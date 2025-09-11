@@ -1,0 +1,23 @@
+{
+  "name": "justWMS - Warehouse Management System",
+  "short_name": "justWMS",
+  "description": "Warehouse Management System with barcode scanning",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0070f3",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "permissions": [
+    "camera"
+  ],
+  "capabilities": [
+    "camera"
+  ]
+}

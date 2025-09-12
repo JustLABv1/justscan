@@ -2,6 +2,7 @@ import "@/styles/globals.css";
 import { Metadata, Viewport } from "next";
 import clsx from "clsx";
 import { ReactNode } from "react";
+import { cookies } from "next/headers";
 
 import { siteConfig } from "@/config/site";
 import { fontSans } from "@/config/fonts";
@@ -35,7 +36,14 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get("session");
+
   return (
     <html suppressHydrationWarning lang="en">
       <head>
@@ -61,7 +69,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       >
         <Providers themeProps={{ attribute: "class", defaultTheme: "dark" }}>
           <div className="relative flex flex-col h-screen">
-            <Navbar />
+            {sessionCookie && <Navbar />}
             <main className="container mx-auto max-w-7xl pt-4 px-6 flex-grow">
               {children}
             </main>

@@ -11,10 +11,17 @@ import {
   Divider,
   Spacer,
   Tooltip,
+  useDisclosure,
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
 
+import DeleteModal from "../modals/delete";
+import BestellungOverviewModal from "../modals/bestellung/overview";
+
 export default function BestellungenList() {
+  const deleteModal = useDisclosure();
+  const bestellungModal = useDisclosure();
+
   return (
     <main>
       <div className="grid grid-cols-2 items-center justify-between gap-2 lg:grid-cols-2">
@@ -22,12 +29,12 @@ export default function BestellungenList() {
       </div>
       <Spacer y={2} />
       <div className="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-4">
-        <Card isPressable>
+        <Card>
           <CardHeader className="flex items-center justify-between">
             <Chip color="warning" radius="sm" variant="dot">
               Offen
             </Chip>
-            <ButtonGroup variant="flat">
+            <ButtonGroup size="sm" variant="flat">
               <Tooltip content="Abschließen">
                 <Button isIconOnly color="success">
                   <Icon icon="hugeicons:tick-01" width={16} />
@@ -39,7 +46,7 @@ export default function BestellungenList() {
                 </Button>
               </Tooltip>
               <Tooltip content="Löschen">
-                <Button isIconOnly color="danger">
+                <Button isIconOnly color="danger" onPress={deleteModal.onOpen}>
                   <Icon icon="hugeicons:delete-02" width={16} />
                 </Button>
               </Tooltip>
@@ -53,12 +60,20 @@ export default function BestellungenList() {
               Aufgegeben von: Jason Neubert
             </p>
             <Spacer y={2} />
-            <Button
-              color="primary"
-              startContent={<Icon icon="hugeicons:file-export" width={18} />}
-            >
-              Exportieren
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                color="primary"
+                startContent={<Icon icon="hugeicons:file-export" width={18} />}
+              >
+                Exportieren
+              </Button>
+              <Button
+                startContent={<Icon icon="hugeicons:file-02" width={18} />}
+                onPress={bestellungModal.onOpen}
+              >
+                Details
+              </Button>
+            </div>
           </CardBody>
           <Divider />
           <CardFooter className="flex flex-wrap gap-2">
@@ -76,12 +91,12 @@ export default function BestellungenList() {
       </div>
       <Spacer y={2} />
       <div className="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-4">
-        <Card isPressable>
+        <Card>
           <CardHeader className="flex items-center justify-between">
             <Chip color="success" radius="sm" variant="dot">
               Abgeschlossen
             </Chip>
-            <ButtonGroup variant="flat">
+            <ButtonGroup size="sm" variant="flat">
               <Tooltip content="Abschließen">
                 <Button isDisabled isIconOnly color="success">
                   <Icon icon="hugeicons:tick-01" width={16} />
@@ -93,7 +108,7 @@ export default function BestellungenList() {
                 </Button>
               </Tooltip>
               <Tooltip content="Löschen">
-                <Button isIconOnly color="danger">
+                <Button isIconOnly color="danger" onPress={deleteModal.onOpen}>
                   <Icon icon="hugeicons:delete-02" width={16} />
                 </Button>
               </Tooltip>
@@ -106,6 +121,13 @@ export default function BestellungenList() {
             <p className="text-sm text-gray-500">
               Aufgegeben von: Jason Neubert
             </p>
+            <Spacer y={2} />
+            <Button
+              startContent={<Icon icon="hugeicons:file-02" width={18} />}
+              onPress={bestellungModal.onOpen}
+            >
+              Details
+            </Button>
           </CardBody>
           <Divider />
           <CardFooter className="flex flex-wrap gap-2">
@@ -118,6 +140,8 @@ export default function BestellungenList() {
           </CardFooter>
         </Card>
       </div>
+      <DeleteModal disclosure={deleteModal} />
+      <BestellungOverviewModal disclosure={bestellungModal} />
     </main>
   );
 }

@@ -1,12 +1,12 @@
 import "@/styles/globals.css";
 import { Metadata, Viewport } from "next";
-import { Link } from "@heroui/link";
 import clsx from "clsx";
 import { ReactNode } from "react";
 
 import { siteConfig } from "@/config/site";
 import { fontSans } from "@/config/fonts";
 import { Navbar } from "@/components/navbar";
+import Footer from "@/components/footer/footer";
 
 import { Providers } from "./providers";
 
@@ -39,7 +39,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html suppressHydrationWarning lang="en">
       <head>
-        <meta content="width=device-width, initial-scale=1" name="viewport" />
+        <meta
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+          name="viewport"
+        />
         <meta content="yes" name="mobile-web-app-capable" />
         <meta content="yes" name="apple-mobile-web-app-capable" />
         <meta content="default" name="apple-mobile-web-app-status-bar-style" />
@@ -62,17 +65,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <main className="container mx-auto max-w-7xl pt-4 px-6 flex-grow">
               {children}
             </main>
-            <footer className="w-full flex items-center justify-center py-3">
-              <Link
-                isExternal
-                className="flex items-center gap-1 text-current"
-                href="https://heroui.com?utm_source=next-app-template"
-                title="heroui.com homepage"
-              >
-                <span className="text-default-600">Powered by</span>
-                <p className="text-primary">JustLab</p>
-              </Link>
-            </footer>
+            <Footer />
           </div>
         </Providers>
       </body>

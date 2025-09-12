@@ -28,3 +28,52 @@
     }
   }
 }
+
+/* iOS Input Zoom Prevention */
+@supports (-webkit-touch-callout: none) {
+  /* iOS-specific styles */
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px !important;
+    -webkit-text-size-adjust: 100%;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  
+  /* Prevent zoom on focus */
+  input:focus,
+  textarea:focus,
+  select:focus {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
+/* Specific fix for modal inputs on iOS */
+.ios-input-fix input {
+  font-size: 16px !important;
+  -webkit-text-size-adjust: 100%;
+  transform: translateZ(0);
+}
+
+/* General input improvements for mobile */
+@media screen and (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+  
+  /* Ensure HeroUI inputs also get the fix */
+  .ios-input-fix input,
+  .ios-input-fix textarea {
+    font-size: 16px !important;
+    -webkit-text-size-adjust: 100%;
+  }
+}

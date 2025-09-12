@@ -8,21 +8,19 @@ import {
   NavbarBrand,
   NavbarItem,
   NavbarMenuItem,
-} from "@heroui/navbar";
-import { Link } from "@heroui/link";
+  Link,
+} from "@heroui/react";
 import { link as linkStyles } from "@heroui/theme";
 import NextLink from "next/link";
 import clsx from "clsx";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useState } from "react";
 
 import { siteConfig } from "@/config/site";
 import { ThemeSwitch } from "@/components/theme-switch";
-import { Logo } from "@/components/icons";
 
 export const Navbar = () => {
-  const router = useRouter();
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
   const currentPath = pathname.split("/")?.[1];
@@ -34,11 +32,17 @@ export const Navbar = () => {
   };
 
   return (
-    <HeroUINavbar className="bg-content1" maxWidth="xl" position="sticky">
+    <HeroUINavbar
+      className="bg-content1"
+      isMenuOpen={isMenuOpen}
+      maxWidth="xl"
+      position="sticky"
+      onMenuOpenChange={setIsMenuOpen}
+    >
       <NavbarContent className="basis-1/5 sm:basis-full" justify="start">
         <NavbarBrand as="li" className="gap-3 max-w-fit">
           <NextLink className="flex justify-start items-center gap-1" href="/">
-            <Logo />
+            {/* <Logo /> */}
             <p className="font-bold text-inherit">JustWMS</p>
           </NextLink>
         </NavbarBrand>
@@ -84,15 +88,21 @@ export const Navbar = () => {
           {siteConfig.navMenuItems.map((item, index) => (
             <NavbarMenuItem key={`${item}-${index}`}>
               <Link
-                color={
-                  index === 2
-                    ? "primary"
-                    : index === siteConfig.navMenuItems.length - 1
-                      ? "danger"
-                      : "foreground"
-                }
-                href="#"
+                className={clsx(
+                  linkStyles({ color: "foreground" }),
+                  {
+                    "text-primary font-bold": "/" + currentPath === item.href,
+                  },
+                  {
+                    "font-semibold": "/" + currentPath !== item.href,
+                  },
+                )}
+                color="foreground"
+                href={item.href}
                 size="lg"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                }}
               >
                 {item.label}
               </Link>

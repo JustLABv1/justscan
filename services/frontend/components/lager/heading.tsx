@@ -1,14 +1,14 @@
 "use client";
 
-import { Button, Chip } from "@heroui/react";
+import { Button, Chip, Input, useDisclosure } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { useState } from "react";
 
 import BarcodeScanner from "../barcode-scanner";
+import LieferscheinErstellenModal from "../modals/lieferschein/erstellen";
 
 export default function LagerHeading() {
-  // const createFolderModal = useDisclosure();
-  // const createFlowModal = useDisclosure();
+  const lieferscheinErstellen = useDisclosure();
 
   const [scannedCode, setScannedCode] = useState<string>("");
 
@@ -22,36 +22,28 @@ export default function LagerHeading() {
 
   return (
     <main>
-      {/* Barcode Scanner Section */}
-      <BarcodeScanner onError={handleError} onScan={handleScan} />
-
-      {scannedCode && (
-        <div className="mb-4">
-          <Chip color="success" variant="flat">
-            Gescannt: {scannedCode}
-          </Chip>
-        </div>
-      )}
-      <div className="grid grid-cols-2 items-center justify-between gap-2 lg:grid-cols-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-2xl font-bold mb-1">Lager</p>
         <div className="flex flex-cols justify-end gap-2">
-          <div className="flex gap-2">
-            <Button
-              color="primary"
-              startContent={<Icon icon="hugeicons:note-add" width={18} />}
-              variant="solid"
-              // onPress={createFolderModal.onOpen}
-            >
-              Lieferschein Erstellen
-            </Button>
-          </div>
+          {scannedCode && (
+            <div className="mb-4">
+              <Chip color="success" variant="flat">
+                Gescannt: {scannedCode}
+              </Chip>
+            </div>
+          )}
+          <BarcodeScanner onError={handleError} onScan={handleScan} />
+          <Button
+            color="primary"
+            startContent={<Icon icon="hugeicons:note-add" width={18} />}
+            variant="solid"
+            onPress={lieferscheinErstellen.onOpen}
+          >
+            Lieferschein Erstellen
+          </Button>
         </div>
       </div>
-      {/* <CreateFolderModal
-        disclosure={createFolderModal}
-        folders={folders}
-        projects={projects}
-      /> */}
+      <LieferscheinErstellenModal disclosure={lieferscheinErstellen} />
     </main>
   );
 }

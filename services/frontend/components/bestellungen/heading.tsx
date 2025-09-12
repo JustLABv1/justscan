@@ -1,11 +1,12 @@
 "use client";
 
-import { Button } from "@heroui/react";
+import { Button, useDisclosure } from "@heroui/react";
 import { Icon } from "@iconify/react";
 
+import BestellungAufgebenModal from "../modals/bestellung/aufgeben";
+
 export default function BestellungenHeading() {
-  // const createFolderModal = useDisclosure();
-  // const createFlowModal = useDisclosure();
+  const bestellungAufgebenModal = useDisclosure();
 
   return (
     <main>
@@ -17,18 +18,14 @@ export default function BestellungenHeading() {
               color="primary"
               startContent={<Icon icon="hugeicons:package-add" width={18} />}
               variant="solid"
-              // onPress={createFolderModal.onOpen}
+              onPress={bestellungAufgebenModal.onOpen}
             >
               Bestellung Aufgeben
             </Button>
           </div>
         </div>
       </div>
-      {/* <CreateFolderModal
-        disclosure={createFolderModal}
-        folders={folders}
-        projects={projects}
-      /> */}
+      <BestellungAufgebenModal disclosure={bestellungAufgebenModal} />
     </main>
   );
 }

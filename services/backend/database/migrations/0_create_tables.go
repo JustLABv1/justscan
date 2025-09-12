@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/v1Flows/exFlow/services/backend/pkg/models"
+	"justwms/pkg/models"
 
 	"github.com/uptrace/bun"
 )
@@ -20,16 +20,7 @@ func init() {
 func createSchema(ctx context.Context, db *bun.DB) error {
 	models := []interface{}{
 		(*models.Tokens)(nil),
-		(*models.ExecutionSteps)(nil),
-		(*models.Executions)(nil),
-		(*models.Folders)(nil),
-		(*models.Flows)(nil),
-		(*models.Projects)(nil),
-		(*models.Runners)(nil),
-		(*models.Settings)(nil),
 		(*models.Users)(nil),
-		(*models.ProjectMembers)(nil),
-		(*models.Notifications)(nil),
 		(*models.Audit)(nil),
 	}
 
@@ -46,16 +37,7 @@ func createSchema(ctx context.Context, db *bun.DB) error {
 func dropSchema(ctx context.Context, db *bun.DB) error {
 	models := []interface{}{
 		(*models.Tokens)(nil),
-		(*models.ExecutionSteps)(nil),
-		(*models.Executions)(nil),
-		(*models.Flows)(nil),
-		(*models.Folders)(nil),
-		(*models.Projects)(nil),
-		(*models.Runners)(nil),
-		(*models.Settings)(nil),
 		(*models.Users)(nil),
-		(*models.ProjectMembers)(nil),
-		(*models.Notifications)(nil),
 		(*models.Audit)(nil),
 	}
 

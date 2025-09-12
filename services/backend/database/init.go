@@ -66,8 +66,6 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 		log.Infof("Migrated to %s\n", group)
 	}
 
-	createDefaultSettings(db)
-
 	return db
 }
 

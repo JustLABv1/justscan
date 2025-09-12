@@ -12,7 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func StartRouter(db *bun.DB, port int, configFile string, frontendEnv string) *http.Server {
+func StartRouter(db *bun.DB, port int) *http.Server {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 

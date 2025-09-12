@@ -1,9 +1,9 @@
 package users
 
 import (
-	"github.com/v1Flows/exFlow/services/backend/functions/auth"
-	"github.com/v1Flows/exFlow/services/backend/functions/httperror"
-	"github.com/v1Flows/exFlow/services/backend/pkg/models"
+	"justwms/functions/auth"
+	"justwms/functions/httperror"
+	"justwms/pkg/models"
 	"net/http"
 
 	_ "github.com/lib/pq"

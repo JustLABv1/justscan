@@ -15,7 +15,7 @@ import React from "react";
 
 import { Logout } from "@/lib/logout";
 
-export default function Login({ user, _, showSignUp, settings }: any) {
+export default function Login({ user, _, showSignUp }: any) {
   const router = useRouter();
 
   const userData = user;
@@ -84,7 +84,7 @@ export default function Login({ user, _, showSignUp, settings }: any) {
             >
               Login
             </Button>
-            {showSignUp && settings.signup && (
+            {showSignUp && (
               <Button
                 color="secondary"
                 startContent={<UserPlusIcon />}
@@ -94,7 +94,7 @@ export default function Login({ user, _, showSignUp, settings }: any) {
                 Sign Up
               </Button>
             )}
-            {showSignUp && !settings.signup && (
+            {showSignUp && (
               <Tooltip
                 color="default"
                 content={

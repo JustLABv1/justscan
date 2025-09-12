@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/v1Flows/exFlow/services/backend/functions/auth"
-	"github.com/v1Flows/exFlow/services/backend/functions/httperror"
-	"github.com/v1Flows/exFlow/services/backend/pkg/models"
+	"justwms/functions/auth"
+	"justwms/functions/httperror"
+	"justwms/pkg/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

@@ -8,6 +8,7 @@ import { siteConfig } from "@/config/site";
 import { fontSans } from "@/config/fonts";
 import { Navbar } from "@/components/navbar";
 import Footer from "@/components/footer/footer";
+import GetUserDetails from "@/lib/fetch/user/getDetails";
 
 import { Providers } from "./providers";
 
@@ -44,6 +45,10 @@ export default async function RootLayout({
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("session");
 
+  const userDetailsData = GetUserDetails();
+
+  const [userDetails] = await Promise.all([userDetailsData]);
+
   return (
     <html suppressHydrationWarning lang="en">
       <head>
@@ -69,7 +74,12 @@ export default async function RootLayout({
       >
         <Providers themeProps={{ attribute: "class", defaultTheme: "dark" }}>
           <div className="relative flex flex-col h-screen">
-            {sessionCookie && <Navbar />}
+            {sessionCookie && (
+              <Navbar
+                session={sessionCookie?.value}
+                userDetails={userDetails.success ? userDetails.data.user : {}}
+              />
+            )}
             <main className="container mx-auto max-w-7xl pt-4 px-6 flex-grow">
               {children}
             </main>

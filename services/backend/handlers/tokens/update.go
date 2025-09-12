@@ -1,10 +1,8 @@
 package tokens
 
 import (
-	"github.com/v1Flows/exFlow/services/backend/functions/gatekeeper"
-	"github.com/v1Flows/exFlow/services/backend/functions/httperror"
-	"github.com/v1Flows/exFlow/services/backend/pkg/models"
-	"errors"
+	"justwms/functions/httperror"
+	"justwms/pkg/models"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -26,17 +24,6 @@ func UpdateToken(context *gin.Context, db *bun.DB) {
 	err := db.NewSelect().Model(&dbToken).Where("id = ?", id).Scan(context)
 	if err != nil {
 		httperror.InternalServerError(context, "Error getting token from db", err)
-		return
-	}
-
-	// check the requestors role in project
-	canModify, err := gatekeeper.CheckRequestUserProjectModifyRole(dbToken.ProjectID, context, db)
-	if err != nil {
-		httperror.InternalServerError(context, "Error checking your user permissions on project", err)
-		return
-	}
-	if !canModify {
-		httperror.Unauthorized(context, "You are not allowed to make modifications on this project", errors.New("unauthorized"))
 		return
 	}
 

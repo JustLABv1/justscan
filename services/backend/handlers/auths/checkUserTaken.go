@@ -4,9 +4,10 @@ import (
 	"errors"
 	"net/http"
 
+	"justwms/functions/httperror"
+	"justwms/pkg/models"
+
 	"github.com/google/uuid"
-	"github.com/v1Flows/exFlow/services/backend/functions/httperror"
-	"github.com/v1Flows/exFlow/services/backend/pkg/models"
 
 	_ "github.com/lib/pq"
 	"github.com/uptrace/bun"

@@ -1,8 +1,8 @@
 package auths
 
 import (
-	"github.com/v1Flows/exFlow/services/backend/functions/httperror"
-	"github.com/v1Flows/exFlow/services/backend/pkg/models"
+	"justwms/functions/httperror"
+	"justwms/pkg/models"
 	"net/http"
 
 	_ "github.com/lib/pq"

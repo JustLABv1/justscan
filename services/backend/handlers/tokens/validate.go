@@ -1,8 +1,8 @@
 package tokens
 
 import (
-	"github.com/v1Flows/exFlow/services/backend/functions/auth"
-	"github.com/v1Flows/exFlow/services/backend/functions/httperror"
+	"justwms/functions/auth"
+	"justwms/functions/httperror"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

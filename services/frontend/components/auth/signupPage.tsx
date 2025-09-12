@@ -11,7 +11,6 @@ import {
   addToast,
 } from "@heroui/react";
 import { AnimatePresence, domAnimation, LazyMotion, m } from "framer-motion";
-import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import React from "react";
 
@@ -20,11 +19,8 @@ import SignUpAPI from "@/lib/auth/signup";
 import LoginAPI from "@/lib/auth/login";
 import CheckUserTaken from "@/lib/auth/checkTaken";
 
-import { Particles } from "../magicui/particles";
-
-export default function SignUpPage({ settings }: any) {
+export default function SignUpPage() {
   const router = useRouter();
-  const { theme } = useTheme();
 
   const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
@@ -197,13 +193,6 @@ export default function SignUpPage({ settings }: any) {
 
   return (
     <div className="flex size-full flex-col items-center justify-center">
-      <Particles
-        refresh
-        className="absolute inset-0"
-        color={theme === "light" ? "#000" : "#fff"}
-        ease={80}
-        quantity={100}
-      />
       <div className="flex flex-col items-center pb-2">
         <Image
           alt="Logo"
@@ -245,7 +234,7 @@ export default function SignUpPage({ settings }: any) {
                 </m.div>
               )}
             </AnimatePresence>
-            <m.div className="flex flex-col gap-4">
+            <m.div className="flex flex-col w-full gap-4">
               <AnimatePresence custom={direction} initial={false} mode="wait">
                 <Title>{titleContent}</Title>
               </AnimatePresence>
@@ -253,14 +242,6 @@ export default function SignUpPage({ settings }: any) {
                 <AnimatePresence custom={direction} initial={false} mode="wait">
                   <Alert color="danger" description={errorText} title="Error" />
                 </AnimatePresence>
-              )}
-              {!settings.signup && (
-                <Alert
-                  color="danger"
-                  description="Sign up is currently disabled. Please check back later."
-                  title="Sign Up Disabled"
-                  variant="faded"
-                />
               )}
             </m.div>
           </m.div>
@@ -280,7 +261,6 @@ export default function SignUpPage({ settings }: any) {
                 <>
                   <Input
                     isRequired
-                    isDisabled={!settings.signup}
                     label="Username"
                     name="username"
                     type="username"
@@ -293,7 +273,6 @@ export default function SignUpPage({ settings }: any) {
                   />
                   <Input
                     isRequired
-                    isDisabled={!settings.signup}
                     label="Email Address"
                     name="email"
                     type="email"
@@ -375,7 +354,7 @@ export default function SignUpPage({ settings }: any) {
               <Button
                 fullWidth
                 color="primary"
-                isDisabled={isLoading || !settings.signup}
+                isDisabled={isLoading}
                 isLoading={isLoading}
                 type="submit"
               >

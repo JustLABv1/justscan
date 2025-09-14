@@ -15,9 +15,9 @@ func Kostenstellen(router *gin.RouterGroup, db *bun.DB) {
 		kostenstelle.GET("/", func(c *gin.Context) {
 			kostenstellen.GetKostenstellen(c, db)
 		})
-		// kostenstelle.POST("/", func(c *gin.Context) {
-		// 	kostenstellen.UploadKostenstellen(c, db)
-		// })
+		kostenstelle.POST("/", func(c *gin.Context) {
+			kostenstellen.UploadKostenstellen(c, db)
+		})
 		kostenstelle.POST("/check", func(c *gin.Context) {
 			kostenstellen.CheckUploadedKostenstellen(c, db)
 		})

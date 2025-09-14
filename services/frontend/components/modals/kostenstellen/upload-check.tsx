@@ -9,6 +9,8 @@ import {
   ModalFooter,
   ModalHeader,
   ScrollShadow,
+  Card,
+  CardBody,
 } from "@heroui/react";
 import React from "react";
 import { Icon } from "@iconify/react";
@@ -28,6 +30,7 @@ export default function KostenstellenUploadCheckModal({
         backdrop="blur"
         isOpen={isOpen}
         placement="center"
+        size="lg"
         onOpenChange={onOpenChange}
       >
         <ModalContent className="w-full">
@@ -41,25 +44,57 @@ export default function KostenstellenUploadCheckModal({
                 </div>
               </ModalHeader>
               <ModalBody>
-                <p className="text-md">
-                  Anzahl der erkannten Kostenstellen:{" "}
-                  <span className="font-bold">
-                    {data.count !== undefined ? data.count : "N/A"}
-                  </span>
+                <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <Card className="bg-content2">
+                    <CardBody className="text-center">
+                      <p className="text-md">
+                        {data.count !== undefined ? data.count : "N/A"}
+                      </p>
+                      <p className="text-sm text-default-500">Erkannt</p>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="bg-content2">
+                    <CardBody className="text-center">
+                      <p className="text-md">
+                        {data.db_count !== undefined ? data.db_count : "N/A"}
+                      </p>
+                      <p className="text-sm text-default-500">Im System</p>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="bg-content2">
+                    <CardBody className="text-center">
+                      <p className="text-md">
+                        {data.new_count !== undefined ? data.new_count : "N/A"}
+                      </p>
+                      <p className="text-sm text-default-500">Neu</p>
+                    </CardBody>
+                  </Card>
+                </div>
+
+                <p className="font-semibold text-default-500">
+                  Neue Kostenstellen
                 </p>
                 <ScrollShadow className="max-h-96">
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {data.kostenstellen.map(
-                      (kostenstelle: string, index: number) => (
-                        <Chip
-                          key={index}
-                          className="text-md"
-                          radius="sm"
-                          variant="flat"
-                        >
-                          {kostenstelle}
-                        </Chip>
-                      ),
+                  <div className="flex flex-wrap gap-2">
+                    {data.new_kostenstellen !== null &&
+                      data.new_kostenstellen.map(
+                        (kostenstelle: string, index: number) => (
+                          <Chip
+                            key={index}
+                            className="text-md"
+                            radius="sm"
+                            variant="flat"
+                          >
+                            {kostenstelle}
+                          </Chip>
+                        ),
+                      )}
+                    {data.new_kostenstellen === null && (
+                      <p className="font-semibold">
+                        Keine neuen Kostenstellen vorhanden.
+                      </p>
                     )}
                   </div>
                 </ScrollShadow>

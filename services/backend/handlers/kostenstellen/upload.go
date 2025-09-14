@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func CheckUploadedKostenstellen(c *gin.Context, db *bun.DB) {
+func UploadKostenstellen(c *gin.Context, db *bun.DB) {
 	// Get the uploaded file
 	file, _, err := c.Request.FormFile("csv")
 	if err != nil {
@@ -45,8 +45,7 @@ func CheckUploadedKostenstellen(c *gin.Context, db *bun.DB) {
 	}
 
 	// diff kostenstellen and dbKostenstellen
-	// find kostenstellen that are in kostenstellen but not in dbKostenstellen
-	var newKostenstellen []string
+	var newKostenstellen []models.Kostenstellen
 	for _, k := range kostenstellen {
 		found := false
 		for _, dbk := range dbKostenstellen {
@@ -57,18 +56,27 @@ func CheckUploadedKostenstellen(c *gin.Context, db *bun.DB) {
 		}
 		if !found {
 			kostenNr, _ := strconv.Atoi(k)
-			newKostenstelle := strconv.Itoa(kostenNr)
+			newKostenstelle := models.Kostenstellen{
+				Kostennummer: kostenNr,
+			}
 			newKostenstellen = append(newKostenstellen, newKostenstelle)
 		}
 	}
 
+	if newKostenstellen == nil || len(newKostenstellen) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"result": "no new kostenstellen",
+		})
+		return
+	}
+
+	_, err = db.NewInsert().Model(&newKostenstellen).Exec(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"result":            "success",
-		"kostenstellen":     kostenstellen,
-		"count":             len(kostenstellen),
-		"db_kostenstellen":  dbKostenstellen,
-		"db_count":          len(dbKostenstellen),
-		"new_kostenstellen": newKostenstellen,
-		"new_count":         len(newKostenstellen),
+		"result": "success",
 	})
 }

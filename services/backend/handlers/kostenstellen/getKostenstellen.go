@@ -13,12 +13,12 @@ import (
 )
 
 func GetKostenstellen(context *gin.Context, db *bun.DB) {
-	var kostenstellen models.Kostenstellen
+	var kostenstellen []models.Kostenstellen
 	err := db.NewSelect().Model(&kostenstellen).Scan(context)
 	if err != nil {
 		httperror.InternalServerError(context, "Error collecting kostenstellen data from db", err)
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"result": "success", "kostenstellen": kostenstellen})
+	context.JSON(http.StatusOK, gin.H{"result": "success", "kostenstellen": kostenstellen})
 }

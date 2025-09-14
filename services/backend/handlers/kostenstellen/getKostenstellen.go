@@ -13,7 +13,7 @@ import (
 )
 
 func GetKostenstellen(context *gin.Context, db *bun.DB) {
-	var kostenstellen []models.Kostenstellen
+	kostenstellen := make([]models.Kostenstellen, 0)
 	err := db.NewSelect().Model(&kostenstellen).Scan(context)
 	if err != nil {
 		httperror.InternalServerError(context, "Error collecting kostenstellen data from db", err)

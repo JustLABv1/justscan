@@ -2,7 +2,6 @@ package kostenstellen
 
 import (
 	"net/http"
-	"strconv"
 
 	"justwms/functions/csvreader"
 	"justwms/pkg/models"
@@ -49,15 +48,15 @@ func UploadKostenstellen(c *gin.Context, db *bun.DB) {
 	for _, k := range kostenstellen {
 		found := false
 		for _, dbk := range dbKostenstellen {
-			if k == strconv.Itoa(dbk.Kostennummer) {
+			if k.Kostenstellenummer == dbk.Kostenstellenummer {
 				found = true
 				break
 			}
 		}
 		if !found {
-			kostenNr, _ := strconv.Atoi(k)
 			newKostenstelle := models.Kostenstellen{
-				Kostennummer: kostenNr,
+				Kostenstellenummer: k.Kostenstellenummer,
+				Bezeichnung:        k.Bezeichnung,
 			}
 			newKostenstellen = append(newKostenstellen, newKostenstelle)
 		}

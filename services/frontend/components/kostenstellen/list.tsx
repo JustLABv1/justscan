@@ -12,17 +12,19 @@ import {
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
 
-import { siteTempData } from "@/config/data";
-
 import DeleteModal from "../modals/delete";
 
-export default function KostenstellenList() {
+export default function KostenstellenList({
+  kostenstellen,
+}: {
+  kostenstellen: any;
+}) {
   const deleteModal = useDisclosure();
 
   return (
     <main>
       <div className="grid grid-cols-2 items-center justify-between gap-4 lg:grid-cols-3">
-        {siteTempData.kostenstellen.map((item) => (
+        {kostenstellen.map((item: any) => (
           <Card key={item.nummer}>
             <CardHeader className="flex items-center justify-between">
               <p className="font-bold">{item.bezeichnung}</p>
@@ -45,7 +47,9 @@ export default function KostenstellenList() {
             </CardHeader>
             <Divider />
             <CardFooter>
-              <p className="text-sm text-default-400">Nummer: {item.nummer}</p>
+              <p className="text-sm text-default-400">
+                Nummer: {item.kostenstellenummer}
+              </p>
             </CardFooter>
           </Card>
         ))}

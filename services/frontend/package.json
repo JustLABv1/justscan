@@ -36,6 +36,7 @@
     "react-dropzone": "^14.3.8",
     "react-qr-reader": "3.0.0-beta-1",
     "serwist": "^9.2.1",
+    "swr": "^2.3.6",
     "tailwind-merge": "^3.3.1",
     "workbox-webpack-plugin": "^7.3.0"
   },

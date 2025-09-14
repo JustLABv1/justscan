@@ -2,7 +2,6 @@ package kostenstellen
 
 import (
 	"net/http"
-	"strconv"
 
 	"justwms/functions/csvreader"
 	"justwms/pkg/models"
@@ -46,19 +45,17 @@ func CheckUploadedKostenstellen(c *gin.Context, db *bun.DB) {
 
 	// diff kostenstellen and dbKostenstellen
 	// find kostenstellen that are in kostenstellen but not in dbKostenstellen
-	var newKostenstellen []string
+	var newKostenstellen []models.Kostenstellen
 	for _, k := range kostenstellen {
 		found := false
 		for _, dbk := range dbKostenstellen {
-			if k == strconv.Itoa(dbk.Kostennummer) {
+			if k.Kostenstellenummer == dbk.Kostenstellenummer {
 				found = true
 				break
 			}
 		}
 		if !found {
-			kostenNr, _ := strconv.Atoi(k)
-			newKostenstelle := strconv.Itoa(kostenNr)
-			newKostenstellen = append(newKostenstellen, newKostenstelle)
+			newKostenstellen = append(newKostenstellen, k)
 		}
 	}
 

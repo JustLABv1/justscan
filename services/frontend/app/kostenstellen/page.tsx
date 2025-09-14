@@ -1,14 +1,9 @@
-import { Divider } from "@heroui/react";
-
-import KostenstellenHeading from "@/components/kostenstellen/heading";
-import KostenstellenList from "@/components/kostenstellen/list";
+import KostenstellenPageClient from "@/components/kostenstellen/page-client";
 
 export default function Lager() {
   return (
     <>
-      <KostenstellenHeading />
-      <Divider className="my-4" />
-      <KostenstellenList />
+      <KostenstellenPageClient />
     </>
   );
 }

@@ -72,7 +72,6 @@ func main() {
 		log.Fatal("Failed to connect to the database")
 	}
 
-	readKostenstellenCSV()
 	readGeraeteCSV()
 
 	// Set up signal handling for graceful shutdown
@@ -92,95 +91,6 @@ func main() {
 	}
 
 	log.Info("Server exited")
-}
-
-func readKostenstellenCSV() {
-	// Open the CSV file
-	file, err := os.Open("/Users/Justin.Neubert/Downloads/CSV Dareien/Kostenstellen.csv")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	// Create a new CSV reader with semicolon delimiter
-	reader := csv.NewReader(file)
-	reader.Comma = ';' // Use semicolon as delimiter instead of comma
-	reader.LazyQuotes = true
-	reader.FieldsPerRecord = -1 // Allow variable number of fields
-
-	// Read all records from the CSV file
-	records, err := reader.ReadAll()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if len(records) == 0 {
-		log.Info("No records found in CSV")
-		return
-	}
-
-	fmt.Printf("Total records: %d\n", len(records))
-
-	// Find the KOSTENST header row to understand the structure for cost center records
-	var kostenstHeader []string
-	for _, record := range records {
-		if len(record) > 1 && record[1] == "KOSTENST" && record[0] == "0" {
-			kostenstHeader = record[2:] // Skip the ID and type columns
-			break
-		}
-	}
-
-	if len(kostenstHeader) == 0 {
-		fmt.Println("No KOSTENST header found")
-		return
-	}
-
-	// Find column indices for cost center data
-	kstNrIndex := -1
-
-	for i, col := range kostenstHeader {
-		trimmedCol := strings.TrimSpace(col)
-		if trimmedCol == "KstNr" {
-			kstNrIndex = i
-			fmt.Printf("Found KstNr at index %d\n", i)
-			break
-		}
-	}
-
-	if kstNrIndex == -1 {
-		fmt.Println("KstNr column not found!")
-		return
-	}
-
-	// Process KO records (which are the cost center records we need)
-	koCount := 0
-	uniqueKstNr := make(map[string]bool) // Use map to track unique KstNr values
-
-	for _, record := range records {
-		if len(record) > 1 && record[1] == "KO" {
-			koCount++
-
-			var kstNr string
-			dataFields := record[2:] // Skip ID and type columns
-
-			if kstNrIndex >= 0 && kstNrIndex < len(dataFields) {
-				kstNr = strings.TrimSpace(dataFields[kstNrIndex])
-			}
-
-			if kstNr != "" {
-				uniqueKstNr[kstNr] = true // Add to map (automatically handles uniqueness)
-			}
-		}
-	}
-
-	// Print unique KstNr values
-	fmt.Printf("Unique KstNr values:\n")
-	for kstNr := range uniqueKstNr {
-		fmt.Printf("KstNr: %s\n", kstNr)
-	}
-
-	fmt.Printf("\nTotal KO records found: %d\n", koCount)
-	fmt.Printf("Unique KstNr values: %d\n", len(uniqueKstNr))
 }
 
 func readGeraeteCSV() {

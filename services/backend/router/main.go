@@ -31,6 +31,7 @@ func StartRouter(db *bun.DB, port int) *http.Server {
 		Token(v1, db)
 		User(v1, db)
 		Health(v1)
+		Kostenstellen(v1, db)
 	}
 
 	server := &http.Server{

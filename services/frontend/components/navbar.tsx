@@ -15,6 +15,7 @@ import {
   DropdownItem,
   User,
   addToast,
+  Avatar,
 } from "@heroui/react";
 import { link as linkStyles } from "@heroui/theme";
 import NextLink from "next/link";
@@ -25,7 +26,6 @@ import { useState } from "react";
 import { Icon } from "@iconify/react";
 
 import { siteConfig } from "@/config/site";
-import { ThemeSwitch } from "@/components/theme-switch";
 import { Logout } from "@/lib/logout";
 
 export const Navbar = ({ userDetails, session }: any) => {
@@ -175,7 +175,75 @@ export const Navbar = ({ userDetails, session }: any) => {
       </NavbarContent>
 
       <NavbarContent className="sm:hidden basis-1 pl-4" justify="end">
-        <ThemeSwitch />
+        <Dropdown placement="bottom-end">
+          <DropdownTrigger>
+            <Avatar
+              isBordered
+              as="button"
+              className="transition-transform"
+              color="primary"
+              name={userDetails.username}
+              size="sm"
+            />
+          </DropdownTrigger>
+          <DropdownMenu aria-label="Profile Actions" variant="flat">
+            <DropdownItem key="profile" className="h-14 gap-2">
+              <p className="font-semibold">Signed in as</p>
+              <p className="font-semibold">
+                {userDetails.username}
+                {" | "}
+                {userDetails.role === "admin" && (
+                  <span className="text-danger font-bold">Admin</span>
+                )}
+              </p>
+            </DropdownItem>
+            <DropdownItem
+              key="settings"
+              showDivider
+              startContent={
+                <Icon icon="hugeicons:user-id-verification" width={20} />
+              }
+              onPress={() => {
+                router.push("/profile");
+              }}
+            >
+              View Profile
+            </DropdownItem>
+            {theme === "light" ? (
+              <DropdownItem
+                key="dark_mode"
+                startContent={<Icon icon="hugeicons:moon-01" width={20} />}
+                onPress={onChange}
+              >
+                Dark Mode
+              </DropdownItem>
+            ) : (
+              <DropdownItem
+                key="white_mode"
+                startContent={<Icon icon="hugeicons:sun-01" width={20} />}
+                onPress={onChange}
+              >
+                White Mode
+              </DropdownItem>
+            )}
+            <DropdownItem
+              key="token"
+              showDivider
+              startContent={<Icon icon="hugeicons:key-02" width={20} />}
+              onPress={copyToken}
+            >
+              Copy Token
+            </DropdownItem>
+            <DropdownItem
+              key="logout"
+              color="danger"
+              startContent={<Icon icon="hugeicons:logout-02" width={20} />}
+              onPress={LogoutHandler}
+            >
+              Log Out
+            </DropdownItem>
+          </DropdownMenu>
+        </Dropdown>
         <NavbarMenuToggle />
       </NavbarContent>
 

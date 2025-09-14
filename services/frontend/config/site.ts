@@ -18,8 +18,16 @@ export const siteConfig = {
       href: "/bestellungen",
     },
     {
+      label: "Artikel",
+      href: "/artikel",
+    },
+    {
       label: "Kostenstellen",
       href: "/kostenstellen",
+    },
+    {
+      label: "Geräte",
+      href: "/geraete",
     },
     {
       label: "System Verwaltung",

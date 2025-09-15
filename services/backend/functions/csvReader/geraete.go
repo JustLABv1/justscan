@@ -74,20 +74,23 @@ func ReadGeraeteCSV(file multipart.File) (geraete []models.Geraete, err error) {
 	}
 
 	// Find column indices for device data
+	betrNrIndex := -1
 	gerNrIndex := -1
-	anlagegutIndex := -1
+	kurznameIndex := -1
 
 	for i, col := range geraeteHeader {
 		trimmedCol := strings.TrimSpace(col)
-		if trimmedCol == "GerNr" {
+		if trimmedCol == "BetrNr" {
+			betrNrIndex = i
+		} else if trimmedCol == "GerNr" {
 			gerNrIndex = i
-		} else if trimmedCol == "Anlagegut" {
-			anlagegutIndex = i
+		} else if trimmedCol == "Kurzname" {
+			kurznameIndex = i
 		}
 	}
 
-	if gerNrIndex == -1 || anlagegutIndex == -1 {
-		fmt.Println("GerNr or Anlagegut column not found!")
+	if betrNrIndex == -1 || gerNrIndex == -1 || kurznameIndex == -1 {
+		fmt.Println("BetrNr, GerNr or Kurzname column not found!")
 		return
 	}
 
@@ -95,21 +98,24 @@ func ReadGeraeteCSV(file multipart.File) (geraete []models.Geraete, err error) {
 	uniqueGeraeteMap := []models.Geraete{}
 
 	for _, record := range records {
-		if len(record) > 1 && record[1] == "GER" {
-			var gerNr, anlagegut string
+		if len(record) > 1 {
+			var gerNr, betrNr, kurzname string
 			dataFields := record[2:] // Skip ID and type columns
 
 			if gerNrIndex >= 0 && gerNrIndex < len(dataFields) {
 				gerNr = strings.TrimSpace(dataFields[gerNrIndex])
 			}
-			if anlagegutIndex >= 0 && anlagegutIndex < len(dataFields) {
-				anlagegut = strings.TrimSpace(dataFields[anlagegutIndex])
+			if betrNrIndex >= 0 && betrNrIndex < len(dataFields) {
+				betrNr = strings.TrimSpace(dataFields[betrNrIndex])
+			}
+			if kurznameIndex >= 0 && kurznameIndex < len(dataFields) {
+				kurzname = strings.TrimSpace(dataFields[kurznameIndex])
 			}
 
-			if gerNr != "" && anlagegut != "" {
+			if gerNr != "" && betrNr != "" && kurzname == "0" {
 				uniqueGeraeteMap = append(uniqueGeraeteMap, models.Geraete{
-					Geraetenummer: gerNr,
-					Anlagegut:     anlagegut,
+					Gerätenummer:   gerNr,
+					Betriebsnummer: betrNr,
 				})
 			}
 		}
@@ -119,8 +125,8 @@ func ReadGeraeteCSV(file multipart.File) (geraete []models.Geraete, err error) {
 	uniqueGeraete := make([]models.Geraete, 0, len(uniqueGeraeteMap))
 	for _, ger := range uniqueGeraeteMap {
 		geraet := models.Geraete{
-			Geraetenummer: ger.Geraetenummer,
-			Anlagegut:     ger.Anlagegut,
+			Gerätenummer:   ger.Gerätenummer,
+			Betriebsnummer: ger.Betriebsnummer,
 		}
 		uniqueGeraete = append(uniqueGeraete, geraet)
 	}

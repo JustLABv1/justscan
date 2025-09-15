@@ -1,9 +1,9 @@
-import QuickNavigation from "@/components/dashboard/quick-navigation";
+import DashboardPageClient from "@/components/dashboard/page-client";
 
 export default function Home() {
   return (
     <>
-      <QuickNavigation />
+      <DashboardPageClient />
     </>
   );
 }

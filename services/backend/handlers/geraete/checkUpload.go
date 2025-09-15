@@ -49,7 +49,7 @@ func CheckUploadedGeraete(c *gin.Context, db *bun.DB) {
 	for _, k := range geraete {
 		found := false
 		for _, dbk := range dbGeraete {
-			if k.Geraetenummer == dbk.Geraetenummer {
+			if k.Betriebsnummer == dbk.Betriebsnummer {
 				found = true
 				break
 			}

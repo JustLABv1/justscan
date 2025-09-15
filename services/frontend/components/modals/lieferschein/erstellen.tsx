@@ -1,6 +1,8 @@
 import type { UseDisclosureReturn } from "@heroui/use-disclosure";
 
 import {
+  Autocomplete,
+  AutocompleteItem,
   Button,
   Card,
   CardBody,
@@ -12,19 +14,20 @@ import {
   DrawerHeader,
   Input,
   NumberInput,
-  Select,
-  SelectItem,
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { useState } from "react";
 
 import BarcodeScanner from "@/components/barcode-scanner";
-import { siteTempData } from "@/config/data";
 
 export default function LieferscheinErstellenModal({
   disclosure,
+  kostenstellen,
+  artikel,
 }: {
   disclosure: UseDisclosureReturn;
+  kostenstellen: any;
+  artikel: any;
 }) {
   const { isOpen, onOpenChange } = disclosure;
 
@@ -34,24 +37,24 @@ export default function LieferscheinErstellenModal({
   const [, setScannedCode] = useState<string>("");
 
   const [itemList, setItemList] = useState<
-    { id: string; name: string; quantity: number }[]
+    { artikelnummer: string; kurzname: string; quantity: number }[]
   >([]);
 
   const handleScan = (code: string) => {
     setScannedCode(code);
     // search for icon in siteTempData.artikel
-    const foundItem = siteTempData.artikel.find(
-      (item) => item.artikelnummer === code,
-    );
+    const foundItem = artikel.find((item: any) => item.artikelnummer === code);
 
     // check if item is already in list
-    const isInList = itemList.find((item) => item.id === code);
+    const isInList = itemList.find((item) => item.artikelnummer === code);
 
     if (isInList) {
       // increase quantity by 1
       setItemList((prev) =>
         prev.map((item) =>
-          item.id === code ? { ...item, quantity: item.quantity + 1 } : item,
+          item.artikelnummer === code
+            ? { ...item, quantity: item.quantity + 1 }
+            : item,
         ),
       );
 
@@ -61,7 +64,11 @@ export default function LieferscheinErstellenModal({
     if (foundItem) {
       setItemList((prev) => [
         ...prev,
-        { id: foundItem.artikelnummer, name: foundItem.name, quantity: 1 },
+        {
+          artikelnummer: foundItem.artikelnummer,
+          kurzname: foundItem.kurzname,
+          quantity: 1,
+        },
       ]);
     }
   };
@@ -115,7 +122,7 @@ export default function LieferscheinErstellenModal({
                 placeholder="Geben Sie den Namen des Abholers ein"
                 variant="flat"
               />
-              <Select
+              <Autocomplete
                 endContent={
                   <Icon
                     className="text-default-400"
@@ -123,21 +130,25 @@ export default function LieferscheinErstellenModal({
                     width={26}
                   />
                 }
+                itemHeight={50}
                 label="Kostenstelle Von"
                 placeholder="Wählen Sie eine Kostenstelle"
-                selectedKeys={[kostenstelleVon]}
+                selectedKey={kostenstelleVon}
                 onSelectionChange={kostenstelleVonSelected}
               >
-                {siteTempData.kostenstellen.map((kostenstelle) => (
-                  <SelectItem
-                    key={kostenstelle.nummer}
-                    isDisabled={kostenstelle.nummer === kostenstelleNeu}
+                {kostenstellen.map((kostenstelle: any) => (
+                  <AutocompleteItem
+                    key={kostenstelle.kostenstellenummer}
+                    description={kostenstelle.bezeichnung}
+                    isDisabled={
+                      kostenstelle.kostenstellenummer === kostenstelleNeu
+                    }
                   >
-                    {kostenstelle.bezeichnung}
-                  </SelectItem>
+                    {kostenstelle.kostenstellenummer}
+                  </AutocompleteItem>
                 ))}
-              </Select>
-              <Select
+              </Autocomplete>
+              <Autocomplete
                 endContent={
                   <Icon
                     className="text-default-400"
@@ -145,32 +156,37 @@ export default function LieferscheinErstellenModal({
                     width={26}
                   />
                 }
+                itemHeight={50}
                 label="Kostenstelle Neu"
                 placeholder="Geben Sie die neue Kostenstelle ein"
-                selectedKeys={[kostenstelleNeu]}
+                selectedKey={kostenstelleNeu}
                 onSelectionChange={kostenstelleNeuSelected}
               >
-                {siteTempData.kostenstellen.map((kostenstelle) => (
-                  <SelectItem
-                    key={kostenstelle.nummer}
-                    isDisabled={kostenstelle.nummer === kostenstelleVon}
+                {kostenstellen.map((kostenstelle: any) => (
+                  <AutocompleteItem
+                    key={kostenstelle.kostenstellenummer}
+                    description={kostenstelle.bezeichnung}
+                    isDisabled={
+                      kostenstelle.kostenstellenummer === kostenstelleVon
+                    }
                   >
-                    {kostenstelle.bezeichnung}
-                  </SelectItem>
+                    {kostenstelle.kostenstellenummer}
+                  </AutocompleteItem>
                 ))}
-              </Select>
+              </Autocomplete>
               <Divider />
               <p className="text-sm font-semibold">Artikel</p>
               <div className="flex flex-col gap-2">
                 {itemList.map((item) => (
-                  <Card key={item.id}>
+                  <Card key={item.artikelnummer}>
                     <CardBody className="bg-content2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Input
                           readOnly
+                          description={item.kurzname}
                           label="Artikelbezeichnung"
                           size="sm"
-                          value={item.name}
+                          value={item.artikelnummer}
                           variant="bordered"
                         />
                         <NumberInput
@@ -185,7 +201,9 @@ export default function LieferscheinErstellenModal({
 
                             setItemList((prev) =>
                               prev.map((i) =>
-                                i.id === item.id ? { ...i, quantity } : i,
+                                i.artikelnummer === item.artikelnummer
+                                  ? { ...i, quantity }
+                                  : i,
                               ),
                             );
                           }}
@@ -196,7 +214,9 @@ export default function LieferscheinErstellenModal({
                           variant="flat"
                           onPress={() => {
                             setItemList((prev) =>
-                              prev.filter((i) => i.id !== item.id),
+                              prev.filter(
+                                (i) => i.artikelnummer !== item.artikelnummer,
+                              ),
                             );
                           }}
                         >
@@ -222,8 +242,8 @@ export default function LieferscheinErstellenModal({
                     setItemList((prev) => [
                       ...prev,
                       {
-                        id: newId,
-                        name: "Manuell Hinzugefügter Artikel",
+                        artikelnummer: newId,
+                        kurzname: "Manuell Hinzugefügter Artikel",
                         quantity: 1,
                       },
                     ]);

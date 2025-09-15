@@ -1,16 +1,19 @@
 "use client";
 
-import { Divider } from "@heroui/react";
-
 import ErrorCard from "@/components/error/ErrorCard";
 import { PageSkeleton } from "@/components/loading/page-skeleton";
+import { useKostenstellen } from "@/lib/swr/hooks/kostenstellen";
 import { useUserDetails } from "@/lib/swr/hooks/user";
 import { useArtikel } from "@/lib/swr/hooks/artikel";
 
-import ArtikelList from "./list";
-import ArtikelHeading from "./heading";
+import QuickNavigation from "./quick-navigation";
 
-export default function ArtikelPageClient() {
+export default function DashboardPageClient() {
+  const {
+    kostenstellen,
+    isLoading: kostenstellenLoading,
+    isError: kostenstellenError,
+  } = useKostenstellen();
   const {
     artikel,
     isLoading: artikelLoading,
@@ -19,7 +22,13 @@ export default function ArtikelPageClient() {
   const { user, isLoading: userLoading, isError: userError } = useUserDetails();
 
   // Check if any essential data is still loading or missing
-  const isLoading = artikelLoading || userLoading || !artikel || !user;
+  const isLoading =
+    kostenstellenLoading ||
+    artikelLoading ||
+    userLoading ||
+    !kostenstellen ||
+    !artikel ||
+    !user;
 
   // Show loading state if essential data is still loading
   if (isLoading) {
@@ -27,7 +36,7 @@ export default function ArtikelPageClient() {
   }
 
   // Show error state
-  const hasError = artikelError || userError;
+  const hasError = kostenstellenError || userError || artikelError;
 
   if (hasError) {
     return (
@@ -42,9 +51,7 @@ export default function ArtikelPageClient() {
 
   return (
     <main>
-      <ArtikelHeading />
-      <Divider className="my-4" />
-      <ArtikelList artikel={artikel} />
+      <QuickNavigation artikel={artikel} kostenstellen={kostenstellen} />
     </main>
   );
 }

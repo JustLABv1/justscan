@@ -86,7 +86,7 @@ export default function UploadCheckModal({
                               radius="sm"
                               variant="flat"
                             >
-                              {item.anlagegut}
+                              {item.betriebsnummer}
                             </Chip>
                           );
                         } else if (type === "kostenstellen") {

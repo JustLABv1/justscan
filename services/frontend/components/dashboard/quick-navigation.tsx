@@ -1,11 +1,20 @@
 "use client";
 
-import { Card, CardBody, Spacer } from "@heroui/react";
+import { Card, CardBody, Spacer, useDisclosure } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { useRouter } from "next/navigation";
 
-export default function QuickNavigation() {
+import LieferscheinErstellenModal from "../modals/lieferschein/erstellen";
+
+export default function QuickNavigation({
+  kostenstellen,
+  artikel,
+}: {
+  kostenstellen: any;
+  artikel: any;
+}) {
   const router = useRouter();
+  const lieferscheinErstellen = useDisclosure();
 
   return (
     <section>
@@ -20,19 +29,17 @@ export default function QuickNavigation() {
           isHoverable
           isPressable
           className="shadow-sm shadow-primary"
-          onPress={() => {
-            router.push("/lager");
-          }}
+          onPress={lieferscheinErstellen.onOpen}
         >
           <CardBody>
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex size-10 items-center justify-center rounded-small bg-default/30 text-foreground">
-                <Icon icon="hugeicons:lift-truck" width={26} />
+                <Icon icon="hugeicons:note-add" width={26} />
               </div>
               <div className="flex flex-col">
-                <p className="text-md">Zum Lager</p>
+                <p className="text-md">Lieferschein Erstellen</p>
                 <p className="text-small text-default-500">
-                  Erstelle Lieferscheine & Verwalte Artikel
+                  Erstelle einen neuen Lieferschein
                 </p>
               </div>
             </div>
@@ -62,6 +69,11 @@ export default function QuickNavigation() {
           </CardBody>
         </Card>
       </div>
+      <LieferscheinErstellenModal
+        artikel={artikel}
+        disclosure={lieferscheinErstellen}
+        kostenstellen={kostenstellen}
+      />
     </section>
   );
 }

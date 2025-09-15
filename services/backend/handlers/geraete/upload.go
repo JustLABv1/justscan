@@ -35,46 +35,17 @@ func UploadGeraete(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// get geraete from db
-	var dbGeraete []models.Geraete
-	err = db.NewSelect().Model(&dbGeraete).Scan(c)
+	// Delete all existing records
+	_, err = db.NewTruncateTable().Model((*models.Geraete)(nil)).Exec(c)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to truncate table"})
 		return
 	}
 
-	// diff geraete and dbGeraete
-	var newGeraete []models.Geraete
-	for _, k := range geraete {
-		found := false
-		for _, dbk := range dbGeraete {
-			if k.Geraetenummer == dbk.Geraetenummer {
-				found = true
-				break
-			}
-		}
-		if !found {
-			newGeraete = append(newGeraete, k)
-		}
-	}
-
-	if newGeraete == nil || len(newGeraete) == 0 {
-		c.JSON(http.StatusOK, gin.H{
-			"result": "no new geraete",
-		})
-		return
-	}
-
-	if newGeraete == nil || len(newGeraete) == 0 {
-		c.JSON(http.StatusOK, gin.H{
-			"result": "no new geraete",
-		})
-		return
-	}
-
-	_, err = db.NewInsert().Model(&newGeraete).Exec(c)
+	// Insert the new records
+	_, err = db.NewInsert().Model(&geraete).Exec(c)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert records", "details": err.Error()})
 		return
 	}
 

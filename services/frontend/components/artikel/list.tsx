@@ -1,14 +1,15 @@
 "use client";
 
 import {
-  Button,
-  Card,
-  CardBody,
-  CardFooter,
-  Divider,
+  getKeyValue,
   Input,
   Pagination,
-  Tooltip,
+  Table,
+  TableBody,
+  TableCell,
+  TableColumn,
+  TableHeader,
+  TableRow,
   useDisclosure,
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
@@ -20,78 +21,92 @@ import DeleteModal from "../modals/delete";
 export default function ArtikelList({ artikel }: { artikel: any }) {
   const deleteModal = useDisclosure();
 
-  const [search, setSearch] = React.useState("");
+  const [filterValue, setFilterValue] = React.useState("");
+  const hasSearchFilter = Boolean(filterValue);
 
   const [page, setPage] = useState(1);
-  const limit = 15;
-  const totalPages = Math.max(1, Math.ceil(artikel.length / limit));
+  const rowsPerPage = 15;
+  const pages = Math.ceil(artikel.length / rowsPerPage);
+  const totalPages = Math.max(1, Math.ceil(artikel.length / rowsPerPage));
   const safePage = Math.min(page, totalPages);
 
   const items = useMemo(() => {
     const filtered = artikel.filter(
       (item: any) =>
-        item.kurzname?.toLowerCase().includes(search.toLowerCase()) ||
-        item.artikelnummer?.toLowerCase().includes(search.toLowerCase()),
+        item.kurzname?.toLowerCase().includes(filterValue.toLowerCase()) ||
+        item.artikelnummer?.toLowerCase().includes(filterValue.toLowerCase()),
     );
 
-    const start = (safePage - 1) * limit;
+    const start = (safePage - 1) * rowsPerPage;
 
-    return filtered.slice(start, start + limit);
-  }, [artikel, safePage, search]);
+    return filtered.slice(start, start + rowsPerPage);
+  }, [artikel, safePage, filterValue]);
+
+  const onSearchChange = React.useCallback((value: any) => {
+    if (value) {
+      setFilterValue(value);
+      setPage(1);
+    } else {
+      setFilterValue("");
+    }
+  }, []);
 
   return (
     <main>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-2xl font-bold mb-1">Artikel</p>
-        <Input
-          className="max-w-xs"
-          placeholder="Suchen..."
-          radius="sm"
-          size="md"
-          startContent={<Icon icon="hugeicons:search-01" width={16} />}
-          type="text"
-          value={search}
-          onValueChange={setSearch}
-        />
-      </div>
-      <Divider className="my-4" />
       {items.length === 0 && (
         <p className="text-center text-default-400">Keine Artikel vorhanden.</p>
       )}
-      <div className="grid grid-cols-2 items-stretch justify-between gap-4 lg:grid-cols-3">
-        {items.map((item: any) => (
-          <Card key={item.artikelnummer}>
-            <CardBody>
-              <p>{item.kurzname}</p>
-            </CardBody>
-            <Divider />
-            <CardFooter className="flex items-center justify-between">
-              <p className="text-sm text-default-400">
-                Nummer: {item.artikelnummer}
-              </p>
-              <Tooltip content="Löschen">
-                <Button
-                  isIconOnly
-                  color="danger"
-                  size="sm"
-                  variant="flat"
-                  onPress={deleteModal.onOpen}
-                >
-                  <Icon icon="hugeicons:delete-02" width={16} />
-                </Button>
-              </Tooltip>
-            </CardFooter>
-          </Card>
-        ))}
-      </div>
-      <div className="flex justify-center mt-4 mb-4">
-        <Pagination
-          showControls
-          page={safePage}
-          total={totalPages}
-          onChange={(newPage) => setPage(newPage)}
-        />
-      </div>
+      <Table
+        aria-label="Example table with client side pagination"
+        bottomContent={
+          <div className="flex w-full justify-center">
+            <Pagination
+              isCompact
+              showControls
+              showShadow
+              color="primary"
+              isDisabled={hasSearchFilter}
+              page={page}
+              total={pages}
+              onChange={(page) => setPage(page)}
+            />
+          </div>
+        }
+        classNames={{
+          wrapper: "min-h-[222px]",
+        }}
+        topContent={
+          <Input
+            isClearable
+            classNames={{
+              base: "w-full sm:max-w-[44%]",
+            }}
+            placeholder="Suchen..."
+            size="sm"
+            startContent={
+              <Icon className="text-default-300" icon="hugeicons:search-01" />
+            }
+            value={filterValue}
+            variant="flat"
+            onClear={() => setFilterValue("")}
+            onValueChange={onSearchChange}
+          />
+        }
+      >
+        <TableHeader>
+          <TableColumn key="artikelnummer">Artikelnummer</TableColumn>
+          <TableColumn key="kurzname">Kurzname</TableColumn>
+        </TableHeader>
+        <TableBody items={items}>
+          {(item: any) => (
+            <TableRow key={item.id}>
+              {(columnKey) => (
+                <TableCell>{getKeyValue(item, columnKey)}</TableCell>
+              )}
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
       <DeleteModal disclosure={deleteModal} />
     </main>
   );

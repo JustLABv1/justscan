@@ -180,48 +180,50 @@ export default function LieferscheinErstellenModal({
                 {itemList.map((item) => (
                   <Card key={item.artikelnummer}>
                     <CardBody className="bg-content2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Input
-                          readOnly
-                          description={item.kurzname}
-                          label="Artikelbezeichnung"
-                          size="sm"
-                          value={item.artikelnummer}
-                          variant="bordered"
-                        />
-                        <NumberInput
-                          defaultValue={1}
-                          label="Stückzahl"
-                          placeholder="Stückzahl"
-                          size="sm"
-                          value={item.quantity}
-                          variant="bordered"
-                          onValueChange={(value) => {
-                            const quantity = value || 1;
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-col">
+                          <p>{item.kurzname}</p>
+                          <p className="text-sm text-default-500">
+                            {item.artikelnummer}
+                          </p>
+                        </div>
 
-                            setItemList((prev) =>
-                              prev.map((i) =>
-                                i.artikelnummer === item.artikelnummer
-                                  ? { ...i, quantity }
-                                  : i,
-                              ),
-                            );
-                          }}
-                        />
-                        <Button
-                          isIconOnly
-                          color="danger"
-                          variant="flat"
-                          onPress={() => {
-                            setItemList((prev) =>
-                              prev.filter(
-                                (i) => i.artikelnummer !== item.artikelnummer,
-                              ),
-                            );
-                          }}
-                        >
-                          <Icon icon="hugeicons:delete-02" width={18} />
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <NumberInput
+                            className="w-32"
+                            defaultValue={1}
+                            label="Stückzahl"
+                            placeholder="Stückzahl"
+                            size="sm"
+                            value={item.quantity}
+                            variant="bordered"
+                            onValueChange={(value) => {
+                              const quantity = value || 1;
+
+                              setItemList((prev) =>
+                                prev.map((i) =>
+                                  i.artikelnummer === item.artikelnummer
+                                    ? { ...i, quantity }
+                                    : i,
+                                ),
+                              );
+                            }}
+                          />
+                          <Button
+                            isIconOnly
+                            color="danger"
+                            variant="flat"
+                            onPress={() => {
+                              setItemList((prev) =>
+                                prev.filter(
+                                  (i) => i.artikelnummer !== item.artikelnummer,
+                                ),
+                              );
+                            }}
+                          >
+                            <Icon icon="hugeicons:delete-02" width={18} />
+                          </Button>
+                        </div>
                       </div>
                     </CardBody>
                   </Card>

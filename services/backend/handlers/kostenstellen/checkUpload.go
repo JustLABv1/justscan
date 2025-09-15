@@ -60,12 +60,12 @@ func CheckUploadedKostenstellen(c *gin.Context, db *bun.DB) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"result":            "success",
-		"kostenstellen":     kostenstellen,
-		"count":             len(kostenstellen),
-		"db_kostenstellen":  dbKostenstellen,
-		"db_count":          len(dbKostenstellen),
-		"new_kostenstellen": newKostenstellen,
-		"new_count":         len(newKostenstellen),
+		"result":        "success",
+		"kostenstellen": kostenstellen,
+		"count":         len(kostenstellen),
+		"db":            dbKostenstellen,
+		"db_count":      len(dbKostenstellen),
+		"new":           newKostenstellen,
+		"new_count":     len(newKostenstellen),
 	})
 }

@@ -7,7 +7,6 @@ import (
 type Geraete struct {
 	bun.BaseModel `bun:"table:geraete"`
 
-	Geraetenummer int    `bun:"geraetenummer,pk,type:int,notnull" json:"geraetenummer"`
-	Kurzname      string `bun:"kurzname,type:text,notnull" json:"kurzname"`
+	Geraetenummer string `bun:"geraetenummer,pk,type:text,notnull" json:"geraetenummer"`
 	Anlagegut     string `bun:"anlagegut,type:text,notnull" json:"anlagegut"`
 }

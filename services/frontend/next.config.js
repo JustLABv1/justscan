@@ -23,6 +23,11 @@ module.exports = async (phase) => {
       unoptimized: true,
       domains: ['localhost', 'exflow.org'],
     },
+    experimental: {
+      serverActions: {
+        bodySizeLimit: '15mb',
+      },
+    },
   };
   if (phase === PHASE_DEVELOPMENT_SERVER || phase === PHASE_PRODUCTION_BUILD) {
     const withSerwist = (await import('@serwist/next')).default({

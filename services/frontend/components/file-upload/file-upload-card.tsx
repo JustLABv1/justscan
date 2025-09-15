@@ -4,8 +4,12 @@ import { Icon } from "@iconify/react";
 
 import { PostCheckKostenstellen } from "@/lib/fetch/kostenstellen/POST/check";
 import { PostUploadKostenstellen } from "@/lib/fetch/kostenstellen/POST/upload";
+import { PostCheckGeraete } from "@/lib/fetch/geraete/POST/check";
+import { PostUploadGeraete } from "@/lib/fetch/geraete/POST/upload";
+import { PostUploadArtikel } from "@/lib/fetch/artikel/POST/upload";
+import { PostCheckArtikel } from "@/lib/fetch/artikel/POST/check";
 
-import KostenstellenUploadCheckModal from "../modals/kostenstellen/upload-check";
+import UploadCheckModal from "../modals/upload/upload-check";
 
 interface FileUploadCardProps {
   type: "artikel" | "geräte" | "kostenstellen";
@@ -28,8 +32,8 @@ export const FileUploadCard: React.FC<FileUploadCardProps> = ({
   >("idle");
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
-  const kostenstellenCheckModal = useDisclosure();
-  const [kostenstellenData, setKostenstellenData] = React.useState<any>(null);
+  const checkModal = useDisclosure();
+  const [checkData, setCheckData] = React.useState<any>(null);
 
   // eslint-disable-next-line no-undef
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -114,28 +118,6 @@ export const FileUploadCard: React.FC<FileUploadCardProps> = ({
     }
   };
 
-  const handleUpload = () => {
-    if (!file) return;
-
-    setUploadStatus("uploading");
-    setUploadProgress(0);
-
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setUploadStatus("success");
-          if (onUploadComplete) onUploadComplete(file);
-
-          return 100;
-        }
-
-        return prev + 5;
-      });
-    }, 200);
-  };
-
   const resetUpload = () => {
     setFile(null);
     setUploadStatus("idle");
@@ -188,14 +170,26 @@ export const FileUploadCard: React.FC<FileUploadCardProps> = ({
     }
   };
 
-  async function handleKostenstellenCheck() {
+  async function handleCheck() {
     // Create FormData with the file and type
     const formData = new FormData();
 
     formData.append("csv", file as Blob);
     formData.append("type", "csv");
 
-    const res = await PostCheckKostenstellen(formData);
+    let res: any = null;
+
+    if (type === "kostenstellen") {
+      res = await PostCheckKostenstellen(formData);
+    }
+
+    if (type === "geräte") {
+      res = await PostCheckGeraete(formData);
+    }
+
+    if (type === "artikel") {
+      res = await PostCheckArtikel(formData);
+    }
 
     if (!res) {
       setErrorMessage("Ein Fehler ist aufgetreten");
@@ -204,8 +198,8 @@ export const FileUploadCard: React.FC<FileUploadCardProps> = ({
     }
 
     if (res.success) {
-      setKostenstellenData(res.data);
-      kostenstellenCheckModal.onOpen();
+      setCheckData(res.data);
+      checkModal.onOpen();
     } else {
       setErrorMessage(res.error || "Ein Fehler ist aufgetreten");
 
@@ -215,7 +209,7 @@ export const FileUploadCard: React.FC<FileUploadCardProps> = ({
     return true;
   }
 
-  async function handleKostenstellenUpload() {
+  async function handleUpload() {
     if (!file) return;
 
     setUploadStatus("uploading");
@@ -226,7 +220,19 @@ export const FileUploadCard: React.FC<FileUploadCardProps> = ({
     newFormData.append("csv", file);
     newFormData.append("type", "csv");
 
-    const res = await PostUploadKostenstellen(newFormData);
+    let res: any = null;
+
+    if (type === "kostenstellen") {
+      res = await PostUploadKostenstellen(newFormData);
+    }
+
+    if (type === "geräte") {
+      res = await PostUploadGeraete(newFormData);
+    }
+
+    if (type === "artikel") {
+      res = await PostUploadArtikel(newFormData);
+    }
 
     if (!res) {
       setUploadStatus("error");
@@ -393,9 +399,7 @@ export const FileUploadCard: React.FC<FileUploadCardProps> = ({
                     isLoading={uploadStatus === "uploading"}
                     variant="flat"
                     onPress={() => {
-                      if (type === "kostenstellen") {
-                        handleKostenstellenCheck();
-                      }
+                      handleCheck();
                     }}
                   >
                     Überprüfen
@@ -405,9 +409,7 @@ export const FileUploadCard: React.FC<FileUploadCardProps> = ({
                     isDisabled={uploadStatus === "uploading"}
                     isLoading={uploadStatus === "uploading"}
                     onPress={() => {
-                      if (type === "kostenstellen") {
-                        handleKostenstellenUpload();
-                      }
+                      handleUpload();
                     }}
                   >
                     Datei Hochladen
@@ -426,10 +428,7 @@ export const FileUploadCard: React.FC<FileUploadCardProps> = ({
           )}
         </CardBody>
       </Card>
-      <KostenstellenUploadCheckModal
-        data={kostenstellenData}
-        disclosure={kostenstellenCheckModal}
-      />
+      <UploadCheckModal data={checkData} disclosure={checkModal} type={type} />
     </>
   );
 };

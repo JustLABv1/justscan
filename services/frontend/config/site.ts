@@ -10,14 +10,6 @@ export const siteConfig = {
       href: "/",
     },
     {
-      label: "Lager",
-      href: "/lager",
-    },
-    {
-      label: "Bestellungen",
-      href: "/bestellungen",
-    },
-    {
       label: "Artikel",
       href: "/artikel",
     },
@@ -30,6 +22,10 @@ export const siteConfig = {
       href: "/geraete",
     },
     {
+      label: "Bestellungen",
+      href: "/bestellungen",
+    },
+    {
       label: "System Verwaltung",
       href: "/system-verwaltung",
     },
@@ -40,8 +36,16 @@ export const siteConfig = {
       href: "/",
     },
     {
-      label: "Lager",
-      href: "/lager",
+      label: "Artikel",
+      href: "/artikel",
+    },
+    {
+      label: "Kostenstellen",
+      href: "/kostenstellen",
+    },
+    {
+      label: "Geräte",
+      href: "/geraete",
     },
     {
       label: "Bestellungen",

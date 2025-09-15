@@ -13,25 +13,19 @@ import { Icon } from "@iconify/react";
 
 import DeleteModal from "../modals/delete";
 
-export default function KostenstellenList({
-  kostenstellen,
-}: {
-  kostenstellen: any;
-}) {
+export default function GeraeteList({ geraete }: { geraete: any }) {
   const deleteModal = useDisclosure();
 
   return (
     <main>
-      {kostenstellen.length === 0 && (
-        <p className="text-center text-default-400">
-          Keine Kostenstellen vorhanden.
-        </p>
+      {geraete.length === 0 && (
+        <p className="text-center text-default-400">Keine Geräte vorhanden.</p>
       )}
       <div className="grid grid-cols-2 items-center justify-between gap-4 lg:grid-cols-3">
-        {kostenstellen.map((item: any) => (
-          <Card key={item.nummer}>
+        {geraete.map((item: any) => (
+          <Card key={item.geraetenummer}>
             <CardHeader className="flex items-center justify-between">
-              <p className="font-bold">{item.bezeichnung}</p>
+              <p className="font-bold">{item.anlagegut}</p>
               <Tooltip content="Löschen">
                 <Button
                   isIconOnly
@@ -47,7 +41,7 @@ export default function KostenstellenList({
             <Divider />
             <CardFooter>
               <p className="text-sm text-default-400">
-                Nummer: {item.kostenstellenummer}
+                Nummer: {item.geraetenummer}
               </p>
             </CardFooter>
           </Card>

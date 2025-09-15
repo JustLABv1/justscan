@@ -15,12 +15,14 @@ import {
 import React from "react";
 import { Icon } from "@iconify/react";
 
-export default function KostenstellenUploadCheckModal({
+export default function UploadCheckModal({
   disclosure,
   data,
+  type,
 }: {
   disclosure: UseDisclosureReturn;
   data: any;
+  type: "artikel" | "geräte" | "kostenstellen";
 }) {
   const { isOpen, onOpenChange } = disclosure;
 
@@ -38,9 +40,7 @@ export default function KostenstellenUploadCheckModal({
             <>
               <ModalHeader className="flex flex-wrap items-center">
                 <div className="flex flex-col gap-2">
-                  <p className="text-lg font-bold">
-                    Kostenstellen Upload Übersicht
-                  </p>
+                  <p className="text-lg font-bold">Upload Übersicht</p>
                 </div>
               </ModalHeader>
               <ModalBody>
@@ -73,27 +73,49 @@ export default function KostenstellenUploadCheckModal({
                   </Card>
                 </div>
 
-                <p className="font-semibold text-default-500">
-                  Neue Kostenstellen
-                </p>
+                <p className="font-semibold text-default-500">Neue Daten</p>
                 <ScrollShadow className="max-h-96">
                   <div className="flex flex-wrap gap-2">
-                    {data.new_kostenstellen !== null &&
-                      data.new_kostenstellen.map(
-                        (kostenstelle: string, index: number) => (
-                          <Chip
-                            key={index}
-                            className="text-md"
-                            radius="sm"
-                            variant="flat"
-                          >
-                            {kostenstelle}
-                          </Chip>
-                        ),
-                      )}
-                    {data.new_kostenstellen === null && (
+                    {data.new !== null &&
+                      data.new.map((item: any, index: number) => {
+                        if (type === "geräte") {
+                          return (
+                            <Chip
+                              key={index}
+                              className="text-md"
+                              radius="sm"
+                              variant="flat"
+                            >
+                              {item.anlagegut}
+                            </Chip>
+                          );
+                        } else if (type === "kostenstellen") {
+                          return (
+                            <Chip
+                              key={index}
+                              className="text-md"
+                              radius="sm"
+                              variant="flat"
+                            >
+                              {item.kostenstellenummer}
+                            </Chip>
+                          );
+                        } else if (type === "artikel") {
+                          return (
+                            <Chip
+                              key={index}
+                              className="text-md"
+                              radius="sm"
+                              variant="flat"
+                            >
+                              {item.artikelnummer}
+                            </Chip>
+                          );
+                        }
+                      })}
+                    {data.new === null && (
                       <p className="font-semibold">
-                        Keine neuen Kostenstellen vorhanden.
+                        Keine neuen Daten vorhanden.
                       </p>
                     )}
                   </div>

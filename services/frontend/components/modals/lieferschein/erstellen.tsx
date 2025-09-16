@@ -1,6 +1,7 @@
 import type { UseDisclosureReturn } from "@heroui/use-disclosure";
 
 import {
+  addToast,
   Autocomplete,
   AutocompleteItem,
   Button,
@@ -42,8 +43,24 @@ export default function LieferscheinErstellenModal({
 
   const handleScan = (code: string) => {
     setScannedCode(code);
-    // search for icon in siteTempData.artikel
+    // search for artikel
     const foundItem = artikel.find((item: any) => item.artikelnummer === code);
+
+    if (!foundItem) {
+      addToast({
+        title: "Artikel nicht gefunden",
+        description: `Der Artikel mit der Nummer ${code} wurde nicht gefunden.`,
+        color: "danger",
+      });
+
+      return;
+    } else {
+      addToast({
+        title: "Artikel gefunden",
+        description: `Der Artikel ${foundItem.kurzname} wurde zur Liste hinzugefügt.`,
+        color: "success",
+      });
+    }
 
     // check if item is already in list
     const isInList = itemList.find((item) => item.artikelnummer === code);

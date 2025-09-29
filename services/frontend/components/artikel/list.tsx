@@ -53,9 +53,6 @@ export default function ArtikelList({ artikel }: { artikel: any }) {
 
   return (
     <main>
-      {items.length === 0 && (
-        <p className="text-center text-default-400">Keine Artikel vorhanden.</p>
-      )}
       <Table
         aria-label="Example table with client side pagination"
         bottomContent={
@@ -97,7 +94,7 @@ export default function ArtikelList({ artikel }: { artikel: any }) {
           <TableColumn key="artikelnummer">Artikelnummer</TableColumn>
           <TableColumn key="kurzname">Kurzname</TableColumn>
         </TableHeader>
-        <TableBody items={items}>
+        <TableBody emptyContent={"Keine Artikel vorhanden."} items={items}>
           {(item: any) => (
             <TableRow key={item.id}>
               {(columnKey) => (

@@ -5,7 +5,7 @@ import { Icon } from "@iconify/react";
 
 import BestellungAufgebenModal from "../modals/bestellung/aufgeben";
 
-export default function BestellungenHeading() {
+export default function BestellungenHeading({ artikel }: { artikel: any }) {
   const bestellungAufgebenModal = useDisclosure();
 
   return (
@@ -25,7 +25,10 @@ export default function BestellungenHeading() {
           </div>
         </div>
       </div>
-      <BestellungAufgebenModal disclosure={bestellungAufgebenModal} />
+      <BestellungAufgebenModal
+        artikel={artikel}
+        disclosure={bestellungAufgebenModal}
+      />
     </main>
   );
 }

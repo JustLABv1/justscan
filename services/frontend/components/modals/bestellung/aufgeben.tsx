@@ -1,6 +1,7 @@
 import type { UseDisclosureReturn } from "@heroui/use-disclosure";
 
 import {
+  addToast,
   Button,
   Card,
   CardBody,
@@ -17,36 +18,63 @@ import { Icon } from "@iconify/react";
 import { useState } from "react";
 
 import BarcodeScanner from "@/components/barcode-scanner";
-import { siteTempData } from "@/config/data";
+import CreateBestellung from "@/lib/fetch/bestellungen/POST/create_bestellung";
+import { useRefreshCache } from "@/lib/swr/hooks/useRefreshCache";
+import ErrorCard from "@/components/error/ErrorCard";
 
 export default function BestellungAufgebenModal({
   disclosure,
+  artikel,
 }: {
   disclosure: UseDisclosureReturn;
+  artikel: any;
 }) {
+  const { refreshBestellungen } = useRefreshCache();
   const { isOpen, onOpenChange } = disclosure;
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [errorText, setErrorText] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   const [, setScannedCode] = useState<string>("");
 
+  const [besteller, setBesteller] = useState<string>("");
   const [itemList, setItemList] = useState<
-    { id: string; name: string; quantity: number }[]
+    { artikelnummer: string; kurzname: string; anzahl: number }[]
   >([]);
 
   const handleScan = (code: string) => {
     setScannedCode(code);
-    // search for icon in siteTempData.artikel
-    const foundItem = siteTempData.artikel.find(
-      (item) => item.artikelnummer === code,
-    );
+    // search for artikel
+    const foundItem = artikel.find((item: any) => item.artikelnummer === code);
+
+    if (!foundItem) {
+      addToast({
+        title: "Artikel nicht gefunden",
+        description: `Der Artikel mit der Nummer ${code} wurde nicht gefunden.`,
+        color: "danger",
+      });
+
+      return;
+    } else {
+      addToast({
+        title: "Artikel gefunden",
+        description: `Der Artikel ${foundItem.kurzname} wurde zur Liste hinzugefügt.`,
+        color: "success",
+      });
+    }
 
     // check if item is already in list
-    const isInList = itemList.find((item) => item.id === code);
+    const isInList = itemList.find((item) => item.artikelnummer === code);
 
     if (isInList) {
       // increase quantity by 1
       setItemList((prev) =>
         prev.map((item) =>
-          item.id === code ? { ...item, quantity: item.quantity + 1 } : item,
+          item.artikelnummer === code
+            ? { ...item, anzahl: item.anzahl + 1 }
+            : item,
         ),
       );
 
@@ -56,7 +84,11 @@ export default function BestellungAufgebenModal({
     if (foundItem) {
       setItemList((prev) => [
         ...prev,
-        { id: foundItem.artikelnummer, name: foundItem.name, quantity: 1 },
+        {
+          artikelnummer: foundItem.artikelnummer,
+          kurzname: foundItem.kurzname,
+          anzahl: 1,
+        },
       ]);
     }
   };
@@ -65,8 +97,37 @@ export default function BestellungAufgebenModal({
     // Handle scan errors silently or show user notification
   };
 
-  function erstellen() {
-    onOpenChange();
+  async function erstellen() {
+    setIsLoading(true);
+
+    const response = (await CreateBestellung(besteller, itemList)) as any;
+
+    if (!response) {
+      setError(true);
+      setErrorText("Fehler beim Erstellen der Bestellung");
+      setErrorMessage("Bitte versuchen Sie es erneut.");
+      setIsLoading(false);
+
+      return;
+    }
+
+    if (response.success) {
+      setIsLoading(false);
+      refreshBestellungen();
+      addToast({
+        title: "Bestellung erstellt",
+        description: `Die Bestellung wurde erfolgreich erstellt.`,
+        color: "success",
+      });
+      onOpenChange();
+      setBesteller("");
+      setItemList([]);
+    } else {
+      setError(true);
+      setErrorText(response.error || "Fehler beim Erstellen der Bestellung");
+      setErrorMessage(response.message || "Bitte versuchen Sie es erneut.");
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -85,6 +146,7 @@ export default function BestellungAufgebenModal({
               Bestellung Aufgeben
             </DrawerHeader>
             <DrawerBody>
+              {error && <ErrorCard error={errorText} message={errorMessage} />}
               <Input
                 classNames={{
                   inputWrapper: [
@@ -100,51 +162,60 @@ export default function BestellungAufgebenModal({
                 }
                 label="Besteller"
                 placeholder="Geben Sie den Namen des Bestellers ein"
+                value={besteller}
                 variant="flat"
+                onValueChange={(value) => setBesteller(value)}
               />
               <Divider />
               <p className="text-sm font-semibold">Artikel</p>
               <div className="flex flex-col gap-2">
                 {itemList.map((item) => (
-                  <Card key={item.id}>
+                  <Card key={item.artikelnummer}>
                     <CardBody className="bg-content2">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          readOnly
-                          label="Artikelbezeichnung"
-                          size="sm"
-                          value={item.name}
-                          variant="bordered"
-                        />
-                        <NumberInput
-                          defaultValue={1}
-                          label="Stückzahl"
-                          placeholder="Stückzahl"
-                          size="sm"
-                          value={item.quantity}
-                          variant="bordered"
-                          onValueChange={(value) => {
-                            const quantity = value || 1;
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-col">
+                          <p>{item.kurzname}</p>
+                          <p className="text-sm text-default-500">
+                            {item.artikelnummer}
+                          </p>
+                        </div>
 
-                            setItemList((prev) =>
-                              prev.map((i) =>
-                                i.id === item.id ? { ...i, quantity } : i,
-                              ),
-                            );
-                          }}
-                        />
-                        <Button
-                          isIconOnly
-                          color="danger"
-                          variant="flat"
-                          onPress={() => {
-                            setItemList((prev) =>
-                              prev.filter((i) => i.id !== item.id),
-                            );
-                          }}
-                        >
-                          <Icon icon="hugeicons:delete-02" width={18} />
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <NumberInput
+                            className="w-32"
+                            defaultValue={1}
+                            label="Stückzahl"
+                            placeholder="Stückzahl"
+                            size="sm"
+                            value={item.anzahl}
+                            variant="bordered"
+                            onValueChange={(value) => {
+                              const anzahl = value || 1;
+
+                              setItemList((prev) =>
+                                prev.map((i) =>
+                                  i.artikelnummer === item.artikelnummer
+                                    ? { ...i, anzahl }
+                                    : i,
+                                ),
+                              );
+                            }}
+                          />
+                          <Button
+                            isIconOnly
+                            color="danger"
+                            variant="flat"
+                            onPress={() => {
+                              setItemList((prev) =>
+                                prev.filter(
+                                  (i) => i.artikelnummer !== item.artikelnummer,
+                                ),
+                              );
+                            }}
+                          >
+                            <Icon icon="hugeicons:delete-02" width={18} />
+                          </Button>
+                        </div>
                       </div>
                     </CardBody>
                   </Card>
@@ -152,42 +223,25 @@ export default function BestellungAufgebenModal({
               </div>
             </DrawerBody>
             <DrawerFooter className="flex flex-cols gap-4 justify-between">
-              <div className="flex flex-col gap-2">
-                <Button
-                  color="primary"
-                  startContent={<Icon icon="hugeicons:layer-add" width={18} />}
-                  variant="flat"
-                  onPress={() => {
-                    const newId = `manual-${Math.random()
-                      .toString(36)
-                      .substring(2, 9)}`;
+              <BarcodeScanner onError={handleError} onScan={handleScan} />
 
-                    setItemList((prev) => [
-                      ...prev,
-                      {
-                        id: newId,
-                        name: "Manuell Hinzugefügter Artikel",
-                        quantity: 1,
-                      },
-                    ]);
-                  }}
-                >
-                  Manuell Hinzufügen
-                </Button>
-                <BarcodeScanner onError={handleError} onScan={handleScan} />
-              </div>
-
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-cols gap-2">
                 <Button
                   color="danger"
                   startContent={<Icon icon="hugeicons:cancel-01" width={18} />}
                   variant="flat"
-                  onPress={onClose}
+                  onPress={() => {
+                    onClose();
+                    setBesteller("");
+                    setItemList([]);
+                  }}
                 >
                   Abbrechen
                 </Button>
                 <Button
                   color="primary"
+                  isDisabled={itemList.length === 0 || besteller.trim() === ""}
+                  isLoading={isLoading}
                   startContent={<Icon icon="hugeicons:note-done" width={18} />}
                   onPress={erstellen}
                 >

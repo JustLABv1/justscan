@@ -45,7 +45,7 @@ export default function LoginPageComponent() {
     } else {
       setIsLoginLoading(false);
       setError(true);
-      setErrorText(res.error);
+      setErrorText(res.message);
     }
   }
 
@@ -138,9 +138,9 @@ export default function LoginPageComponent() {
         </form>
         <Divider className="my-2" />
         <p className="text-center text-small">
-          Need to create an account?&nbsp;
+          Du benötigst ein Konto?&nbsp;
           <Link href="/auth/signup" size="sm">
-            Sign Up
+            Registrieren
           </Link>
         </p>
       </div>

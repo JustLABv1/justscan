@@ -11,7 +11,7 @@ func Token(router *gin.RouterGroup, db *bun.DB) {
 	token := router.Group("/token")
 	{
 		token.GET("/validate", func(c *gin.Context) {
-			tokens.ValidateToken(c)
+			tokens.ValidateToken(c, db)
 		})
 		token.POST("/refresh", func(c *gin.Context) {
 			tokens.RefreshToken(c, db)

@@ -64,9 +64,6 @@ export default function GeraeteList({ geraete }: { geraete: any }) {
 
   return (
     <main>
-      {geraete.length === 0 && (
-        <p className="text-center text-default-400">Keine Geräte vorhanden.</p>
-      )}
       <Table
         aria-label="Example table with client side pagination"
         bottomContent={
@@ -108,7 +105,7 @@ export default function GeraeteList({ geraete }: { geraete: any }) {
           <TableColumn key="betriebsnummer">Betriebsnummer</TableColumn>
           <TableColumn key="gerätenummer">Gerätenummer</TableColumn>
         </TableHeader>
-        <TableBody items={items}>
+        <TableBody emptyContent={"Keine Geräte vorhanden."} items={items}>
           {(item: any) => (
             <TableRow key={item.id}>
               {(columnKey) => (

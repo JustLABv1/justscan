@@ -248,32 +248,9 @@ export default function LieferscheinErstellenModal({
               </div>
             </DrawerBody>
             <DrawerFooter className="flex flex-cols gap-4 justify-between">
-              <div className="flex flex-col gap-2">
-                <Button
-                  color="primary"
-                  startContent={<Icon icon="hugeicons:layer-add" width={18} />}
-                  variant="flat"
-                  onPress={() => {
-                    const newId = `manual-${Math.random()
-                      .toString(36)
-                      .substring(2, 9)}`;
+              <BarcodeScanner onError={handleError} onScan={handleScan} />
 
-                    setItemList((prev) => [
-                      ...prev,
-                      {
-                        artikelnummer: newId,
-                        kurzname: "Manuell Hinzugefügter Artikel",
-                        quantity: 1,
-                      },
-                    ]);
-                  }}
-                >
-                  Manuell Hinzufügen
-                </Button>
-                <BarcodeScanner onError={handleError} onScan={handleScan} />
-              </div>
-
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-cols gap-2">
                 <Button
                   color="danger"
                   startContent={<Icon icon="hugeicons:cancel-01" width={18} />}

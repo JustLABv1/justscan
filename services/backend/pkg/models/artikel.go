@@ -11,4 +11,5 @@ type Artikel struct {
 	ID            uuid.UUID `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
 	Artikelnummer string    `bun:"artikelnummer,type:text,notnull" json:"artikelnummer"`
 	Kurzname      string    `bun:"kurzname,type:text" json:"kurzname"`
+	Anzahl        int       `bun:"anzahl,type:int,notnull,default:0" json:"anzahl"`
 }

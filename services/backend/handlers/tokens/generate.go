@@ -32,19 +32,19 @@ func GenerateTokenUser(db *bun.DB, context *gin.Context) {
 	var user models.Users
 	err := db.NewSelect().Model(&user).Where("email = ? OR username = ?", request.Email, request.Email).Scan(context)
 	if err != nil {
-		httperror.InternalServerError(context, "Error collecting user information from db", err)
+		httperror.InternalServerError(context, "Benutzer nicht gefunden", err)
 		return
 	}
 
 	// check if user account is disabled
 	if user.Disabled {
-		httperror.Unauthorized(context, "Your Account is currently disabled", errors.New("user account is disabled"))
+		httperror.Unauthorized(context, "Dein Account ist deaktiviert", errors.New("dein account ist deaktiviert: "+user.DisabledReason))
 		return
 	}
 	// check if password is correct
 	credentialError := user.CheckPassword(request.Password)
 	if credentialError != nil {
-		httperror.Unauthorized(context, "Invalid credentials", errors.New("invalid credentials"))
+		httperror.Unauthorized(context, "Passwort ist falsch", errors.New("passwort ist falsch"))
 		return
 	}
 

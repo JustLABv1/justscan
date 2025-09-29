@@ -68,11 +68,6 @@ export default function KostenstellenList({
 
   return (
     <main>
-      {kostenstellen.length === 0 && (
-        <p className="text-center text-default-400">
-          Keine Kostenstellen vorhanden.
-        </p>
-      )}
       <Table
         aria-label="Example table with client side pagination"
         bottomContent={
@@ -116,7 +111,10 @@ export default function KostenstellenList({
           </TableColumn>
           <TableColumn key="bezeichnung">Bezeichnung</TableColumn>
         </TableHeader>
-        <TableBody items={items}>
+        <TableBody
+          emptyContent={"Keine Kostenstellen vorhanden."}
+          items={items}
+        >
           {(item: any) => (
             <TableRow key={item.kostenstellenummer}>
               {(columnKey) => (

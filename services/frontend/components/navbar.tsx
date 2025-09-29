@@ -113,7 +113,7 @@ export const Navbar = ({ userDetails, session }: any) => {
             </DropdownTrigger>
             <DropdownMenu aria-label="Profile Actions" variant="flat">
               <DropdownItem key="profile" className="h-14 gap-2">
-                <p className="font-semibold">Signed in as</p>
+                <p className="text-xs text-default-500">Eingeloggt als</p>
                 <p className="font-semibold">
                   {userDetails.username}
                   {userDetails.role === "admin" && (
@@ -123,18 +123,6 @@ export const Navbar = ({ userDetails, session }: any) => {
                     </span>
                   )}
                 </p>
-              </DropdownItem>
-              <DropdownItem
-                key="settings"
-                showDivider
-                startContent={
-                  <Icon icon="hugeicons:user-id-verification" width={20} />
-                }
-                onPress={() => {
-                  router.push("/profile");
-                }}
-              >
-                View Profile
               </DropdownItem>
               {theme === "light" ? (
                 <DropdownItem
@@ -159,7 +147,7 @@ export const Navbar = ({ userDetails, session }: any) => {
                 startContent={<Icon icon="hugeicons:key-02" width={20} />}
                 onPress={copyToken}
               >
-                Copy Token
+                Token Kopieren
               </DropdownItem>
               <DropdownItem
                 key="logout"
@@ -167,7 +155,7 @@ export const Navbar = ({ userDetails, session }: any) => {
                 startContent={<Icon icon="hugeicons:logout-02" width={20} />}
                 onPress={LogoutHandler}
               >
-                Log Out
+                Ausloggen
               </DropdownItem>
             </DropdownMenu>
           </Dropdown>
@@ -188,7 +176,7 @@ export const Navbar = ({ userDetails, session }: any) => {
           </DropdownTrigger>
           <DropdownMenu aria-label="Profile Actions" variant="flat">
             <DropdownItem key="profile" className="h-14 gap-2">
-              <p className="font-semibold">Signed in as</p>
+              <p className="text-xs text-default-500">Eingeloggt als</p>
               <p className="font-semibold">
                 {userDetails.username}
                 {" | "}
@@ -196,18 +184,6 @@ export const Navbar = ({ userDetails, session }: any) => {
                   <span className="text-danger font-bold">Admin</span>
                 )}
               </p>
-            </DropdownItem>
-            <DropdownItem
-              key="settings"
-              showDivider
-              startContent={
-                <Icon icon="hugeicons:user-id-verification" width={20} />
-              }
-              onPress={() => {
-                router.push("/profile");
-              }}
-            >
-              View Profile
             </DropdownItem>
             {theme === "light" ? (
               <DropdownItem
@@ -232,7 +208,7 @@ export const Navbar = ({ userDetails, session }: any) => {
               startContent={<Icon icon="hugeicons:key-02" width={20} />}
               onPress={copyToken}
             >
-              Copy Token
+              Token Kopieren
             </DropdownItem>
             <DropdownItem
               key="logout"
@@ -240,7 +216,7 @@ export const Navbar = ({ userDetails, session }: any) => {
               startContent={<Icon icon="hugeicons:logout-02" width={20} />}
               onPress={LogoutHandler}
             >
-              Log Out
+              Ausloggen
             </DropdownItem>
           </DropdownMenu>
         </Dropdown>

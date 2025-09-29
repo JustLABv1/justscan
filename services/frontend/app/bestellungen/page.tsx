@@ -1,14 +1,9 @@
-import { Divider } from "@heroui/react";
-
-import BestellungenHeading from "@/components/bestellungen/heading";
-import BestellungenList from "@/components/bestellungen/list";
+import BestellungenPageClient from "@/components/bestellungen/page-client";
 
 export default function Bestellungen() {
   return (
     <>
-      <BestellungenHeading />
-      <Divider className="my-4" />
-      <BestellungenList />
+      <BestellungenPageClient />
     </>
   );
 }

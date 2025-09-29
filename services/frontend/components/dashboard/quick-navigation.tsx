@@ -62,7 +62,7 @@ export default function QuickNavigation({
               <div className="flex flex-col">
                 <p className="text-md">Zu Bestellungen</p>
                 <p className="text-small text-default-500">
-                  Bestellungen Einsehen & Verwalten
+                  Bestellungen aufgeben und verwalten
                 </p>
               </div>
             </div>

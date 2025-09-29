@@ -11,27 +11,17 @@ import {
   DrawerFooter,
   DrawerHeader,
   Input,
-  NumberInput,
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
-import { useState } from "react";
-
-import { siteTempData } from "@/config/data";
 
 export default function BestellungOverviewModal({
   disclosure,
+  bestellung,
 }: {
   disclosure: UseDisclosureReturn;
+  bestellung: any;
 }) {
   const { isOpen, onOpenChange } = disclosure;
-
-  const [itemList] = useState<{ id: string; name: string; quantity: number }[]>(
-    siteTempData.artikel.map((item) => ({
-      id: item.artikelnummer, // Map artikelnummer to id
-      name: item.name, // Name stays the same
-      quantity: item.lagernd, // Map lagernd to quantity
-    })),
-  );
 
   return (
     <Drawer
@@ -44,7 +34,7 @@ export default function BestellungOverviewModal({
         {(onClose) => (
           <>
             <DrawerHeader className="flex flex-col gap-1">
-              Bestellung #1234
+              Bestellung {bestellung.id}
             </DrawerHeader>
             <DrawerBody>
               <Input
@@ -57,44 +47,24 @@ export default function BestellungOverviewModal({
                   />
                 }
                 label="Bestellt von"
-                value={"Jason Neubert"}
-                variant="flat"
-              />
-              <Input
-                isReadOnly
-                endContent={
-                  <Icon
-                    className="text-default-400"
-                    icon="hugeicons:invoice-03"
-                    width={26}
-                  />
-                }
-                label="Kostenstelle"
-                value={"Intern (999)"}
+                value={bestellung.bestellt_von}
                 variant="flat"
               />
               <Divider />
               <p className="text-sm font-semibold">Artikel</p>
               <div className="flex flex-col gap-2">
-                {itemList.map((item) => (
-                  <Card key={item.id}>
+                {bestellung.artikel.map((item: any) => (
+                  <Card key={item.artikelnummer}>
                     <CardBody className="bg-content2">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          readOnly
-                          label="Artikelbezeichnung"
-                          size="sm"
-                          value={item.name}
-                          variant="bordered"
-                        />
-                        <NumberInput
-                          readOnly
-                          label="Stückzahl"
-                          placeholder="Stückzahl"
-                          size="sm"
-                          value={item.quantity}
-                          variant="bordered"
-                        />
+                      <div className="flex flex-cols items-center justify-between gap-2">
+                        <div className="flex flex-col max-w-xs">
+                          <p>{item.kurzname}</p>
+                          <p className="text-sm text-default-500">
+                            {item.artikelnummer}
+                          </p>
+                        </div>
+
+                        <p className="text-lg font-bold">{item.anzahl}x</p>
                       </div>
                     </CardBody>
                   </Card>

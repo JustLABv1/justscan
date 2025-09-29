@@ -61,10 +61,10 @@ export default function SignUpPage() {
 
   const titleContent = React.useMemo(() => {
     return page === 0
-      ? "Sign Up"
+      ? "Registrieren"
       : page === 1
-        ? "Enter Password"
-        : "Confirm Password";
+        ? "Passwort eingeben"
+        : "Passwort bestätigen";
   }, [page]);
 
   const variants = {
@@ -202,9 +202,9 @@ export default function SignUpPage() {
           src={`/images/ef_logo_512.png`}
           width={28}
         />
-        <p className="text-xl font-medium">Welcome</p>
+        <p className="text-xl font-medium">Willkommen</p>
         <p className="text-small text-default-500">
-          Create your account to get started
+          Erstellen Sie Ihr Konto, um zu beginnen
         </p>
       </div>
       <div className="mt-2 flex w-full max-w-sm flex-col gap-4 rounded-large bg-content1 px-8 py-6 shadow-small">
@@ -261,7 +261,7 @@ export default function SignUpPage() {
                 <>
                   <Input
                     isRequired
-                    label="Username"
+                    label="Benutzername"
                     name="username"
                     type="username"
                     validationState={isUsernameValid ? "valid" : "invalid"}
@@ -273,7 +273,7 @@ export default function SignUpPage() {
                   />
                   <Input
                     isRequired
-                    label="Email Address"
+                    label="E-Mail Adresse"
                     name="email"
                     type="email"
                     validationState={isEmailValid ? "valid" : "invalid"}
@@ -303,7 +303,7 @@ export default function SignUpPage() {
                       )}
                     </button>
                   }
-                  label="Password"
+                  label="Passwort"
                   name="password"
                   type={isPasswordVisible ? "text" : "password"}
                   validationState={isPasswordValid ? "valid" : "invalid"}
@@ -340,7 +340,7 @@ export default function SignUpPage() {
                       ? "Passwords do not match"
                       : undefined
                   }
-                  label="Confirm Password"
+                  label="Passwort bestätigen"
                   name="confirmPassword"
                   type={isConfirmPasswordVisible ? "text" : "password"}
                   validationState={isConfirmPasswordValid ? "valid" : "invalid"}
@@ -359,18 +359,18 @@ export default function SignUpPage() {
                 type="submit"
               >
                 {page === 0
-                  ? "Continue with Email"
+                  ? "Mit E-Mail fortfahren"
                   : page === 1
-                    ? "Enter Password"
-                    : "Confirm Password & Sign Up"}
+                    ? "Fortfahren"
+                    : "Passwort bestätigen & Registrieren"}
               </Button>
             </m.form>
           </AnimatePresence>
         </LazyMotion>
         <p className="text-center text-small">
-          Already have an account?&nbsp;
+          Du hast bereits ein Konto?&nbsp;
           <Link href="/auth/login" size="sm">
-            Log In
+            Anmelden
           </Link>
         </p>
       </div>

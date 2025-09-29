@@ -1,4 +1,5 @@
 "use client";
+/* eslint-env browser */
 
 import {
   addToast,
@@ -21,6 +22,7 @@ import { useState } from "react";
 
 import { useRefreshCache } from "@/lib/swr/hooks/useRefreshCache";
 import UpdateBestellung from "@/lib/fetch/bestellungen/PUT/update";
+import GetBestellungPDF from "@/lib/fetch/bestellungen/export";
 
 import BestellungOverviewModal from "../modals/bestellung/overview";
 import DeleteBestellungModal from "../modals/bestellung/delete";
@@ -31,12 +33,14 @@ export function BestellungCard({
   bestellung,
   setTargetBestellung,
   updateBestellung,
+  downloadBestellungPDF,
 }: {
   deleteModal: any;
   bestellungModal: any;
   bestellung: any;
   setTargetBestellung: (bestellung: any) => void; // Add this type
   updateBestellung: (bestellung: any, status: string) => Promise<void>;
+  downloadBestellungPDF: (bestellung: any) => void;
 }) {
   function getChipColor(status: string) {
     switch (status) {
@@ -121,6 +125,9 @@ export function BestellungCard({
           <Button
             color="primary"
             startContent={<Icon icon="hugeicons:file-export" width={18} />}
+            onPress={() => {
+              downloadBestellungPDF(bestellung.id);
+            }}
           >
             Exportieren
           </Button>
@@ -155,6 +162,46 @@ export default function BestellungenList({
   const bestellungModal = useDisclosure();
 
   const [targetBestellung, setTargetBestellung] = useState<any>(null);
+
+  async function downloadBestellungPDF(bestellungId: string) {
+    const result = await GetBestellungPDF(bestellungId);
+
+    if (!result.success) {
+      addToast({
+        title: "Fehler",
+        description: result.message || "PDF konnte nicht erstellt werden.",
+        color: "danger",
+        variant: "flat",
+      });
+
+      return;
+    }
+
+    // Create download link for the PDF blob
+    if (typeof window !== "undefined") {
+      const url = URL.createObjectURL(result.blob);
+      // eslint-disable-next-line no-undef
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `bestellung_${bestellungId.substring(0, 8)}.pdf`;
+      // eslint-disable-next-line no-undef
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      // eslint-disable-next-line no-undef
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      addToast({
+        title: "Erfolg",
+        description: "PDF wurde erfolgreich heruntergeladen.",
+        color: "success",
+        variant: "flat",
+      });
+    }
+  }
 
   async function updateBestellung(bestellung: any, status: string) {
     const response = (await UpdateBestellung(bestellung.id, status)) as any;
@@ -207,6 +254,7 @@ export default function BestellungenList({
               bestellung={bestellung}
               bestellungModal={bestellungModal}
               deleteModal={deleteModal}
+              downloadBestellungPDF={downloadBestellungPDF}
               setTargetBestellung={setTargetBestellung}
               updateBestellung={updateBestellung}
             />
@@ -232,6 +280,7 @@ export default function BestellungenList({
               bestellung={bestellung}
               bestellungModal={bestellungModal}
               deleteModal={deleteModal}
+              downloadBestellungPDF={downloadBestellungPDF}
               setTargetBestellung={setTargetBestellung}
               updateBestellung={updateBestellung}
             />
@@ -257,6 +306,7 @@ export default function BestellungenList({
               bestellung={bestellung}
               bestellungModal={bestellungModal}
               deleteModal={deleteModal}
+              downloadBestellungPDF={downloadBestellungPDF}
               setTargetBestellung={setTargetBestellung}
               updateBestellung={updateBestellung}
             />

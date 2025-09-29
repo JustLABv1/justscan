@@ -24,5 +24,8 @@ func Bestellungen(router *gin.RouterGroup, db *bun.DB) {
 		bestellung.DELETE("/:id", func(c *gin.Context) {
 			bestellungen.DeleteBestellung(c, db)
 		})
+		bestellung.GET("/:id/export", func(c *gin.Context) {
+			bestellungen.Export(c, db)
+		})
 	}
 }

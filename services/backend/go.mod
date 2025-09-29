@@ -20,6 +20,7 @@ require (
 )
 
 require (
+	codeberg.org/go-pdf/fpdf v0.11.1 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
 	github.com/bytedance/sonic v1.13.3 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect

@@ -15,8 +15,6 @@ export default function Footer() {
           <Image
             alt="Logo"
             height={32}
-            radius="none"
-            shadow="none"
             src={"/images/justlab.png"}
             width={32}
           />

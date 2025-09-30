@@ -2,8 +2,6 @@ module github.com/JustNZ/JustWMS/services/backend
 
 go 1.24.0
 
-replace github.com/JustNZ/JustWMS/services/backend/functions/csvreader => ../functions/csvreader
-
 require (
 	codeberg.org/go-pdf/fpdf v0.11.1
 	github.com/alecthomas/kingpin/v2 v2.4.0

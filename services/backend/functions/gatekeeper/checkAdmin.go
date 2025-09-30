@@ -3,7 +3,7 @@ package gatekeeper
 import (
 	"context"
 
-	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
+	"justwms-backend/pkg/models"
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"

@@ -29,6 +29,7 @@ import BestellungOverviewModal from "../modals/bestellung/overview";
 import DeleteBestellungModal from "../modals/bestellung/delete";
 
 export function BestellungCard({
+  userDetails,
   deleteModal,
   bestellungModal,
   bestellung,
@@ -36,6 +37,7 @@ export function BestellungCard({
   updateBestellung,
   downloadBestellungPDF,
 }: {
+  userDetails: any;
   deleteModal: any;
   bestellungModal: any;
   bestellung: any;
@@ -67,57 +69,59 @@ export function BestellungCard({
         >
           {bestellung.status}
         </Chip>
-        <Dropdown>
-          <DropdownTrigger>
-            <Button isIconOnly variant="light">
-              <Icon icon="hugeicons:more-horizontal-circle-01" width={22} />
-            </Button>
-          </DropdownTrigger>
-          <DropdownMenu aria-label="Static Actions">
-            <DropdownSection showDivider title="Status Ändern">
-              <DropdownItem
-                key="status_offen"
-                isDisabled={bestellung.status === "offen"}
-                onPress={() => {
-                  updateBestellung(bestellung, "offen");
-                }}
-              >
-                Offen
-              </DropdownItem>
-              <DropdownItem
-                key="status_bestellt"
-                isDisabled={bestellung.status === "bestellt"}
-                onPress={() => {
-                  updateBestellung(bestellung, "bestellt");
-                }}
-              >
-                Bestellt
-              </DropdownItem>
-              <DropdownItem
-                key="status_abgeschlossen"
-                isDisabled={bestellung.status === "abgeschlossen"}
-                onPress={() => {
-                  updateBestellung(bestellung, "abgeschlossen");
-                }}
-              >
-                Abgeschlossen
-              </DropdownItem>
-            </DropdownSection>
-            <DropdownSection title="Achtung">
-              <DropdownItem
-                key="delete"
-                className="text-danger"
-                color="danger"
-                onPress={() => {
-                  setTargetBestellung(bestellung);
-                  deleteModal.onOpen();
-                }}
-              >
-                Löschen
-              </DropdownItem>
-            </DropdownSection>
-          </DropdownMenu>
-        </Dropdown>
+        {userDetails.role === "admin" && (
+          <Dropdown>
+            <DropdownTrigger>
+              <Button isIconOnly variant="light">
+                <Icon icon="hugeicons:more-horizontal-circle-01" width={22} />
+              </Button>
+            </DropdownTrigger>
+            <DropdownMenu aria-label="Static Actions">
+              <DropdownSection showDivider title="Status Ändern">
+                <DropdownItem
+                  key="status_offen"
+                  isDisabled={bestellung.status === "offen"}
+                  onPress={() => {
+                    updateBestellung(bestellung, "offen");
+                  }}
+                >
+                  Offen
+                </DropdownItem>
+                <DropdownItem
+                  key="status_bestellt"
+                  isDisabled={bestellung.status === "bestellt"}
+                  onPress={() => {
+                    updateBestellung(bestellung, "bestellt");
+                  }}
+                >
+                  Bestellt
+                </DropdownItem>
+                <DropdownItem
+                  key="status_abgeschlossen"
+                  isDisabled={bestellung.status === "abgeschlossen"}
+                  onPress={() => {
+                    updateBestellung(bestellung, "abgeschlossen");
+                  }}
+                >
+                  Abgeschlossen
+                </DropdownItem>
+              </DropdownSection>
+              <DropdownSection title="Achtung">
+                <DropdownItem
+                  key="delete"
+                  className="text-danger"
+                  color="danger"
+                  onPress={() => {
+                    setTargetBestellung(bestellung);
+                    deleteModal.onOpen();
+                  }}
+                >
+                  Löschen
+                </DropdownItem>
+              </DropdownSection>
+            </DropdownMenu>
+          </Dropdown>
+        )}
       </CardHeader>
       <Divider />
       <CardBody>
@@ -158,8 +162,10 @@ export function BestellungCard({
 }
 
 export default function BestellungenList({
+  userDetails,
   bestellungen,
 }: {
+  userDetails: any;
   bestellungen: any;
 }) {
   const { refreshBestellungen } = useRefreshCache();
@@ -262,6 +268,7 @@ export default function BestellungenList({
               downloadBestellungPDF={downloadBestellungPDF}
               setTargetBestellung={setTargetBestellung}
               updateBestellung={updateBestellung}
+              userDetails={userDetails}
             />
           ))}
       </div>
@@ -288,6 +295,7 @@ export default function BestellungenList({
               downloadBestellungPDF={downloadBestellungPDF}
               setTargetBestellung={setTargetBestellung}
               updateBestellung={updateBestellung}
+              userDetails={userDetails}
             />
           ))}
       </div>
@@ -314,6 +322,7 @@ export default function BestellungenList({
               downloadBestellungPDF={downloadBestellungPDF}
               setTargetBestellung={setTargetBestellung}
               updateBestellung={updateBestellung}
+              userDetails={userDetails}
             />
           ))}
       </div>

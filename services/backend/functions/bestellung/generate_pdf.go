@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
+	"justwms-backend/pkg/models"
 
 	"codeberg.org/go-pdf/fpdf"
 )

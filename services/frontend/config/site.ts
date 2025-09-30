@@ -25,10 +25,6 @@ export const siteConfig = {
       label: "Bestellungen",
       href: "/bestellungen",
     },
-    {
-      label: "System Verwaltung",
-      href: "/system-verwaltung",
-    },
   ],
   navMenuItems: [
     {
@@ -50,10 +46,6 @@ export const siteConfig = {
     {
       label: "Bestellungen",
       href: "/bestellungen",
-    },
-    {
-      label: "System Verwaltung",
-      href: "/system-verwaltung",
     },
   ],
 };

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/JustNZ/JustWMS/services/backend/config"
-	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
+	"justwms-backend/config"
+	"justwms-backend/pkg/models"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"

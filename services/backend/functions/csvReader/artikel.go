@@ -1,4 +1,4 @@
-package functions_csv_reader
+package csvreader
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
+	"justwms-backend/pkg/models"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/text/encoding/charmap"

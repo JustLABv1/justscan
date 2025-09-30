@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/JustNZ/JustWMS/services/backend/functions/httperror"
-	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
+	"justwms-backend/functions/httperror"
+	"justwms-backend/pkg/models"
 
 	"github.com/google/uuid"
 
@@ -54,7 +54,7 @@ func CheckUserTaken(context *gin.Context, db *bun.DB) {
 			return
 		}
 		if usernameCount > 0 {
-			httperror.StatusConflict(context, "Username is already taken", errors.New("username already taken"))
+			httperror.StatusConflict(context, "Benutzername bereits vergeben", errors.New("benutzername bereits vergeben"))
 			return
 		}
 	}
@@ -67,7 +67,7 @@ func CheckUserTaken(context *gin.Context, db *bun.DB) {
 			return
 		}
 		if emailCount > 0 {
-			httperror.StatusConflict(context, "Email is already taken", errors.New("email already taken"))
+			httperror.StatusConflict(context, "Email bereits vergeben", errors.New("email bereits vergeben"))
 			return
 		}
 	}

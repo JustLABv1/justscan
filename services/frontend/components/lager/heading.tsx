@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Chip, Input, useDisclosure } from "@heroui/react";
+import { Button, Chip, useDisclosure } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { useState } from "react";
 

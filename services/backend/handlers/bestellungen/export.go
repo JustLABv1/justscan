@@ -30,7 +30,7 @@ func Export(context *gin.Context, db *bun.DB) {
 	}
 
 	// Set headers for PDF download
-	filename := fmt.Sprintf("bestellung_%s.pdf", bestellung.ID.String()[:8])
+	filename := fmt.Sprintf("bestellung_%s.pdf", bestellung.ID.String())
 	context.Header("Content-Description", "File Transfer")
 	context.Header("Content-Transfer-Encoding", "binary")
 	context.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))

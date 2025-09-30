@@ -1,0 +1,59 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Build Frontend Docker Image
+        run: docker build . --file services/frontend/Dockerfile --tag ghcr.io/justnz/justwms:frontend-latest --tag ghcr.io/justnz/justwms:frontend-${{ github.sha }} --tag ghcr.io/justnz/justwms:frontend-${{ github.ref_name }}
+
+      - name: Build Backend Docker Image
+        run: docker build . --file services/backend/Dockerfile --tag ghcr.io/justnz/justwms:backend-latest --tag ghcr.io/justnz/justwms:backend-${{ github.sha }} --tag ghcr.io/justnz/justwms:backend-${{ github.ref_name }}
+
+      - name: Build justwms Docker Image
+        run: docker build . --file Dockerfile --tag ghcr.io/justnz/justwms:latest --tag ghcr.io/justnz/justwms:${{ github.sha }} --tag ghcr.io/justnz/justwms:${{ github.ref_name }}
+
+      - name: 'Login to GitHub Container Registry'
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{github.actor}}
+          password: ${{secrets.GITHUB_TOKEN}}
+
+      - name: Push Docker Images
+        run: |
+          docker push ghcr.io/justnz/justwms:frontend-latest
+          docker push ghcr.io/justnz/justwms:frontend-${{ github.sha }}
+          docker push ghcr.io/justnz/justwms:frontend-${{ github.ref_name }}
+          docker push ghcr.io/justnz/justwms:backend-latest
+          docker push ghcr.io/justnz/justwms:backend-${{ github.sha }}
+          docker push ghcr.io/justnz/justwms:backend-${{ github.ref_name }}
+          docker push ghcr.io/justnz/justwms:latest
+          docker push ghcr.io/justnz/justwms:${{ github.sha }}
+          docker push ghcr.io/justnz/justwms:${{ github.ref_name }}
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        
+      - name: Create Release
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          name: Release ${{ github.ref_name }}
+          tag: ${{ github.ref_name }}
+          skipIfReleaseExists: true
+          generateReleaseNotes: true
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -13,6 +13,7 @@ import {
   Dropdown,
   DropdownItem,
   DropdownMenu,
+  DropdownSection,
   DropdownTrigger,
   Spacer,
   useDisclosure,
@@ -73,44 +74,48 @@ export function BestellungCard({
             </Button>
           </DropdownTrigger>
           <DropdownMenu aria-label="Static Actions">
-            <DropdownItem
-              key="status_offen"
-              isDisabled={bestellung.status === "offen"}
-              onPress={() => {
-                updateBestellung(bestellung, "offen");
-              }}
-            >
-              Offen
-            </DropdownItem>
-            <DropdownItem
-              key="status_bestellt"
-              isDisabled={bestellung.status === "bestellt"}
-              onPress={() => {
-                updateBestellung(bestellung, "bestellt");
-              }}
-            >
-              Bestellt
-            </DropdownItem>
-            <DropdownItem
-              key="status_abgeschlossen"
-              isDisabled={bestellung.status === "abgeschlossen"}
-              onPress={() => {
-                updateBestellung(bestellung, "abgeschlossen");
-              }}
-            >
-              Abgeschlossen
-            </DropdownItem>
-            <DropdownItem
-              key="delete"
-              className="text-danger"
-              color="danger"
-              onPress={() => {
-                setTargetBestellung(bestellung);
-                deleteModal.onOpen();
-              }}
-            >
-              Löschen
-            </DropdownItem>
+            <DropdownSection showDivider title="Status Ändern">
+              <DropdownItem
+                key="status_offen"
+                isDisabled={bestellung.status === "offen"}
+                onPress={() => {
+                  updateBestellung(bestellung, "offen");
+                }}
+              >
+                Offen
+              </DropdownItem>
+              <DropdownItem
+                key="status_bestellt"
+                isDisabled={bestellung.status === "bestellt"}
+                onPress={() => {
+                  updateBestellung(bestellung, "bestellt");
+                }}
+              >
+                Bestellt
+              </DropdownItem>
+              <DropdownItem
+                key="status_abgeschlossen"
+                isDisabled={bestellung.status === "abgeschlossen"}
+                onPress={() => {
+                  updateBestellung(bestellung, "abgeschlossen");
+                }}
+              >
+                Abgeschlossen
+              </DropdownItem>
+            </DropdownSection>
+            <DropdownSection title="Achtung">
+              <DropdownItem
+                key="delete"
+                className="text-danger"
+                color="danger"
+                onPress={() => {
+                  setTargetBestellung(bestellung);
+                  deleteModal.onOpen();
+                }}
+              >
+                Löschen
+              </DropdownItem>
+            </DropdownSection>
           </DropdownMenu>
         </Dropdown>
       </CardHeader>
@@ -124,12 +129,12 @@ export function BestellungCard({
         <div className="grid grid-cols-2 gap-2">
           <Button
             color="primary"
-            startContent={<Icon icon="hugeicons:file-export" width={18} />}
+            startContent={<Icon icon="hugeicons:pdf-01" width={18} />}
             onPress={() => {
               downloadBestellungPDF(bestellung.id);
             }}
           >
-            Exportieren
+            PDF Downloaden
           </Button>
           <Button
             startContent={<Icon icon="hugeicons:file-02" width={18} />}

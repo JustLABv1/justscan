@@ -201,7 +201,7 @@ func GenerateBestellungPDF(bestellung models.Bestellungen) (filePath string, err
 	pdf.CellFormat(0, 5, "JustWMS - Warehouse Management System", "", 1, "C", false, 0, "")
 
 	// Generate filename with bestellung ID
-	filename := fmt.Sprintf("bestellung_%s.pdf", bestellung.ID.String()[:8])
+	filename := fmt.Sprintf("bestellung_%s.pdf", bestellung.ID.String())
 	err = pdf.OutputFileAndClose(filename)
 	if err != nil {
 		return "", err

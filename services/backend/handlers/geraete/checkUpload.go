@@ -3,7 +3,7 @@ package geraete
 import (
 	"net/http"
 
-	"github.com/JustNZ/JustWMS/services/backend/functions/csvreader"
+	functions_csv_reader "github.com/JustNZ/JustWMS/services/backend/functions/csvreader"
 	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
 
 	_ "github.com/lib/pq"
@@ -29,7 +29,7 @@ func CheckUploadedGeraete(c *gin.Context, db *bun.DB) {
 	}
 
 	// Read the CSV file
-	geraete, err := csvreader.ReadGeraeteCSV(file)
+	geraete, err := functions_csv_reader.ReadGeraeteCSV(file)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

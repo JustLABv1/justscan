@@ -3,7 +3,7 @@ package artikel
 import (
 	"net/http"
 
-	"github.com/JustNZ/JustWMS/services/backend/functions/csvreader"
+	functions_csv_reader "github.com/JustNZ/JustWMS/services/backend/functions/csvreader"
 	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
 
 	_ "github.com/lib/pq"
@@ -29,7 +29,7 @@ func UploadArtikel(c *gin.Context, db *bun.DB) {
 	}
 
 	// Read the CSV file
-	artikel, err := csvreader.ReadArtikelCSV(file)
+	artikel, err := functions_csv_reader.ReadArtikelCSV(file)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

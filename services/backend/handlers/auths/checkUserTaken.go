@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"justwms/functions/httperror"
-	"justwms/pkg/models"
+	"github.com/JustNZ/JustWMS/services/backend/functions/httperror"
+	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
 
 	"github.com/google/uuid"
 

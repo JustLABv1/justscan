@@ -2,10 +2,11 @@ package functions_bestellung
 
 import (
 	"fmt"
-	"justwms/pkg/models"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
 
 	"codeberg.org/go-pdf/fpdf"
 )

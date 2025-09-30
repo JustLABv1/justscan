@@ -5,10 +5,11 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
-	"justwms/pkg/models"
 	"mime/multipart"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/text/encoding/charmap"

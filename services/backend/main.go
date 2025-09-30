@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"time"
 
-	"justwms/config"
-	"justwms/database"
-	"justwms/router"
+	"github.com/JustNZ/JustWMS/services/backend/config"
+	"github.com/JustNZ/JustWMS/services/backend/database"
+	"github.com/JustNZ/JustWMS/services/backend/router"
 
 	"github.com/alecthomas/kingpin/v2"
 	log "github.com/sirupsen/logrus"

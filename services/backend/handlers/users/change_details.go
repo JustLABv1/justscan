@@ -1,10 +1,11 @@
 package users
 
 import (
-	"justwms/functions/auth"
-	"justwms/functions/httperror"
-	"justwms/pkg/models"
 	"net/http"
+
+	"github.com/JustNZ/JustWMS/services/backend/functions/auth"
+	"github.com/JustNZ/JustWMS/services/backend/functions/httperror"
+	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
 
 	_ "github.com/lib/pq"
 	"github.com/uptrace/bun"

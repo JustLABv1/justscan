@@ -3,9 +3,9 @@ package tokens
 import (
 	"net/http"
 
-	"justwms/functions/auth"
-	"justwms/functions/httperror"
-	"justwms/pkg/models"
+	"github.com/JustNZ/JustWMS/services/backend/functions/auth"
+	"github.com/JustNZ/JustWMS/services/backend/functions/httperror"
+	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"

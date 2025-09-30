@@ -1,8 +1,8 @@
 package router
 
 import (
-	"justwms/handlers/auths"
-	"justwms/handlers/tokens"
+	"github.com/JustNZ/JustWMS/services/backend/handlers/auths"
+	"github.com/JustNZ/JustWMS/services/backend/handlers/tokens"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"

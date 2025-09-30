@@ -1,9 +1,10 @@
 package tokens
 
 import (
-	"justwms/functions/httperror"
-	"justwms/pkg/models"
 	"net/http"
+
+	"github.com/JustNZ/JustWMS/services/backend/functions/httperror"
+	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"

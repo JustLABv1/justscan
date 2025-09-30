@@ -13,6 +13,7 @@ import {
 import { AnimatePresence, domAnimation, LazyMotion, m } from "framer-motion";
 import { useRouter } from "next/navigation";
 import React from "react";
+import { useTheme } from "next-themes";
 
 import { setSession } from "@/lib/setSession";
 import SignUpAPI from "@/lib/auth/signup";
@@ -21,6 +22,7 @@ import CheckUserTaken from "@/lib/auth/checkTaken";
 
 export default function SignUpPage() {
   const router = useRouter();
+  const { theme } = useTheme();
 
   const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
@@ -100,7 +102,7 @@ export default function SignUpPage() {
       return;
     }
 
-    const res = await CheckUserTaken("", email, username);
+    const res = await CheckUserTaken(null, email, username);
 
     if (res.result === "success") {
       setError(false);
@@ -111,8 +113,8 @@ export default function SignUpPage() {
     } else {
       setError(true);
       setErrorText(res.error);
-      setIsUsernameValid(res.error !== "Username already taken");
-      setIsEmailValid(res.error !== "Email already taken");
+      setIsUsernameValid(res.error !== "Benutzername bereits vergeben");
+      setIsEmailValid(res.error !== "Email bereits vergeben");
     }
   };
 
@@ -196,11 +198,9 @@ export default function SignUpPage() {
       <div className="flex flex-col items-center pb-2">
         <Image
           alt="Logo"
-          height={28}
-          radius="none"
-          shadow="none"
-          src={`/images/ef_logo_512.png`}
-          width={28}
+          height={64}
+          src={`/images/justlab-${theme === "light" ? "dark" : "white"}.png`}
+          width={64}
         />
         <p className="text-xl font-medium">Willkommen</p>
         <p className="text-small text-default-500">

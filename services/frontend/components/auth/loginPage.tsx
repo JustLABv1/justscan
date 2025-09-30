@@ -12,12 +12,14 @@ import {
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
+import { useTheme } from "next-themes";
 
 import { setSession } from "@/lib/setSession";
 import LoginAPI from "@/lib/auth/login";
 
 export default function LoginPageComponent() {
   const router = useRouter();
+  const { theme } = useTheme();
 
   const [isLoginLoading, setIsLoginLoading] = useState(false);
   const [usernameEmail, setUsernameEmail] = useState("");
@@ -54,11 +56,9 @@ export default function LoginPageComponent() {
       <div className="flex flex-col items-center pb-2">
         <Image
           alt="Logo"
-          height={28}
-          radius="none"
-          shadow="none"
-          src={`/images/ef_logo_512.png`}
-          width={28}
+          height={64}
+          src={`/images/justlab-${theme === "light" ? "dark" : "white"}.png`}
+          width={64}
         />
         <p className="text-xl font-medium">Willkommen Zurück</p>
         <p className="text-small text-default-500">

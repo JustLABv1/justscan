@@ -16,6 +16,7 @@ import {
   User,
   addToast,
   Avatar,
+  Image,
 } from "@heroui/react";
 import { link as linkStyles } from "@heroui/theme";
 import NextLink from "next/link";
@@ -65,7 +66,12 @@ export const Navbar = ({ userDetails, session }: any) => {
       <NavbarContent className="basis-1/5 sm:basis-full" justify="start">
         <NavbarBrand as="li" className="gap-3 max-w-fit">
           <NextLink className="flex justify-start items-center gap-1" href="/">
-            {/* <Logo /> */}
+            <Image
+              alt="Logo"
+              height={32}
+              src={`/images/justlab-${theme === "light" ? "dark" : "white"}.png`}
+              width={32}
+            />
             <p className="font-bold text-inherit">JustWMS</p>
           </NextLink>
         </NavbarBrand>
@@ -89,6 +95,26 @@ export const Navbar = ({ userDetails, session }: any) => {
               </NextLink>
             </NavbarItem>
           ))}
+          {userDetails.role === "admin" && (
+            <NavbarItem>
+              <NextLink
+                className={clsx(
+                  linkStyles({ color: "foreground" }),
+                  {
+                    "text-primary font-bold":
+                      "/" + currentPath === "/system-verwaltung",
+                  },
+                  {
+                    "font-semibold": "/" + currentPath !== "/system-verwaltung",
+                  },
+                )}
+                color="foreground"
+                href="/system-verwaltung"
+              >
+                System Verwaltung
+              </NextLink>
+            </NavbarItem>
+          )}
         </ul>
       </NavbarContent>
 

@@ -10,15 +10,15 @@ import (
 )
 
 func Kostenstellen(router *gin.RouterGroup, db *bun.DB) {
-	kostenstelle := router.Group("/kostenstellen").Use(middlewares.Auth(db))
+	kostenstelle := router.Group("/kostenstellen")
 	{
-		kostenstelle.GET("/", func(c *gin.Context) {
+		kostenstelle.Use(middlewares.Auth(db)).GET("/", func(c *gin.Context) {
 			kostenstellen.GetKostenstellen(c, db)
 		})
-		kostenstelle.POST("/", func(c *gin.Context) {
+		kostenstelle.Use(middlewares.Admin(db)).POST("/", func(c *gin.Context) {
 			kostenstellen.UploadKostenstellen(c, db)
 		})
-		kostenstelle.POST("/check", func(c *gin.Context) {
+		kostenstelle.Use(middlewares.Auth(db)).POST("/check", func(c *gin.Context) {
 			kostenstellen.CheckUploadedKostenstellen(c, db)
 		})
 	}

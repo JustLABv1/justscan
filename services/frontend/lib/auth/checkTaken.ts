@@ -1,7 +1,7 @@
 "use server";
 
 export default async function CheckUserTaken(
-  id: string,
+  id: any,
   email: string,
   username: string,
 ) {

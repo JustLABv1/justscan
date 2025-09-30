@@ -3,9 +3,9 @@ package users
 import (
 	"net/http"
 
-	"github.com/JustNZ/JustWMS/services/backend/functions/auth"
-	"github.com/JustNZ/JustWMS/services/backend/functions/httperror"
-	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
+	"justwms-backend/functions/auth"
+	"justwms-backend/functions/httperror"
+	"justwms-backend/pkg/models"
 
 	_ "github.com/lib/pq"
 	"github.com/uptrace/bun"

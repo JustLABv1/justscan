@@ -3,8 +3,8 @@ package kostenstellen
 import (
 	"net/http"
 
-	functions_csv_reader "github.com/JustNZ/JustWMS/services/backend/functions/csvreader"
-	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
+	"justwms-backend/functions/csvreader"
+	"justwms-backend/pkg/models"
 
 	_ "github.com/lib/pq"
 	"github.com/uptrace/bun"
@@ -29,7 +29,7 @@ func CheckUploadedKostenstellen(c *gin.Context, db *bun.DB) {
 	}
 
 	// Read the CSV file
-	kostenstellen, err := functions_csv_reader.ReadKostenstellenCSV(file)
+	kostenstellen, err := csvreader.ReadKostenstellenCSV(file)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

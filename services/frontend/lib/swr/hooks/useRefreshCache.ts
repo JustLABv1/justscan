@@ -15,6 +15,7 @@ export function useRefreshCache() {
     refreshKostenstellen: () => mutate("kostenstellen"),
     refreshBestellungen: () => mutate("bestellungen"),
     refreshUser: () => mutate("user-details"),
+    refreshUsers: () => mutate("users"),
     refreshPageSettings: () => mutate("page-settings"),
 
     // Convenience methods for common combinations
@@ -24,6 +25,7 @@ export function useRefreshCache() {
       mutate("kostenstellen");
       mutate("bestellungen");
       mutate("user-details");
+      mutate("users");
       mutate("page-settings");
     },
   };

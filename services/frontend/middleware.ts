@@ -71,7 +71,7 @@ export async function middleware(request: NextRequest) {
 
     // Admin route protection
     if (
-      pathname.startsWith("/admin") &&
+      pathname.startsWith("/system-verwaltung") &&
       (!userData || userData.role !== "admin")
     ) {
       return NextResponse.redirect(new URL("/", request.url));

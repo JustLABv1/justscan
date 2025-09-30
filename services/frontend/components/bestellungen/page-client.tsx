@@ -25,13 +25,7 @@ export default function BestellungenPageClient() {
   const { user, isLoading: userLoading, isError: userError } = useUserDetails();
 
   // Check if any essential data is still loading or missing
-  const isLoading =
-    bestellungenLoading ||
-    userLoading ||
-    !bestellungen ||
-    !user ||
-    artikelLoading ||
-    !artikel;
+  const isLoading = bestellungenLoading || userLoading || artikelLoading;
 
   // Show loading state if essential data is still loading
   if (isLoading) {
@@ -56,7 +50,7 @@ export default function BestellungenPageClient() {
     <main>
       <BestellungenHeading artikel={artikel} />
       <Divider className="my-4" />
-      <BestellungenList bestellungen={bestellungen} />
+      <BestellungenList bestellungen={bestellungen} userDetails={user} />
     </main>
   );
 }

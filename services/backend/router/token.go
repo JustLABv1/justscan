@@ -1,7 +1,7 @@
 package router
 
 import (
-	"github.com/JustNZ/JustWMS/services/backend/handlers/tokens"
+	"justwms-backend/handlers/tokens"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -16,14 +16,8 @@ func Token(router *gin.RouterGroup, db *bun.DB) {
 		token.POST("/refresh", func(c *gin.Context) {
 			tokens.RefreshToken(c, db)
 		})
-		token.GET("/service/validate", func(c *gin.Context) {
-			tokens.ValidateServiceToken(c, db)
-		})
 		token.PUT("/:id", func(c *gin.Context) {
 			tokens.UpdateToken(c, db)
-		})
-		token.DELETE("/runner/:apikey", func(c *gin.Context) {
-			tokens.DeleteRunnerToken(c, db)
 		})
 	}
 }

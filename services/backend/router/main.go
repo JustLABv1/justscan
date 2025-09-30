@@ -35,6 +35,7 @@ func StartRouter(db *bun.DB, port int) *http.Server {
 		Geraete(v1, db)
 		Artikel(v1, db)
 		Bestellungen(v1, db)
+		Admin(v1, db)
 	}
 
 	server := &http.Server{

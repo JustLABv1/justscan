@@ -4,10 +4,13 @@ import { Icon } from "@iconify/react";
 import { Spacer } from "@heroui/react";
 import Image from "next/image";
 import React from "react";
+import { useTheme } from "next-themes";
 
 import { siteConfig } from "@/config/site";
 
 export default function Footer() {
+  const { theme } = useTheme();
+
   return (
     <footer className="sticky top-[100vh] flex w-full flex-col">
       <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-center px-6 py-12 lg:px-8">
@@ -15,7 +18,7 @@ export default function Footer() {
           <Image
             alt="Logo"
             height={32}
-            src={"/images/justlab.png"}
+            src={`/images/justlab-${theme === "light" ? "dark" : "white"}.png`}
             width={32}
           />
           <span className="text-medium font-medium pl-1">JustWMS</span>

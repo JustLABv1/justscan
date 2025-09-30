@@ -1,6 +1,6 @@
 FROM golang:1.25-alpine as builder
 
-WORKDIR /app/backend
+WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -14,7 +14,7 @@ FROM alpine:3.22 as runner
 LABEL org.opencontainers.image.source="https://github.com/justnz/justwms"
 WORKDIR /app
 
-COPY --from=builder /app/backend/justwms-backend /app/
+COPY --from=builder /app/justwms-backend /app/
 
 RUN addgroup --system --gid 1001 justwms
 RUN adduser --system --uid 1001 justwms

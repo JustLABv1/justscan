@@ -1,4 +1,4 @@
-module github.com/JustNZ/JustWMS/services/backend
+module justwms-backend
 
 go 1.24.0
 

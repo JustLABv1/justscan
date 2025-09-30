@@ -3,8 +3,8 @@ package geraete
 import (
 	"net/http"
 
-	"github.com/JustNZ/JustWMS/services/backend/functions/csvreader"
-	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
+	"justwms-backend/functions/csvreader"
+	"justwms-backend/pkg/models"
 
 	_ "github.com/lib/pq"
 	"github.com/uptrace/bun"

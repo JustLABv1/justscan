@@ -3,9 +3,9 @@ package bestellungen
 import (
 	"fmt"
 
-	functions_bestellung "github.com/JustNZ/JustWMS/services/backend/functions/bestellung"
-	"github.com/JustNZ/JustWMS/services/backend/functions/httperror"
-	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
+	functions_bestellung "justwms-backend/functions/bestellung"
+	"justwms-backend/functions/httperror"
+	"justwms-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"

@@ -3,7 +3,7 @@ package gatekeeper
 import (
 	"context"
 
-	"github.com/JustNZ/JustWMS/services/backend/pkg/models"
+	"justwms-backend/pkg/models"
 
 	_ "github.com/lib/pq"
 	"github.com/uptrace/bun"

@@ -7,9 +7,6 @@ RUN go mod download
 
 COPY . ./
 
-RUN echo $GOPATH
-RUN ls -la $GOPATH/src
-
 # Build
 RUN CGO_ENABLED=0 GOOS=linux go build -o justwms-backend
 

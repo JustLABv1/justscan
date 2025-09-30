@@ -1,9 +1,9 @@
 package router
 
 import (
-	"github.com/JustNZ/JustWMS/services/backend/middlewares"
+	"justwms-backend/middlewares"
 
-	"github.com/JustNZ/JustWMS/services/backend/handlers/geraete"
+	"justwms-backend/handlers/geraete"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"

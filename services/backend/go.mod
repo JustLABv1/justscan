@@ -3,11 +3,13 @@ module justwms
 go 1.25.1
 
 require (
+	codeberg.org/go-pdf/fpdf v0.11.1
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.10.1
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
+	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.31
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.20.1
@@ -15,12 +17,11 @@ require (
 	github.com/uptrace/bun/dialect/pgdialect v1.2.15
 	github.com/uptrace/bun/driver/pgdriver v1.2.15
 	github.com/uptrace/bun/extra/bunotel v1.2.15
-	github.com/v1Flows/exFlow/services/backend v0.0.0-20250910110859-115734c2de76
 	golang.org/x/crypto v0.41.0
+	golang.org/x/text v0.28.0
 )
 
 require (
-	codeberg.org/go-pdf/fpdf v0.11.1 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
 	github.com/bytedance/sonic v1.13.3 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
@@ -39,7 +40,6 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/lib/pq v1.10.9 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -55,7 +55,6 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
 	github.com/uptrace/opentelemetry-go-extra/otelsql v0.3.2 // indirect
-	github.com/v1Flows/shared-library v1.0.25 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
@@ -68,7 +67,6 @@ require (
 	golang.org/x/arch v0.18.0 // indirect
 	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	mellium.im/sasl v0.3.2 // indirect

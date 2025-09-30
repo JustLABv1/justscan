@@ -12,6 +12,8 @@ services/frontend/coverage
 services/frontend/.next/
 services/frontend/out/
 
+.venv
+
 # production
 services/frontend/build
 

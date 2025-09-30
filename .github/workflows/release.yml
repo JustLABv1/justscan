@@ -17,7 +17,7 @@ jobs:
         run: docker build . --file services/frontend/Dockerfile --tag ghcr.io/justnz/justwms:frontend-latest --tag ghcr.io/justnz/justwms:frontend-${{ github.sha }} --tag ghcr.io/justnz/justwms:frontend-${{ github.ref_name }}
 
       - name: Build Backend Docker Image
-        run: docker build . --file services/backend/Dockerfile --tag ghcr.io/justnz/justwms:backend-latest --tag ghcr.io/justnz/justwms:backend-${{ github.sha }} --tag ghcr.io/justnz/justwms:backend-${{ github.ref_name }}
+        run: docker build services/backend --file services/backend/Dockerfile --tag ghcr.io/justnz/justwms:backend-latest --tag ghcr.io/justnz/justwms:backend-${{ github.sha }} --tag ghcr.io/justnz/justwms:backend-${{ github.ref_name }}
 
       - name: Build justwms Docker Image
         run: docker build . --file Dockerfile --tag ghcr.io/justnz/justwms:latest --tag ghcr.io/justnz/justwms:${{ github.sha }} --tag ghcr.io/justnz/justwms:${{ github.ref_name }}

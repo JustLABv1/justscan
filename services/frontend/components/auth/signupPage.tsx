@@ -100,7 +100,7 @@ export default function SignUpPage() {
       return;
     }
 
-    const res = await CheckUserTaken(null, email, username);
+    const res = await CheckUserTaken("", email, username);
 
     if (res.result === "success") {
       setError(false);

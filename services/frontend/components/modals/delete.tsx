@@ -55,11 +55,11 @@ export default function DeleteModal({
                   Abbrechen
                 </Button>
                 <Button
-                  color="danger"
-                  // isLoading={isDeleteLoading}
-                  variant="solid"
-                  // onPress={deleteAlert}
                   startContent={<Icon icon="hugeicons:delete-02" width={18} />}
+                  // isLoading={isDeleteLoading}
+                  color="danger"
+                  // onPress={deleteAlert}
+                  variant="solid"
                 >
                   Löschen
                 </Button>

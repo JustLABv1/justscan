@@ -1,4 +1,4 @@
-package functions_csv_reader
+package csvreader
 
 import (
 	"bytes"

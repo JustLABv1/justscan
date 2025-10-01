@@ -7,17 +7,17 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntulatest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
       - name: Build Frontend Docker Image
-        run: cd services/frontend && docker build . --file Dockerfile --tag ghcr.io/justnz/justwms-frontend:-latest --tag ghcr.io/justnz/justwms-frontend:${{ github.sha }} --tag ghcr.io/justnz/justwms-frontend:${{ github.ref_name }}
+        run: cd services/frontend && docker build . --file Dockerfile --tag ghcr.io/justnz/justwms-frontend:latest --tag ghcr.io/justnz/justwms-frontend:${{ github.sha }} --tag ghcr.io/justnz/justwms-frontend:${{ github.ref_name }}
 
       - name: Build Backend Docker Image
-        run: cd services/backend && docker build . --file Dockerfile --tag ghcr.io/justnz/justwms-backend:-latest --tag ghcr.io/justnz/justwms-backend:${{ github.sha }} --tag ghcr.io/justnz/justwms-backend:${{ github.ref_name }}
+        run: cd services/backend && docker build . --file Dockerfile --tag ghcr.io/justnz/justwms-backend:latest --tag ghcr.io/justnz/justwms-backend:${{ github.sha }} --tag ghcr.io/justnz/justwms-backend:${{ github.ref_name }}
 
       - name: Build JustWMS Docker Image
         run: docker build . --file Dockerfile --tag ghcr.io/justnz/justwms:latest --tag ghcr.io/justnz/justwms:${{ github.sha }} --tag ghcr.io/justnz/justwms:${{ github.ref_name }}
@@ -42,7 +42,7 @@ jobs:
           docker push ghcr.io/justnz/justwms:${{ github.ref_name }}
 
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntulatest
     needs: build
     steps:
       - name: Checkout code

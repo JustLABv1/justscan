@@ -1,5 +1,5 @@
 FROM node:24.7-alpine AS base
-LABEL org.opencontainers.image.source="https://github.com/justnz/justwms"
+LABEL org.opencontainers.image.source = "https://github.com/JustNZ/JustWMS"
 
 # Stage 1: Build the frontend
 FROM node:24.7-alpine AS frontend-builder
@@ -24,6 +24,7 @@ RUN go build -o justwms-backend
 
 # Stage 3: Create the final image
 FROM base AS runner
+LABEL org.opencontainers.image.source = "https://github.com/JustNZ/JustWMS"
 WORKDIR /app
 
 # Install necessary packages

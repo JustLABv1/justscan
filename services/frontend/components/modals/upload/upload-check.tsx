@@ -108,7 +108,7 @@ export default function UploadCheckModal({
                               radius="sm"
                               variant="flat"
                             >
-                              {item.artikelnummer}
+                              {item.betriebsnummer}
                             </Chip>
                           );
                         }

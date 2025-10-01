@@ -33,8 +33,9 @@ export default function ArtikelList({ artikel }: { artikel: any }) {
   const items = useMemo(() => {
     const filtered = artikel.filter(
       (item: any) =>
+        item.artikel?.toLowerCase().includes(filterValue.toLowerCase()) ||
         item.kurzname?.toLowerCase().includes(filterValue.toLowerCase()) ||
-        item.artikelnummer?.toLowerCase().includes(filterValue.toLowerCase()),
+        item.betriebsnummer?.toLowerCase().includes(filterValue.toLowerCase()),
     );
 
     const start = (safePage - 1) * rowsPerPage;
@@ -91,7 +92,8 @@ export default function ArtikelList({ artikel }: { artikel: any }) {
         }
       >
         <TableHeader>
-          <TableColumn key="artikelnummer">Artikelnummer</TableColumn>
+          <TableColumn key="artikel">Artikel</TableColumn>
+          <TableColumn key="betriebsnummer">Betriebsnummer</TableColumn>
           <TableColumn key="kurzname">Kurzname</TableColumn>
         </TableHeader>
         <TableBody emptyContent={"Keine Artikel vorhanden."} items={items}>

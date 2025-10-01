@@ -20,6 +20,8 @@ import { Icon } from "@iconify/react";
 import { useState } from "react";
 
 import BarcodeScanner from "@/components/barcode-scanner";
+import CreateLieferschein from "@/lib/fetch/lieferschein/POST/CreateLieferschein";
+import ErrorCard from "@/components/error/ErrorCard";
 
 export default function LieferscheinErstellenModal({
   disclosure,
@@ -32,19 +34,30 @@ export default function LieferscheinErstellenModal({
 }) {
   const { isOpen, onOpenChange } = disclosure;
 
+  const [besteller, setBesteller] = useState("");
   const [kostenstelleVon, setKostenstelleVon] = useState("");
   const [kostenstelleNeu, setKostenstelleNeu] = useState("");
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [errorText, setErrorText] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   const [, setScannedCode] = useState<string>("");
 
   const [itemList, setItemList] = useState<
-    { artikelnummer: string; kurzname: string; quantity: number }[]
+    {
+      artikel: string;
+      betriebsnummer: string;
+      kurzname: string;
+      anzahl: number;
+    }[]
   >([]);
 
   const handleScan = (code: string) => {
     setScannedCode(code);
     // search for artikel
-    const foundItem = artikel.find((item: any) => item.artikelnummer === code);
+    const foundItem = artikel.find((item: any) => item.betriebsnummer === code);
 
     if (!foundItem) {
       addToast({
@@ -63,14 +76,14 @@ export default function LieferscheinErstellenModal({
     }
 
     // check if item is already in list
-    const isInList = itemList.find((item) => item.artikelnummer === code);
+    const isInList = itemList.find((item) => item.betriebsnummer === code);
 
     if (isInList) {
       // increase quantity by 1
       setItemList((prev) =>
         prev.map((item) =>
-          item.artikelnummer === code
-            ? { ...item, quantity: item.quantity + 1 }
+          item.betriebsnummer === code
+            ? { ...item, anzahl: item.anzahl + 1 }
             : item,
         ),
       );
@@ -82,9 +95,10 @@ export default function LieferscheinErstellenModal({
       setItemList((prev) => [
         ...prev,
         {
-          artikelnummer: foundItem.artikelnummer,
+          artikel: foundItem.artikel,
+          betriebsnummer: foundItem.betriebsnummer,
           kurzname: foundItem.kurzname,
-          quantity: 1,
+          anzahl: 1,
         },
       ]);
     }
@@ -94,16 +108,63 @@ export default function LieferscheinErstellenModal({
     // Handle scan errors silently or show user notification
   };
 
-  function erstellen() {
-    onOpenChange();
+  async function erstellen() {
+    setIsLoading(true);
+
+    if (
+      !besteller ||
+      !kostenstelleVon ||
+      !kostenstelleNeu ||
+      itemList.length === 0
+    ) {
+      setError(true);
+      setErrorText("Fehlende Angaben");
+      setErrorMessage("Bitte füllen Sie alle Felder aus.");
+      setIsLoading(false);
+
+      return;
+    }
+
+    const response = (await CreateLieferschein(
+      besteller,
+      kostenstelleVon,
+      kostenstelleNeu,
+      itemList,
+    )) as any;
+
+    if (!response) {
+      setError(true);
+      setErrorText("Fehler beim Erstellen des Lieferscheins");
+      setErrorMessage("Bitte versuchen Sie es erneut.");
+      setIsLoading(false);
+
+      return;
+    }
+
+    if (response.success) {
+      setIsLoading(false);
+      addToast({
+        title: "Lieferschein erstellt",
+        description: `Der Lieferschein wurde erfolgreich erstellt.`,
+        color: "success",
+      });
+      onOpenChange();
+      setBesteller("");
+      setItemList([]);
+    } else {
+      setError(true);
+      setErrorText(response.error || "Fehler beim Erstellen der Bestellung");
+      setErrorMessage(response.message || "Bitte versuchen Sie es erneut.");
+      setIsLoading(false);
+    }
   }
 
   const kostenstelleVonSelected = async (e: any) => {
-    setKostenstelleVon(e.currentKey);
+    setKostenstelleVon(e);
   };
 
   const kostenstelleNeuSelected = async (e: any) => {
-    setKostenstelleNeu(e.currentKey);
+    setKostenstelleNeu(e);
   };
 
   return (
@@ -122,6 +183,7 @@ export default function LieferscheinErstellenModal({
               Lieferschein Erstellen
             </DrawerHeader>
             <DrawerBody>
+              {error && <ErrorCard error={errorText} message={errorMessage} />}
               <Input
                 classNames={{
                   inputWrapper: [
@@ -137,7 +199,9 @@ export default function LieferscheinErstellenModal({
                 }
                 label="Abholer"
                 placeholder="Geben Sie den Namen des Abholers ein"
+                value={besteller}
                 variant="flat"
+                onValueChange={(value) => setBesteller(value)}
               />
               <Autocomplete
                 endContent={
@@ -174,7 +238,7 @@ export default function LieferscheinErstellenModal({
                   />
                 }
                 itemHeight={50}
-                label="Kostenstelle Neu"
+                label="Kostenstelle Zu"
                 placeholder="Geben Sie die neue Kostenstelle ein"
                 selectedKey={kostenstelleNeu}
                 onSelectionChange={kostenstelleNeuSelected}
@@ -195,13 +259,13 @@ export default function LieferscheinErstellenModal({
               <p className="text-sm font-semibold">Artikel</p>
               <div className="flex flex-col gap-2">
                 {itemList.map((item) => (
-                  <Card key={item.artikelnummer}>
+                  <Card key={item.betriebsnummer}>
                     <CardBody className="bg-content2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-col">
                           <p>{item.kurzname}</p>
                           <p className="text-sm text-default-500">
-                            {item.artikelnummer}
+                            {item.betriebsnummer}
                           </p>
                         </div>
 
@@ -212,15 +276,15 @@ export default function LieferscheinErstellenModal({
                             label="Stückzahl"
                             placeholder="Stückzahl"
                             size="sm"
-                            value={item.quantity}
+                            value={item.anzahl}
                             variant="bordered"
                             onValueChange={(value) => {
-                              const quantity = value || 1;
+                              const anzahl = value || 1;
 
                               setItemList((prev) =>
                                 prev.map((i) =>
-                                  i.artikelnummer === item.artikelnummer
-                                    ? { ...i, quantity }
+                                  i.betriebsnummer === item.betriebsnummer
+                                    ? { ...i, anzahl }
                                     : i,
                                 ),
                               );
@@ -233,7 +297,8 @@ export default function LieferscheinErstellenModal({
                             onPress={() => {
                               setItemList((prev) =>
                                 prev.filter(
-                                  (i) => i.artikelnummer !== item.artikelnummer,
+                                  (i) =>
+                                    i.betriebsnummer !== item.betriebsnummer,
                                 ),
                               );
                             }}
@@ -261,6 +326,7 @@ export default function LieferscheinErstellenModal({
                 </Button>
                 <Button
                   color="primary"
+                  isLoading={isLoading}
                   startContent={<Icon icon="hugeicons:note-done" width={18} />}
                   onPress={erstellen}
                 >

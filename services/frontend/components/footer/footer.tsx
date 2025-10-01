@@ -28,10 +28,6 @@ export default function Footer() {
           &copy; 2025 JustLAB. Alle Rechte vorbehalten. Version{" "}
           {siteConfig.version}
         </p>
-        <p className="mt-1 flex gap-1 text-center text-small text-default-400">
-          Made with <Icon icon="hugeicons:love-korean-finger" width={18} /> in
-          Germany
-        </p>
       </div>
     </footer>
   );

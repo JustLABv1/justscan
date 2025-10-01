@@ -9,7 +9,7 @@ RUN go mod download
 COPY . .
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -o /justwms-backend
+RUN CGO_ENABLED=0 GOOS=linux go build -o justwms-backend
 
 FROM alpine:3.22 as runner
 LABEL org.opencontainers.image.source="https://github.com/justnz/justwms"

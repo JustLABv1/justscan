@@ -19,12 +19,12 @@ jobs:
           ref: ${{ github.event.inputs.branch }}
 
       - name: Build Frontend Docker Image
-        run: docker build . --file services/frontend/Dockerfile --tag github.com/justnz/justwms:frontend-${{ github.sha }} --tag github.com/justnz/justwms:frontend-${{ github.ref_name }}
+        run: cd services/frontend && docker build . --file Dockerfile --tag github.com/justnz/justwms:frontend-${{ github.sha }} --tag github.com/justnz/justwms:frontend-${{ github.ref_name }}
 
       - name: Build Backend Docker Image
-        run: docker build . --file services/backend/Dockerfile --tag github.com/justnz/justwms:backend-${{ github.sha }} --tag github.com/justnz/justwms:backend-${{ github.ref_name }}
+        run: cd services/backend && docker build . --file Dockerfile --tag github.com/justnz/justwms:backend-${{ github.sha }} --tag github.com/justnz/justwms:backend-${{ github.ref_name }}
 
-      - name: Build exFlow Docker Image
+      - name: Build JustWMS Docker Image
         run: docker build . --file Dockerfile --tag github.com/justnz/justwms:${{ github.sha }} --tag github.com/justnz/justwms:${{ github.ref_name }}
 
       - name: 'Login to GitHub Container Registry'

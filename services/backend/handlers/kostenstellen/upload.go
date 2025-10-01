@@ -3,7 +3,7 @@ package kostenstellen
 import (
 	"net/http"
 
-	"justwms-backend/functions/csvreader"
+	"justwms-backend/pkg/csvreader"
 	"justwms-backend/pkg/models"
 
 	_ "github.com/lib/pq"

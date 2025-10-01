@@ -1,4 +1,5 @@
 FROM golang:1.24-alpine as builder
+LABEL org.opencontainers.image.source = "https://github.com/JustNZ/JustWMS"
 
 WORKDIR /app/backend
 
@@ -12,7 +13,7 @@ COPY . .
 RUN go build -o justwms-backend
 
 FROM alpine:3.22 as runner
-LABEL org.opencontainers.image.source="https://github.com/justnz/justwms"
+LABEL org.opencontainers.image.source = "https://github.com/JustNZ/JustWMS"
 WORKDIR /app
 
 COPY --from=builder /app/backend/justwms-backend /app/

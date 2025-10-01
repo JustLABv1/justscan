@@ -61,34 +61,38 @@ func ReadArtikelCSV(file multipart.File) (artikel []models.Artikel, err error) {
 	}
 
 	// Find the GERAETE header row to understand the structure for device records
-	var artikelHeader []string
+	var nullHeader []string
 	for _, record := range records {
-		if len(record) > 1 && record[1] == "ARTIKEL" && record[0] == "0" {
-			artikelHeader = record[2:] // Skip the ID and type columns
+		if len(record) > 1 && record[0] == "0" {
+			nullHeader = record[1:] // Skip the ID and type columns
 			break
 		}
 	}
 
-	if len(artikelHeader) == 0 {
-		fmt.Println("No ARTIKEL header found")
+	if len(nullHeader) == 0 {
+		fmt.Println("No null header found")
 		return
 	}
 
 	// Find column indices for device data
 	betrNrIndex := -1
 	kurznameIndex := -1
+	artiIndex := -1
 
-	for i, col := range artikelHeader {
+	for i, col := range nullHeader {
 		trimmedCol := strings.TrimSpace(col)
-		if trimmedCol == "BetrNr" {
+		switch trimmedCol {
+		case "BetrNr":
 			betrNrIndex = i
-		} else if trimmedCol == "Kurzname" {
+		case "Kurzname":
 			kurznameIndex = i
+		case "ARTIKEL":
+			artiIndex = i
 		}
 	}
 
-	if betrNrIndex == -1 || kurznameIndex == -1 {
-		fmt.Println("BetrNr or Kurzname column not found!")
+	if betrNrIndex == -1 || kurznameIndex == -1 || artiIndex == -1 {
+		fmt.Println("BetrNr, Kurzname or ARTIKEL column not found!")
 		return
 	}
 
@@ -97,8 +101,8 @@ func ReadArtikelCSV(file multipart.File) (artikel []models.Artikel, err error) {
 
 	for _, record := range records {
 		if len(record) > 1 {
-			var betrNr, kurzname string
-			dataFields := record[2:] // Skip ID and type columns
+			var betrNr, kurzname, arti string
+			dataFields := record[1:] // Skip ID and type columns
 
 			if betrNrIndex >= 0 && betrNrIndex < len(dataFields) {
 				betrNr = strings.TrimSpace(dataFields[betrNrIndex])
@@ -108,10 +112,15 @@ func ReadArtikelCSV(file multipart.File) (artikel []models.Artikel, err error) {
 				kurzname = strings.TrimSpace(dataFields[kurznameIndex])
 			}
 
-			if betrNr != "" && betrNr != "*" && betrNr != "BetrNr" && betrNr != "StammTyp" && betrNr != "SetBetrNr" && betrNr != "ME" && kurzname != "" {
+			if artiIndex >= 0 && artiIndex < len(dataFields) {
+				arti = strings.TrimSpace(dataFields[artiIndex])
+			}
+
+			if betrNr != "" && betrNr != "*" && betrNr != "BetrNr" && betrNr != "StammTyp" && betrNr != "SetBetrNr" && betrNr != "ME" && kurzname != "" && arti != "" && arti != "ART" {
 				uniqueArtikelMap = append(uniqueArtikelMap, models.Artikel{
-					Artikelnummer: betrNr,
-					Kurzname:      kurzname,
+					Betriebsnummer: betrNr,
+					Kurzname:       kurzname,
+					Artikel:        arti,
 				})
 			}
 		}
@@ -121,8 +130,9 @@ func ReadArtikelCSV(file multipart.File) (artikel []models.Artikel, err error) {
 	uniqueArtikel := make([]models.Artikel, 0, len(uniqueArtikelMap))
 	for _, art := range uniqueArtikelMap {
 		artikel := models.Artikel{
-			Artikelnummer: art.Artikelnummer,
-			Kurzname:      art.Kurzname,
+			Artikel:        art.Artikel,
+			Betriebsnummer: art.Betriebsnummer,
+			Kurzname:       art.Kurzname,
 		}
 		uniqueArtikel = append(uniqueArtikel, artikel)
 	}

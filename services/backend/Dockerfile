@@ -2,15 +2,14 @@ FROM golang:1.23-alpine as builder
 
 WORKDIR /app
 
-# Copy everything first
-COPY . ./
+COPY go.mod go.sum ./
 
-# Ensure Go module mode is enabled and clean up dependencies
-ENV GO111MODULE=on
-RUN go mod tidy
+RUN go mod download
+
+COPY . .
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -o justwms-backend
+RUN CGO_ENABLED=0 GOOS=linux go build -o /justwms-backend
 
 FROM alpine:3.22 as runner
 LABEL org.opencontainers.image.source="https://github.com/justnz/justwms"

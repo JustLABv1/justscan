@@ -48,7 +48,7 @@ func CheckUploadedArtikel(c *gin.Context, db *bun.DB) {
 	for _, k := range artikel {
 		found := false
 		for _, dbk := range dbArtikel {
-			if k.Artikelnummer == dbk.Artikelnummer {
+			if k.Betriebsnummer == dbk.Betriebsnummer {
 				found = true
 				break
 			}

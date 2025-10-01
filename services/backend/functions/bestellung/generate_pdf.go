@@ -152,7 +152,7 @@ func GenerateBestellungPDF(bestellung models.Bestellungen) (filePath string, err
 		rowData := [colCount]string{
 			strconv.Itoa(rowJ + 1),       // Position
 			strconv.Itoa(artikel.Anzahl), // Anzahl
-			artikel.Artikelnummer,        // Artikelnummer
+			artikel.Betriebsnummer,       // Artikelnummer
 			artikel.Kurzname,             // Bezeichnung (Kurzname)
 		}
 
@@ -202,7 +202,7 @@ func GenerateBestellungPDF(bestellung models.Bestellungen) (filePath string, err
 	pdf.CellFormat(0, 5, "JustWMS - Warehouse Management System", "", 1, "C", false, 0, "")
 
 	// Generate filename with bestellung ID
-	filename := fmt.Sprintf("bestellung_%s.pdf", bestellung.ID.String())
+	filename := fmt.Sprintf("data/bestellung_%s.pdf", bestellung.ID.String())
 	err = pdf.OutputFileAndClose(filename)
 	if err != nil {
 		return "", err

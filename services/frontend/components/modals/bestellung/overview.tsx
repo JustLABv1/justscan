@@ -54,13 +54,13 @@ export default function BestellungOverviewModal({
               <p className="text-sm font-semibold">Artikel</p>
               <div className="flex flex-col gap-2">
                 {bestellung.artikel.map((item: any) => (
-                  <Card key={item.artikelnummer}>
+                  <Card key={item.betriebsnummer}>
                     <CardBody className="bg-content2">
                       <div className="flex flex-cols items-center justify-between gap-2">
                         <div className="flex flex-col max-w-xs">
                           <p>{item.kurzname}</p>
                           <p className="text-sm text-default-500">
-                            {item.artikelnummer}
+                            {item.betriebsnummer}
                           </p>
                         </div>
 

@@ -26,6 +26,7 @@ func createSchema(ctx context.Context, db *bun.DB) error {
 		(*models.Artikel)(nil),
 		(*models.Geraete)(nil),
 		(*models.Bestellungen)(nil),
+		(*models.Lieferschein)(nil),
 	}
 
 	for _, model := range models {

@@ -41,13 +41,13 @@ export default function BestellungAufgebenModal({
 
   const [besteller, setBesteller] = useState<string>("");
   const [itemList, setItemList] = useState<
-    { artikelnummer: string; kurzname: string; anzahl: number }[]
+    { betriebsnummer: string; kurzname: string; anzahl: number }[]
   >([]);
 
   const handleScan = (code: string) => {
     setScannedCode(code);
     // search for artikel
-    const foundItem = artikel.find((item: any) => item.artikelnummer === code);
+    const foundItem = artikel.find((item: any) => item.betriebsnummer === code);
 
     if (!foundItem) {
       addToast({
@@ -66,13 +66,13 @@ export default function BestellungAufgebenModal({
     }
 
     // check if item is already in list
-    const isInList = itemList.find((item) => item.artikelnummer === code);
+    const isInList = itemList.find((item) => item.betriebsnummer === code);
 
     if (isInList) {
       // increase quantity by 1
       setItemList((prev) =>
         prev.map((item) =>
-          item.artikelnummer === code
+          item.betriebsnummer === code
             ? { ...item, anzahl: item.anzahl + 1 }
             : item,
         ),
@@ -85,7 +85,7 @@ export default function BestellungAufgebenModal({
       setItemList((prev) => [
         ...prev,
         {
-          artikelnummer: foundItem.artikelnummer,
+          betriebsnummer: foundItem.betriebsnummer,
           kurzname: foundItem.kurzname,
           anzahl: 1,
         },
@@ -170,13 +170,13 @@ export default function BestellungAufgebenModal({
               <p className="text-sm font-semibold">Artikel</p>
               <div className="flex flex-col gap-2">
                 {itemList.map((item) => (
-                  <Card key={item.artikelnummer}>
+                  <Card key={item.betriebsnummer}>
                     <CardBody className="bg-content2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-col">
                           <p>{item.kurzname}</p>
                           <p className="text-sm text-default-500">
-                            {item.artikelnummer}
+                            {item.betriebsnummer}
                           </p>
                         </div>
 
@@ -194,7 +194,7 @@ export default function BestellungAufgebenModal({
 
                               setItemList((prev) =>
                                 prev.map((i) =>
-                                  i.artikelnummer === item.artikelnummer
+                                  i.betriebsnummer === item.betriebsnummer
                                     ? { ...i, anzahl }
                                     : i,
                                 ),
@@ -208,7 +208,8 @@ export default function BestellungAufgebenModal({
                             onPress={() => {
                               setItemList((prev) =>
                                 prev.filter(
-                                  (i) => i.artikelnummer !== item.artikelnummer,
+                                  (i) =>
+                                    i.betriebsnummer !== item.betriebsnummer,
                                 ),
                               );
                             }}

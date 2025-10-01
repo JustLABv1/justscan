@@ -1,5 +1,5 @@
 FROM node:24.7-alpine AS base
-LABEL org.opencontainers.image.source = "https://github.com/JustNZ/JustWMS"
+LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustWMS"
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -28,7 +28,7 @@ RUN pnpm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner
-LABEL org.opencontainers.image.source = "https://github.com/JustNZ/JustWMS"
+LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustWMS"
 WORKDIR /app
 
 RUN addgroup --system --gid 1001 nodejs

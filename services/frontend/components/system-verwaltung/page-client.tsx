@@ -5,6 +5,9 @@ import { Divider, Spacer } from "@heroui/react";
 import ErrorCard from "@/components/error/ErrorCard";
 import { PageSkeleton } from "@/components/loading/page-skeleton";
 import { useAdminGetUsers } from "@/lib/swr/hooks/users";
+import { useKostenstellen } from "@/lib/swr/hooks/kostenstellen";
+import { useGeraete } from "@/lib/swr/hooks/geraete";
+import { useArtikel } from "@/lib/swr/hooks/artikel";
 
 import SystemVerwaltungHeading from "./heading";
 import SystemVerwaltungUploads from "./uploads";
@@ -18,8 +21,27 @@ export default function SystemVerwaltungPageClient() {
     isError: usersError,
   } = useAdminGetUsers();
 
+  const {
+    kostenstellen,
+    isLoading: kostenstellenLoading,
+    isError: kostenstellenError,
+  } = useKostenstellen();
+
+  const {
+    geraete,
+    isLoading: geraeteLoading,
+    isError: geraeteError,
+  } = useGeraete();
+
+  const {
+    artikel,
+    isLoading: artikelLoading,
+    isError: artikelError,
+  } = useArtikel();
+
   // Check if any essential data is still loading or missing
-  const isLoading = usersLoading;
+  const isLoading =
+    usersLoading || kostenstellenLoading || geraeteLoading || artikelLoading;
 
   // Show loading state if essential data is still loading
   if (isLoading) {
@@ -27,7 +49,8 @@ export default function SystemVerwaltungPageClient() {
   }
 
   // Show error state
-  const hasError = usersError;
+  const hasError =
+    usersError || kostenstellenError || geraeteError || artikelError;
 
   if (hasError) {
     return (
@@ -44,7 +67,11 @@ export default function SystemVerwaltungPageClient() {
     <main>
       <SystemVerwaltungHeading />
       <Divider className="my-4" />
-      <SystemVerwaltungUploads />
+      <SystemVerwaltungUploads
+        artikel={artikel}
+        geraete={geraete}
+        kostenstellen={kostenstellen}
+      />
       <Divider className="my-4" />
       <AdminUsersHeading />
       <Spacer y={4} />

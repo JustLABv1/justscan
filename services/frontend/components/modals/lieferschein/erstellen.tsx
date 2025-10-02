@@ -312,27 +312,26 @@ export default function LieferscheinErstellenModal({
                 ))}
               </div>
             </DrawerBody>
-            <DrawerFooter className="flex flex-cols gap-4 justify-between">
+            <DrawerFooter className="grid grid-cols-1 lg:grid-cols-3 md:grid-cols-2 gap-4 items-center">
+              <Button
+                color="danger"
+                startContent={<Icon icon="hugeicons:cancel-01" width={18} />}
+                variant="flat"
+                onPress={onClose}
+              >
+                Abbrechen
+              </Button>
+
               <BarcodeScanner onError={handleError} onScan={handleScan} />
 
-              <div className="flex flex-cols gap-2">
-                <Button
-                  color="danger"
-                  startContent={<Icon icon="hugeicons:cancel-01" width={18} />}
-                  variant="flat"
-                  onPress={onClose}
-                >
-                  Abbrechen
-                </Button>
-                <Button
-                  color="primary"
-                  isLoading={isLoading}
-                  startContent={<Icon icon="hugeicons:note-done" width={18} />}
-                  onPress={erstellen}
-                >
-                  Erstellen
-                </Button>
-              </div>
+              <Button
+                color="primary"
+                isLoading={isLoading}
+                startContent={<Icon icon="hugeicons:note-done" width={18} />}
+                onPress={erstellen}
+              >
+                Erstellen
+              </Button>
             </DrawerFooter>
           </>
         )}

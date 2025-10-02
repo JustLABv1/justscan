@@ -56,4 +56,4 @@ jobs:
           tag: ${{ github.ref_name }}
           skipIfReleaseExists: true
           generateReleaseNotes: true
-          token: ${{ secrets.ACCESS_TOKEN }}
+          token: ${{secrets.GITHUB_TOKEN}}

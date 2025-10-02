@@ -22,7 +22,7 @@ export default function AdminUsersHeading() {
               variant="flat"
               onPress={createUserModal.onOpen}
             >
-              Create User
+              Benutzer erstellen
             </Button>
           </div>
 

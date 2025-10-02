@@ -19,8 +19,7 @@ import (
 const version string = "0.1.2"
 
 var (
-	configFile  = kingpin.Flag("config", "Config file").Short('c').Default("/etc/justwms/config.yaml").String()
-	frontendEnv = kingpin.Flag("frontendEnv", "Path to frontend environment").Default("/etc/justwms/.env").String()
+	configFile = kingpin.Flag("config", "Config file").Short('c').Default("/etc/justwms/config.yaml").String()
 )
 
 func logging(logLevel string) {

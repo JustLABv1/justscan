@@ -51,6 +51,9 @@ RUN mkdir .next \
 COPY --from=frontend-builder --chown=nextjs:nodejs /app/frontend/.next/standalone ./
 COPY --from=frontend-builder --chown=nextjs:nodejs /app/frontend/.next/static ./.next/static
 
+# Copy .env file to the working directory
+COPY --from=frontend-builder --chown=nextjs:nodejs /app/frontend/.env /app/.env
+
 RUN chown -R nextjs:nodejs /app
 
 RUN mkdir -p /etc/justwms \

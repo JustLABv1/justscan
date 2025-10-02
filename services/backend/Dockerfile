@@ -24,9 +24,12 @@ RUN adduser --system --uid 1001 justwms
 RUN mkdir -p /etc/justwms \
     && chown -R justwms:justwms /etc/justwms
 
+RUN mkdir -p /app/data \
+    && chown -R justwms:justwms /app/data
+
 RUN chown -R justwms:justwms /app
 
-VOLUME [ "/etc/justwms" ]
+VOLUME [ "/etc/justwms", "/app/data" ]
 
 EXPOSE 8080
 

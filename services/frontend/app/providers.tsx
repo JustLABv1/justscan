@@ -26,7 +26,7 @@ export function Providers({ children, themeProps }: ProvidersProps) {
 
   return (
     <HeroUIProvider navigate={router.push}>
-      <ToastProvider />
+      <ToastProvider placement="top-right" />
       <NextThemesProvider {...themeProps}>{children}</NextThemesProvider>
     </HeroUIProvider>
   );

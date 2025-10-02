@@ -274,6 +274,27 @@ export const Navbar = ({ userDetails, session }: any) => {
               </Link>
             </NavbarMenuItem>
           ))}
+
+          {userDetails.role === "admin" && (
+            <NavbarItem>
+              <NextLink
+                className={clsx(
+                  linkStyles({ color: "foreground" }),
+                  {
+                    "text-primary font-bold":
+                      "/" + currentPath === "/system-verwaltung",
+                  },
+                  {
+                    "font-semibold": "/" + currentPath !== "/system-verwaltung",
+                  },
+                )}
+                color="foreground"
+                href="/system-verwaltung"
+              >
+                System Verwaltung
+              </NextLink>
+            </NavbarItem>
+          )}
         </div>
       </NavbarMenu>
     </HeroUINavbar>

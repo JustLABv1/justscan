@@ -59,10 +59,13 @@ RUN chown -R nextjs:nodejs /app
 RUN mkdir -p /etc/justwms \
     && chown -R nextjs:nodejs /etc/justwms
 
+RUN mkdir -p /app/data \
+    && chown -R nextjs:nodejs /app/data
+
 # Set environment variables
 ENV NODE_ENV=production
 
-VOLUME [ "/etc/justwms" ]
+VOLUME [ "/etc/justwms", "/app/data" ]
 
 # Expose ports
 EXPOSE 8080 3000

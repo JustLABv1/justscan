@@ -51,7 +51,11 @@ export default function DashboardPageClient() {
 
   return (
     <main>
-      <QuickNavigation artikel={artikel} kostenstellen={kostenstellen} />
+      <QuickNavigation
+        artikel={artikel}
+        kostenstellen={kostenstellen}
+        user={user}
+      />
     </main>
   );
 }

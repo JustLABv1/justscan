@@ -60,7 +60,7 @@ RUN mkdir -p /etc/justwms \
     && chown -R nextjs:nodejs /etc/justwms
 
 RUN mkdir -p /app/data \
-    && chown -R justwms:justwms /app/data
+    && chown -R nextjs:nodejs /app/data
 
 # Set environment variables
 ENV NODE_ENV=production

@@ -9,9 +9,11 @@ import LieferscheinErstellenModal from "../modals/lieferschein/erstellen";
 export default function QuickNavigation({
   kostenstellen,
   artikel,
+  user,
 }: {
   kostenstellen: any;
   artikel: any;
+  user: any;
 }) {
   const router = useRouter();
   const lieferscheinErstellen = useDisclosure();
@@ -20,7 +22,7 @@ export default function QuickNavigation({
     <section>
       <div className="flex flex-cols items-center">
         <p className="text-2xl font-semibold">Willkommen&nbsp;</p>
-        <p className="text-2xl font-bold text-primary">Justin!</p>
+        <p className="text-2xl font-bold text-primary">{user.username}!</p>
       </div>
       <Spacer y={4} />
       <div className="grid grid-cols-2 gap-4">

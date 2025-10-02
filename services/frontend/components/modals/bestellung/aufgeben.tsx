@@ -223,32 +223,30 @@ export default function BestellungAufgebenModal({
                 ))}
               </div>
             </DrawerBody>
-            <DrawerFooter className="flex flex-cols gap-4 justify-between">
+            <DrawerFooter className="grid grid-cols-1 lg:grid-cols-3 md:grid-cols-2 gap-4 items-center">
+              <Button
+                color="danger"
+                startContent={<Icon icon="hugeicons:cancel-01" width={18} />}
+                variant="flat"
+                onPress={() => {
+                  onClose();
+                  setBesteller("");
+                  setItemList([]);
+                }}
+              >
+                Abbrechen
+              </Button>
               <BarcodeScanner onError={handleError} onScan={handleScan} />
 
-              <div className="flex flex-cols gap-2">
-                <Button
-                  color="danger"
-                  startContent={<Icon icon="hugeicons:cancel-01" width={18} />}
-                  variant="flat"
-                  onPress={() => {
-                    onClose();
-                    setBesteller("");
-                    setItemList([]);
-                  }}
-                >
-                  Abbrechen
-                </Button>
-                <Button
-                  color="primary"
-                  isDisabled={itemList.length === 0 || besteller.trim() === ""}
-                  isLoading={isLoading}
-                  startContent={<Icon icon="hugeicons:note-done" width={18} />}
-                  onPress={erstellen}
-                >
-                  Aufgeben
-                </Button>
-              </div>
+              <Button
+                color="primary"
+                isDisabled={itemList.length === 0 || besteller.trim() === ""}
+                isLoading={isLoading}
+                startContent={<Icon icon="hugeicons:note-done" width={18} />}
+                onPress={erstellen}
+              >
+                Aufgeben
+              </Button>
             </DrawerFooter>
           </>
         )}

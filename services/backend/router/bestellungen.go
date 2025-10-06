@@ -1,6 +1,7 @@
 package router
 
 import (
+	"justwms-backend/config"
 	"justwms-backend/middlewares"
 
 	"justwms-backend/handlers/bestellungen"
@@ -9,7 +10,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-func Bestellungen(router *gin.RouterGroup, db *bun.DB) {
+func Bestellungen(router *gin.RouterGroup, db *bun.DB, config *config.RestfulConf) {
 	bestellung := router.Group("/bestellungen")
 	{
 		bestellung.Use(middlewares.Auth(db)).GET("/", func(c *gin.Context) {
@@ -25,7 +26,7 @@ func Bestellungen(router *gin.RouterGroup, db *bun.DB) {
 			bestellungen.DeleteBestellung(c, db)
 		})
 		bestellung.Use(middlewares.Auth(db)).GET("/:id/export", func(c *gin.Context) {
-			bestellungen.Export(c, db)
+			bestellungen.Export(c, db, config)
 		})
 	}
 }

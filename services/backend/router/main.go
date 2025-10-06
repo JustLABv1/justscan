@@ -1,6 +1,7 @@
 package router
 
 import (
+	"justwms-backend/config"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,7 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func StartRouter(db *bun.DB, port int) *http.Server {
+func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
@@ -34,7 +35,7 @@ func StartRouter(db *bun.DB, port int) *http.Server {
 		Kostenstellen(v1, db)
 		Geraete(v1, db)
 		Artikel(v1, db)
-		Bestellungen(v1, db)
+		Bestellungen(v1, db, config)
 		Admin(v1, db)
 		Lieferschein(v1, db)
 	}

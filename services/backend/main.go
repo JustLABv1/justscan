@@ -70,7 +70,7 @@ func main() {
 	}
 
 	// Set up signal handling for graceful shutdown
-	server := router.StartRouter(db, cfg.Port)
+	server := router.StartRouter(db, cfg.Port, cfg)
 
 	// Wait for interrupt signal to gracefully shutdown the server
 	quit := make(chan os.Signal, 1)

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"justwms-backend/config"
 	"justwms-backend/pkg/models"
 
 	"codeberg.org/go-pdf/fpdf"
@@ -27,7 +28,7 @@ func getStatusColor(status string) [3]int {
 	}
 }
 
-func GenerateBestellungPDF(bestellung models.Bestellungen) (filePath string, err error) {
+func GenerateBestellungPDF(bestellung models.Bestellungen, config *config.RestfulConf) (filePath string, err error) {
 	const (
 		colCount    = 4
 		marginH     = 20.0
@@ -202,7 +203,7 @@ func GenerateBestellungPDF(bestellung models.Bestellungen) (filePath string, err
 	pdf.CellFormat(0, 5, "JustWMS - Warehouse Management System", "", 1, "C", false, 0, "")
 
 	// Generate filename with bestellung ID
-	filename := fmt.Sprintf("data/bestellung_%s.pdf", bestellung.ID.String())
+	filename := fmt.Sprintf(config.DataPath+"/bestellung_%s.pdf", bestellung.ID.String())
 	err = pdf.OutputFileAndClose(filename)
 	if err != nil {
 		return "", err

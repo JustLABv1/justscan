@@ -150,6 +150,11 @@ export default function LieferscheinErstellenModal({
       });
       onOpenChange();
       setBesteller("");
+      setKostenstelleNeu("");
+      setKostenstelleVon("");
+      setError(false);
+      setErrorText("");
+      setErrorMessage("");
       setItemList([]);
     } else {
       setError(true);
@@ -183,7 +188,11 @@ export default function LieferscheinErstellenModal({
               Lieferschein Erstellen
             </DrawerHeader>
             <DrawerBody>
-              {error && <ErrorCard error={errorText} message={errorMessage} />}
+              {error && (
+                <div>
+                  <ErrorCard error={errorText} message={errorMessage} />
+                </div>
+              )}
               <Input
                 classNames={{
                   inputWrapper: [
@@ -220,12 +229,12 @@ export default function LieferscheinErstellenModal({
                 {kostenstellen.map((kostenstelle: any) => (
                   <AutocompleteItem
                     key={kostenstelle.kostenstellenummer}
-                    description={kostenstelle.bezeichnung}
+                    description={kostenstelle.kostenstellenummer}
                     isDisabled={
                       kostenstelle.kostenstellenummer === kostenstelleNeu
                     }
                   >
-                    {kostenstelle.kostenstellenummer}
+                    {kostenstelle.bezeichnung}
                   </AutocompleteItem>
                 ))}
               </Autocomplete>
@@ -246,12 +255,12 @@ export default function LieferscheinErstellenModal({
                 {kostenstellen.map((kostenstelle: any) => (
                   <AutocompleteItem
                     key={kostenstelle.kostenstellenummer}
-                    description={kostenstelle.bezeichnung}
+                    description={kostenstelle.kostenstellenummer}
                     isDisabled={
                       kostenstelle.kostenstellenummer === kostenstelleVon
                     }
                   >
-                    {kostenstelle.kostenstellenummer}
+                    {kostenstelle.bezeichnung}
                   </AutocompleteItem>
                 ))}
               </Autocomplete>
@@ -326,6 +335,12 @@ export default function LieferscheinErstellenModal({
 
               <Button
                 color="primary"
+                isDisabled={
+                  !besteller ||
+                  !kostenstelleVon ||
+                  !kostenstelleNeu ||
+                  itemList.length === 0
+                }
                 isLoading={isLoading}
                 startContent={<Icon icon="hugeicons:note-done" width={18} />}
                 onPress={erstellen}

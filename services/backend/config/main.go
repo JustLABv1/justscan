@@ -24,10 +24,16 @@ type ConfigurationManager struct {
 }
 
 type RestfulConf struct {
-	LogLevel string       `mapstructure:"log_level" validate:"required,oneof=debug info warn error"`
-	Port     int          `mapstructure:"port" validate:"required"`
-	Database DatabaseConf `mapstructure:"database" validate:"required"`
-	JWT      JWTConf      `mapstructure:"jwt" validate:"required"`
+	LogLevel     string           `mapstructure:"log_level" validate:"required,oneof=debug info warn error"`
+	Port         int              `mapstructure:"port" validate:"required"`
+	Database     DatabaseConf     `mapstructure:"database" validate:"required"`
+	JWT          JWTConf          `mapstructure:"jwt" validate:"required"`
+	DataPath     string           `mapstructure:"data_path" validate:"required"`
+	Lieferschein LieferscheinConf `mapstructure:"lieferschein" validate:"required"`
+}
+
+type LieferscheinConf struct {
+	ExportPath string `mapstructure:"export_path" validate:"required"`
 }
 
 type DatabaseConf struct {
@@ -73,6 +79,7 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"database.name":               "BACKEND_DATABASE_NAME",
 		"database.user":               "BACKEND_DATABASE_USER",
 		"database.password":           "BACKEND_DATABASE_PASSWORD",
+		"data_path":                   "BACKEND_DATA_PATH",
 		"encryption.key":              "BACKEND_ENCRYPTION_KEY",
 		"encryption.master_secret":    "BACKEND_ENCRYPTION_MASTER_SECRET",
 		"jwt.secret":                  "BACKEND_JWT_SECRET",

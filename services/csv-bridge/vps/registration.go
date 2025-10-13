@@ -103,7 +103,7 @@ func RegisterWithVPS(cfg *config.Config) error {
 // StartHeartbeat starts a periodic heartbeat to the VPS application
 func StartHeartbeat(cfg *config.Config) {
 	// Use 5 seconds interval for frequent heartbeats
-	interval := 5 * time.Second
+	interval := 30 * time.Second
 	log.Infof("Starting heartbeat service with interval: %v", interval)
 
 	ticker := time.NewTicker(interval)

@@ -16,7 +16,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const version string = "0.1.6"
+const version string = "0.2.0"
 
 var (
 	configFile = kingpin.Flag("config", "Config file").Short('c').Default("/etc/justwms/config.yaml").String()

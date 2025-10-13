@@ -37,3 +37,12 @@ jobs:
 
       - name: Build JustWMS Docker Image
         run: docker build . --file Dockerfile --tag ghcr.io/justlabv1/justwms:test
+  csv-bridge:
+    name: Check Standalone CSV Bridge Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build CSV Bridge Docker Image
+        run: cd services/csv-bridge && docker build . --file Dockerfile --tag ghcr.io/justlabv1/justwms:csv-bridge-test

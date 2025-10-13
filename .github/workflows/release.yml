@@ -103,6 +103,8 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     needs: [build, build-csv-bridge]
     steps:
       - name: Checkout code
@@ -133,4 +135,3 @@ jobs:
             binaries/csv-bridge-windows-386.exe.sha256
             binaries/csv-bridge-linux-amd64.sha256
             binaries/csv-bridge-linux-arm64.sha256
-          token: ${{secrets.GITHUB_TOKEN}}

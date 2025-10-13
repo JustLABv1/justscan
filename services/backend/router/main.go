@@ -38,6 +38,7 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 		Bestellungen(v1, db, config)
 		Admin(v1, db)
 		Lieferschein(v1, db)
+		Bridge(v1, db)
 	}
 
 	server := &http.Server{

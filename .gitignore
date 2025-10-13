@@ -65,3 +65,5 @@ services/backend/.envrc
 services/backend/alertflow-backend
 
 services/backend/config.yaml
+
+csv-files/

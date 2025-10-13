@@ -10,7 +10,6 @@ import { useArtikel } from "@/lib/swr/hooks/artikel";
 
 import BestellungenHeading from "./heading";
 import BestellungenList from "./list";
-import CSVBridgeTransfer from "./csv-bridge-transfer";
 
 export default function BestellungenPageClient() {
   const {

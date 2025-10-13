@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"csv-bridge/config"
@@ -100,7 +103,7 @@ func RegisterWithVPS(cfg *config.Config) error {
 // StartHeartbeat starts a periodic heartbeat to the VPS application
 func StartHeartbeat(cfg *config.Config) {
 	// Use 5 seconds interval for frequent heartbeats
-	interval := 5 * time.Second
+	interval := 30 * time.Second
 	log.Infof("Starting heartbeat service with interval: %v", interval)
 
 	ticker := time.NewTicker(interval)
@@ -135,25 +138,133 @@ func StartHeartbeat(cfg *config.Config) {
 }
 
 // getExternalIP attempts to determine the external IP address
-// In a real deployment, you might want to configure this or use a service discovery mechanism
 func getExternalIP() string {
-	// This is a simple implementation - in production you might want to:
-	// 1. Use environment variables
-	// 2. Query external services
-	// 3. Use service discovery
-	// 4. Configure static IPs
-
-	// Try to get from common environment variables first
+	// Try to get from environment variables first (highest priority)
 	if ip := getEnvOrDefault("EXTERNAL_IP", ""); ip != "" {
+		log.Infof("Using configured external IP: %s", ip)
 		return ip
 	}
 
 	if ip := getEnvOrDefault("POD_IP", ""); ip != "" {
+		log.Infof("Using pod IP: %s", ip)
 		return ip
 	}
 
-	// Fallback to local IP detection (simplified)
-	return "localhost" // This should be replaced with actual external IP detection
+	// Try to get external IP from online services
+	if ip := getExternalIPFromService(); ip != "" {
+		log.Infof("Detected external IP: %s", ip)
+		return ip
+	}
+
+	// Fallback to local network IP (for internal networks)
+	if ip := getLocalNetworkIP(); ip != "" {
+		log.Warnf("Using local network IP: %s (this may not be reachable from VPS)", ip)
+		return ip
+	}
+
+	// Last resort fallback
+	log.Warn("Could not determine external IP, using localhost. Set EXTERNAL_IP environment variable for proper registration.")
+	return "localhost"
+}
+
+// getExternalIPFromService queries external services to determine public IP
+func getExternalIPFromService() string {
+	// List of reliable IP detection services
+	services := []string{
+		"https://api.ipify.org",
+		"https://checkip.amazonaws.com",
+		"https://ipinfo.io/ip",
+		"https://icanhazip.com",
+	}
+
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	for _, service := range services {
+		if ip := queryIPService(client, service); ip != "" {
+			return strings.TrimSpace(ip)
+		}
+	}
+
+	log.Warn("All external IP services failed")
+	return ""
+}
+
+// queryIPService queries a single IP detection service
+func queryIPService(client *http.Client, url string) string {
+	resp, err := client.Get(url)
+	if err != nil {
+		log.Debugf("Failed to query %s: %v", url, err)
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		log.Debugf("Service %s returned status %d", url, resp.StatusCode)
+		return ""
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Debugf("Failed to read response from %s: %v", url, err)
+		return ""
+	}
+
+	ip := strings.TrimSpace(string(body))
+
+	// Validate IP format
+	if net.ParseIP(ip) == nil {
+		log.Debugf("Invalid IP format from %s: %s", url, ip)
+		return ""
+	}
+
+	log.Debugf("Successfully got IP from %s: %s", url, ip)
+	return ip
+}
+
+// getLocalNetworkIP tries to determine the local network IP address
+func getLocalNetworkIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		log.Errorf("Failed to get network interfaces: %v", err)
+		return ""
+	}
+
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				ip := ipnet.IP.String()
+				// Skip common virtual/docker interfaces
+				if !isVirtualInterface(ip) {
+					log.Infof("Detected local network IP: %s", ip)
+					return ip
+				}
+			}
+		}
+	}
+
+	log.Warn("No suitable network interface found")
+	return ""
+}
+
+// isVirtualInterface checks if an IP is from a virtual/docker interface
+func isVirtualInterface(ip string) bool {
+	// Common virtual interface IP ranges to skip
+	virtualRanges := []string{
+		"172.17.",  // Docker default bridge
+		"172.18.",  // Docker bridge networks
+		"172.19.",  // Docker bridge networks
+		"172.20.",  // Docker bridge networks
+		"169.254.", // Link-local addresses
+	}
+
+	for _, vRange := range virtualRanges {
+		if strings.HasPrefix(ip, vRange) {
+			return true
+		}
+	}
+	return false
 }
 
 func getEnvOrDefault(key, defaultValue string) string {

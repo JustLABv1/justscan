@@ -10,12 +10,14 @@ import (
 	"github.com/uptrace/bun"
 
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 )
 
 func UploadKostenstellen(c *gin.Context, db *bun.DB) {
 	// Get the uploaded file
 	file, _, err := c.Request.FormFile("csv")
 	if err != nil {
+		log.Errorf("Failed to get file from request: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get file"})
 		return
 	}
@@ -24,6 +26,7 @@ func UploadKostenstellen(c *gin.Context, db *bun.DB) {
 	// Get the upload type
 	uploadType := c.PostForm("type")
 	if uploadType == "" {
+		log.Error("Upload type is required")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Upload type is required"})
 		return
 	}
@@ -31,46 +34,22 @@ func UploadKostenstellen(c *gin.Context, db *bun.DB) {
 	// Read the CSV file
 	kostenstellen, err := csvreader.ReadKostenstellenCSV(file)
 	if err != nil {
+		log.Errorf("Failed to read kostenstellen CSV: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// get kostenstellen from db
-	var dbKostenstellen []models.Kostenstellen
-	err = db.NewSelect().Model(&dbKostenstellen).Scan(c)
+	// delete existing kostenstellen
+	_, err = db.NewDelete().Model((*models.Kostenstellen)(nil)).Where("1=1").Exec(c)
 	if err != nil {
+		log.Errorf("Failed to delete existing kostenstellen: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// diff kostenstellen and dbKostenstellen
-	var newKostenstellen []models.Kostenstellen
-	for _, k := range kostenstellen {
-		found := false
-		for _, dbk := range dbKostenstellen {
-			if k.Kostenstellenummer == dbk.Kostenstellenummer {
-				found = true
-				break
-			}
-		}
-		if !found {
-			newKostenstelle := models.Kostenstellen{
-				Kostenstellenummer: k.Kostenstellenummer,
-				Bezeichnung:        k.Bezeichnung,
-			}
-			newKostenstellen = append(newKostenstellen, newKostenstelle)
-		}
-	}
-
-	if newKostenstellen == nil || len(newKostenstellen) == 0 {
-		c.JSON(http.StatusOK, gin.H{
-			"result": "no new kostenstellen",
-		})
-		return
-	}
-
-	_, err = db.NewInsert().Model(&newKostenstellen).Exec(c)
+	_, err = db.NewInsert().Model(&kostenstellen).Exec(c)
 	if err != nil {
+		log.Errorf("Failed to insert kostenstellen: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

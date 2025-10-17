@@ -21,7 +21,7 @@
     "@heroui/use-disclosure": "^2.2.16",
     "@iconify/react": "^6.0.1",
     "@react-aria/ssr": "3.9.10",
-    "@react-aria/visually-hidden": "3.8.27",
+    "@react-aria/visually-hidden": "3.8.28",
     "@serwist/next": "^9.2.1",
     "@tabler/icons-react": "^3.34.1",
     "@zxing/browser": "^0.1.5",

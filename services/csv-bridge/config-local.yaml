@@ -9,8 +9,8 @@ server:
 # VPS Application Configuration
 vps:
   base_url: "http://localhost:8082"  # Your VPS application URL
-  api_token: "your-secret-api-token"    # Authentication token for your VPS
-  register_interval: 300                # Register with VPS every 5 minutes (300 seconds)
+  api_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjE4M2M3OTJhLTk2YjEtNDBkOC05NWQ1LTk1MzRjMzQ0ZWFkZSIsInNlcnZpY2VfaWQiOiJjc3YtYnJpZGdlLTAwMSIsInR5cGUiOiJicmlkZ2UiLCJleHAiOjMzMzcyMzg3MDd9.-iHfuPNKh83Xt7QMDEyqL5Jhz8W_t5CAtSWE9LbZvns"    # Authentication token for your VPS
+  register_interval: 30                # Register with VPS every 30 seconds
   
 # Bridge Service Configuration  
 bridge:

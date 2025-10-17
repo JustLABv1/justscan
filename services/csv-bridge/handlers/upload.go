@@ -198,7 +198,7 @@ func GetHeartbeatStatus(cfg *config.Config) gin.HandlerFunc {
 			// Create a simple HEAD request to test connectivity
 			req, err := http.NewRequest("HEAD", registrationURL, nil)
 			if err == nil {
-				req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.VPS.APIToken))
+				req.Header.Set("Authorization", cfg.VPS.APIToken)
 				resp, err := client.Do(req)
 				if err != nil {
 					status["vps_connectivity"] = "error"

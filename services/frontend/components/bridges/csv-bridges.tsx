@@ -15,9 +15,13 @@ export default function CsvBridges({ bridges }: any) {
   const deleteBridgeModal = useDisclosure();
   const [targetBridge, setTargetBridge] = useState({} as any);
 
-  function heartbeatColor(runner: any) {
+  function heartbeatColor(bridge: any) {
     const timeAgo =
-      (new Date(runner.last_heartbeat).getTime() - Date.now()) / 1000;
+      (new Date(bridge.last_heartbeat).getTime() - Date.now()) / 1000;
+
+    if (bridge.reachable === false) {
+      return "danger";
+    }
 
     if (timeAgo < 0 && timeAgo > -30) {
       return "success";
@@ -28,9 +32,13 @@ export default function CsvBridges({ bridges }: any) {
     }
   }
 
-  function heartbeatStatus(bridge: any) {
+  function heartbeatStatus(bridge: any, skipReachableCheck = false) {
     const timeAgo =
       (new Date(bridge.last_heartbeat).getTime() - Date.now()) / 1000;
+
+    if (bridge.reachable === false && !skipReachableCheck) {
+      return false;
+    }
 
     if (timeAgo < 0 && timeAgo > -35) {
       return true;
@@ -65,9 +73,32 @@ export default function CsvBridges({ bridges }: any) {
                   </Chip>
 
                   <Tooltip
-                    content={`Letzter Heartbeat Status: ${new Date(
-                      bridge.last_heartbeat,
-                    ).toLocaleString()}`}
+                    content={
+                      <div className="flex flex-col gap-1">
+                        <p>
+                          Backend -&gt; Bridge:{" "}
+                          {bridge.reachable ? (
+                            <span className="text-success">Erreichbar</span>
+                          ) : (
+                            <span className="text-danger">
+                              Nicht erreichbar
+                            </span>
+                          )}
+                        </p>
+                        <p>
+                          Bridge -&gt; Backend:{" "}
+                          {heartbeatStatus(bridge, true) ? (
+                            <span className="text-success">Online</span>
+                          ) : (
+                            <span className="text-danger">Offline</span>
+                          )}
+                        </p>
+                        <p>
+                          Letzter Heartbeat:{" "}
+                          {new Date(bridge.last_heartbeat).toLocaleString()}
+                        </p>
+                      </div>
+                    }
                     placement="top"
                   >
                     <Chip

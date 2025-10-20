@@ -40,5 +40,10 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.DELETE("/tokens/:tokenID", func(c *gin.Context) {
 			admins.DeleteToken(c, db)
 		})
+
+		// bridges
+		admin.DELETE("/bridges/:bridgeID", func(c *gin.Context) {
+			admins.DeleteBridge(c, db)
+		})
 	}
 }

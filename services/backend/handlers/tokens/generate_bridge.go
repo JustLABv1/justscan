@@ -14,7 +14,7 @@ import (
 )
 
 type TokenRequestBridge struct {
-	ServiceID string `json:"service_id"`
+	BridgeID string `json:"bridge_id"`
 }
 
 func GenerateTokenBridge(db *bun.DB, context *gin.Context) {
@@ -28,11 +28,11 @@ func GenerateTokenBridge(db *bun.DB, context *gin.Context) {
 	// generate token
 	token := models.Tokens{
 		ID:          uuid.New(),
-		Description: "Bridge Token for " + request.ServiceID,
+		Description: "Bridge Token for " + request.BridgeID,
 		Type:        "bridge",
 		CreatedAt:   time.Now(),
 	}
-	tokenString, ExpiresAt, err := auth.GenerateBridgeToken(token.ID, request.ServiceID)
+	tokenString, ExpiresAt, err := auth.GenerateBridgeToken(token.ID, request.BridgeID)
 	if err != nil {
 		httperror.InternalServerError(context, "Error generating user token", err)
 		return

@@ -1,7 +1,6 @@
 package bridge
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -31,16 +30,11 @@ func RegisterBridge(context *gin.Context, db *bun.DB) {
 		return
 	}
 
-	fmt.Println(registration)
-
-	bridgeID, bridgeType, err := auth.GetBridgeDataFromToken(context.GetHeader("Authorization"))
+	bridgeID, _, err := auth.GetBridgeDataFromToken(context.GetHeader("Authorization"))
 	if err != nil {
 		httperror.Unauthorized(context, "Error receiving bridgeID from token", err)
 		return
 	}
-
-	fmt.Println("Bridge ID from token:", bridgeID)
-	fmt.Println("Bridge Type from token:", bridgeType)
 
 	// check if token bridgeID matches registration.BridgeID
 	if bridgeID != registration.BridgeID {

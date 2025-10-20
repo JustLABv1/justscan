@@ -3,7 +3,7 @@ export type SiteConfig = typeof siteConfig;
 export const siteConfig = {
   name: "JustWMS",
   description: "Lagerverwaltungssystem.",
-  version: "0.2.0",
+  version: "1.0.0",
   navItems: [
     {
       label: "Home",

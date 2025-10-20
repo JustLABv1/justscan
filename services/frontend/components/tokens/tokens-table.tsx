@@ -18,6 +18,7 @@ import React from "react";
 
 import CreateBridgeTokenModal from "../modals/admin/tokens/create_bridge";
 import DeleteTokenModal from "../modals/admin/tokens/delete";
+import ChangeTokenStatusModal from "../modals/admin/tokens/change_status";
 
 export default function TokensTable({
   tokens,
@@ -32,7 +33,7 @@ export default function TokensTable({
 
   // project tokens
   const createBridgeTokenModal = useDisclosure();
-  const changeProjectTokenStatusModal = useDisclosure();
+  const changeTokenStatusModal = useDisclosure();
 
   const deleteTokenModal = useDisclosure();
 
@@ -96,7 +97,7 @@ export default function TokensTable({
                   onPress={() => {
                     key.disabled = true;
                     setTargetToken(key);
-                    changeProjectTokenStatusModal.onOpen();
+                    changeTokenStatusModal.onOpen();
                   }}
                 >
                   <Icon icon="hugeicons:square-lock-01" width={20} />
@@ -111,7 +112,7 @@ export default function TokensTable({
                   onPress={() => {
                     key.disabled = false;
                     setTargetToken(key);
-                    changeProjectTokenStatusModal.onOpen();
+                    changeTokenStatusModal.onOpen();
                   }}
                 >
                   <Icon icon="hugeicons:square-unlock-01" width={20} />
@@ -229,7 +230,7 @@ export default function TokensTable({
             Aktionen
           </TableColumn>
         </TableHeader>
-        <TableBody emptyContent="No rows to display." items={items}>
+        <TableBody emptyContent="Keine Daten verfügbar." items={items}>
           {(item: any) => (
             <TableRow key={item.id}>
               {(columnKey) => (
@@ -240,13 +241,11 @@ export default function TokensTable({
         </TableBody>
       </Table>
       <CreateBridgeTokenModal disclosure={createBridgeTokenModal} />
-      {/* <ChangeProjectTokenStatusModal
+      <ChangeTokenStatusModal
         disabled={targetToken.disabled}
-        disclosure={changeProjectTokenStatusModal}
-        projectID={project.id}
+        disclosure={changeTokenStatusModal}
         token={targetToken}
       />
-      */}
       <DeleteTokenModal disclosure={deleteTokenModal} token={targetToken} />
     </div>
   );

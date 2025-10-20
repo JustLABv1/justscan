@@ -31,9 +31,9 @@ type VPSConfig struct {
 }
 
 type BridgeConfig struct {
-	ServiceID   string `yaml:"service_id"`
-	ServiceName string `yaml:"service_name"`
-	Version     string `yaml:"version"`
+	ID      string `yaml:"id"`
+	Name    string `yaml:"name"`
+	Version string `yaml:"version"`
 }
 
 type LoggingConfig struct {
@@ -42,7 +42,6 @@ type LoggingConfig struct {
 }
 
 type SecurityConfig struct {
-	APIKey         string   `yaml:"api_key"`
 	EnableCORS     bool     `yaml:"enable_cors"`
 	TrustedProxies []string `yaml:"trusted_proxies"`
 }
@@ -91,9 +90,6 @@ func LoadConfig(configPath string) (*Config, error) {
 	if apiToken := os.Getenv("CSV_BRIDGE_API_TOKEN"); apiToken != "" {
 		config.VPS.APIToken = apiToken
 	}
-	if apiKey := os.Getenv("CSV_BRIDGE_API_KEY"); apiKey != "" {
-		config.Security.APIKey = apiKey
-	}
 
 	// Validate required fields
 	if config.VPS.BaseURL == "" {
@@ -101,9 +97,6 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 	if config.VPS.APIToken == "" {
 		return nil, fmt.Errorf("VPS API token is required")
-	}
-	if config.Security.APIKey == "" {
-		return nil, fmt.Errorf("Bridge service API key is required")
 	}
 
 	// Set up logging

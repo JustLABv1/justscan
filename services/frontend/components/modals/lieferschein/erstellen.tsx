@@ -35,7 +35,7 @@ export default function LieferscheinErstellenModal({
   const { isOpen, onOpenChange } = disclosure;
 
   const [besteller, setBesteller] = useState("");
-  const [kostenstelleVon, setKostenstelleVon] = useState("");
+  const [kostenstelleVon, setKostenstelleVon] = useState("60000");
   const [kostenstelleNeu, setKostenstelleNeu] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);

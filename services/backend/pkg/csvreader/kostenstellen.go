@@ -111,7 +111,7 @@ func ReadKostenstellenCSV(file multipart.File) (kostenstellen []models.Kostenste
 				kstProjNr = strings.TrimSpace(dataFields[kstProjNrIndex])
 			}
 
-			if verbBetrNr != "" && strings.HasPrefix(verbBetrNr, "7") {
+			if verbBetrNr != "" && (strings.HasPrefix(verbBetrNr, "7") || verbBetrNr == "60000") {
 				uniqueKstNrMap = append(uniqueKstNrMap, models.Kostenstellen{
 					Kostenstellenummer: verbBetrNr,
 					Bezeichnung:        kstProjNr,

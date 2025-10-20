@@ -17,6 +17,7 @@ import {
   addToast,
   Avatar,
   Image,
+  Button,
 } from "@heroui/react";
 import { link as linkStyles } from "@heroui/theme";
 import NextLink from "next/link";
@@ -75,7 +76,7 @@ export const Navbar = ({ userDetails, session }: any) => {
             <p className="font-bold text-inherit">JustWMS</p>
           </NextLink>
         </NavbarBrand>
-        <ul className="hidden lg:flex gap-4 justify-start ml-2">
+        <ul className="hidden lg:flex gap-4 justify-start items-center ml-2">
           {siteConfig.navItems.map((item) => (
             <NavbarItem key={item.href}>
               <NextLink
@@ -97,22 +98,93 @@ export const Navbar = ({ userDetails, session }: any) => {
           ))}
           {userDetails.role === "admin" && (
             <NavbarItem>
-              <NextLink
-                className={clsx(
-                  linkStyles({ color: "foreground" }),
-                  {
-                    "text-primary font-bold":
-                      "/" + currentPath === "/system-verwaltung",
-                  },
-                  {
-                    "font-semibold": "/" + currentPath !== "/system-verwaltung",
-                  },
-                )}
-                color="foreground"
-                href="/system-verwaltung"
-              >
-                System Verwaltung
-              </NextLink>
+              <Dropdown>
+                <NavbarItem>
+                  <DropdownTrigger>
+                    <Button
+                      disableRipple
+                      className="p-0 bg-transparent data-[hover=true]:bg-transparent font-bold"
+                      color="danger"
+                      endContent={<Icon icon="hugeicons:arrow-down-01" />}
+                      radius="sm"
+                      variant="light"
+                    >
+                      Admin
+                    </Button>
+                  </DropdownTrigger>
+                </NavbarItem>
+                <DropdownMenu
+                  aria-label="Admin Actions"
+                  itemClasses={{
+                    base: "gap-4",
+                  }}
+                >
+                  <DropdownItem
+                    key="system-verwaltung"
+                    description="Importiere & Überprüfe Daten in JustWMS"
+                    startContent={
+                      <Icon
+                        className="text-danger"
+                        icon="hugeicons:database-sync-01"
+                        width={24}
+                      />
+                    }
+                    onPress={() => {
+                      router.push("/admin/system-verwaltung");
+                    }}
+                  >
+                    Daten Import
+                  </DropdownItem>
+                  <DropdownItem
+                    key="bridges"
+                    description="Verwalte alle Bridges"
+                    startContent={
+                      <Icon
+                        className="text-danger"
+                        icon="hugeicons:bridge"
+                        width={24}
+                      />
+                    }
+                    onPress={() => {
+                      router.push("/admin/bridges");
+                    }}
+                  >
+                    Bridges
+                  </DropdownItem>
+                  <DropdownItem
+                    key="tokens"
+                    description="Verwalte alle Tokens"
+                    startContent={
+                      <Icon
+                        className="text-danger"
+                        icon="hugeicons:key-02"
+                        width={24}
+                      />
+                    }
+                    onPress={() => {
+                      router.push("/admin/tokens");
+                    }}
+                  >
+                    Tokens
+                  </DropdownItem>
+                  <DropdownItem
+                    key="users"
+                    description="Verwalte alle Nutzer"
+                    startContent={
+                      <Icon
+                        className="text-danger"
+                        icon="hugeicons:location-user-02"
+                        width={24}
+                      />
+                    }
+                    onPress={() => {
+                      router.push("/admin/users");
+                    }}
+                  >
+                    Users
+                  </DropdownItem>
+                </DropdownMenu>
+              </Dropdown>
             </NavbarItem>
           )}
         </ul>
@@ -205,9 +277,11 @@ export const Navbar = ({ userDetails, session }: any) => {
               <p className="text-xs text-default-500">Eingeloggt als</p>
               <p className="font-semibold">
                 {userDetails.username}
-                {" | "}
                 {userDetails.role === "admin" && (
-                  <span className="text-danger font-bold">Admin</span>
+                  <span>
+                    {" "}
+                    | <span className="text-danger font-bold"> Admin</span>
+                  </span>
                 )}
               </p>
             </DropdownItem>
@@ -277,22 +351,93 @@ export const Navbar = ({ userDetails, session }: any) => {
 
           {userDetails.role === "admin" && (
             <NavbarItem>
-              <NextLink
-                className={clsx(
-                  linkStyles({ color: "foreground" }),
-                  {
-                    "text-primary font-bold":
-                      "/" + currentPath === "/system-verwaltung",
-                  },
-                  {
-                    "font-semibold": "/" + currentPath !== "/system-verwaltung",
-                  },
-                )}
-                color="foreground"
-                href="/system-verwaltung"
-              >
-                System Verwaltung
-              </NextLink>
+              <Dropdown>
+                <NavbarItem>
+                  <DropdownTrigger>
+                    <Button
+                      disableRipple
+                      className="p-0 bg-transparent data-[hover=true]:bg-transparent font-bold"
+                      color="danger"
+                      endContent={<Icon icon="hugeicons:arrow-down-01" />}
+                      radius="sm"
+                      variant="light"
+                    >
+                      Admin
+                    </Button>
+                  </DropdownTrigger>
+                </NavbarItem>
+                <DropdownMenu
+                  aria-label="Admin Actions"
+                  itemClasses={{
+                    base: "gap-4",
+                  }}
+                >
+                  <DropdownItem
+                    key="system-verwaltung"
+                    description="Importiere & Überprüfe Daten in JustWMS"
+                    startContent={
+                      <Icon
+                        className="text-danger"
+                        icon="hugeicons:database-sync-01"
+                        width={24}
+                      />
+                    }
+                    onPress={() => {
+                      router.push("/admin/system-verwaltung");
+                    }}
+                  >
+                    Daten Import
+                  </DropdownItem>
+                  <DropdownItem
+                    key="bridges"
+                    description="Verwalte alle Bridges"
+                    startContent={
+                      <Icon
+                        className="text-danger"
+                        icon="hugeicons:bridge"
+                        width={24}
+                      />
+                    }
+                    onPress={() => {
+                      router.push("/admin/bridges");
+                    }}
+                  >
+                    Bridges
+                  </DropdownItem>
+                  <DropdownItem
+                    key="tokens"
+                    description="Verwalte alle Tokens"
+                    startContent={
+                      <Icon
+                        className="text-danger"
+                        icon="hugeicons:key-02"
+                        width={24}
+                      />
+                    }
+                    onPress={() => {
+                      router.push("/admin/tokens");
+                    }}
+                  >
+                    Tokens
+                  </DropdownItem>
+                  <DropdownItem
+                    key="users"
+                    description="Verwalte alle Nutzer"
+                    startContent={
+                      <Icon
+                        className="text-danger"
+                        icon="hugeicons:location-user-02"
+                        width={24}
+                      />
+                    }
+                    onPress={() => {
+                      router.push("/admin/users");
+                    }}
+                  >
+                    Users
+                  </DropdownItem>
+                </DropdownMenu>
+              </Dropdown>
             </NavbarItem>
           )}
         </div>

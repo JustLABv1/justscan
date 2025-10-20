@@ -38,7 +38,7 @@ func transferCSVToBridge(csvFilePath string, lieferscheinID string, db *bun.DB, 
 		return false, "No active bridge services available"
 	}
 
-	log.Infof("Found active bridge: %s (%s)", bridge.ServiceName, bridge.UploadURL)
+	log.Infof("Found active bridge: %s (%s)", bridge.BridgeName, bridge.UploadURL)
 
 	// Read the CSV file
 	fileContent, err := os.ReadFile(csvFilePath)
@@ -96,7 +96,7 @@ func transferCSVToBridge(csvFilePath string, lieferscheinID string, db *bun.DB, 
 
 	// Check if upload was successful
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		log.Infof("Successfully uploaded CSV to bridge %s (status: %d)", bridge.ServiceName, resp.StatusCode)
+		log.Infof("Successfully uploaded CSV to bridge %s (status: %d)", bridge.BridgeName, resp.StatusCode)
 		return true, string(responseBody)
 	} else {
 		log.Errorf("Bridge upload failed with status %d: %s", resp.StatusCode, string(responseBody))

@@ -17,8 +17,8 @@ import (
 )
 
 type RegistrationRequest struct {
-	ServiceID     string    `json:"service_id"`
-	ServiceName   string    `json:"service_name"`
+	BridgeID      string    `json:"bridge_id"`
+	BridgeName    string    `json:"bridge_name"`
 	Version       string    `json:"version"`
 	UploadURL     string    `json:"upload_url"`
 	HealthURL     string    `json:"health_url"`
@@ -48,12 +48,11 @@ func RegisterWithVPS(cfg *config.Config) error {
 	}
 
 	registrationData := RegistrationRequest{
-		ServiceID:     cfg.Bridge.ServiceID,
-		ServiceName:   cfg.Bridge.ServiceName,
+		BridgeID:      cfg.Bridge.ID,
+		BridgeName:    cfg.Bridge.Name,
 		Version:       cfg.Bridge.Version,
 		UploadURL:     uploadURL,
 		HealthURL:     healthURL,
-		APIKey:        cfg.Security.APIKey,
 		MaxFileSize:   cfg.Server.MaxFileSize,
 		LastHeartbeat: time.Now(),
 	}
@@ -71,7 +70,7 @@ func RegisterWithVPS(cfg *config.Config) error {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.VPS.APIToken))
+	req.Header.Set("Authorization", cfg.VPS.APIToken)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -102,8 +101,8 @@ func RegisterWithVPS(cfg *config.Config) error {
 
 // StartHeartbeat starts a periodic heartbeat to the VPS application
 func StartHeartbeat(cfg *config.Config) {
-	// Use 5 seconds interval for frequent heartbeats
-	interval := 30 * time.Second
+	// Use configured interval for heartbeats
+	interval := time.Duration(cfg.VPS.RegisterInterval) * time.Second
 	log.Infof("Starting heartbeat service with interval: %v", interval)
 
 	ticker := time.NewTicker(interval)

@@ -33,19 +33,6 @@ type ErrorResponse struct {
 // UploadCSV handles CSV file uploads from the VPS application
 func UploadCSV(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Validate API key
-		apiKey := c.GetHeader("X-API-Key")
-		if apiKey == "" {
-			apiKey = c.Query("api_key")
-		}
-		if apiKey != cfg.Security.APIKey {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Status:  "error",
-				Message: "Invalid or missing API key",
-			})
-			return
-		}
-
 		// Parse the multipart form
 		err := c.Request.ParseMultipartForm(cfg.Server.MaxFileSize)
 		if err != nil {
@@ -152,9 +139,9 @@ func HealthCheck(cfg *config.Config) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"status":        status,
-			"service":       cfg.Bridge.ServiceName,
+			"service":       cfg.Bridge.Name,
 			"version":       cfg.Bridge.Version,
-			"service_id":    cfg.Bridge.ServiceID,
+			"service_id":    cfg.Bridge.ID,
 			"timestamp":     time.Now(),
 			"upload_dir":    cfg.Server.UploadDir,
 			"upload_dir_ok": uploadDirOK,
@@ -166,8 +153,8 @@ func HealthCheck(cfg *config.Config) gin.HandlerFunc {
 func GetServiceInfo(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"service_id":         cfg.Bridge.ServiceID,
-			"service_name":       cfg.Bridge.ServiceName,
+			"service_id":         cfg.Bridge.ID,
+			"service_name":       cfg.Bridge.Name,
 			"version":            cfg.Bridge.Version,
 			"upload_url":         fmt.Sprintf("http://%s:%d/upload", cfg.Server.Host, cfg.Server.Port),
 			"health_url":         fmt.Sprintf("http://%s:%d/health", cfg.Server.Host, cfg.Server.Port),
@@ -185,7 +172,7 @@ func GetHeartbeatStatus(cfg *config.Config) gin.HandlerFunc {
 		status := gin.H{
 			"vps_url":            cfg.VPS.BaseURL,
 			"heartbeat_interval": cfg.VPS.RegisterInterval,
-			"service_id":         cfg.Bridge.ServiceID,
+			"service_id":         cfg.Bridge.ID,
 			"timestamp":          time.Now(),
 		}
 
@@ -198,7 +185,7 @@ func GetHeartbeatStatus(cfg *config.Config) gin.HandlerFunc {
 			// Create a simple HEAD request to test connectivity
 			req, err := http.NewRequest("HEAD", registrationURL, nil)
 			if err == nil {
-				req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.VPS.APIToken))
+				req.Header.Set("Authorization", cfg.VPS.APIToken)
 				resp, err := client.Do(req)
 				if err != nil {
 					status["vps_connectivity"] = "error"

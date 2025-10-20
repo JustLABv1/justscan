@@ -10,6 +10,7 @@ import (
 
 	"justwms-backend/config"
 	"justwms-backend/database"
+	"justwms-backend/functions/background_checks"
 	"justwms-backend/router"
 
 	"github.com/alecthomas/kingpin/v2"
@@ -68,6 +69,8 @@ func main() {
 	if db == nil {
 		log.Fatal("Failed to connect to the database")
 	}
+
+	go background_checks.Init(db)
 
 	// Set up signal handling for graceful shutdown
 	server := router.StartRouter(db, cfg.Port, cfg)

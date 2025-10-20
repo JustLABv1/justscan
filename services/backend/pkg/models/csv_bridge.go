@@ -24,4 +24,5 @@ type CSVBridge struct {
 	LastHeartbeat time.Time `bun:"last_heartbeat" json:"last_heartbeat"`
 	CreatedAt     time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt     time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	Reachable     bool      `bun:"reachable,default:false" json:"reachable"`
 }

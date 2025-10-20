@@ -18,6 +18,7 @@ export function useRefreshCache() {
     refreshUsers: () => mutate("users"),
     refreshPageSettings: () => mutate("page-settings"),
     refreshTokens: () => mutate("tokens"),
+    refreshBridges: () => mutate("bridges"),
 
     // Convenience methods for common combinations
     refreshAll: () => {

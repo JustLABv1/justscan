@@ -1,7 +1,20 @@
-import { Card, CardBody, Chip } from "@heroui/react";
+import {
+  Button,
+  Card,
+  CardBody,
+  Chip,
+  Tooltip,
+  useDisclosure,
+} from "@heroui/react";
 import { Icon } from "@iconify/react";
+import { useState } from "react";
 
-export default function CsvBridges({ bridges, user }: any) {
+import DeleteBridgeModal from "../modals/admin/bridge/delete";
+
+export default function CsvBridges({ bridges }: any) {
+  const deleteBridgeModal = useDisclosure();
+  const [targetBridge, setTargetBridge] = useState({} as any);
+
   function heartbeatColor(runner: any) {
     const timeAgo =
       (new Date(runner.last_heartbeat).getTime() - Date.now()) / 1000;
@@ -19,73 +32,101 @@ export default function CsvBridges({ bridges, user }: any) {
     const timeAgo =
       (new Date(bridge.last_heartbeat).getTime() - Date.now()) / 1000;
 
-    if (timeAgo < 0 && timeAgo > -30) {
+    if (timeAgo < 0 && timeAgo > -35) {
       return true;
-    } else if (timeAgo <= -30) {
+    } else if (timeAgo <= -35) {
       return false;
     }
   }
 
   return (
     <main className="flex flex-col gap-4">
-      {bridges.map((bridge: any) => (
-        <Card key={bridge.id} fullWidth>
-          <CardBody className="p-5">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-lg font-semibold">{bridge.bridge_name}</h3>
-                <p className="text-small text-default-500 mt-1">
-                  ID: {bridge.bridge_id}
-                </p>
+      {bridges &&
+        bridges.map((bridge: any) => (
+          <Card key={bridge.id} fullWidth>
+            <CardBody className="p-5">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    {bridge.bridge_name}
+                  </h3>
+                  <p className="text-small text-default-500 mt-1">
+                    ID: {bridge.bridge_id}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Chip
+                    color={bridge.is_active ? "success" : "danger"}
+                    radius="sm"
+                    variant="flat"
+                  >
+                    {bridge.is_active ? "Aktiviert" : "Deaktiviert"}
+                  </Chip>
+
+                  <Tooltip
+                    content={`Letzter Heartbeat Status: ${new Date(
+                      bridge.last_heartbeat,
+                    ).toLocaleString()}`}
+                    placement="top"
+                  >
+                    <Chip
+                      color={heartbeatColor(bridge)}
+                      radius="sm"
+                      variant="flat"
+                    >
+                      {heartbeatStatus(bridge) ? "Online" : "Offline"}
+                    </Chip>
+                  </Tooltip>
+                  <Tooltip color="danger" content="Löschen">
+                    <Button
+                      isIconOnly
+                      color="danger"
+                      variant="light"
+                      onPress={() => {
+                        setTargetBridge(bridge);
+                        deleteBridgeModal.onOpen();
+                      }}
+                    >
+                      <Icon icon="hugeicons:delete-02" width={20} />
+                    </Button>
+                  </Tooltip>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Chip
-                  color={bridge.is_active ? "success" : "danger"}
-                  radius="sm"
-                  variant="flat"
-                >
-                  {bridge.is_active ? "Aktiviert" : "Deaktiviert"}
-                </Chip>
-
-                <Chip color={heartbeatColor(bridge)} radius="sm" variant="flat">
-                  {heartbeatStatus(bridge) ? "Online" : "Offline"}
-                </Chip>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mt-5">
-              <div className="flex items-center gap-2">
-                <Icon
-                  className={`text-default-500`}
-                  icon={"hugeicons:catalogue"}
-                  width={20}
-                />
-                <span className="text-sm">
-                  Version:{" "}
-                  <span className="font-medium">
-                    {bridge.version || "Unbekannt"}
+              <div className="grid grid-cols-2 gap-4 mt-5">
+                <div className="flex items-center gap-2">
+                  <Icon
+                    className={`text-default-500`}
+                    icon={"hugeicons:catalogue"}
+                    width={20}
+                  />
+                  <span className="text-sm">
+                    Version:{" "}
+                    <span className="font-medium">
+                      {bridge.version || "Unbekannt"}
+                    </span>
                   </span>
-                </span>
-              </div>
+                </div>
 
-              <div className="flex items-center gap-2">
-                <Icon
-                  className={`text-default-500`}
-                  icon={"hugeicons:upload-01"}
-                  width={20}
-                />
-                <span className="text-sm">
-                  Upload URL:{" "}
-                  <span className="font-medium">
-                    {bridge.upload_url || "Unbekannt"}
+                <div className="flex items-center gap-2">
+                  <Icon
+                    className={`text-default-500`}
+                    icon={"hugeicons:upload-01"}
+                    width={20}
+                  />
+                  <span className="text-sm">
+                    Upload URL:{" "}
+                    <span className="font-medium">
+                      {bridge.upload_url || "Unbekannt"}
+                    </span>
                   </span>
-                </span>
+                </div>
               </div>
-            </div>
-          </CardBody>
-        </Card>
-      ))}
+            </CardBody>
+          </Card>
+        ))}
+      <DeleteBridgeModal bridge={targetBridge} disclosure={deleteBridgeModal} />
     </main>
   );
 }

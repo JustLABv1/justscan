@@ -17,8 +17,8 @@ import (
 )
 
 type RegistrationRequest struct {
-	ServiceID     string    `json:"service_id"`
-	ServiceName   string    `json:"service_name"`
+	BridgeID      string    `json:"bridge_id"`
+	BridgeName    string    `json:"bridge_name"`
 	Version       string    `json:"version"`
 	UploadURL     string    `json:"upload_url"`
 	HealthURL     string    `json:"health_url"`
@@ -48,12 +48,11 @@ func RegisterWithVPS(cfg *config.Config) error {
 	}
 
 	registrationData := RegistrationRequest{
-		ServiceID:     cfg.Bridge.ServiceID,
-		ServiceName:   cfg.Bridge.ServiceName,
+		BridgeID:      cfg.Bridge.ID,
+		BridgeName:    cfg.Bridge.Name,
 		Version:       cfg.Bridge.Version,
 		UploadURL:     uploadURL,
 		HealthURL:     healthURL,
-		APIKey:        cfg.Security.APIKey,
 		MaxFileSize:   cfg.Server.MaxFileSize,
 		LastHeartbeat: time.Now(),
 	}

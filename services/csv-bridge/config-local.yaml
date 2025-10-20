@@ -9,13 +9,13 @@ server:
 # VPS Application Configuration
 vps:
   base_url: "http://localhost:8082"  # Your VPS application URL
-  api_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjE4M2M3OTJhLTk2YjEtNDBkOC05NWQ1LTk1MzRjMzQ0ZWFkZSIsInNlcnZpY2VfaWQiOiJjc3YtYnJpZGdlLTAwMSIsInR5cGUiOiJicmlkZ2UiLCJleHAiOjMzMzcyMzg3MDd9.-iHfuPNKh83Xt7QMDEyqL5Jhz8W_t5CAtSWE9LbZvns"    # Authentication token for your VPS
+  api_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjE5NmFkMTI3LTQ3ODUtNGI5OS04NTFjLWM4Y2QzNmU5MWE5MCIsImJyaWRnZV9pZCI6ImNzdi1icmlkZ2UtMDAyIiwidHlwZSI6ImJyaWRnZSIsImV4cCI6MzMzNzc2NDgyM30.xs__RsCg6ZzTXCLyCEGN4cs0y1gLJL4LX49AqZSgvwo"    # Authentication token for your VPS
   register_interval: 30                # Register with VPS every 30 seconds
   
 # Bridge Service Configuration  
 bridge:
-  service_id: "csv-bridge-001"          # Unique identifier for this bridge service
-  service_name: "Customer CSV Bridge"    # Human-readable name
+  id: "csv-bridge-002"          # Unique identifier for this bridge service
+  name: "Customer CSV Bridge"    # Human-readable name
   version: "1.0.0"
 
 # Logging Configuration
@@ -25,6 +25,5 @@ logging:
   
 # Security Configuration
 security:
-  api_key: "customer-bridge-secret-key"  # API key for securing this service
   enable_cors: true
   trusted_proxies: []                    # List of trusted proxy IPs

@@ -131,3 +131,26 @@ func RefreshToken(signedToken string) (newToken string, ExpiresAt int64, err err
 	newToken, ExpiresAt, err = GenerateJWT(claims.ID, false)
 	return
 }
+
+func GetBridgeDataFromToken(signedToken string) (bridgeID string, bridgeType string, err error) {
+	var jwtKey = []byte(config.Config.JWT.Secret)
+
+	token, err := jwt.ParseWithClaims(
+		signedToken,
+		&models.JWTBridgeClaim{},
+		func(token *jwt.Token) (interface{}, error) {
+			return []byte(jwtKey), nil
+		},
+	)
+	if err != nil {
+		return
+	}
+	claims, ok := token.Claims.(*models.JWTBridgeClaim)
+	if !ok {
+		err = errors.New("couldn't parse claims")
+		return
+	}
+	bridgeID = claims.BridgeID
+	bridgeType = claims.Type
+	return
+}

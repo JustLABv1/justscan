@@ -27,15 +27,15 @@ export default function CsvBridges({ bridges, user }: any) {
   }
 
   return (
-    <main>
+    <main className="flex flex-col gap-4">
       {bridges.map((bridge: any) => (
         <Card key={bridge.id} fullWidth>
           <CardBody className="p-5">
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="text-lg font-semibold">{bridge.service_name}</h3>
+                <h3 className="text-lg font-semibold">{bridge.bridge_name}</h3>
                 <p className="text-small text-default-500 mt-1">
-                  ID: {bridge.service_id}
+                  ID: {bridge.bridge_id}
                 </p>
               </div>
 

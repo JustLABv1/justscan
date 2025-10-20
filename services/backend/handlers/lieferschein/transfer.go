@@ -69,7 +69,7 @@ func TransferLieferscheinCSV(context *gin.Context, db *bun.DB) {
 
 		targetURL = bridge.UploadURL
 		apiKey = bridge.APIKey
-		log.Infof("Using registered bridge service: %s (%s)", bridge.ServiceName, bridge.ServiceID)
+		log.Infof("Using registered bridge service: %s (%s)", bridge.BridgeName, bridge.BridgeID)
 	} else if request.TargetURL != "" {
 		// Fallback to manual URL
 		targetURL = request.TargetURL

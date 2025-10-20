@@ -36,6 +36,16 @@ func checkCSVBridgeHealth(db *bun.DB) {
 		} else {
 			log.Warnf("Bot: Bridge %s health endpoint is unhealthy", bridge.BridgeID)
 		}
+
+		// update bridge status in DB
+		_, err := db.NewUpdate().
+			Model(&models.CSVBridge{}).
+			Set("reachable = ?", healthy).
+			Where("id = ?", bridge.ID).
+			Exec(context)
+		if err != nil {
+			log.Error("Bot: Error updating bridge status. ", err)
+		}
 	}
 }
 

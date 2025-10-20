@@ -10,14 +10,14 @@ import (
 	"github.com/google/uuid"
 )
 
-func GenerateBridgeToken(id uuid.UUID, serviceID string) (tokenString string, ExpiresAt int64, err error) {
+func GenerateBridgeToken(id uuid.UUID, bridgeID string) (tokenString string, ExpiresAt int64, err error) {
 	var jwtKey = []byte(config.Config.JWT.Secret)
 
 	expirationTime := time.Now().Add(50 * 365 * 24 * time.Hour) // 10 years
 	claims := &models.JWTBridgeClaim{
-		ID:        id,
-		ServiceID: serviceID,
-		Type:      "bridge",
+		ID:       id,
+		BridgeID: bridgeID,
+		Type:     "bridge",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},

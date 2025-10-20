@@ -1,9 +1,9 @@
-import SystemVerwaltungPageClient from "@/components/system-verwaltung/page-client";
+import TokensPageClient from "@/components/tokens/page-client";
 
 export default function SystemVerwaltung() {
   return (
     <>
-      <SystemVerwaltungPageClient />
+      <TokensPageClient />
     </>
   );
 }

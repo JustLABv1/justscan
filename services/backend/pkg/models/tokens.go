@@ -25,3 +25,7 @@ type IncExpireTokenRequest struct {
 	ExpiresIn   int    `json:"expires_in"`
 	Description string `json:"description"`
 }
+
+type IncBridgeTokenRequest struct {
+	BridgeID string `json:"bridge_id"`
+}

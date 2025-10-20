@@ -27,5 +27,18 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.DELETE("/users/:userID", func(c *gin.Context) {
 			admins.DeleteUser(c, db)
 		})
+		// tokens
+		admin.GET("/tokens", func(c *gin.Context) {
+			admins.GetTokens(c, db)
+		})
+		admin.PUT("/tokens/:tokenID", func(c *gin.Context) {
+			admins.UpdateToken(c, db)
+		})
+		admin.POST("/tokens/bridge", func(c *gin.Context) {
+			admins.GenerateBridgeToken(c, db)
+		})
+		admin.DELETE("/tokens/:tokenID", func(c *gin.Context) {
+			admins.DeleteToken(c, db)
+		})
 	}
 }

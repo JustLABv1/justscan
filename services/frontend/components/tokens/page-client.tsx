@@ -1,77 +1,34 @@
 "use client";
 
-import { Divider, Spacer } from "@heroui/react";
+import { Divider } from "@heroui/react";
 
 import ErrorCard from "@/components/error/ErrorCard";
 import { PageSkeleton } from "@/components/loading/page-skeleton";
-import { useAdminGetUsers } from "@/lib/swr/hooks/users";
-import { useKostenstellen } from "@/lib/swr/hooks/kostenstellen";
-import { useGeraete } from "@/lib/swr/hooks/geraete";
-import { useArtikel } from "@/lib/swr/hooks/artikel";
-import { useBridges } from "@/lib/swr/hooks/bridges";
-import { useUserDetails } from "@/lib/swr/hooks/user";
+import { useAdminGetTokens } from "@/lib/swr/hooks/tokens";
 
-import SystemVerwaltungHeading from "./heading";
-import SystemVerwaltungUploads from "./uploads";
-import { AdminUsersList } from "./user-list";
-import AdminUsersHeading from "./user-heading";
-import CsvBridges from "./csv-bridges";
+import TokensHeading from "./heading";
+import TokensTable from "./tokens-table";
 
-export default function SystemVerwaltungPageClient() {
+export default function TokensPageClient() {
   const {
-    users,
-    isLoading: usersLoading,
-    isError: usersError,
-  } = useAdminGetUsers();
-
-  const {
-    bridges,
-    isLoading: bridgesLoading,
-    isError: bridgesError,
-  } = useBridges();
-
-  const {
-    kostenstellen,
-    isLoading: kostenstellenLoading,
-    isError: kostenstellenError,
-  } = useKostenstellen();
-
-  const {
-    geraete,
-    isLoading: geraeteLoading,
-    isError: geraeteError,
-  } = useGeraete();
-
-  const {
-    artikel,
-    isLoading: artikelLoading,
-    isError: artikelError,
-  } = useArtikel();
-
-  const { user, isLoading: userLoading, isError: userError } = useUserDetails();
+    tokens,
+    isLoading: tokensLoading,
+    isError: tokensError,
+  } = useAdminGetTokens();
 
   // Check if any essential data is still loading or missing
-  const isLoading =
-    usersLoading ||
-    kostenstellenLoading ||
-    geraeteLoading ||
-    artikelLoading ||
-    bridgesLoading ||
-    userLoading;
+  const isLoading = tokensLoading;
 
   // Show loading state if essential data is still loading
   if (isLoading) {
     return <PageSkeleton />;
   }
 
+  // Normalize tokens to an array to avoid "possibly null" errors
+  const tokenList = tokens ?? [];
+
   // Show error state
-  const hasError =
-    usersError ||
-    kostenstellenError ||
-    geraeteError ||
-    artikelError ||
-    bridgesError ||
-    userError;
+  const hasError = tokensError;
 
   if (hasError) {
     return (
@@ -86,19 +43,20 @@ export default function SystemVerwaltungPageClient() {
 
   return (
     <main>
-      <SystemVerwaltungHeading />
+      <TokensHeading />
       <Divider className="my-4" />
-      <SystemVerwaltungUploads
-        artikel={artikel}
-        geraete={geraete}
-        kostenstellen={kostenstellen}
+      <TokensTable
+        showCopyToClipboard
+        showTokenGenerate
+        tokens={tokenList.filter((token: any) => token.type !== "user")}
       />
       <Divider className="my-4" />
-      <CsvBridges bridges={bridges} user={user} />
-      <Divider className="my-4" />
-      <AdminUsersHeading />
-      <Spacer y={4} />
-      <AdminUsersList users={users} />
+      <p className="text-xl font-bold mb-2">User Tokens</p>
+      <TokensTable
+        showCopyToClipboard={false}
+        showTokenGenerate={false}
+        tokens={tokenList.filter((token: any) => token.type === "user")}
+      />
     </main>
   );
 }

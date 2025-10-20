@@ -16,7 +16,7 @@ import (
 
 func main() {
 	// Parse command line flags
-	var configPath = flag.String("config", "config.yaml", "Path to configuration file")
+	var configPath = flag.String("c", "config.yaml", "Path to configuration file")
 	var showVersion = flag.Bool("version", false, "Show version information")
 	flag.Parse()
 
@@ -31,7 +31,7 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	log.Infof("Starting CSV Bridge Service %s (ID: %s)", cfg.Bridge.ServiceName, cfg.Bridge.ServiceID)
+	log.Infof("Starting CSV Bridge Service %s (ID: %s)", cfg.Bridge.Name, cfg.Bridge.ID)
 	log.Infof("Upload directory: %s", cfg.Server.UploadDir)
 	log.Infof("VPS URL: %s", cfg.VPS.BaseURL)
 
@@ -89,6 +89,7 @@ func main() {
 		log.Errorf("Failed to register with VPS: %v", err)
 		log.Warn("Service will continue to run, but may not be reachable from VPS")
 		log.Info("Check your VPS URL, API token, and network connectivity")
+		return
 	} else {
 		log.Info("Successfully registered with VPS")
 	}

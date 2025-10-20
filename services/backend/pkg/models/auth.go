@@ -12,8 +12,8 @@ type JWTClaim struct {
 }
 
 type JWTBridgeClaim struct {
-	ID        uuid.UUID `json:"id"`
-	ServiceID string    `json:"service_id"`
-	Type      string    `json:"type"`
+	ID       uuid.UUID `json:"id"`
+	BridgeID string    `json:"bridge_id"`
+	Type     string    `json:"type"`
 	jwt.RegisteredClaims
 }

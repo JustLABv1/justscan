@@ -24,16 +24,10 @@ type ConfigurationManager struct {
 }
 
 type RestfulConf struct {
-	LogLevel     string           `mapstructure:"log_level" validate:"required,oneof=debug info warn error"`
-	Port         int              `mapstructure:"port" validate:"required"`
-	Database     DatabaseConf     `mapstructure:"database" validate:"required"`
-	JWT          JWTConf          `mapstructure:"jwt" validate:"required"`
-	DataPath     string           `mapstructure:"data_path" validate:"required"`
-	Lieferschein LieferscheinConf `mapstructure:"lieferschein" validate:"required"`
-}
-
-type LieferscheinConf struct {
-	ExportPath string `mapstructure:"export_path" validate:"required"`
+	LogLevel string       `mapstructure:"log_level" validate:"required,oneof=debug info warn error"`
+	Port     int          `mapstructure:"port" validate:"required"`
+	Database DatabaseConf `mapstructure:"database" validate:"required"`
+	JWT      JWTConf      `mapstructure:"jwt" validate:"required"`
 }
 
 type DatabaseConf struct {

@@ -22,12 +22,6 @@ func createSchema(ctx context.Context, db *bun.DB) error {
 		(*models.Tokens)(nil),
 		(*models.Users)(nil),
 		(*models.Audit)(nil),
-		(*models.Kostenstellen)(nil),
-		(*models.Artikel)(nil),
-		(*models.Geraete)(nil),
-		(*models.Bestellungen)(nil),
-		(*models.Lieferschein)(nil),
-		(*models.CSVBridge)(nil),
 	}
 
 	for _, model := range models {
@@ -45,10 +39,6 @@ func dropSchema(ctx context.Context, db *bun.DB) error {
 		(*models.Tokens)(nil),
 		(*models.Users)(nil),
 		(*models.Audit)(nil),
-		(*models.Kostenstellen)(nil),
-		(*models.Artikel)(nil),
-		(*models.Geraete)(nil),
-		(*models.Bestellungen)(nil),
 	}
 
 	for _, model := range models {

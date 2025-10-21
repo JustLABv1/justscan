@@ -26,16 +26,3 @@ updates:
       backend:
         patterns:
           - "*"
-
-  - package-ecosystem: "gomod" # See documentation for possible values
-    directory: "/services/csv-bridge" # Location of package manifests
-    schedule:
-      interval: "weekly"
-    labels:
-      - "dependencies"
-      - "csv-bridge"
-    target-branch: "develop"
-    groups:
-      csv-bridge:
-        patterns:
-          - "*"

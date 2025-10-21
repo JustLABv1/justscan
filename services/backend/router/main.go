@@ -32,13 +32,7 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 		Token(v1, db)
 		User(v1, db)
 		Health(v1)
-		Kostenstellen(v1, db)
-		Geraete(v1, db)
-		Artikel(v1, db)
-		Bestellungen(v1, db, config)
 		Admin(v1, db)
-		Lieferschein(v1, db)
-		Bridge(v1, db)
 	}
 
 	server := &http.Server{

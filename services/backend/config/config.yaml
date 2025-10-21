@@ -13,8 +13,3 @@ database:
 
 jwt:
   secret: null
-
-data_path: ./data
-
-lieferschein:
-  export_path: ./data/lieferscheine

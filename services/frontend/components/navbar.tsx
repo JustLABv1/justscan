@@ -73,7 +73,7 @@ export const Navbar = ({ userDetails, session }: any) => {
               src={`/images/justlab-${theme === "light" ? "dark" : "white"}.png`}
               width={32}
             />
-            <p className="font-bold text-inherit">JustWMS</p>
+            <p className="font-bold text-inherit">{siteConfig.name}</p>
           </NextLink>
         </NavbarBrand>
         <ul className="hidden lg:flex gap-4 justify-start items-center ml-2">

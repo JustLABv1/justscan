@@ -2,32 +2,16 @@
 
 import ErrorCard from "@/components/error/ErrorCard";
 import { PageSkeleton } from "@/components/loading/page-skeleton";
-import { useKostenstellen } from "@/lib/swr/hooks/kostenstellen";
 import { useUserDetails } from "@/lib/swr/hooks/user";
-import { useArtikel } from "@/lib/swr/hooks/artikel";
 
 import QuickNavigation from "./quick-navigation";
 
 export default function DashboardPageClient() {
-  const {
-    kostenstellen,
-    isLoading: kostenstellenLoading,
-    isError: kostenstellenError,
-  } = useKostenstellen();
-  const {
-    artikel,
-    isLoading: artikelLoading,
-    isError: artikelError,
-  } = useArtikel();
   const { user, isLoading: userLoading, isError: userError } = useUserDetails();
 
   // Check if any essential data is still loading or missing
   const isLoading =
-    kostenstellenLoading ||
-    artikelLoading ||
     userLoading ||
-    !kostenstellen ||
-    !artikel ||
     !user;
 
   // Show loading state if essential data is still loading
@@ -36,7 +20,7 @@ export default function DashboardPageClient() {
   }
 
   // Show error state
-  const hasError = kostenstellenError || userError || artikelError;
+  const hasError = userError;
 
   if (hasError) {
     return (
@@ -52,8 +36,6 @@ export default function DashboardPageClient() {
   return (
     <main>
       <QuickNavigation
-        artikel={artikel}
-        kostenstellen={kostenstellen}
         user={user}
       />
     </main>

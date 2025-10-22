@@ -10,22 +10,13 @@ import { mutate } from "swr";
 export function useRefreshCache() {
   return {
     // Direct cache key refreshes
-    refreshArtikel: () => mutate("artikel"),
-    refreshGeraete: () => mutate("geraete"),
-    refreshKostenstellen: () => mutate("kostenstellen"),
-    refreshBestellungen: () => mutate("bestellungen"),
     refreshUser: () => mutate("user-details"),
     refreshUsers: () => mutate("users"),
     refreshPageSettings: () => mutate("page-settings"),
     refreshTokens: () => mutate("tokens"),
-    refreshBridges: () => mutate("bridges"),
 
     // Convenience methods for common combinations
     refreshAll: () => {
-      mutate("artikel");
-      mutate("geraete");
-      mutate("kostenstellen");
-      mutate("bestellungen");
       mutate("user-details");
       mutate("users");
       mutate("page-settings");

@@ -4,19 +4,12 @@ import { Card, CardBody, Spacer, useDisclosure } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { useRouter } from "next/navigation";
 
-import LieferscheinErstellenModal from "../modals/lieferschein/erstellen";
-
 export default function QuickNavigation({
-  kostenstellen,
-  artikel,
   user,
 }: {
-  kostenstellen: any;
-  artikel: any;
   user: any;
 }) {
   const router = useRouter();
-  const lieferscheinErstellen = useDisclosure();
 
   return (
     <section>
@@ -31,7 +24,6 @@ export default function QuickNavigation({
           isHoverable
           isPressable
           className="shadow-sm shadow-primary"
-          onPress={lieferscheinErstellen.onOpen}
         >
           <CardBody>
             <div className="flex flex-wrap items-center gap-4">
@@ -71,11 +63,6 @@ export default function QuickNavigation({
           </CardBody>
         </Card>
       </div>
-      <LieferscheinErstellenModal
-        artikel={artikel}
-        disclosure={lieferscheinErstellen}
-        kostenstellen={kostenstellen}
-      />
     </section>
   );
 }

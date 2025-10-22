@@ -21,7 +21,7 @@ export default function Footer() {
             src={`/images/justlab-${theme === "light" ? "dark" : "white"}.png`}
             width={32}
           />
-          <span className="text-medium font-medium pl-1">JustWMS</span>
+          <span className="text-medium font-medium pl-1">{siteConfig.name}</span>
         </div>
         <Spacer y={2} />
         <p className="mt-1 text-center text-small text-default-400">

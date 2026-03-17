@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"justscan-backend/compliance"
 	"justscan-backend/config"
 	"justscan-backend/pkg/models"
 
@@ -140,6 +141,9 @@ func processScan(job ScanJob) {
 	log.Infof("Worker: scan %s completed — CRIT:%d HIGH:%d MED:%d LOW:%d UNK:%d",
 		scanID,
 		scan.CriticalCount, scan.HighCount, scan.MediumCount, scan.LowCount, scan.UnknownCount)
+
+	// Auto-assign to orgs by image pattern, then run compliance checks
+	go compliance.AutoAssignOrgs(db, scan.ImageName, scan.ImageTag, scanID)
 }
 
 func setFailed(ctx context.Context, db *bun.DB, scan *models.Scan, msg string) {

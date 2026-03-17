@@ -2,6 +2,7 @@ package router
 
 import (
 	"justscan-backend/handlers/comments"
+	"justscan-backend/handlers/orgs"
 	"justscan-backend/handlers/scans"
 	"justscan-backend/handlers/tags"
 	"justscan-backend/middlewares"
@@ -24,5 +25,7 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 		s.POST("/:id/tags/:tagId", tags.AddTagToScan(db))
 		s.DELETE("/:id/tags/:tagId", tags.RemoveTagFromScan(db))
 		s.POST("/:id/vulnerabilities/:vulnId/comments", comments.CreateComment(db))
+		s.GET("/:id/compliance", orgs.GetScanCompliance(db))
+		s.POST("/:id/compliance/evaluate", orgs.ReEvaluate(db))
 	}
 }

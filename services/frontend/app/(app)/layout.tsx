@@ -1,6 +1,7 @@
 'use client';
 import { clearToken, clearUser, getToken, getUser } from '@/lib/api';
 import {
+  Building04Icon,
   DashboardSquare01Icon,
   EyeIcon,
   Logout02Icon,
@@ -18,6 +19,7 @@ const navItems = [
   { href: '/watchlist', label: 'Watchlist', Icon: EyeIcon },
   { href: '/registries', label: 'Registries', Icon: ServerStack01Icon },
   { href: '/tags', label: 'Tags', Icon: Tag01Icon },
+  { href: '/orgs', label: 'Organizations', Icon: Building04Icon },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

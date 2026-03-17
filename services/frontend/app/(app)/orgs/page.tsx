@@ -5,135 +5,134 @@ import { ArrowRight01Icon, Building04Icon, Delete01Icon, PlusSignIcon } from 'hu
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
-const inputCls =
-  'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors';
+const panel: React.CSSProperties = {
+  background: 'linear-gradient(145deg,rgba(255,255,255,0.038) 0%,rgba(255,255,255,0.01) 100%)',
+  backdropFilter: 'blur(20px)',
+  WebkitBackdropFilter: 'blur(20px)',
+  border: '1px solid rgba(255,255,255,0.07)',
+  boxShadow: '0 4px 32px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.05)',
+};
+const modalPanel: React.CSSProperties = {
+  background: 'linear-gradient(145deg,rgba(20,20,24,0.97) 0%,rgba(15,15,18,0.99) 100%)',
+  backdropFilter: 'blur(32px)',
+  WebkitBackdropFilter: 'blur(32px)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  boxShadow: '0 25px 50px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.06)',
+};
+const inputStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 10, color: '#f4f4f5' };
+const inputCls = 'w-full px-3 py-2.5 text-sm placeholder-zinc-600 outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl';
 
-interface OrgWithCount extends Org {
-  policy_count: number;
-}
+interface OrgWithCount extends Org { policy_count: number }
 
 export default function OrgsPage() {
   const [orgs, setOrgs] = useState<OrgWithCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
-
   const modal = useOverlayState();
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const data = await listOrgs();
-      setOrgs(data as OrgWithCount[]);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load organizations');
-    } finally {
-      setLoading(false);
-    }
+    try { setOrgs((await listOrgs()) as OrgWithCount[]); }
+    catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load organizations'); }
+    finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setCreateError('');
-    setCreating(true);
+    e.preventDefault(); setCreateError(''); setCreating(true);
     try {
       await createOrg(name, description);
-      modal.close();
-      setName('');
-      setDescription('');
-      await load();
-    } catch (err: unknown) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create organization');
-    } finally {
-      setCreating(false);
-    }
+      modal.close(); setName(''); setDescription(''); await load();
+    } catch (err: unknown) { setCreateError(err instanceof Error ? err.message : 'Failed to create organization'); }
+    finally { setCreating(false); }
   }
 
   async function handleDelete(id: string, orgName: string) {
     if (!confirm(`Delete organization "${orgName}"? This will remove all policies and compliance results.`)) return;
-    await deleteOrg(id).catch(() => {});
-    load();
+    await deleteOrg(id).catch(() => {}); load();
   }
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Organizations</h1>
-          {orgs.length > 0 && (
-            <p className="text-sm text-zinc-500 mt-0.5">{orgs.length} organization{orgs.length !== 1 ? 's' : ''}</p>
-          )}
+          <h1 className="text-2xl font-bold text-white tracking-tight">Organizations</h1>
+          {orgs.length > 0 && <p className="text-sm text-zinc-500 mt-0.5">{orgs.length} organization{orgs.length !== 1 ? 's' : ''}</p>}
         </div>
         <button
           onClick={modal.open}
-          className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
+          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
         >
-          <PlusSignIcon size={16} />
-          New Organization
+          <PlusSignIcon size={15} /> New Organization
         </button>
       </div>
 
       {error && (
-        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{error}</div>
+        <div className="rounded-xl px-4 py-3 text-sm"
+          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>{error}</div>
       )}
 
-      {/* Grid */}
       {loading ? (
         <div className="flex justify-center items-center h-48">
-          <div className="w-7 h-7 rounded-full border-2 border-zinc-700 border-t-violet-500 animate-spin" />
+          <div className="w-7 h-7 rounded-full border-2 border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : orgs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 space-y-3">
-          <Building04Icon size={36} className="text-zinc-700" />
-          <p className="text-sm text-zinc-600">No organizations yet. Create one to start managing compliance policies.</p>
+        <div className="rounded-2xl py-20 flex flex-col items-center gap-3" style={panel}>
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
+            style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
+            <Building04Icon size={28} color="rgba(167,139,250,0.6)" />
+          </div>
+          <p className="text-sm text-zinc-500 text-center max-w-xs">
+            No organizations yet. Create one to start managing compliance policies.
+          </p>
+          <button onClick={modal.open} className="mt-1 text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors">
+            Create organization →
+          </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {orgs.map((org) => (
-            <div
-              key={org.id}
-              className="bg-zinc-900 rounded-xl border border-zinc-800 p-5 flex flex-col gap-3 hover:border-zinc-700 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-lg bg-violet-600/20 flex items-center justify-center shrink-0">
-                    <Building04Icon size={18} className="text-violet-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-sm font-semibold text-white truncate">{org.name}</h2>
-                    <p className="text-xs text-zinc-500 mt-0.5 truncate">
-                      {org.description || 'No description'}
-                    </p>
-                  </div>
+            <div key={org.id} className="rounded-2xl p-5 flex flex-col gap-4 group transition-all duration-200"
+              style={{ ...panel, cursor: 'default' }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(167,139,250,0.2)')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)')}>
+              {/* Top shimmer */}
+              <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
+                style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)' }} />
+
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(124,58,237,0.2)', boxShadow: '0 0 14px rgba(124,58,237,0.3)', border: '1px solid rgba(167,139,250,0.15)' }}>
+                  <Building04Icon size={19} color="#a78bfa" />
                 </div>
-                <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/20">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-sm font-semibold text-white truncate">{org.name}</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5 truncate">{org.description || 'No description'}</p>
+                </div>
+                <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full"
+                  style={{ color: '#a78bfa', background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(167,139,250,0.2)' }}>
                   {org.policy_count ?? 0} {org.policy_count === 1 ? 'policy' : 'policies'}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between pt-1 border-t border-zinc-800">
-                <button
-                  onClick={() => handleDelete(org.id, org.name)}
-                  className="text-zinc-600 hover:text-red-400 transition-colors"
-                  title="Delete organization"
-                >
+              <div className="flex items-center justify-between pt-1"
+                style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <button onClick={() => handleDelete(org.id, org.name)}
+                  className="text-zinc-600 hover:text-red-400 transition-colors p-1" title="Delete organization">
                   <Delete01Icon size={15} />
                 </button>
-                <Link
-                  href={`/orgs/${org.id}`}
-                  className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-violet-400 transition-colors"
-                >
-                  View
-                  <ArrowRight01Icon size={13} />
+                <Link href={`/orgs/${org.id}`}
+                  className="flex items-center gap-1.5 text-xs font-medium transition-colors"
+                  style={{ color: 'rgba(161,161,170,0.8)' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(161,161,170,0.8)')}>
+                  View details <ArrowRight01Icon size={13} />
                 </Link>
               </div>
             </div>
@@ -141,59 +140,41 @@ export default function OrgsPage() {
         </div>
       )}
 
-      {/* Create modal */}
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="bg-zinc-900 border border-zinc-800 rounded-2xl">
-              <Modal.Header className="border-b border-zinc-800 px-6 py-4">
+            <Modal.Dialog className="rounded-2xl overflow-hidden" style={modalPanel}>
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                 <Modal.Heading className="text-white font-semibold">New Organization</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
                 <form id="create-org-form" onSubmit={handleCreate} className="space-y-4">
                   {createError && (
-                    <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5 text-sm text-red-400">
+                    <div className="rounded-xl px-3 py-2.5 text-sm"
+                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
                       {createError}
                     </div>
                   )}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-300">Name <span className="text-red-400">*</span></label>
-                    <input
-                      className={inputCls}
-                      placeholder="e.g. Production"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
+                    <input className={inputCls} style={inputStyle} placeholder="e.g. Production"
+                      value={name} onChange={(e) => setName(e.target.value)} required />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-300">Description</label>
-                    <input
-                      className={inputCls}
-                      placeholder="Optional description"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                    />
+                    <input className={inputCls} style={inputStyle} placeholder="Optional description"
+                      value={description} onChange={(e) => setDescription(e.target.value)} />
                   </div>
                 </form>
               </Modal.Body>
-              <Modal.Footer className="border-t border-zinc-800 px-6 py-4 flex gap-3 justify-end">
-                <button
-                  onClick={modal.close}
-                  className="px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  form="create-org-form"
-                  disabled={creating}
-                  className="px-4 py-2 text-sm rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-medium disabled:opacity-60 transition-colors flex items-center gap-2"
-                >
-                  {creating && (
-                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  )}
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-300 hover:text-white transition-colors"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>Cancel</button>
+                <button type="submit" form="create-org-form" disabled={creating}
+                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  {creating && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   Create
                 </button>
               </Modal.Footer>

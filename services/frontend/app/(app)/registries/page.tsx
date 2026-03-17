@@ -1,10 +1,39 @@
 'use client';
 import { createRegistry, deleteRegistry, listRegistries, Registry, updateRegistry } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
-import { Delete01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
+import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, ServerStack01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
 
-const inputCls = 'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors';
+const panel: React.CSSProperties = {
+  background: 'linear-gradient(145deg,rgba(255,255,255,0.038) 0%,rgba(255,255,255,0.01) 100%)',
+  backdropFilter: 'blur(20px)',
+  WebkitBackdropFilter: 'blur(20px)',
+  border: '1px solid rgba(255,255,255,0.07)',
+  boxShadow: '0 4px 32px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.05)',
+};
+const modalPanel: React.CSSProperties = {
+  background: 'linear-gradient(145deg,rgba(20,20,24,0.97) 0%,rgba(15,15,18,0.99) 100%)',
+  backdropFilter: 'blur(32px)',
+  WebkitBackdropFilter: 'blur(32px)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  boxShadow: '0 25px 50px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.06)',
+};
+const inputStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 10, color: '#f4f4f5' };
+const selectStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 10, color: '#e4e4e7' };
+const inputCls = 'w-full px-3 py-2.5 text-sm placeholder-zinc-600 outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl';
+
+const AUTH_TYPE_LABEL: Record<string, string> = {
+  none: 'Public',
+  basic: 'Basic auth',
+  token: 'Token',
+  aws_ecr: 'AWS ECR',
+};
+const AUTH_TYPE_STYLE: Record<string, React.CSSProperties> = {
+  none:    { color: '#a1a1aa', background: 'rgba(161,161,170,0.08)', border: '1px solid rgba(161,161,170,0.15)' },
+  basic:   { color: '#60a5fa', background: 'rgba(59,130,246,0.1)',   border: '1px solid rgba(59,130,246,0.2)'  },
+  token:   { color: '#a78bfa', background: 'rgba(124,58,237,0.1)',   border: '1px solid rgba(124,58,237,0.2)'  },
+  aws_ecr: { color: '#fb923c', background: 'rgba(249,115,22,0.1)',   border: '1px solid rgba(249,115,22,0.2)'  },
+};
 
 export default function RegistriesPage() {
   const [registries, setRegistries] = useState<Registry[]>([]);
@@ -22,84 +51,72 @@ export default function RegistriesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      setRegistries(await listRegistries());
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
+    try { setRegistries(await listRegistries()); }
+    catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   function openCreate() {
-    setEditing(null); setName(''); setUrl(''); setAuthType('basic'); setUsername(''); setPassword(''); setFormError('');
+    setEditing(null); setName(''); setUrl(''); setAuthType('none'); setUsername(''); setPassword(''); setFormError('');
     modal.open();
   }
-
   function openEdit(r: Registry) {
     setEditing(r); setName(r.name); setUrl(r.url); setAuthType(r.auth_type ?? 'none'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
     modal.open();
   }
-
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setFormError(''); setSaving(true);
+    e.preventDefault(); setFormError(''); setSaving(true);
     try {
-      if (editing) {
-        await updateRegistry(editing.id, { name, url, auth_type: authType, username, ...(password ? { password } : {}) });
-      } else {
-        await createRegistry({ name, url, auth_type: authType, username: username || undefined, password: password || undefined });
-      }
-      modal.close();
-      await load();
-    } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setSaving(false);
-    }
+      if (editing) await updateRegistry(editing.id, { name, url, auth_type: authType, username, ...(password ? { password } : {}) });
+      else await createRegistry({ name, url, auth_type: authType, username: username || undefined, password: password || undefined });
+      modal.close(); await load();
+    } catch (err: unknown) { setFormError(err instanceof Error ? err.message : 'Failed to save'); }
+    finally { setSaving(false); }
   }
-
   async function handleDelete(id: string) {
     if (!confirm('Delete this registry?')) return;
-    await deleteRegistry(id).catch(() => {});
-    load();
+    await deleteRegistry(id).catch(() => {}); load();
   }
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Registries</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Registries</h1>
           <p className="text-sm text-zinc-500 mt-0.5">Configure private Docker registries</p>
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
+          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
         >
-          <PlusSignIcon size={16} />
-          Add Registry
+          <PlusSignIcon size={15} /> Add Registry
         </button>
       </div>
 
       {error && (
-        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{error}</div>
+        <div className="rounded-xl px-4 py-3 text-sm"
+          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          {error}
+        </div>
       )}
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="w-7 h-7 rounded-full border-2 border-zinc-700 border-t-violet-500 animate-spin" />
+          <div className="w-7 h-7 rounded-full border-2 border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : registries.length === 0 ? (
-        <div className="bg-zinc-900 rounded-xl border border-zinc-800 py-16 text-center text-zinc-600 text-sm">
-          No registries configured. Add one to use private images.
+        <div className="rounded-2xl py-16 flex flex-col items-center gap-3" style={panel}>
+          <ServerStack01Icon size={32} color="rgba(113,113,122,0.5)" />
+          <p className="text-sm text-zinc-600">No registries configured. Add one to use private images.</p>
         </div>
       ) : (
-        <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+        <div className="rounded-2xl overflow-hidden" style={panel}>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-800">
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">URL</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
@@ -107,27 +124,26 @@ export default function RegistriesPage() {
                 <th className="px-4 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/60">
-              {registries.map((r) => (
-                <tr key={r.id} className="hover:bg-zinc-800/40 transition-colors">
+            <tbody>
+              {registries.map((r, i) => (
+                <tr key={r.id} style={{ borderTop: i > 0 ? '1px solid rgba(255,255,255,0.04)' : undefined }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.025)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                   <td className="px-4 py-3 font-medium text-zinc-200">{r.name}</td>
                   <td className="px-4 py-3 font-mono text-xs text-zinc-500">{r.url}</td>
-                  <td className="px-4 py-3 text-xs text-zinc-400">{r.auth_type ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-md"
+                      style={AUTH_TYPE_STYLE[r.auth_type ?? 'none']}>
+                      {AUTH_TYPE_LABEL[r.auth_type ?? 'none']}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-sm text-zinc-400">{r.username || <span className="text-zinc-700">—</span>}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => openEdit(r)}
-                        className="text-zinc-600 hover:text-zinc-300 transition-colors p-1.5"
-                        title="Edit"
-                      >
+                      <button onClick={() => openEdit(r)} className="text-zinc-600 hover:text-zinc-300 transition-colors p-1.5" title="Edit">
                         <PencilEdit01Icon size={15} />
                       </button>
-                      <button
-                        onClick={() => handleDelete(r.id)}
-                        className="text-zinc-600 hover:text-red-400 transition-colors p-1.5"
-                        title="Delete"
-                      >
+                      <button onClick={() => handleDelete(r.id)} className="text-zinc-600 hover:text-red-400 transition-colors p-1.5" title="Delete">
                         <Delete01Icon size={15} />
                       </button>
                     </div>
@@ -142,33 +158,31 @@ export default function RegistriesPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="bg-zinc-900 border border-zinc-800 rounded-2xl">
-              <Modal.Header className="border-b border-zinc-800 px-6 py-4">
+            <Modal.Dialog className="rounded-2xl overflow-hidden" style={modalPanel}>
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                 <Modal.Heading className="text-white font-semibold">{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
                 <form id="registry-form" onSubmit={handleSubmit} className="space-y-4">
                   {formError && (
-                    <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5 text-sm text-red-400">
+                    <div className="rounded-xl px-3 py-2.5 text-sm"
+                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
                       {formError}
                     </div>
                   )}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-300">Name</label>
-                    <input className={inputCls} placeholder="My Registry" value={name} onChange={(e) => setName(e.target.value)} required />
+                    <input className={inputCls} style={inputStyle} placeholder="My Registry" value={name} onChange={(e) => setName(e.target.value)} required />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-300">URL</label>
-                    <input className={inputCls + ' font-mono'} placeholder="https://registry.example.com" value={url} onChange={(e) => setUrl(e.target.value)} required />
+                    <input className={inputCls + ' font-mono'} style={inputStyle} placeholder="https://registry.example.com" value={url} onChange={(e) => setUrl(e.target.value)} required />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-300">Auth Type</label>
-                    <select
-                      value={authType}
-                      onChange={(e) => setAuthType(e.target.value as 'none' | 'basic' | 'token' | 'aws_ecr')}
-                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors"
-                    >
+                    <select value={authType} onChange={(e) => setAuthType(e.target.value as 'none' | 'basic' | 'token' | 'aws_ecr')}
+                      className={inputCls} style={selectStyle}>
                       <option value="none">None (public registry)</option>
                       <option value="basic">Basic (username / password)</option>
                       <option value="token">Token</option>
@@ -177,40 +191,27 @@ export default function RegistriesPage() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-300">Username <span className="text-zinc-600 font-normal">(optional)</span></label>
-                    <input className={inputCls} placeholder="Optional" value={username} onChange={(e) => setUsername(e.target.value)} />
+                    <input className={inputCls} style={inputStyle} placeholder="Optional" value={username} onChange={(e) => setUsername(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-300">
                       Password{' '}
-                      {editing
-                        ? <span className="text-zinc-600 font-normal">(leave blank to keep unchanged)</span>
-                        : <span className="text-zinc-600 font-normal">(optional)</span>
-                      }
+                      <span className="text-zinc-600 font-normal">{editing ? '(leave blank to keep unchanged)' : '(optional)'}</span>
                     </label>
-                    <input
-                      type="password"
-                      className={inputCls}
-                      placeholder={editing ? '••••••••' : 'Optional'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
+                    <input type="password" className={inputCls} style={inputStyle}
+                      placeholder={editing ? '••••••••' : 'Optional'} value={password} onChange={(e) => setPassword(e.target.value)} />
                   </div>
                 </form>
               </Modal.Body>
-              <Modal.Footer className="border-t border-zinc-800 px-6 py-4 flex gap-3 justify-end">
-                <button
-                  onClick={modal.close}
-                  className="px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
-                >
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-300 hover:text-white transition-colors"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  form="registry-form"
-                  disabled={saving}
-                  className="px-4 py-2 text-sm rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-medium disabled:opacity-60 transition-colors flex items-center gap-2"
-                >
-                  {saving ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
+                <button type="submit" form="registry-form" disabled={saving}
+                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Add'}
                 </button>
               </Modal.Footer>

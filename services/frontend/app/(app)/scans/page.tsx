@@ -67,6 +67,7 @@ export default function ScansPage() {
   const [error, setError] = useState('');
   const [imageName, setImageName] = useState('');
   const [imageTag, setImageTag] = useState('latest');
+  const [platform, setPlatform] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -93,8 +94,8 @@ export default function ScansPage() {
     e.preventDefault();
     setCreateError(''); setCreating(true);
     try {
-      await createScan(imageName, imageTag);
-      modal.close(); setImageName(''); setImageTag('latest');
+      await createScan(imageName, imageTag, undefined, undefined, platform || undefined);
+      modal.close(); setImageName(''); setImageTag('latest'); setPlatform('');
       await load(1); setPage(1);
     } catch (err: unknown) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create scan');
@@ -201,12 +202,21 @@ export default function ScansPage() {
               >
                 {selecting && (
                   <td className="px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(scan.id)}
-                      onChange={() => toggleSelect(scan.id)}
-                      className="w-4 h-4 accent-violet-500 cursor-pointer"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleSelect(scan.id)}
+                      aria-label={selected.has(scan.id) ? 'Deselect' : 'Select'}
+                      className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-all cursor-pointer"
+                      style={selected.has(scan.id)
+                        ? { background: 'rgba(124,58,237,0.9)', border: '1px solid rgba(167,139,250,0.8)' }
+                        : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.15)' }}
+                    >
+                      {selected.has(scan.id) && (
+                        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                          <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </button>
                   </td>
                 )}
                 <td className="px-4 py-3">
@@ -320,6 +330,25 @@ export default function ScansPage() {
                     <label className="text-sm font-medium text-zinc-300">Tag</label>
                     <input className={inputCls + ' font-mono'} style={inputStyle} placeholder="latest"
                       value={imageTag} onChange={(e) => setImageTag(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-300">Platform <span className="text-zinc-600 font-normal">(optional)</span></label>
+                    <select
+                      className={inputCls}
+                      style={inputStyle}
+                      value={platform}
+                      onChange={(e) => setPlatform(e.target.value)}
+                    >
+                      <option value="">Auto-detect</option>
+                      <option value="linux/amd64">linux/amd64</option>
+                      <option value="linux/arm64">linux/arm64</option>
+                      <option value="linux/arm/v7">linux/arm/v7</option>
+                      <option value="linux/arm/v6">linux/arm/v6</option>
+                      <option value="linux/386">linux/386</option>
+                      <option value="linux/s390x">linux/s390x</option>
+                      <option value="linux/ppc64le">linux/ppc64le</option>
+                      <option value="windows/amd64">windows/amd64</option>
+                    </select>
                   </div>
                   <p className="text-xs text-zinc-600">Tags can be added from the scan detail page after creation.</p>
                 </form>

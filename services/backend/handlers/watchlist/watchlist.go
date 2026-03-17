@@ -164,7 +164,7 @@ func TriggerScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create scan"})
 			return
 		}
-		scanner.EnqueueScan(scan.ID, db, nil)
+		scanner.EnqueueScan(scan.ID, db, nil, "")
 		// Update last scanned
 		now := time.Now()
 		item.LastScannedAt = &now

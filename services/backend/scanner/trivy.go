@@ -104,7 +104,7 @@ type TrivySBOMOrg struct {
 }
 
 // RunScan executes trivy against an image and returns parsed output.
-func RunScan(ctx context.Context, imageName, imageTag string, envVars []string) (*TrivyOutput, string, error) {
+func RunScan(ctx context.Context, imageName, imageTag string, envVars []string, platform string) (*TrivyOutput, string, error) {
 	trivyPath := config.Config.Scanner.TrivyPath
 	if trivyPath == "" {
 		trivyPath = "trivy"
@@ -120,8 +120,12 @@ func RunScan(ctx context.Context, imageName, imageTag string, envVars []string) 
 	if imageTag != "" {
 		imageRef = imageName + ":" + imageTag
 	}
-	cmd := exec.CommandContext(scanCtx, trivyPath,
-		"image", "--format", "json", "--exit-code", "0", "--no-progress", imageRef)
+	args := []string{"image", "--format", "json", "--exit-code", "0", "--no-progress"}
+	if platform != "" {
+		args = append(args, "--platform", platform)
+	}
+	args = append(args, imageRef)
+	cmd := exec.CommandContext(scanCtx, trivyPath, args...)
 	cmd.Env = append(os.Environ(), envVars...)
 
 	var stdout, stderr bytes.Buffer
@@ -139,7 +143,7 @@ func RunScan(ctx context.Context, imageName, imageTag string, envVars []string) 
 }
 
 // RunSBOMScan executes trivy in CycloneDX SBOM mode.
-func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []string) (*TrivySBOMOutput, error) {
+func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []string, platform string) (*TrivySBOMOutput, error) {
 	trivyPath := config.Config.Scanner.TrivyPath
 	if trivyPath == "" {
 		trivyPath = "trivy"
@@ -155,8 +159,12 @@ func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []stri
 	if imageTag != "" {
 		imageRef = imageName + ":" + imageTag
 	}
-	cmd := exec.CommandContext(scanCtx, trivyPath,
-		"image", "--format", "cyclonedx", "--exit-code", "0", "--no-progress", imageRef)
+	args := []string{"image", "--format", "cyclonedx", "--exit-code", "0", "--no-progress"}
+	if platform != "" {
+		args = append(args, "--platform", platform)
+	}
+	args = append(args, imageRef)
+	cmd := exec.CommandContext(scanCtx, trivyPath, args...)
 	cmd.Env = append(os.Environ(), envVars...)
 
 	var stdout, stderr bytes.Buffer

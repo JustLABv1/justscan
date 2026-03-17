@@ -15,9 +15,10 @@ import (
 
 // ScanJob represents a queued scan job
 type ScanJob struct {
-	ScanID  uuid.UUID
-	DB      *bun.DB
-	EnvVars []string // optional registry credentials
+	ScanID   uuid.UUID
+	DB       *bun.DB
+	EnvVars  []string // optional registry credentials
+	Platform string   // optional platform override (e.g. linux/arm64)
 }
 
 var jobQueue chan ScanJob
@@ -39,8 +40,8 @@ func InitWorker(db *bun.DB) {
 }
 
 // EnqueueScan queues a scan job. The scan row must already exist in the DB with status=pending.
-func EnqueueScan(scanID uuid.UUID, db *bun.DB, envVars []string) {
-	jobQueue <- ScanJob{ScanID: scanID, DB: db, EnvVars: envVars}
+func EnqueueScan(scanID uuid.UUID, db *bun.DB, envVars []string, platform string) {
+	jobQueue <- ScanJob{ScanID: scanID, DB: db, EnvVars: envVars, Platform: platform}
 }
 
 func workerLoop(id int) {
@@ -74,7 +75,7 @@ func processScan(job ScanJob) {
 	log.Infof("Worker: starting scan %s for %s:%s", scanID, scan.ImageName, scan.ImageTag)
 
 	// Run vulnerability scan
-	trivyOut, trivyVersion, err := RunScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars)
+	trivyOut, trivyVersion, err := RunScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform)
 	if err != nil {
 		setFailed(ctx, db, scan, err.Error())
 		return
@@ -95,7 +96,7 @@ func processScan(job ScanJob) {
 	}
 
 	// Run SBOM scan (best-effort, don't fail the whole scan if it errors)
-	sbomOut, sbomErr := RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars)
+	sbomOut, sbomErr := RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform)
 	if sbomErr != nil {
 		log.Warnf("Worker: SBOM scan failed for %s (non-fatal): %v", scanID, sbomErr)
 	} else if sbomOut != nil {

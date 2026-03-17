@@ -15,9 +15,10 @@ import (
 )
 
 type CreateScanRequest struct {
-	Image  string   `json:"image" binding:"required"`
-	Tag    string   `json:"tag" binding:"required"`
-	TagIDs []string `json:"tag_ids"`
+	Image    string   `json:"image" binding:"required"`
+	Tag      string   `json:"tag" binding:"required"`
+	Platform string   `json:"platform"`
+	TagIDs   []string `json:"tag_ids"`
 }
 
 func CreateScan(db *bun.DB) gin.HandlerFunc {
@@ -37,6 +38,7 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 		scan := &models.Scan{
 			ImageName: req.Image,
 			ImageTag:  req.Tag,
+			Platform:  req.Platform,
 			Status:    models.ScanStatusPending,
 			UserID:    userID,
 			CreatedAt: time.Now(),
@@ -64,7 +66,7 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 
 		// Resolve registry credentials and enqueue scan
 		envVars := resolveRegistryEnv(c.Request.Context(), db, req.Image)
-		scanner.EnqueueScan(scan.ID, db, envVars)
+		scanner.EnqueueScan(scan.ID, db, envVars, req.Platform)
 
 		c.JSON(http.StatusCreated, scan)
 	}

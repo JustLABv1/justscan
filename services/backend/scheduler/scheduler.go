@@ -65,7 +65,7 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 			log.Errorf("scheduler: failed to create scan for %s: %v", itemCopy.ImageName, err)
 			return
 		}
-		scanner.EnqueueScan(scan.ID, db, nil)
+		scanner.EnqueueScan(scan.ID, db, nil, "")
 		now := time.Now()
 		itemCopy.LastScannedAt = &now
 		itemCopy.LastScanID = &scan.ID

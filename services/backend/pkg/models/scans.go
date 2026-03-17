@@ -27,6 +27,7 @@ type Scan struct {
 	Architecture    string     `bun:"architecture,type:text,default:''" json:"architecture"`
 	OSFamily        string     `bun:"os_family,type:text,default:''" json:"os_family"`
 	OSName          string     `bun:"os_name,type:text,default:''" json:"os_name"`
+	Platform        string     `bun:"platform,type:text,default:''" json:"platform"`
 	StartedAt       *time.Time `bun:"started_at,type:timestamptz" json:"started_at"`
 	CompletedAt     *time.Time `bun:"completed_at,type:timestamptz" json:"completed_at"`
 	CreatedAt       time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`

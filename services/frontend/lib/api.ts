@@ -56,8 +56,8 @@ export const listScans = (page = 1, limit = 20) =>
 export const getScan = (id: string) =>
   req<Scan>('GET', `/api/v1/scans/${id}`);
 
-export const createScan = (imageName: string, imageTag: string, registryId?: string, tagIds?: string[]) =>
-  req<Scan>('POST', '/api/v1/scans/', { image: imageName, tag: imageTag, registry_id: registryId, tag_ids: tagIds });
+export const createScan = (imageName: string, imageTag: string, registryId?: string, tagIds?: string[], platform?: string) =>
+  req<Scan>('POST', '/api/v1/scans/', { image: imageName, tag: imageTag, registry_id: registryId, tag_ids: tagIds, platform });
 
 export const deleteScan = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/scans/${id}`);

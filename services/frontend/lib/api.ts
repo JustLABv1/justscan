@@ -127,6 +127,40 @@ export const deleteWatchlistItem = (id: string) =>
 export const triggerWatchlistScan = (id: string) =>
   req<{ result: string }>('POST', `/api/v1/watchlist/${id}/scan`);
 
+// Orgs
+export const listOrgs = () =>
+  req<{ data: Org[] }>('GET', '/api/v1/orgs/').then((r) => r.data ?? []);
+export const createOrg = (name: string, description: string) =>
+  req<Org>('POST', '/api/v1/orgs/', { name, description });
+export const getOrg = (id: string) =>
+  req<Org>('GET', `/api/v1/orgs/${id}`);
+export const updateOrg = (id: string, data: Partial<Org>) =>
+  req<Org>('PUT', `/api/v1/orgs/${id}`, data);
+export const deleteOrg = (id: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/orgs/${id}`);
+
+export const createPolicy = (orgId: string, name: string, rules: PolicyRule[]) =>
+  req<OrgPolicy>('POST', `/api/v1/orgs/${orgId}/policies`, { name, rules });
+export const updatePolicy = (orgId: string, policyId: string, name: string, rules: PolicyRule[]) =>
+  req<OrgPolicy>('PUT', `/api/v1/orgs/${orgId}/policies/${policyId}`, { name, rules });
+export const deletePolicy = (orgId: string, policyId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/orgs/${orgId}/policies/${policyId}`);
+
+export const assignScanToOrg = (orgId: string, scanId: string) =>
+  req<{ result: string }>('POST', `/api/v1/orgs/${orgId}/scans/${scanId}`);
+export const removeScanFromOrg = (orgId: string, scanId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/orgs/${orgId}/scans/${scanId}`);
+export const listOrgScans = (orgId: string) =>
+  req<{ data: Scan[] }>('GET', `/api/v1/orgs/${orgId}/scans`).then((r) => r.data ?? []);
+
+export const getScanCompliance = (scanId: string) =>
+  req<{ data: ComplianceResult[] }>('GET', `/api/v1/scans/${scanId}/compliance`).then((r) => r.data ?? []);
+export const reEvaluateCompliance = (scanId: string) =>
+  req<{ data: ComplianceResult[] }>('POST', `/api/v1/scans/${scanId}/compliance/evaluate`).then((r) => r.data ?? []);
+
+export const getComplianceTrend = (orgId: string) =>
+  req<{ data: TrendPoint[] }>('GET', `/api/v1/orgs/${orgId}/compliance/trend`).then((r) => r.data ?? []);
+
 // Suppressions
 export const listSuppressions = (digest: string) =>
   req<Suppression[]>('GET', `/api/v1/images/${encodeURIComponent(digest)}/suppressions`);
@@ -136,6 +170,58 @@ export const deleteSuppression = (digest: string, vulnId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/images/${encodeURIComponent(digest)}/suppressions/${encodeURIComponent(vulnId)}`);
 
 // Types
+export interface PolicyRule {
+  type: 'max_cvss' | 'max_count' | 'max_total' | 'require_fix' | 'blocked_cve';
+  value?: number;
+  severity?: string;
+  cve_id?: string;
+}
+
+export interface OrgPolicy {
+  id: string;
+  org_id: string;
+  name: string;
+  rules: PolicyRule[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Org {
+  id: string;
+  name: string;
+  description: string;
+  image_patterns?: string[];
+  created_by_id: string;
+  created_at: string;
+  updated_at: string;
+  policies?: OrgPolicy[];
+}
+
+export interface TrendPoint {
+  date: string;
+  pass: number;
+  fail: number;
+  rate: number;
+}
+
+export interface Violation {
+  rule: PolicyRule;
+  message: string;
+  vuln_id?: string;
+}
+
+export interface ComplianceResult {
+  id: string;
+  scan_id: string;
+  policy_id: string;
+  org_id: string;
+  status: 'pass' | 'fail';
+  violations: Violation[];
+  evaluated_at: string;
+  policy_name?: string;
+  org_name?: string;
+}
+
 export interface User {
   id: string;
   email: string;

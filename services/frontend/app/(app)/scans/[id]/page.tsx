@@ -1,18 +1,25 @@
 'use client';
 import {
   addTagToScan,
+  assignScanToOrg,
+  ComplianceResult,
   createComment,
   deleteComment,
   getScan,
+  getScanCompliance,
   getUser,
+  listOrgs,
   listTags,
   listVulnerabilities,
+  Org,
+  reEvaluateCompliance,
   removeTagFromScan,
+  removeScanFromOrg,
   Scan,
   Tag,
   Vulnerability,
 } from '@/lib/api';
-import { ArrowLeft01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, PencilEdit01Icon } from 'hugeicons-react';
+import { ArrowLeft01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, PencilEdit01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -80,6 +87,11 @@ export default function ScanDetailPage() {
   const [commentText, setCommentText] = useState('');
   const [commentSaving, setCommentSaving] = useState(false);
 
+  // Compliance state
+  const [compliance, setCompliance] = useState<ComplianceResult[]>([]);
+  const [allOrgs, setAllOrgs] = useState<Org[]>([]);
+  const [complianceLoading, setComplianceLoading] = useState(false);
+
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -88,6 +100,8 @@ export default function ScanDetailPage() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
     listTags().then(setAllTags).catch(() => {});
+    getScanCompliance(id).then(setCompliance).catch(() => {});
+    listOrgs().then(setAllOrgs).catch(() => {});
   }, [id]);
 
   // Debounce package filter input
@@ -160,6 +174,24 @@ export default function ScanDetailPage() {
     } catch { /* ignore */ }
   }
 
+  async function handleAssignOrg(orgId: string) {
+    await assignScanToOrg(orgId, id).catch(() => {});
+    const results = await getScanCompliance(id).catch(() => [] as ComplianceResult[]);
+    setCompliance(results);
+  }
+
+  async function handleRemoveOrg(orgId: string) {
+    await removeScanFromOrg(orgId, id).catch(() => {});
+    setCompliance((c) => c.filter((r) => r.org_id !== orgId));
+  }
+
+  async function handleReEvaluate() {
+    setComplianceLoading(true);
+    const results = await reEvaluateCompliance(id).catch(() => [] as ComplianceResult[]);
+    setCompliance(results);
+    setComplianceLoading(false);
+  }
+
   if (loading) return (
     <div className="flex justify-center items-center h-64">
       <div className="w-7 h-7 rounded-full border-2 border-zinc-700 border-t-violet-500 animate-spin" />
@@ -211,7 +243,7 @@ export default function ScanDetailPage() {
             )}
           </div>
           <Link
-            href={`/reports/${scan.id}/print`}
+            href={`/reports/print?scans=${scan.id}`}
             target="_blank"
             className="flex items-center gap-2 shrink-0 px-3 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
           >
@@ -265,6 +297,112 @@ export default function ScanDetailPage() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Compliance */}
+      {(compliance.length > 0 || allOrgs.length > 0) && (
+        <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldKeyIcon size={14} className="text-zinc-500" />
+              <span className="text-sm font-medium text-zinc-400">Compliance</span>
+            </div>
+            {compliance.length > 0 && (
+              <button
+                onClick={handleReEvaluate}
+                disabled={complianceLoading}
+                className="text-xs text-zinc-500 hover:text-violet-400 transition-colors disabled:opacity-40"
+              >
+                {complianceLoading ? 'Evaluating…' : 'Re-evaluate'}
+              </button>
+            )}
+          </div>
+
+          {compliance.length === 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs text-zinc-600">Not assigned to any organization.</p>
+              {allOrgs.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {allOrgs.map((org) => (
+                    <button
+                      key={org.id}
+                      onClick={() => handleAssignOrg(org.id)}
+                      className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-500 transition-colors"
+                    >
+                      + {org.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {Object.entries(
+                compliance.reduce(
+                  (acc, r) => {
+                    const key = r.org_name ?? r.org_id;
+                    if (!acc[key]) acc[key] = { org_id: r.org_id, org_name: r.org_name ?? r.org_id, results: [] };
+                    acc[key].results.push(r);
+                    return acc;
+                  },
+                  {} as Record<string, { org_id: string; org_name: string; results: ComplianceResult[] }>,
+                ),
+              ).map(([, { org_id, org_name, results }]) => {
+                const allPass = results.every((r) => r.status === 'pass');
+                return (
+                  <div key={org_id} className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          allPass ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
+                        }`}
+                      >
+                        {allPass ? '✓' : '✗'} {org_name}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveOrg(org_id)}
+                        className="text-zinc-700 hover:text-red-400 transition-colors text-xs"
+                      >
+                        remove
+                      </button>
+                    </div>
+                    {results.map((r) => (
+                      <div key={r.id} className="ml-4 space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-xs ${r.status === 'pass' ? 'text-emerald-500' : 'text-red-400'}`}>
+                            {r.status === 'pass' ? '✓' : '✗'}
+                          </span>
+                          <span className="text-xs text-zinc-400">{r.policy_name}</span>
+                        </div>
+                        {r.violations && r.violations.length > 0 && (
+                          <ul className="ml-4 space-y-0.5">
+                            {r.violations.slice(0, 3).map((v, i) => (
+                              <li key={i} className="text-xs text-zinc-600">{v.message}</li>
+                            ))}
+                            {r.violations.length > 3 && (
+                              <li className="text-xs text-zinc-700">+{r.violations.length - 3} more</li>
+                            )}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              {allOrgs
+                .filter((o) => !compliance.some((c) => c.org_id === o.id))
+                .map((org) => (
+                  <button
+                    key={org.id}
+                    onClick={() => handleAssignOrg(org.id)}
+                    className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-500 transition-colors"
+                  >
+                    + {org.name}
+                  </button>
+                ))}
+            </div>
+          )}
         </div>
       )}
 

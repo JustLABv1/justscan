@@ -45,6 +45,7 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 		Registries(v1, db)
 		Watchlist(v1, db)
 		VulnKB(v1, db)
+		Orgs(v1, db)
 	}
 
 	server := &http.Server{

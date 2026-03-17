@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
@@ -36,10 +37,14 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 
 	// Register m2m join models so bun can resolve their relations
 	db.RegisterModel((*models.ScanTag)(nil))
+	db.RegisterModel((*models.OrgScan)(nil))
 
 	maxOpenConns := 4 * runtime.GOMAXPROCS(0)
 	db.SetMaxOpenConns(maxOpenConns)
 	db.SetMaxIdleConns(maxOpenConns)
+	// Recycle connections before NAT/firewall silently drops idle TCP connections.
+	db.SetConnMaxLifetime(30 * time.Minute)
+	db.SetConnMaxIdleTime(2 * time.Minute)
 
 	// Create a new migrator
 	migrator := migrate.NewMigrator(db, migrations.Migrations)

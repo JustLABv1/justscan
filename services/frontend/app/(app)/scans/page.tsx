@@ -1,7 +1,7 @@
 'use client';
 import { createScan, deleteScan, listScans, listTags, Scan, Tag } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
-import { Delete01Icon, PlusSignIcon } from 'hugeicons-react';
+import { CheckmarkSquare01Icon, Delete01Icon, FileExportIcon, PlusSignIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -41,6 +41,8 @@ export default function ScansPage() {
   const [imageTag, setImageTag] = useState('latest');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selecting, setSelecting] = useState(false);
   const modal = useOverlayState();
   const LIMIT = 20;
 
@@ -86,6 +88,16 @@ export default function ScansPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
+  const colSpanCount = selecting ? 10 : 9;
+
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
       {/* Header */}
@@ -94,13 +106,22 @@ export default function ScansPage() {
           <h1 className="text-2xl font-bold text-white">Scans</h1>
           {total > 0 && <p className="text-sm text-zinc-500 mt-0.5">{total} scans total</p>}
         </div>
-        <button
-          onClick={modal.open}
-          className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          <PlusSignIcon size={16} />
-          New Scan
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setSelecting(s => !s); setSelected(new Set()); }}
+            className={`flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg border transition-colors ${selecting ? 'border-violet-500 bg-violet-500/15 text-violet-300' : 'border-zinc-700 text-zinc-300 hover:bg-zinc-800'}`}
+          >
+            <CheckmarkSquare01Icon size={15} />
+            {selecting ? 'Cancel' : 'Select'}
+          </button>
+          <button
+            onClick={modal.open}
+            className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            <PlusSignIcon size={16} />
+            New Scan
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -112,6 +133,7 @@ export default function ScansPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-zinc-800">
+              {selecting && <th className="px-3 py-3 w-8" />}
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
               <th className="text-center px-3 py-3 text-xs font-medium text-red-500/70 uppercase tracking-wider">C</th>
@@ -126,7 +148,7 @@ export default function ScansPage() {
           <tbody className="divide-y divide-zinc-800/60">
             {loading ? (
               <tr>
-                <td colSpan={9} className="py-16 text-center">
+                <td colSpan={colSpanCount} className="py-16 text-center">
                   <div className="flex justify-center">
                     <div className="w-6 h-6 rounded-full border-2 border-zinc-700 border-t-violet-500 animate-spin" />
                   </div>
@@ -134,12 +156,22 @@ export default function ScansPage() {
               </tr>
             ) : scans.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-16 text-center text-zinc-600 text-sm">
+                <td colSpan={colSpanCount} className="py-16 text-center text-zinc-600 text-sm">
                   No scans yet. Create one to get started.
                 </td>
               </tr>
             ) : scans.map((scan) => (
               <tr key={scan.id} className="hover:bg-zinc-800/40 transition-colors">
+                {selecting && (
+                  <td className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(scan.id)}
+                      onChange={() => toggleSelect(scan.id)}
+                      className="w-4 h-4 accent-violet-500 cursor-pointer"
+                    />
+                  </td>
+                )}
                 <td className="px-4 py-3">
                   <Link href={`/scans/${scan.id}`} className="font-mono text-zinc-200 hover:text-violet-400 transition-colors text-sm">
                     {scan.image_name}:{scan.image_tag}
@@ -198,6 +230,23 @@ export default function ScansPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Sticky multi-select export bar */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-800 px-6 py-3 flex items-center justify-between z-10 print:hidden">
+          <span className="text-sm text-zinc-400">{selected.size} scan{selected.size !== 1 ? 's' : ''} selected</span>
+          <div className="flex gap-3">
+            <button onClick={() => setSelected(new Set())} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">Clear</button>
+            <a
+              href={`/reports/print?scans=${[...selected].join(',')}`}
+              target="_blank"
+              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              <FileExportIcon size={15} /> Export Report
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (

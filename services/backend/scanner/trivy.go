@@ -25,10 +25,16 @@ type TrivyOutput struct {
 }
 
 type TrivyMetadata struct {
-	OS          *TrivyOS `json:"OS,omitempty"`
-	ImageID     string   `json:"ImageID,omitempty"`
-	RepoTags    []string `json:"RepoTags,omitempty"`
-	RepoDigests []string `json:"RepoDigests,omitempty"`
+	OS          *TrivyOS          `json:"OS,omitempty"`
+	ImageConfig *TrivyImageConfig `json:"ImageConfig,omitempty"`
+	ImageID     string            `json:"ImageID,omitempty"`
+	RepoTags    []string          `json:"RepoTags,omitempty"`
+	RepoDigests []string          `json:"RepoDigests,omitempty"`
+}
+
+type TrivyImageConfig struct {
+	Architecture string `json:"architecture"`
+	OS           string `json:"os"`
 }
 
 type TrivyOS struct {

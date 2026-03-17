@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
 )
 
@@ -41,6 +42,7 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			CreatedAt: time.Now(),
 		}
 		if _, err := db.NewInsert().Model(scan).Exec(c.Request.Context()); err != nil {
+			log.Errorf("CreateScan DB insert error: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create scan"})
 			return
 		}

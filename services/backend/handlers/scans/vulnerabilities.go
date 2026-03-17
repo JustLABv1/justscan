@@ -29,10 +29,34 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 		}
 		offset := (page - 1) * limit
 
+		// Sorting
+		allowedCols := map[string]string{
+			"vuln_id":           "vuln_id",
+			"pkg_name":          "pkg_name",
+			"severity":          "CASE severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 WHEN 'LOW' THEN 4 ELSE 5 END",
+			"cvss_score":        "cvss_score",
+			"installed_version": "installed_version",
+			"fixed_version":     "fixed_version",
+		}
+		sortCol := "severity"
+		sortDir := "asc"
+		if s := c.Query("sort_by"); s != "" {
+			if _, ok := allowedCols[s]; ok {
+				sortCol = s
+			}
+		}
+		if d := c.Query("sort_dir"); d == "desc" {
+			sortDir = "desc"
+		}
+		orderExpr := allowedCols[sortCol] + " " + sortDir
+		if sortCol != "vuln_id" {
+			orderExpr += ", vuln_id asc"
+		}
+
 		var vulns []models.Vulnerability
 		q := db.NewSelect().Model(&vulns).
 			Where("scan_id = ?", scanID).
-			OrderExpr("CASE severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 WHEN 'LOW' THEN 4 ELSE 5 END, vuln_id").
+			OrderExpr(orderExpr).
 			Limit(limit).
 			Offset(offset)
 
@@ -45,6 +69,9 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 		}
 		if c.Query("has_fix") == "true" {
 			q = q.Where("fixed_version != ''")
+		}
+		if minCVSS := c.Query("min_cvss"); minCVSS != "" {
+			q = q.Where("cvss_score >= ?", minCVSS)
 		}
 
 		total, err := q.Count(c.Request.Context())

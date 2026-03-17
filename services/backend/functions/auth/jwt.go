@@ -2,10 +2,11 @@ package auth
 
 import (
 	"errors"
+	"strings"
 	"time"
 
-	"justwms-backend/config"
-	"justwms-backend/pkg/models"
+	"justscan-backend/config"
+	"justscan-backend/pkg/models"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -37,6 +38,7 @@ func ValidateToken(signedToken string) (err error) {
 }
 
 func GetTypeFromToken(signedToken string) (tokenType string, err error) {
+	signedToken = strings.TrimPrefix(signedToken, "Bearer ")
 	var jwtKey = []byte(config.Config.JWT.Secret)
 
 	token, err := jwt.ParseWithClaims(
@@ -59,6 +61,7 @@ func GetTypeFromToken(signedToken string) (tokenType string, err error) {
 }
 
 func GetIDFromToken(signedToken string) (tokenID string, err error) {
+	signedToken = strings.TrimPrefix(signedToken, "Bearer ")
 	var jwtKey = []byte(config.Config.JWT.Secret)
 
 	token, err := jwt.ParseWithClaims(
@@ -81,6 +84,7 @@ func GetIDFromToken(signedToken string) (tokenID string, err error) {
 }
 
 func GetUserIDFromToken(signedToken string) (id uuid.UUID, err error) {
+	signedToken = strings.TrimPrefix(signedToken, "Bearer ")
 	var jwtKey = []byte(config.Config.JWT.Secret)
 
 	token, err := jwt.ParseWithClaims(
@@ -133,6 +137,7 @@ func RefreshToken(signedToken string) (newToken string, ExpiresAt int64, err err
 }
 
 func GetBridgeDataFromToken(signedToken string) (bridgeID string, bridgeType string, err error) {
+	signedToken = strings.TrimPrefix(signedToken, "Bearer ")
 	var jwtKey = []byte(config.Config.JWT.Secret)
 
 	token, err := jwt.ParseWithClaims(

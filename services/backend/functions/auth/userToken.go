@@ -3,8 +3,8 @@ package auth
 import (
 	"time"
 
-	"justwms-backend/config"
-	"justwms-backend/pkg/models"
+	"justscan-backend/config"
+	"justscan-backend/pkg/models"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"

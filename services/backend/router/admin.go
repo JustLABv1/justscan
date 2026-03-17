@@ -1,8 +1,8 @@
 package router
 
 import (
-	"justwms-backend/handlers/admins"
-	"justwms-backend/middlewares"
+	"justscan-backend/handlers/admins"
+	"justscan-backend/middlewares"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"

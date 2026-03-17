@@ -12,9 +12,8 @@ import (
 	"github.com/uptrace/bun/extra/bunotel"
 	"github.com/uptrace/bun/migrate"
 
-	_ "github.com/mattn/go-sqlite3"
-
-	"justwms-backend/database/migrations"
+	"justscan-backend/database/migrations"
+	"justscan-backend/pkg/models"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -34,6 +33,9 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 	sqldb := sql.OpenDB(pgconn)
 	db := bun.NewDB(sqldb, pgdialect.New(), bun.WithDiscardUnknownColumns())
 	db.AddQueryHook(bunotel.NewQueryHook(bunotel.WithDBName(dbName)))
+
+	// Register m2m join models so bun can resolve their relations
+	db.RegisterModel((*models.ScanTag)(nil))
 
 	maxOpenConns := 4 * runtime.GOMAXPROCS(0)
 	db.SetMaxOpenConns(maxOpenConns)

@@ -1,0 +1,124 @@
+package suppressions
+
+import (
+	"net/http"
+	"time"
+
+	"justscan-backend/functions/auth"
+	"justscan-backend/pkg/models"
+
+	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
+)
+
+func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		digest := c.Param("digest")
+		if digest == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "image digest is required"})
+			return
+		}
+
+		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		var body struct {
+			VulnID        string     `json:"vuln_id" binding:"required"`
+			Status        string     `json:"status" binding:"required,oneof=accepted wont_fix false_positive"`
+			Justification string     `json:"justification"`
+			ExpiresAt     *time.Time `json:"expires_at"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		existing := &models.Suppression{}
+		err = db.NewSelect().Model(existing).
+			Where("image_digest = ? AND vuln_id = ?", digest, body.VulnID).
+			Scan(c.Request.Context())
+
+		if err == nil {
+			// Update existing
+			existing.Status = body.Status
+			existing.Justification = body.Justification
+			existing.UserID = userID
+			existing.ExpiresAt = body.ExpiresAt
+			existing.UpdatedAt = time.Now()
+			if _, err := db.NewUpdate().Model(existing).
+				Column("status", "justification", "user_id", "expires_at", "updated_at").
+				Where("id = ?", existing.ID).
+				Exec(c.Request.Context()); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update suppression"})
+				return
+			}
+			c.JSON(http.StatusOK, existing)
+			return
+		}
+
+		// Insert new
+		supp := &models.Suppression{
+			ImageDigest:   digest,
+			VulnID:        body.VulnID,
+			Status:        body.Status,
+			Justification: body.Justification,
+			UserID:        userID,
+			ExpiresAt:     body.ExpiresAt,
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
+		}
+		if _, err := db.NewInsert().Model(supp).Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save suppression"})
+			return
+		}
+		c.JSON(http.StatusCreated, supp)
+	}
+}
+
+func ListSuppressions(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		digest := c.Param("digest")
+		var suppressions []models.Suppression
+		if err := db.NewSelect().Model(&suppressions).
+			Where("image_digest = ?", digest).
+			OrderExpr("created_at DESC").
+			Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load suppressions"})
+			return
+		}
+
+		for i := range suppressions {
+			user := &models.Users{}
+			if err := db.NewSelect().Model(user).Column("username").
+				Where("id = ?", suppressions[i].UserID).
+				Scan(c.Request.Context()); err == nil {
+				suppressions[i].Username = user.Username
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": suppressions})
+	}
+}
+
+func DeleteSuppression(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		digest := c.Param("digest")
+		vulnID := c.Param("vulnId")
+
+		if _, err := auth.GetUserIDFromToken(c.GetHeader("Authorization")); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		if _, err := db.NewDelete().Model((*models.Suppression)(nil)).
+			Where("image_digest = ? AND vuln_id = ?", digest, vulnID).
+			Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete suppression"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
+	}
+}

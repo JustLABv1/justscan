@@ -1,7 +1,7 @@
 package router
 
 import (
-	"justwms-backend/config"
+	"justscan-backend/config"
 	"net/http"
 	"strconv"
 	"time"
@@ -17,8 +17,12 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
+	allowOrigins := config.AllowOrigins
+	if len(allowOrigins) == 0 {
+		allowOrigins = []string{"http://localhost:3000", "http://localhost:4000"}
+	}
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"https://exflow.org", "http://localhost:3000", "http://localhost:4000"},
+		AllowOrigins:     allowOrigins,
 		AllowMethods:     []string{"GET", "HEAD", "POST", "PUT", "OPTIONS", "DELETE"},
 		AllowHeaders:     []string{"Origin", "Authorization", "X-Requested-With", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -33,6 +37,14 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 		User(v1, db)
 		Health(v1)
 		Admin(v1, db)
+		Scans(v1, db)
+		Dashboard(v1, db)
+		Comments(v1, db)
+		Suppressions(v1, db)
+		Tags(v1, db)
+		Registries(v1, db)
+		Watchlist(v1, db)
+		VulnKB(v1, db)
 	}
 
 	server := &http.Server{

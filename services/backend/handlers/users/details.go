@@ -3,9 +3,9 @@ package users
 import (
 	"net/http"
 
-	"justwms-backend/functions/auth"
-	"justwms-backend/functions/httperror"
-	"justwms-backend/pkg/models"
+	"justscan-backend/functions/auth"
+	"justscan-backend/functions/httperror"
+	"justscan-backend/pkg/models"
 
 	_ "github.com/lib/pq"
 	"github.com/uptrace/bun"

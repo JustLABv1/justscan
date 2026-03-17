@@ -1,8 +1,8 @@
 package admins
 
 import (
-	"justwms-backend/functions/httperror"
-	"justwms-backend/pkg/models"
+	"justscan-backend/functions/httperror"
+	"justscan-backend/pkg/models"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

@@ -1,9 +1,4 @@
-import DashboardPageClient from "@/components/dashboard/page-client";
-
+import { redirect } from "next/navigation";
 export default function Home() {
-  return (
-    <>
-      <DashboardPageClient />
-    </>
-  );
+  redirect("/scans");
 }

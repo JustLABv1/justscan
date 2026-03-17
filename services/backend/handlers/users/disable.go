@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	"justwms-backend/functions/auth"
-	"justwms-backend/functions/httperror"
-	"justwms-backend/pkg/models"
+	"justscan-backend/functions/auth"
+	"justscan-backend/functions/httperror"
+	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"

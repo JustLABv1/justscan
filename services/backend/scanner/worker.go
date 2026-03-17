@@ -115,6 +115,13 @@ func processScan(job ScanJob) {
 	scan.CompletedAt = &completedAt
 	scan.TrivyVersion = trivyVersion
 	scan.ImageDigest = ExtractDigest(trivyOut)
+	if trivyOut.Metadata.ImageConfig != nil {
+		scan.Architecture = trivyOut.Metadata.ImageConfig.Architecture
+	}
+	if trivyOut.Metadata.OS != nil {
+		scan.OSFamily = trivyOut.Metadata.OS.Family
+		scan.OSName = trivyOut.Metadata.OS.Name
+	}
 	scan.CriticalCount = severityCounts[models.SeverityCritical]
 	scan.HighCount = severityCounts[models.SeverityHigh]
 	scan.MediumCount = severityCounts[models.SeverityMedium]
@@ -123,7 +130,8 @@ func processScan(job ScanJob) {
 
 	if _, err := db.NewUpdate().Model(scan).
 		Column("status", "completed_at", "trivy_version", "image_digest",
-			"critical_count", "high_count", "medium_count", "low_count", "unknown_count").
+			"critical_count", "high_count", "medium_count", "low_count", "unknown_count",
+			"architecture", "os_family", "os_name").
 		Where("id = ?", scanID).Exec(ctx); err != nil {
 		log.Errorf("Worker: failed to mark scan %s as completed: %v", scanID, err)
 		return

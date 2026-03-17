@@ -16,7 +16,7 @@ var cronRunner *cron.Cron
 
 // Start initialises the cron scheduler and registers all enabled watchlist items.
 func Start(db *bun.DB) {
-	cronRunner = cron.New(cron.WithSeconds())
+	cronRunner = cron.New()
 	// Load all enabled watchlist items and schedule them
 	go func() {
 		if err := loadAndSchedule(db); err != nil {

@@ -1,9 +1,21 @@
 'use client';
-import { addTagToScan, getScan, listTags, listVulnerabilities, removeTagFromScan, Scan, Tag, Vulnerability } from '@/lib/api';
-import { ArrowLeft01Icon, FileExportIcon, PencilEdit01Icon } from 'hugeicons-react';
+import {
+  addTagToScan,
+  createComment,
+  deleteComment,
+  getScan,
+  getUser,
+  listTags,
+  listVulnerabilities,
+  removeTagFromScan,
+  Scan,
+  Tag,
+  Vulnerability,
+} from '@/lib/api';
+import { ArrowLeft01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, PencilEdit01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   CRITICAL: { label: 'Critical', color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20' },
@@ -41,6 +53,7 @@ function StatusBadge({ status }: { status: string }) {
 const LIMIT = 25;
 
 const selectCls = 'rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-violet-500 transition-colors';
+const inputCls = 'rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-violet-500 transition-colors';
 
 export default function ScanDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -50,11 +63,24 @@ export default function ScanDetailPage() {
   const [vulnTotal, setVulnTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [severityFilter, setSeverityFilter] = useState('');
+  const [pkgFilter, setPkgFilter] = useState('');
+  const [pkgInput, setPkgInput] = useState('');
+  const [minCvss, setMinCvss] = useState(0);
+  const [cvssMode, setCvssMode] = useState<'preset' | 'custom'>('preset');
+  const [customCvss, setCustomCvss] = useState('');
+  const [hasFix, setHasFix] = useState(false);
+  const [sortBy, setSortBy] = useState('severity');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [loading, setLoading] = useState(true);
   const [vulnLoading, setVulnLoading] = useState(false);
   const [error, setError] = useState('');
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [tagLoading, setTagLoading] = useState('');
+  const [expandedVuln, setExpandedVuln] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [commentSaving, setCommentSaving] = useState(false);
+
+  const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     getScan(id)
@@ -64,14 +90,39 @@ export default function ScanDetailPage() {
     listTags().then(setAllTags).catch(() => {});
   }, [id]);
 
+  // Debounce package filter input
   useEffect(() => {
+    if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
+    pkgDebounceRef.current = setTimeout(() => {
+      setPkgFilter(pkgInput);
+      setPage(1);
+    }, 400);
+    return () => {
+      if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
+    };
+  }, [pkgInput]);
+
+  function loadVulns() {
     if (!scan) return;
     setVulnLoading(true);
-    listVulnerabilities(id, page, LIMIT, severityFilter || undefined)
+    listVulnerabilities(
+      id, page, LIMIT,
+      severityFilter || undefined,
+      pkgFilter || undefined,
+      hasFix || undefined,
+      minCvss || undefined,
+      sortBy,
+      sortDir,
+    )
       .then((res) => { setVulns(res.data ?? []); setVulnTotal(res.total); })
       .catch(() => {})
       .finally(() => setVulnLoading(false));
-  }, [id, scan, page, severityFilter]);
+  }
+
+  useEffect(() => {
+    loadVulns();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, scan, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir]);
 
   async function toggleTag(tag: Tag) {
     if (!scan) return;
@@ -90,6 +141,25 @@ export default function ScanDetailPage() {
     }
   }
 
+  async function handleAddComment(vulnId: string) {
+    if (!commentText.trim()) return;
+    setCommentSaving(true);
+    try {
+      await createComment(id, vulnId, commentText.trim());
+      setCommentText('');
+      loadVulns();
+    } catch { /* ignore */ } finally {
+      setCommentSaving(false);
+    }
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    try {
+      await deleteComment(commentId);
+      loadVulns();
+    } catch { /* ignore */ }
+  }
+
   if (loading) return (
     <div className="flex justify-center items-center h-64">
       <div className="w-7 h-7 rounded-full border-2 border-zinc-700 border-t-violet-500 animate-spin" />
@@ -105,6 +175,7 @@ export default function ScanDetailPage() {
   if (!scan) return null;
 
   const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
+  const currentUser = getUser();
 
   const sevCards = [
     { count: scan.critical_count, ...SEV_CONFIG.CRITICAL },
@@ -131,6 +202,12 @@ export default function ScanDetailPage() {
             </h1>
             {scan.image_digest && (
               <p className="text-xs font-mono text-zinc-600 mt-1 break-all">{scan.image_digest}</p>
+            )}
+            {scan.architecture && (
+              <p className="flex items-center gap-1.5 text-xs text-zinc-500 mt-1">
+                <CpuIcon size={12} />
+                {scan.architecture} · {scan.os_family} {scan.os_name}
+              </p>
             )}
           </div>
           <Link
@@ -193,42 +270,122 @@ export default function ScanDetailPage() {
 
       {/* Vulnerabilities */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h2 className="text-base font-semibold text-white">
               Vulnerabilities
               {vulnTotal > 0 && <span className="text-sm font-normal text-zinc-500 ml-2">{vulnTotal} found</span>}
             </h2>
           </div>
-          <select
-            value={severityFilter}
-            onChange={(e) => { setSeverityFilter(e.target.value); setPage(1); }}
-            className={selectCls}
-          >
-            <option value="">All Severities</option>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
+          <div className="flex flex-wrap gap-2 items-center">
+            <select
+              value={severityFilter}
+              onChange={(e) => { setSeverityFilter(e.target.value); setPage(1); }}
+              className={selectCls}
+            >
+              <option value="">All Severities</option>
+              <option value="CRITICAL">Critical</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+            <input
+              type="text"
+              value={pkgInput}
+              onChange={(e) => setPkgInput(e.target.value)}
+              placeholder="Package…"
+              className={inputCls}
+            />
+            <select
+              value={cvssMode === 'custom' ? 'custom' : minCvss}
+              onChange={(e) => {
+                if (e.target.value === 'custom') {
+                  setCvssMode('custom');
+                  setCustomCvss('');
+                  setMinCvss(0);
+                } else {
+                  setCvssMode('preset');
+                  setMinCvss(Number(e.target.value));
+                  setPage(1);
+                }
+              }}
+              className={selectCls}
+            >
+              <option value={0}>Any CVSS</option>
+              <option value={4}>≥ 4.0</option>
+              <option value={7}>≥ 7.0</option>
+              <option value={9}>≥ 9.0</option>
+              <option value="custom">Custom…</option>
+            </select>
+            {cvssMode === 'custom' && (
+              <input
+                type="number"
+                min={0}
+                max={10}
+                step={0.1}
+                value={customCvss}
+                placeholder="0.0"
+                onChange={(e) => {
+                  setCustomCvss(e.target.value);
+                  const val = parseFloat(e.target.value);
+                  setMinCvss(!isNaN(val) ? val : 0);
+                  setPage(1);
+                }}
+                className={`${inputCls} w-24`}
+              />
+            )}
+            <button
+              onClick={() => { setHasFix(!hasFix); setPage(1); }}
+              className={`px-3 py-2 text-sm rounded-lg border transition-colors ${hasFix ? 'border-violet-500 bg-violet-500/15 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-zinc-200'}`}
+            >
+              Has Fix
+            </button>
+          </div>
         </div>
 
         <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-800">
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">CVE ID</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Package</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Installed</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Fixed In</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Severity</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">CVSS</th>
+                {([
+                  { label: 'CVE ID',    key: 'vuln_id',           align: 'left'  },
+                  { label: 'Package',   key: 'pkg_name',          align: 'left'  },
+                  { label: 'Installed', key: 'installed_version', align: 'left'  },
+                  { label: 'Fixed In',  key: 'fixed_version',     align: 'left'  },
+                  { label: 'Severity',  key: 'severity',          align: 'left'  },
+                  { label: 'CVSS',      key: 'cvss_score',        align: 'right' },
+                ] as { label: string; key: string; align: 'left' | 'right' }[]).map(({ label, key, align }) => {
+                  const active = sortBy === key;
+                  return (
+                    <th
+                      key={key}
+                      onClick={() => {
+                        if (active) {
+                          setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortBy(key);
+                          setSortDir('asc');
+                        }
+                        setPage(1);
+                      }}
+                      className={`px-4 py-3 text-xs font-medium uppercase tracking-wider cursor-pointer select-none transition-colors text-${align} ${active ? 'text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {label}
+                        <span className={`transition-opacity ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
+                          {active && sortDir === 'desc' ? '↓' : '↑'}
+                        </span>
+                      </span>
+                    </th>
+                  );
+                })}
+                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Notes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60">
               {vulnLoading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center">
+                  <td colSpan={7} className="py-12 text-center">
                     <div className="flex justify-center">
                       <div className="w-6 h-6 rounded-full border-2 border-zinc-700 border-t-violet-500 animate-spin" />
                     </div>
@@ -236,36 +393,105 @@ export default function ScanDetailPage() {
                 </tr>
               ) : vulns.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-zinc-600 text-sm">
+                  <td colSpan={7} className="py-12 text-center text-zinc-600 text-sm">
                     No vulnerabilities found.
                   </td>
                 </tr>
               ) : vulns.map((v) => (
-                <tr key={v.id} className="hover:bg-zinc-800/40 transition-colors">
-                  <td className="px-4 py-3">
-                    {v.vuln_id ? (
-                      <a
-                        href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-mono text-xs text-violet-400 hover:text-violet-300 hover:underline transition-colors"
+                <>
+                  <tr key={v.id} className="hover:bg-zinc-800/40 transition-colors">
+                    <td className="px-4 py-3">
+                      {v.vuln_id ? (
+                        <a
+                          href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-mono text-xs text-violet-400 hover:text-violet-300 hover:underline transition-colors"
+                        >
+                          {v.vuln_id}
+                        </a>
+                      ) : <span className="text-zinc-600">—</span>}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-zinc-300">{v.pkg_name}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-zinc-500">{v.installed_version}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-emerald-500">
+                      {v.fixed_version || <span className="text-zinc-700">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <SeverityBadge severity={v.severity} />
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-xs text-zinc-400">
+                      {v.cvss_score ? v.cvss_score.toFixed(1) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => {
+                          setExpandedVuln(expandedVuln === v.id ? null : v.id);
+                          setCommentText('');
+                        }}
+                        className="inline-flex items-center gap-1 text-zinc-500 hover:text-violet-400 transition-colors"
                       >
-                        {v.vuln_id}
-                      </a>
-                    ) : <span className="text-zinc-600">—</span>}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">{v.pkg_name}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-500">{v.installed_version}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-emerald-500">
-                    {v.fixed_version || <span className="text-zinc-700">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <SeverityBadge severity={v.severity} />
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-zinc-400">
-                    {v.cvss_score ? v.cvss_score.toFixed(1) : '—'}
-                  </td>
-                </tr>
+                        <Comment01Icon size={15} />
+                        {v.comments && v.comments.length > 0 && (
+                          <span className="text-xs bg-violet-500/20 text-violet-400 rounded-full px-1.5 py-0.5 font-medium">
+                            {v.comments.length}
+                          </span>
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedVuln === v.id && (
+                    <tr key={`${v.id}-comments`}>
+                      <td colSpan={7} className="border-t border-zinc-800 bg-zinc-800/60 px-4 py-4">
+                        <div className="space-y-3 max-w-3xl">
+                          {v.comments && v.comments.length > 0 ? (
+                            <div className="space-y-2">
+                              {v.comments.map((c) => (
+                                <div key={c.id} className="flex items-start justify-between gap-3 group">
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-xs font-semibold text-zinc-300">
+                                      {c.username || 'You'}
+                                    </span>
+                                    <span className="text-xs text-zinc-600 ml-2">
+                                      {new Date(c.created_at).toLocaleString()}
+                                    </span>
+                                    <p className="text-xs text-zinc-400 mt-0.5">{c.content}</p>
+                                  </div>
+                                  {currentUser?.id === c.user_id && (
+                                    <button
+                                      onClick={() => handleDeleteComment(c.id)}
+                                      className="text-zinc-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                                    >
+                                      <Delete02Icon size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-zinc-600">No notes yet.</p>
+                          )}
+                          <div className="flex gap-2 items-end pt-1">
+                            <textarea
+                              value={commentText}
+                              onChange={(e) => setCommentText(e.target.value)}
+                              placeholder="Add a note…"
+                              rows={2}
+                              className={`${inputCls} flex-1 resize-none`}
+                            />
+                            <button
+                              onClick={() => handleAddComment(v.id)}
+                              disabled={commentSaving || !commentText.trim()}
+                              className="px-3 py-2 text-sm rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                            >
+                              Add Note
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
             </tbody>
           </table>

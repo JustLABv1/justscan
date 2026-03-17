@@ -62,9 +62,24 @@ export const createScan = (imageName: string, imageTag: string, registryId?: str
 export const deleteScan = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/scans/${id}`);
 
-export const listVulnerabilities = (scanId: string, page = 1, limit = 100, severity?: string) => {
+export const listVulnerabilities = (
+  scanId: string,
+  page = 1,
+  limit = 100,
+  severity?: string,
+  pkg?: string,
+  hasFix?: boolean,
+  minCvss?: number,
+  sortBy?: string,
+  sortDir?: 'asc' | 'desc',
+) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (severity) params.set('severity', severity);
+  if (pkg) params.set('pkg', pkg);
+  if (hasFix) params.set('has_fix', 'true');
+  if (minCvss) params.set('min_cvss', String(minCvss));
+  if (sortBy) params.set('sort_by', sortBy);
+  if (sortDir) params.set('sort_dir', sortDir);
   return req<{ data: Vulnerability[]; total: number }>('GET', `/api/v1/scans/${scanId}/vulnerabilities?${params}`);
 };
 
@@ -81,6 +96,14 @@ export const addTagToScan = (scanId: string, tagId: string) =>
   req<{ result: string }>('POST', `/api/v1/scans/${scanId}/tags/${tagId}`);
 export const removeTagFromScan = (scanId: string, tagId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/scans/${scanId}/tags/${tagId}`);
+
+// Comments
+export const createComment = (scanId: string, vulnId: string, content: string) =>
+  req<Comment>('POST', `/api/v1/scans/${scanId}/vulnerabilities/${vulnId}/comments`, { content });
+export const updateComment = (commentId: string, content: string) =>
+  req<Comment>('PUT', `/api/v1/comments/${commentId}`, { content });
+export const deleteComment = (commentId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/comments/${commentId}`);
 
 // Registries
 export const listRegistries = () =>
@@ -139,6 +162,9 @@ export interface Scan {
   completed_at: string | null;
   created_at: string;
   tags?: Tag[];
+  architecture?: string;
+  os_family?: string;
+  os_name?: string;
 }
 
 export interface Vulnerability {
@@ -154,6 +180,7 @@ export interface Vulnerability {
   cvss_score: number;
   references: string[];
   suppression?: Suppression | null;
+  comments?: Comment[];
 }
 
 export interface Tag {
@@ -167,7 +194,7 @@ export interface Registry {
   id: string;
   name: string;
   url: string;
-  auth_type: 'basic' | 'token' | 'aws_ecr';
+  auth_type: 'none' | 'basic' | 'token' | 'aws_ecr';
   username: string;
   password?: string;
   created_at: string;
@@ -191,6 +218,17 @@ export interface Suppression {
   reason: string;
   note: string;
   created_at: string;
+}
+
+export interface Comment {
+  id: string;
+  vulnerability_id: string;
+  scan_id: string;
+  user_id: string;
+  content: string;
+  username?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DashboardStats {

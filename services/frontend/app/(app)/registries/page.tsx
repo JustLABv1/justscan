@@ -13,7 +13,7 @@ export default function RegistriesPage() {
   const [editing, setEditing] = useState<Registry | null>(null);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
-  const [authType, setAuthType] = useState<'basic' | 'token' | 'aws_ecr'>('basic');
+  const [authType, setAuthType] = useState<'none' | 'basic' | 'token' | 'aws_ecr'>('none');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -39,7 +39,7 @@ export default function RegistriesPage() {
   }
 
   function openEdit(r: Registry) {
-    setEditing(r); setName(r.name); setUrl(r.url); setAuthType(r.auth_type ?? 'basic'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
+    setEditing(r); setName(r.name); setUrl(r.url); setAuthType(r.auth_type ?? 'none'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
     modal.open();
   }
 
@@ -166,9 +166,10 @@ export default function RegistriesPage() {
                     <label className="text-sm font-medium text-zinc-300">Auth Type</label>
                     <select
                       value={authType}
-                      onChange={(e) => setAuthType(e.target.value as 'basic' | 'token' | 'aws_ecr')}
+                      onChange={(e) => setAuthType(e.target.value as 'none' | 'basic' | 'token' | 'aws_ecr')}
                       className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors"
                     >
+                      <option value="none">None (public registry)</option>
                       <option value="basic">Basic (username / password)</option>
                       <option value="token">Token</option>
                       <option value="aws_ecr">AWS ECR</option>

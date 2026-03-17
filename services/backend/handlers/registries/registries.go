@@ -38,13 +38,16 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 		var body struct {
 			Name     string `json:"name" binding:"required"`
 			URL      string `json:"url" binding:"required"`
-			AuthType string `json:"auth_type" binding:"required,oneof=basic token aws_ecr"`
+			AuthType string `json:"auth_type" binding:"omitempty,oneof=basic token aws_ecr none"`
 			Username string `json:"username"`
 			Password string `json:"password"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+		if body.AuthType == "" {
+			body.AuthType = "none"
 		}
 		encryptedPassword := ""
 		if body.Password != "" {

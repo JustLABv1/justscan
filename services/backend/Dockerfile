@@ -1,5 +1,5 @@
 FROM golang:1.24-alpine as builder
-LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustWMS"
+LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 
 WORKDIR /app/backend
 
@@ -10,27 +10,29 @@ RUN go mod download
 COPY . .
 
 # Build
-RUN go build -o justwms-backend
+RUN go build -o justscan-backend
 
 FROM alpine:3.22 as runner
-LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustWMS"
+LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 WORKDIR /app
 
-COPY --from=builder /app/backend/justwms-backend /app/
+RUN apk add --no-cache ca-certificates
 
-RUN addgroup --system --gid 1001 justwms
-RUN adduser --system --uid 1001 justwms
+COPY --from=builder /app/backend/justscan-backend /app/
 
-RUN mkdir -p /etc/justwms \
-    && chown -R justwms:justwms /etc/justwms
+RUN addgroup --system --gid 1001 justscan
+RUN adduser --system --uid 1001 justscan
+
+RUN mkdir -p /etc/justscan \
+    && chown -R justscan:justscan /etc/justscan
 
 RUN mkdir -p /app/data \
-    && chown -R justwms:justwms /app/data
+    && chown -R justscan:justscan /app/data
 
-RUN chown -R justwms:justwms /app
+RUN chown -R justscan:justscan /app
 
-VOLUME [ "/etc/justwms", "/app/data" ]
+VOLUME [ "/etc/justscan", "/app/data" ]
 
 EXPOSE 8080
 
-CMD [ "/justwms-backend", "--config", "/etc/justwms/config.yaml" ]
+CMD [ "/app/justscan-backend", "--config", "/etc/justscan/config.yaml" ]

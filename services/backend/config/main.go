@@ -24,10 +24,29 @@ type ConfigurationManager struct {
 }
 
 type RestfulConf struct {
-	LogLevel string       `mapstructure:"log_level" validate:"required,oneof=debug info warn error"`
-	Port     int          `mapstructure:"port" validate:"required"`
-	Database DatabaseConf `mapstructure:"database" validate:"required"`
-	JWT      JWTConf      `mapstructure:"jwt" validate:"required"`
+	LogLevel     string         `mapstructure:"log_level" validate:"required,oneof=debug info warn error"`
+	Port         int            `mapstructure:"port" validate:"required"`
+	Database     DatabaseConf   `mapstructure:"database" validate:"required"`
+	JWT          JWTConf        `mapstructure:"jwt" validate:"required"`
+	AllowOrigins []string       `mapstructure:"allow_origins"`
+	Scanner      ScannerConf    `mapstructure:"scanner"`
+	Encryption   EncryptionConf `mapstructure:"encryption"`
+	VulnKB       VulnKBConf     `mapstructure:"vuln_kb"`
+}
+
+type ScannerConf struct {
+	TrivyPath   string `mapstructure:"trivy_path"`
+	Timeout     int    `mapstructure:"timeout"`
+	Concurrency int    `mapstructure:"concurrency"`
+}
+
+type EncryptionConf struct {
+	Key string `mapstructure:"key"`
+}
+
+type VulnKBConf struct {
+	NVDApiKey string `mapstructure:"nvd_api_key"`
+	CacheDays int    `mapstructure:"cache_days"`
 }
 
 type DatabaseConf struct {

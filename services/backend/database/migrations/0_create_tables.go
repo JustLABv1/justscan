@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"justwms-backend/pkg/models"
+	"justscan-backend/pkg/models"
 
 	"github.com/uptrace/bun"
 )

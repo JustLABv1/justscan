@@ -1,7 +1,7 @@
 package router
 
 import (
-	"justwms-backend/handlers/tokens"
+	"justscan-backend/handlers/tokens"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"

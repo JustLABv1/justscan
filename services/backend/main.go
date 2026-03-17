@@ -8,9 +8,11 @@ import (
 	"syscall"
 	"time"
 
-	"justwms-backend/config"
-	"justwms-backend/database"
-	"justwms-backend/router"
+	"justscan-backend/config"
+	"justscan-backend/database"
+	"justscan-backend/router"
+	"justscan-backend/scanner"
+	"justscan-backend/scheduler"
 
 	"github.com/alecthomas/kingpin/v2"
 	log "github.com/sirupsen/logrus"
@@ -19,7 +21,7 @@ import (
 const version string = "1.0.0"
 
 var (
-	configFile = kingpin.Flag("config", "Config file").Short('c').Default("/etc/justwms/config.yaml").String()
+	configFile = kingpin.Flag("config", "Config file").Short('c').Default("/etc/justscan/config.yaml").String()
 )
 
 func logging(logLevel string) {
@@ -44,7 +46,7 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
-	log.Info("Starting JustWMS API. Version: ", version)
+	log.Info("Starting JustScan API. Version: ", version)
 
 	// Check if config file exists
 	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
@@ -69,6 +71,12 @@ func main() {
 		log.Fatal("Failed to connect to the database")
 	}
 
+	// Start async scan worker pool
+	scanner.InitWorker(db)
+
+	// Start watchlist scheduler
+	scheduler.Start(db)
+
 	// Set up signal handling for graceful shutdown
 	server := router.StartRouter(db, cfg.Port, cfg)
 
@@ -77,6 +85,8 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Info("Shutting down server...")
+
+	scheduler.Stop()
 
 	// The server has 30 seconds to finish the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

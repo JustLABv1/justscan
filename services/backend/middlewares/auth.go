@@ -2,11 +2,12 @@ package middlewares
 
 import (
 	"errors"
+	"strings"
 
-	"justwms-backend/functions/auth"
-	"justwms-backend/functions/gatekeeper"
-	"justwms-backend/functions/httperror"
-	"justwms-backend/pkg/models"
+	"justscan-backend/functions/auth"
+	"justscan-backend/functions/gatekeeper"
+	"justscan-backend/functions/httperror"
+	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -14,11 +15,12 @@ import (
 
 func Auth(db *bun.DB) gin.HandlerFunc {
 	return func(context *gin.Context) {
-		tokenString := context.GetHeader("Authorization")
-		if tokenString == "" {
+		raw := context.GetHeader("Authorization")
+		if raw == "" {
 			httperror.Unauthorized(context, "Request does not contain an access token", errors.New("request does not contain an access token"))
 			return
 		}
+		tokenString := strings.TrimPrefix(raw, "Bearer ")
 		err := auth.ValidateToken(tokenString)
 		if err != nil {
 			httperror.Unauthorized(context, "Token is not valid", err)

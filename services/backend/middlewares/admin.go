@@ -3,10 +3,10 @@ package middlewares
 import (
 	"errors"
 
-	"justwms-backend/functions/auth"
-	"justwms-backend/functions/gatekeeper"
-	"justwms-backend/functions/httperror"
-	"justwms-backend/pkg/models"
+	"justscan-backend/functions/auth"
+	"justscan-backend/functions/gatekeeper"
+	"justscan-backend/functions/httperror"
+	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"

@@ -55,6 +55,9 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 		log.Fatal(err)
 	}
 
+	// Clear any stale lock left by a previously crashed instance.
+	_ = migrator.Unlock(ctx)
+
 	if err := migrator.Lock(ctx); err != nil {
 		log.Fatal(err)
 	}

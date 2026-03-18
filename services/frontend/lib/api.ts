@@ -300,6 +300,46 @@ export const deleteNotificationChannel = (id: string) =>
 export const updateRateLimit = (limit: number) =>
   req<{ limit: number }>('PUT', '/api/v1/admin/settings/rate-limit', { limit });
 
+// Vuln KB
+export const listKBEntries = (q?: string, severity?: string, page = 1, limit = 50) => {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (severity) params.set('severity', severity);
+  params.set('page', String(page));
+  params.set('limit', String(limit));
+  return req<{ data: VulnKBEntry[]; total: number }>('GET', `/api/v1/kb/?${params}`);
+};
+export const getKBEntry = (vulnId: string) =>
+  req<VulnKBEntry>('GET', `/api/v1/kb/${encodeURIComponent(vulnId)}`);
+
+// SBOM
+export const getScanSBOM = (scanId: string, name?: string, type?: string) => {
+  const params = new URLSearchParams();
+  if (name) params.set('name', name);
+  if (type) params.set('type', type);
+  return req<{ data: SBOMComponent[]; total: number }>('GET', `/api/v1/scans/${scanId}/sbom?${params}`);
+};
+
+// User profile
+export const getUserDetails = () =>
+  req<{ result: string; user: User }>('GET', '/api/v1/user/');
+export const updateUserDetails = (username: string, email: string) =>
+  req<{ result: string }>('PUT', '/api/v1/user/', { username, email });
+export const changePassword = (currentPassword: string, newPassword: string, confirmPassword: string) =>
+  req<{ result: string }>('PUT', '/api/v1/user/password', {
+    current_password: currentPassword,
+    new_password: newPassword,
+    confirm_password: confirmPassword,
+  });
+
+// Global suppressions list
+export const listAllSuppressions = (page = 1, limit = 50, status?: string, q?: string) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (status) params.set('status', status);
+  if (q) params.set('q', q);
+  return req<{ data: Suppression[]; total: number }>('GET', `/api/v1/suppressions/?${params}`);
+};
+
 // Types
 export interface PolicyRule {
   type: 'max_cvss' | 'max_count' | 'max_total' | 'require_fix' | 'blocked_cve';
@@ -433,9 +473,13 @@ export interface Suppression {
   id: string;
   vuln_id: string;
   image_digest: string;
-  reason: string;
-  note: string;
+  status: 'accepted' | 'wont_fix' | 'false_positive';
+  justification: string;
+  user_id: string;
+  expires_at: string | null;
   created_at: string;
+  updated_at: string;
+  username?: string;
 }
 
 export interface Comment {
@@ -563,5 +607,30 @@ export interface NotificationChannel {
   events: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface VulnKBEntry {
+  vuln_id: string;
+  description: string;
+  severity: string;
+  cvss_vector: string;
+  cvss_score: number;
+  published_date: string | null;
+  modified_date: string | null;
+  references: { url: string; source: string }[];
+  exploit_available: boolean;
+  fetched_at: string;
+}
+
+export interface SBOMComponent {
+  id: string;
+  scan_id: string;
+  name: string;
+  version: string;
+  type: string;
+  package_url: string;
+  license: string;
+  supplier: string;
+  created_at: string;
 }
 

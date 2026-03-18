@@ -6,10 +6,12 @@ import {
     deletePolicy,
     getComplianceTrend,
     getOrg,
+    getOrgRiskScore,
     listOrgScans,
     listScans,
     Org,
     OrgPolicy,
+    OrgRiskScore,
     PolicyRule,
     removeScanFromOrg,
     Scan,
@@ -114,6 +116,7 @@ export default function OrgDetailPage() {
   const [error, setError] = useState('');
 
   const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [riskScore, setRiskScore] = useState<OrgRiskScore | null>(null);
   const [newPattern, setNewPattern] = useState('');
 
   type OrgScanItem = Scan & { compliance: { policy_id: string; policy_name: string; status: string }[] };
@@ -154,6 +157,7 @@ export default function OrgDetailPage() {
     load();
     loadOrgScans();
     getComplianceTrend(id).then(setTrend).catch(() => {});
+    getOrgRiskScore(id).then(setRiskScore).catch(() => {});
   }, [load, loadOrgScans, id]);
 
   function openCreatePolicy() {
@@ -294,6 +298,48 @@ export default function OrgDetailPage() {
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">{org.name}</h1>
         {org.description && <p className="text-sm text-zinc-500 mt-1">{org.description}</p>}
       </div>
+
+      {/* Risk Score */}
+      {riskScore && (() => {
+        const gradeColor = riskScore.grade === 'A' ? '#34d399' : riskScore.grade === 'B' ? '#60a5fa' : riskScore.grade === 'C' ? '#fbbf24' : riskScore.grade === 'D' ? '#fb923c' : '#f87171';
+        const pct = riskScore.compliance_pass + riskScore.compliance_fail > 0
+          ? Math.round(riskScore.compliance_pass_rate * 100)
+          : null;
+        return (
+          <div className="glass-panel relative rounded-2xl p-5">
+            <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
+              style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.2),transparent)' }} />
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Risk Overview</h2>
+            <div className="flex items-center gap-6 flex-wrap">
+              {/* Grade */}
+              <div className="flex flex-col items-center justify-center w-20 h-20 rounded-2xl"
+                style={{ background: gradeColor + '18', border: `1px solid ${gradeColor}30` }}>
+                <span className="text-4xl font-black" style={{ color: gradeColor }}>{riskScore.grade}</span>
+                <span className="text-xs text-zinc-500 mt-0.5">grade</span>
+              </div>
+              {/* Severity counts */}
+              <div className="flex gap-4 flex-wrap">
+                {([['CRITICAL', riskScore.totals.critical, '#f87171'], ['HIGH', riskScore.totals.high, '#fb923c'], ['MEDIUM', riskScore.totals.medium, '#fbbf24'], ['LOW', riskScore.totals.low, '#60a5fa']] as [string, number, string][]).map(([label, val, color]) => (
+                  <div key={label} className="flex flex-col items-center">
+                    <span className="text-2xl font-bold" style={{ color }}>{val}</span>
+                    <span className="text-xs text-zinc-500 mt-0.5">{label}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Compliance */}
+              {pct !== null && (
+                <div className="ml-auto flex flex-col items-end">
+                  <span className="text-xs text-zinc-500 mb-1">Compliance</span>
+                  <div className="w-48 h-2 rounded-full overflow-hidden" style={{ background: 'var(--row-hover)' }}>
+                    <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs text-zinc-500 mt-1">{pct}% pass ({riskScore.compliance_pass}/{riskScore.compliance_pass + riskScore.compliance_fail})</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Compliance Trend */}
       <div className="glass-panel relative rounded-2xl p-5 space-y-3">

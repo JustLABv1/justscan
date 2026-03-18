@@ -5,8 +5,10 @@ import {
   ComplianceResult,
   createComment,
   deleteComment,
+  deleteSuppression,
   getScan,
   getScanCompliance,
+  getScanSBOM,
   getUser,
   listOrgs,
   listTags,
@@ -16,8 +18,11 @@ import {
   removeScanFromOrg,
   removeTagFromScan,
   reScan,
+  SBOMComponent,
   Scan,
+  Suppression,
   Tag,
+  upsertSuppression,
   Vulnerability,
 } from '@/lib/api';
 import { ArrowLeft01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, PencilEdit01Icon, Refresh01Icon, ShieldKeyIcon } from 'hugeicons-react';
@@ -235,7 +240,18 @@ export default function ScanDetailPage() {
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [vulnTotal, setVulnTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [severityFilter, setSeverityFilter] = useState('');
+  const [activeTab, setActiveTab] = useState<'vulns' | 'sbom'>('vulns');
+  const [sbomComponents, setSbomComponents] = useState<SBOMComponent[]>([]);
+  const [sbomTotal, setSbomTotal] = useState(0);
+  const [sbomLoading, setSbomLoading] = useState(false);
+  const [sbomLoaded, setSbomLoaded] = useState(false);
+  const [sbomNameFilter, setSbomNameFilter] = useState('');
+  const [sbomNameInput, setSbomNameInput] = useState('');
+  const [sbomTypeFilter, setSbomTypeFilter] = useState('');
+  const sbomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [severityFilter, setSeverityFilter] = useState<string>(() =>
+    typeof window !== 'undefined' ? (localStorage.getItem('scan_severity_filter') ?? '') : ''
+  );
   const [pkgFilter, setPkgFilter] = useState('');
   const [pkgInput, setPkgInput] = useState('');
   const [minCvss, setMinCvss] = useState(0);
@@ -257,6 +273,11 @@ export default function ScanDetailPage() {
   const [allOrgs, setAllOrgs] = useState<Org[]>([]);
   const [complianceLoading, setComplianceLoading] = useState(false);
   const [reScanning, setReScanning] = useState(false);
+
+  const [suppressStatus, setSuppressStatus] = useState<Suppression['status']>('accepted');
+  const [suppressJustification, setSuppressJustification] = useState('');
+  const [suppressExpiry, setSuppressExpiry] = useState('');
+  const [suppressSaving, setSuppressSaving] = useState(false);
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -301,6 +322,57 @@ export default function ScanDetailPage() {
       if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
     };
   }, [pkgInput]);
+
+  // Persist severity filter
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('scan_severity_filter', severityFilter);
+  }, [severityFilter]);
+
+  // Reset suppress form when expanded vuln changes
+  useEffect(() => {
+    const v = vulns.find(v => v.id === expandedVuln);
+    if (v?.suppression) {
+      setSuppressStatus(v.suppression.status);
+      setSuppressJustification(v.suppression.justification);
+      setSuppressExpiry(v.suppression.expires_at
+        ? new Date(v.suppression.expires_at).toISOString().slice(0, 10)
+        : '');
+    } else {
+      setSuppressStatus('accepted');
+      setSuppressJustification('');
+      setSuppressExpiry('');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedVuln]);
+
+  // Debounce SBOM name filter
+  useEffect(() => {
+    if (sbomDebounceRef.current) clearTimeout(sbomDebounceRef.current);
+    sbomDebounceRef.current = setTimeout(() => setSbomNameFilter(sbomNameInput), 350);
+    return () => { if (sbomDebounceRef.current) clearTimeout(sbomDebounceRef.current); };
+  }, [sbomNameInput]);
+
+  // Load SBOM when tab is first opened
+  useEffect(() => {
+    if (activeTab !== 'sbom' || sbomLoaded || !scan || scan.status !== 'completed') return;
+    setSbomLoading(true);
+    getScanSBOM(id, sbomNameFilter || undefined, sbomTypeFilter || undefined)
+      .then(res => { setSbomComponents(res.data ?? []); setSbomTotal(res.total); setSbomLoaded(true); })
+      .catch(() => {})
+      .finally(() => setSbomLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, scan?.status]);
+
+  // Reload SBOM when filters change (after first load)
+  useEffect(() => {
+    if (!sbomLoaded) return;
+    setSbomLoading(true);
+    getScanSBOM(id, sbomNameFilter || undefined, sbomTypeFilter || undefined)
+      .then(res => { setSbomComponents(res.data ?? []); setSbomTotal(res.total); })
+      .catch(() => {})
+      .finally(() => setSbomLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sbomNameFilter, sbomTypeFilter]);
 
   function loadVulns() {
     if (!scan) return;
@@ -385,6 +457,33 @@ export default function ScanDetailPage() {
       router.push(`/scans/${newScan.id}`);
     } catch { /* ignore */ } finally {
       setReScanning(false);
+    }
+  }
+
+  async function handleSuppress(vuln: Vulnerability) {
+    if (!scan?.image_digest) return;
+    setSuppressSaving(true);
+    try {
+      await upsertSuppression(scan.image_digest, {
+        vuln_id: vuln.vuln_id,
+        status: suppressStatus,
+        justification: suppressJustification,
+        expires_at: suppressExpiry ? new Date(suppressExpiry).toISOString() : null,
+      });
+      loadVulns();
+    } catch { /* ignore */ } finally {
+      setSuppressSaving(false);
+    }
+  }
+
+  async function handleLiftSuppression(vuln: Vulnerability) {
+    if (!scan?.image_digest) return;
+    setSuppressSaving(true);
+    try {
+      await deleteSuppression(scan.image_digest, vuln.vuln_id);
+      loadVulns();
+    } catch { /* ignore */ } finally {
+      setSuppressSaving(false);
     }
   }
 
@@ -628,8 +727,94 @@ export default function ScanDetailPage() {
         <ScanningAnimation status={scan.status} startedAt={scan.started_at} />
       )}
 
-      {/* Vulnerabilities */}
-      {scan.status !== 'pending' && scan.status !== 'running' && <div className="space-y-3">
+      {/* Tab bar */}
+      {scan.status !== 'pending' && scan.status !== 'running' && (
+        <div className="flex items-center gap-1 p-1 rounded-xl w-fit"
+          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+          {(['vulns', 'sbom'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className="px-4 py-1.5 text-sm font-medium rounded-lg transition-all"
+              style={activeTab === tab
+                ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', boxShadow: '0 0 12px rgba(124,58,237,0.3)' }
+                : { color: 'var(--text-muted)' }}
+            >
+              {tab === 'vulns' ? `Vulnerabilities${vulnTotal ? ` (${vulnTotal})` : ''}` : `SBOM${sbomTotal ? ` (${sbomTotal})` : ''}`}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* SBOM tab */}
+      {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'sbom' && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="text"
+              value={sbomNameInput}
+              onChange={e => setSbomNameInput(e.target.value)}
+              placeholder="Filter by name…"
+              className={inputCls}
+            />
+            <select
+              value={sbomTypeFilter}
+              onChange={e => { setSbomTypeFilter(e.target.value); setSbomLoaded(false); }}
+              className={inputCls}
+            >
+              <option value="">All Types</option>
+              <option value="library">Library</option>
+              <option value="application">Application</option>
+              <option value="operating-system">OS</option>
+            </select>
+          </div>
+          <div className="glass-panel rounded-2xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Version</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Type</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">License</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Package URL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sbomLoading ? (
+                  <tr><td colSpan={5} className="py-12 text-center">
+                    <div className="flex justify-center">
+                      <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                    </div>
+                  </td></tr>
+                ) : sbomComponents.length === 0 ? (
+                  <tr><td colSpan={5} className="py-12 text-center text-sm text-zinc-500">
+                    No SBOM components found for this scan.
+                  </td></tr>
+                ) : sbomComponents.map((c, i) => (
+                  <tr
+                    key={c.id}
+                    style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-700 dark:text-zinc-200">{c.name}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{c.version || '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <span className="text-xs px-1.5 py-0.5 rounded font-medium"
+                        style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
+                        {c.type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-zinc-500">{c.license || '—'}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-400 max-w-xs truncate" title={c.package_url}>{c.package_url || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'vulns' && <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
@@ -818,51 +1003,133 @@ export default function ScanDetailPage() {
                   {expandedVuln === v.id && (
                     <tr key={`${v.id}-comments`}>
                       <td colSpan={8} className="px-4 py-4" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--row-hover)' }}>
-                        <div className="space-y-3 max-w-3xl">
-                          {v.comments && v.comments.length > 0 ? (
-                            <div className="space-y-2">
-                              {v.comments.map((c) => (
-                                <div key={c.id} className="flex items-start justify-between gap-3 group">
-                                  <div className="flex-1 min-w-0">
-                                    <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                                      {c.username || 'You'}
-                                    </span>
-                                    <span className="text-xs text-zinc-500 ml-2">
-                                      {new Date(c.created_at).toLocaleString()}
-                                    </span>
-                                    <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">{c.content}</p>
-                                  </div>
-                                  {currentUser?.id === c.user_id && (
-                                    <button
-                                      onClick={() => handleDeleteComment(c.id)}
-                                      className="text-zinc-400 dark:text-zinc-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                                    >
-                                      <Delete02Icon size={14} />
-                                    </button>
+                        <div className="space-y-4 max-w-3xl">
+
+                          {/* Suppression section */}
+                          {scan.image_digest && (
+                            <div className="space-y-2.5">
+                              <div className="flex items-center gap-2">
+                                <ShieldKeyIcon size={13} className="text-zinc-400" />
+                                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Suppression</span>
+                                {v.suppression && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
+                                    style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                    {v.suppression.status.replace(/_/g, ' ')}
+                                  </span>
+                                )}
+                              </div>
+                              {v.suppression && (
+                                <div className="rounded-lg px-3 py-2 space-y-1"
+                                  style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)' }}>
+                                  <p className="text-xs text-zinc-400">{v.suppression.justification || '—'}</p>
+                                  {v.suppression.expires_at && (
+                                    <p className="text-xs text-zinc-500">Expires: {new Date(v.suppression.expires_at).toLocaleDateString()}</p>
+                                  )}
+                                  {v.suppression.username && (
+                                    <p className="text-xs text-zinc-500">By: {v.suppression.username}</p>
                                   )}
                                 </div>
-                              ))}
+                              )}
+                              <div className="flex gap-2 items-center flex-wrap">
+                                <select
+                                  value={suppressStatus}
+                                  onChange={e => setSuppressStatus(e.target.value as Suppression['status'])}
+                                  className={inputCls}
+                                >
+                                  <option value="accepted">Accepted Risk</option>
+                                  <option value="wont_fix">Won&apos;t Fix</option>
+                                  <option value="false_positive">False Positive</option>
+                                </select>
+                                <input
+                                  type="text"
+                                  value={suppressJustification}
+                                  onChange={e => setSuppressJustification(e.target.value)}
+                                  placeholder="Justification…"
+                                  className={`${inputCls} flex-1 min-w-0`}
+                                />
+                                <input
+                                  type="date"
+                                  value={suppressExpiry}
+                                  onChange={e => setSuppressExpiry(e.target.value)}
+                                  title="Expiry date (optional)"
+                                  className={inputCls}
+                                />
+                                <button
+                                  onClick={() => handleSuppress(v)}
+                                  disabled={suppressSaving || !suppressJustification.trim()}
+                                  className="px-3 py-2 text-sm rounded-xl font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90 shrink-0"
+                                  style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171' }}
+                                >
+                                  {v.suppression ? 'Update' : 'Suppress'}
+                                </button>
+                                {v.suppression && (
+                                  <button
+                                    onClick={() => handleLiftSuppression(v)}
+                                    disabled={suppressSaving}
+                                    className="px-3 py-2 text-sm rounded-xl disabled:opacity-40 transition-colors shrink-0"
+                                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
+                                  >
+                                    Lift
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          ) : (
-                            <p className="text-xs text-zinc-500">No notes yet.</p>
                           )}
-                          <div className="flex gap-2 items-end pt-1">
-                            <textarea
-                              value={commentText}
-                              onChange={(e) => setCommentText(e.target.value)}
-                              placeholder="Add a note…"
-                              rows={2}
-                              className={`${inputCls} flex-1 resize-none`}
-                            />
-                            <button
-                              onClick={() => handleAddComment(v.id)}
-                              disabled={commentSaving || !commentText.trim()}
-                              className="px-3 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90 shrink-0"
-                              style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}
-                            >
-                              Add Note
-                            </button>
+
+                          <div style={{ borderTop: '1px solid var(--border-subtle)' }} />
+
+                          {/* Notes / Comments */}
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <Comment01Icon size={13} className="text-zinc-400" />
+                              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Notes</span>
+                            </div>
+                            {v.comments && v.comments.length > 0 ? (
+                              <div className="space-y-2">
+                                {v.comments.map((c) => (
+                                  <div key={c.id} className="flex items-start justify-between gap-3 group">
+                                    <div className="flex-1 min-w-0">
+                                      <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                                        {c.username || 'You'}
+                                      </span>
+                                      <span className="text-xs text-zinc-500 ml-2">
+                                        {new Date(c.created_at).toLocaleString()}
+                                      </span>
+                                      <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">{c.content}</p>
+                                    </div>
+                                    {currentUser?.id === c.user_id && (
+                                      <button
+                                        onClick={() => handleDeleteComment(c.id)}
+                                        className="text-zinc-400 dark:text-zinc-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                                      >
+                                        <Delete02Icon size={14} />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-zinc-500">No notes yet.</p>
+                            )}
+                            <div className="flex gap-2 items-end pt-1">
+                              <textarea
+                                value={commentText}
+                                onChange={(e) => setCommentText(e.target.value)}
+                                placeholder="Add a note…"
+                                rows={2}
+                                className={`${inputCls} flex-1 resize-none`}
+                              />
+                              <button
+                                onClick={() => handleAddComment(v.id)}
+                                disabled={commentSaving || !commentText.trim()}
+                                className="px-3 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90 shrink-0"
+                                style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+                              >
+                                Add Note
+                              </button>
+                            </div>
                           </div>
+
                         </div>
                       </td>
                     </tr>

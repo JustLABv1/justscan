@@ -2,6 +2,7 @@ package vulnkb
 
 import (
 	"net/http"
+	"strconv"
 
 	"justscan-backend/pkg/models"
 
@@ -29,20 +30,38 @@ func ListKBEntries(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		search := c.Query("q")
 		severity := c.Query("severity")
-		q := db.NewSelect().Model((*models.VulnKBEntry)(nil)).
-			OrderExpr("published_date DESC").
-			Limit(50)
+
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+		if page < 1 {
+			page = 1
+		}
+		if limit < 1 || limit > 200 {
+			limit = 50
+		}
+		offset := (page - 1) * limit
+
+		base := db.NewSelect().Model((*models.VulnKBEntry)(nil))
 		if search != "" {
-			q = q.Where("vuln_id ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
+			base = base.Where("vuln_id ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
 		}
 		if severity != "" {
-			q = q.Where("severity = ?", severity)
+			base = base.Where("severity = ?", severity)
 		}
+
+		total, err := base.Count(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count KB entries"})
+			return
+		}
+
 		var entries []models.VulnKBEntry
-		if err := q.Scan(c.Request.Context(), &entries); err != nil {
+		if err := base.OrderExpr("cvss_score DESC NULLS LAST, vuln_id").
+			Limit(limit).Offset(offset).
+			Scan(c.Request.Context(), &entries); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query KB"})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"data": entries})
+		c.JSON(http.StatusOK, gin.H{"data": entries, "total": total})
 	}
 }

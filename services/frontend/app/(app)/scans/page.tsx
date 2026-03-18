@@ -1,8 +1,8 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
-import { bulkDeleteScans, createScan, deleteScan, listScans, Scan } from '@/lib/api';
+import { bulkAddTagToScans, bulkDeleteScans, createScan, deleteScan, listScans, listTags, Scan, Tag } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
-import { CheckmarkSquare01Icon, Delete01Icon, FileExportIcon, GitCompareIcon, PlusSignIcon } from 'hugeicons-react';
+import { CheckmarkSquare01Icon, Delete01Icon, FileExportIcon, GitCompareIcon, PlusSignIcon, Tag01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -48,6 +48,8 @@ export default function ScansPage() {
   const [createError, setCreateError] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selecting, setSelecting] = useState(false);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const LIMIT = 20;
@@ -66,6 +68,7 @@ export default function ScansPage() {
   }, []);
 
   useEffect(() => { load(page); }, [load, page]);
+  useEffect(() => { listTags().then(tags => setAllTags(tags)).catch(() => {}); }, []);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -270,8 +273,46 @@ export default function ScansPage() {
           style={{ background: 'var(--modal-bg)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderTop: '1px solid var(--border-subtle)' }}
         >
           <span className="text-sm text-zinc-600 dark:text-zinc-400">{selected.size} scan{selected.size !== 1 ? 's' : ''} selected</span>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
             <button onClick={() => setSelected(new Set())} className="text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">Clear</button>
+            {/* Bulk tag */}
+            <div className="relative">
+              <button
+                onClick={() => setTagPickerOpen(o => !o)}
+                className="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition-all hover:opacity-90"
+                style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+              >
+                <Tag01Icon size={15} /> Add Tag
+              </button>
+              {tagPickerOpen && (
+                <div
+                  className="absolute bottom-full mb-2 right-0 rounded-xl p-2 space-y-0.5 min-w-[160px] z-50"
+                  style={{ background: 'var(--modal-bg)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid var(--glass-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}
+                >
+                  {allTags.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-zinc-500">No tags yet</div>
+                  ) : allTags.map(tag => (
+                    <button
+                      key={tag.id}
+                      className="w-full text-left px-2 py-1 rounded-lg text-sm transition-colors"
+                      style={{ color: 'var(--text-primary)' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      onClick={async () => {
+                        await bulkAddTagToScans(tag.id, [...selected]).catch(() => {});
+                        setTagPickerOpen(false);
+                        load(page);
+                      }}
+                    >
+                      <span className="inline-block text-xs px-1.5 py-0.5 rounded-md font-medium"
+                        style={{ background: tag.color + '22', color: tag.color, border: `1px solid ${tag.color}33` }}>
+                        {tag.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               onClick={handleBulkDelete}
               className="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition-all hover:opacity-90"

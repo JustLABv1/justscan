@@ -41,6 +41,9 @@ func InitWorker(db *bun.DB) {
 	}
 
 	log.Infof("Scanner worker pool started with concurrency=%d", concurrency)
+
+	// Backfill vuln_kb from existing vulnerabilities (best-effort, runs once in background)
+	go backfillKB(db)
 }
 
 // EnqueueScan queues a scan job. The scan row must already exist in the DB with status=pending.
@@ -98,6 +101,28 @@ func processScan(job ScanJob) {
 			return
 		}
 	}
+
+	// Upsert KB entries from scan data (best-effort, non-fatal)
+	go func() {
+		kbEntries := ExtractKBEntries(trivyOut)
+		if len(kbEntries) == 0 {
+			return
+		}
+		if _, err := db.NewInsert().Model(&kbEntries).
+			On("CONFLICT (vuln_id) DO UPDATE").
+			Set("description = CASE WHEN EXCLUDED.description != '' THEN EXCLUDED.description ELSE vuln_kb.description END").
+			Set("severity = CASE WHEN EXCLUDED.severity != '' THEN EXCLUDED.severity ELSE vuln_kb.severity END").
+			Set("cvss_score = CASE WHEN EXCLUDED.cvss_score > vuln_kb.cvss_score THEN EXCLUDED.cvss_score ELSE vuln_kb.cvss_score END").
+			Set("cvss_vector = CASE WHEN EXCLUDED.cvss_score > vuln_kb.cvss_score THEN EXCLUDED.cvss_vector ELSE vuln_kb.cvss_vector END").
+			Set("references = EXCLUDED.references").
+			Set("exploit_available = EXCLUDED.exploit_available OR vuln_kb.exploit_available").
+			Set("fetched_at = now()").
+			Exec(ctx); err != nil {
+			log.Warnf("Worker: KB upsert failed for scan %s (non-fatal): %v", scanID, err)
+		} else {
+			log.Debugf("Worker: upserted %d KB entries for scan %s", len(kbEntries), scanID)
+		}
+	}()
 
 	// Run SBOM scan (best-effort, don't fail the whole scan if it errors)
 	sbomOut, sbomErr := RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform)
@@ -203,4 +228,78 @@ func setFailed(ctx context.Context, db *bun.DB, scan *models.Scan, msg string) {
 		Status:    models.ScanStatusFailed,
 		Details:   msg,
 	})
+}
+
+// backfillKB populates vuln_kb from the existing vulnerabilities table for any
+// vuln_id not yet present. Runs once at startup so historical scan data appears
+// in the KB without requiring a re-scan.
+func backfillKB(db *bun.DB) {
+	ctx := context.Background()
+
+	// Count how many entries are missing from vuln_kb
+	var missing int
+	row := db.QueryRowContext(ctx,
+		`SELECT COUNT(DISTINCT vuln_id) FROM vulnerabilities v
+		 WHERE NOT EXISTS (SELECT 1 FROM vuln_kb k WHERE k.vuln_id = v.vuln_id)`)
+	if err := row.Scan(&missing); err != nil || missing == 0 {
+		return
+	}
+	log.Infof("KB backfill: found %d vuln_ids not in vuln_kb, backfilling…", missing)
+
+	// Fetch one representative row per vuln_id (best cvss_score wins).
+	// References are intentionally excluded here — they are JSONB and cannot be
+	// scanned into []string on a plain struct. New scans populate references via
+	// ExtractKBEntries. Backfilled entries have empty references.
+	type vulnRow struct {
+		VulnID      string  `bun:"vuln_id"`
+		Description string  `bun:"description"`
+		Severity    string  `bun:"severity"`
+		CVSSScore   float64 `bun:"cvss_score"`
+		CVSSVector  string  `bun:"cvss_vector"`
+	}
+	var vulns []vulnRow
+	if err := db.NewSelect().
+		TableExpr("vulnerabilities").
+		ColumnExpr("DISTINCT ON (vuln_id) vuln_id, description, severity, cvss_score, cvss_vector").
+		OrderExpr("vuln_id, cvss_score DESC").
+		Where("vuln_id NOT IN (SELECT vuln_id FROM vuln_kb)").
+		Scan(ctx, &vulns); err != nil {
+		log.Warnf("KB backfill: failed to query vulnerabilities: %v", err)
+		return
+	}
+
+	entries := make([]models.VulnKBEntry, 0, len(vulns))
+	for _, v := range vulns {
+		entries = append(entries, models.VulnKBEntry{
+			VulnID:      v.VulnID,
+			Description: v.Description,
+			Severity:    v.Severity,
+			CVSSScore:   v.CVSSScore,
+			CVSSVector:  v.CVSSVector,
+			References:  []models.KBRef{},
+		})
+	}
+
+	if len(entries) == 0 {
+		return
+	}
+
+	// Batch insert in chunks of 500 to avoid huge single queries
+	const chunkSize = 500
+	inserted := 0
+	for i := 0; i < len(entries); i += chunkSize {
+		end := i + chunkSize
+		if end > len(entries) {
+			end = len(entries)
+		}
+		chunk := entries[i:end]
+		if _, err := db.NewInsert().Model(&chunk).
+			On("CONFLICT (vuln_id) DO NOTHING").
+			Exec(ctx); err != nil {
+			log.Warnf("KB backfill: chunk insert error: %v", err)
+			continue
+		}
+		inserted += len(chunk)
+	}
+	log.Infof("KB backfill: inserted %d entries into vuln_kb", inserted)
 }

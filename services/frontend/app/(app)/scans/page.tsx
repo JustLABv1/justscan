@@ -1,10 +1,13 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { useToast } from '@/components/toast';
 import { bulkAddTagToScans, bulkDeleteScans, createScan, deleteScan, listScans, listTags, Scan, Tag } from '@/lib/api';
-import { Modal, useOverlayState } from '@heroui/react';
-import { CheckmarkSquare01Icon, Delete01Icon, FileExportIcon, GitCompareIcon, PlusSignIcon, Tag01Icon } from 'hugeicons-react';
+import { timeAgo, fullDate } from '@/lib/time';
+import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { CheckmarkSquare01Icon, Delete01Icon, FileExportIcon, FilterIcon, GitCompareIcon, PlusSignIcon, Tag01Icon } from 'hugeicons-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
@@ -36,28 +39,42 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function ScansPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const toast = useToast();
+
   const [scans, setScans] = useState<Scan[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Filters — initialise from URL
+  const [imageFilter, setImageFilter] = useState(searchParams.get('image') ?? '');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? '');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // New scan form
   const [imageName, setImageName] = useState('');
   const [imageTag, setImageTag] = useState('latest');
   const [platform, setPlatform] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+
+  // Selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selecting, setSelecting] = useState(false);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
+
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const LIMIT = 20;
 
-  const load = useCallback(async (p: number) => {
+  const load = useCallback(async (p: number, img: string, st: string) => {
     setLoading(true);
     try {
-      const res = await listScans(p, LIMIT);
+      const res = await listScans(p, LIMIT, img || undefined, st || undefined);
       setScans(res.data ?? []);
       setTotal(res.total);
     } catch (e: unknown) {
@@ -67,8 +84,47 @@ export default function ScansPage() {
     }
   }, []);
 
-  useEffect(() => { load(page); }, [load, page]);
+  // Initial load + when page changes
+  useEffect(() => { load(page, imageFilter, statusFilter); }, [load, page]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-refresh when any scan is running/pending
+  useEffect(() => {
+    const hasInProgress = scans.some(s => s.status === 'running' || s.status === 'pending');
+    if (!hasInProgress) return;
+    const iv = setInterval(() => load(page, imageFilter, statusFilter), 5000);
+    return () => clearInterval(iv);
+  }, [scans, load, page, imageFilter, statusFilter]);
+
   useEffect(() => { listTags().then(tags => setAllTags(tags)).catch(() => {}); }, []);
+
+  // Sync filters to URL
+  function applyFilters(img: string, st: string) {
+    const params = new URLSearchParams();
+    if (img) params.set('image', img);
+    if (st) params.set('status', st);
+    router.replace(`/scans${params.toString() ? `?${params}` : ''}`);
+    setPage(1);
+    load(1, img, st);
+  }
+
+  function handleImageFilterChange(value: string) {
+    setImageFilter(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => applyFilters(value, statusFilter), 300);
+  }
+
+  function handleStatusFilterChange(value: string) {
+    setStatusFilter(value);
+    applyFilters(imageFilter, value);
+  }
+
+  function clearFilters() {
+    setImageFilter('');
+    setStatusFilter('');
+    applyFilters('', '');
+  }
+
+  const hasFilters = imageFilter !== '' || statusFilter !== '';
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -76,7 +132,8 @@ export default function ScansPage() {
     try {
       await createScan(imageName, imageTag, undefined, undefined, platform || undefined);
       modal.close(); setImageName(''); setImageTag('latest'); setPlatform('');
-      await load(1); setPage(1);
+      toast.success('Scan started');
+      await load(1, imageFilter, statusFilter); setPage(1);
     } catch (err: unknown) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create scan');
     } finally { setCreating(false); }
@@ -91,7 +148,8 @@ export default function ScansPage() {
     });
     if (!ok) return;
     await deleteScan(id).catch(() => {});
-    load(page);
+    toast.success('Scan deleted');
+    load(page, imageFilter, statusFilter);
   }
 
   async function handleBulkDelete() {
@@ -103,9 +161,10 @@ export default function ScansPage() {
     });
     if (!ok) return;
     await bulkDeleteScans([...selected]).catch(() => {});
+    toast.success(`${selected.size} scan${selected.size !== 1 ? 's' : ''} deleted`);
     setSelected(new Set());
     setSelecting(false);
-    load(page);
+    load(page, imageFilter, statusFilter);
   }
 
   function toggleSelect(id: string) {
@@ -158,6 +217,48 @@ export default function ScansPage() {
         </div>
       </div>
 
+      {/* Search + filter bar */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <input
+            className={inputCls}
+            placeholder="Search by image name…"
+            value={imageFilter}
+            onChange={e => handleImageFilterChange(e.target.value)}
+          />
+        </div>
+        <div className="w-40">
+          <Select
+            selectedKey={statusFilter || '__all__'}
+            onSelectionChange={k => handleStatusFilterChange(String(k === '__all__' ? '' : k))}
+          >
+            <Select.Trigger className={inputCls}>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="__all__">All statuses</ListBox.Item>
+                <ListBox.Item id="completed">Completed</ListBox.Item>
+                <ListBox.Item id="failed">Failed</ListBox.Item>
+                <ListBox.Item id="running">Running</ListBox.Item>
+                <ListBox.Item id="pending">Pending</ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </div>
+        {hasFilters && (
+          <button
+            onClick={clearFilters}
+            className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+            style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa' }}
+          >
+            <FilterIcon size={12} />
+            Clear filters
+          </button>
+        )}
+      </div>
+
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm"
           style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
@@ -194,7 +295,7 @@ export default function ScansPage() {
             ) : scans.length === 0 ? (
               <tr>
                 <td colSpan={colCount} className="py-16 text-center text-zinc-500 text-sm">
-                  No scans yet. Create one to get started.
+                  {hasFilters ? 'No scans match your filters.' : 'No scans yet. Create one to get started.'}
                 </td>
               </tr>
             ) : scans.map((scan, i) => (
@@ -252,8 +353,8 @@ export default function ScansPage() {
                     ))}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-xs text-zinc-500 whitespace-nowrap">
-                  {new Date(scan.created_at).toLocaleDateString()}
+                <td className="px-4 py-3 text-xs text-zinc-500 whitespace-nowrap" title={fullDate(scan.created_at)}>
+                  {timeAgo(scan.created_at)}
                 </td>
                 <td className="px-4 py-3">
                   <button onClick={() => handleDelete(scan.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors" title="Delete">
@@ -300,8 +401,9 @@ export default function ScansPage() {
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                       onClick={async () => {
                         await bulkAddTagToScans(tag.id, [...selected]).catch(() => {});
+                        toast.success(`Tag "${tag.name}" added to ${selected.size} scan${selected.size !== 1 ? 's' : ''}`);
                         setTagPickerOpen(false);
-                        load(page);
+                        load(page, imageFilter, statusFilter);
                       }}
                     >
                       <span className="inline-block text-xs px-1.5 py-0.5 rounded-md font-medium"
@@ -383,17 +485,25 @@ export default function ScansPage() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Platform <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span></label>
-                    <select className={inputCls} value={platform} onChange={(e) => setPlatform(e.target.value)}>
-                      <option value="">Auto-detect</option>
-                      <option value="linux/amd64">linux/amd64</option>
-                      <option value="linux/arm64">linux/arm64</option>
-                      <option value="linux/arm/v7">linux/arm/v7</option>
-                      <option value="linux/arm/v6">linux/arm/v6</option>
-                      <option value="linux/386">linux/386</option>
-                      <option value="linux/s390x">linux/s390x</option>
-                      <option value="linux/ppc64le">linux/ppc64le</option>
-                      <option value="windows/amd64">windows/amd64</option>
-                    </select>
+                    <Select selectedKey={platform || '__auto__'} onSelectionChange={k => setPlatform(String(k === '__auto__' ? '' : k))}>
+                      <Select.Trigger className={inputCls}>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__auto__">Auto-detect</ListBox.Item>
+                          <ListBox.Item id="linux/amd64">linux/amd64</ListBox.Item>
+                          <ListBox.Item id="linux/arm64">linux/arm64</ListBox.Item>
+                          <ListBox.Item id="linux/arm/v7">linux/arm/v7</ListBox.Item>
+                          <ListBox.Item id="linux/arm/v6">linux/arm/v6</ListBox.Item>
+                          <ListBox.Item id="linux/386">linux/386</ListBox.Item>
+                          <ListBox.Item id="linux/s390x">linux/s390x</ListBox.Item>
+                          <ListBox.Item id="linux/ppc64le">linux/ppc64le</ListBox.Item>
+                          <ListBox.Item id="windows/amd64">windows/amd64</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
                   </div>
                   <p className="text-xs text-zinc-500">Tags can be added from the scan detail page after creation.</p>
                 </form>

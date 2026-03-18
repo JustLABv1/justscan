@@ -1,9 +1,10 @@
 'use client';
 import { compareScans, listScans, Scan, ScanComparison, Vulnerability } from '@/lib/api';
+import { ListBox, Select } from '@heroui/react';
 import { ArrowLeft01Icon } from 'hugeicons-react';
 import Link from 'next/link';
-import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 
 const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
@@ -81,14 +82,22 @@ function ScanSelector({
   return (
     <div className="space-y-1.5 flex-1">
       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">{label}</label>
-      <select className={inputCls} value={value} onChange={e => onChange(e.target.value)}>
-        <option value="">Select a scan…</option>
-        {scans.map(s => (
-          <option key={s.id} value={s.id}>
-            {s.image_name}:{s.image_tag} — {new Date(s.created_at).toLocaleDateString()} ({s.status})
-          </option>
-        ))}
-      </select>
+      <Select selectedKey={value || '__none__'} onSelectionChange={k => onChange(String(k === '__none__' ? '' : k))}>
+        <Select.Trigger className={inputCls}>
+          <Select.Value />
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover>
+          <ListBox>
+            <ListBox.Item id="__none__">Select a scan…</ListBox.Item>
+            {scans.map(s => (
+              <ListBox.Item key={s.id} id={s.id}>
+                {s.image_name}:{s.image_tag} — {new Date(s.created_at).toLocaleDateString()} ({s.status})
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
     </div>
   );
 }

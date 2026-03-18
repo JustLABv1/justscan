@@ -11,6 +11,7 @@ import {
     getScanSBOM,
     getUser,
     listOrgs,
+    listScans,
     listTags,
     listVulnerabilities,
     Org,
@@ -25,10 +26,11 @@ import {
     upsertSuppression,
     Vulnerability,
 } from '@/lib/api';
-import { Calendar, DateField, DatePicker } from '@heroui/react';
+import { Calendar, DateField, DatePicker, ListBox, Select } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
-import { ArrowLeft01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, PencilEdit01Icon, Refresh01Icon, ShieldKeyIcon } from 'hugeicons-react';
+import { timeAgo, fullDate } from '@/lib/time';
+import { ArrowLeft01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, GitCompareIcon, PencilEdit01Icon, Refresh01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -258,8 +260,6 @@ export default function ScanDetailPage() {
   const [pkgFilter, setPkgFilter] = useState('');
   const [pkgInput, setPkgInput] = useState('');
   const [minCvss, setMinCvss] = useState(0);
-  const [cvssMode, setCvssMode] = useState<'preset' | 'custom'>('preset');
-  const [customCvss, setCustomCvss] = useState('');
   const [hasFix, setHasFix] = useState(false);
   const [sortBy, setSortBy] = useState('severity');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -276,6 +276,7 @@ export default function ScanDetailPage() {
   const [allOrgs, setAllOrgs] = useState<Org[]>([]);
   const [complianceLoading, setComplianceLoading] = useState(false);
   const [reScanning, setReScanning] = useState(false);
+  const [comparingPrev, setComparingPrev] = useState(false);
 
   const [suppressStatus, setSuppressStatus] = useState<Suppression['status']>('accepted');
   const [suppressJustification, setSuppressJustification] = useState('');
@@ -465,6 +466,18 @@ export default function ScanDetailPage() {
     }
   }
 
+  async function handleComparePrev() {
+    if (!scan) return;
+    setComparingPrev(true);
+    try {
+      const res = await listScans(1, 5, scan.image_name);
+      const prev = (res.data ?? []).find(s => s.id !== scan.id);
+      if (prev) router.push(`/scans/compare?a=${prev.id}&b=${scan.id}`);
+    } catch { /* ignore */ } finally {
+      setComparingPrev(false);
+    }
+  }
+
   async function handleSuppress(vuln: Vulnerability) {
     if (!scan?.image_digest) return;
     setSuppressSaving(true);
@@ -572,6 +585,18 @@ export default function ScanDetailPage() {
                 ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
                 : <Refresh01Icon size={15} />}
               Re-scan
+            </button>
+            <button
+              onClick={handleComparePrev}
+              disabled={comparingPrev}
+              className="flex items-center gap-2 px-3 py-2 text-sm rounded-xl font-medium disabled:opacity-50 transition-all"
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+              title="Compare with the previous scan of this image"
+            >
+              {comparingPrev
+                ? <span className="w-3.5 h-3.5 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin" />
+                : <GitCompareIcon size={15} />}
+              Compare
             </button>
           </div>
         </div>
@@ -770,16 +795,20 @@ export default function ScanDetailPage() {
               placeholder="Filter by name…"
               className={inputCls}
             />
-            <select
-              value={sbomTypeFilter}
-              onChange={e => { setSbomTypeFilter(e.target.value); setSbomLoaded(false); }}
-              className={inputCls}
-            >
-              <option value="">All Types</option>
-              <option value="library">Library</option>
-              <option value="application">Application</option>
-              <option value="operating-system">OS</option>
-            </select>
+            <Select selectedKey={sbomTypeFilter || '__all__'} onSelectionChange={k => { setSbomTypeFilter(String(k === '__all__' ? '' : k)); setSbomLoaded(false); }} className="flex-1">
+              <Select.Trigger className={inputCls}>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="__all__">All Types</ListBox.Item>
+                  <ListBox.Item id="library">Library</ListBox.Item>
+                  <ListBox.Item id="application">Application</ListBox.Item>
+                  <ListBox.Item id="operating-system">OS</ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
           </div>
           <div className="glass-panel rounded-2xl overflow-hidden">
             <table className="w-full text-sm">
@@ -836,17 +865,21 @@ export default function ScanDetailPage() {
             </h2>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
-            <select
-              value={severityFilter}
-              onChange={(e) => { setSeverityFilter(e.target.value); setPage(1); }}
-              className={inputCls}
-            >
-              <option value="">All Severities</option>
-              <option value="CRITICAL">Critical</option>
-              <option value="HIGH">High</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="LOW">Low</option>
-            </select>
+            <Select selectedKey={severityFilter || '__all__'} onSelectionChange={k => { setSeverityFilter(String(k === '__all__' ? '' : k)); setPage(1); }}>
+              <Select.Trigger className={inputCls}>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="__all__">All Severities</ListBox.Item>
+                  <ListBox.Item id="CRITICAL">Critical</ListBox.Item>
+                  <ListBox.Item id="HIGH">High</ListBox.Item>
+                  <ListBox.Item id="MEDIUM">Medium</ListBox.Item>
+                  <ListBox.Item id="LOW">Low</ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
             <input
               type="text"
               value={pkgInput}
@@ -854,44 +887,23 @@ export default function ScanDetailPage() {
               placeholder="Package…"
               className={inputCls}
             />
-            <select
-              value={cvssMode === 'custom' ? 'custom' : minCvss}
-              onChange={(e) => {
-                if (e.target.value === 'custom') {
-                  setCvssMode('custom');
-                  setCustomCvss('');
-                  setMinCvss(0);
-                } else {
-                  setCvssMode('preset');
-                  setMinCvss(Number(e.target.value));
-                  setPage(1);
-                }
-              }}
-              className={inputCls}
-            >
-              <option value={0}>Any CVSS</option>
-              <option value={4}>≥ 4.0</option>
-              <option value={7}>≥ 7.0</option>
-              <option value={9}>≥ 9.0</option>
-              <option value="custom">Custom…</option>
-            </select>
-            {cvssMode === 'custom' && (
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-zinc-500 whitespace-nowrap">Min CVSS</label>
               <input
                 type="number"
                 min={0}
                 max={10}
                 step={0.1}
-                value={customCvss}
-                placeholder="0.0"
+                value={minCvss || ''}
+                placeholder="0"
                 onChange={(e) => {
-                  setCustomCvss(e.target.value);
                   const val = parseFloat(e.target.value);
                   setMinCvss(!isNaN(val) ? val : 0);
                   setPage(1);
                 }}
-                className={`${inputCls} w-24`}
+                className={`${inputCls} w-20`}
               />
-            )}
+            </div>
             <button
               onClick={() => { setHasFix(!hasFix); setPage(1); }}
               className="px-3 py-2 text-sm rounded-xl transition-colors"
@@ -1055,15 +1067,19 @@ export default function ScanDetailPage() {
                                 </div>
                               )}
                               <div className="flex gap-2 items-center flex-wrap">
-                                <select
-                                  value={suppressStatus}
-                                  onChange={e => setSuppressStatus(e.target.value as Suppression['status'])}
-                                  className={inputCls}
-                                >
-                                  <option value="accepted">Accepted Risk</option>
-                                  <option value="wont_fix">Won&apos;t Fix</option>
-                                  <option value="false_positive">False Positive</option>
-                                </select>
+                                <Select selectedKey={suppressStatus} onSelectionChange={k => setSuppressStatus(k as Suppression['status'])}>
+                                  <Select.Trigger className={inputCls}>
+                                    <Select.Value />
+                                    <Select.Indicator />
+                                  </Select.Trigger>
+                                  <Select.Popover>
+                                    <ListBox>
+                                      <ListBox.Item id="accepted">Accepted Risk</ListBox.Item>
+                                      <ListBox.Item id="wont_fix">Won&apos;t Fix</ListBox.Item>
+                                      <ListBox.Item id="false_positive">False Positive</ListBox.Item>
+                                    </ListBox>
+                                  </Select.Popover>
+                                </Select>
                                 <input
                                   type="text"
                                   value={suppressJustification}
@@ -1151,8 +1167,8 @@ export default function ScanDetailPage() {
                                       <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                                         {c.username || 'You'}
                                       </span>
-                                      <span className="text-xs text-zinc-500 ml-2">
-                                        {new Date(c.created_at).toLocaleString()}
+                                      <span className="text-xs text-zinc-500 ml-2" title={fullDate(c.created_at)}>
+                                        {timeAgo(c.created_at)}
                                       </span>
                                       <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">{c.content}</p>
                                     </div>

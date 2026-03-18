@@ -1,5 +1,6 @@
 'use client';
 import { DashboardStats, DashboardTrendPoint, getDashboardTrends, getStats, Scan } from '@/lib/api';
+import { timeAgo, fullDate } from '@/lib/time';
 import {
   Activity01Icon,
   Add01Icon,
@@ -112,7 +113,7 @@ function RecentScanRow({ scan }: { scan: Scan }) {
           <p className="text-xs font-mono text-zinc-700 dark:text-zinc-300 truncate group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
             {scan.image_name}:{scan.image_tag}
           </p>
-          <p className="text-[11px] text-zinc-500 mt-0.5">{new Date(scan.created_at).toLocaleString()}</p>
+          <p className="text-[11px] text-zinc-500 mt-0.5" title={fullDate(scan.created_at)}>{timeAgo(scan.created_at)}</p>
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0 ml-2">

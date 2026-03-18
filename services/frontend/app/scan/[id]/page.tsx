@@ -2,6 +2,7 @@
 import { Logo } from '@/components/logo';
 import { getPublicScan, listPublicVulnerabilities, Scan, Vulnerability } from '@/lib/api';
 import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
+import { ListBox, Select } from '@heroui/react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -278,18 +279,21 @@ export default function PublicScanResultPage() {
                   {vulnTotal > 0 && <span className="text-sm font-normal ml-2" style={{ color: 'var(--text-muted)' }}>{vulnTotal} found</span>}
                 </h2>
                 <div className="flex flex-wrap gap-2 items-center">
-                  <select
-                    value={severityFilter}
-                    onChange={e => { setSeverityFilter(e.target.value); setPage(1); }}
-                    className={inputCls}
-                    style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="">All Severities</option>
-                    <option value="CRITICAL">Critical</option>
-                    <option value="HIGH">High</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="LOW">Low</option>
-                  </select>
+                  <Select selectedKey={severityFilter || '__all__'} onSelectionChange={k => { setSeverityFilter(String(k === '__all__' ? '' : k)); setPage(1); }}>
+                    <Select.Trigger className={inputCls} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="__all__">All Severities</ListBox.Item>
+                        <ListBox.Item id="CRITICAL">Critical</ListBox.Item>
+                        <ListBox.Item id="HIGH">High</ListBox.Item>
+                        <ListBox.Item id="MEDIUM">Medium</ListBox.Item>
+                        <ListBox.Item id="LOW">Low</ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
                   <input
                     type="text"
                     value={pkgInput}
@@ -298,17 +302,20 @@ export default function PublicScanResultPage() {
                     className={inputCls}
                     style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
                   />
-                  <select
-                    value={minCvss}
-                    onChange={e => { setMinCvss(Number(e.target.value)); setPage(1); }}
-                    className={inputCls}
-                    style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
-                  >
-                    <option value={0}>Any CVSS</option>
-                    <option value={4}>≥ 4.0</option>
-                    <option value={7}>≥ 7.0</option>
-                    <option value={9}>≥ 9.0</option>
-                  </select>
+                  <Select selectedKey={String(minCvss)} onSelectionChange={k => { setMinCvss(Number(k)); setPage(1); }}>
+                    <Select.Trigger className={inputCls} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="0">Any CVSS</ListBox.Item>
+                        <ListBox.Item id="4">≥ 4.0</ListBox.Item>
+                        <ListBox.Item id="7">≥ 7.0</ListBox.Item>
+                        <ListBox.Item id="9">≥ 9.0</ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
                   <button
                     onClick={() => { setHasFix(!hasFix); setPage(1); }}
                     className="px-3 py-2 text-sm rounded-xl transition-colors"

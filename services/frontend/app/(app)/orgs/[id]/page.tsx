@@ -1,5 +1,6 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { useToast } from '@/components/toast';
 import {
     assignScanToOrg,
     createPolicy,
@@ -19,13 +20,14 @@ import {
     updateOrg,
     updatePolicy,
 } from '@/lib/api';
-import { Modal, useOverlayState } from '@heroui/react';
+import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import {
     ArrowLeft01Icon,
     Delete01Icon,
     PencilEdit01Icon,
     PlusSignIcon,
 } from 'hugeicons-react';
+import { timeAgo } from '@/lib/time';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -129,6 +131,7 @@ export default function OrgDetailPage() {
   const [policySaving, setPolicySaving] = useState(false);
   const policyModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const toast = useToast();
 
   const [allScans, setAllScans] = useState<Scan[]>([]);
   const [assignLoading, setAssignLoading] = useState(false);
@@ -183,8 +186,10 @@ export default function OrgDetailPage() {
     try {
       if (editingPolicy) {
         await updatePolicy(id, editingPolicy.id, policyName, policyRules);
+        toast.success('Policy updated');
       } else {
         await createPolicy(id, policyName, policyRules);
+        toast.success('Policy created');
       }
       policyModal.close();
       await load();
@@ -204,6 +209,7 @@ export default function OrgDetailPage() {
     });
     if (!ok) return;
     await deletePolicy(id, policyId).catch(() => {});
+    toast.success('Policy deleted');
     load();
   }
 
@@ -233,6 +239,7 @@ export default function OrgDetailPage() {
 
   async function handleAssign(scanId: string) {
     await assignScanToOrg(id, scanId).catch(() => {});
+    toast.success('Scan assigned to organization');
     assignModal.close();
     await loadOrgScans();
   }
@@ -246,6 +253,7 @@ export default function OrgDetailPage() {
     });
     if (!ok) return;
     await removeScanFromOrg(id, scanId).catch(() => {});
+    toast.success('Scan removed from organization');
     loadOrgScans();
   }
 
@@ -586,20 +594,24 @@ export default function OrgDetailPage() {
                       <div key={idx} className="rounded-xl p-3 space-y-3"
                         style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                         <div className="flex items-center justify-between gap-2">
-                          <select
-                            value={rule.type}
-                            onChange={(e) => {
-                              const newType = e.target.value as PolicyRule['type'];
+                          <Select selectedKey={rule.type} onSelectionChange={k => {
+                              const newType = k as PolicyRule['type'];
                               setPolicyRules((prev) =>
                                 prev.map((r, i) => (i === idx ? { type: newType } : r))
                               );
-                            }}
-                            className={inputCls}
-                          >
-                            {Object.entries(RULE_TYPE_LABELS).map(([val, label]) => (
-                              <option key={val} value={val}>{label}</option>
-                            ))}
-                          </select>
+                            }}>
+                            <Select.Trigger className={inputCls}>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Select.Popover>
+                              <ListBox>
+                                {Object.entries(RULE_TYPE_LABELS).map(([val, label]) => (
+                                  <ListBox.Item key={val} id={val}>{label}</ListBox.Item>
+                                ))}
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
                           <button
                             type="button"
                             onClick={() => removeRule(idx)}
@@ -627,13 +639,17 @@ export default function OrgDetailPage() {
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
                               <label className="text-xs text-zinc-500">Severity</label>
-                              <select
-                                value={rule.severity ?? 'CRITICAL'}
-                                onChange={(e) => setRuleField(idx, 'severity', e.target.value)}
-                                className={inputCls}
-                              >
-                                {SEV_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                              </select>
+                              <Select selectedKey={rule.severity ?? 'CRITICAL'} onSelectionChange={k => setRuleField(idx, 'severity', String(k))}>
+                                <Select.Trigger className={inputCls}>
+                                  <Select.Value />
+                                  <Select.Indicator />
+                                </Select.Trigger>
+                                <Select.Popover>
+                                  <ListBox>
+                                    {SEV_OPTIONS.map((s) => <ListBox.Item key={s} id={s}>{s}</ListBox.Item>)}
+                                  </ListBox>
+                                </Select.Popover>
+                              </Select>
                             </div>
                             <div className="space-y-1">
                               <label className="text-xs text-zinc-500">Max count</label>
@@ -662,13 +678,17 @@ export default function OrgDetailPage() {
                         {rule.type === 'require_fix' && (
                           <div className="space-y-1">
                             <label className="text-xs text-zinc-500">Require fix for severity</label>
-                            <select
-                              value={rule.severity ?? 'CRITICAL'}
-                              onChange={(e) => setRuleField(idx, 'severity', e.target.value)}
-                              className={inputCls}
-                            >
-                              {SEV_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                            </select>
+                            <Select selectedKey={rule.severity ?? 'CRITICAL'} onSelectionChange={k => setRuleField(idx, 'severity', String(k))}>
+                              <Select.Trigger className={inputCls}>
+                                <Select.Value />
+                                <Select.Indicator />
+                              </Select.Trigger>
+                              <Select.Popover>
+                                <ListBox>
+                                  {SEV_OPTIONS.map((s) => <ListBox.Item key={s} id={s}>{s}</ListBox.Item>)}
+                                </ListBox>
+                              </Select.Popover>
+                            </Select>
                           </div>
                         )}
                         {rule.type === 'blocked_cve' && (
@@ -751,7 +771,7 @@ export default function OrgDetailPage() {
                             {scan.image_name}:{scan.image_tag}
                           </p>
                           <p className="text-xs text-zinc-500 mt-0.5">
-                            {new Date(scan.created_at).toLocaleDateString()}
+                            {timeAgo(scan.created_at)}
                           </p>
                         </div>
                         <StatusBadge status={scan.status} />

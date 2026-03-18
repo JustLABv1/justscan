@@ -25,9 +25,10 @@ import {
     updateNotificationChannel,
     updateRateLimit,
 } from '@/lib/api';
-import { Modal, useOverlayState } from '@heroui/react';
+import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { Delete01Icon, Notification01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
+import { timeAgo, fullDate } from '@/lib/time';
 
 const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
@@ -344,7 +345,7 @@ function UsersTab() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-xs text-zinc-500">{new Date(u.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-xs text-zinc-500" title={fullDate(u.created_at)}>{timeAgo(u.created_at)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       <button
@@ -398,10 +399,18 @@ function UsersTab() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
-                    <select className={inputCls} value={formRole} onChange={e => setFormRole(e.target.value)}>
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                    <Select selectedKey={formRole} onSelectionChange={k => setFormRole(String(k))}>
+                      <Select.Trigger className={inputCls}>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="user">User</ListBox.Item>
+                          <ListBox.Item id="admin">Admin</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
@@ -553,7 +562,7 @@ function AutoTagsTab() {
                         <span className="text-xs text-zinc-400 font-mono">{r.tag_id}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-zinc-500">{new Date(r.created_at).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-500" title={fullDate(r.created_at)}>{timeAgo(r.created_at)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => openEdit(r)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit">
@@ -603,12 +612,20 @@ function AutoTagsTab() {
                     {tags.length === 0 ? (
                       <p className="text-sm text-zinc-500">No tags available. Create tags first.</p>
                     ) : (
-                      <select className={inputCls} value={formTagId} onChange={e => setFormTagId(e.target.value)} required>
-                        <option value="">Select a tag…</option>
-                        {tags.map(t => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                      </select>
+                      <Select selectedKey={formTagId} onSelectionChange={k => setFormTagId(String(k))} isRequired>
+                        <Select.Trigger className={inputCls}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="">Select a tag…</ListBox.Item>
+                            {tags.map(t => (
+                              <ListBox.Item key={t.id} id={t.id}>{t.name}</ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
                     )}
                   </div>
                 </form>
@@ -709,8 +726,8 @@ function AuditLogTab() {
                   style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                  <td className="px-4 py-3 text-xs text-zinc-400 whitespace-nowrap">
-                    {new Date(l.created_at).toLocaleString()}
+                  <td className="px-4 py-3 text-xs text-zinc-400 whitespace-nowrap" title={fullDate(l.created_at)}>
+                    {timeAgo(l.created_at)}
                   </td>
                   <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-300 font-medium">
                     {l.username ?? l.user_id.slice(0, 8)}
@@ -966,11 +983,19 @@ function NotificationsTab() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Type</label>
-                    <select className={inputCls} value={formType} onChange={e => setFormType(e.target.value as typeof formType)}>
-                      <option value="discord">Discord</option>
-                      <option value="email">Email (SMTP)</option>
-                      <option value="webhook">Generic Webhook</option>
-                    </select>
+                    <Select selectedKey={formType} onSelectionChange={k => setFormType(k as typeof formType)}>
+                      <Select.Trigger className={inputCls}>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="discord">Discord</ListBox.Item>
+                          <ListBox.Item id="email">Email (SMTP)</ListBox.Item>
+                          <ListBox.Item id="webhook">Generic Webhook</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
                   </div>
 
                   {/* Type-specific fields */}

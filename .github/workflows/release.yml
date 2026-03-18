@@ -76,11 +76,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # NEXT_PUBLIC_API_URL is baked in at build time.
-          # The published image defaults to http://localhost:8080.
-          # Users needing a different URL should build locally — see deploy/docker-compose/README.md.
-          build-args: |
-            NEXT_PUBLIC_API_URL=http://localhost:8080
+          # NEXT_PUBLIC_API_URL is intentionally empty so API calls use relative paths (/api/v1/...).
+          # nginx routes /api/* to the backend — works on any domain without rebuilding.
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
 

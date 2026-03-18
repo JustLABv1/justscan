@@ -25,10 +25,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "${BACKEND_PORT:-8080}:8080"
     volumes:
-      - ./backend-config.yaml:/etc/justscan/config.yaml:ro
+      - ./backend-config.yaml:/etc/justscan/config.yaml
       - backend_data:/app/data
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/health || exit 1"]
@@ -38,21 +36,22 @@ services:
       start_period: 15s
 
   frontend:
-    # The published image has NEXT_PUBLIC_API_URL=http://localhost:8080 baked in.
-    # For a different backend URL (e.g. remote server), build locally:
-    #   comment the image line, uncomment the build block, set NEXT_PUBLIC_API_URL in .env
     image: ghcr.io/justlabv1/justscan:frontend-${JUSTSCAN_VERSION:-latest}
-    # build:
-    #   context: ../../services/frontend
-    #   dockerfile: Dockerfile
-    #   args:
-    #     NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
     restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   postgres_data:

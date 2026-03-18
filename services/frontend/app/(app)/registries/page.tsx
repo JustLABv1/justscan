@@ -4,29 +4,10 @@ import { Modal, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, ServerStack01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
 
-const panel: React.CSSProperties = {
-  background: 'linear-gradient(145deg,rgba(255,255,255,0.038) 0%,rgba(255,255,255,0.01) 100%)',
-  backdropFilter: 'blur(20px)',
-  WebkitBackdropFilter: 'blur(20px)',
-  border: '1px solid rgba(255,255,255,0.07)',
-  boxShadow: '0 4px 32px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.05)',
-};
-const modalPanel: React.CSSProperties = {
-  background: 'linear-gradient(145deg,rgba(20,20,24,0.97) 0%,rgba(15,15,18,0.99) 100%)',
-  backdropFilter: 'blur(32px)',
-  WebkitBackdropFilter: 'blur(32px)',
-  border: '1px solid rgba(255,255,255,0.08)',
-  boxShadow: '0 25px 50px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.06)',
-};
-const inputStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 10, color: '#f4f4f5' };
-const selectStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 10, color: '#e4e4e7' };
-const inputCls = 'w-full px-3 py-2.5 text-sm placeholder-zinc-600 outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl';
+const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
 const AUTH_TYPE_LABEL: Record<string, string> = {
-  none: 'Public',
-  basic: 'Basic auth',
-  token: 'Token',
-  aws_ecr: 'AWS ECR',
+  none: 'Public', basic: 'Basic auth', token: 'Token', aws_ecr: 'AWS ECR',
 };
 const AUTH_TYPE_STYLE: Record<string, React.CSSProperties> = {
   none:    { color: '#a1a1aa', background: 'rgba(161,161,170,0.08)', border: '1px solid rgba(161,161,170,0.15)' },
@@ -81,10 +62,10 @@ export default function RegistriesPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-5">
+    <div className="p-6 max-w-7xl mx-auto space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Registries</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Registries</h1>
           <p className="text-sm text-zinc-500 mt-0.5">Configure private Docker registries</p>
         </div>
         <button
@@ -105,18 +86,18 @@ export default function RegistriesPage() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="w-7 h-7 rounded-full border-2 border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : registries.length === 0 ? (
-        <div className="rounded-2xl py-16 flex flex-col items-center gap-3" style={panel}>
+        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
           <ServerStack01Icon size={32} color="rgba(113,113,122,0.5)" />
-          <p className="text-sm text-zinc-600">No registries configured. Add one to use private images.</p>
+          <p className="text-sm text-zinc-500">No registries configured. Add one to use private images.</p>
         </div>
       ) : (
-        <div className="rounded-2xl overflow-hidden" style={panel}>
+        <div className="glass-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">URL</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
@@ -126,10 +107,10 @@ export default function RegistriesPage() {
             </thead>
             <tbody>
               {registries.map((r, i) => (
-                <tr key={r.id} style={{ borderTop: i > 0 ? '1px solid rgba(255,255,255,0.04)' : undefined }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.025)')}
+                <tr key={r.id} style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                  <td className="px-4 py-3 font-medium text-zinc-200">{r.name}</td>
+                  <td className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-200">{r.name}</td>
                   <td className="px-4 py-3 font-mono text-xs text-zinc-500">{r.url}</td>
                   <td className="px-4 py-3">
                     <span className="text-xs font-medium px-2 py-0.5 rounded-md"
@@ -137,13 +118,13 @@ export default function RegistriesPage() {
                       {AUTH_TYPE_LABEL[r.auth_type ?? 'none']}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-zinc-400">{r.username || <span className="text-zinc-700">—</span>}</td>
+                  <td className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">{r.username || <span className="text-zinc-400 dark:text-zinc-700">—</span>}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openEdit(r)} className="text-zinc-600 hover:text-zinc-300 transition-colors p-1.5" title="Edit">
+                      <button onClick={() => openEdit(r)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit">
                         <PencilEdit01Icon size={15} />
                       </button>
-                      <button onClick={() => handleDelete(r.id)} className="text-zinc-600 hover:text-red-400 transition-colors p-1.5" title="Delete">
+                      <button onClick={() => handleDelete(r.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1.5" title="Delete">
                         <Delete01Icon size={15} />
                       </button>
                     </div>
@@ -158,10 +139,10 @@ export default function RegistriesPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="rounded-2xl overflow-hidden" style={modalPanel}>
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                <Modal.Heading className="text-white font-semibold">{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-300" />
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
                 <form id="registry-form" onSubmit={handleSubmit} className="space-y-4">
@@ -172,17 +153,16 @@ export default function RegistriesPage() {
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-300">Name</label>
-                    <input className={inputCls} style={inputStyle} placeholder="My Registry" value={name} onChange={(e) => setName(e.target.value)} required />
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Name</label>
+                    <input className={inputCls} placeholder="My Registry" value={name} onChange={(e) => setName(e.target.value)} required />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-300">URL</label>
-                    <input className={inputCls + ' font-mono'} style={inputStyle} placeholder="https://registry.example.com" value={url} onChange={(e) => setUrl(e.target.value)} required />
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">URL</label>
+                    <input className={inputCls + ' font-mono'} placeholder="https://registry.example.com" value={url} onChange={(e) => setUrl(e.target.value)} required />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-300">Auth Type</label>
-                    <select value={authType} onChange={(e) => setAuthType(e.target.value as 'none' | 'basic' | 'token' | 'aws_ecr')}
-                      className={inputCls} style={selectStyle}>
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Auth Type</label>
+                    <select value={authType} onChange={(e) => setAuthType(e.target.value as 'none' | 'basic' | 'token' | 'aws_ecr')} className={inputCls}>
                       <option value="none">None (public registry)</option>
                       <option value="basic">Basic (username / password)</option>
                       <option value="token">Token</option>
@@ -190,22 +170,22 @@ export default function RegistriesPage() {
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-300">Username <span className="text-zinc-600 font-normal">(optional)</span></label>
-                    <input className={inputCls} style={inputStyle} placeholder="Optional" value={username} onChange={(e) => setUsername(e.target.value)} />
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Username <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span></label>
+                    <input className={inputCls} placeholder="Optional" value={username} onChange={(e) => setUsername(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-300">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                       Password{' '}
-                      <span className="text-zinc-600 font-normal">{editing ? '(leave blank to keep unchanged)' : '(optional)'}</span>
+                      <span className="text-zinc-400 dark:text-zinc-600 font-normal">{editing ? '(leave blank to keep unchanged)' : '(optional)'}</span>
                     </label>
-                    <input type="password" className={inputCls} style={inputStyle}
+                    <input type="password" className={inputCls}
                       placeholder={editing ? '••••••••' : 'Optional'} value={password} onChange={(e) => setPassword(e.target.value)} />
                   </div>
                 </form>
               </Modal.Body>
-              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-300 hover:text-white transition-colors"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                   Cancel
                 </button>
                 <button type="submit" form="registry-form" disabled={saving}

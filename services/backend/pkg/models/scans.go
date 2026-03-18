@@ -23,7 +23,7 @@ type Scan struct {
 	UnknownCount    int        `bun:"unknown_count,type:int,default:0" json:"unknown_count"`
 	SuppressedCount int        `bun:"suppressed_count,type:int,default:0" json:"suppressed_count"`
 	TrivyVersion    string     `bun:"trivy_version,type:text,default:''" json:"trivy_version"`
-	UserID          uuid.UUID  `bun:"user_id,type:uuid,notnull" json:"user_id"`
+	UserID          *uuid.UUID `bun:"user_id,type:uuid" json:"user_id,omitempty"`
 	Architecture    string     `bun:"architecture,type:text,default:''" json:"architecture"`
 	OSFamily        string     `bun:"os_family,type:text,default:''" json:"os_family"`
 	OSName          string     `bun:"os_name,type:text,default:''" json:"os_name"`

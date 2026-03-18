@@ -76,12 +76,12 @@ const STATS = [
 function glassCard(tint?: string): React.CSSProperties {
   return {
     background: tint
-      ? `linear-gradient(145deg, ${tint} 0%, rgba(255,255,255,0.015) 70%)`
-      : 'linear-gradient(145deg, rgba(255,255,255,0.038) 0%, rgba(255,255,255,0.01) 100%)',
+      ? `linear-gradient(145deg, ${tint} 0%, var(--glass-bg-tint-end) 70%)`
+      : 'var(--glass-bg)',
     backdropFilter: 'blur(20px)',
     WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid rgba(255,255,255,0.07)',
-    boxShadow: '0 4px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06)',
+    border: '1px solid var(--glass-border)',
+    boxShadow: 'var(--glass-shadow)',
   };
 }
 
@@ -98,8 +98,7 @@ function RecentScanRow({ scan }: { scan: Scan }) {
     <Link
       href={`/scans/${scan.id}`}
       className="flex items-center justify-between px-3 py-2.5 rounded-xl transition-colors duration-150 group"
-      style={{ '--hover-bg': 'rgba(255,255,255,0.03)' } as React.CSSProperties}
-      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
     >
       <div className="flex items-center gap-2.5 min-w-0">
@@ -110,10 +109,10 @@ function RecentScanRow({ scan }: { scan: Scan }) {
           {sc.label}
         </span>
         <div className="min-w-0">
-          <p className="text-xs font-mono text-zinc-300 truncate group-hover:text-white transition-colors">
+          <p className="text-xs font-mono text-zinc-700 dark:text-zinc-300 truncate group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
             {scan.image_name}:{scan.image_tag}
           </p>
-          <p className="text-[11px] text-zinc-600 mt-0.5">{new Date(scan.created_at).toLocaleString()}</p>
+          <p className="text-[11px] text-zinc-500 mt-0.5">{new Date(scan.created_at).toLocaleString()}</p>
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0 ml-2">
@@ -155,7 +154,7 @@ export default function DashboardPage() {
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="w-7 h-7 rounded-full border-2 border-zinc-800 border-t-violet-500 animate-spin" />
+      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
     </div>
   );
 
@@ -174,8 +173,8 @@ export default function DashboardPage() {
   const hasCriticals = (stats.severity_totals['critical'] ?? 0) > 0;
 
   return (
-    <div className="relative p-6 space-y-5 max-w-6xl mx-auto">
-      {/* Ambient background orbs — fixed so they blur through the sidebar glass */}
+    <div className="relative p-6 space-y-5 max-w-7xl mx-auto">
+      {/* Ambient background orbs */}
       <div className="pointer-events-none" aria-hidden>
         <div className="fixed top-0 right-0 w-[560px] h-[560px] rounded-full"
           style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.09) 0%, transparent 70%)', filter: 'blur(48px)', zIndex: 0 }} />
@@ -190,7 +189,7 @@ export default function DashboardPage() {
       {/* ── Header ── */}
       <div className="relative flex items-start justify-between z-10">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Dashboard</h1>
           <p className="text-sm text-zinc-500 mt-1">Security scan activity overview</p>
         </div>
         <Link
@@ -224,7 +223,7 @@ export default function DashboardPage() {
               </div>
               {/* Text */}
               <div className="min-w-0">
-                <p className="text-xl font-bold text-white tracking-tight tabular-nums leading-none">{value}</p>
+                <p className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight tabular-nums leading-none">{value}</p>
                 <p className="text-xs text-zinc-500 mt-0.5 truncate">{label}</p>
                 {sub && (
                   <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: '#60a5fa' }}>
@@ -251,13 +250,13 @@ export default function DashboardPage() {
               <Activity01Icon size={17} color="#a78bfa" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-white">Vulnerability Landscape</h2>
-              <p className="text-xs text-zinc-600 mt-0.5">Across all completed scans</p>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Vulnerability Landscape</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">Across all completed scans</p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-bold text-white tabular-nums">{totalVulns.toLocaleString()}</p>
-            <p className="text-xs text-zinc-600">total findings</p>
+            <p className="text-2xl font-bold text-zinc-900 dark:text-white tabular-nums">{totalVulns.toLocaleString()}</p>
+            <p className="text-xs text-zinc-500">total findings</p>
           </div>
         </div>
 
@@ -271,7 +270,7 @@ export default function DashboardPage() {
                   {label}
                 </span>
                 <div className="flex-1 rounded-full h-2 overflow-hidden"
-                  style={{ background: 'rgba(255,255,255,0.05)' }}>
+                  style={{ background: 'var(--row-divider)' }}>
                   <div
                     className="h-2 rounded-full transition-all duration-700"
                     style={{
@@ -300,23 +299,23 @@ export default function DashboardPage() {
       {/* ── Bottom row ── */}
       <div className="relative grid md:grid-cols-2 gap-4 z-10">
         {/* Recent scans */}
-        <div className="rounded-2xl p-5" style={glassCard()}>
+        <div className="relative rounded-2xl p-5" style={glassCard()}>
           <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
             style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.15), transparent)' }} />
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                 <Clock01Icon size={14} color="#71717a" />
               </div>
-              <h2 className="text-sm font-semibold text-white">Recent Scans</h2>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Recent Scans</h2>
             </div>
-            <Link href="/scans" className="text-xs text-zinc-600 hover:text-violet-400 transition-colors">
+            <Link href="/scans" className="text-xs text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors">
               View all →
             </Link>
           </div>
           {(stats.recent_scans ?? []).length === 0 ? (
-            <p className="text-sm text-zinc-600 py-8 text-center">No scans yet</p>
+            <p className="text-sm text-zinc-500 py-8 text-center">No scans yet</p>
           ) : (
             <div className="space-y-0.5 -mx-1">
               {(stats.recent_scans ?? []).map((s) => <RecentScanRow key={s.id} scan={s} />)}
@@ -325,39 +324,39 @@ export default function DashboardPage() {
         </div>
 
         {/* Top scanned images */}
-        <div className="rounded-2xl p-5" style={glassCard()}>
+        <div className="relative rounded-2xl p-5" style={glassCard()}>
           <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
             style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.15), transparent)' }} />
           <div className="flex items-center gap-2.5 mb-3">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
               <Shield01Icon size={14} color="#71717a" />
             </div>
-            <h2 className="text-sm font-semibold text-white">Top Scanned Images</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Top Scanned Images</h2>
           </div>
           {(stats.top_images ?? []).length === 0 ? (
-            <p className="text-sm text-zinc-600 py-8 text-center">No data yet</p>
+            <p className="text-sm text-zinc-500 py-8 text-center">No data yet</p>
           ) : (
             <div className="space-y-1.5 pt-1">
               {(stats.top_images ?? []).map((img, i) => (
                 <div
                   key={img.image_name}
                   className="flex items-center gap-3 px-2.5 py-2 rounded-xl"
-                  style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}
+                  style={{ background: 'var(--row-hover)', border: '1px solid var(--row-divider)' }}
                 >
                   <span
                     className="text-xs font-bold w-5 h-5 rounded-md flex items-center justify-center shrink-0"
                     style={i === 0
                       ? { background: 'rgba(124,58,237,0.25)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.2)' }
-                      : { background: 'rgba(255,255,255,0.04)', color: '#52525b', border: '1px solid rgba(255,255,255,0.06)' }
+                      : { background: 'var(--row-divider)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }
                     }
                   >
                     {i + 1}
                   </span>
-                  <span className="flex-1 font-mono text-xs text-zinc-300 truncate">{img.image_name}</span>
+                  <span className="flex-1 font-mono text-xs text-zinc-700 dark:text-zinc-300 truncate">{img.image_name}</span>
                   <span
                     className="text-xs font-mono shrink-0 px-2 py-0.5 rounded-lg"
-                    style={{ color: '#71717a', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+                    style={{ color: 'var(--text-muted)', background: 'var(--row-divider)', border: '1px solid var(--glass-border)' }}
                   >
                     {img.count}×
                   </span>

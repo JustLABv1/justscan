@@ -161,6 +161,60 @@ export const reEvaluateCompliance = (scanId: string) =>
 export const getComplianceTrend = (orgId: string) =>
   req<{ data: TrendPoint[] }>('GET', `/api/v1/orgs/${orgId}/compliance/trend`).then((r) => r.data ?? []);
 
+// Public (unauthenticated) scan API
+async function publicReq<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? res.statusText);
+  }
+  return res.json();
+}
+
+export const getPublicSettings = () =>
+  publicReq<{ enabled: boolean; rate_limit_per_hour: number }>('GET', '/api/v1/public/settings');
+
+export const createPublicScan = (image: string, tag: string, platform?: string) =>
+  publicReq<Scan>('POST', '/api/v1/public/scans', { image, tag, platform });
+
+export const getPublicScan = (id: string) =>
+  publicReq<Scan>('GET', `/api/v1/public/scans/${id}`);
+
+export const listPublicVulnerabilities = (
+  scanId: string,
+  page = 1,
+  limit = 50,
+  severity?: string,
+  pkg?: string,
+  hasFix?: boolean,
+  minCvss?: number,
+  sortBy?: string,
+  sortDir?: 'asc' | 'desc',
+) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (severity) params.set('severity', severity);
+  if (pkg) params.set('pkg', pkg);
+  if (hasFix) params.set('has_fix', 'true');
+  if (minCvss) params.set('min_cvss', String(minCvss));
+  if (sortBy) params.set('sort_by', sortBy);
+  if (sortDir) params.set('sort_dir', sortDir);
+  return publicReq<{ data: Vulnerability[]; total: number }>(
+    'GET',
+    `/api/v1/public/scans/${scanId}/vulnerabilities?${params}`,
+  );
+};
+
+// Admin settings
+export const getAdminSettings = () =>
+  req<Record<string, string>>('GET', '/api/v1/admin/settings');
+
+export const setPublicScanEnabled = (enabled: boolean) =>
+  req<{ enabled: boolean }>('PUT', '/api/v1/admin/settings/public-scan', { enabled });
+
 // Suppressions
 export const listSuppressions = (digest: string) =>
   req<Suppression[]>('GET', `/api/v1/images/${encodeURIComponent(digest)}/suppressions`);

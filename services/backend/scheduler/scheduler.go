@@ -58,7 +58,7 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 			ImageName: itemCopy.ImageName,
 			ImageTag:  itemCopy.ImageTag,
 			Status:    models.ScanStatusPending,
-			UserID:    itemCopy.UserID,
+			UserID:    &itemCopy.UserID,
 			CreatedAt: time.Now(),
 		}
 		if _, err := db.NewInsert().Model(scan).Exec(context.Background()); err != nil {

@@ -7,12 +7,16 @@ import {
   DashboardSquare01Icon,
   EyeIcon,
   Logout02Icon,
+  Moon02Icon,
   ServerStack01Icon,
+  Settings01Icon,
   Shield01Icon,
+  Sun01Icon,
   Tag01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 
 const navItems = [
@@ -27,6 +31,7 @@ const navItems = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { resolvedTheme, setTheme } = useTheme();
   const [user, setUser] = useState<{ username?: string; email?: string; role?: string } | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -57,43 +62,37 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (!authReady) {
     return (
-      <div className="flex h-screen items-center justify-center bg-zinc-950">
-        <div className="w-7 h-7 rounded-full border-2 border-zinc-700 border-t-violet-500 animate-spin" />
+      <div className="flex h-screen items-center justify-center app-bg">
+        <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
       </div>
     );
   }
 
   const initials = (user?.username ?? user?.email ?? 'U')[0].toUpperCase();
+  const isDark = resolvedTheme === 'dark';
 
   return (
-    <div className="flex h-screen bg-zinc-950 overflow-hidden">
+    <div className="flex h-screen app-bg overflow-hidden">
       {/* Sidebar */}
       <aside
-        className={`relative flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
+        className={`relative flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out sidebar-glass ${
           collapsed ? 'w-[68px]' : 'w-60'
         }`}
-        style={{
-          background: 'linear-gradient(160deg, rgba(39,32,74,0.55) 0%, rgba(9,9,11,0.75) 50%, rgba(15,10,30,0.65) 100%)',
-          backdropFilter: 'blur(28px)',
-          WebkitBackdropFilter: 'blur(28px)',
-          borderRight: '1px solid rgba(255,255,255,0.07)',
-          boxShadow: '4px 0 24px rgba(0,0,0,0.4), inset -1px 0 0 rgba(124,58,237,0.06)',
-        }}
       >
-        {/* Ambient violet glow in top-left corner */}
+        {/* Ambient violet glow */}
         <div
           className="absolute -top-10 -left-10 w-40 h-40 rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%)' }}
         />
         {/* Top edge shimmer */}
-        <div className="absolute inset-x-0 top-0 h-px pointer-events-none bg-gradient-to-r from-transparent via-violet-400/25 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-px pointer-events-none bg-gradient-to-r from-transparent via-violet-400/20 to-transparent" />
         {/* Right edge inner highlight */}
         <div className="absolute inset-y-0 right-0 w-px pointer-events-none bg-gradient-to-b from-violet-500/10 via-transparent to-transparent" />
 
         {/* Brand */}
         <div
           className="flex items-center px-[18px] py-5 shrink-0"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+          style={{ borderBottom: '1px solid var(--border-subtle)' }}
         >
           <div
             className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
@@ -105,8 +104,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Shield01Icon size={15} color="white" />
           </div>
           <span
-            className="ml-3 font-semibold text-[15px] text-white tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300"
-            style={{ maxWidth: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1 }}
+            className="ml-3 font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300"
+            style={{ maxWidth: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1, color: 'var(--text-primary)' }}
           >
             JustScan
           </span>
@@ -114,7 +113,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-0.5">
-          {navItems.map(({ href, label, Icon }) => {
+          {[...navItems, ...(user?.role === 'admin' ? [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] : [])].map(({ href, label, Icon }) => {
             const active = pathname === href || pathname.startsWith(href + '/');
             return (
               <Link
@@ -123,17 +122,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 title={collapsed ? label : undefined}
                 className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
                   transition-all duration-150 overflow-hidden whitespace-nowrap group
-                  ${active ? 'text-violet-200' : 'text-zinc-400 hover:text-zinc-100'}`}
+                  ${active ? 'text-violet-600 dark:text-violet-200' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
                 style={active ? {
-                  background: 'linear-gradient(135deg, rgba(124,58,237,0.3) 0%, rgba(109,40,217,0.15) 100%)',
-                  boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.2), 0 2px 8px rgba(124,58,237,0.15)',
+                  background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                  boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.2), 0 2px 8px rgba(124,58,237,0.08)',
                 } : undefined}
               >
                 {/* Hover background for inactive */}
                 {!active && (
                   <span
                     className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                    style={{ background: 'rgba(255,255,255,0.04)' }}
+                    style={{ background: 'var(--row-hover)' }}
                   />
                 )}
                 {/* Active left accent bar */}
@@ -155,10 +154,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Footer: user + collapse toggle */}
+        {/* Footer: user + theme toggle + collapse */}
         <div
-          className="shrink-0 p-2"
-          style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+          className="shrink-0 p-2 space-y-1"
+          style={{ borderTop: '1px solid var(--border-subtle)' }}
         >
           {/* User row */}
           <div className="flex items-center gap-2 px-2 py-2 rounded-xl overflow-hidden">
@@ -175,37 +174,51 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               className="flex-1 min-w-0 overflow-hidden transition-all duration-300"
               style={{ maxWidth: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1 }}
             >
-              <p className="text-xs font-medium text-zinc-200 truncate">{user?.username ?? user?.email ?? 'User'}</p>
-              <p className="text-xs text-zinc-500 capitalize">{user?.role ?? 'user'}</p>
+              <p className="text-xs font-medium truncate" style={{ color: 'var(--text-secondary)' }}>
+                {user?.username ?? user?.email ?? 'User'}
+              </p>
+              <p className="text-xs capitalize" style={{ color: 'var(--text-muted)' }}>
+                {user?.role ?? 'user'}
+              </p>
             </div>
             <button
               onClick={handleLogout}
-              className="shrink-0 text-zinc-500 hover:text-red-400 transition-colors"
+              className="shrink-0 text-zinc-400 hover:text-red-400 dark:text-zinc-500 dark:hover:text-red-400 transition-colors"
               title="Sign out"
             >
               <Logout02Icon size={16} />
             </button>
           </div>
 
-          {/* Collapse toggle */}
-          <button
-            onClick={toggleCollapsed}
-            className="mt-1 w-full flex items-center justify-center py-2 rounded-xl text-zinc-600 hover:text-zinc-300 transition-all duration-150"
-            style={{ background: 'transparent' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed
-              ? <ArrowRight01Icon size={14} />
-              : <ArrowLeft01Icon size={14} />
-            }
-          </button>
+          {/* Theme toggle + collapse row */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setTheme(isDark ? 'light' : 'dark')}
+              className="flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-150 text-zinc-400 hover:text-violet-500 dark:text-zinc-500 dark:hover:text-violet-400"
+              style={{ background: 'transparent' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {isDark ? <Sun01Icon size={15} /> : <Moon02Icon size={15} />}
+            </button>
+
+            <button
+              onClick={toggleCollapsed}
+              className="flex-1 flex items-center justify-center py-2 rounded-xl transition-all duration-150 text-zinc-400 hover:text-zinc-700 dark:text-zinc-600 dark:hover:text-zinc-300"
+              style={{ background: 'transparent' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {collapsed ? <ArrowRight01Icon size={14} /> : <ArrowLeft01Icon size={14} />}
+            </button>
+          </div>
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto bg-zinc-950">{children}</main>
+      <main className="flex-1 overflow-y-auto app-bg">{children}</main>
     </div>
   );
 }

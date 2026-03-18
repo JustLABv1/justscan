@@ -245,6 +245,72 @@ func ParseSBOMComponents(sbom *TrivySBOMOutput, scanID uuid.UUID) []models.SBOMC
 	return components
 }
 
+// ExtractKBEntries builds a deduplicated slice of VulnKBEntry from a TrivyOutput.
+// It collects all references (URL strings from Trivy) and the DataSource as a
+// named reference, then assembles CVSS info using the multi-source extractor.
+func ExtractKBEntries(output *TrivyOutput) []models.VulnKBEntry {
+	seen := make(map[string]*models.VulnKBEntry)
+	for _, result := range output.Results {
+		for _, v := range result.Vulnerabilities {
+			id := v.VulnerabilityID
+			if id == "" {
+				continue
+			}
+			entry, exists := seen[id]
+			if !exists {
+				score, vector := extractCVSS(v.CVSS)
+				// Build references from URLs + data source
+				var refs []models.KBRef
+				for _, ref := range v.References {
+					if ref != "" {
+						refs = append(refs, models.KBRef{URL: ref})
+					}
+				}
+				if v.DataSource != nil && v.DataSource.URL != "" {
+					refs = append(refs, models.KBRef{
+						URL:    v.DataSource.URL,
+						Source: v.DataSource.Name,
+					})
+				}
+				// Detect exploit hint from references (GitHub PoC / exploit-db patterns)
+				exploitAvailable := false
+				for _, r := range refs {
+					url := strings.ToLower(r.URL)
+					if strings.Contains(url, "exploit-db.com") ||
+						strings.Contains(url, "packetstormsecurity") ||
+						strings.Contains(url, "github.com/exploit") ||
+						strings.Contains(url, "exploit") {
+						exploitAvailable = true
+						break
+					}
+				}
+				entry = &models.VulnKBEntry{
+					VulnID:           id,
+					Description:      v.Description,
+					Severity:         normalizeSeverity(v.Severity),
+					CVSSScore:        score,
+					CVSSVector:       vector,
+					References:       refs,
+					ExploitAvailable: exploitAvailable,
+				}
+				seen[id] = entry
+			} else {
+				// Merge: keep best score
+				score, vector := extractCVSS(v.CVSS)
+				if score > entry.CVSSScore {
+					entry.CVSSScore = score
+					entry.CVSSVector = vector
+				}
+			}
+		}
+	}
+	entries := make([]models.VulnKBEntry, 0, len(seen))
+	for _, e := range seen {
+		entries = append(entries, *e)
+	}
+	return entries
+}
+
 // CountSeverities counts vulnerabilities by severity.
 func CountSeverities(vulns []models.Vulnerability) map[string]int {
 	counts := map[string]int{
@@ -289,8 +355,24 @@ func normalizeSeverity(s string) string {
 	}
 }
 
+// preferredCVSSSources lists data source keys in descending preference order.
+// Trivy uses these as keys in the CVSS map.
+var preferredCVSSSources = []string{
+	"nvd", "NVD", // National Vulnerability Database
+	"ghsa", "GHSA", // GitHub Security Advisories
+	"osv", "OSV", // Open Source Vulnerabilities
+	"redhat", "RedHat", // Red Hat Security
+	"debian", "Debian", // Debian Security
+	"ubuntu", "Ubuntu", // Ubuntu Security
+	"alpine", "Alpine", // Alpine SecDB
+	"amazon", "Amazon", // Amazon Linux
+	"oracle", "Oracle", // Oracle Linux OVAL
+	"suse", "SUSE", // SUSE OVAL
+}
+
 func extractCVSS(cvss map[string]TrivyCVSS) (float64, string) {
-	for _, key := range []string{"nvd", "NVD"} {
+	// Try preferred sources first
+	for _, key := range preferredCVSSSources {
 		if c, ok := cvss[key]; ok {
 			if c.V3Score > 0 {
 				return c.V3Score, c.V3Vector
@@ -300,6 +382,7 @@ func extractCVSS(cvss map[string]TrivyCVSS) (float64, string) {
 			}
 		}
 	}
+	// Fall back to any available source
 	for _, c := range cvss {
 		if c.V3Score > 0 {
 			return c.V3Score, c.V3Vector

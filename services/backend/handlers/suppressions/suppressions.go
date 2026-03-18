@@ -2,6 +2,7 @@ package suppressions
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"justscan-backend/functions/auth"
@@ -10,6 +11,50 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
+
+func ListAllSuppressions(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+		if page < 1 {
+			page = 1
+		}
+		if limit < 1 || limit > 200 {
+			limit = 50
+		}
+		offset := (page - 1) * limit
+
+		statusFilter := c.Query("status")
+		search := c.Query("q")
+
+		var suppressions []models.Suppression
+		q := db.NewSelect().Model(&suppressions).OrderExpr("created_at DESC")
+		if statusFilter != "" {
+			q = q.Where("status = ?", statusFilter)
+		}
+		if search != "" {
+			q = q.Where("vuln_id ILIKE ? OR image_digest ILIKE ?", "%"+search+"%", "%"+search+"%")
+		}
+
+		total, _ := db.NewSelect().TableExpr("suppressions").Count(c.Request.Context())
+
+		if err := q.Limit(limit).Offset(offset).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load suppressions"})
+			return
+		}
+
+		for i := range suppressions {
+			user := &models.Users{}
+			if err := db.NewSelect().Model(user).Column("username").
+				Where("id = ?", suppressions[i].UserID).
+				Scan(c.Request.Context()); err == nil {
+				suppressions[i].Username = user.Username
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": suppressions, "total": total})
+	}
+}
 
 func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {

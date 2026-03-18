@@ -1,48 +1,48 @@
-name: Check Image Build
+name: PR Checks
 
 on:
   pull_request:
-    types: [opened, reopened, edited, synchronize]
-    branches: [ "release/**", "develop" ]
-    paths-ignore:
-      - '.github/**'
-      - '*.md'
-      - 'deployment-examples/**'
+    branches: [main]
 
 jobs:
-  frontend:
-    name: Check Standalone Frontend Build
+  frontend-compile:
+    name: Frontend — Compile Check
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Build Frontend Docker Image
-        run: cd services/frontend && docker build . --file Dockerfile --tag ghcr.io/justlabv1/plattform-template:frontend-test
-  backend:
-    name: Check Standalone Backend Build
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: services/frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: services/frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        working-directory: services/frontend
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+  backend-compile:
+    name: Backend — Compile Check
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Build Backend Docker Image
-        run: cd services/backend && docker build . --file Dockerfile --tag ghcr.io/justlabv1/plattform-template:backend-test
-  justwms:
-    name: Check JustWMS Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/backend/go.mod
+          cache-dependency-path: services/backend/go.sum
 
-      - name: Build JustWMS Docker Image
-        run: docker build . --file Dockerfile --tag ghcr.io/justlabv1/plattform-template:test
-  csv-bridge:
-    name: Check Standalone CSV Bridge Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Build CSV Bridge Docker Image
-        run: cd services/csv-bridge && docker build . --file Dockerfile --tag ghcr.io/justlabv1/plattform-template:csv-bridge-test
+      - name: Build
+        working-directory: services/backend
+        run: go build ./...

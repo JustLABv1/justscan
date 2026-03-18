@@ -22,7 +22,7 @@ import {
 import { ArrowLeft01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, PencilEdit01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
@@ -33,6 +33,17 @@ const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; bor
   LOW:      { label: 'Low',      color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20' },
   UNKNOWN:  { label: 'Unknown',  color: 'text-zinc-400',   bg: 'bg-zinc-500/10',   border: 'border-zinc-500/20' },
 };
+
+function FirstSeenBadge({ firstSeenAt, scanCompletedAt }: { firstSeenAt?: string | null; scanCompletedAt?: string | null }) {
+  if (!firstSeenAt) return <span className="text-xs text-zinc-500">—</span>;
+  const first = new Date(firstSeenAt);
+  const scan = scanCompletedAt ? new Date(scanCompletedAt) : new Date();
+  const diffDays = Math.floor((scan.getTime() - first.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays <= 1) return (
+    <span className="text-xs font-semibold px-2 py-0.5 rounded-md" style={{color:'#fb923c', background:'rgba(249,115,22,0.12)'}}>New</span>
+  );
+  return <span className="text-xs text-zinc-500">{diffDays}d ago</span>;
+}
 
 function SeverityBadge({ severity }: { severity: string }) {
   const cfg = SEV_CONFIG[severity] ?? SEV_CONFIG.UNKNOWN;
@@ -56,6 +67,161 @@ function StatusBadge({ status }: { status: string }) {
       <span className={`w-1.5 h-1.5 rounded-full ${status === 'running' ? 'animate-pulse bg-blue-400' : 'bg-current'}`} />
       {status}
     </span>
+  );
+}
+
+// ── Scanning animation shown while pending/running ───────────────────
+function ScanningAnimation({ status, startedAt }: { status: string; startedAt: string | null }) {
+  const [elapsed, setElapsed] = useState(0);
+  const [phase, setPhase] = useState(0);
+
+  const phases = [
+    'Pulling image layers…',
+    'Analyzing OS packages…',
+    'Scanning language libraries…',
+    'Checking CVE database…',
+    'Correlating vulnerabilities…',
+    'Building report…',
+  ];
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      const start = startedAt ? new Date(startedAt).getTime() : Date.now();
+      setElapsed(Math.floor((Date.now() - start) / 1000));
+      setPhase(p => (p + 1) % phases.length);
+    }, 1800);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startedAt]);
+
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  const elapsedStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+  return (
+    <div
+      className="glass-panel rounded-2xl overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.06) 0%, rgba(59,130,246,0.04) 100%)' }}
+    >
+      {/* Top bar */}
+      <div
+        className="h-0.5 w-full relative overflow-hidden"
+        style={{ background: 'rgba(124,58,237,0.15)' }}
+      >
+        <div
+          className="absolute inset-y-0 left-0 w-1/3"
+          style={{
+            background: 'linear-gradient(90deg, transparent, #a78bfa, #60a5fa, transparent)',
+            animation: 'scanBar 2s ease-in-out infinite',
+          }}
+        />
+      </div>
+
+      <style>{`
+        @keyframes scanBar {
+          0%   { left: -33%; }
+          100% { left: 100%; }
+        }
+        @keyframes radarSweep {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes ringPulse1 {
+          0%, 100% { opacity: 0.8; }
+          50%       { opacity: 0.25; }
+        }
+        @keyframes ringPulse2 {
+          0%, 100% { opacity: 0.6; }
+          50%       { opacity: 0.15; }
+        }
+        @keyframes ringPulse3 {
+          0%, 100% { opacity: 0.5; }
+          50%       { opacity: 0.08; }
+        }
+        @keyframes fadePhase {
+          0%   { opacity: 0; transform: translateY(6px); }
+          15%  { opacity: 1; transform: translateY(0);   }
+          85%  { opacity: 1; transform: translateY(0);   }
+          100% { opacity: 0; transform: translateY(-6px);}
+        }
+      `}</style>
+
+      <div className="p-10 flex flex-col items-center gap-8">
+        {/* Radar — pure SVG for precise positioning */}
+        <svg width="160" height="160" viewBox="0 0 160 160" style={{ overflow: 'visible' }}>
+          {/* Radial glow background */}
+          <circle cx="80" cy="80" r="76"
+            fill="url(#radarGlow)" />
+          <defs>
+            <radialGradient id="radarGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.07" />
+              <stop offset="100%" stopColor="#7c3aed" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+
+          {/* Rings */}
+          <circle cx="80" cy="80" r="76" stroke="rgba(124,58,237,0.18)" strokeWidth="1" fill="none"
+            style={{ animation: 'ringPulse3 3s ease-in-out infinite' }} />
+          <circle cx="80" cy="80" r="56" stroke="rgba(124,58,237,0.25)" strokeWidth="1" fill="none"
+            style={{ animation: 'ringPulse2 3s ease-in-out infinite 0.4s' }} />
+          <circle cx="80" cy="80" r="36" stroke="rgba(124,58,237,0.35)" strokeWidth="1" fill="none"
+            style={{ animation: 'ringPulse1 3s ease-in-out infinite 0.8s' }} />
+
+          {/* Cross-hairs — clipped to outer ring */}
+          <line x1="4" y1="80" x2="156" y2="80" stroke="rgba(124,58,237,0.12)" strokeWidth="1" />
+          <line x1="80" y1="4" x2="80" y2="156" stroke="rgba(124,58,237,0.12)" strokeWidth="1" />
+
+          {/* Rotating sweep group — origin at exact center (80,80) */}
+          <g style={{ transformOrigin: '80px 80px', animation: 'radarSweep 3s linear infinite' }}>
+            {/* Wedge: from center, straight up (80,4), arc CW ~90° to (156,80), back to center */}
+            <path d="M 80 80 L 80 4 A 76 76 0 0 1 156 80 Z"
+              fill="rgba(124,58,237,0.13)" />
+            {/* Arm: center (80,80) to top (80,4) — rotates with group */}
+            <line x1="80" y1="80" x2="80" y2="4"
+              stroke="rgba(167,139,250,0.85)" strokeWidth="1.5" strokeLinecap="round" />
+          </g>
+
+          {/* Center glow */}
+          <circle cx="80" cy="80" r="7" fill="rgba(167,139,250,0.2)" />
+          {/* Center dot */}
+          <circle cx="80" cy="80" r="3.5" fill="#a78bfa"
+            style={{ filter: 'drop-shadow(0 0 5px rgba(167,139,250,0.9))' }} />
+        </svg>
+
+        {/* Text */}
+        <div className="text-center space-y-2">
+          <div className="flex items-center justify-center gap-2.5">
+            <span
+              className="text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-widest"
+              style={{
+                background: status === 'running' ? 'rgba(59,130,246,0.12)' : 'rgba(161,161,170,0.1)',
+                border: `1px solid ${status === 'running' ? 'rgba(59,130,246,0.25)' : 'rgba(161,161,170,0.2)'}`,
+                color: status === 'running' ? '#60a5fa' : '#a1a1aa',
+              }}
+            >
+              <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle animate-pulse"
+                style={{ background: status === 'running' ? '#60a5fa' : '#a1a1aa' }} />
+              {status}
+            </span>
+            {elapsed > 0 && (
+              <span className="text-xs text-zinc-500 font-mono">{elapsedStr}</span>
+            )}
+          </div>
+
+          <p
+            className="text-sm text-zinc-500"
+            key={phase}
+            style={{ animation: 'fadePhase 1.8s ease-in-out forwards', minHeight: 20 }}
+          >
+            {status === 'pending' ? 'Waiting for scanner…' : phases[phase]}
+          </p>
+
+          <p className="text-xs text-zinc-500/50 mt-1">
+            Results will appear automatically when the scan finishes.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -92,15 +258,36 @@ export default function ScanDetailPage() {
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const loadScan = useCallback(() => {
+    return getScan(id).then(setScan).catch((e) => setError(e.message));
+  }, [id]);
+
+  // Initial load
   useEffect(() => {
-    getScan(id)
-      .then(setScan)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+    loadScan().finally(() => setLoading(false));
     listTags().then(setAllTags).catch(() => {});
     getScanCompliance(id).then(setCompliance).catch(() => {});
     listOrgs().then(setAllOrgs).catch(() => {});
-  }, [id]);
+  }, [id, loadScan]);
+
+  // Poll every 3s while scan is pending or running
+  useEffect(() => {
+    if (!scan) return;
+    if (scan.status !== 'pending' && scan.status !== 'running') return;
+    const interval = setInterval(() => {
+      loadScan().then(() => {
+        setScan(prev => {
+          if (prev && (prev.status === 'completed' || prev.status === 'failed')) {
+            clearInterval(interval);
+            // Load vulns and compliance now that it's done
+            getScanCompliance(id).then(setCompliance).catch(() => {});
+          }
+          return prev;
+        });
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [scan?.status, id, loadScan]);
 
   useEffect(() => {
     if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
@@ -412,8 +599,13 @@ export default function ScanDetailPage() {
         </div>
       )}
 
+      {/* Scanning animation */}
+      {(scan.status === 'pending' || scan.status === 'running') && (
+        <ScanningAnimation status={scan.status} startedAt={scan.started_at} />
+      )}
+
       {/* Vulnerabilities */}
-      <div className="space-y-3">
+      {scan.status !== 'pending' && scan.status !== 'running' && <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
@@ -496,12 +688,13 @@ export default function ScanDetailPage() {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
                 {([
-                  { label: 'CVE ID',    key: 'vuln_id',           align: 'left'  },
-                  { label: 'Package',   key: 'pkg_name',          align: 'left'  },
-                  { label: 'Installed', key: 'installed_version', align: 'left'  },
-                  { label: 'Fixed In',  key: 'fixed_version',     align: 'left'  },
-                  { label: 'Severity',  key: 'severity',          align: 'left'  },
-                  { label: 'CVSS',      key: 'cvss_score',        align: 'right' },
+                  { label: 'CVE ID',     key: 'vuln_id',           align: 'left'  },
+                  { label: 'Package',    key: 'pkg_name',          align: 'left'  },
+                  { label: 'Installed',  key: 'installed_version', align: 'left'  },
+                  { label: 'Fixed In',   key: 'fixed_version',     align: 'left'  },
+                  { label: 'Severity',   key: 'severity',          align: 'left'  },
+                  { label: 'CVSS',       key: 'cvss_score',        align: 'right' },
+                  { label: 'First Seen', key: 'first_seen_at',     align: 'left'  },
                 ] as { label: string; key: string; align: 'left' | 'right' }[]).map(({ label, key, align }) => {
                   const active = sortBy === key;
                   return (
@@ -534,7 +727,7 @@ export default function ScanDetailPage() {
             <tbody>
               {vulnLoading ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center">
+                  <td colSpan={8} className="py-12 text-center">
                     <div className="flex justify-center">
                       <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                     </div>
@@ -542,7 +735,7 @@ export default function ScanDetailPage() {
                 </tr>
               ) : vulns.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-zinc-500 text-sm">
+                  <td colSpan={8} className="py-12 text-center text-zinc-500 text-sm">
                     No vulnerabilities found.
                   </td>
                 </tr>
@@ -577,6 +770,9 @@ export default function ScanDetailPage() {
                     <td className="px-4 py-3 text-right font-mono text-xs text-zinc-500">
                       {v.cvss_score ? v.cvss_score.toFixed(1) : '—'}
                     </td>
+                    <td className="px-4 py-3">
+                      <FirstSeenBadge firstSeenAt={v.first_seen_at} scanCompletedAt={scan.completed_at} />
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => {
@@ -597,7 +793,7 @@ export default function ScanDetailPage() {
                   </tr>
                   {expandedVuln === v.id && (
                     <tr key={`${v.id}-comments`}>
-                      <td colSpan={7} className="px-4 py-4" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--row-hover)' }}>
+                      <td colSpan={8} className="px-4 py-4" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--row-hover)' }}>
                         <div className="space-y-3 max-w-3xl">
                           {v.comments && v.comments.length > 0 ? (
                             <div className="space-y-2">
@@ -677,7 +873,7 @@ export default function ScanDetailPage() {
             </div>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

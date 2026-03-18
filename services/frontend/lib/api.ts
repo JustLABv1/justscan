@@ -107,7 +107,7 @@ export const deleteComment = (commentId: string) =>
 
 // Registries
 export const listRegistries = () =>
-  req<{ data: Registry[] }>('GET', '/api/v1/registries/').then((r) => r.data ?? []);
+  req<{ data: RegistryWithHealth[] }>('GET', '/api/v1/registries/').then((r) => r.data ?? []);
 export const createRegistry = (data: Partial<Registry>) =>
   req<Registry>('POST', '/api/v1/registries/', data);
 export const updateRegistry = (id: string, data: Partial<Registry>) =>
@@ -215,6 +215,52 @@ export const getAdminSettings = () =>
 export const setPublicScanEnabled = (enabled: boolean) =>
   req<{ enabled: boolean }>('PUT', '/api/v1/admin/settings/public-scan', { enabled });
 
+// Auto-tag rules
+export const listAutoTagRules = () =>
+  req<{ data: AutoTagRule[] }>('GET', '/api/v1/auto-tags/').then(r => r.data ?? []);
+export const createAutoTagRule = (pattern: string, tag_id: string) =>
+  req<AutoTagRule>('POST', '/api/v1/auto-tags/', { pattern, tag_id });
+export const updateAutoTagRule = (id: string, pattern: string, tag_id: string) =>
+  req<AutoTagRule>('PUT', `/api/v1/auto-tags/${id}`, { pattern, tag_id });
+export const deleteAutoTagRule = (id: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/auto-tags/${id}`);
+
+// Registry health
+export const testRegistry = (id: string) =>
+  req<{ health_status: string; health_message: string; last_health_check_at: string }>('POST', `/api/v1/registries/${id}/test`);
+
+// Scan comparison
+export const compareScans = (scanIdA: string, scanIdB: string) =>
+  req<ScanComparison>('GET', `/api/v1/scans/compare?a=${scanIdA}&b=${scanIdB}`);
+
+// Scan trends
+export const getScanTrends = (imageName?: string, imageTag?: string, days = 30) => {
+  const params = new URLSearchParams({ days: String(days) });
+  if (imageName) params.set('image_name', imageName);
+  if (imageTag) params.set('image_tag', imageTag);
+  return req<{ data: ScanTrendPoint[] }>('GET', `/api/v1/scans/trends?${params}`).then(r => r.data ?? []);
+};
+
+// Dashboard trends
+export const getDashboardTrends = () =>
+  req<{ data: DashboardTrendPoint[] }>('GET', '/api/v1/dashboard/trends').then(r => r.data ?? []);
+
+// Org risk score
+export const getOrgRiskScore = (orgId: string) =>
+  req<OrgRiskScore>('GET', `/api/v1/orgs/${orgId}/risk`);
+
+// Admin users
+export const listAdminUsers = () =>
+  req<{ users: AdminUser[] }>('GET', '/api/v1/admin/users').then(r => r.users ?? []);
+export const updateAdminUser = (id: string, data: { username?: string; email?: string; role?: string; password?: string }) =>
+  req<{ result: string }>('PUT', `/api/v1/admin/users/${id}`, data);
+export const deleteAdminUser = (id: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/admin/users/${id}`);
+export const disableAdminUser = (id: string, disabled: boolean, disabled_reason?: string) =>
+  req<{ result: string }>('PUT', `/api/v1/admin/users/${id}/disable`, { disabled, disabled_reason: disabled_reason ?? '' });
+export const createAdminUser = (username: string, email: string, password: string, role: string) =>
+  req<{ result: string }>('POST', '/api/v1/admin/users/', { username, email, password, role });
+
 // Suppressions
 export const listSuppressions = (digest: string) =>
   req<Suppression[]>('GET', `/api/v1/images/${encodeURIComponent(digest)}/suppressions`);
@@ -321,6 +367,7 @@ export interface Vulnerability {
   references: string[];
   suppression?: Suppression | null;
   comments?: Comment[];
+  first_seen_at?: string | null;
 }
 
 export interface Tag {
@@ -378,4 +425,79 @@ export interface DashboardStats {
   recent_scans: Scan[] | null;
   top_images: { image_name: string; count: number }[] | null;
   watchlist_count: number;
+}
+
+export interface AutoTagRule {
+  id: string;
+  pattern: string;
+  tag_id: string;
+  created_by_id: string;
+  created_at: string;
+  tag?: Tag;
+}
+
+export interface RegistryWithHealth extends Registry {
+  health_status: 'healthy' | 'unhealthy' | 'unknown';
+  health_message: string;
+  last_health_check_at: string | null;
+}
+
+export interface ScanTrendPoint {
+  date: string;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  unknown: number;
+  scan_count: number;
+}
+
+export interface DashboardTrendPoint {
+  date: string;
+  total: number;
+  completed: number;
+  failed: number;
+}
+
+export interface OrgRiskScore {
+  score: number;
+  grade: string;
+  unique_images: number;
+  total_scans: number;
+  totals: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    unknown: number;
+  };
+  compliance_pass_rate: number;
+  compliance_pass: number;
+  compliance_fail: number;
+}
+
+export interface ScanComparison {
+  scan_a: Scan;
+  scan_b: Scan;
+  added: Vulnerability[];
+  removed: Vulnerability[];
+  unchanged: Vulnerability[];
+  summary: {
+    added_count: number;
+    removed_count: number;
+    unchanged_count: number;
+    added_critical: number;
+    added_high: number;
+  };
+}
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+  disabled: boolean;
+  disabled_reason: string;
+  created_at: string;
+  updated_at: string;
 }

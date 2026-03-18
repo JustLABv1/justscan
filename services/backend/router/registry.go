@@ -15,5 +15,6 @@ func Registries(router *gin.RouterGroup, db *bun.DB) {
 		r.POST("/", registries.CreateRegistry(db))
 		r.PUT("/:id", registries.UpdateRegistry(db))
 		r.DELETE("/:id", registries.DeleteRegistry(db))
+		r.POST("/:id/test", registries.TestRegistry(db))
 	}
 }

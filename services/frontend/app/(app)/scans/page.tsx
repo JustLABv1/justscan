@@ -1,7 +1,7 @@
 'use client';
 import { createScan, deleteScan, listScans, Scan } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
-import { CheckmarkSquare01Icon, Delete01Icon, FileExportIcon, PlusSignIcon } from 'hugeicons-react';
+import { CheckmarkSquare01Icon, Delete01Icon, FileExportIcon, GitCompareIcon, PlusSignIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -114,6 +114,14 @@ export default function ScansPage() {
             <CheckmarkSquare01Icon size={15} />
             {selecting ? 'Cancel' : 'Select'}
           </button>
+          <Link
+            href="/scans/compare"
+            className="flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-xl transition-all duration-150"
+            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+          >
+            <GitCompareIcon size={15} />
+            Compare
+          </Link>
           <button
             onClick={modal.open}
             className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"

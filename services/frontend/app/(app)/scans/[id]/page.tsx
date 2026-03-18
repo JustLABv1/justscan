@@ -1,29 +1,29 @@
 'use client';
 import {
-  addTagToScan,
-  assignScanToOrg,
-  ComplianceResult,
-  createComment,
-  deleteComment,
-  deleteSuppression,
-  getScan,
-  getScanCompliance,
-  getScanSBOM,
-  getUser,
-  listOrgs,
-  listTags,
-  listVulnerabilities,
-  Org,
-  reEvaluateCompliance,
-  removeScanFromOrg,
-  removeTagFromScan,
-  reScan,
-  SBOMComponent,
-  Scan,
-  Suppression,
-  Tag,
-  upsertSuppression,
-  Vulnerability,
+    addTagToScan,
+    assignScanToOrg,
+    ComplianceResult,
+    createComment,
+    deleteComment,
+    deleteSuppression,
+    getScan,
+    getScanCompliance,
+    getScanSBOM,
+    getUser,
+    listOrgs,
+    listTags,
+    listVulnerabilities,
+    Org,
+    reEvaluateCompliance,
+    removeScanFromOrg,
+    removeTagFromScan,
+    reScan,
+    SBOMComponent,
+    Scan,
+    Suppression,
+    Tag,
+    upsertSuppression,
+    Vulnerability,
 } from '@/lib/api';
 import { Calendar, DateField, DatePicker } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
@@ -551,27 +551,29 @@ export default function ScanDetailPage() {
               </p>
             )}
           </div>
-          <Link
-            href={`/reports/print?scans=${scan.id}`}
-            target="_blank"
-            className="flex items-center gap-2 shrink-0 px-3 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
-          >
-            <FileExportIcon size={15} />
-            Export
-          </Link>
-          <button
-            onClick={handleReScan}
-            disabled={reScanning || scan.status === 'running' || scan.status === 'pending'}
-            className="flex items-center gap-2 shrink-0 px-3 py-2 text-sm rounded-xl font-medium disabled:opacity-50 transition-all hover:opacity-90"
-            style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#c4b5fd' }}
-            title="Start a new scan with the same image and tag"
-          >
-            {reScanning
-              ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
-              : <Refresh01Icon size={15} />}
-            Re-scan
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href={`/reports/print?scans=${scan.id}`}
+              target="_blank"
+              className="flex items-center gap-2 px-3 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+            >
+              <FileExportIcon size={15} />
+              Export
+            </Link>
+            <button
+              onClick={handleReScan}
+              disabled={reScanning || scan.status === 'running' || scan.status === 'pending'}
+              className="flex items-center gap-2 px-3 py-2 text-sm rounded-xl font-medium disabled:opacity-50 transition-all hover:opacity-90"
+              style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#c4b5fd' }}
+              title="Start a new scan with the same image and tag"
+            >
+              {reScanning
+                ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+                : <Refresh01Icon size={15} />}
+              Re-scan
+            </button>
+          </div>
         </div>
       </div>
 
@@ -969,14 +971,25 @@ export default function ScanDetailPage() {
                   >
                     <td className="px-4 py-3">
                       {v.vuln_id ? (
-                        <a
-                          href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-mono text-xs text-violet-500 dark:text-violet-400 hover:text-violet-400 dark:hover:text-violet-300 hover:underline transition-colors"
-                        >
-                          {v.vuln_id}
-                        </a>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <a
+                            href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-mono text-xs text-violet-500 dark:text-violet-400 hover:text-violet-400 dark:hover:text-violet-300 hover:underline transition-colors"
+                          >
+                            {v.vuln_id}
+                          </a>
+                          {v.suppression && (
+                            <span
+                              className="text-xs font-medium px-1.5 py-0.5 rounded-md capitalize shrink-0"
+                              style={{ background: 'rgba(251,146,60,0.12)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.25)' }}
+                              title={v.suppression.justification || 'Suppressed'}
+                            >
+                              {v.suppression.status.replace(/_/g, ' ')}
+                            </span>
+                          )}
+                        </div>
                       ) : <span className="text-zinc-400 dark:text-zinc-600">—</span>}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">{v.pkg_name}</td>

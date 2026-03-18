@@ -30,6 +30,9 @@ func ListKBEntries(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		search := c.Query("q")
 		severity := c.Query("severity")
+		exploit := c.Query("exploit")
+		minCvssStr := c.Query("min_cvss")
+		publishedAfter := c.Query("published_after")
 
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
@@ -47,6 +50,17 @@ func ListKBEntries(db *bun.DB) gin.HandlerFunc {
 		}
 		if severity != "" {
 			base = base.Where("severity = ?", severity)
+		}
+		if exploit == "true" {
+			base = base.Where("exploit_available = ?", true)
+		}
+		if minCvssStr != "" {
+			if minCvssFloat, err := strconv.ParseFloat(minCvssStr, 64); err == nil && minCvssFloat > 0 {
+				base = base.Where("cvss_score >= ?", minCvssFloat)
+			}
+		}
+		if publishedAfter != "" {
+			base = base.Where("published_date >= ?::timestamptz", publishedAfter)
 		}
 
 		total, err := base.Count(c.Request.Context())

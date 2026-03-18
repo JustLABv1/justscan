@@ -1,5 +1,6 @@
 'use client';
 import { getKBEntry, listKBEntries, VulnKBEntry } from '@/lib/api';
+import { Label, ListBox, Select, Switch } from '@heroui/react';
 import { InformationCircleIcon, Shield01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -92,6 +93,37 @@ function DetailPanel({ entry, onClose }: { entry: VulnKBEntry; onClose: () => vo
 
 const LIMIT = 50;
 
+const CVSS_OPTIONS = [
+  { id: '0',   label: 'Any CVSS' },
+  { id: '4',   label: '≥ 4.0 (Medium+)' },
+  { id: '7',   label: '≥ 7.0 (High+)' },
+  { id: '9',   label: '≥ 9.0 (Critical)' },
+];
+
+const SEV_OPTIONS = [
+  { id: '',         label: 'All Severities' },
+  { id: 'CRITICAL', label: 'Critical' },
+  { id: 'HIGH',     label: 'High' },
+  { id: 'MEDIUM',   label: 'Medium' },
+  { id: 'LOW',      label: 'Low' },
+];
+
+const PUBLISHED_OPTIONS = [
+  { id: '',     label: 'Any Time' },
+  { id: '30d',  label: 'Last 30 days' },
+  { id: '90d',  label: 'Last 90 days' },
+  { id: '1y',   label: 'Last year' },
+];
+
+function publishedAfterDate(value: string): string | undefined {
+  if (!value) return undefined;
+  const now = new Date();
+  if (value === '30d') { now.setDate(now.getDate() - 30); return now.toISOString(); }
+  if (value === '90d') { now.setDate(now.getDate() - 90); return now.toISOString(); }
+  if (value === '1y')  { now.setFullYear(now.getFullYear() - 1); return now.toISOString(); }
+  return undefined;
+}
+
 export default function VulnKBPage() {
   const [entries, setEntries] = useState<VulnKBEntry[]>([]);
   const [total, setTotal] = useState(0);
@@ -101,13 +133,24 @@ export default function VulnKBPage() {
   const [query, setQuery] = useState('');
   const [queryInput, setQueryInput] = useState('');
   const [severity, setSeverity] = useState('');
+  const [minCvss, setMinCvss] = useState('0');
+  const [exploitOnly, setExploitOnly] = useState(false);
+  const [publishedRange, setPublishedRange] = useState('');
   const [detail, setDetail] = useState<VulnKBEntry | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listKBEntries(query || undefined, severity || undefined, page, LIMIT);
+      const res = await listKBEntries(
+        query || undefined,
+        severity || undefined,
+        page,
+        LIMIT,
+        exploitOnly || undefined,
+        Number(minCvss) || undefined,
+        publishedAfterDate(publishedRange),
+      );
       setEntries(res.data ?? []);
       setTotal(res.total ?? 0);
     } catch (e: unknown) {
@@ -115,7 +158,7 @@ export default function VulnKBPage() {
     } finally {
       setLoading(false);
     }
-  }, [query, severity, page]);
+  }, [query, severity, page, exploitOnly, minCvss, publishedRange]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -125,8 +168,7 @@ export default function VulnKBPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [queryInput]);
 
-  // Reset page when severity changes
-  useEffect(() => { setPage(1); }, [severity]);
+  useEffect(() => { setPage(1); }, [severity, minCvss, exploitOnly, publishedRange]);
 
   async function handleRowClick(entry: VulnKBEntry) {
     try {
@@ -137,6 +179,8 @@ export default function VulnKBPage() {
     }
   }
 
+  const activeFilters = [severity, minCvss !== '0' ? `CVSS ≥ ${minCvss}` : '', exploitOnly ? 'Exploit Only' : '', publishedRange ? PUBLISHED_OPTIONS.find(o => o.id === publishedRange)?.label : ''].filter(Boolean);
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -145,24 +189,143 @@ export default function VulnKBPage() {
             <Shield01Icon size={22} className="text-violet-500" />
             Vulnerability Knowledge Base
           </h1>
-      <p className="text-sm text-zinc-500 mt-0.5">Enriched CVE data from NVD, GHSA, OSV, and other sources via Trivy</p>
+          <p className="text-sm text-zinc-500 mt-0.5">Enriched CVE data from NVD, GHSA, OSV, and other sources via Trivy</p>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={queryInput}
-            onChange={e => setQueryInput(e.target.value)}
-            placeholder="Search CVE ID or description…"
-            className={`${inputCls} w-64`}
-          />
-          <select value={severity} onChange={e => { setSeverity(e.target.value); setPage(1); }} className={inputCls}>
-            <option value="">All Severities</option>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
+      </div>
+
+      {/* Filters */}
+      <div className="glass-panel rounded-2xl p-4 space-y-3">
+        <div className="flex flex-wrap gap-3 items-end">
+          {/* Search */}
+          <div className="flex-1 min-w-52">
+            <label className="text-xs font-medium text-zinc-500 mb-1.5 block">Search</label>
+            <input
+              type="text"
+              value={queryInput}
+              onChange={e => setQueryInput(e.target.value)}
+              placeholder="CVE ID or description…"
+              className={`${inputCls} w-full`}
+            />
+          </div>
+
+          {/* Severity Select */}
+          <div className="min-w-44">
+            <label className="text-xs font-medium text-zinc-500 mb-1.5 block">Severity</label>
+            <Select
+              selectedKey={severity}
+              onSelectionChange={k => setSeverity(String(k ?? ''))}
+              className="w-full"
+              placeholder="All Severities"
+            >
+              <Select.Trigger className={inputCls}>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {SEV_OPTIONS.map(o => (
+                    <ListBox.Item key={o.id} id={o.id} textValue={o.label}>
+                      {o.label}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+
+          {/* CVSS Select */}
+          <div className="min-w-44">
+            <label className="text-xs font-medium text-zinc-500 mb-1.5 block">Min CVSS</label>
+            <Select
+              selectedKey={minCvss}
+              onSelectionChange={k => setMinCvss(String(k ?? '0'))}
+              className="w-full"
+              placeholder="Any CVSS"
+            >
+              <Select.Trigger className={inputCls}>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {CVSS_OPTIONS.map(o => (
+                    <ListBox.Item key={o.id} id={o.id} textValue={o.label}>
+                      {o.label}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+
+          {/* Published Range Select */}
+          <div className="min-w-40">
+            <label className="text-xs font-medium text-zinc-500 mb-1.5 block">Published</label>
+            <Select
+              selectedKey={publishedRange}
+              onSelectionChange={k => setPublishedRange(String(k ?? ''))}
+              className="w-full"
+              placeholder="Any Time"
+            >
+              <Select.Trigger className={inputCls}>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {PUBLISHED_OPTIONS.map(o => (
+                    <ListBox.Item key={o.id} id={o.id} textValue={o.label}>
+                      {o.label}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+
+          {/* Exploit Only Toggle */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-zinc-500">Exploit</label>
+            <Switch
+              isSelected={exploitOnly}
+              onChange={setExploitOnly}
+              className="h-[38px] flex items-center"
+            >
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              <Switch.Content>
+                <Label className="text-sm text-zinc-600 dark:text-zinc-300">Only</Label>
+              </Switch.Content>
+            </Switch>
+          </div>
+
+          {/* Reset */}
+          {activeFilters.length > 0 && (
+            <button
+              onClick={() => { setSeverity(''); setMinCvss('0'); setExploitOnly(false); setPublishedRange(''); setQueryInput(''); setQuery(''); setPage(1); }}
+              className="px-3 py-2 text-sm rounded-xl text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors self-end"
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+            >
+              Reset
+            </button>
+          )}
         </div>
+
+        {/* Active filter chips */}
+        {activeFilters.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {activeFilters.map((f, i) => (
+              <span key={i} className="text-xs px-2 py-0.5 rounded-full font-medium"
+                style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.25)' }}>
+                {f}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -198,7 +361,7 @@ export default function VulnKBPage() {
                   <div className="flex flex-col items-center gap-3">
                     <Shield01Icon size={32} className="text-zinc-400 dark:text-zinc-600" />
                     <p className="text-sm text-zinc-500">No KB entries found.</p>
-                    <p className="text-xs text-zinc-400">The KB is populated when vulnerabilities are found in scans.</p>
+                    <p className="text-xs text-zinc-400">Try adjusting your filters or the KB is populated when vulnerabilities are found in scans.</p>
                   </div>
                 </td>
               </tr>
@@ -227,7 +390,7 @@ export default function VulnKBPage() {
                 </td>
                 <td className="px-4 py-3 text-center">
                   {e.exploit_available ? (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ color: '#f87171', background: 'rgba(239,68,68,0.12)' }}>Yes</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ color: '#f87171', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.2)' }}>Yes</span>
                   ) : (
                     <span className="text-xs text-zinc-400">—</span>
                   )}
@@ -273,3 +436,4 @@ export default function VulnKBPage() {
     </div>
   );
 }
+

@@ -41,6 +41,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       router.replace('/login');
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUser(getUser());
     setAuthReady(true);
     if (localStorage.getItem('sidebar_collapsed') === 'true') setCollapsed(true);

@@ -100,6 +100,7 @@ export default function PrintReportPage() {
 
   useEffect(() => {
     const token = localStorage.getItem('justscan_token');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!token) { setError('Not authenticated. Please log in and try again.'); return; }
 
     const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';

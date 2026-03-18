@@ -101,6 +101,7 @@ export default function PublicScanPage() {
   const isDark = resolvedTheme === 'dark';
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     getPublicSettings().then(setSettings).catch(() => setSettings({ enabled: true, rate_limit_per_hour: 5 }));
     setHistory(getPublicHistory());

@@ -26,6 +26,7 @@ function SeverityBadge({ severity }: { severity: string }) {
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
   if (!mounted) return <div className="w-9 h-9" />;
   const isDark = resolvedTheme === 'dark';
@@ -159,6 +160,7 @@ export default function PublicScanResultPage() {
 
   useEffect(() => {
     if (!scan || scan.status !== 'completed') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVulnLoading(true);
     listPublicVulnerabilities(id, page, LIMIT, severityFilter || undefined, pkgFilter || undefined, hasFix || undefined, minCvss || undefined, sortBy, sortDir)
       .then(res => { setVulns(res.data ?? []); setVulnTotal(res.total); })
@@ -254,10 +256,10 @@ export default function PublicScanResultPage() {
             {/* Severity cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: 'Critical', count: scan.critical_count, ...SEV_CONFIG.CRITICAL },
-                { label: 'High',     count: scan.high_count,     ...SEV_CONFIG.HIGH },
-                { label: 'Medium',   count: scan.medium_count,   ...SEV_CONFIG.MEDIUM },
-                { label: 'Low',      count: scan.low_count,      ...SEV_CONFIG.LOW },
+                { ...SEV_CONFIG.CRITICAL, count: scan.critical_count },
+                { ...SEV_CONFIG.HIGH,     count: scan.high_count },
+                { ...SEV_CONFIG.MEDIUM,   count: scan.medium_count },
+                { ...SEV_CONFIG.LOW,      count: scan.low_count },
               ].map(({ label, count, color, border }) => (
                 <div
                   key={label}

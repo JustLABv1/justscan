@@ -1,26 +1,144 @@
 'use client';
-import { createPublicScan, getPublicSettings } from '@/lib/api';
+import { createPublicScan, getPublicScan, getPublicSettings, Scan } from '@/lib/api';
+import {
+  addToPublicHistory,
+  clearPublicHistory,
+  getPublicHistory,
+  PublicScanRecord,
+  timeAgo,
+  updatePublicHistoryEntry,
+} from '@/lib/publicScanHistory';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useTheme } from 'next-themes';
+
+const PLATFORMS = [
+  { value: '', label: 'Auto (detect)' },
+  { value: 'linux/amd64', label: 'linux/amd64' },
+  { value: 'linux/arm64', label: 'linux/arm64' },
+  { value: 'linux/arm/v7', label: 'linux/arm/v7' },
+  { value: 'windows/amd64', label: 'windows/amd64' },
+];
+
+function statusStyle(status: string): { color: string; dot: string } {
+  switch (status) {
+    case 'completed': return { color: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' };
+    case 'failed':    return { color: 'text-red-500 dark:text-red-400',         dot: 'bg-red-500' };
+    case 'running':   return { color: 'text-blue-500 dark:text-blue-400',        dot: 'bg-blue-400' };
+    default:          return { color: 'text-zinc-500',                           dot: 'bg-zinc-400' };
+  }
+}
+
+function HistoryRow({ record }: { record: PublicScanRecord }) {
+  const st = statusStyle(record.status);
+  const isActive = record.status === 'running' || record.status === 'pending';
+  return (
+    <Link
+      href={`/scan/${record.id}`}
+      className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors group"
+      style={{ background: 'var(--row-hover)' }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--glass-bg)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+    >
+      {/* Image + platform */}
+      <div className="flex-1 min-w-0">
+        <p className="font-mono text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+          {record.image_name}:{record.image_tag}
+        </p>
+        {record.platform && (
+          <span className="text-xs px-1.5 py-0.5 rounded font-mono mt-0.5 inline-block"
+            style={{ background: 'rgba(124,58,237,0.1)', color: '#7c3aed', border: '1px solid rgba(124,58,237,0.15)' }}>
+            {record.platform}
+          </span>
+        )}
+      </div>
+
+      {/* Status */}
+      <div className={`flex items-center gap-1.5 text-xs font-medium shrink-0 ${st.color}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${st.dot} ${isActive ? 'animate-pulse' : ''}`} />
+        {record.status}
+      </div>
+
+      {/* Severity counts (only for completed) */}
+      {record.status === 'completed' && (
+        <div className="hidden sm:flex items-center gap-2 shrink-0 text-xs font-mono">
+          {record.critical_count > 0 && <span className="text-red-500 dark:text-red-400">{record.critical_count}C</span>}
+          {record.high_count > 0     && <span className="text-orange-500 dark:text-orange-400">{record.high_count}H</span>}
+          {record.medium_count > 0   && <span className="text-yellow-600 dark:text-yellow-400">{record.medium_count}M</span>}
+          {record.low_count > 0      && <span className="text-blue-500 dark:text-blue-400">{record.low_count}L</span>}
+          {record.critical_count === 0 && record.high_count === 0 && record.medium_count === 0 && record.low_count === 0 && (
+            <span className="text-emerald-600 dark:text-emerald-400">Clean</span>
+          )}
+        </div>
+      )}
+
+      {/* Time */}
+      <span className="text-xs shrink-0" style={{ color: 'var(--text-faint)' }}>{timeAgo(record.created_at)}</span>
+
+      {/* Arrow */}
+      <svg className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" width="14" height="14"
+        viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+        style={{ color: 'var(--text-muted)' }}>
+        <polyline points="9 18 15 12 9 6"/>
+      </svg>
+    </Link>
+  );
+}
 
 export default function PublicScanPage() {
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState('');
+  const [platform, setPlatform] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [settings, setSettings] = useState<{ enabled: boolean; rate_limit_per_hour: number } | null>(null);
+  const [history, setHistory] = useState<PublicScanRecord[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isDark = resolvedTheme === 'dark';
 
   useEffect(() => {
     setMounted(true);
     getPublicSettings().then(setSettings).catch(() => setSettings({ enabled: true, rate_limit_per_hour: 5 }));
+    setHistory(getPublicHistory());
     inputRef.current?.focus();
   }, []);
+
+  // Poll status for any pending/running scans in history
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+
+    const active = history.filter(s => s.status === 'pending' || s.status === 'running');
+    if (active.length === 0) return;
+
+    pollRef.current = setInterval(async () => {
+      let anyChange = false;
+      await Promise.all(
+        active.map(async record => {
+          try {
+            const fresh = await getPublicScan(record.id);
+            if (fresh.status !== record.status) {
+              updatePublicHistoryEntry(record.id, {
+                status: fresh.status,
+                critical_count: fresh.critical_count,
+                high_count: fresh.high_count,
+                medium_count: fresh.medium_count,
+                low_count: fresh.low_count,
+                unknown_count: fresh.unknown_count,
+              });
+              anyChange = true;
+            }
+          } catch { /* ignore */ }
+        })
+      );
+      if (anyChange) setHistory(getPublicHistory());
+    }, 3000);
+
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [history]);
 
   async function handleScan(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -36,12 +154,19 @@ export default function PublicScanPage() {
     }
     setLoading(true);
     try {
-      const scan = await createPublicScan(image, tag);
+      const scan = await createPublicScan(image, tag, platform || undefined);
+      addToPublicHistory(scanToRecord(scan, platform));
+      setHistory(getPublicHistory());
       router.push(`/scan/${scan.id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to start scan');
       setLoading(false);
     }
+  }
+
+  function handleClearHistory() {
+    clearPublicHistory();
+    setHistory([]);
   }
 
   const isDisabled = settings !== null && !settings.enabled;
@@ -50,33 +175,17 @@ export default function PublicScanPage() {
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--app-bg)', color: 'var(--text-primary)' }}>
       {/* Ambient glow */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div
-          className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full"
-          style={{ background: isDark
-            ? 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 65%)'
-            : 'radial-gradient(circle, rgba(124,58,237,0.09) 0%, transparent 65%)' }}
-        />
-        <div
-          className="absolute bottom-0 right-1/4 w-[400px] h-[400px] rounded-full"
-          style={{ background: isDark
-            ? 'radial-gradient(circle, rgba(109,40,217,0.1) 0%, transparent 65%)'
-            : 'radial-gradient(circle, rgba(109,40,217,0.05) 0%, transparent 65%)' }}
-        />
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full"
+          style={{ background: isDark ? 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 65%)' : 'radial-gradient(circle, rgba(124,58,237,0.09) 0%, transparent 65%)' }} />
+        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] rounded-full"
+          style={{ background: isDark ? 'radial-gradient(circle, rgba(109,40,217,0.1) 0%, transparent 65%)' : 'radial-gradient(circle, rgba(109,40,217,0.05) 0%, transparent 65%)' }} />
       </div>
 
       {/* Nav */}
-      <header
-        className="relative z-10 flex items-center justify-between px-6 py-4"
-        style={{ borderBottom: '1px solid var(--border-subtle)' }}
-      >
+      <header className="relative z-10 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         <Link href="/" className="flex items-center gap-2.5">
-          <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-              boxShadow: '0 0 12px rgba(124,58,237,0.5)',
-            }}
-          >
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 12px rgba(124,58,237,0.5)' }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
@@ -103,74 +212,57 @@ export default function PublicScanPage() {
               )}
             </button>
           )}
-          <Link
-            href="/login"
-            className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
-            style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
-          >
+          <Link href="/login" className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
+            style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
             Sign in
           </Link>
         </div>
       </header>
 
-      {/* Hero */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-16">
-        <div className="w-full max-w-2xl text-center space-y-6">
-          {/* Icon */}
-          <div className="flex justify-center">
-            <div
-              className="w-20 h-20 rounded-3xl flex items-center justify-center"
-              style={{
-                background: isDark
-                  ? 'linear-gradient(135deg, rgba(124,58,237,0.25) 0%, rgba(109,40,217,0.12) 100%)'
-                  : 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(109,40,217,0.06) 100%)',
-                border: '1px solid rgba(167,139,250,0.25)',
-                boxShadow: '0 0 40px rgba(124,58,237,0.15)',
-              }}
-            >
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <polyline points="9 12 11 14 15 10" />
-              </svg>
+      <main className="relative z-10 flex-1 flex flex-col items-center px-4 py-12">
+        <div className="w-full max-w-2xl space-y-8 my-auto">
+
+          {/* Hero */}
+          <div className="text-center space-y-4">
+            <div className="flex justify-center">
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                style={{
+                  background: isDark ? 'linear-gradient(135deg, rgba(124,58,237,0.25) 0%, rgba(109,40,217,0.12) 100%)' : 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(109,40,217,0.06) 100%)',
+                  border: '1px solid rgba(167,139,250,0.25)',
+                  boxShadow: '0 0 32px rgba(124,58,237,0.15)',
+                }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <polyline points="9 12 11 14 15 10" />
+                </svg>
+              </div>
+            </div>
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                Scan any Docker image{' '}
+                <span style={{ background: 'linear-gradient(135deg, #a78bfa, #7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                  instantly
+                </span>
+              </h1>
+              <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+                No account needed · {settings?.rate_limit_per_hour ?? 5} free scans per hour · Powered by Trivy
+              </p>
             </div>
           </div>
 
-          {/* Heading */}
-          <div>
-            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              Scan any Docker image
-              <br />
-              <span style={{ background: 'linear-gradient(135deg, #a78bfa, #7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                instantly
-              </span>
-            </h1>
-            <p className="mt-4 text-base max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
-              Detect vulnerabilities in public Docker images — no account needed.
-              {settings && ` Up to ${settings.rate_limit_per_hour} scans per hour.`}
-            </p>
-          </div>
-
-          {/* Input / disabled state */}
+          {/* Form */}
           {isDisabled ? (
-            <div
-              className="rounded-2xl px-6 py-5 text-center"
-              style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}
-            >
+            <div className="rounded-2xl px-6 py-5 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
               <p className="text-red-500 dark:text-red-400 font-medium">Public scanning is temporarily disabled</p>
               <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>The administrator has disabled this feature. Please check back later.</p>
             </div>
           ) : (
-            <form onSubmit={handleScan} className="space-y-3">
-              <div
-                className="flex items-center gap-2 p-2 rounded-2xl"
-                style={{
-                  background: 'var(--glass-bg)',
-                  border: '1px solid var(--glass-border)',
-                  boxShadow: 'var(--glass-shadow)',
-                }}
-              >
+            <form onSubmit={handleScan} className="space-y-2">
+              {/* Image input row */}
+              <div className="flex items-center gap-2 p-2 rounded-2xl"
+                style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
                 <div className="pl-2 shrink-0" style={{ color: 'var(--text-faint)' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/><line x1="15" y1="9" x2="15" y2="21"/>
                   </svg>
                 </div>
@@ -188,10 +280,7 @@ export default function PublicScanPage() {
                   type="submit"
                   disabled={loading || !input.trim()}
                   className="shrink-0 px-5 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90"
-                  style={{
-                    background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-                    boxShadow: '0 0 20px rgba(124,58,237,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
-                  }}
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4), inset 0 1px 0 rgba(255,255,255,0.15)' }}
                 >
                   {loading ? (
                     <span className="flex items-center gap-2">
@@ -202,17 +291,32 @@ export default function PublicScanPage() {
                 </button>
               </div>
 
-              {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
+              {/* Platform row */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs" style={{ color: 'var(--text-faint)' }}>Platform:</span>
+                {PLATFORMS.map(p => (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => setPlatform(p.value)}
+                    className="text-xs px-2.5 py-1 rounded-lg font-mono transition-all"
+                    style={platform === p.value
+                      ? { background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(167,139,250,0.4)', color: '#7c3aed' }
+                      : { background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }
+                    }
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
 
-              <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
-                Powered by Trivy · {settings?.rate_limit_per_hour ?? 5} free scans per hour per IP · Public images only
-              </p>
+              {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
             </form>
           )}
 
-          {/* Example images */}
+          {/* Quick picks */}
           {!isDisabled && (
-            <div className="flex flex-wrap justify-center gap-2 pt-2">
+            <div className="flex flex-wrap gap-2">
               {['nginx:latest', 'ubuntu:22.04', 'python:3.11-slim', 'node:20-alpine'].map(img => (
                 <button
                   key={img}
@@ -225,33 +329,55 @@ export default function PublicScanPage() {
               ))}
             </div>
           )}
-        </div>
 
-        {/* Feature highlights */}
-        <div className="mt-20 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-2xl">
-          {[
-            { title: 'CVE Detection', desc: 'Scans all layers for known vulnerabilities' },
-            { title: 'No Account Needed', desc: 'Start scanning immediately, no sign-up required' },
-            { title: 'Export Report', desc: 'Download a full report of findings' },
-          ].map(({ title, desc }) => (
-            <div
-              key={title}
-              className="rounded-2xl p-4 text-left"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)' }}
-            >
-              <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{title}</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>{desc}</p>
+          {/* History */}
+          {history.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Your recent scans</h2>
+                <button
+                  onClick={handleClearHistory}
+                  className="text-xs transition-colors"
+                  style={{ color: 'var(--text-faint)' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+                >
+                  Clear history
+                </button>
+              </div>
+              <div className="rounded-2xl overflow-hidden space-y-px p-2"
+                style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                {history.map(record => (
+                  <HistoryRow key={record.id} record={record} />
+                ))}
+              </div>
+              <p className="text-xs text-center" style={{ color: 'var(--text-faint)' }}>
+                Stored locally on this device · Sign in to keep scans permanently
+              </p>
             </div>
-          ))}
+          )}
         </div>
       </main>
 
-      <footer
-        className="relative z-10 text-center py-6 text-xs"
-        style={{ color: 'var(--text-faint)', borderTop: '1px solid var(--border-subtle)' }}
-      >
+      <footer className="relative z-10 text-center py-6 text-xs" style={{ color: 'var(--text-faint)', borderTop: '1px solid var(--border-subtle)' }}>
         JustScan · Self-hosted image vulnerability scanner
       </footer>
     </div>
   );
+}
+
+function scanToRecord(scan: Scan, platform: string): PublicScanRecord {
+  return {
+    id: scan.id,
+    image_name: scan.image_name,
+    image_tag: scan.image_tag,
+    platform: platform || undefined,
+    status: scan.status,
+    critical_count: scan.critical_count ?? 0,
+    high_count: scan.high_count ?? 0,
+    medium_count: scan.medium_count ?? 0,
+    low_count: scan.low_count ?? 0,
+    unknown_count: scan.unknown_count ?? 0,
+    created_at: scan.created_at,
+  };
 }

@@ -1,22 +1,34 @@
 'use client';
 import { createPublicScan, getToken } from '@/lib/api';
+import { getPublicHistory } from '@/lib/publicScanHistory';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useTheme } from 'next-themes';
+
+const PLATFORMS = [
+  { value: '', label: 'Auto' },
+  { value: 'linux/amd64', label: 'linux/amd64' },
+  { value: 'linux/arm64', label: 'linux/arm64' },
+  { value: 'linux/arm/v7', label: 'linux/arm/v7' },
+  { value: 'windows/amd64', label: 'windows/amd64' },
+];
 
 export default function LandingPage() {
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState('');
+  const [platform, setPlatform] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [historyCount, setHistoryCount] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setMounted(true);
     if (getToken()) router.replace('/scans');
+    setHistoryCount(getPublicHistory().length);
   }, [router]);
 
   const isDark = resolvedTheme === 'dark';
@@ -35,7 +47,7 @@ export default function LandingPage() {
     }
     setLoading(true);
     try {
-      const scan = await createPublicScan(image, tag);
+      const scan = await createPublicScan(image, tag, platform || undefined);
       router.push(`/scan/${scan.id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to start scan');
@@ -196,6 +208,22 @@ export default function LandingPage() {
                 ) : 'Scan free'}
               </button>
             </div>
+            {/* Platform chips */}
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {PLATFORMS.map(p => (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => setPlatform(p.value)}
+                  className="text-xs px-3 py-1 rounded-full font-mono transition-colors"
+                  style={platform === p.value
+                    ? { background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(167,139,250,0.4)', color: '#7c3aed' }
+                    : { background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
             {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
             <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
               5 free scans per hour · Public images only · No sign-up required
@@ -219,6 +247,24 @@ export default function LandingPage() {
               </button>
             ))}
           </div>
+
+          {/* History link — only shown after mount if localStorage has entries */}
+          {mounted && historyCount > 0 && (
+            <div className="flex justify-center">
+              <Link
+                href="/scan"
+                className="inline-flex items-center gap-1.5 text-xs transition-colors"
+                style={{ color: 'var(--text-faint)' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#7c3aed')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12h18M3 6h18M3 18h18"/>
+                </svg>
+                View your {historyCount} recent scan{historyCount !== 1 ? 's' : ''} →
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Divider + sign-in section */}

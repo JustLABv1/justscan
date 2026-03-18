@@ -1,4 +1,5 @@
 'use client';
+import { useConfirmDialog } from '@/components/confirm-dialog';
 import { createTag, deleteTag, listTags, Tag, updateTag } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Tag01Icon } from 'hugeicons-react';
@@ -17,6 +18,7 @@ export default function TagsPage() {
   const [formError, setFormError] = useState('');
   const [editing, setEditing] = useState<Tag | null>(null);
   const modal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,7 +43,13 @@ export default function TagsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this tag? It will be removed from all scans.')) return;
+    const ok = await confirm({
+      title: 'Delete tag?',
+      message: 'The tag will be removed from all scans.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
     await deleteTag(id).catch(() => {}); load();
   }
 
@@ -171,6 +179,7 @@ export default function TagsPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+      {confirmDialog}
     </div>
   );
 }

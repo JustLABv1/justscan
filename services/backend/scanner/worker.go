@@ -2,12 +2,14 @@ package scanner
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"justscan-backend/compliance"
 	"justscan-backend/config"
+	"justscan-backend/notifications"
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
@@ -150,6 +152,16 @@ func processScan(job ScanJob) {
 
 	// Apply auto-tag rules based on image name/tag patterns
 	go applyAutoTags(db, scan)
+
+	// Fire completion notification
+	go notifications.Dispatch(db, models.NotificationEventScanComplete, notifications.Payload{
+		ScanID:    scanID.String(),
+		ImageName: scan.ImageName,
+		ImageTag:  scan.ImageTag,
+		Status:    models.ScanStatusCompleted,
+		Details: fmt.Sprintf("Critical: %d  High: %d  Medium: %d  Low: %d",
+			scan.CriticalCount, scan.HighCount, scan.MediumCount, scan.LowCount),
+	})
 }
 
 func applyAutoTags(db *bun.DB, scan *models.Scan) {
@@ -183,4 +195,12 @@ func setFailed(ctx context.Context, db *bun.DB, scan *models.Scan, msg string) {
 	db.NewUpdate().Model(scan).
 		Column("status", "error_message", "completed_at").
 		Where("id = ?", scan.ID).Exec(ctx) //nolint:errcheck
+
+	go notifications.Dispatch(db, models.NotificationEventScanFailed, notifications.Payload{
+		ScanID:    scan.ID.String(),
+		ImageName: scan.ImageName,
+		ImageTag:  scan.ImageTag,
+		Status:    models.ScanStatusFailed,
+		Details:   msg,
+	})
 }

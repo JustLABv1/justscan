@@ -1,4 +1,5 @@
 'use client';
+import { useConfirmDialog } from '@/components/confirm-dialog';
 import {
   createWatchlistItem, deleteWatchlistItem, listRegistries, listWatchlist,
   Registry, triggerWatchlistScan, updateWatchlistItem, WatchlistItem,
@@ -24,6 +25,7 @@ export default function WatchlistPage() {
   const [formError, setFormError] = useState('');
   const [triggering, setTriggering] = useState('');
   const modal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,7 +56,13 @@ export default function WatchlistPage() {
     finally { setSaving(false); }
   }
   async function handleDelete(id: string) {
-    if (!confirm('Remove this item from the watchlist?')) return;
+    const ok = await confirm({
+      title: 'Remove from watchlist?',
+      message: 'This image will no longer be automatically scanned on a schedule.',
+      confirmLabel: 'Remove',
+      variant: 'danger',
+    });
+    if (!ok) return;
     await deleteWatchlistItem(id).catch(() => {}); load();
   }
   async function handleTrigger(id: string) {
@@ -228,6 +236,7 @@ export default function WatchlistPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+      {confirmDialog}
     </div>
   );
 }

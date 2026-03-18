@@ -1,4 +1,5 @@
 'use client';
+import { useConfirmDialog } from '@/components/confirm-dialog';
 import { createRegistry, deleteRegistry, listRegistries, RegistryWithHealth, testRegistry, updateRegistry } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, ServerStack01Icon } from 'hugeicons-react';
@@ -44,6 +45,7 @@ export default function RegistriesPage() {
   const [formError, setFormError] = useState('');
   const [testing, setTesting] = useState<string | null>(null);
   const modal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,7 +74,13 @@ export default function RegistriesPage() {
     finally { setSaving(false); }
   }
   async function handleDelete(id: string) {
-    if (!confirm('Delete this registry?')) return;
+    const ok = await confirm({
+      title: 'Delete registry?',
+      message: 'The registry configuration will be permanently removed.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
     await deleteRegistry(id).catch(() => {}); load();
   }
   async function handleTest(id: string) {
@@ -247,6 +255,7 @@ export default function RegistriesPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+      {confirmDialog}
     </div>
   );
 }

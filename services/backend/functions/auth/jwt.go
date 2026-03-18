@@ -130,9 +130,8 @@ func RefreshToken(signedToken string) (newToken string, ExpiresAt int64, err err
 		return "", 0, errors.New("token is not close to expiration")
 	}
 
-	// Generate a new token with the same claims but a new expiration time
-	// TODO: Implement a way to consider rememberMe
-	newToken, ExpiresAt, err = GenerateJWT(claims.ID, false)
+	// Generate a new token preserving the original rememberMe preference
+	newToken, ExpiresAt, err = GenerateJWT(claims.ID, claims.RememberMe)
 	return
 }
 

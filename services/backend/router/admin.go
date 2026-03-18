@@ -24,6 +24,9 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.PUT("/users/:userID/state", func(c *gin.Context) {
 			admins.DisableUser(c, db)
 		})
+		admin.PUT("/users/:userID/disable", func(c *gin.Context) {
+			admins.DisableUser(c, db)
+		})
 		admin.DELETE("/users/:userID", func(c *gin.Context) {
 			admins.DeleteUser(c, db)
 		})
@@ -43,6 +46,26 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		})
 		admin.PUT("/settings/public-scan", func(c *gin.Context) {
 			admins.UpdatePublicScanEnabled(c, db)
+		})
+		admin.PUT("/settings/rate-limit", func(c *gin.Context) {
+			admins.UpdateRateLimit(c, db)
+		})
+		// audit log
+		admin.GET("/audit", func(c *gin.Context) {
+			admins.GetAuditLogs(c, db)
+		})
+		// notification channels
+		admin.GET("/notifications", func(c *gin.Context) {
+			admins.ListNotificationChannels(c, db)
+		})
+		admin.POST("/notifications", func(c *gin.Context) {
+			admins.CreateNotificationChannel(c, db)
+		})
+		admin.PUT("/notifications/:channelID", func(c *gin.Context) {
+			admins.UpdateNotificationChannel(c, db)
+		})
+		admin.DELETE("/notifications/:channelID", func(c *gin.Context) {
+			admins.DeleteNotificationChannel(c, db)
 		})
 	}
 }

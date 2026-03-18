@@ -1,10 +1,16 @@
 package scans
 
 import (
+	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
+	"justscan-backend/config"
+	"justscan-backend/functions/audit"
 	"justscan-backend/functions/auth"
+	"justscan-backend/pkg/crypto"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -68,11 +74,55 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 		envVars := resolveRegistryEnv(c.Request.Context(), db, req.Image)
 		scanner.EnqueueScan(scan.ID, db, envVars, req.Platform)
 
+		go audit.Write(c.Request.Context(), db, userID.String(), "scan.create",
+			fmt.Sprintf("Scan created for %s:%s (id=%s)", req.Image, req.Tag, scan.ID))
+
 		c.JSON(http.StatusCreated, scan)
 	}
 }
 
-// resolveRegistryEnv returns env vars for registry auth. Implemented fully in Phase 10.
-func resolveRegistryEnv(_ interface{ Done() <-chan struct{} }, _ *bun.DB, _ string) []string {
+// resolveRegistryEnv matches the image name to a stored registry and returns
+// Trivy-compatible environment variables for authentication.
+func resolveRegistryEnv(ctx context.Context, db *bun.DB, imageName string) []string {
+	var registries []models.Registry
+	if err := db.NewSelect().Model(&registries).Scan(ctx); err != nil {
+		return nil
+	}
+
+	encKey := crypto.KeyFromString(config.Config.Encryption.Key)
+
+	for _, reg := range registries {
+		host := strings.TrimPrefix(reg.URL, "https://")
+		host = strings.TrimPrefix(host, "http://")
+		host = strings.TrimSuffix(host, "/")
+
+		if !strings.HasPrefix(imageName, host+"/") && host != "docker.io" {
+			continue
+		}
+
+		password, err := crypto.Decrypt(encKey, reg.Password)
+		if err != nil {
+			log.Warnf("resolveRegistryEnv: failed to decrypt password for registry %s: %v", reg.Name, err)
+			continue
+		}
+
+		switch reg.AuthType {
+		case models.RegistryAuthBasic:
+			return []string{
+				"TRIVY_USERNAME=" + reg.Username,
+				"TRIVY_PASSWORD=" + password,
+			}
+		case models.RegistryAuthToken:
+			return []string{
+				"TRIVY_REGISTRY_TOKEN=" + password,
+			}
+		case models.RegistryAuthAWSECR:
+			// AWS ECR: username is AWS_ACCESS_KEY_ID, password is AWS_SECRET_ACCESS_KEY
+			return []string{
+				"AWS_ACCESS_KEY_ID=" + reg.Username,
+				"AWS_SECRET_ACCESS_KEY=" + password,
+			}
+		}
+	}
 	return nil
 }

@@ -21,8 +21,9 @@ func GenerateJWT(id uuid.UUID, rememberMe bool) (tokenString string, ExpiresAt i
 	}
 
 	claims := &models.JWTClaim{
-		ID:   id,
-		Type: "user",
+		ID:         id,
+		Type:       "user",
+		RememberMe: rememberMe,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},

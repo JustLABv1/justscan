@@ -27,10 +27,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-const inputCls =
-  'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors';
-const selectCls =
-  'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-violet-500 transition-colors';
+const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
 const RULE_TYPE_LABELS: Record<string, string> = {
   max_cvss: 'Max CVSS Score',
@@ -61,16 +58,17 @@ function RulePill({ rule }: { rule: PolicyRule }) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    completed: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
-    failed: 'bg-red-500/15 text-red-400 border-red-500/20',
-    running: 'bg-blue-500/15 text-blue-400 border-blue-500/20',
-    pending: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/20',
+  const map: Record<string, { color: string; bg: string; border: string }> = {
+    completed: { color: '#34d399', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.22)'  },
+    failed:    { color: '#f87171', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.22)'   },
+    running:   { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.22)'  },
+    pending:   { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)' },
   };
-  const cls = map[status] ?? map.pending;
+  const s = map[status] ?? map.pending;
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${cls}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${status === 'running' ? 'bg-blue-400 animate-pulse' : 'bg-current'}`} />
+    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full"
+      style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}` }}>
+      <span className={`w-1.5 h-1.5 rounded-full bg-current ${status === 'running' ? 'animate-pulse' : ''}`} />
       {status}
     </span>
   );
@@ -82,7 +80,7 @@ function emptyRule(): PolicyRule {
 
 function TrendChart({ points }: { points: TrendPoint[] }) {
   if (points.length === 0) return (
-    <p className="text-xs text-zinc-600 py-4 text-center">No compliance history yet.</p>
+    <p className="text-xs text-zinc-500 py-4 text-center">No compliance history yet.</p>
   );
 
   const maxVal = Math.max(...points.map(p => p.pass + p.fail), 1);
@@ -114,17 +112,12 @@ export default function OrgDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Trend chart
   const [trend, setTrend] = useState<TrendPoint[]>([]);
-
-  // Image pattern input
   const [newPattern, setNewPattern] = useState('');
 
-  // Assigned scans
   type OrgScanItem = Scan & { compliance: { policy_id: string; policy_name: string; status: string }[] };
   const [orgScans, setOrgScans] = useState<OrgScanItem[]>([]);
 
-  // Policy editor state
   const [editingPolicy, setEditingPolicy] = useState<OrgPolicy | null>(null);
   const [policyName, setPolicyName] = useState('');
   const [policyRules, setPolicyRules] = useState<PolicyRule[]>([emptyRule()]);
@@ -132,7 +125,6 @@ export default function OrgDetailPage() {
   const [policySaving, setPolicySaving] = useState(false);
   const policyModal = useOverlayState();
 
-  // Assign scan modal
   const [allScans, setAllScans] = useState<Scan[]>([]);
   const [assignLoading, setAssignLoading] = useState(false);
   const assignModal = useOverlayState();
@@ -220,7 +212,6 @@ export default function OrgDetailPage() {
     assignModal.open();
     try {
       const res = await listScans(1, 50);
-      // Filter out already-assigned scans
       const assignedIds = new Set(orgScans.map((s) => s.id));
       setAllScans((res.data ?? []).filter((s) => !assignedIds.has(s.id)));
     } catch { /* ignore */ } finally {
@@ -257,7 +248,7 @@ export default function OrgDetailPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="w-7 h-7 rounded-full border-2 border-zinc-700 border-t-violet-500 animate-spin" />
+        <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
       </div>
     );
   }
@@ -265,7 +256,10 @@ export default function OrgDetailPage() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{error}</div>
+        <div className="rounded-xl px-4 py-3 text-sm"
+          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          {error}
+        </div>
       </div>
     );
   }
@@ -278,20 +272,22 @@ export default function OrgDetailPage() {
       <div>
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-3"
+          className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors mb-3"
         >
           <ArrowLeft01Icon size={15} />
           Back to organizations
         </button>
-        <h1 className="text-xl font-bold text-white">{org.name}</h1>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">{org.name}</h1>
         {org.description && <p className="text-sm text-zinc-500 mt-1">{org.description}</p>}
       </div>
 
       {/* Compliance Trend */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-5 space-y-3">
+      <div className="glass-panel relative rounded-2xl p-5 space-y-3">
+        <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
+          style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.2),transparent)' }} />
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-white">Compliance Trend</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Compliance Trend</h2>
             <p className="text-xs text-zinc-500 mt-0.5">Pass/fail evaluations over 30 days</p>
           </div>
           <div className="flex items-center gap-3 text-xs text-zinc-500">
@@ -303,24 +299,27 @@ export default function OrgDetailPage() {
       </div>
 
       {/* Auto-assign Patterns */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-5 space-y-3">
+      <div className="glass-panel relative rounded-2xl p-5 space-y-3">
+        <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
+          style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)' }} />
         <div>
-          <h2 className="text-sm font-semibold text-white">Auto-assign Patterns</h2>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Auto-assign Patterns</h2>
           <p className="text-xs text-zinc-500 mt-0.5">
             Scans matching these patterns are automatically assigned to this org.
-            Use glob syntax: <code className="text-violet-400">nginx:*</code>, <code className="text-violet-400">docker.io/myapp:*</code>
+            Use glob syntax: <code className="text-violet-500 dark:text-violet-400">nginx:*</code>, <code className="text-violet-500 dark:text-violet-400">docker.io/myapp:*</code>
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {(org.image_patterns ?? []).map((p, i) => (
-            <span key={i} className="inline-flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-mono px-2.5 py-1 rounded-lg">
+            <span key={i} className="inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-200"
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
               {p}
-              <button onClick={() => removePattern(p)} className="text-zinc-500 hover:text-red-400 transition-colors ml-0.5">×</button>
+              <button onClick={() => removePattern(p)} className="text-zinc-400 hover:text-red-400 transition-colors ml-0.5">×</button>
             </span>
           ))}
           {(org.image_patterns ?? []).length === 0 && (
-            <p className="text-xs text-zinc-600">No patterns configured.</p>
+            <p className="text-xs text-zinc-500">No patterns configured.</p>
           )}
         </div>
 
@@ -331,12 +330,13 @@ export default function OrgDetailPage() {
             onChange={e => setNewPattern(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && addPattern()}
             placeholder="nginx:* or docker.io/myapp:*"
-            className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-violet-500 transition-colors font-mono"
+            className={inputCls + ' font-mono'}
           />
           <button
             onClick={addPattern}
             disabled={!newPattern.trim()}
-            className="px-3 py-2 text-sm rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-medium disabled:opacity-40 transition-colors"
+            className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 transition-all hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}
           >
             Add
           </button>
@@ -346,10 +346,11 @@ export default function OrgDetailPage() {
       {/* Policies */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-white">Policies</h2>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Policies</h2>
           <button
             onClick={openCreatePolicy}
-            className="flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white transition-colors"
+            className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
           >
             <PlusSignIcon size={14} />
             Add Policy
@@ -357,15 +358,15 @@ export default function OrgDetailPage() {
         </div>
 
         {(org.policies ?? []).length === 0 ? (
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 text-center text-sm text-zinc-600">
+          <div className="glass-panel rounded-2xl p-6 text-center text-sm text-zinc-500">
             No policies yet. Add one to start evaluating compliance.
           </div>
         ) : (
           <div className="space-y-2">
             {(org.policies ?? []).map((policy) => (
-              <div key={policy.id} className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 flex items-start justify-between gap-4">
+              <div key={policy.id} className="glass-panel rounded-2xl p-4 flex items-start justify-between gap-4">
                 <div className="space-y-2 min-w-0">
-                  <p className="text-sm font-medium text-zinc-200">{policy.name}</p>
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{policy.name}</p>
                   {policy.rules.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {policy.rules.map((r, i) => (
@@ -377,14 +378,14 @@ export default function OrgDetailPage() {
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => openEditPolicy(policy)}
-                    className="text-zinc-500 hover:text-violet-400 transition-colors"
+                    className="text-zinc-400 dark:text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1"
                     title="Edit policy"
                   >
                     <PencilEdit01Icon size={15} />
                   </button>
                   <button
                     onClick={() => handleDeletePolicy(policy.id)}
-                    className="text-zinc-600 hover:text-red-400 transition-colors"
+                    className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1"
                     title="Delete policy"
                   >
                     <Delete01Icon size={15} />
@@ -399,10 +400,11 @@ export default function OrgDetailPage() {
       {/* Assigned Scans */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-white">Assigned Scans</h2>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Assigned Scans</h2>
           <button
             onClick={openAssignModal}
-            className="flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
+            className="flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
+            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
           >
             <PlusSignIcon size={14} />
             Assign Scan
@@ -410,27 +412,30 @@ export default function OrgDetailPage() {
         </div>
 
         {orgScans.length === 0 ? (
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 text-center text-sm text-zinc-600">
-            No scans assigned. Assign a scan to evaluate it against this organization's policies.
+          <div className="glass-panel rounded-2xl p-6 text-center text-sm text-zinc-500">
+            No scans assigned. Assign a scan to evaluate it against this organization&apos;s policies.
           </div>
         ) : (
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+          <div className="glass-panel rounded-2xl overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-800">
+                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
                   <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Compliance</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/60">
-                {orgScans.map((scan) => (
-                  <tr key={scan.id} className="hover:bg-zinc-800/40 transition-colors">
+              <tbody>
+                {orgScans.map((scan, i) => (
+                  <tr key={scan.id}
+                    style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                     <td className="px-4 py-3">
                       <Link
                         href={`/scans/${scan.id}`}
-                        className="font-mono text-sm text-zinc-200 hover:text-violet-400 transition-colors"
+                        className="font-mono text-sm text-zinc-700 dark:text-zinc-300 hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
                       >
                         {scan.image_name}:{scan.image_tag}
                       </Link>
@@ -453,14 +458,14 @@ export default function OrgDetailPage() {
                           </span>
                         ))}
                         {(scan.compliance ?? []).length === 0 && (
-                          <span className="text-xs text-zinc-600">Not evaluated</span>
+                          <span className="text-xs text-zinc-500">Not evaluated</span>
                         )}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => handleRemoveScan(scan.id)}
-                        className="text-zinc-600 hover:text-red-400 transition-colors"
+                        className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors"
                         title="Remove scan from org"
                       >
                         <Delete01Icon size={15} />
@@ -478,22 +483,23 @@ export default function OrgDetailPage() {
       <Modal state={policyModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="bg-zinc-900 border border-zinc-800 rounded-2xl">
-              <Modal.Header className="border-b border-zinc-800 px-6 py-4">
-                <Modal.Heading className="text-white font-semibold">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
                   {editingPolicy ? 'Edit Policy' : 'New Policy'}
                 </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-300" />
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5 max-h-[60vh] overflow-y-auto">
                 <form id="policy-form" onSubmit={handleSavePolicy} className="space-y-5">
                   {policyError && (
-                    <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5 text-sm text-red-400">
+                    <div className="rounded-xl px-3 py-2.5 text-sm"
+                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
                       {policyError}
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-300">Policy Name <span className="text-red-400">*</span></label>
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Policy Name <span className="text-red-400">*</span></label>
                     <input
                       className={inputCls}
                       placeholder="e.g. No Critical CVEs"
@@ -505,11 +511,11 @@ export default function OrgDetailPage() {
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-zinc-300">Rules</label>
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Rules</label>
                       <button
                         type="button"
                         onClick={addRule}
-                        className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+                        className="flex items-center gap-1 text-xs text-violet-500 dark:text-violet-400 hover:text-violet-400 dark:hover:text-violet-300 transition-colors"
                       >
                         <PlusSignIcon size={12} />
                         Add Rule
@@ -517,7 +523,8 @@ export default function OrgDetailPage() {
                     </div>
 
                     {policyRules.map((rule, idx) => (
-                      <div key={idx} className="bg-zinc-800 rounded-lg p-3 space-y-3 border border-zinc-700">
+                      <div key={idx} className="rounded-xl p-3 space-y-3"
+                        style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                         <div className="flex items-center justify-between gap-2">
                           <select
                             value={rule.type}
@@ -527,7 +534,7 @@ export default function OrgDetailPage() {
                                 prev.map((r, i) => (i === idx ? { type: newType } : r))
                               );
                             }}
-                            className={selectCls}
+                            className={inputCls}
                           >
                             {Object.entries(RULE_TYPE_LABELS).map(([val, label]) => (
                               <option key={val} value={val}>{label}</option>
@@ -536,16 +543,15 @@ export default function OrgDetailPage() {
                           <button
                             type="button"
                             onClick={() => removeRule(idx)}
-                            className="text-zinc-600 hover:text-red-400 transition-colors shrink-0"
+                            className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors shrink-0 p-1"
                           >
                             <Delete01Icon size={15} />
                           </button>
                         </div>
 
-                        {/* Conditional inputs */}
                         {rule.type === 'max_cvss' && (
                           <div className="space-y-1">
-                            <label className="text-xs text-zinc-400">Max CVSS threshold (fail if ≥ this value)</label>
+                            <label className="text-xs text-zinc-500">Max CVSS threshold (fail if ≥ this value)</label>
                             <input
                               type="number"
                               min={0}
@@ -560,17 +566,17 @@ export default function OrgDetailPage() {
                         {rule.type === 'max_count' && (
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                              <label className="text-xs text-zinc-400">Severity</label>
+                              <label className="text-xs text-zinc-500">Severity</label>
                               <select
                                 value={rule.severity ?? 'CRITICAL'}
                                 onChange={(e) => setRuleField(idx, 'severity', e.target.value)}
-                                className={selectCls}
+                                className={inputCls}
                               >
                                 {SEV_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                               </select>
                             </div>
                             <div className="space-y-1">
-                              <label className="text-xs text-zinc-400">Max count</label>
+                              <label className="text-xs text-zinc-500">Max count</label>
                               <input
                                 type="number"
                                 min={0}
@@ -583,7 +589,7 @@ export default function OrgDetailPage() {
                         )}
                         {rule.type === 'max_total' && (
                           <div className="space-y-1">
-                            <label className="text-xs text-zinc-400">Max total vulnerabilities</label>
+                            <label className="text-xs text-zinc-500">Max total vulnerabilities</label>
                             <input
                               type="number"
                               min={0}
@@ -595,11 +601,11 @@ export default function OrgDetailPage() {
                         )}
                         {rule.type === 'require_fix' && (
                           <div className="space-y-1">
-                            <label className="text-xs text-zinc-400">Require fix for severity</label>
+                            <label className="text-xs text-zinc-500">Require fix for severity</label>
                             <select
                               value={rule.severity ?? 'CRITICAL'}
                               onChange={(e) => setRuleField(idx, 'severity', e.target.value)}
-                              className={selectCls}
+                              className={inputCls}
                             >
                               {SEV_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                             </select>
@@ -607,7 +613,7 @@ export default function OrgDetailPage() {
                         )}
                         {rule.type === 'blocked_cve' && (
                           <div className="space-y-1">
-                            <label className="text-xs text-zinc-400">CVE ID</label>
+                            <label className="text-xs text-zinc-500">CVE ID</label>
                             <input
                               type="text"
                               value={rule.cve_id ?? ''}
@@ -621,15 +627,16 @@ export default function OrgDetailPage() {
                     ))}
 
                     {policyRules.length === 0 && (
-                      <p className="text-xs text-zinc-600 text-center py-2">No rules. Add at least one rule.</p>
+                      <p className="text-xs text-zinc-500 text-center py-2">No rules. Add at least one rule.</p>
                     )}
                   </div>
                 </form>
               </Modal.Body>
-              <Modal.Footer className="border-t border-zinc-800 px-6 py-4 flex gap-3 justify-end">
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <button
                   onClick={policyModal.close}
-                  className="px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
+                  className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
                 >
                   Cancel
                 </button>
@@ -637,7 +644,8 @@ export default function OrgDetailPage() {
                   type="submit"
                   form="policy-form"
                   disabled={policySaving}
-                  className="px-4 py-2 text-sm rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-medium disabled:opacity-60 transition-colors flex items-center gap-2"
+                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}
                 >
                   {policySaving && (
                     <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -654,15 +662,15 @@ export default function OrgDetailPage() {
       <Modal state={assignModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="bg-zinc-900 border border-zinc-800 rounded-2xl">
-              <Modal.Header className="border-b border-zinc-800 px-6 py-4">
-                <Modal.Heading className="text-white font-semibold">Assign Scan</Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-300" />
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Assign Scan</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5 max-h-[60vh] overflow-y-auto">
                 {assignLoading ? (
                   <div className="flex justify-center py-8">
-                    <div className="w-6 h-6 rounded-full border-2 border-zinc-700 border-t-violet-500 animate-spin" />
+                    <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                   </div>
                 ) : allScans.length === 0 ? (
                   <p className="text-sm text-zinc-500 text-center py-6">
@@ -674,13 +682,15 @@ export default function OrgDetailPage() {
                       <button
                         key={scan.id}
                         onClick={() => handleAssign(scan.id)}
-                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-zinc-800 transition-colors text-left group"
+                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-colors text-left group"
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                       >
                         <div>
-                          <p className="font-mono text-sm text-zinc-200 group-hover:text-violet-400 transition-colors">
+                          <p className="font-mono text-sm text-zinc-700 dark:text-zinc-300 group-hover:text-violet-500 dark:group-hover:text-violet-400 transition-colors">
                             {scan.image_name}:{scan.image_tag}
                           </p>
-                          <p className="text-xs text-zinc-600 mt-0.5">
+                          <p className="text-xs text-zinc-500 mt-0.5">
                             {new Date(scan.created_at).toLocaleDateString()}
                           </p>
                         </div>

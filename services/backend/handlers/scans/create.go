@@ -40,7 +40,7 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			ImageTag:  req.Tag,
 			Platform:  req.Platform,
 			Status:    models.ScanStatusPending,
-			UserID:    userID,
+			UserID:    &userID,
 			CreatedAt: time.Now(),
 		}
 		if _, err := db.NewInsert().Model(scan).Exec(c.Request.Context()); err != nil {

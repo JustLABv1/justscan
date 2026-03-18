@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"errors"
+	"strings"
 
 	"justscan-backend/functions/auth"
 	"justscan-backend/functions/gatekeeper"
@@ -14,11 +15,12 @@ import (
 
 func Admin(db *bun.DB) gin.HandlerFunc {
 	return func(context *gin.Context) {
-		tokenString := context.GetHeader("Authorization")
-		if tokenString == "" {
+		raw := context.GetHeader("Authorization")
+		if raw == "" {
 			httperror.Unauthorized(context, "Request does not contain an access token", errors.New("request does not contain an access token"))
 			return
 		}
+		tokenString := strings.TrimPrefix(raw, "Bearer ")
 		err := auth.ValidateToken(tokenString)
 		if err != nil {
 			httperror.Unauthorized(context, "Token is not valid", err)

@@ -5,14 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-const inputStyle: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.04)',
-  border: '1px solid rgba(255,255,255,0.09)',
-  borderRadius: 12,
-  color: '#f4f4f5',
-};
-const inputCls = 'w-full px-3.5 py-2.5 text-sm placeholder-zinc-600 outline-none focus:ring-1 focus:ring-violet-500/50 transition-all rounded-xl';
-
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -46,22 +38,13 @@ export default function LoginPage() {
           <Shield01Icon size={26} color="white" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">JustScan</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Sign in to your account</p>
+          <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>Sign in to your account</p>
         </div>
       </div>
 
       {/* Card */}
-      <div
-        className="rounded-2xl p-6 space-y-4"
-        style={{
-          background: 'linear-gradient(145deg,rgba(255,255,255,0.05) 0%,rgba(255,255,255,0.015) 100%)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          border: '1px solid rgba(255,255,255,0.09)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.07)',
-        }}
-      >
+      <div className="glass-panel rounded-2xl p-6 space-y-4 relative">
         {/* Top shimmer */}
         <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
           style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.3),transparent)' }} />
@@ -75,10 +58,9 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-zinc-300">Email or Username</label>
+            <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Email or Username</label>
             <input
-              className={inputCls}
-              style={inputStyle}
+              className="w-full px-3.5 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/50 transition-all rounded-xl glass-input"
               type="text"
               placeholder="you@example.com"
               value={email}
@@ -88,10 +70,9 @@ export default function LoginPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-zinc-300">Password</label>
+            <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Password</label>
             <input
-              className={inputCls}
-              style={inputStyle}
+              className="w-full px-3.5 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/50 transition-all rounded-xl glass-input"
               type="password"
               placeholder="••••••••"
               value={password}
@@ -117,9 +98,9 @@ export default function LoginPage() {
         </form>
       </div>
 
-      <p className="text-center text-sm text-zinc-600">
+      <p className="text-center text-sm" style={{ color: 'var(--text-faint)' }}>
         No account?{' '}
-        <Link href="/register" className="text-violet-400 hover:text-violet-300 font-medium transition-colors">
+        <Link href="/register" className="text-violet-500 hover:text-violet-400 dark:text-violet-400 dark:hover:text-violet-300 font-medium transition-colors">
           Register
         </Link>
       </p>

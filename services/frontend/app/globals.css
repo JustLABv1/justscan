@@ -1,2 +1,121 @@
 @import "tailwindcss";
-@import "@heroui/styles"; 
+@import "@heroui/styles";
+
+/* ── Design tokens ───────────────────────────────────────────────────── */
+:root {
+  /* App shell */
+  --app-bg: #f4f4f5;
+  --sidebar-bg: linear-gradient(160deg, rgba(237,233,254,0.65) 0%, rgba(244,244,245,0.92) 50%, rgba(240,237,255,0.6) 100%);
+  --sidebar-border: rgba(0,0,0,0.08);
+  --sidebar-shadow: 4px 0 24px rgba(0,0,0,0.06), inset -1px 0 0 rgba(124,58,237,0.04);
+
+  /* Glass panel */
+  --glass-bg: linear-gradient(145deg, rgba(255,255,255,0.92) 0%, rgba(248,248,252,0.88) 100%);
+  --glass-bg-tint-end: rgba(0,0,0,0.004);
+  --glass-border: rgba(0,0,0,0.08);
+  --glass-shadow: 0 4px 32px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.9);
+  --glass-backdrop: blur(20px);
+
+  /* Modal */
+  --modal-bg: linear-gradient(145deg, rgba(255,255,255,0.99) 0%, rgba(250,250,252,1) 100%);
+  --modal-border: rgba(0,0,0,0.1);
+  --modal-shadow: 0 25px 50px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,1);
+
+  /* Inputs */
+  --input-bg: rgba(255,255,255,0.85);
+  --input-border: rgba(0,0,0,0.14);
+  --input-color: #18181b;
+  --input-placeholder: #71717a;
+
+  /* Row interaction */
+  --row-hover: rgba(0,0,0,0.03);
+  --row-divider: rgba(0,0,0,0.06);
+
+  /* Text */
+  --text-primary: #18181b;
+  --text-secondary: #3f3f46;
+  --text-muted: #71717a;
+  --text-faint: #a1a1aa;
+
+  /* Section borders */
+  --border-subtle: rgba(0,0,0,0.07);
+}
+
+.dark {
+  /* App shell */
+  --app-bg: #09090b;
+  --sidebar-bg: linear-gradient(160deg, rgba(39,32,74,0.55) 0%, rgba(9,9,11,0.75) 50%, rgba(15,10,30,0.65) 100%);
+  --sidebar-border: rgba(255,255,255,0.07);
+  --sidebar-shadow: 4px 0 24px rgba(0,0,0,0.4), inset -1px 0 0 rgba(124,58,237,0.06);
+
+  /* Glass panel */
+  --glass-bg: linear-gradient(145deg, rgba(255,255,255,0.038) 0%, rgba(255,255,255,0.01) 100%);
+  --glass-bg-tint-end: rgba(255,255,255,0.015);
+  --glass-border: rgba(255,255,255,0.07);
+  --glass-shadow: 0 4px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05);
+
+  /* Modal */
+  --modal-bg: linear-gradient(145deg, rgba(20,20,24,0.97) 0%, rgba(15,15,18,0.99) 100%);
+  --modal-border: rgba(255,255,255,0.08);
+  --modal-shadow: 0 25px 50px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
+
+  /* Inputs */
+  --input-bg: rgba(255,255,255,0.04);
+  --input-border: rgba(255,255,255,0.09);
+  --input-color: #f4f4f5;
+  --input-placeholder: #52525b;
+
+  /* Row interaction */
+  --row-hover: rgba(255,255,255,0.025);
+  --row-divider: rgba(255,255,255,0.04);
+
+  /* Text */
+  --text-primary: #fafafa;
+  --text-secondary: #d4d4d8;
+  --text-muted: #71717a;
+  --text-faint: #52525b;
+
+  /* Section borders */
+  --border-subtle: rgba(255,255,255,0.07);
+}
+
+/* ── Utility classes ─────────────────────────────────────────────────── */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-modal {
+  background: var(--modal-bg);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid var(--modal-border);
+  box-shadow: var(--modal-shadow);
+}
+
+.glass-input {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  color: var(--input-color);
+}
+
+.glass-input::placeholder {
+  color: var(--input-placeholder);
+}
+
+/* App + sidebar shell */
+.app-bg {
+  background-color: var(--app-bg);
+}
+
+.sidebar-glass {
+  background: var(--sidebar-bg);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-right: 1px solid var(--sidebar-border);
+  box-shadow: var(--sidebar-shadow);
+}

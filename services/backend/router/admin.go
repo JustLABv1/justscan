@@ -37,5 +37,12 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.DELETE("/tokens/:tokenID", func(c *gin.Context) {
 			admins.DeleteToken(c, db)
 		})
+		// system settings
+		admin.GET("/settings", func(c *gin.Context) {
+			admins.GetSettings(c, db)
+		})
+		admin.PUT("/settings/public-scan", func(c *gin.Context) {
+			admins.UpdatePublicScanEnabled(c, db)
+		})
 	}
 }

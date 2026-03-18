@@ -5,30 +5,8 @@ import { CheckmarkSquare01Icon, Delete01Icon, FileExportIcon, PlusSignIcon } fro
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
-// ── shared glass styles ───────────────────────────────────────────────
-const panel: React.CSSProperties = {
-  background: 'linear-gradient(145deg,rgba(255,255,255,0.038) 0%,rgba(255,255,255,0.01) 100%)',
-  backdropFilter: 'blur(20px)',
-  WebkitBackdropFilter: 'blur(20px)',
-  border: '1px solid rgba(255,255,255,0.07)',
-  boxShadow: '0 4px 32px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.05)',
-};
-const modalPanel: React.CSSProperties = {
-  background: 'linear-gradient(145deg,rgba(20,20,24,0.97) 0%,rgba(15,15,18,0.99) 100%)',
-  backdropFilter: 'blur(32px)',
-  WebkitBackdropFilter: 'blur(32px)',
-  border: '1px solid rgba(255,255,255,0.08)',
-  boxShadow: '0 25px 50px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.06)',
-};
-const inputStyle: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.04)',
-  border: '1px solid rgba(255,255,255,0.09)',
-  borderRadius: 10,
-  color: '#f4f4f5',
-};
-const inputCls = 'w-full px-3 py-2.5 text-sm placeholder-zinc-600 outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl';
+const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
-// ── severity columns ──────────────────────────────────────────────────
 const SEV_CELL: Record<string, string> = {
   critical: 'text-red-400 font-bold',
   high: 'text-orange-400',
@@ -36,7 +14,6 @@ const SEV_CELL: Record<string, string> = {
   low: 'text-blue-400',
 };
 
-// ── status badge ──────────────────────────────────────────────────────
 const STATUS: Record<string, { color: string; bg: string; border: string }> = {
   completed: { color: '#34d399', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.22)'  },
   failed:    { color: '#f87171', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.22)'   },
@@ -51,9 +28,7 @@ function StatusBadge({ status }: { status: string }) {
       className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full"
       style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}` }}
     >
-      <span
-        className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`}
-      />
+      <span className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`} />
       {status}
     </span>
   );
@@ -124,7 +99,7 @@ export default function ScansPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Scans</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Scans</h1>
           {total > 0 && <p className="text-sm text-zinc-500 mt-0.5">{total} scans total</p>}
         </div>
         <div className="flex items-center gap-2">
@@ -133,7 +108,7 @@ export default function ScansPage() {
             className="flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-xl transition-all duration-150"
             style={selecting
               ? { background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(167,139,250,0.3)', color: '#c4b5fd' }
-              : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#d4d4d8' }
+              : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }
             }
           >
             <CheckmarkSquare01Icon size={15} />
@@ -158,13 +133,10 @@ export default function ScansPage() {
       )}
 
       {/* Table */}
-      <div className="rounded-2xl overflow-hidden" style={panel}>
-        {/* top shimmer */}
-        <div className="absolute inset-x-0 top-0 h-px pointer-events-none"
-          style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.2),transparent)' }} />
+      <div className="glass-panel rounded-2xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
               {selecting && <th className="px-3 py-3 w-8" />}
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
@@ -182,13 +154,13 @@ export default function ScansPage() {
               <tr>
                 <td colSpan={colCount} className="py-16 text-center">
                   <div className="flex justify-center">
-                    <div className="w-6 h-6 rounded-full border-2 border-zinc-800 border-t-violet-500 animate-spin" />
+                    <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
                   </div>
                 </td>
               </tr>
             ) : scans.length === 0 ? (
               <tr>
-                <td colSpan={colCount} className="py-16 text-center text-zinc-600 text-sm">
+                <td colSpan={colCount} className="py-16 text-center text-zinc-500 text-sm">
                   No scans yet. Create one to get started.
                 </td>
               </tr>
@@ -196,8 +168,8 @@ export default function ScansPage() {
               <tr
                 key={scan.id}
                 className="transition-colors"
-                style={{ borderTop: i > 0 ? '1px solid rgba(255,255,255,0.04)' : undefined }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.025)')}
+                style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
               >
                 {selecting && (
@@ -209,7 +181,7 @@ export default function ScansPage() {
                       className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-all cursor-pointer"
                       style={selected.has(scan.id)
                         ? { background: 'rgba(124,58,237,0.9)', border: '1px solid rgba(167,139,250,0.8)' }
-                        : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.15)' }}
+                        : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
                     >
                       {selected.has(scan.id) && (
                         <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
@@ -220,22 +192,22 @@ export default function ScansPage() {
                   </td>
                 )}
                 <td className="px-4 py-3">
-                  <Link href={`/scans/${scan.id}`} className="font-mono text-zinc-300 hover:text-violet-400 transition-colors text-sm">
+                  <Link href={`/scans/${scan.id}`} className="font-mono text-zinc-700 dark:text-zinc-300 hover:text-violet-500 dark:hover:text-violet-400 transition-colors text-sm">
                     {scan.image_name}:{scan.image_tag}
                   </Link>
                 </td>
                 <td className="px-4 py-3"><StatusBadge status={scan.status} /></td>
                 <td className="px-3 py-3 text-center font-mono text-sm">
-                  <span className={scan.critical_count ? SEV_CELL.critical : 'text-zinc-700'}>{scan.critical_count || '—'}</span>
+                  <span className={scan.critical_count ? SEV_CELL.critical : 'text-zinc-400 dark:text-zinc-700'}>{scan.critical_count || '—'}</span>
                 </td>
                 <td className="px-3 py-3 text-center font-mono text-sm">
-                  <span className={scan.high_count ? SEV_CELL.high : 'text-zinc-700'}>{scan.high_count || '—'}</span>
+                  <span className={scan.high_count ? SEV_CELL.high : 'text-zinc-400 dark:text-zinc-700'}>{scan.high_count || '—'}</span>
                 </td>
                 <td className="px-3 py-3 text-center font-mono text-sm">
-                  <span className={scan.medium_count ? SEV_CELL.medium : 'text-zinc-700'}>{scan.medium_count || '—'}</span>
+                  <span className={scan.medium_count ? SEV_CELL.medium : 'text-zinc-400 dark:text-zinc-700'}>{scan.medium_count || '—'}</span>
                 </td>
                 <td className="px-3 py-3 text-center font-mono text-sm">
-                  <span className={scan.low_count ? SEV_CELL.low : 'text-zinc-700'}>{scan.low_count || '—'}</span>
+                  <span className={scan.low_count ? SEV_CELL.low : 'text-zinc-400 dark:text-zinc-700'}>{scan.low_count || '—'}</span>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
@@ -251,7 +223,7 @@ export default function ScansPage() {
                   {new Date(scan.created_at).toLocaleDateString()}
                 </td>
                 <td className="px-4 py-3">
-                  <button onClick={() => handleDelete(scan.id)} className="text-zinc-600 hover:text-red-400 transition-colors" title="Delete">
+                  <button onClick={() => handleDelete(scan.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors" title="Delete">
                     <Delete01Icon size={15} />
                   </button>
                 </td>
@@ -265,11 +237,11 @@ export default function ScansPage() {
       {selected.size > 0 && (
         <div
           className="fixed bottom-0 left-0 right-0 px-6 py-3 flex items-center justify-between z-20 print:hidden"
-          style={{ background: 'rgba(9,9,11,0.85)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderTop: '1px solid rgba(255,255,255,0.07)' }}
+          style={{ background: 'var(--modal-bg)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderTop: '1px solid var(--border-subtle)' }}
         >
-          <span className="text-sm text-zinc-400">{selected.size} scan{selected.size !== 1 ? 's' : ''} selected</span>
+          <span className="text-sm text-zinc-600 dark:text-zinc-400">{selected.size} scan{selected.size !== 1 ? 's' : ''} selected</span>
           <div className="flex gap-3">
-            <button onClick={() => setSelected(new Set())} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">Clear</button>
+            <button onClick={() => setSelected(new Set())} className="text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">Clear</button>
             <a
               href={`/reports/print?scans=${[...selected].join(',')}`}
               target="_blank"
@@ -285,20 +257,20 @@ export default function ScansPage() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <span className="text-sm text-zinc-600">{total} scans</span>
+          <span className="text-sm text-zinc-500">{total} scans</span>
           <div className="flex items-center gap-2">
             <button
               disabled={page <= 1}
               onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 text-sm rounded-xl text-zinc-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+              className="px-3 py-1.5 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
             >← Prev</button>
             <span className="text-sm text-zinc-500 px-2">{page} / {totalPages}</span>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 text-sm rounded-xl text-zinc-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+              className="px-3 py-1.5 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
             >Next →</button>
           </div>
         </div>
@@ -308,10 +280,10 @@ export default function ScansPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="rounded-2xl overflow-hidden" style={modalPanel}>
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                <Modal.Heading className="text-white font-semibold">New Scan</Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-300" />
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">New Scan</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
                 <form id="create-scan-form" onSubmit={handleCreate} className="space-y-4">
@@ -322,23 +294,18 @@ export default function ScansPage() {
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-300">Image Name</label>
-                    <input className={inputCls + ' font-mono'} style={inputStyle} placeholder="nginx"
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image Name</label>
+                    <input className={inputCls + ' font-mono'} placeholder="nginx"
                       value={imageName} onChange={(e) => setImageName(e.target.value)} required />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-300">Tag</label>
-                    <input className={inputCls + ' font-mono'} style={inputStyle} placeholder="latest"
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Tag</label>
+                    <input className={inputCls + ' font-mono'} placeholder="latest"
                       value={imageTag} onChange={(e) => setImageTag(e.target.value)} required />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-300">Platform <span className="text-zinc-600 font-normal">(optional)</span></label>
-                    <select
-                      className={inputCls}
-                      style={inputStyle}
-                      value={platform}
-                      onChange={(e) => setPlatform(e.target.value)}
-                    >
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Platform <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span></label>
+                    <select className={inputCls} value={platform} onChange={(e) => setPlatform(e.target.value)}>
                       <option value="">Auto-detect</option>
                       <option value="linux/amd64">linux/amd64</option>
                       <option value="linux/arm64">linux/arm64</option>
@@ -350,12 +317,12 @@ export default function ScansPage() {
                       <option value="windows/amd64">windows/amd64</option>
                     </select>
                   </div>
-                  <p className="text-xs text-zinc-600">Tags can be added from the scan detail page after creation.</p>
+                  <p className="text-xs text-zinc-500">Tags can be added from the scan detail page after creation.</p>
                 </form>
               </Modal.Body>
-              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-300 hover:text-white transition-colors"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                   Cancel
                 </button>
                 <button type="submit" form="create-scan-form" disabled={creating}

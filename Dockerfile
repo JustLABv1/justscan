@@ -1,3 +1,5 @@
+FROM aquasec/trivy:latest AS trivy-bin
+
 FROM node:24.7-alpine AS base
 
 # Stage 1: Build the frontend
@@ -27,22 +29,13 @@ RUN go build -o justscan-backend
 FROM base AS runner
 WORKDIR /app
 
-# Install necessary packages including Trivy
-ARG TRIVY_VERSION=0.55.0
+# Install necessary packages
 RUN apk update && apk add --no-cache \
     ca-certificates \
     tini \
-    postgresql-client \
-    wget \
-    && ARCH=$(uname -m) \
-    && if [ "$ARCH" = "x86_64" ]; then TRIVY_ARCH="64bit"; \
-       elif [ "$ARCH" = "aarch64" ]; then TRIVY_ARCH="ARM64"; \
-       else TRIVY_ARCH="ARM"; fi \
-    && wget -qO /tmp/trivy.tar.gz \
-         "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
-    && tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy \
-    && rm /tmp/trivy.tar.gz \
-    && apk del wget
+    postgresql-client
+
+COPY --from=trivy-bin /usr/local/bin/trivy /usr/local/bin/trivy
 
 # Create user and group
 RUN addgroup --system --gid 1001 nodejs \

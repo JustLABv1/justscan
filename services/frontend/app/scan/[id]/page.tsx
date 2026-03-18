@@ -1,5 +1,6 @@
 'use client';
 import { getPublicScan, listPublicVulnerabilities, Scan, Vulnerability } from '@/lib/api';
+import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -130,6 +131,14 @@ export default function PublicScanResultPage() {
           setScan(s);
           if (s.status === 'completed' || s.status === 'failed') {
             if (pollRef.current) clearInterval(pollRef.current);
+            updatePublicHistoryEntry(id, {
+              status: s.status,
+              critical_count: s.critical_count ?? 0,
+              high_count: s.high_count ?? 0,
+              medium_count: s.medium_count ?? 0,
+              low_count: s.low_count ?? 0,
+              unknown_count: s.unknown_count ?? 0,
+            });
           }
         })
         .catch(e => {

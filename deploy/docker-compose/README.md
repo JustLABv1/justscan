@@ -6,6 +6,7 @@ Deploys JustScan as three containers: **PostgreSQL**, **backend** (Go + Trivy), 
 
 - Docker 24+ with Docker Compose v2 (`docker compose version`)
 - Ports `3000` and `8080` available on the host (configurable via `.env`)
+- For pulling images from GHCR on a private repo: `docker login ghcr.io -u YOUR_GITHUB_USER`
 
 ## Quick Start
 
@@ -21,7 +22,7 @@ Edit `.env`:
 | Variable | Description |
 |---|---|
 | `POSTGRES_PASSWORD` | Database password — must also be set in `backend-config.yaml` |
-| `NEXT_PUBLIC_API_URL` | Backend URL **as seen from the browser** (default: `http://localhost:8080`) |
+| `JUSTSCAN_VERSION` | Image tag to deploy, e.g. `v1.2.3` (default: `latest`) |
 
 ### 2. Configure the backend
 
@@ -34,8 +35,12 @@ Edit `backend-config.yaml` and replace all `change-me-in-production` placeholder
 | `encryption.key` | 64-char hex string — `openssl rand -hex 32` |
 | `allow_origins` | Must include the URL users open in their browser for the frontend |
 
-> **Important:** `NEXT_PUBLIC_API_URL` is baked into the frontend image at build time.
-> For remote servers, set it to `http://YOUR_SERVER_IP:8080` in `.env` **before** building.
+> **Note on `NEXT_PUBLIC_API_URL`:** The published frontend image has
+> `http://localhost:8080` baked in, which works for local deployments.
+> For a remote server where the backend is on a different URL, build the
+> frontend locally: comment out the `image:` line in `docker-compose.yml`,
+> uncomment the `build:` block, set `NEXT_PUBLIC_API_URL` in `.env`, and
+> run `docker compose up --build -d`.
 
 ### 3. Build and start
 
@@ -84,7 +89,8 @@ docker compose up -d frontend
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `POSTGRES_PASSWORD` | Yes | — | PostgreSQL password (must match `backend-config.yaml`) |
-| `NEXT_PUBLIC_API_URL` | No | `http://localhost:8080` | Backend URL seen by the browser (build-time) |
+| `JUSTSCAN_VERSION` | No | `latest` | Image tag to pull, e.g. `v1.2.3` |
+| `NEXT_PUBLIC_API_URL` | No* | `http://localhost:8080` | Backend URL seen by the browser — only used when building locally |
 | `BACKEND_PORT` | No | `8080` | Host port for the backend |
 | `FRONTEND_PORT` | No | `3000` | Host port for the frontend |
 

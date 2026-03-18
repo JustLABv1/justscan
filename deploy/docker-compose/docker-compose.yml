@@ -16,9 +16,11 @@ services:
       start_period: 10s
 
   backend:
-    build:
-      context: ../../services/backend
-      dockerfile: Dockerfile
+    image: ghcr.io/justlabv1/justscan:backend-${JUSTSCAN_VERSION:-latest}
+    # To build from source instead, comment the image line above and uncomment:
+    # build:
+    #   context: ../../services/backend
+    #   dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
       postgres:
@@ -36,11 +38,15 @@ services:
       start_period: 15s
 
   frontend:
-    build:
-      context: ../../services/frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    # The published image has NEXT_PUBLIC_API_URL=http://localhost:8080 baked in.
+    # For a different backend URL (e.g. remote server), build locally:
+    #   comment the image line, uncomment the build block, set NEXT_PUBLIC_API_URL in .env
+    image: ghcr.io/justlabv1/justscan:frontend-${JUSTSCAN_VERSION:-latest}
+    # build:
+    #   context: ../../services/frontend
+    #   dockerfile: Dockerfile
+    #   args:
+    #     NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
     restart: unless-stopped
     depends_on:
       backend:

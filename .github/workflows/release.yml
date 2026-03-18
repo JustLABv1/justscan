@@ -1,96 +1,154 @@
-name: Build and Release
+name: Release
 
 on:
   push:
     tags:
       - 'v*.*.*'
 
+env:
+  IMAGE: ghcr.io/justlabv1/justscan
+
 jobs:
-  build:
+  build-backend:
+    name: Build & Push Backend
     runs-on: ubuntu-latest
-    permissions: write-all
+    permissions:
+      contents: read
+      packages: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - name: Build Frontend Docker Image
-        run: cd services/frontend && docker build . --file Dockerfile --tag ghcr.io/justlabv1/plattform-template:frontend-latest --tag ghcr.io/justlabv1/plattform-template:frontend-${{ github.sha }} --tag ghcr.io/justlabv1/plattform-template:frontend-${{ github.ref_name }}
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Build Backend Docker Image
-        run: cd services/backend && docker build . --file Dockerfile --tag ghcr.io/justlabv1/plattform-template:backend-latest --tag ghcr.io/justlabv1/plattform-template:backend-${{ github.sha }} --tag ghcr.io/justlabv1/plattform-template:backend-${{ github.ref_name }}
-
-      - name: Build JustWMS Docker Image
-        run: docker build . --file Dockerfile --tag ghcr.io/justlabv1/plattform-template:latest --tag ghcr.io/justlabv1/plattform-template:${{ github.sha }} --tag ghcr.io/justlabv1/plattform-template:${{ github.ref_name }}
-
-      - name: 'Login to GitHub Container Registry'
-        uses: docker/login-action@v1
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{github.actor}}
-          password: ${{secrets.GITHUB_TOKEN}}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push Docker Images
-        run: |
-          docker push ghcr.io/justlabv1/plattform-template:frontend-latest
-          docker push ghcr.io/justlabv1/plattform-template:frontend-${{ github.sha }}
-          docker push ghcr.io/justlabv1/plattform-template:frontend-${{ github.ref_name }}
-          docker push ghcr.io/justlabv1/plattform-template:backend-latest
-          docker push ghcr.io/justlabv1/plattform-template:backend-${{ github.sha }}
-          docker push ghcr.io/justlabv1/plattform-template:backend-${{ github.ref_name }}
-          docker push ghcr.io/justlabv1/plattform-template:latest
-          docker push ghcr.io/justlabv1/plattform-template:${{ github.sha }}
-          docker push ghcr.io/justlabv1/plattform-template:${{ github.ref_name }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern=backend-{{version}}
+            type=raw,value=backend-latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: services/backend
+          file: services/backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+
+  build-frontend:
+    name: Build & Push Frontend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern=frontend-{{version}}
+            type=raw,value=frontend-latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: services/frontend
+          file: services/frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # NEXT_PUBLIC_API_URL is baked in at build time.
+          # The published image defaults to http://localhost:8080.
+          # Users needing a different URL should build locally — see deploy/docker-compose/README.md.
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://localhost:8080
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max
+
+  build-combined:
+    name: Build & Push Combined Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=combined
+          cache-to: type=gha,scope=combined,mode=max
 
   build-csv-bridge:
+    name: Build CSV Bridge Binaries
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.24'
+          cache-dependency-path: services/csv-bridge/go.sum
 
-      - name: Get dependencies
-        run: cd services/csv-bridge && go mod download
-
-      - name: Build Windows AMD64 binary
+      - name: Build binaries
         run: |
           cd services/csv-bridge
           GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o csv-bridge-windows-amd64.exe ./main.go
-
-      - name: Build Windows ARM64 binary
-        run: |
-          cd services/csv-bridge
           GOOS=windows GOARCH=arm64 go build -ldflags "-s -w" -o csv-bridge-windows-arm64.exe ./main.go
-
-      - name: Build Windows 386 binary
-        run: |
-          cd services/csv-bridge
-          GOOS=windows GOARCH=386 go build -ldflags "-s -w" -o csv-bridge-windows-386.exe ./main.go
-
-      - name: Build Linux AMD64 binary
-        run: |
-          cd services/csv-bridge
-          GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o csv-bridge-linux-amd64 ./main.go
-
-      - name: Build Linux ARM64 binary
-        run: |
-          cd services/csv-bridge
-          GOOS=linux GOARCH=arm64 go build -ldflags "-s -w" -o csv-bridge-linux-arm64 ./main.go
+          GOOS=windows GOARCH=386   go build -ldflags "-s -w" -o csv-bridge-windows-386.exe   ./main.go
+          GOOS=linux   GOARCH=amd64 go build -ldflags "-s -w" -o csv-bridge-linux-amd64       ./main.go
+          GOOS=linux   GOARCH=arm64 go build -ldflags "-s -w" -o csv-bridge-linux-arm64       ./main.go
 
       - name: Create checksums
         run: |
           cd services/csv-bridge
           sha256sum csv-bridge-windows-amd64.exe > csv-bridge-windows-amd64.exe.sha256
           sha256sum csv-bridge-windows-arm64.exe > csv-bridge-windows-arm64.exe.sha256
-          sha256sum csv-bridge-windows-386.exe > csv-bridge-windows-386.exe.sha256
-          sha256sum csv-bridge-linux-amd64 > csv-bridge-linux-amd64.sha256
-          sha256sum csv-bridge-linux-arm64 > csv-bridge-linux-arm64.sha256
+          sha256sum csv-bridge-windows-386.exe   > csv-bridge-windows-386.exe.sha256
+          sha256sum csv-bridge-linux-amd64       > csv-bridge-linux-amd64.sha256
+          sha256sum csv-bridge-linux-arm64       > csv-bridge-linux-arm64.sha256
 
-      - name: Upload binaries as artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: csv-bridge-binaries
           path: |
@@ -102,23 +160,20 @@ jobs:
             services/csv-bridge/*.sha256
 
   release:
+    name: Create GitHub Release
     runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend, build-combined, build-csv-bridge]
     permissions:
       contents: write
-    needs: [build, build-csv-bridge]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Download CSV bridge binaries
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: csv-bridge-binaries
           path: ./binaries
-        
-      - name: Create Release
-        id: create_release
-        uses: ncipollo/release-action@v1
+
+      - uses: ncipollo/release-action@v1
         with:
           name: Release ${{ github.ref_name }}
           tag: ${{ github.ref_name }}

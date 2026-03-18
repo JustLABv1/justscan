@@ -26,6 +26,7 @@ export default function LandingPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     if (getToken()) router.replace('/scans');
     setHistoryCount(getPublicHistory().length);

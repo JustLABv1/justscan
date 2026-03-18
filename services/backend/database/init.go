@@ -14,6 +14,7 @@ import (
 	"github.com/uptrace/bun/migrate"
 
 	"justscan-backend/database/migrations"
+	"justscan-backend/middlewares"
 	"justscan-backend/pkg/models"
 
 	log "github.com/sirupsen/logrus"
@@ -76,6 +77,15 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 		log.Info("No migrations to run.")
 	} else {
 		log.Infof("Migrated to %s\n", group)
+	}
+
+	// Load persisted rate limit setting
+	var rateLimitSetting models.SystemSetting
+	if err := db.NewSelect().Model(&rateLimitSetting).Where("key = ?", "public_scan_rate_limit").Scan(ctx); err == nil {
+		if v, err := strconv.Atoi(rateLimitSetting.Value); err == nil && v > 0 {
+			middlewares.SetPublicScanRateLimit(v)
+			log.Infof("Rate limit loaded from DB: %d/hour", v)
+		}
 	}
 
 	return db

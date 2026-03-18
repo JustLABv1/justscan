@@ -1,4 +1,5 @@
 'use client';
+import { useConfirmDialog } from '@/components/confirm-dialog';
 import { createOrg, deleteOrg, listOrgs, Org } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
 import { ArrowRight01Icon, Building04Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
@@ -18,6 +19,7 @@ export default function OrgsPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const modal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,7 +40,13 @@ export default function OrgsPage() {
   }
 
   async function handleDelete(id: string, orgName: string) {
-    if (!confirm(`Delete organization "${orgName}"? This will remove all policies and compliance results.`)) return;
+    const ok = await confirm({
+      title: `Delete "${orgName}"?`,
+      message: 'All policies and compliance results for this organization will be permanently removed.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
     await deleteOrg(id).catch(() => {}); load();
   }
 
@@ -162,6 +170,7 @@ export default function OrgsPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+      {confirmDialog}
     </div>
   );
 }

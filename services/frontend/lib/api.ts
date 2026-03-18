@@ -269,6 +269,37 @@ export const upsertSuppression = (digest: string, data: Partial<Suppression>) =>
 export const deleteSuppression = (digest: string, vulnId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/images/${encodeURIComponent(digest)}/suppressions/${encodeURIComponent(vulnId)}`);
 
+// Scans - bulk & rescan
+export const reScan = (id: string) =>
+  req<Scan>('POST', `/api/v1/scans/${id}/rescan`);
+
+export const bulkDeleteScans = (ids: string[]) =>
+  req<{ deleted: number }>('DELETE', '/api/v1/scans/bulk', { ids });
+
+export const bulkAddTagToScans = (tagId: string, ids: string[]) =>
+  req<{ result: string }>('POST', `/api/v1/scans/bulk/tags/${tagId}`, { ids });
+
+// Admin - audit log
+export const listAuditLogs = (page = 1, limit = 50) =>
+  req<{ data: AuditLog[]; total: number }>('GET', `/api/v1/admin/audit?page=${page}&limit=${limit}`);
+
+// Admin - notifications
+export const listNotificationChannels = () =>
+  req<{ data: NotificationChannel[] }>('GET', '/api/v1/admin/notifications').then(r => r.data ?? []);
+
+export const createNotificationChannel = (data: Partial<NotificationChannel>) =>
+  req<NotificationChannel>('POST', '/api/v1/admin/notifications', data);
+
+export const updateNotificationChannel = (id: string, data: Partial<NotificationChannel>) =>
+  req<NotificationChannel>('PUT', `/api/v1/admin/notifications/${id}`, data);
+
+export const deleteNotificationChannel = (id: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/admin/notifications/${id}`);
+
+// Admin - rate limit
+export const updateRateLimit = (limit: number) =>
+  req<{ limit: number }>('PUT', '/api/v1/admin/settings/rate-limit', { limit });
+
 // Types
 export interface PolicyRule {
   type: 'max_cvss' | 'max_count' | 'max_total' | 'require_fix' | 'blocked_cve';
@@ -501,3 +532,36 @@ export interface AdminUser {
   created_at: string;
   updated_at: string;
 }
+
+export interface AuditLog {
+  id: string;
+  user_id: string;
+  operation: string;
+  details: string;
+  created_at: string;
+  username?: string;
+}
+
+export interface NotificationConfig {
+  webhook_url?: string;
+  headers?: Record<string, string>;
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_username?: string;
+  smtp_password?: string;
+  smtp_from?: string;
+  to_addresses?: string[];
+  smtp_tls?: boolean;
+}
+
+export interface NotificationChannel {
+  id: string;
+  name: string;
+  type: 'discord' | 'email' | 'webhook';
+  config: NotificationConfig;
+  enabled: boolean;
+  events: string[];
+  created_at: string;
+  updated_at: string;
+}
+

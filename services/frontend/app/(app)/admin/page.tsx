@@ -1,23 +1,32 @@
 'use client';
+import { useConfirmDialog } from '@/components/confirm-dialog';
 import {
-  AdminUser,
-  AutoTagRule,
-  createAdminUser,
-  createAutoTagRule,
-  deleteAdminUser,
-  deleteAutoTagRule,
-  disableAdminUser,
-  getAdminSettings,
-  listAdminUsers,
-  listAutoTagRules,
-  listTags,
-  setPublicScanEnabled,
-  Tag,
-  updateAdminUser,
-  updateAutoTagRule,
+    AdminUser,
+    AuditLog,
+    AutoTagRule,
+    createAdminUser,
+    createAutoTagRule,
+    createNotificationChannel,
+    deleteAdminUser,
+    deleteAutoTagRule,
+    deleteNotificationChannel,
+    disableAdminUser,
+    getAdminSettings,
+    listAdminUsers,
+    listAuditLogs,
+    listAutoTagRules,
+    listNotificationChannels,
+    listTags,
+    NotificationChannel,
+    setPublicScanEnabled,
+    Tag,
+    updateAdminUser,
+    updateAutoTagRule,
+    updateNotificationChannel,
+    updateRateLimit,
 } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
-import { Delete01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
+import { Delete01Icon, Notification01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
 
 const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
@@ -25,7 +34,10 @@ const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:rin
 // ── Settings Tab ──────────────────────────────────────────────────────
 function SettingsTab() {
   const [publicScanEnabled, setPublicScanEnabledState] = useState<boolean | null>(null);
+  const [rateLimit, setRateLimitState] = useState<number>(5);
+  const [rateLimitInput, setRateLimitInput] = useState('5');
   const [saving, setSaving] = useState(false);
+  const [savingRl, setSavingRl] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -33,6 +45,9 @@ function SettingsTab() {
     getAdminSettings()
       .then(settings => {
         setPublicScanEnabledState(settings['public_scan_enabled'] !== 'false');
+        const rl = parseInt(settings['public_scan_rate_limit'] ?? '5', 10);
+        setRateLimitState(rl);
+        setRateLimitInput(String(rl));
       })
       .catch(() => setError('Failed to load settings'));
   }, []);
@@ -50,6 +65,22 @@ function SettingsTab() {
       setError(e instanceof Error ? e.message : 'Failed to update setting');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveRateLimit() {
+    const v = parseInt(rateLimitInput, 10);
+    if (isNaN(v) || v < 1 || v > 1000) { setError('Rate limit must be between 1 and 1000'); return; }
+    setSavingRl(true); setError(''); setSuccess('');
+    try {
+      await updateRateLimit(v);
+      setRateLimitState(v);
+      setSuccess('Rate limit updated');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to update rate limit');
+    } finally {
+      setSavingRl(false);
     }
   }
 
@@ -130,6 +161,33 @@ function SettingsTab() {
           </div>
         )}
       </div>
+
+      {/* Rate limit */}
+      <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Public Scan Rate Limit</h2>
+          <p className="text-sm text-zinc-500 mt-0.5">Maximum number of public scans allowed per IP address per hour.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            min={1} max={1000}
+            className={inputCls + ' max-w-[120px]'}
+            value={rateLimitInput}
+            onChange={e => setRateLimitInput(e.target.value)}
+          />
+          <span className="text-sm text-zinc-500">per IP / hour</span>
+          <button
+            onClick={handleSaveRateLimit}
+            disabled={savingRl || rateLimitInput === String(rateLimit)}
+            className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 flex items-center gap-2 transition-all hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}
+          >
+            {savingRl && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            Save
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -148,6 +206,7 @@ function UsersTab() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const modal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -188,11 +247,31 @@ function UsersTab() {
     finally { setSaving(false); }
   }
   async function handleDelete(u: AdminUser) {
-    if (!confirm(`Delete user "${u.username}"? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete "${u.username}"?`,
+      message: 'This will permanently remove the user and cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
     await deleteAdminUser(u.id).catch(() => {}); load();
   }
   async function handleToggleDisable(u: AdminUser) {
     const newDisabled = !u.disabled;
+    const ok = await confirm(newDisabled
+      ? {
+          title: `Disable "${u.username}"?`,
+          message: 'The user will no longer be able to log in.',
+          confirmLabel: 'Disable',
+          variant: 'warning',
+        }
+      : {
+          title: `Re-enable "${u.username}"?`,
+          message: 'The user will regain access to their account.',
+          confirmLabel: 'Enable',
+          variant: 'default',
+        });
+    if (!ok) return;
     await disableAdminUser(u.id, newDisabled).catch(() => {});
     load();
   }
@@ -353,11 +432,10 @@ function UsersTab() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+      {confirmDialog}
     </div>
   );
 }
-
-// ── Auto Tags Tab ─────────────────────────────────────────────────────
 function AutoTagsTab() {
   const [rules, setRules] = useState<AutoTagRule[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -370,6 +448,7 @@ function AutoTagsTab() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const modal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -402,7 +481,13 @@ function AutoTagsTab() {
     finally { setSaving(false); }
   }
   async function handleDelete(id: string) {
-    if (!confirm('Delete this auto-tag rule?')) return;
+    const ok = await confirm({
+      title: 'Delete auto-tag rule?',
+      message: 'The rule will no longer apply to new scans.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
     await deleteAutoTagRule(id).catch(() => {}); load();
   }
 
@@ -544,13 +629,452 @@ function AutoTagsTab() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+      {confirmDialog}
     </div>
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────
+// ── Audit Log Tab ────────────────────────────────────────────────────
+function AuditLogTab() {
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const limit = 50;
+
+  const load = useCallback(async (p: number) => {
+    setLoading(true);
+    try {
+      const r = await listAuditLogs(p, limit);
+      setLogs(r.data ?? []);
+      setTotal(r.total);
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load audit logs'); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(page); }, [load, page]);
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  if (loading) return (
+    <div className="flex justify-center py-16">
+      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          {error}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-zinc-500">{total} total events</p>
+        <div className="flex items-center gap-2 text-sm">
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
+            className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
+            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            ←
+          </button>
+          <span className="text-zinc-500">{page} / {totalPages}</span>
+          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+            className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
+            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            →
+          </button>
+        </div>
+      </div>
+
+      {logs.length === 0 ? (
+        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+          <p className="text-sm text-zinc-500">No audit log entries yet.</p>
+        </div>
+      ) : (
+        <div className="glass-panel rounded-2xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Time</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">User</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Operation</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((l, i) => (
+                <tr key={l.id}
+                  style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  <td className="px-4 py-3 text-xs text-zinc-400 whitespace-nowrap">
+                    {new Date(l.created_at).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-300 font-medium">
+                    {l.username ?? l.user_id.slice(0, 8)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-mono font-medium px-2 py-0.5 rounded-md"
+                      style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
+                      {l.operation}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-zinc-500 max-w-xs truncate">{l.details}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Notifications Tab ────────────────────────────────────────────────
+const EVENT_OPTIONS = [
+  { value: 'scan_complete', label: 'Scan Completed' },
+  { value: 'scan_failed', label: 'Scan Failed' },
+  { value: 'compliance_failed', label: 'Compliance Failed' },
+];
+
+function NotificationsTab() {
+  const [channels, setChannels] = useState<NotificationChannel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [editing, setEditing] = useState<NotificationChannel | null>(null);
+  const [isCreate, setIsCreate] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+  const modal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const [formName, setFormName] = useState('');
+  const [formType, setFormType] = useState<'discord' | 'email' | 'webhook'>('discord');
+  const [formEnabled, setFormEnabled] = useState(true);
+  const [formEvents, setFormEvents] = useState<string[]>(['scan_complete', 'scan_failed']);
+  const [formWebhookURL, setFormWebhookURL] = useState('');
+  const [formSMTPHost, setFormSMTPHost] = useState('');
+  const [formSMTPPort, setFormSMTPPort] = useState('587');
+  const [formSMTPUser, setFormSMTPUser] = useState('');
+  const [formSMTPPass, setFormSMTPPass] = useState('');
+  const [formSMTPFrom, setFormSMTPFrom] = useState('');
+  const [formSMTPTo, setFormSMTPTo] = useState('');
+  const [formSMTPTLS, setFormSMTPTLS] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setChannels(await listNotificationChannels()); }
+    catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function resetForm(ch?: NotificationChannel) {
+    setFormName(ch?.name ?? '');
+    setFormType(ch?.type ?? 'discord');
+    setFormEnabled(ch?.enabled ?? true);
+    setFormEvents(ch?.events ?? ['scan_complete', 'scan_failed']);
+    setFormWebhookURL(ch?.config?.webhook_url ?? '');
+    setFormSMTPHost(ch?.config?.smtp_host ?? '');
+    setFormSMTPPort(String(ch?.config?.smtp_port ?? 587));
+    setFormSMTPUser(ch?.config?.smtp_username ?? '');
+    setFormSMTPPass('');
+    setFormSMTPFrom(ch?.config?.smtp_from ?? '');
+    setFormSMTPTo((ch?.config?.to_addresses ?? []).join(', '));
+    setFormSMTPTLS(ch?.config?.smtp_tls ?? false);
+    setFormError('');
+  }
+
+  function openCreate() {
+    setIsCreate(true); setEditing(null); resetForm(); modal.open();
+  }
+  function openEdit(ch: NotificationChannel) {
+    setIsCreate(false); setEditing(ch); resetForm(ch); modal.open();
+  }
+
+  function buildPayload(): Partial<NotificationChannel> {
+    const config: NotificationChannel['config'] = {};
+    if (formType === 'discord' || formType === 'webhook') {
+      config.webhook_url = formWebhookURL;
+    }
+    if (formType === 'email') {
+      config.smtp_host = formSMTPHost;
+      config.smtp_port = parseInt(formSMTPPort, 10) || 587;
+      config.smtp_username = formSMTPUser;
+      if (formSMTPPass) config.smtp_password = formSMTPPass;
+      config.smtp_from = formSMTPFrom;
+      config.to_addresses = formSMTPTo.split(',').map(s => s.trim()).filter(Boolean);
+      config.smtp_tls = formSMTPTLS;
+    }
+    return { name: formName, type: formType, enabled: formEnabled, events: formEvents, config };
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault(); setFormError(''); setSaving(true);
+    try {
+      const payload = buildPayload();
+      if (isCreate) await createNotificationChannel(payload);
+      else if (editing) await updateNotificationChannel(editing.id, payload);
+      modal.close(); await load();
+    } catch (err: unknown) { setFormError(err instanceof Error ? err.message : 'Failed to save'); }
+    finally { setSaving(false); }
+  }
+
+  async function handleDelete(ch: NotificationChannel) {
+    const ok = await confirm({
+      title: `Delete "${ch.name}"?`,
+      message: 'The notification channel will be permanently removed.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    await deleteNotificationChannel(ch.id).catch(() => {}); load();
+  }
+
+  async function handleToggleEnabled(ch: NotificationChannel) {
+    const ok = await confirm(ch.enabled
+      ? { title: `Disable "${ch.name}"?`, message: 'No notifications will be sent through this channel.', confirmLabel: 'Disable', variant: 'warning' }
+      : { title: `Enable "${ch.name}"?`, message: 'Notifications will start being sent through this channel.', confirmLabel: 'Enable', variant: 'default' }
+    );
+    if (!ok) return;
+    await updateNotificationChannel(ch.id, { enabled: !ch.enabled }).catch(() => {}); load();
+  }
+
+  function toggleEvent(ev: string) {
+    setFormEvents(prev => prev.includes(ev) ? prev.filter(e => e !== ev) : [...prev, ev]);
+  }
+
+  if (loading) return (
+    <div className="flex justify-center py-16">
+      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          {error}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-zinc-500">Send alerts to Discord, email, or webhooks when scan events occur.</p>
+        <button
+          onClick={openCreate}
+          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
+          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+        >
+          <PlusSignIcon size={15} /> Add Channel
+        </button>
+      </div>
+
+      {channels.length === 0 ? (
+        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+          <Notification01Icon size={32} className="text-zinc-400 dark:text-zinc-600" />
+          <p className="text-sm text-zinc-500">No notification channels configured.</p>
+        </div>
+      ) : (
+        <div className="glass-panel rounded-2xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Type</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Events</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {channels.map((ch, i) => (
+                <tr key={ch.id}
+                  style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  <td className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-200">{ch.name}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-md capitalize"
+                      style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)' }}>
+                      {ch.type}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {(ch.events ?? []).map(ev => (
+                        <span key={ev} className="text-xs px-1.5 py-0.5 rounded font-mono"
+                          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
+                          {ev}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {ch.enabled ? (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>Active</span>
+                    ) : (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ color: '#a1a1aa', background: 'rgba(161,161,170,0.1)', border: '1px solid rgba(161,161,170,0.2)' }}>Disabled</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => handleToggleEnabled(ch)}
+                        className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
+                        style={ch.enabled
+                          ? { color: '#fb923c', background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)' }
+                          : { color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                        {ch.enabled ? 'Disable' : 'Enable'}
+                      </button>
+                      <button onClick={() => openEdit(ch)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5">
+                        <PencilEdit01Icon size={15} />
+                      </button>
+                      <button onClick={() => handleDelete(ch)} className="text-zinc-400 hover:text-red-400 transition-colors p-1.5">
+                        <Delete01Icon size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Modal state={modal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                  {isCreate ? 'Add Notification Channel' : 'Edit Notification Channel'}
+                </Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5 max-h-[70vh] overflow-y-auto">
+                <form id="notif-form" onSubmit={handleSubmit} className="space-y-4">
+                  {formError && (
+                    <div className="rounded-xl px-3 py-2.5 text-sm"
+                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+                      {formError}
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Name</label>
+                    <input className={inputCls} placeholder="My Discord Channel" value={formName} onChange={e => setFormName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Type</label>
+                    <select className={inputCls} value={formType} onChange={e => setFormType(e.target.value as typeof formType)}>
+                      <option value="discord">Discord</option>
+                      <option value="email">Email (SMTP)</option>
+                      <option value="webhook">Generic Webhook</option>
+                    </select>
+                  </div>
+
+                  {/* Type-specific fields */}
+                  {(formType === 'discord' || formType === 'webhook') && (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                        {formType === 'discord' ? 'Discord Webhook URL' : 'Webhook URL'}
+                      </label>
+                      <input className={inputCls} placeholder="https://discord.com/api/webhooks/..." value={formWebhookURL} onChange={e => setFormWebhookURL(e.target.value)} required />
+                    </div>
+                  )}
+
+                  {formType === 'email' && (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">SMTP Host</label>
+                          <input className={inputCls} placeholder="smtp.example.com" value={formSMTPHost} onChange={e => setFormSMTPHost(e.target.value)} required />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Port</label>
+                          <input type="number" className={inputCls} placeholder="587" value={formSMTPPort} onChange={e => setFormSMTPPort(e.target.value)} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Username</label>
+                          <input className={inputCls} placeholder="user@example.com" value={formSMTPUser} onChange={e => setFormSMTPUser(e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Password</label>
+                          <input type="password" className={inputCls} placeholder={editing ? '(unchanged)' : 'Password'} value={formSMTPPass} onChange={e => setFormSMTPPass(e.target.value)} />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">From Address</label>
+                        <input className={inputCls} placeholder="noreply@example.com" value={formSMTPFrom} onChange={e => setFormSMTPFrom(e.target.value)} required />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">To Addresses</label>
+                        <input className={inputCls} placeholder="ops@example.com, team@example.com" value={formSMTPTo} onChange={e => setFormSMTPTo(e.target.value)} required />
+                        <p className="text-xs text-zinc-400">Comma-separated list of recipients</p>
+                      </div>
+                      <label className="flex items-center gap-2.5 cursor-pointer">
+                        <input type="checkbox" checked={formSMTPTLS} onChange={e => setFormSMTPTLS(e.target.checked)}
+                          className="w-4 h-4 rounded accent-violet-500" />
+                        <span className="text-sm text-zinc-600 dark:text-zinc-300">Use TLS (port 465)</span>
+                      </label>
+                    </>
+                  )}
+
+                  {/* Events */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Trigger on Events</label>
+                    <div className="space-y-2">
+                      {EVENT_OPTIONS.map(ev => (
+                        <label key={ev.value} className="flex items-center gap-2.5 cursor-pointer">
+                          <input type="checkbox" checked={formEvents.includes(ev.value)} onChange={() => toggleEvent(ev.value)}
+                            className="w-4 h-4 rounded accent-violet-500" />
+                          <span className="text-sm text-zinc-600 dark:text-zinc-300">{ev.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input type="checkbox" checked={formEnabled} onChange={e => setFormEnabled(e.target.checked)}
+                      className="w-4 h-4 rounded accent-violet-500" />
+                    <span className="text-sm text-zinc-600 dark:text-zinc-300">Enabled</span>
+                  </label>
+                </form>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 transition-colors"
+                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  Cancel
+                </button>
+                <button type="submit" form="notif-form" disabled={saving}
+                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {isCreate ? 'Create' : 'Save'}
+                </button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+      {confirmDialog}
+    </div>
+  );
+}
+
+// ── Page ───────────────────────────────────────────────────── ──────────────────────────────────────────────────────────────
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'settings' | 'users' | 'autotags'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'users' | 'autotags' | 'audit' | 'notifications'>('settings');
+
+  const tabs: { value: typeof activeTab; label: string }[] = [
+    { value: 'settings', label: 'Settings' },
+    { value: 'users', label: 'Users' },
+    { value: 'autotags', label: 'Auto Tags' },
+    { value: 'audit', label: 'Audit Log' },
+    { value: 'notifications', label: 'Notifications' },
+  ];
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -560,14 +1084,14 @@ export default function AdminPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 p-1 rounded-xl" style={{background:'var(--glass-bg)', border:'1px solid var(--glass-border)'}}>
-        {(['settings', 'users', 'autotags'] as const).map(t => (
-          <button key={t} onClick={() => setActiveTab(t)}
-            className="px-4 py-1.5 text-sm font-medium rounded-lg transition-all capitalize"
-            style={activeTab === t
+      <div className="flex gap-1 p-1 rounded-xl flex-wrap" style={{background:'var(--glass-bg)', border:'1px solid var(--glass-border)'}}>
+        {tabs.map(t => (
+          <button key={t.value} onClick={() => setActiveTab(t.value)}
+            className="px-4 py-1.5 text-sm font-medium rounded-lg transition-all"
+            style={activeTab === t.value
               ? {background:'linear-gradient(135deg,#7c3aed,#6d28d9)', color:'white'}
               : {color:'var(--text-muted)'}}>
-            {t === 'autotags' ? 'Auto Tags' : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t.label}
           </button>
         ))}
       </div>
@@ -575,6 +1099,8 @@ export default function AdminPage() {
       {activeTab === 'settings' && <SettingsTab />}
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'autotags' && <AutoTagsTab />}
+      {activeTab === 'audit' && <AuditLogTab />}
+      {activeTab === 'notifications' && <NotificationsTab />}
     </div>
   );
 }

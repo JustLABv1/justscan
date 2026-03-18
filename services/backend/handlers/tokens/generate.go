@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"justscan-backend/functions/audit"
 	"justscan-backend/functions/auth"
 	"justscan-backend/functions/httperror"
 	"justscan-backend/pkg/models"
@@ -88,4 +89,6 @@ func GenerateTokenUser(db *bun.DB, context *gin.Context) {
 	}
 
 	context.JSON(http.StatusOK, gin.H{"token": tokenString, "user": userResponse, "expires_at": ExpiresAt})
+
+	go audit.Write(context.Request.Context(), db, user.ID.String(), "user.login", "Login from IP: "+context.ClientIP())
 }

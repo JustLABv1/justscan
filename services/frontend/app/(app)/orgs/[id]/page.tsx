@@ -1,27 +1,28 @@
 'use client';
+import { useConfirmDialog } from '@/components/confirm-dialog';
 import {
-  assignScanToOrg,
-  createPolicy,
-  deletePolicy,
-  getComplianceTrend,
-  getOrg,
-  listScans,
-  listOrgScans,
-  Org,
-  OrgPolicy,
-  PolicyRule,
-  removeScanFromOrg,
-  Scan,
-  TrendPoint,
-  updateOrg,
-  updatePolicy,
+    assignScanToOrg,
+    createPolicy,
+    deletePolicy,
+    getComplianceTrend,
+    getOrg,
+    listOrgScans,
+    listScans,
+    Org,
+    OrgPolicy,
+    PolicyRule,
+    removeScanFromOrg,
+    Scan,
+    TrendPoint,
+    updateOrg,
+    updatePolicy,
 } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
 import {
-  ArrowLeft01Icon,
-  Delete01Icon,
-  PencilEdit01Icon,
-  PlusSignIcon,
+    ArrowLeft01Icon,
+    Delete01Icon,
+    PencilEdit01Icon,
+    PlusSignIcon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -124,6 +125,7 @@ export default function OrgDetailPage() {
   const [policyError, setPolicyError] = useState('');
   const [policySaving, setPolicySaving] = useState(false);
   const policyModal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   const [allScans, setAllScans] = useState<Scan[]>([]);
   const [assignLoading, setAssignLoading] = useState(false);
@@ -190,7 +192,13 @@ export default function OrgDetailPage() {
   }
 
   async function handleDeletePolicy(policyId: string) {
-    if (!confirm('Delete this policy? Existing compliance results will be removed.')) return;
+    const ok = await confirm({
+      title: 'Delete policy?',
+      message: 'Existing compliance results for this policy will be permanently removed.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
     await deletePolicy(id, policyId).catch(() => {});
     load();
   }
@@ -226,7 +234,13 @@ export default function OrgDetailPage() {
   }
 
   async function handleRemoveScan(scanId: string) {
-    if (!confirm('Remove this scan from the organization?')) return;
+    const ok = await confirm({
+      title: 'Remove scan from organization?',
+      message: 'The scan will remain in the system but will no longer be part of this organization.',
+      confirmLabel: 'Remove',
+      variant: 'warning',
+    });
+    if (!ok) return;
     await removeScanFromOrg(id, scanId).catch(() => {});
     loadOrgScans();
   }
@@ -704,6 +718,7 @@ export default function OrgDetailPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+      {confirmDialog}
     </div>
   );
 }

@@ -6,8 +6,9 @@ import (
 )
 
 type JWTClaim struct {
-	ID   uuid.UUID `json:"id"`
-	Type string    `json:"type"`
+	ID         uuid.UUID `json:"id"`
+	Type       string    `json:"type"`
+	RememberMe bool      `json:"remember_me"`
 	jwt.RegisteredClaims
 }
 

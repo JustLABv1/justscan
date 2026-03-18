@@ -13,13 +13,14 @@ import {
   listVulnerabilities,
   Org,
   reEvaluateCompliance,
-  removeTagFromScan,
   removeScanFromOrg,
+  removeTagFromScan,
+  reScan,
   Scan,
   Tag,
   Vulnerability,
 } from '@/lib/api';
-import { ArrowLeft01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, PencilEdit01Icon, ShieldKeyIcon } from 'hugeicons-react';
+import { ArrowLeft01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, PencilEdit01Icon, Refresh01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -255,6 +256,7 @@ export default function ScanDetailPage() {
   const [compliance, setCompliance] = useState<ComplianceResult[]>([]);
   const [allOrgs, setAllOrgs] = useState<Org[]>([]);
   const [complianceLoading, setComplianceLoading] = useState(false);
+  const [reScanning, setReScanning] = useState(false);
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -376,6 +378,16 @@ export default function ScanDetailPage() {
     setComplianceLoading(false);
   }
 
+  async function handleReScan() {
+    setReScanning(true);
+    try {
+      const newScan = await reScan(id);
+      router.push(`/scans/${newScan.id}`);
+    } catch { /* ignore */ } finally {
+      setReScanning(false);
+    }
+  }
+
   if (loading) return (
     <div className="flex justify-center items-center h-64">
       <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
@@ -438,6 +450,18 @@ export default function ScanDetailPage() {
             <FileExportIcon size={15} />
             Export
           </Link>
+          <button
+            onClick={handleReScan}
+            disabled={reScanning || scan.status === 'running' || scan.status === 'pending'}
+            className="flex items-center gap-2 shrink-0 px-3 py-2 text-sm rounded-xl font-medium disabled:opacity-50 transition-all hover:opacity-90"
+            style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#c4b5fd' }}
+            title="Start a new scan with the same image and tag"
+          >
+            {reScanning
+              ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+              : <Refresh01Icon size={15} />}
+            Re-scan
+          </button>
         </div>
       </div>
 

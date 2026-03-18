@@ -1,5 +1,6 @@
 'use client';
-import { createScan, deleteScan, listScans, Scan } from '@/lib/api';
+import { useConfirmDialog } from '@/components/confirm-dialog';
+import { bulkDeleteScans, createScan, deleteScan, listScans, Scan } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
 import { CheckmarkSquare01Icon, Delete01Icon, FileExportIcon, GitCompareIcon, PlusSignIcon } from 'hugeicons-react';
 import Link from 'next/link';
@@ -48,6 +49,7 @@ export default function ScansPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selecting, setSelecting] = useState(false);
   const modal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const LIMIT = 20;
 
   const load = useCallback(async (p: number) => {
@@ -78,8 +80,28 @@ export default function ScansPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this scan?')) return;
+    const ok = await confirm({
+      title: 'Delete scan?',
+      message: 'This scan and all its vulnerability data will be permanently removed.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
     await deleteScan(id).catch(() => {});
+    load(page);
+  }
+
+  async function handleBulkDelete() {
+    const ok = await confirm({
+      title: `Delete ${selected.size} scan${selected.size !== 1 ? 's' : ''}?`,
+      message: 'All selected scans and their vulnerability data will be permanently removed. This cannot be undone.',
+      confirmLabel: `Delete ${selected.size}`,
+      variant: 'danger',
+    });
+    if (!ok) return;
+    await bulkDeleteScans([...selected]).catch(() => {});
+    setSelected(new Set());
+    setSelecting(false);
     load(page);
   }
 
@@ -250,6 +272,13 @@ export default function ScansPage() {
           <span className="text-sm text-zinc-600 dark:text-zinc-400">{selected.size} scan{selected.size !== 1 ? 's' : ''} selected</span>
           <div className="flex gap-3">
             <button onClick={() => setSelected(new Set())} className="text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">Clear</button>
+            <button
+              onClick={handleBulkDelete}
+              className="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition-all hover:opacity-90"
+              style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}
+            >
+              <Delete01Icon size={15} /> Delete Selected
+            </button>
             <a
               href={`/reports/print?scans=${[...selected].join(',')}`}
               target="_blank"
@@ -344,6 +373,7 @@ export default function ScansPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+      {confirmDialog}
     </div>
   );
 }

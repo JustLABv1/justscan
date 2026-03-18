@@ -9,6 +9,8 @@ RUN corepack enable pnpm && pnpm --version
 RUN pnpm install
 COPY services/frontend/ ./
 
+ARG NEXT_PUBLIC_API_URL=http://localhost:8080
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN pnpm run build
@@ -25,11 +27,22 @@ RUN go build -o justscan-backend
 FROM base AS runner
 WORKDIR /app
 
-# Install necessary packages
+# Install necessary packages including Trivy
+ARG TRIVY_VERSION=0.55.0
 RUN apk update && apk add --no-cache \
     ca-certificates \
     tini \
-    postgresql-client
+    postgresql-client \
+    wget \
+    && ARCH=$(uname -m) \
+    && if [ "$ARCH" = "x86_64" ]; then TRIVY_ARCH="64bit"; \
+       elif [ "$ARCH" = "aarch64" ]; then TRIVY_ARCH="ARM64"; \
+       else TRIVY_ARCH="ARM"; fi \
+    && wget -qO /tmp/trivy.tar.gz \
+         "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
+    && tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy \
+    && rm /tmp/trivy.tar.gz \
+    && apk del wget
 
 # Create user and group
 RUN addgroup --system --gid 1001 nodejs \
@@ -48,9 +61,6 @@ RUN mkdir .next \
 # Automatically leverage output traces to reduce image size
 COPY --from=frontend-builder --chown=nextjs:nodejs /app/frontend/.next/standalone ./
 COPY --from=frontend-builder --chown=nextjs:nodejs /app/frontend/.next/static ./.next/static
-
-# Copy .env file to the working directory
-COPY --from=frontend-builder --chown=nextjs:nodejs /app/frontend/.env /app/.env
 
 RUN chown -R nextjs:nodejs /app
 

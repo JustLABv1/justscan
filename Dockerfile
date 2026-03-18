@@ -11,7 +11,7 @@ RUN corepack enable pnpm && pnpm --version
 RUN pnpm install
 COPY services/frontend/ ./
 
-ARG NEXT_PUBLIC_API_URL=http://localhost:8080
+ARG NEXT_PUBLIC_API_URL=""
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 

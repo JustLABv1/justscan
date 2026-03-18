@@ -1,8 +1,11 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { useToast } from '@/components/toast';
 import { deleteSuppression, listAllSuppressions, Suppression } from '@/lib/api';
+import { timeAgo, fullDate } from '@/lib/time';
+import { ListBox, Select } from '@heroui/react';
 import { Delete01Icon, SecurityLockIcon } from 'hugeicons-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const STATUS_STYLE: Record<string, React.CSSProperties> = {
   accepted:       { color: '#60a5fa', background: 'rgba(59,130,246,0.1)',   border: '1px solid rgba(59,130,246,0.22)'   },
@@ -34,12 +37,15 @@ export default function SuppressionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const toast = useToast();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (p: number, status: string, q: string) => {
     setLoading(true);
     try {
-      const res = await listAllSuppressions(page, LIMIT, statusFilter || undefined);
+      const res = await listAllSuppressions(p, LIMIT, status || undefined, q || undefined);
       setSuppressions(res.data ?? []);
       setTotal(res.total);
     } catch (e: unknown) {
@@ -47,9 +53,9 @@ export default function SuppressionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter]);
+  }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(page, statusFilter, searchQuery); }, [load, page, statusFilter, searchQuery]);
 
   async function handleDelete(s: Suppression) {
     const ok = await confirm({
@@ -60,7 +66,8 @@ export default function SuppressionsPage() {
     });
     if (!ok) return;
     await deleteSuppression(s.image_digest, s.vuln_id).catch(() => {});
-    load();
+    toast.success(`Suppression for ${s.vuln_id} removed`);
+    load(page, statusFilter, searchQuery);
   }
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
@@ -77,16 +84,35 @@ export default function SuppressionsPage() {
             {total > 0 ? `${total} active suppression${total !== 1 ? 's' : ''}` : 'Manage vulnerability suppressions across all images'}
           </p>
         </div>
-        <select
-          value={statusFilter}
-          onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
-          className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input"
-        >
-          <option value="">All Statuses</option>
-          <option value="accepted">Accepted Risk</option>
-          <option value="wont_fix">Won&apos;t Fix</option>
-          <option value="false_positive">False Positive</option>
-        </select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input w-48"
+            placeholder="Search CVE ID…"
+            value={searchQuery}
+            onChange={e => {
+              const v = e.target.value;
+              setSearchQuery(v);
+              if (debounceRef.current) clearTimeout(debounceRef.current);
+              debounceRef.current = setTimeout(() => { setPage(1); load(1, statusFilter, v); }, 300);
+            }}
+          />
+          <Select selectedKey={statusFilter || '__all__'} onSelectionChange={k => { const v = String(k === '__all__' ? '' : k); setStatusFilter(v); setPage(1); load(1, v, searchQuery); }}
+            className="w-44"
+          >
+            <Select.Trigger className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input">
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="__all__">All Statuses</ListBox.Item>
+                <ListBox.Item id="accepted">Accepted Risk</ListBox.Item>
+                <ListBox.Item id="wont_fix">Won&apos;t Fix</ListBox.Item>
+                <ListBox.Item id="false_positive">False Positive</ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </div>
       </div>
 
       {error && (
@@ -123,8 +149,8 @@ export default function SuppressionsPage() {
                 <td colSpan={8} className="py-16 text-center">
                   <div className="flex flex-col items-center gap-3">
                     <SecurityLockIcon size={32} className="text-zinc-400 dark:text-zinc-600" />
-                    <p className="text-sm text-zinc-500">No suppressions found.</p>
-                    <p className="text-xs text-zinc-400">Suppressions allow you to acknowledge known vulnerabilities in a scan.</p>
+                    <p className="text-sm text-zinc-500">{searchQuery || statusFilter ? 'No suppressions match your filters.' : 'No suppressions found.'}</p>
+                    {!searchQuery && !statusFilter && <p className="text-xs text-zinc-400">Suppressions allow you to acknowledge known vulnerabilities in a scan.</p>}
                   </div>
                 </td>
               </tr>
@@ -160,15 +186,15 @@ export default function SuppressionsPage() {
                 <td className="px-4 py-3 text-xs text-zinc-500">{s.username || '—'}</td>
                 <td className="px-4 py-3 text-xs">
                   {s.expires_at ? (
-                    <span className={new Date(s.expires_at) < new Date() ? 'text-red-400' : 'text-zinc-500'}>
+                    <span className={new Date(s.expires_at) < new Date() ? 'text-red-400' : 'text-zinc-500'} title={fullDate(s.expires_at)}>
                       {new Date(s.expires_at).toLocaleDateString()}
                     </span>
                   ) : (
                     <span className="text-zinc-400">Never</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-xs text-zinc-500">
-                  {new Date(s.created_at).toLocaleDateString()}
+                <td className="px-4 py-3 text-xs text-zinc-500" title={fullDate(s.created_at)}>
+                  {timeAgo(s.created_at)}
                 </td>
                 <td className="px-4 py-3">
                   <button

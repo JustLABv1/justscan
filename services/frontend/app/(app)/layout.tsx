@@ -24,6 +24,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { Logo } from '@/components/logo';
+import { ToastProvider } from '@/components/toast';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon },
@@ -104,6 +105,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <ToastProvider>
     <div className="flex h-screen app-bg overflow-hidden">
       {/* Sidebar */}
       <aside
@@ -325,5 +327,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <main className="flex-1 overflow-y-auto app-bg">{children}</main>
     </div>
+    </ToastProvider>
   );
+
 }

@@ -50,8 +50,12 @@ export const getStats = () =>
   req<DashboardStats>('GET', '/api/v1/dashboard/stats');
 
 // Scans
-export const listScans = (page = 1, limit = 20) =>
-  req<{ data: Scan[]; total: number }>('GET', `/api/v1/scans/?page=${page}&limit=${limit}`);
+export const listScans = (page = 1, limit = 20, image?: string, status?: string) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (image) params.set('image', image);
+  if (status) params.set('status', status);
+  return req<{ data: Scan[]; total: number }>('GET', `/api/v1/scans/?${params}`);
+};
 
 export const getScan = (id: string) =>
   req<Scan>('GET', `/api/v1/scans/${id}`);
@@ -469,6 +473,7 @@ export interface WatchlistItem {
   schedule: string;
   enabled: boolean;
   last_scan_id?: string;
+  last_scanned_at?: string;
   created_at: string;
 }
 

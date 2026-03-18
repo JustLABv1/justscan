@@ -107,6 +107,12 @@
   color: var(--input-placeholder);
 }
 
+/* Select trigger: override utility-layer px-3 to reserve space for the
+   absolute-positioned indicator arrow. Unlayered CSS beats @layer utilities. */
+.select__trigger {
+  padding-right: 2rem;
+}
+
 /* App + sidebar shell */
 .app-bg {
   background-color: var(--app-bg);

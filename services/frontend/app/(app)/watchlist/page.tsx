@@ -1,11 +1,15 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { useToast } from '@/components/toast';
 import {
-  createWatchlistItem, deleteWatchlistItem, listRegistries, listWatchlist,
-  Registry, triggerWatchlistScan, updateWatchlistItem, WatchlistItem,
+    createWatchlistItem, deleteWatchlistItem, listRegistries, listWatchlist,
+    Registry, triggerWatchlistScan, updateWatchlistItem, WatchlistItem,
 } from '@/lib/api';
-import { Modal, useOverlayState } from '@heroui/react';
+import { cronToHuman } from '@/lib/cron';
+import { timeAgo } from '@/lib/time';
+import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { Clock01Icon, Delete01Icon, EyeIcon, PencilEdit01Icon, PlayIcon, PlusSignIcon } from 'hugeicons-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
@@ -26,6 +30,7 @@ export default function WatchlistPage() {
   const [triggering, setTriggering] = useState('');
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const toast = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,8 +54,8 @@ export default function WatchlistPage() {
     e.preventDefault(); setFormError(''); setSaving(true);
     try {
       const data = { image_name: imageName, image_tag: imageTag, schedule, enabled, ...(registryId ? { registry_id: registryId } : {}) };
-      if (editing) await updateWatchlistItem(editing.id, data);
-      else await createWatchlistItem(data);
+      if (editing) { await updateWatchlistItem(editing.id, data); toast.success('Watchlist item updated'); }
+      else { await createWatchlistItem(data); toast.success('Added to watchlist'); }
       modal.close(); await load();
     } catch (err: unknown) { setFormError(err instanceof Error ? err.message : 'Failed to save'); }
     finally { setSaving(false); }
@@ -63,11 +68,13 @@ export default function WatchlistPage() {
       variant: 'danger',
     });
     if (!ok) return;
-    await deleteWatchlistItem(id).catch(() => {}); load();
+    await deleteWatchlistItem(id).catch(() => {});
+    toast.success('Removed from watchlist');
+    load();
   }
   async function handleTrigger(id: string) {
     setTriggering(id);
-    try { await triggerWatchlistScan(id); } catch { /* ignore */ }
+    try { await triggerWatchlistScan(id); toast.success('Scan triggered'); } catch { /* ignore */ }
     finally { setTriggering(''); load(); }
   }
 
@@ -123,9 +130,9 @@ export default function WatchlistPage() {
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                     <td className="px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-200">{item.image_name}:{item.image_tag}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 font-mono text-xs" style={{ color: 'rgba(167,139,250,0.8)' }}>
+                      <div className="flex items-center gap-1.5 text-xs" style={{ color: 'rgba(167,139,250,0.8)' }} title={item.schedule}>
                         <Clock01Icon size={12} color="rgba(113,113,122,0.7)" className="shrink-0" />
-                        {item.schedule}
+                        {cronToHuman(item.schedule ?? '')}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-500">{reg?.name ?? <span className="text-zinc-400 dark:text-zinc-700">—</span>}</td>
@@ -139,8 +146,12 @@ export default function WatchlistPage() {
                         {item.enabled ? 'Active' : 'Disabled'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-zinc-500 font-mono">
-                      {item.last_scan_id ? item.last_scan_id.slice(0, 8) + '…' : <span className="text-zinc-400 dark:text-zinc-700">Never</span>}
+                    <td className="px-4 py-3 text-xs text-zinc-500">
+                      {item.last_scan_id ? (
+                        <Link href={`/scans/${item.last_scan_id}`} className="hover:text-violet-500 dark:hover:text-violet-400 transition-colors">
+                          {timeAgo(item.last_scanned_at)}
+                        </Link>
+                      ) : <span className="text-zinc-400 dark:text-zinc-700">Never</span>}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
@@ -203,10 +214,18 @@ export default function WatchlistPage() {
                   {registries.length > 0 && (
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Registry <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span></label>
-                      <select value={registryId} onChange={(e) => setRegistryId(e.target.value)} className={inputCls}>
-                        <option value="">Public / Docker Hub</option>
-                        {registries.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                      </select>
+                      <Select selectedKey={registryId} onSelectionChange={k => setRegistryId(String(k === '__none__' ? '' : k))}>
+                        <Select.Trigger className={inputCls}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="__none__">Public / Docker Hub</ListBox.Item>
+                            {registries.map((r) => <ListBox.Item key={r.id} id={r.id}>{r.name}</ListBox.Item>)}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
                     </div>
                   )}
                   <label className="flex items-center gap-3 cursor-pointer select-none">

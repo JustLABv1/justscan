@@ -1,7 +1,9 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { useToast } from '@/components/toast';
 import { createRegistry, deleteRegistry, listRegistries, RegistryWithHealth, testRegistry, updateRegistry } from '@/lib/api';
-import { Modal, useOverlayState } from '@heroui/react';
+import { timeAgo } from '@/lib/time';
+import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, ServerStack01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -46,6 +48,7 @@ export default function RegistriesPage() {
   const [testing, setTesting] = useState<string | null>(null);
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const toast = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,8 +70,8 @@ export default function RegistriesPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setFormError(''); setSaving(true);
     try {
-      if (editing) await updateRegistry(editing.id, { name, url, auth_type: authType, username, ...(password ? { password } : {}) });
-      else await createRegistry({ name, url, auth_type: authType, username: username || undefined, password: password || undefined });
+      if (editing) { await updateRegistry(editing.id, { name, url, auth_type: authType, username, ...(password ? { password } : {}) }); toast.success('Registry updated'); }
+      else { await createRegistry({ name, url, auth_type: authType, username: username || undefined, password: password || undefined }); toast.success('Registry added'); }
       modal.close(); await load();
     } catch (err: unknown) { setFormError(err instanceof Error ? err.message : 'Failed to save'); }
     finally { setSaving(false); }
@@ -81,15 +84,20 @@ export default function RegistriesPage() {
       variant: 'danger',
     });
     if (!ok) return;
-    await deleteRegistry(id).catch(() => {}); load();
+    await deleteRegistry(id).catch(() => {});
+    toast.success('Registry deleted');
+    load();
   }
   async function handleTest(id: string) {
     setTesting(id);
     try {
       await testRegistry(id);
+      toast.success('Connection test passed');
       await load();
-    } catch { /* ignore - load will show updated status */ }
-    finally { setTesting(null); }
+    } catch {
+      toast.error('Connection test failed');
+      await load();
+    } finally { setTesting(null); }
   }
 
   return (
@@ -156,7 +164,7 @@ export default function RegistriesPage() {
                       <HealthBadge status={r.health_status ?? 'unknown'} message={r.health_message ?? ''} />
                       {r.last_health_check_at && (
                         <span className="text-[10px] text-zinc-500">
-                          {new Date(r.last_health_check_at).toLocaleString()}
+                          {timeAgo(r.last_health_check_at)}
                         </span>
                       )}
                     </div>
@@ -218,12 +226,20 @@ export default function RegistriesPage() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Auth Type</label>
-                    <select value={authType} onChange={(e) => setAuthType(e.target.value as 'none' | 'basic' | 'token' | 'aws_ecr')} className={inputCls}>
-                      <option value="none">None (public registry)</option>
-                      <option value="basic">Basic (username / password)</option>
-                      <option value="token">Token</option>
-                      <option value="aws_ecr">AWS ECR</option>
-                    </select>
+                    <Select selectedKey={authType} onSelectionChange={k => setAuthType(k as 'none' | 'basic' | 'token' | 'aws_ecr')}>
+                      <Select.Trigger className={inputCls}>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="none">None (public registry)</ListBox.Item>
+                          <ListBox.Item id="basic">Basic (username / password)</ListBox.Item>
+                          <ListBox.Item id="token">Token</ListBox.Item>
+                          <ListBox.Item id="aws_ecr">AWS ECR</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Username <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span></label>

@@ -1,5 +1,6 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { useToast } from '@/components/toast';
 import { createTag, deleteTag, listTags, Tag, updateTag } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Tag01Icon } from 'hugeicons-react';
@@ -19,6 +20,7 @@ export default function TagsPage() {
   const [editing, setEditing] = useState<Tag | null>(null);
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const toast = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,8 +37,8 @@ export default function TagsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setFormError(''); setSaving(true);
     try {
-      if (editing) await updateTag(editing.id, name, color);
-      else await createTag(name, color);
+      if (editing) { await updateTag(editing.id, name, color); toast.success('Tag updated'); }
+      else { await createTag(name, color); toast.success(`Tag "${name}" created`); }
       modal.close(); await load();
     } catch (err: unknown) { setFormError(err instanceof Error ? err.message : 'Failed to save'); }
     finally { setSaving(false); }
@@ -50,7 +52,9 @@ export default function TagsPage() {
       variant: 'danger',
     });
     if (!ok) return;
-    await deleteTag(id).catch(() => {}); load();
+    await deleteTag(id).catch(() => {});
+    toast.success('Tag deleted');
+    load();
   }
 
   return (

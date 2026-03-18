@@ -58,9 +58,11 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 	if err := migrator.Lock(ctx); err != nil {
 		log.Fatal(err)
 	}
-	defer migrator.Unlock(ctx)
 
 	group, err := migrator.Migrate(ctx)
+	if unlockErr := migrator.Unlock(ctx); unlockErr != nil {
+		log.Errorf("Failed to release migration lock: %v", unlockErr)
+	}
 	if err != nil {
 		log.Fatal(err)
 	}

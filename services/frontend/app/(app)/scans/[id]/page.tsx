@@ -25,6 +25,9 @@ import {
   upsertSuppression,
   Vulnerability,
 } from '@/lib/api';
+import { Calendar, DateField, DatePicker } from '@heroui/react';
+import type { DateValue } from '@internationalized/date';
+import { parseDate } from '@internationalized/date';
 import { ArrowLeft01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, PencilEdit01Icon, Refresh01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -276,8 +279,9 @@ export default function ScanDetailPage() {
 
   const [suppressStatus, setSuppressStatus] = useState<Suppression['status']>('accepted');
   const [suppressJustification, setSuppressJustification] = useState('');
-  const [suppressExpiry, setSuppressExpiry] = useState('');
+  const [suppressExpiry, setSuppressExpiry] = useState<DateValue | null>(null);
   const [suppressSaving, setSuppressSaving] = useState(false);
+  const [suppressError, setSuppressError] = useState('');
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -331,16 +335,17 @@ export default function ScanDetailPage() {
   // Reset suppress form when expanded vuln changes
   useEffect(() => {
     const v = vulns.find(v => v.id === expandedVuln);
+    setSuppressError('');
     if (v?.suppression) {
       setSuppressStatus(v.suppression.status);
       setSuppressJustification(v.suppression.justification);
       setSuppressExpiry(v.suppression.expires_at
-        ? new Date(v.suppression.expires_at).toISOString().slice(0, 10)
-        : '');
+        ? parseDate(v.suppression.expires_at.slice(0, 10))
+        : null);
     } else {
       setSuppressStatus('accepted');
       setSuppressJustification('');
-      setSuppressExpiry('');
+      setSuppressExpiry(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedVuln]);
@@ -463,15 +468,18 @@ export default function ScanDetailPage() {
   async function handleSuppress(vuln: Vulnerability) {
     if (!scan?.image_digest) return;
     setSuppressSaving(true);
+    setSuppressError('');
     try {
       await upsertSuppression(scan.image_digest, {
         vuln_id: vuln.vuln_id,
         status: suppressStatus,
         justification: suppressJustification,
-        expires_at: suppressExpiry ? new Date(suppressExpiry).toISOString() : null,
+        expires_at: suppressExpiry ? new Date(suppressExpiry.toString()).toISOString() : null,
       });
       loadVulns();
-    } catch { /* ignore */ } finally {
+    } catch (e: unknown) {
+      setSuppressError(e instanceof Error ? e.message : 'Failed to save suppression');
+    } finally {
       setSuppressSaving(false);
     }
   }
@@ -479,10 +487,13 @@ export default function ScanDetailPage() {
   async function handleLiftSuppression(vuln: Vulnerability) {
     if (!scan?.image_digest) return;
     setSuppressSaving(true);
+    setSuppressError('');
     try {
       await deleteSuppression(scan.image_digest, vuln.vuln_id);
       loadVulns();
-    } catch { /* ignore */ } finally {
+    } catch (e: unknown) {
+      setSuppressError(e instanceof Error ? e.message : 'Failed to lift suppression');
+    } finally {
       setSuppressSaving(false);
     }
   }
@@ -1047,19 +1058,51 @@ export default function ScanDetailPage() {
                                   placeholder="Justification…"
                                   className={`${inputCls} flex-1 min-w-0`}
                                 />
-                                <input
-                                  type="date"
+                                <DatePicker
+                                  aria-label="Expiry date (optional)"
                                   value={suppressExpiry}
-                                  onChange={e => setSuppressExpiry(e.target.value)}
-                                  title="Expiry date (optional)"
-                                  className={inputCls}
-                                />
+                                  onChange={setSuppressExpiry}
+                                  className="w-40"
+                                >
+                                  <DateField.Group className={`${inputCls} flex items-center gap-1`}>
+                                    <DateField.Input>{(seg) => <DateField.Segment segment={seg} />}</DateField.Input>
+                                    <DateField.Suffix>
+                                      <DatePicker.Trigger>
+                                        <DatePicker.TriggerIndicator />
+                                      </DatePicker.Trigger>
+                                    </DateField.Suffix>
+                                  </DateField.Group>
+                                  <DatePicker.Popover>
+                                    <Calendar aria-label="Expiry date">
+                                      <Calendar.Header>
+                                        <Calendar.YearPickerTrigger>
+                                          <Calendar.YearPickerTriggerHeading />
+                                          <Calendar.YearPickerTriggerIndicator />
+                                        </Calendar.YearPickerTrigger>
+                                        <Calendar.NavButton slot="previous" />
+                                        <Calendar.NavButton slot="next" />
+                                      </Calendar.Header>
+                                      <Calendar.Grid>
+                                        <Calendar.GridHeader>
+                                          {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
+                                        </Calendar.GridHeader>
+                                        <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
+                                      </Calendar.Grid>
+                                      <Calendar.YearPickerGrid>
+                                        <Calendar.YearPickerGridBody>
+                                          {({year}) => <Calendar.YearPickerCell year={year} />}
+                                        </Calendar.YearPickerGridBody>
+                                      </Calendar.YearPickerGrid>
+                                    </Calendar>
+                                  </DatePicker.Popover>
+                                </DatePicker>
                                 <button
                                   onClick={() => handleSuppress(v)}
                                   disabled={suppressSaving || !suppressJustification.trim()}
-                                  className="px-3 py-2 text-sm rounded-xl font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90 shrink-0"
+                                  className="px-3 py-2 text-sm rounded-xl font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90 shrink-0 flex items-center gap-1.5"
                                   style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171' }}
                                 >
+                                  {suppressSaving && <span className="w-3 h-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />}
                                   {v.suppression ? 'Update' : 'Suppress'}
                                 </button>
                                 {v.suppression && (
@@ -1073,6 +1116,9 @@ export default function ScanDetailPage() {
                                   </button>
                                 )}
                               </div>
+                              {suppressError && (
+                                <p className="text-xs mt-1" style={{ color: '#f87171' }}>{suppressError}</p>
+                              )}
                             </div>
                           )}
 

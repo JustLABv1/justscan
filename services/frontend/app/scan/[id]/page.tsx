@@ -1,10 +1,11 @@
 'use client';
+import { Logo } from '@/components/logo';
 import { getPublicScan, listPublicVulnerabilities, Scan, Vulnerability } from '@/lib/api';
 import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
+import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { useTheme } from 'next-themes';
 
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   CRITICAL: { label: 'Critical', color: 'text-red-500 dark:text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20' },
@@ -70,9 +71,7 @@ function ScanningAnimation({ image }: { image: string }) {
             boxShadow: '0 0 30px rgba(124,58,237,0.25)',
           }}
         >
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-          </svg>
+          <Logo size={28} className="text-[#a78bfa]" />
         </div>
         <div
           className="absolute w-28 h-0.5 rounded-full"
@@ -192,9 +191,7 @@ export default function PublicScanResultPage() {
       >
         <Link href="/scan" className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 12px rgba(124,58,237,0.4)' }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
+            <Logo size={16} className="text-white" />
           </div>
           <span className="font-semibold text-[15px] tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</span>
         </Link>

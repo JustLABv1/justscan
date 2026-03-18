@@ -1,17 +1,18 @@
 'use client';
+import { Logo } from '@/components/logo';
 import { createPublicScan, getPublicScan, getPublicSettings, Scan } from '@/lib/api';
 import {
-  addToPublicHistory,
-  clearPublicHistory,
-  getPublicHistory,
-  PublicScanRecord,
-  timeAgo,
-  updatePublicHistoryEntry,
+    addToPublicHistory,
+    clearPublicHistory,
+    getPublicHistory,
+    PublicScanRecord,
+    timeAgo,
+    updatePublicHistoryEntry,
 } from '@/lib/publicScanHistory';
+import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { useTheme } from 'next-themes';
 
 const PLATFORMS = [
   { value: '', label: 'Auto (detect)' },
@@ -187,9 +188,7 @@ export default function PublicScanPage() {
         <Link href="/" className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center"
             style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 12px rgba(124,58,237,0.5)' }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
+            <Logo size={16} className="text-white" />
           </div>
           <span className="font-semibold text-[15px] tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</span>
         </Link>
@@ -232,10 +231,7 @@ export default function PublicScanPage() {
                   border: '1px solid rgba(167,139,250,0.25)',
                   boxShadow: '0 0 32px rgba(124,58,237,0.15)',
                 }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  <polyline points="9 12 11 14 15 10" />
-                </svg>
+                <Logo size={28} className="text-[#a78bfa]" />
               </div>
             </div>
             <div>

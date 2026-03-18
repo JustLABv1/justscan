@@ -1,6 +1,6 @@
 'use client';
+import { Logo } from '@/components/logo';
 import { register } from '@/lib/api';
-import { Shield01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -31,7 +31,7 @@ export default function RegisterPage() {
     <div className="space-y-6">
       <div className="text-center space-y-3">
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-violet-600">
-          <Shield01Icon size={24} color="white" />
+          <Logo size={24} className="text-white" />
         </div>
         <div>
           <h1 className="text-xl font-bold text-white">JustScan</h1>

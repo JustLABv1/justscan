@@ -263,11 +263,11 @@ export const createAdminUser = (username: string, email: string, password: strin
 
 // Suppressions
 export const listSuppressions = (digest: string) =>
-  req<Suppression[]>('GET', `/api/v1/images/${encodeURIComponent(digest)}/suppressions`);
+  req<Suppression[]>('GET', `/api/v1/images/${digest}/suppressions`);
 export const upsertSuppression = (digest: string, data: Partial<Suppression>) =>
-  req<Suppression>('POST', `/api/v1/images/${encodeURIComponent(digest)}/suppressions`, data);
+  req<Suppression>('POST', `/api/v1/images/${digest}/suppressions`, data);
 export const deleteSuppression = (digest: string, vulnId: string) =>
-  req<{ result: string }>('DELETE', `/api/v1/images/${encodeURIComponent(digest)}/suppressions/${encodeURIComponent(vulnId)}`);
+  req<{ result: string }>('DELETE', `/api/v1/images/${digest}/suppressions/${encodeURIComponent(vulnId)}`);
 
 // Scans - bulk & rescan
 export const reScan = (id: string) =>

@@ -1,6 +1,6 @@
 'use client';
+import { Logo } from '@/components/logo';
 import { login, setToken, setUser } from '@/lib/api';
-import { Shield01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -35,7 +35,7 @@ export default function LoginPage() {
             boxShadow: '0 0 32px rgba(124,58,237,0.5),inset 0 1px 0 rgba(255,255,255,0.2)',
           }}
         >
-          <Shield01Icon size={26} color="white" />
+          <Logo size={26} className="text-white" />
         </div>
         <div>
           <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</h1>

@@ -23,6 +23,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { Logo } from '@/components/logo';
+
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon },
   { href: '/scans', label: 'Scans', Icon: Shield01Icon },
@@ -131,7 +133,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
             }}
           >
-            <Shield01Icon size={15} color="white" />
+            <Logo size={16} className="text-white" />
           </div>
           <span
             className="ml-3 font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300"

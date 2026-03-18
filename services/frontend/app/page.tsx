@@ -1,10 +1,11 @@
 'use client';
+import { Logo } from '@/components/logo';
 import { createPublicScan, getToken } from '@/lib/api';
 import { getPublicHistory } from '@/lib/publicScanHistory';
+import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { useTheme } from 'next-themes';
 
 const PLATFORMS = [
   { value: '', label: 'Auto' },
@@ -90,9 +91,7 @@ export default function LandingPage() {
               boxShadow: '0 0 16px rgba(124,58,237,0.45)',
             }}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
+            <Logo size={16} className="text-white" />
           </div>
           <span className="font-semibold text-[15px] tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</span>
         </div>
@@ -136,7 +135,7 @@ export default function LandingPage() {
           {/* Shield icon */}
           <div className="flex justify-center">
             <div
-              className="w-20 h-20 rounded-3xl flex items-center justify-center"
+              className="w-20 h-20 rounded-3xl flex items-center justify-center text-[#a78bfa]"
               style={{
                 background: isDark
                   ? 'linear-gradient(135deg, rgba(124,58,237,0.25) 0%, rgba(109,40,217,0.12) 100%)'
@@ -145,10 +144,7 @@ export default function LandingPage() {
                 boxShadow: '0 0 40px rgba(124,58,237,0.15)',
               }}
             >
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <polyline points="9 12 11 14 15 10" />
-              </svg>
+              <Logo size={36} />
             </div>
           </div>
 

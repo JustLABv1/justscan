@@ -15,8 +15,8 @@ func Suppressions(router *gin.RouterGroup, db *bun.DB) {
 	// Per-image CRUD
 	s := router.Group("/images/:digest/suppressions").Use(middlewares.Auth(db))
 	{
-		s.GET("/", suppressions.ListSuppressions(db))
-		s.POST("/", suppressions.UpsertSuppression(db))
+		s.GET("", suppressions.ListSuppressions(db))
+		s.POST("", suppressions.UpsertSuppression(db))
 		s.DELETE("/:vulnId", suppressions.DeleteSuppression(db))
 	}
 }

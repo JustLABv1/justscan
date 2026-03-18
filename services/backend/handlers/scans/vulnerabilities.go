@@ -3,6 +3,7 @@ package scans
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"justscan-backend/pkg/models"
 
@@ -10,6 +11,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
+
+// VulnerabilityResponse embeds Vulnerability and adds the FirstSeenAt field.
+type VulnerabilityResponse struct {
+	models.Vulnerability
+	FirstSeenAt *time.Time `json:"first_seen_at"`
+}
 
 func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -136,8 +143,41 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 			vulns[i].Comments = comments
 		}
 
+		// Batch-query first_seen_at for each vuln_id+pkg_name combination
+		// across all completed scans for the same image_name as this scan.
+		type firstSeenRow struct {
+			VulnID      string     `bun:"vuln_id"`
+			PkgName     string     `bun:"pkg_name"`
+			FirstSeenAt *time.Time `bun:"first_seen_at"`
+		}
+		var firstSeenRows []firstSeenRow
+		db.NewRaw(`
+			SELECT v.vuln_id, v.pkg_name, MIN(s.completed_at) AS first_seen_at
+			FROM vulnerabilities v
+			JOIN scans s ON s.id = v.scan_id
+			WHERE s.image_name = (SELECT image_name FROM scans WHERE id = ?)
+			  AND s.status = 'completed'
+			GROUP BY v.vuln_id, v.pkg_name
+		`, scanID).Scan(c.Request.Context(), &firstSeenRows) //nolint:errcheck
+
+		firstSeenMap := make(map[string]*time.Time, len(firstSeenRows))
+		for i := range firstSeenRows {
+			key := firstSeenRows[i].VulnID + "|" + firstSeenRows[i].PkgName
+			firstSeenMap[key] = firstSeenRows[i].FirstSeenAt
+		}
+
+		// Build response with first_seen_at merged in
+		response := make([]VulnerabilityResponse, len(vulns))
+		for i, v := range vulns {
+			key := v.VulnID + "|" + v.PkgName
+			response[i] = VulnerabilityResponse{
+				Vulnerability: v,
+				FirstSeenAt:   firstSeenMap[key],
+			}
+		}
+
 		c.JSON(http.StatusOK, gin.H{
-			"data":  vulns,
+			"data":  response,
 			"total": total,
 			"page":  page,
 			"limit": limit,

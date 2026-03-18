@@ -1,5 +1,5 @@
 'use client';
-import { DashboardStats, getStats, Scan } from '@/lib/api';
+import { DashboardStats, DashboardTrendPoint, getDashboardTrends, getStats, Scan } from '@/lib/api';
 import {
   Activity01Icon,
   Add01Icon,
@@ -139,15 +139,72 @@ function RecentScanRow({ scan }: { scan: Scan }) {
   );
 }
 
+// ── Trend Chart ───────────────────────────────────────────────────────
+function TrendChart({ data }: { data: DashboardTrendPoint[] }) {
+  if (data.length === 0) return null;
+  const W = 600, H = 160, PAD = { top: 10, right: 16, bottom: 30, left: 36 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+  const maxVal = Math.max(...data.map(d => d.total), 1);
+  const xScale = (i: number) => PAD.left + (i / Math.max(data.length - 1, 1)) * innerW;
+  const yScale = (v: number) => PAD.top + innerH - (v / maxVal) * innerH;
+  const line = (key: 'total' | 'completed' | 'failed') =>
+    data.map((d, i) => `${i === 0 ? 'M' : 'L'}${xScale(i).toFixed(1)},${yScale(d[key]).toFixed(1)}`).join(' ');
+
+  return (
+    <div className="glass-panel rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Scan Activity (30 days)</h2>
+        <div className="flex items-center gap-4 text-xs text-zinc-500">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded-full inline-block" style={{background:'#a78bfa'}} />Total</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded-full inline-block" style={{background:'#34d399'}} />Completed</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded-full inline-block" style={{background:'#f87171'}} />Failed</span>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{height: 160}}>
+        {/* Y axis grid lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map(f => (
+          <g key={f}>
+            <line x1={PAD.left} x2={W - PAD.right} y1={yScale(f * maxVal)} y2={yScale(f * maxVal)} stroke="currentColor" strokeOpacity="0.08" strokeWidth="1" />
+            <text x={PAD.left - 4} y={yScale(f * maxVal) + 4} textAnchor="end" fontSize="9" fill="currentColor" opacity="0.4">{Math.round(f * maxVal)}</text>
+          </g>
+        ))}
+        {/* X axis date labels - every nth point */}
+        {data.map((d, i) => i % Math.ceil(data.length / 6) === 0 && (
+          <text key={i} x={xScale(i)} y={H - 4} textAnchor="middle" fontSize="8" fill="currentColor" opacity="0.4">
+            {new Date(d.date).toLocaleDateString('en', {month:'short', day:'numeric'})}
+          </text>
+        ))}
+        {/* Lines */}
+        <path d={line('total')} fill="none" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={line('completed')} fill="none" stroke="#34d399" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={line('failed')} fill="none" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Dots at last point */}
+        {data.length > 0 && (
+          <>
+            <circle cx={xScale(data.length-1)} cy={yScale(data[data.length-1].total)} r="3" fill="#a78bfa" />
+            <circle cx={xScale(data.length-1)} cy={yScale(data[data.length-1].completed)} r="3" fill="#34d399" />
+            <circle cx={xScale(data.length-1)} cy={yScale(data[data.length-1].failed)} r="3" fill="#f87171" />
+          </>
+        )}
+      </svg>
+    </div>
+  );
+}
+
 // ── page ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [trends, setTrends] = useState<DashboardTrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    getStats()
-      .then(setStats)
+    Promise.all([
+      getStats(),
+      getDashboardTrends().catch(() => [] as DashboardTrendPoint[]),
+    ])
+      .then(([s, t]) => { setStats(s); setTrends(t); })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -235,6 +292,11 @@ export default function DashboardPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* ── Trend Chart ── */}
+      <div className="relative z-10">
+        <TrendChart data={trends} />
       </div>
 
       {/* ── Vulnerability landscape ── */}

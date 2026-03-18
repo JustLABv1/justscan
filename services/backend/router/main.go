@@ -47,6 +47,7 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 		VulnKB(v1, db)
 		Orgs(v1, db)
 		PublicScan(v1, db)
+		AutoTags(v1, db)
 	}
 
 	server := &http.Server{

@@ -27,5 +27,7 @@ func Orgs(router *gin.RouterGroup, db *bun.DB) {
 		r.GET("/:id/scans", orgs.ListOrgScans(db))
 		r.POST("/:id/scans/:scanId", orgs.AssignScan(db))
 		r.DELETE("/:id/scans/:scanId", orgs.RemoveScan(db))
+
+		r.GET("/:id/risk", orgs.GetRiskScore(db))
 	}
 }

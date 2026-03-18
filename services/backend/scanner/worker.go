@@ -2,6 +2,8 @@ package scanner
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"justscan-backend/compliance"
@@ -145,6 +147,31 @@ func processScan(job ScanJob) {
 
 	// Auto-assign to orgs by image pattern, then run compliance checks
 	go compliance.AutoAssignOrgs(db, scan.ImageName, scan.ImageTag, scanID)
+
+	// Apply auto-tag rules based on image name/tag patterns
+	go applyAutoTags(db, scan)
+}
+
+func applyAutoTags(db *bun.DB, scan *models.Scan) {
+	ctx := context.Background()
+	var rules []models.AutoTagRule
+	if err := db.NewSelect().Model(&rules).Scan(ctx); err != nil {
+		return
+	}
+
+	imageFull := scan.ImageName + ":" + scan.ImageTag
+
+	for _, rule := range rules {
+		if matchesPattern(rule.Pattern, scan.ImageName) || matchesPattern(rule.Pattern, imageFull) {
+			st := &models.ScanTag{ScanID: scan.ID, TagID: rule.TagID}
+			db.NewInsert().Model(st).On("CONFLICT DO NOTHING").Exec(ctx) //nolint:errcheck
+		}
+	}
+}
+
+func matchesPattern(pattern, s string) bool {
+	matched, _ := filepath.Match(strings.ToLower(pattern), strings.ToLower(s))
+	return matched
 }
 
 func setFailed(ctx context.Context, db *bun.DB, scan *models.Scan, msg string) {

@@ -1,5 +1,5 @@
 'use client';
-import { createRegistry, deleteRegistry, listRegistries, Registry, updateRegistry } from '@/lib/api';
+import { createRegistry, deleteRegistry, listRegistries, RegistryWithHealth, testRegistry, updateRegistry } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, ServerStack01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -16,11 +16,25 @@ const AUTH_TYPE_STYLE: Record<string, React.CSSProperties> = {
   aws_ecr: { color: '#fb923c', background: 'rgba(249,115,22,0.1)',   border: '1px solid rgba(249,115,22,0.2)'  },
 };
 
+function HealthBadge({ status, message }: { status: string; message: string }) {
+  const cfg = ({
+    healthy:   { color: '#34d399', bg: 'rgba(16,185,129,0.1)',   border: 'rgba(16,185,129,0.2)',   label: 'Healthy'   },
+    unhealthy: { color: '#f87171', bg: 'rgba(239,68,68,0.1)',    border: 'rgba(239,68,68,0.2)',    label: 'Unhealthy' },
+    unknown:   { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)', label: 'Unknown'   },
+  } as Record<string, { color: string; bg: string; border: string; label: string }>)[status] ?? { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)', label: status };
+  return (
+    <span className="flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full" style={{color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`}} title={message}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{background: cfg.color}} />
+      {cfg.label}
+    </span>
+  );
+}
+
 export default function RegistriesPage() {
-  const [registries, setRegistries] = useState<Registry[]>([]);
+  const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [editing, setEditing] = useState<Registry | null>(null);
+  const [editing, setEditing] = useState<RegistryWithHealth | null>(null);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [authType, setAuthType] = useState<'none' | 'basic' | 'token' | 'aws_ecr'>('none');
@@ -28,6 +42,7 @@ export default function RegistriesPage() {
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [testing, setTesting] = useState<string | null>(null);
   const modal = useOverlayState();
 
   const load = useCallback(async () => {
@@ -43,7 +58,7 @@ export default function RegistriesPage() {
     setEditing(null); setName(''); setUrl(''); setAuthType('none'); setUsername(''); setPassword(''); setFormError('');
     modal.open();
   }
-  function openEdit(r: Registry) {
+  function openEdit(r: RegistryWithHealth) {
     setEditing(r); setName(r.name); setUrl(r.url); setAuthType(r.auth_type ?? 'none'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
     modal.open();
   }
@@ -59,6 +74,14 @@ export default function RegistriesPage() {
   async function handleDelete(id: string) {
     if (!confirm('Delete this registry?')) return;
     await deleteRegistry(id).catch(() => {}); load();
+  }
+  async function handleTest(id: string) {
+    setTesting(id);
+    try {
+      await testRegistry(id);
+      await load();
+    } catch { /* ignore - load will show updated status */ }
+    finally { setTesting(null); }
   }
 
   return (
@@ -102,6 +125,7 @@ export default function RegistriesPage() {
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">URL</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Username</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Health</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -120,7 +144,31 @@ export default function RegistriesPage() {
                   </td>
                   <td className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">{r.username || <span className="text-zinc-400 dark:text-zinc-700">—</span>}</td>
                   <td className="px-4 py-3">
+                    <div className="flex flex-col gap-1">
+                      <HealthBadge status={r.health_status ?? 'unknown'} message={r.health_message ?? ''} />
+                      {r.last_health_check_at && (
+                        <span className="text-[10px] text-zinc-500">
+                          {new Date(r.last_health_check_at).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => handleTest(r.id)}
+                        disabled={testing === r.id}
+                        className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all disabled:opacity-50"
+                        style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)', color: '#a78bfa' }}
+                        title="Test connection"
+                      >
+                        {testing === r.id ? (
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-full border border-current border-t-transparent animate-spin" />
+                            Testing…
+                          </span>
+                        ) : 'Test'}
+                      </button>
                       <button onClick={() => openEdit(r)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit">
                         <PencilEdit01Icon size={15} />
                       </button>

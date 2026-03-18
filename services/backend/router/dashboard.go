@@ -12,5 +12,6 @@ func Dashboard(router *gin.RouterGroup, db *bun.DB) {
 	d := router.Group("/dashboard").Use(middlewares.Auth(db))
 	{
 		d.GET("/stats", dashboard.GetStats(db))
+		d.GET("/trends", dashboard.GetTrends(db))
 	}
 }

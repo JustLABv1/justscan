@@ -16,7 +16,8 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 	{
 		s.GET("/", scans.ListScans(db))
 		s.POST("/", scans.CreateScan(db))
-		s.GET("/compare", scans.CompareScan(db))
+		s.GET("/compare", scans.Compare(db))
+		s.GET("/trends", scans.GetTrends(db))
 		s.GET("/:id", scans.GetScan(db))
 		s.DELETE("/:id", scans.DeleteScan(db))
 		s.GET("/:id/vulnerabilities", scans.ListVulnerabilities(db))

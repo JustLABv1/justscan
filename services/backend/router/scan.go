@@ -22,6 +22,7 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 		s.GET("/compare", scans.Compare(db))
 		s.GET("/trends", scans.GetTrends(db))
 		s.GET("/:id", scans.GetScan(db))
+		s.PATCH("/:id", scans.UpdateScan(db))
 		s.DELETE("/:id", scans.DeleteScan(db))
 		s.POST("/:id/cancel", scans.CancelScan(db))
 		s.POST("/:id/rescan", scans.ReScan(db))
@@ -33,5 +34,9 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 		s.POST("/:id/vulnerabilities/:vulnId/comments", comments.CreateComment(db))
 		s.GET("/:id/compliance", orgs.GetScanCompliance(db))
 		s.POST("/:id/compliance/evaluate", orgs.ReEvaluate(db))
+		s.GET("/:id/manual-findings", scans.ListManualFindings(db))
+		s.POST("/:id/manual-findings", scans.CreateManualFinding(db))
+		s.PUT("/:id/manual-findings/:fid", scans.UpdateManualFinding(db))
+		s.DELETE("/:id/manual-findings/:fid", scans.DeleteManualFinding(db))
 	}
 }

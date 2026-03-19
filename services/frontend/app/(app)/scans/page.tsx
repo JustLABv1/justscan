@@ -8,10 +8,12 @@ import {
   ImageSummary,
   listScanImages,
   listScans,
+  listTags,
   Scan,
+  Tag,
 } from '@/lib/api';
-import { timeAgo, fullDate } from '@/lib/time';
-import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { fullDate, timeAgo } from '@/lib/time';
+import { Checkbox, ListBox, Modal, Popover, Select, useOverlayState } from '@heroui/react';
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
@@ -68,10 +70,14 @@ function ImageChildren({
   imageName,
   onDelete,
   onCancel,
+  selectedScans,
+  onSelectScan,
 }: {
   imageName: string;
   onDelete: (id: string) => void;
   onCancel: (id: string) => void;
+  selectedScans: Set<string>;
+  onSelectScan: (scanId: string, selected: boolean) => void;
 }) {
   const router = useRouter();
   const [scans, setScans] = useState<Scan[]>([]);
@@ -105,7 +111,7 @@ function ImageChildren({
 
   return (
     <tr>
-      <td colSpan={7} className="p-0">
+      <td colSpan={10} className="p-0">
         <div
           className="mx-4 mb-3 rounded-xl overflow-hidden"
           style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)' }}
@@ -120,8 +126,10 @@ function ImageChildren({
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                  <th className="w-8 px-3 py-2" />
                   <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Tag</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Tags</th>
                   <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }}>C</th>
                   <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }}>H</th>
                   <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }}>M</th>
@@ -140,6 +148,16 @@ function ImageChildren({
                     onMouseEnter={e => (e.currentTarget.style.background = 'rgba(124,58,237,0.06)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
+                    <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                      <Checkbox
+                        isSelected={selectedScans.has(scan.id)}
+                        onChange={(checked: boolean) => onSelectScan(scan.id, checked)}
+                      >
+                        <Checkbox.Control className="border border-zinc-500/50 data-[selected=true]:border-violet-500 data-[selected=true]:bg-violet-600">
+                          <Checkbox.Indicator />
+                        </Checkbox.Control>
+                      </Checkbox>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span
@@ -152,6 +170,19 @@ function ImageChildren({
                       </div>
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={scan.status} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {(scan.tags ?? []).map(tag => (
+                          <span
+                            key={tag.id}
+                            className="text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                            style={{ background: tag.color + '22', color: tag.color, border: `1px solid ${tag.color}44` }}
+                          >
+                            {tag.name}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
                     <td className="px-3 py-3 text-center"><SevCount count={scan.critical_count} cls={SEV.critical} /></td>
                     <td className="px-3 py-3 text-center"><SevCount count={scan.high_count} cls={SEV.high} /></td>
                     <td className="px-3 py-3 text-center"><SevCount count={scan.medium_count} cls={SEV.medium} /></td>
@@ -234,6 +265,12 @@ export default function ScansPage() {
   // Track refresh tokens per expanded image (incremented to force child reload after delete/cancel)
   const [childRefreshKey, setChildRefreshKey] = useState<Record<string, number>>({});
 
+  // Multi-select state
+  const [selectedScans, setSelectedScans] = useState<Set<string>>(new Set());
+
+  // Available tags for bulk tagging
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+
   // New scan form
   const [imageName, setImageName] = useState('');
   const [imageTag, setImageTag] = useState('latest');
@@ -260,6 +297,7 @@ export default function ScansPage() {
   }, []);
 
   useEffect(() => { load(page, imageFilter); }, [load, page]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { listTags().then(setAvailableTags).catch(() => {}); }, []);
 
   // Auto-refresh top-level when any image has an active scan
   useEffect(() => {
@@ -347,6 +385,45 @@ export default function ScansPage() {
     }
   }
 
+  async function handleBulkDelete() {
+    if (selectedScans.size === 0) return;
+    const ok = await confirm({
+      title: `Delete ${selectedScans.size} scan${selectedScans.size !== 1 ? 's' : ''}?`,
+      message: 'These scans and all their vulnerability data will be permanently removed.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      const { bulkDeleteScans } = await import('@/lib/api');
+      await bulkDeleteScans(Array.from(selectedScans));
+      toast.success(`${selectedScans.size} scan${selectedScans.size !== 1 ? 's' : ''} deleted`);
+      setSelectedScans(new Set());
+      load(page, imageFilter);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete scans');
+    }
+  }
+
+  async function handleBulkAddTag(tagId: string) {
+    if (selectedScans.size === 0) return;
+    try {
+      const { bulkAddTagToScans } = await import('@/lib/api');
+      await bulkAddTagToScans(tagId, Array.from(selectedScans));
+      toast.success(`Tag added to ${selectedScans.size} scan${selectedScans.size !== 1 ? 's' : ''}`);
+      setSelectedScans(new Set());
+      load(page, imageFilter);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add tag');
+    }
+  }
+
+  function handleGenerateReport() {
+    if (selectedScans.size === 0) return;
+    const scanIds = Array.from(selectedScans).join(',');
+    window.open(`/reports/print?scans=${scanIds}`, '_blank');
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
   return (
@@ -406,11 +483,75 @@ export default function ScansPage() {
         </div>
       )}
 
+      {/* Bulk action toolbar */}
+      {selectedScans.size > 0 && (
+        <div className="glass-panel rounded-2xl px-4 py-3 flex items-center justify-between" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            {selectedScans.size} scan{selectedScans.size !== 1 ? 's' : ''} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleGenerateReport}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all"
+              style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa' }}
+              title="Generate report for selected scans"
+            >
+              Report
+            </button>
+            <Popover>
+              <Popover.Trigger
+                className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+              >
+                Add Tag
+              </Popover.Trigger>
+              <Popover.Content className="rounded-xl min-w-[160px]" placement="bottom end">
+                <Popover.Dialog className="p-1">
+                  {availableTags.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-zinc-500">No tags created yet</div>
+                  ) : (
+                    <ListBox
+                      onAction={(key) => {
+                        handleBulkAddTag(String(key));
+                      }}
+                    >
+                      {availableTags.map(tag => (
+                        <ListBox.Item key={tag.id} id={tag.id} className="px-3 py-1.5 text-sm rounded-lg cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                          <span
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ background: tag.color }}
+                          />
+                          {tag.name}
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  )}
+                </Popover.Dialog>
+              </Popover.Content>
+            </Popover>
+            <button
+              onClick={() => setSelectedScans(new Set())}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+            >
+              Clear
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-red-400 hover:text-red-300"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tree table */}
       <div className="glass-panel rounded-2xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+              <th className="w-8 px-3 py-3" />
               <th className="w-8 px-3 py-3" />
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Latest</th>
@@ -423,7 +564,7 @@ export default function ScansPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="py-16 text-center">
+                <td colSpan={9} className="py-16 text-center">
                   <div className="flex justify-center">
                     <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
                   </div>
@@ -431,7 +572,7 @@ export default function ScansPage() {
               </tr>
             ) : images.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-16 text-center text-zinc-500 text-sm">
+                <td colSpan={9} className="py-16 text-center text-zinc-500 text-sm">
                   {imageFilter ? 'No images match your filter.' : 'No scans yet. Create one to get started.'}
                 </td>
               </tr>
@@ -448,7 +589,27 @@ export default function ScansPage() {
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
-                    {/* Expand toggle */}
+                    {/* Checkbox for selecting image's latest scan */}
+                    <td className="px-3 py-3.5 w-8" onClick={e => e.stopPropagation()}>
+                      <Checkbox
+                        isSelected={selectedScans.has(img.latest_scan_id)}
+                        onChange={(checked: boolean) => {
+                          if (checked) {
+                            setSelectedScans(prev => new Set(prev).add(img.latest_scan_id));
+                          } else {
+                            setSelectedScans(prev => {
+                              const next = new Set(prev);
+                              next.delete(img.latest_scan_id);
+                              return next;
+                            });
+                          }
+                        }}
+                      >
+                        <Checkbox.Control className="border border-zinc-500/50 data-[selected=true]:border-violet-500 data-[selected=true]:bg-violet-600">
+                          <Checkbox.Indicator />
+                        </Checkbox.Control>
+                      </Checkbox>
+                    </td>
                     <td className="px-3 py-3.5 w-8">
                       <span
                         className="flex items-center justify-center w-5 h-5 rounded-md transition-all duration-150"
@@ -508,6 +669,18 @@ export default function ScansPage() {
                       imageName={img.image_name}
                       onDelete={scanId => handleDelete(scanId, img.image_name)}
                       onCancel={scanId => handleCancel(scanId, img.image_name)}
+                      selectedScans={selectedScans}
+                      onSelectScan={(scanId, selected) => {
+                        if (selected) {
+                          setSelectedScans(prev => new Set(prev).add(scanId));
+                        } else {
+                          setSelectedScans(prev => {
+                            const next = new Set(prev);
+                            next.delete(scanId);
+                            return next;
+                          });
+                        }
+                      }}
                     />
                   )}
                 </>

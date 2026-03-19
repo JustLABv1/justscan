@@ -1,6 +1,7 @@
 package scans
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -52,7 +53,7 @@ func ReScan(db *bun.DB) gin.HandlerFunc {
 		envVars := resolveRegistryEnv(c.Request.Context(), db, orig.ImageName)
 		scanner.EnqueueScan(newScan.ID, db, envVars, orig.Platform)
 
-		go audit.Write(c.Request.Context(), db, userID.String(), "scan.rescan",
+		go audit.Write(context.Background(), db, userID.String(), "scan.rescan",
 			fmt.Sprintf("Rescan of %s:%s (original=%s, new=%s)", orig.ImageName, orig.ImageTag, orig.ID, newScan.ID))
 
 		c.JSON(http.StatusCreated, newScan)

@@ -2,10 +2,12 @@ package public
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"justscan-backend/functions/audit"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -77,6 +79,11 @@ func CreatePublicScan(db *bun.DB) gin.HandlerFunc {
 		}
 
 		scanner.EnqueueScan(scan.ID, db, nil, req.Platform)
+
+		clientIP := c.ClientIP()
+		go audit.Write(context.Background(), db, "public", "scan.public.create",
+			fmt.Sprintf("Public scan created for %s:%s (id=%s, ip=%s)", req.Image, req.Tag, scan.ID, clientIP))
+
 		c.JSON(http.StatusCreated, scan)
 	}
 }

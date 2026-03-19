@@ -3,8 +3,10 @@ package scanner
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"justscan-backend/compliance"
@@ -26,6 +28,25 @@ type ScanJob struct {
 }
 
 var jobQueue chan ScanJob
+
+// cancelMap stores cancel functions for in-progress scans so they can be interrupted.
+var (
+	cancelMap = make(map[uuid.UUID]context.CancelFunc)
+	cancelMu  sync.Mutex
+)
+
+// CancelScan signals a running scan to stop. Returns true if the scan was found
+// and cancelled, false if it was not currently running (already queued/done).
+func CancelScan(scanID uuid.UUID) bool {
+	cancelMu.Lock()
+	defer cancelMu.Unlock()
+	if fn, ok := cancelMap[scanID]; ok {
+		fn()
+		delete(cancelMap, scanID)
+		return true
+	}
+	return false
+}
 
 // InitWorker initializes the scan worker pool and starts it
 func InitWorker(db *bun.DB) {
@@ -53,22 +74,42 @@ func EnqueueScan(scanID uuid.UUID, db *bun.DB, envVars []string, platform string
 
 func workerLoop(id int) {
 	log.Infof("Scanner worker %d ready", id)
+	// Each worker gets its own trivy cache directory to prevent DB lock conflicts
+	// when multiple workers run simultaneously.
+	cacheDir := filepath.Join(os.TempDir(), fmt.Sprintf("justscan-trivy-worker-%d", id))
 	for job := range jobQueue {
-		processScan(job)
+		processScan(job, cacheDir)
 	}
 }
 
-func processScan(job ScanJob) {
-	ctx := context.Background()
+func processScan(job ScanJob, cacheDir string) {
 	db := job.DB
 	scanID := job.ScanID
 
 	// Load the scan row
 	scan := &models.Scan{}
-	if err := db.NewSelect().Model(scan).Where("id = ?", scanID).Scan(ctx); err != nil {
+	if err := db.NewSelect().Model(scan).Where("id = ?", scanID).Scan(context.Background()); err != nil {
 		log.Errorf("Worker: failed to load scan %s: %v", scanID, err)
 		return
 	}
+
+	// If the scan was cancelled before a worker picked it up, skip processing.
+	if scan.Status == models.ScanStatusCancelled {
+		log.Infof("Worker: scan %s was cancelled before processing, skipping", scanID)
+		return
+	}
+
+	// Create a cancellable context so this scan can be interrupted via CancelScan().
+	ctx, cancel := context.WithCancel(context.Background())
+	cancelMu.Lock()
+	cancelMap[scanID] = cancel
+	cancelMu.Unlock()
+	defer func() {
+		cancel()
+		cancelMu.Lock()
+		delete(cancelMap, scanID)
+		cancelMu.Unlock()
+	}()
 
 	// Mark as running
 	now := time.Now()
@@ -82,9 +123,15 @@ func processScan(job ScanJob) {
 	log.Infof("Worker: starting scan %s for %s:%s", scanID, scan.ImageName, scan.ImageTag)
 
 	// Run vulnerability scan
-	trivyOut, trivyVersion, err := RunScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform)
+	trivyOut, trivyVersion, err := RunScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
 	if err != nil {
-		setFailed(ctx, db, scan, err.Error())
+		if ctx.Err() != nil {
+			// Context was cancelled — scan was interrupted by user
+			log.Infof("Worker: scan %s was cancelled", scanID)
+			// Status is already set to cancelled by the cancel handler; just return.
+			return
+		}
+		setFailed(db, scan, err.Error())
 		return
 	}
 
@@ -97,7 +144,7 @@ func processScan(job ScanJob) {
 			vulns[i].ScanID = scanID
 		}
 		if _, err := db.NewInsert().Model(&vulns).Exec(ctx); err != nil {
-			setFailed(ctx, db, scan, "failed to store vulnerabilities: "+err.Error())
+			setFailed(db, scan, "failed to store vulnerabilities: "+err.Error())
 			return
 		}
 	}
@@ -117,7 +164,7 @@ func processScan(job ScanJob) {
 			Set("references = EXCLUDED.references").
 			Set("exploit_available = EXCLUDED.exploit_available OR vuln_kb.exploit_available").
 			Set("fetched_at = now()").
-			Exec(ctx); err != nil {
+			Exec(context.Background()); err != nil {
 			log.Warnf("Worker: KB upsert failed for scan %s (non-fatal): %v", scanID, err)
 		} else {
 			log.Debugf("Worker: upserted %d KB entries for scan %s", len(kbEntries), scanID)
@@ -125,19 +172,26 @@ func processScan(job ScanJob) {
 	}()
 
 	// Run SBOM scan (best-effort, don't fail the whole scan if it errors)
-	sbomOut, sbomErr := RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform)
+	sbomOut, sbomErr := RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
 	if sbomErr != nil {
-		log.Warnf("Worker: SBOM scan failed for %s (non-fatal): %v", scanID, sbomErr)
+		if ctx.Err() == nil {
+			log.Warnf("Worker: SBOM scan failed for %s (non-fatal): %v", scanID, sbomErr)
+		}
 	} else if sbomOut != nil {
 		components := ParseSBOMComponents(sbomOut, scanID)
 		if len(components) > 0 {
 			for i := range components {
 				components[i].ScanID = scanID
 			}
-			if _, err := db.NewInsert().Model(&components).Exec(ctx); err != nil {
+			if _, err := db.NewInsert().Model(&components).Exec(context.Background()); err != nil {
 				log.Warnf("Worker: failed to store SBOM components for %s: %v", scanID, err)
 			}
 		}
+	}
+
+	// If context was cancelled during SBOM, don't mark as completed
+	if ctx.Err() != nil {
+		return
 	}
 
 	// Mark as completed
@@ -163,7 +217,7 @@ func processScan(job ScanJob) {
 		Column("status", "completed_at", "trivy_version", "image_digest",
 			"critical_count", "high_count", "medium_count", "low_count", "unknown_count",
 			"architecture", "os_family", "os_name").
-		Where("id = ?", scanID).Exec(ctx); err != nil {
+		Where("id = ?", scanID).Exec(context.Background()); err != nil {
 		log.Errorf("Worker: failed to mark scan %s as completed: %v", scanID, err)
 		return
 	}
@@ -211,7 +265,8 @@ func matchesPattern(pattern, s string) bool {
 	return matched
 }
 
-func setFailed(ctx context.Context, db *bun.DB, scan *models.Scan, msg string) {
+func setFailed(db *bun.DB, scan *models.Scan, msg string) {
+	ctx := context.Background()
 	log.Errorf("Worker: scan %s failed: %s", scan.ID, msg)
 	scan.Status = models.ScanStatusFailed
 	scan.ErrorMessage = msg

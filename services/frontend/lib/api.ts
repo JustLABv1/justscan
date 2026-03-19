@@ -27,6 +27,14 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
     headers: authHeaders(),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  if (res.status === 401) {
+    clearToken();
+    clearUser();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    throw new Error('Session expired. Please log in again.');
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error ?? res.statusText);
@@ -50,11 +58,18 @@ export const getStats = () =>
   req<DashboardStats>('GET', '/api/v1/dashboard/stats');
 
 // Scans
-export const listScans = (page = 1, limit = 20, image?: string, status?: string) => {
+export const listScans = (page = 1, limit = 20, image?: string, status?: string, exact?: boolean) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
   if (status) params.set('status', status);
+  if (exact) params.set('exact', 'true');
   return req<{ data: Scan[]; total: number }>('GET', `/api/v1/scans/?${params}`);
+};
+
+export const listScanImages = (page = 1, limit = 30, image?: string) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (image) params.set('image', image);
+  return req<{ data: ImageSummary[]; total: number }>('GET', `/api/v1/scans/images?${params}`);
 };
 
 export const getScan = (id: string) =>
@@ -276,6 +291,9 @@ export const deleteSuppression = (digest: string, vulnId: string) =>
 // Scans - bulk & rescan
 export const reScan = (id: string) =>
   req<Scan>('POST', `/api/v1/scans/${id}/rescan`);
+
+export const cancelScan = (id: string) =>
+  req<{ result: string }>('POST', `/api/v1/scans/${id}/cancel`);
 
 export const bulkDeleteScans = (ids: string[]) =>
   req<{ deleted: number }>('DELETE', '/api/v1/scans/bulk', { ids });
@@ -628,6 +646,19 @@ export interface VulnKBEntry {
   references: { url: string; source: string }[];
   exploit_available: boolean;
   fetched_at: string;
+}
+
+export interface ImageSummary {
+  image_name: string;
+  scan_count: number;
+  latest_scan_id: string;
+  latest_tag: string;
+  latest_status: string;
+  latest_scan_at: string;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
 }
 
 export interface SBOMComponent {

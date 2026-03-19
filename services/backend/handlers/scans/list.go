@@ -48,7 +48,11 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 			q = q.Where("status = ?", status)
 		}
 		if image := c.Query("image"); image != "" {
-			q = q.Where("image_name ILIKE ?", "%"+image+"%")
+			if c.Query("exact") == "true" {
+				q = q.Where("image_name = ?", image)
+			} else {
+				q = q.Where("image_name ILIKE ?", "%"+image+"%")
+			}
 		}
 		if tags := c.Query("tags"); tags != "" {
 			tagIDs := strings.Split(tags, ",")

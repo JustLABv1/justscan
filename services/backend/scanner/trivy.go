@@ -104,7 +104,8 @@ type TrivySBOMOrg struct {
 }
 
 // RunScan executes trivy against an image and returns parsed output.
-func RunScan(ctx context.Context, imageName, imageTag string, envVars []string, platform string) (*TrivyOutput, string, error) {
+// cacheDir, if non-empty, sets --cache-dir to isolate the trivy DB per worker.
+func RunScan(ctx context.Context, imageName, imageTag string, envVars []string, platform, cacheDir string) (*TrivyOutput, string, error) {
 	trivyPath := config.Config.Scanner.TrivyPath
 	if trivyPath == "" {
 		trivyPath = "trivy"
@@ -121,6 +122,9 @@ func RunScan(ctx context.Context, imageName, imageTag string, envVars []string, 
 		imageRef = imageName + ":" + imageTag
 	}
 	args := []string{"image", "--format", "json", "--exit-code", "0", "--no-progress"}
+	if cacheDir != "" {
+		args = append(args, "--cache-dir", cacheDir)
+	}
 	if platform != "" {
 		args = append(args, "--platform", platform)
 	}
@@ -143,7 +147,8 @@ func RunScan(ctx context.Context, imageName, imageTag string, envVars []string, 
 }
 
 // RunSBOMScan executes trivy in CycloneDX SBOM mode.
-func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []string, platform string) (*TrivySBOMOutput, error) {
+// cacheDir, if non-empty, sets --cache-dir to match the worker's cache directory.
+func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []string, platform, cacheDir string) (*TrivySBOMOutput, error) {
 	trivyPath := config.Config.Scanner.TrivyPath
 	if trivyPath == "" {
 		trivyPath = "trivy"
@@ -160,6 +165,9 @@ func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []stri
 		imageRef = imageName + ":" + imageTag
 	}
 	args := []string{"image", "--format", "cyclonedx", "--exit-code", "0", "--no-progress"}
+	if cacheDir != "" {
+		args = append(args, "--cache-dir", cacheDir)
+	}
 	if platform != "" {
 		args = append(args, "--platform", platform)
 	}

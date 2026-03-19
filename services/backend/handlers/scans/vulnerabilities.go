@@ -143,8 +143,10 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 			vulns[i].Comments = comments
 		}
 
-		// Batch-query first_seen_at for each vuln_id+pkg_name combination
-		// across all completed scans for the same image_name as this scan.
+		// Batch-query first_seen_at for each vuln_id+pkg_name combination across
+		// all OTHER completed scans of the same image. Excluding the current scan
+		// means: if first_seen_at is non-null, the vulnerability existed before this
+		// scan; if it is null, this is the first time we have ever seen it.
 		type firstSeenRow struct {
 			VulnID      string     `bun:"vuln_id"`
 			PkgName     string     `bun:"pkg_name"`
@@ -157,8 +159,9 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 			JOIN scans s ON s.id = v.scan_id
 			WHERE s.image_name = (SELECT image_name FROM scans WHERE id = ?)
 			  AND s.status = 'completed'
+			  AND s.id != ?
 			GROUP BY v.vuln_id, v.pkg_name
-		`, scanID).Scan(c.Request.Context(), &firstSeenRows) //nolint:errcheck
+		`, scanID, scanID).Scan(c.Request.Context(), &firstSeenRows) //nolint:errcheck
 
 		firstSeenMap := make(map[string]*time.Time, len(firstSeenRows))
 		for i := range firstSeenRows {

@@ -1,7 +1,6 @@
 'use client';
-import { clearToken, clearUser, getToken, getUser, listScans, Scan } from '@/lib/api';
+import { clearToken, clearUser, getToken, getUser } from '@/lib/api';
 import {
-  AlertCircleIcon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
   Building04Icon,
@@ -10,7 +9,6 @@ import {
   GridTableIcon,
   Logout02Icon,
   Moon02Icon,
-  Notification02Icon,
   ServerStack01Icon,
   Settings01Icon,
   Shield01Icon,
@@ -44,9 +42,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<{ username?: string; email?: string; role?: string } | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [recentScans, setRecentScans] = useState<Scan[]>([]);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [notifLastSeen, setNotifLastSeen] = useState('');
 
   useEffect(() => {
     if (!getToken()) {
@@ -57,14 +52,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setUser(getUser());
     setAuthReady(true);
     if (localStorage.getItem('sidebar_collapsed') === 'true') setCollapsed(true);
-    const seen = localStorage.getItem('notif_last_seen') ?? '';
-    setNotifLastSeen(seen);
-    const fetchScans = () => {
-      listScans(1, 10).then(res => setRecentScans(res.data ?? [])).catch(() => {});
-    };
-    fetchScans();
-    const iv = setInterval(fetchScans, 60_000);
-    return () => clearInterval(iv);
   }, [router]);
 
   function toggleCollapsed() {
@@ -91,18 +78,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const initials = (user?.username ?? user?.email ?? 'U')[0].toUpperCase();
   const isDark = resolvedTheme === 'dark';
-
-  const finishedScans = recentScans.filter(s => s.status === 'completed' || s.status === 'failed');
-  const unreadCount = notifLastSeen
-    ? finishedScans.filter(s => new Date(s.created_at) > new Date(notifLastSeen)).length
-    : 0;
-
-  function openNotifications() {
-    setNotifOpen(o => !o);
-    const now = new Date().toISOString();
-    setNotifLastSeen(now);
-    localStorage.setItem('notif_last_seen', now);
-  }
 
   return (
     <ToastProvider>
@@ -189,57 +164,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Footer */}
         <div className="shrink-0 px-2 pb-3 pt-2 space-y-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
 
-          {/* Notification panel — renders inside sidebar flow so it can't be clipped */}
-          {notifOpen && (
-            <div
-              className="rounded-xl overflow-hidden mb-1"
-              style={{
-                background: 'var(--modal-bg)',
-                border: '1px solid var(--glass-border)',
-                boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
-              }}
-            >
-              <div className="px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider"
-                style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                Recent Activity
-              </div>
-              {finishedScans.length === 0 ? (
-                <div className="px-3 py-4 text-xs text-zinc-500 text-center flex flex-col items-center gap-1.5">
-                  <AlertCircleIcon size={16} className="text-zinc-400" />
-                  No recent activity
-                </div>
-              ) : finishedScans.slice(0, 5).map((s, i) => {
-                const isNew = notifLastSeen ? new Date(s.created_at) > new Date(notifLastSeen) : false;
-                return (
-                  <Link
-                    key={s.id}
-                    href={`/scans/${s.id}`}
-                    onClick={() => setNotifOpen(false)}
-                    className="flex items-start gap-2.5 px-3 py-2 text-xs transition-colors"
-                    style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <span
-                      className="mt-0.5 w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ background: s.status === 'completed' ? '#34d399' : '#f87171', marginTop: 4 }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-mono truncate text-zinc-700 dark:text-zinc-300">
-                        {s.image_name}:{s.image_tag}
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span style={{ color: s.status === 'completed' ? '#34d399' : '#f87171' }}>{s.status}</span>
-                        {isNew && <span className="px-1 py-px rounded text-[9px] font-bold bg-violet-500/20 text-violet-400">NEW</span>}
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Settings + bell row (collapsed: just icons stacked) */}
+          {/* Theme toggle + collapse row */}
           <div className={`flex items-center ${collapsed ? 'flex-col gap-0.5' : 'gap-1'}`}>
             {/* Theme toggle */}
             <button
@@ -250,23 +175,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {isDark ? <Sun01Icon size={15} /> : <Moon02Icon size={15} />}
-            </button>
-
-            {/* Notification bell */}
-            <button
-              onClick={openNotifications}
-              className="relative flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-150 text-zinc-400 hover:text-violet-500 dark:text-zinc-500 dark:hover:text-violet-400 shrink-0"
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              title="Recent activity"
-            >
-              <Notification02Icon size={15} />
-              {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-3 h-3 rounded-full text-[8px] font-bold flex items-center justify-center text-white"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
             </button>
 
             {/* Collapse toggle — grows to fill remaining space when expanded */}

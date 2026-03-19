@@ -43,4 +43,5 @@ const (
 	ScanStatusRunning   = "running"
 	ScanStatusCompleted = "completed"
 	ScanStatusFailed    = "failed"
+	ScanStatusCancelled = "cancelled"
 )

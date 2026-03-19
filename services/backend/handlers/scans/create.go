@@ -74,7 +74,7 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 		envVars := resolveRegistryEnv(c.Request.Context(), db, req.Image)
 		scanner.EnqueueScan(scan.ID, db, envVars, req.Platform)
 
-		go audit.Write(c.Request.Context(), db, userID.String(), "scan.create",
+		go audit.Write(context.Background(), db, userID.String(), "scan.create",
 			fmt.Sprintf("Scan created for %s:%s (id=%s)", req.Image, req.Tag, scan.ID))
 
 		c.JSON(http.StatusCreated, scan)

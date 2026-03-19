@@ -15,6 +15,7 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 	s := router.Group("/scans").Use(middlewares.Auth(db))
 	{
 		s.GET("/", scans.ListScans(db))
+		s.GET("/images", scans.ListScanImages(db))
 		s.POST("/", scans.CreateScan(db))
 		s.DELETE("/bulk", scans.BulkDeleteScans(db))
 		s.POST("/bulk/tags/:tagId", scans.BulkAddTagToScans(db))
@@ -22,6 +23,7 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 		s.GET("/trends", scans.GetTrends(db))
 		s.GET("/:id", scans.GetScan(db))
 		s.DELETE("/:id", scans.DeleteScan(db))
+		s.POST("/:id/cancel", scans.CancelScan(db))
 		s.POST("/:id/rescan", scans.ReScan(db))
 		s.GET("/:id/vulnerabilities", scans.ListVulnerabilities(db))
 		s.GET("/:id/sbom", scans.GetSBOM(db))

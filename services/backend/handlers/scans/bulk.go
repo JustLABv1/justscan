@@ -1,6 +1,7 @@
 package scans
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -49,7 +50,7 @@ func BulkDeleteScans(db *bun.DB) gin.HandlerFunc {
 		affected, _ := res.RowsAffected()
 
 		userID, _ := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
-		go audit.Write(c.Request.Context(), db, userID.String(), "scan.bulk_delete",
+		go audit.Write(context.Background(), db, userID.String(), "scan.bulk_delete",
 			fmt.Sprintf("Bulk deleted %d scans", affected))
 
 		c.JSON(http.StatusOK, gin.H{"deleted": affected})

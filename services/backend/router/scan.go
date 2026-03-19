@@ -34,6 +34,8 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 		s.POST("/:id/vulnerabilities/:vulnId/comments", comments.CreateComment(db))
 		s.GET("/:id/compliance", orgs.GetScanCompliance(db))
 		s.POST("/:id/compliance/evaluate", orgs.ReEvaluate(db))
+		s.POST("/:id/share", scans.CreateShare(db))
+		s.DELETE("/:id/share", scans.DeleteShare(db))
 		s.GET("/:id/manual-findings", scans.ListManualFindings(db))
 		s.POST("/:id/manual-findings", scans.CreateManualFinding(db))
 		s.PUT("/:id/manual-findings/:fid", scans.UpdateManualFinding(db))

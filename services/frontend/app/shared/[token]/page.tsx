@@ -1,11 +1,9 @@
 'use client';
 import { Logo } from '@/components/logo';
-import { getPublicScan, getToken, listPublicVulnerabilities, Scan, Vulnerability } from '@/lib/api';
-import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
-import { ListBox, Select } from '@heroui/react';
+import { ApiError, getSharedScan, getToken, listScans, listSharedVulnerabilities, rescanShared, Scan, Vulnerability } from '@/lib/api';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -107,8 +105,9 @@ function ScanningAnimation({ image }: { image: string }) {
 
 const LIMIT = 25;
 
-export default function PublicScanResultPage() {
-  const { id } = useParams<{ id: string }>();
+export default function SharedScanPage() {
+  const { token } = useParams<{ token: string }>();
+  const router = useRouter();
   const [scan, setScan] = useState<Scan | null>(null);
   const [error, setError] = useState('');
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
@@ -123,31 +122,30 @@ export default function PublicScanResultPage() {
   const [sortBy, setSortBy] = useState('severity');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [vulnLoading, setVulnLoading] = useState(false);
+  const [reScanning, setReScanning] = useState(false);
+  const [comparingPrev, setComparingPrev] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setIsLoggedIn(!!getToken()), []);
+  useEffect(() => {
+    setIsLoggedIn(!!getToken());
+  }, []);
 
   useEffect(() => {
     function fetchScan() {
-      getPublicScan(id)
+      getSharedScan(token)
         .then(s => {
           setScan(s);
           if (s.status === 'completed' || s.status === 'failed') {
             if (pollRef.current) clearInterval(pollRef.current);
-            updatePublicHistoryEntry(id, {
-              status: s.status,
-              critical_count: s.critical_count ?? 0,
-              high_count: s.high_count ?? 0,
-              medium_count: s.medium_count ?? 0,
-              low_count: s.low_count ?? 0,
-              unknown_count: s.unknown_count ?? 0,
-            });
           }
         })
         .catch(e => {
+          if (e instanceof ApiError && e.status === 401) {
+            router.push(`/login?returnUrl=/shared/${token}`);
+            return;
+          }
           setError(e.message);
           if (pollRef.current) clearInterval(pollRef.current);
         });
@@ -155,7 +153,7 @@ export default function PublicScanResultPage() {
     fetchScan();
     pollRef.current = setInterval(fetchScan, 2500);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [id]);
+  }, [token, router]);
 
   useEffect(() => {
     if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
@@ -165,13 +163,42 @@ export default function PublicScanResultPage() {
 
   useEffect(() => {
     if (!scan || scan.status !== 'completed') return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVulnLoading(true);
-    listPublicVulnerabilities(id, page, LIMIT, severityFilter || undefined, pkgFilter || undefined, hasFix || undefined, minCvss || undefined, sortBy, sortDir)
+    listSharedVulnerabilities(token, page, LIMIT, severityFilter || undefined, pkgFilter || undefined, hasFix || undefined, minCvss || undefined, sortBy, sortDir)
       .then(res => { setVulns(res.data ?? []); setVulnTotal(res.total); })
-      .catch(() => {})
+      .catch(e => {
+        if (e instanceof ApiError && e.status === 401) {
+          router.push(`/login?returnUrl=/shared/${token}`);
+        }
+      })
       .finally(() => setVulnLoading(false));
-  }, [id, scan?.status, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token, scan?.status, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir, router]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleRescan() {
+    setReScanning(true);
+    try {
+      const result = await rescanShared(token);
+      if (result.type === 'authenticated') {
+        router.push(`/scans/${result.scan_id}`);
+      } else {
+        router.push(`/scan/${result.scan_id}`);
+      }
+    } catch { /* ignore */ } finally {
+      setReScanning(false);
+    }
+  }
+
+  async function handleComparePrev() {
+    if (!scan) return;
+    setComparingPrev(true);
+    try {
+      const res = await listScans(1, 5, scan.image_name);
+      const prev = (res.data ?? []).find(s => s.id !== scan.id);
+      if (prev) router.push(`/scans/compare?a=${prev.id}&b=${scan.id}`);
+    } catch { /* ignore */ } finally {
+      setComparingPrev(false);
+    }
+  }
 
   const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl';
 
@@ -179,7 +206,7 @@ export default function PublicScanResultPage() {
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
       <div className="text-center space-y-3">
         <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>
-        <Link href="/scan" className="text-violet-600 dark:text-violet-400 text-sm hover:underline">← Try another scan</Link>
+        <Link href="/" className="text-violet-600 dark:text-violet-400 text-sm hover:underline">← Back to home</Link>
       </div>
     </div>
   );
@@ -195,7 +222,7 @@ export default function PublicScanResultPage() {
         className="sticky top-0 z-20 flex items-center justify-between px-6 py-4"
         style={{ background: 'var(--app-bg)', borderBottom: '1px solid var(--border-subtle)' }}
       >
-        <Link href="/scan" className="flex items-center gap-2.5">
+        <Link href="/" className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 12px rgba(124,58,237,0.4)' }}>
             <Logo size={16} className="text-white" />
           </div>
@@ -205,7 +232,7 @@ export default function PublicScanResultPage() {
         <div className="flex items-center gap-2">
           {scan?.status === 'completed' && (
             <Link
-              href={`/reports/print?scans=${id}`}
+              href={`/reports/print?scans=${scan.id}`}
               target="_blank"
               className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
               style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
@@ -216,6 +243,40 @@ export default function PublicScanResultPage() {
               Export
             </Link>
           )}
+          {scan?.status === 'completed' && (
+            <button
+              onClick={handleRescan}
+              disabled={reScanning}
+              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#c4b5fd' }}
+            >
+              {reScanning
+                ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+                : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+                  </svg>
+                )}
+              Re-scan
+            </button>
+          )}
+          {scan?.status === 'completed' && isLoggedIn && (
+            <button
+              onClick={handleComparePrev}
+              disabled={comparingPrev}
+              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+            >
+              {comparingPrev
+                ? <span className="w-3.5 h-3.5 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin" />
+                : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/>
+                  </svg>
+                )}
+              Compare
+            </button>
+          )}
           <ThemeToggle />
           {isLoggedIn ? (
             <Link href="/scans"
@@ -224,7 +285,8 @@ export default function PublicScanResultPage() {
               Dashboard →
             </Link>
           ) : (
-            <Link href="/login" className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
+            <Link href={`/login?returnUrl=/shared/${token}`}
+              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
               style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
               Sign in
             </Link>
@@ -233,15 +295,22 @@ export default function PublicScanResultPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-        {/* Scan header */}
+        {/* Shared badge */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+            style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
+            Shared scan
+          </span>
+          {scan?.share_visibility === 'authenticated' && (
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+              style={{ background: 'rgba(234,179,8,0.1)', color: '#facc15', border: '1px solid rgba(234,179,8,0.2)' }}>
+              Signed-in users only
+            </span>
+          )}
+        </div>
+
+        {/* Image header */}
         <div>
-          <Link href="/scan" className="inline-flex items-center gap-1.5 text-sm transition-colors mb-3"
-            style={{ color: 'var(--text-muted)' }}
-            onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            New scan
-          </Link>
           <h1 className="text-xl font-bold font-mono break-all" style={{ color: 'var(--text-primary)' }}>{imageName}</h1>
           {scan?.image_digest && <p className="text-xs font-mono mt-1 break-all" style={{ color: 'var(--text-faint)' }}>{scan.image_digest}</p>}
           {scan?.architecture && (
@@ -258,7 +327,6 @@ export default function PublicScanResultPage() {
           <div className="rounded-2xl px-6 py-5 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
             <p className="text-red-500 dark:text-red-400 font-medium">Scan failed</p>
             {scan.error_message && <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{scan.error_message}</p>}
-            <Link href="/scan" className="inline-block mt-3 text-sm text-violet-600 dark:text-violet-400 hover:underline">Try another image →</Link>
           </div>
         )}
 
@@ -292,21 +360,18 @@ export default function PublicScanResultPage() {
                   {vulnTotal > 0 && <span className="text-sm font-normal ml-2" style={{ color: 'var(--text-muted)' }}>{vulnTotal} found</span>}
                 </h2>
                 <div className="flex flex-wrap gap-2 items-center">
-                  <Select selectedKey={severityFilter || '__all__'} onSelectionChange={k => { setSeverityFilter(String(k === '__all__' ? '' : k)); setPage(1); }}>
-                    <Select.Trigger className={inputCls} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        <ListBox.Item id="__all__">All Severities</ListBox.Item>
-                        <ListBox.Item id="CRITICAL">Critical</ListBox.Item>
-                        <ListBox.Item id="HIGH">High</ListBox.Item>
-                        <ListBox.Item id="MEDIUM">Medium</ListBox.Item>
-                        <ListBox.Item id="LOW">Low</ListBox.Item>
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
+                  {/* Severity pills */}
+                  <div className="flex gap-1">
+                    {['', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map(sev => (
+                      <button key={sev || '__all__'} onClick={() => { setSeverityFilter(sev); setPage(1); }}
+                        className="px-3 py-1.5 text-xs rounded-lg font-medium transition-all"
+                        style={severityFilter === sev
+                          ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white' }
+                          : { background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
+                        {sev || 'All'}
+                      </button>
+                    ))}
+                  </div>
                   <input
                     type="text"
                     value={pkgInput}
@@ -430,24 +495,6 @@ export default function PublicScanResultPage() {
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Sign-in CTA */}
-            <div
-              className="rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-              style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(167,139,250,0.15)' }}
-            >
-              <div>
-                <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>Want more features?</p>
-                <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>Sign in to track scans, add tags, suppress findings, and more.</p>
-              </div>
-              <Link
-                href="/login"
-                className="shrink-0 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.25)' }}
-              >
-                Sign in →
-              </Link>
             </div>
           </>
         )}

@@ -1,6 +1,6 @@
 'use client';
 import { Logo } from '@/components/logo';
-import { createPublicScan, getPublicScan, getPublicSettings, Scan } from '@/lib/api';
+import { createPublicScan, getPublicScan, getPublicSettings, getToken, Scan } from '@/lib/api';
 import {
     addToPublicHistory,
     clearPublicHistory,
@@ -13,6 +13,34 @@ import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+
+function CopyButton({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={e => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(url).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+      title="Copy link"
+      className="shrink-0 flex items-center justify-center w-6 h-6 rounded-md transition-all opacity-0 group-hover:opacity-100 hover:!opacity-100"
+      style={{ color: copied ? '#34d399' : 'var(--text-muted)', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}
+    >
+      {copied ? (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      ) : (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+      )}
+    </button>
+  );
+}
 
 const PLATFORMS = [
   { value: '', label: 'Auto (detect)' },
@@ -32,12 +60,19 @@ function statusStyle(status: string): { color: string; dot: string } {
 }
 
 function HistoryRow({ record }: { record: PublicScanRecord }) {
+  const router = useRouter();
   const st = statusStyle(record.status);
   const isActive = record.status === 'running' || record.status === 'pending';
+  const scanUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/scan/${record.id}`
+    : `/scan/${record.id}`;
   return (
-    <Link
-      href={`/scan/${record.id}`}
-      className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors group"
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={() => router.push(`/scan/${record.id}`)}
+      onKeyDown={e => { if (e.key === 'Enter') router.push(`/scan/${record.id}`); }}
+      className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors group cursor-pointer"
       style={{ background: 'var(--row-hover)' }}
       onMouseEnter={e => (e.currentTarget.style.background = 'var(--glass-bg)')}
       onMouseLeave={e => (e.currentTarget.style.background = 'var(--row-hover)')}
@@ -77,13 +112,16 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
       {/* Time */}
       <span className="text-xs shrink-0" style={{ color: 'var(--text-faint)' }}>{timeAgo(record.created_at)}</span>
 
+      {/* Copy URL */}
+      <CopyButton url={scanUrl} />
+
       {/* Arrow */}
       <svg className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" width="14" height="14"
         viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
         style={{ color: 'var(--text-muted)' }}>
         <polyline points="9 18 15 12 9 6"/>
       </svg>
-    </Link>
+    </div>
   );
 }
 
@@ -97,6 +135,7 @@ export default function PublicScanPage() {
   const [error, setError] = useState('');
   const [settings, setSettings] = useState<{ enabled: boolean; rate_limit_per_hour: number } | null>(null);
   const [history, setHistory] = useState<PublicScanRecord[]>([]);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isDark = resolvedTheme === 'dark';
@@ -104,6 +143,7 @@ export default function PublicScanPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
+    setIsLoggedIn(!!getToken());
     getPublicSettings().then(setSettings).catch(() => setSettings({ enabled: true, rate_limit_per_hour: 5 }));
     setHistory(getPublicHistory());
     inputRef.current?.focus();
@@ -212,9 +252,9 @@ export default function PublicScanPage() {
               )}
             </button>
           )}
-          <Link href="/login" className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
+          <Link href={isLoggedIn ? '/scans' : '/login'} className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
             style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
-            Sign in
+            {isLoggedIn ? 'Dashboard →' : 'Sign in'}
           </Link>
         </div>
       </header>

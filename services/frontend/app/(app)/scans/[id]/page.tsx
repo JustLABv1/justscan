@@ -5,7 +5,9 @@ import {
     cancelScan,
     ComplianceResult,
     createComment,
+    createShare,
     deleteComment,
+    deleteShare,
     deleteSuppression,
     getScan,
     getScanCompliance,
@@ -27,11 +29,11 @@ import {
     upsertSuppression,
     Vulnerability,
 } from '@/lib/api';
+import { fullDate, timeAgo } from '@/lib/time';
 import { Calendar, DateField, DatePicker, ListBox, Select } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
-import { timeAgo, fullDate } from '@/lib/time';
-import { ArrowLeft01Icon, Cancel01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, GitCompareIcon, PencilEdit01Icon, Refresh01Icon, ShieldKeyIcon } from 'hugeicons-react';
+import { ArrowLeft01Icon, Cancel01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, GitCompareIcon, PencilEdit01Icon, Refresh01Icon, Share01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -282,6 +284,10 @@ export default function ScanDetailPage() {
   const [reScanning, setReScanning] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [comparingPrev, setComparingPrev] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareVisibility, setShareVisibility] = useState<'public' | 'authenticated'>('public');
+  const [shareCopied, setShareCopied] = useState(false);
 
   const [suppressStatus, setSuppressStatus] = useState<Suppression['status']>('accepted');
   const [suppressJustification, setSuppressJustification] = useState('');
@@ -482,6 +488,28 @@ export default function ScanDetailPage() {
     }
   }
 
+  async function handleEnableShare() {
+    if (!scan) return;
+    setShareLoading(true);
+    try {
+      const result = await createShare(scan.id, shareVisibility);
+      setScan(s => s ? { ...s, share_token: result.share_token, share_visibility: result.share_visibility } : s);
+    } catch { /* ignore */ } finally {
+      setShareLoading(false);
+    }
+  }
+
+  async function handleDisableShare() {
+    if (!scan) return;
+    setShareLoading(true);
+    try {
+      await deleteShare(scan.id);
+      setScan(s => s ? { ...s, share_token: undefined, share_visibility: undefined } : s);
+    } catch { /* ignore */ } finally {
+      setShareLoading(false);
+    }
+  }
+
   async function handleComparePrev() {
     if (!scan) return;
     setComparingPrev(true);
@@ -628,6 +656,113 @@ export default function ScanDetailPage() {
                 : <GitCompareIcon size={15} />}
               Compare
             </button>
+            {/* Share button + dropdown panel */}
+            <div className="relative">
+              <button
+                onClick={() => { setShareOpen(o => !o); if (scan.share_visibility) setShareVisibility(scan.share_visibility as 'public' | 'authenticated'); }}
+                className="flex items-center gap-2 px-3 py-2 text-sm rounded-xl font-medium transition-all"
+                style={scan.share_token
+                  ? { background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.25)', color: '#4ade80' }
+                  : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+                title="Share this scan"
+              >
+                <Share01Icon size={15} />
+                Share
+              </button>
+              {shareOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />
+                  <div className="absolute right-0 top-11 w-80 rounded-xl z-50 p-4 space-y-3"
+                    style={{ background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-zinc-800 dark:text-white">Share scan</p>
+                      <button onClick={() => setShareOpen(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-lg leading-none">✕</button>
+                    </div>
+                    {scan.share_token ? (
+                      <>
+                        <div>
+                          <p className="text-xs text-zinc-500 mb-1.5">Share link
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium"
+                              style={{ background: scan.share_visibility === 'public' ? 'rgba(34,197,94,0.1)' : 'rgba(124,58,237,0.1)', color: scan.share_visibility === 'public' ? '#4ade80' : '#a78bfa', border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'rgba(124,58,237,0.2)'}` }}>
+                              {scan.share_visibility}
+                            </span>
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 text-xs text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 rounded-lg px-2 py-1.5 truncate">
+                              {typeof window !== 'undefined' ? `${window.location.origin}/shared/${scan.share_token}` : ''}
+                            </code>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/shared/${scan.share_token}`);
+                                setShareCopied(true);
+                                setTimeout(() => setShareCopied(false), 1500);
+                              }}
+                              className="shrink-0 px-2.5 py-1.5 text-xs rounded-lg transition-colors"
+                              style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}
+                            >
+                              {shareCopied ? '✓ Copied' : 'Copy'}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <p className="text-xs text-zinc-500">Change visibility</p>
+                          <div className="flex gap-2">
+                            {(['public', 'authenticated'] as const).map(v => (
+                              <button key={v} onClick={() => setShareVisibility(v)}
+                                className="flex-1 py-1.5 text-xs rounded-lg font-medium transition-all"
+                                style={shareVisibility === v
+                                  ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white' }
+                                  : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
+                                {v === 'public' ? '🌐 Public' : '🔐 Signed in'}
+                              </button>
+                            ))}
+                          </div>
+                          {shareVisibility !== scan.share_visibility && (
+                            <button onClick={handleEnableShare} disabled={shareLoading}
+                              className="w-full py-1.5 text-xs rounded-lg font-medium transition-all disabled:opacity-50"
+                              style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
+                              {shareLoading ? 'Updating…' : 'Update visibility'}
+                            </button>
+                          )}
+                        </div>
+                        <button onClick={handleDisableShare} disabled={shareLoading}
+                          className="w-full py-2 text-xs rounded-lg transition-all disabled:opacity-50"
+                          style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171', border: '1px solid rgba(239,68,68,0.18)' }}>
+                          {shareLoading ? 'Processing…' : 'Disable sharing'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="space-y-1.5">
+                          <p className="text-xs text-zinc-500">Visibility</p>
+                          <div className="flex gap-2">
+                            {(['public', 'authenticated'] as const).map(v => (
+                              <button key={v} onClick={() => setShareVisibility(v)}
+                                className="flex-1 py-1.5 text-xs rounded-lg font-medium transition-all"
+                                style={shareVisibility === v
+                                  ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white' }
+                                  : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
+                                {v === 'public' ? '🌐 Public' : '🔐 Signed in'}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-xs text-zinc-400 leading-relaxed">
+                            {shareVisibility === 'public'
+                              ? 'Anyone with the link can view this scan.'
+                              : 'Only signed-in users can view this scan.'}
+                          </p>
+                        </div>
+                        <button onClick={handleEnableShare} disabled={shareLoading}
+                          className="w-full py-2 text-sm rounded-lg font-medium transition-all disabled:opacity-50"
+                          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white' }}>
+                          {shareLoading ? 'Creating link…' : 'Create share link'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

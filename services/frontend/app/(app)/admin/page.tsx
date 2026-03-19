@@ -1,6 +1,7 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import {
+    AdminScan,
     AdminUser,
     AuditLog,
     AutoTagRule,
@@ -12,6 +13,7 @@ import {
     deleteNotificationChannel,
     disableAdminUser,
     getAdminSettings,
+    listAdminScans,
     listAdminUsers,
     listAuditLogs,
     listAutoTagRules,
@@ -25,10 +27,11 @@ import {
     updateNotificationChannel,
     updateRateLimit,
 } from '@/lib/api';
+import { fullDate, timeAgo } from '@/lib/time';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
-import { Delete01Icon, Notification01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
+import { ArrowDown01Icon, ArrowRight01Icon, Delete01Icon, Notification01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { timeAgo, fullDate } from '@/lib/time';
 
 const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
@@ -1089,9 +1092,272 @@ function NotificationsTab() {
   );
 }
 
+// ── Scans Tab ─────────────────────────────────────────────────────────
+const STATUS_COLORS: Record<string, { bg: string; color: string; border: string }> = {
+  completed: { bg: 'rgba(34,197,94,0.1)', color: '#4ade80', border: 'rgba(34,197,94,0.2)' },
+  running:   { bg: 'rgba(234,179,8,0.1)',  color: '#facc15', border: 'rgba(234,179,8,0.2)'  },
+  pending:   { bg: 'rgba(148,163,184,0.1)',color: '#94a3b8', border: 'rgba(148,163,184,0.2)'},
+  failed:    { bg: 'rgba(239,68,68,0.1)',  color: '#f87171', border: 'rgba(239,68,68,0.2)'  },
+};
+
+function ScansTab() {
+  const [scans, setScans] = useState<AdminScan[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [imageFilter, setImageFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const limit = 50;
+
+  const load = useCallback(async (p: number, img: string, st: string) => {
+    setLoading(true);
+    setError('');
+    try {
+      const r = await listAdminScans(p, limit, img || undefined, st || undefined);
+      setScans(r.data ?? []);
+      setTotal(r.total);
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load scans'); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(page, imageFilter, statusFilter); }, [load, page, imageFilter, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  function handleImageChange(v: string) { setImageFilter(v); setPage(1); }
+  function handleStatusChange(v: string) { setStatusFilter(v); setPage(1); }
+
+  function toggleExpand(imageName: string) {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(imageName)) next.delete(imageName); else next.add(imageName);
+      return next;
+    });
+  }
+
+  // Group scans by image name, preserving insertion order
+  const groups: { imageName: string; scans: AdminScan[] }[] = [];
+  const seen = new Map<string, AdminScan[]>();
+  for (const s of scans) {
+    if (!seen.has(s.image_name)) {
+      seen.set(s.image_name, []);
+      groups.push({ imageName: s.image_name, scans: seen.get(s.image_name)! });
+    }
+    seen.get(s.image_name)!.push(s);
+  }
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          {error}
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          placeholder="Filter by image…"
+          value={imageFilter}
+          onChange={e => handleImageChange(e.target.value)}
+          className={`${inputCls} max-w-xs`}
+        />
+        <select
+          value={statusFilter}
+          onChange={e => handleStatusChange(e.target.value)}
+          className={`${inputCls} w-36`}
+        >
+          <option value="">All statuses</option>
+          <option value="completed">Completed</option>
+          <option value="running">Running</option>
+          <option value="pending">Pending</option>
+          <option value="failed">Failed</option>
+        </select>
+        <p className="ml-auto text-sm text-zinc-500">{total} total</p>
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-end gap-2 text-sm">
+        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
+          className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
+          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>←</button>
+        <span className="text-zinc-500">{page} / {totalPages}</span>
+        <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+          className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
+          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>→</button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        </div>
+      ) : groups.length === 0 ? (
+        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+          <p className="text-sm text-zinc-500">No scans found.</p>
+        </div>
+      ) : (
+        <div className="glass-panel rounded-2xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                <th className="w-8 px-3 py-3" />
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }}>C</th>
+                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }}>H</th>
+                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }}>M</th>
+                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }}>L</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Owner</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map((group, gi) => {
+                const isOpen = expanded.has(group.imageName);
+                const latest = group.scans[0];
+                const sc = STATUS_COLORS[latest.status] ?? STATUS_COLORS.failed;
+                return (
+                  <>
+                    {/* Image group header */}
+                    <tr
+                      key={group.imageName}
+                      className="cursor-pointer transition-colors"
+                      style={{ borderTop: gi > 0 ? '1px solid var(--row-divider)' : undefined }}
+                      onClick={() => toggleExpand(group.imageName)}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <td className="px-3 py-3.5 w-8">
+                        <span
+                          className="flex items-center justify-center w-5 h-5 rounded-md transition-all duration-150"
+                          style={{ color: 'var(--text-muted)', background: isOpen ? 'rgba(124,58,237,0.12)' : undefined }}
+                        >
+                          {isOpen
+                            ? <ArrowDown01Icon size={13} className="text-violet-400" />
+                            : <ArrowRight01Icon size={13} />}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200 text-sm">
+                            {group.imageName}
+                          </span>
+                          <span
+                            className="text-xs px-1.5 py-0.5 rounded-md font-medium"
+                            style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.2)' }}
+                          >
+                            {group.scans.length} scan{group.scans.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="font-mono text-xs text-zinc-400">:{latest.image_tag}</span>
+                          <span className="text-xs text-zinc-500" title={fullDate(latest.created_at)}>{timeAgo(latest.created_at)}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-md"
+                          style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
+                          {latest.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3.5 text-center font-mono text-xs text-red-400">{latest.critical_count || '—'}</td>
+                      <td className="px-3 py-3.5 text-center font-mono text-xs text-orange-400">{latest.high_count || '—'}</td>
+                      <td className="px-3 py-3.5 text-center font-mono text-xs text-yellow-400">{latest.medium_count || '—'}</td>
+                      <td className="px-3 py-3.5 text-center font-mono text-xs text-blue-400">{latest.low_count || '—'}</td>
+                      <td className="px-4 py-3.5 text-sm text-zinc-500 max-w-[160px] truncate" title={latest.owner_email || '—'}>
+                        {latest.owner_email ? latest.owner_email : <span className="italic text-zinc-400">anonymous</span>}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-zinc-400 whitespace-nowrap">{timeAgo(latest.created_at)}</td>
+                    </tr>
+
+                    {/* Expanded child rows */}
+                    {isOpen && (
+                      <tr key={`${group.imageName}-children`}>
+                        <td colSpan={9} className="p-0">
+                          <div
+                            className="mx-4 mb-3 rounded-xl overflow-hidden"
+                            style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)' }}
+                          >
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Tag</th>
+                                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+                                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }}>C</th>
+                                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }}>H</th>
+                                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }}>M</th>
+                                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }}>L</th>
+                                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Owner</th>
+                                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Date</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.scans.map((s, si) => {
+                                  const csc = STATUS_COLORS[s.status] ?? STATUS_COLORS.failed;
+                                  return (
+                                    <tr
+                                      key={s.id}
+                                      className="cursor-pointer group/row transition-colors"
+                                      style={{ borderTop: si > 0 ? '1px solid var(--row-divider)' : undefined }}
+                                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(124,58,237,0.06)')}
+                                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                    >
+                                      <td className="px-4 py-2.5">
+                                        <Link
+                                          href={`/scans/${s.id}`}
+                                          onClick={e => e.stopPropagation()}
+                                          className="flex items-center gap-2 group/link"
+                                        >
+                                          <span
+                                            className="w-1 h-4 rounded-full shrink-0 opacity-0 group-hover/link:opacity-100 transition-opacity"
+                                            style={{ background: 'linear-gradient(180deg,#a78bfa,#7c3aed)' }}
+                                          />
+                                          <span className="font-mono text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:text-violet-400 transition-colors">
+                                            :{s.image_tag}
+                                          </span>
+                                        </Link>
+                                      </td>
+                                      <td className="px-4 py-2.5">
+                                        <span className="text-xs font-medium px-2 py-0.5 rounded-md"
+                                          style={{ background: csc.bg, color: csc.color, border: `1px solid ${csc.border}` }}>
+                                          {s.status}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2.5 text-center font-mono text-xs text-red-400">{s.critical_count || '—'}</td>
+                                      <td className="px-3 py-2.5 text-center font-mono text-xs text-orange-400">{s.high_count || '—'}</td>
+                                      <td className="px-3 py-2.5 text-center font-mono text-xs text-yellow-400">{s.medium_count || '—'}</td>
+                                      <td className="px-3 py-2.5 text-center font-mono text-xs text-blue-400">{s.low_count || '—'}</td>
+                                      <td className="px-4 py-2.5 text-xs text-zinc-500 max-w-[160px] truncate" title={s.owner_email || '—'}>
+                                        {s.owner_email ? s.owner_email : <span className="italic text-zinc-400">anonymous</span>}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-zinc-400 whitespace-nowrap" title={fullDate(s.created_at)}>
+                                        {timeAgo(s.created_at)}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────── ──────────────────────────────────────────────────────────────
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'settings' | 'users' | 'autotags' | 'audit' | 'notifications'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'users' | 'autotags' | 'audit' | 'notifications' | 'scans'>('settings');
 
   const tabs: { value: typeof activeTab; label: string }[] = [
     { value: 'settings', label: 'Settings' },
@@ -1099,6 +1365,7 @@ export default function AdminPage() {
     { value: 'autotags', label: 'Auto Tags' },
     { value: 'audit', label: 'Audit Log' },
     { value: 'notifications', label: 'Notifications' },
+    { value: 'scans', label: 'Scans' },
   ];
 
   return (
@@ -1126,6 +1393,7 @@ export default function AdminPage() {
       {activeTab === 'autotags' && <AutoTagsTab />}
       {activeTab === 'audit' && <AuditLogTab />}
       {activeTab === 'notifications' && <NotificationsTab />}
+      {activeTab === 'scans' && <ScansTab />}
     </div>
   );
 }

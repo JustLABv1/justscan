@@ -32,6 +32,8 @@ type Scan struct {
 	StartedAt       *time.Time `bun:"started_at,type:timestamptz" json:"started_at"`
 	CompletedAt     *time.Time `bun:"completed_at,type:timestamptz" json:"completed_at"`
 	CreatedAt       time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+	ShareToken      *string    `bun:"share_token,type:varchar(64)" json:"share_token,omitempty"`
+	ShareVisibility *string    `bun:"share_visibility,type:varchar(20)" json:"share_visibility,omitempty"`
 
 	// Relations (not stored in DB, populated on join)
 	Tags            []Tag           `bun:"m2m:scan_tags,join:Scan=Tag" json:"tags,omitempty"`

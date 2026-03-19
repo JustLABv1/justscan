@@ -365,6 +365,69 @@ export const listAllSuppressions = (page = 1, limit = 50, status?: string, q?: s
   return req<{ data: Suppression[]; total: number }>('GET', `/api/v1/suppressions/?${params}`);
 };
 
+// Scan sharing
+export const createShare = (scanId: string, visibility: 'public' | 'authenticated') =>
+  req<{ share_token: string; share_visibility: string }>('POST', `/api/v1/scans/${scanId}/share`, { visibility });
+
+export const deleteShare = (scanId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/scans/${scanId}/share`);
+
+// Admin - all scans
+export const listAdminScans = (page = 1, limit = 50, image?: string, status?: string) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (image) params.set('image', image);
+  if (status) params.set('status', status);
+  return req<{ data: AdminScan[]; total: number }>('GET', `/api/v1/admin/scans?${params}`);
+};
+
+// Shared scans — sends JWT if available but throws ApiError (with .status) instead of redirecting on 401
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+async function sharedReq<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: authHeaders(),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new ApiError(res.status, err.error ?? res.statusText);
+  }
+  return res.json();
+}
+
+export const getSharedScan = (token: string) =>
+  sharedReq<Scan>('GET', `/api/v1/shared/${token}`);
+
+export const listSharedVulnerabilities = (
+  token: string,
+  page = 1,
+  limit = 25,
+  severity?: string,
+  pkg?: string,
+  hasFix?: boolean,
+  minCvss?: number,
+  sortBy?: string,
+  sortDir?: 'asc' | 'desc',
+) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (severity) params.set('severity', severity);
+  if (pkg) params.set('pkg', pkg);
+  if (hasFix) params.set('has_fix', 'true');
+  if (minCvss) params.set('min_cvss', String(minCvss));
+  if (sortBy) params.set('sort_by', sortBy);
+  if (sortDir) params.set('sort_dir', sortDir);
+  return sharedReq<{ data: Vulnerability[]; total: number }>('GET', `/api/v1/shared/${token}/vulnerabilities?${params}`);
+};
+
+export const rescanShared = (token: string) =>
+  sharedReq<{ scan_id: string; type: 'public' | 'authenticated' }>('POST', `/api/v1/shared/${token}/rescan`);
+
 // Types
 export interface PolicyRule {
   type: 'max_cvss' | 'max_count' | 'max_total' | 'require_fix' | 'blocked_cve';
@@ -447,6 +510,13 @@ export interface Scan {
   architecture?: string;
   os_family?: string;
   os_name?: string;
+  share_token?: string;
+  share_visibility?: string;
+}
+
+export interface AdminScan extends Omit<Scan, 'tags'> {
+  owner_email: string;
+  owner_username: string;
 }
 
 export interface Vulnerability {

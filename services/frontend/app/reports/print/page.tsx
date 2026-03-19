@@ -1,6 +1,6 @@
 'use client';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
 interface Comment { id: string; user_id: string; content: string; username?: string; created_at: string; }
 interface Tag { id: string; name: string; color: string; }
@@ -8,7 +8,7 @@ interface Vulnerability {
   id: string; vuln_id: string; pkg_name: string; installed_version: string;
   fixed_version: string; severity: string; title: string; description: string;
   cvss_score: number; references: string[];
-  suppression?: { reason: string; note: string } | null;
+  suppression?: { status: string; justification: string; username?: string } | null;
   comments?: Comment[];
 }
 interface Scan {
@@ -17,9 +17,19 @@ interface Scan {
   low_count: number; unknown_count: number; suppressed_count: number;
   trivy_version: string; started_at: string | null; completed_at: string | null;
   created_at: string; architecture?: string; os_family?: string; os_name?: string;
+  image_location?: string;
   tags?: Tag[];
 }
+
+interface ManualFinding {
+  id: string; scan_id: string; vuln_id: string; severity: string;
+  pkg_name: string; installed_version: string; fixed_version: string;
+  title: string; description: string; cvss_score: number; justification: string;
+  created_at: string;
+}
 interface ScanData { scan: Scan; vulns: Vulnerability[]; }
+interface CustomField { label: string; value: string; }
+
 interface Filters {
   minCvss: number;
   severities: string[];
@@ -28,6 +38,10 @@ interface Filters {
   showComments: boolean;
   showDescription: boolean;
   showReferences: boolean;
+  showScanId: boolean;
+  showStarted: boolean;
+  showCompleted: boolean;
+  showTrivyVersion: boolean;
 }
 
 const SEV_COLORS: Record<string, { bg: string; text: string; light: string }> = {
@@ -115,6 +129,15 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
         </label>
       ))}
 
+      <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
+      <p style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Scan Details</p>
+      {([['showScanId', 'Scan ID'], ['showStarted', 'Started'], ['showCompleted', 'Completed'], ['showTrivyVersion', 'Trivy Version']] as [keyof Filters, string][]).map(([k, label]) => (
+        <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer' }}>
+          <input type="checkbox" checked={f[k] as boolean} onChange={e => onChange({ ...f, [k]: e.target.checked })} />
+          {label}
+        </label>
+      ))}
+
       <button onClick={() => window.print()}
         style={{ width: '100%', marginTop: 16, background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
         Save as PDF
@@ -130,6 +153,56 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
   const ws = worstSeverity(scan);
   const accentColor = SEV_COLORS[ws]?.bg ?? '#7c3aed';
   const imageRef = `${scan.image_name}:${scan.image_tag}`;
+
+  const [imageLocation, setImageLocation] = useState(scan.image_location ?? '');
+  const [savingLocation, setSavingLocation] = useState(false);
+  const [manualFindings, setManualFindings] = useState<ManualFinding[]>([]);
+  const [showAddFinding, setShowAddFinding] = useState(false);
+  const [newFinding, setNewFinding] = useState<Partial<ManualFinding>>({ severity: 'HIGH', cvss_score: 0 });
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [newCustomField, setNewCustomField] = useState<CustomField>({ label: '', value: '' });
+  const apiRef = useRef(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080');
+  const tokenRef = useRef(typeof window !== 'undefined' ? localStorage.getItem('justscan_token') ?? '' : '');
+
+  useEffect(() => {
+    const headers = { Authorization: `Bearer ${tokenRef.current}` };
+    fetch(`${apiRef.current}/api/v1/scans/${scan.id}/manual-findings`, { headers })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setManualFindings(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [scan.id]);
+
+  const patchImageLocation = useCallback((value: string) => {
+    setSavingLocation(true);
+    fetch(`${apiRef.current}/api/v1/scans/${scan.id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${tokenRef.current}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_location: value }),
+    }).finally(() => setSavingLocation(false));
+  }, [scan.id]);
+
+  async function submitManualFinding() {
+    if (!newFinding.vuln_id) return;
+    const res = await fetch(`${apiRef.current}/api/v1/scans/${scan.id}/manual-findings`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenRef.current}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(newFinding),
+    });
+    if (res.ok) {
+      const created: ManualFinding = await res.json();
+      setManualFindings(prev => [...prev, created]);
+      setNewFinding({ severity: 'HIGH', cvss_score: 0 });
+      setShowAddFinding(false);
+    }
+  }
+
+  async function deleteManualFinding(findingId: string) {
+    await fetch(`${apiRef.current}/api/v1/scans/${scan.id}/manual-findings/${findingId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${tokenRef.current}` },
+    });
+    setManualFindings(prev => prev.filter(f => f.id !== findingId));
+  }
 
   return (
     <div className={isFirst ? '' : 'page-break'} style={{ marginBottom: 48 }} id={`scan-${scan.id}`}>
@@ -157,21 +230,78 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 20, border: '1px solid #e5e7eb' }}>
         <tbody>
           {([
-            ['Scan ID', scan.id, true],
-            ['Started', fmt(scan.started_at), false],
-            ['Completed', fmt(scan.completed_at), false],
-            ['Trivy Version', scan.trivy_version || '—', false],
+            ...(filters.showScanId ? [['Scan ID', scan.id, true] as [string, string, boolean]] : []),
+            ...(filters.showStarted ? [['Started', fmt(scan.started_at), false] as [string, string, boolean]] : []),
+            ...(filters.showCompleted ? [['Completed', fmt(scan.completed_at), false] as [string, string, boolean]] : []),
+            ...(filters.showTrivyVersion ? [['Trivy Version', scan.trivy_version || '—', false] as [string, string, boolean]] : []),
             ...(scan.os_family ? [['OS', `${scan.os_family} ${scan.os_name}`.trim(), false] as [string, string, boolean]] : []),
             ...(scan.architecture ? [['Architecture', scan.architecture, false] as [string, string, boolean]] : []),
             ...(scan.tags && scan.tags.length > 0 ? [['Tags', scan.tags.map(t => t.name).join(', '), false] as [string, string, boolean]] : []),
+            ...customFields.map(f => [f.label, f.value, false] as [string, string, boolean]),
           ] as [string, string, boolean][]).map(([label, value, mono]) => (
             <tr key={label}>
               <td style={{ padding: '5px 12px', fontWeight: 600, color: '#374151', background: '#f9fafb', width: 140, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{label}</td>
               <td style={{ padding: '5px 12px', color: '#111827', fontFamily: mono ? 'monospace' : 'inherit', fontSize: mono ? 10 : 12, wordBreak: 'break-all', borderBottom: '1px solid #e5e7eb' }}>{value}</td>
             </tr>
           ))}
+          {/* Registry / Location — editable, hidden on print if empty */}
+          <tr>
+            <td style={{ padding: '5px 12px', fontWeight: 600, color: '#374151', background: '#f9fafb', width: 140, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>Registry / Location</td>
+            <td style={{ padding: '3px 8px', borderBottom: '1px solid #e5e7eb' }}>
+              <span className="print:hidden">
+                <input
+                  type="text"
+                  value={imageLocation}
+                  onChange={e => setImageLocation(e.target.value)}
+                  onBlur={() => patchImageLocation(imageLocation)}
+                  placeholder="e.g. registry.example.com/myapp"
+                  style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 4, padding: '3px 6px', fontSize: 12, boxSizing: 'border-box', color: '#374151' }}
+                />
+                {savingLocation && <span style={{ fontSize: 10, color: '#9ca3af', marginLeft: 4 }}>Saving…</span>}
+              </span>
+              {imageLocation && <span className="hidden print:inline" style={{ fontSize: 12, color: '#111827' }}>{imageLocation}</span>}
+            </td>
+          </tr>
         </tbody>
       </table>
+
+      {/* Custom fields editor — screen only */}
+      <div className="print:hidden" style={{ marginBottom: 16, padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#f9fafb' }}>
+        <p style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Add Custom Info Field</p>
+        {customFields.map((cf, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span style={{ flex: 1, fontSize: 12, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><strong>{cf.label}:</strong> {cf.value}</span>
+            <button onClick={() => setCustomFields(prev => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>×</button>
+          </div>
+        ))}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 6, alignItems: 'center' }}>
+          <input
+            type="text"
+            value={newCustomField.label}
+            onChange={e => setNewCustomField(f => ({ ...f, label: e.target.value }))}
+            placeholder="Label (e.g. Team)"
+            style={{ border: '1px solid #d1d5db', borderRadius: 4, padding: '4px 8px', fontSize: 12, boxSizing: 'border-box' }}
+          />
+          <input
+            type="text"
+            value={newCustomField.value}
+            onChange={e => setNewCustomField(f => ({ ...f, value: e.target.value }))}
+            placeholder="Value"
+            style={{ border: '1px solid #d1d5db', borderRadius: 4, padding: '4px 8px', fontSize: 12, boxSizing: 'border-box' }}
+          />
+          <button
+            onClick={() => {
+              if (!newCustomField.label) return;
+              setCustomFields(prev => [...prev, newCustomField]);
+              setNewCustomField({ label: '', value: '' });
+            }}
+            disabled={!newCustomField.label}
+            style={{ background: newCustomField.label ? '#374151' : '#e5e7eb', color: newCustomField.label ? '#fff' : '#9ca3af', border: 'none', borderRadius: 4, padding: '4px 12px', fontWeight: 700, fontSize: 12, cursor: newCustomField.label ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}
+          >
+            + Add
+          </button>
+        </div>
+      </div>
 
       {/* Vulnerabilities */}
       <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #7c3aed', paddingBottom: 6, display: 'inline-block' }}>
@@ -211,11 +341,15 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
                         <span style={{ color: '#7c3aed', marginLeft: 8, fontSize: 10 }}>{v.references.slice(0, 2).join(' · ')}</span>
                       )}
                       {filters.showComments && v.comments && v.comments.length > 0 && (
-                        <div style={{ marginTop: 4, borderTop: '1px solid #e5e7eb', paddingTop: 4 }}>
+                        <div style={{ marginTop: '6px' }}>
                           {v.comments.map(c => (
-                            <p key={c.id} style={{ margin: '2px 0', fontSize: 10, color: '#374151' }}>
-                              <strong>{c.username || 'Note'}:</strong> {c.content}
-                            </p>
+                            <div key={c.id} style={{ marginTop: '4px', background: '#fffbeb', border: '1px solid #fde68a', borderLeft: '3px solid #f59e0b', borderRadius: '3px', padding: '6px 8px' }}>
+                              <p style={{ margin: '0 0 2px', fontSize: '10px', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                Analyst Note
+                                {c.username && <span style={{ fontWeight: 400, marginLeft: '5px', textTransform: 'none', letterSpacing: 0 }}>— {c.username}</span>}
+                              </p>
+                              <p style={{ margin: 0, fontSize: '11px', color: '#78350f', lineHeight: 1.5 }}>{c.content}</p>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -228,6 +362,107 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
         </table>
       )}
 
+      {/* Manual Findings */}
+      {manualFindings.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #7c3aed', paddingBottom: 6, display: 'inline-block' }}>
+            Manual Findings ({manualFindings.length})
+          </p>
+          {manualFindings.map((f) => (
+            <div key={f.id} style={{ border: '1px solid #e5e7eb', borderLeft: '4px solid #7c3aed', borderRadius: 4, padding: '10px 12px', marginBottom: 8, position: 'relative' }}>
+              <button
+                className="print:hidden"
+                onClick={() => deleteManualFinding(f.id)}
+                style={{ position: 'absolute', top: 6, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1 }}
+                title="Delete finding"
+              >✕</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 12 }}>{f.vuln_id}</span>
+                <SevBadge s={f.severity} />
+                <span style={{ display: 'inline-block', background: '#ede9fe', color: '#6d28d9', fontSize: '0.65rem', fontWeight: 700, padding: '2px 6px', borderRadius: 3, letterSpacing: '0.05em' }}>MANUAL</span>
+                {f.cvss_score > 0 && <span style={{ fontSize: 11, color: '#555', fontWeight: 600 }}>CVSS {f.cvss_score.toFixed(1)}</span>}
+              </div>
+              {f.title && <p style={{ margin: '0 0 3px', fontWeight: 600, fontSize: 12 }}>{f.title}</p>}
+              {f.pkg_name && (
+                <p style={{ margin: 0, fontSize: 11, color: '#444' }}>
+                  <span style={{ fontWeight: 600 }}>{f.pkg_name}</span>{' '}
+                  {f.installed_version && <span style={{ color: '#dc2626' }}>{f.installed_version}</span>}
+                  {f.fixed_version && <> → <span style={{ color: '#16a34a' }}>fix: {f.fixed_version}</span></>}
+                </p>
+              )}
+              {f.justification && (
+                <div style={{ marginTop: 6, background: '#ede9fe', border: '1px solid #c4b5fd', borderLeft: '3px solid #7c3aed', borderRadius: 3, padding: '6px 8px' }}>
+                  <p style={{ margin: '0 0 2px', fontSize: 10, fontWeight: 700, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Justification</p>
+                  <p style={{ margin: 0, fontSize: 11, color: '#4c1d95', lineHeight: 1.5 }}>{f.justification}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add Manual CVE form (screen only) */}
+      <div className="print:hidden" style={{ marginBottom: 20 }}>
+        <button
+          onClick={() => setShowAddFinding(v => !v)}
+          style={{ background: showAddFinding ? '#f3f4f6' : '#7c3aed', color: showAddFinding ? '#374151' : '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
+        >
+          {showAddFinding ? '✕ Cancel' : '+ Add Manual CVE'}
+        </button>
+        {showAddFinding && (
+          <div style={{ marginTop: 10, border: '1px solid #e5e7eb', borderRadius: 8, padding: '14px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', background: '#fafafa' }}>
+            {([['vuln_id', 'CVE ID *'], ['pkg_name', 'Package'], ['installed_version', 'Installed Version'], ['title', 'Title']] as [keyof ManualFinding, string][]).map(([field, label]) => (
+              <div key={field}>
+                <p style={{ fontSize: 10, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>{label}</p>
+                <input
+                  type="text"
+                  value={(newFinding as Record<string, string | number>)[field] as string ?? ''}
+                  onChange={e => setNewFinding(f => ({ ...f, [field]: e.target.value }))}
+                  style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 4, padding: '4px 6px', fontSize: 12, boxSizing: 'border-box' }}
+                />
+              </div>
+            ))}
+            <div>
+              <p style={{ fontSize: 10, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>Severity</p>
+              <select
+                value={newFinding.severity ?? 'HIGH'}
+                onChange={e => setNewFinding(f => ({ ...f, severity: e.target.value }))}
+                style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 4, padding: '4px 6px', fontSize: 12, boxSizing: 'border-box' }}
+              >
+                {['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <p style={{ fontSize: 10, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>CVSS Score</p>
+              <input
+                type="number" min={0} max={10} step={0.1}
+                value={newFinding.cvss_score ?? 0}
+                onChange={e => setNewFinding(f => ({ ...f, cvss_score: parseFloat(e.target.value) || 0 }))}
+                style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 4, padding: '4px 6px', fontSize: 12, boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <p style={{ fontSize: 10, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>Justification — Why is this CVE accepted / not a risk?</p>
+              <textarea
+                value={newFinding.justification ?? ''}
+                onChange={e => setNewFinding(f => ({ ...f, justification: e.target.value }))}
+                rows={2}
+                style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 4, padding: '4px 6px', fontSize: 12, boxSizing: 'border-box', resize: 'vertical' }}
+              />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <button
+                onClick={submitManualFinding}
+                disabled={!newFinding.vuln_id}
+                style={{ background: newFinding.vuln_id ? '#7c3aed' : '#e5e7eb', color: newFinding.vuln_id ? '#fff' : '#9ca3af', border: 'none', borderRadius: 6, padding: '7px 20px', fontWeight: 700, fontSize: 12, cursor: newFinding.vuln_id ? 'pointer' : 'not-allowed' }}
+              >
+                Save Finding
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Suppressed */}
       {suppressedVulns.length > 0 && (
         <div style={{ marginBottom: 20 }}>
@@ -235,20 +470,24 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
               <tr style={{ background: '#f9fafb' }}>
-                {['CVE ID', 'Package', 'Severity', 'Reason'].map(h => (
+                {['CVE ID', 'Package', 'Severity', 'Status', 'Justification'].map(h => (
                   <th key={h} style={{ padding: '5px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600, color: '#6b7280' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {suppressedVulns.map(v => (
-                <tr key={v.id} style={{ color: '#9ca3af' }}>
-                  <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace' }}>{v.vuln_id}</td>
-                  <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.pkg_name}</td>
-                  <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.severity}</td>
-                  <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.suppression?.reason ?? '—'}</td>
-                </tr>
-              ))}
+              {suppressedVulns.map(v => {
+                const statusLabel: Record<string, string> = { accepted: 'Accepted', wont_fix: "Won't Fix", false_positive: 'False Positive' };
+                return (
+                  <tr key={v.id} style={{ color: '#6b7280' }}>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace' }}>{v.vuln_id}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.pkg_name}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.severity}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.suppression ? (statusLabel[v.suppression.status] ?? v.suppression.status) : '—'}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{v.suppression?.justification || '—'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -271,6 +510,10 @@ function PrintReport() {
     showComments: true,
     showDescription: true,
     showReferences: true,
+    showScanId: true,
+    showStarted: true,
+    showCompleted: true,
+    showTrivyVersion: true,
   });
 
   useEffect(() => {

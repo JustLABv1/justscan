@@ -182,9 +182,10 @@ export default function PublicHelmScanPage() {
         isOCI ? undefined : chartName.trim() || undefined,
         chartVersion.trim() || undefined,
       );
+      const images = Array.isArray(res.images) ? res.images : [];
       setChartInfo({ name: res.chart_name, version: res.chart_version });
-      setImages(res.images);
-      setSelected(new Set(res.images.map(img => img.full_ref)));
+      setImages(images);
+      setSelected(new Set(images.map(img => img.full_ref)));
       setStep('review');
     } catch (err: unknown) {
       setExtractError(err instanceof Error ? err.message : 'Failed to extract images');

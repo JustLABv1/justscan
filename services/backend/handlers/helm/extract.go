@@ -64,6 +64,9 @@ func ExtractImages(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 			return
 		}
+		if images == nil {
+			images = make([]scanner.HelmImage, 0)
+		}
 
 		c.JSON(http.StatusOK, extractResponse{
 			ChartName:    resolvedName,

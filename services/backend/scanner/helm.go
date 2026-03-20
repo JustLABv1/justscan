@@ -118,7 +118,114 @@ func ExtractHelmImages(_ context.Context, chartURL, chartName, chartVersion stri
 	}
 
 	images := extractImagesFromRendered(rendered)
+	if len(images) == 0 {
+		images = fallbackHelmImages(chrt)
+	}
+	if images == nil {
+		images = make([]HelmImage, 0)
+	}
 	return images, resolvedName, resolvedVersion, nil
+}
+
+func fallbackHelmImages(chrt *chart.Chart) []HelmImage {
+	images := extractImagesFromChartAnnotations(chrt)
+	if len(images) > 0 {
+		return images
+	}
+
+	image, ok := extractImageFromValues(chrt)
+	if !ok {
+		return nil
+	}
+
+	return []HelmImage{image}
+}
+
+func extractImagesFromChartAnnotations(chrt *chart.Chart) []HelmImage {
+	if chrt == nil || chrt.Metadata == nil || chrt.Metadata.Annotations == nil {
+		return nil
+	}
+
+	raw := strings.TrimSpace(chrt.Metadata.Annotations["artifacthub.io/images"])
+	if raw == "" {
+		return nil
+	}
+
+	var entries []struct {
+		Image string `yaml:"image"`
+	}
+	if err := yaml.Unmarshal([]byte(raw), &entries); err != nil {
+		return nil
+	}
+
+	images := make([]HelmImage, 0, len(entries))
+	for index, entry := range entries {
+		fullRef := strings.TrimSpace(entry.Image)
+		if fullRef == "" {
+			continue
+		}
+		name, tag := splitImageRef(fullRef)
+		if name == "" {
+			continue
+		}
+		images = append(images, HelmImage{
+			FullRef:    fullRef,
+			Name:       name,
+			Tag:        tag,
+			SourceFile: "Chart.yaml",
+			SourcePath: fmt.Sprintf("annotations.artifacthub.io/images[%d].image", index),
+		})
+	}
+
+	return images
+}
+
+func extractImageFromValues(chrt *chart.Chart) (HelmImage, bool) {
+	if chrt == nil || chrt.Values == nil {
+		return HelmImage{}, false
+	}
+
+	imageValues, ok := chrt.Values["image"].(map[string]interface{})
+	if !ok {
+		return HelmImage{}, false
+	}
+
+	repository := strings.TrimSpace(stringValue(imageValues["repository"]))
+	if repository == "" {
+		return HelmImage{}, false
+	}
+
+	registry := strings.TrimSpace(stringValue(imageValues["registry"]))
+	tag := strings.TrimSpace(stringValue(imageValues["tag"]))
+	if tag == "" && chrt.Metadata != nil {
+		tag = strings.TrimSpace(chrt.Metadata.AppVersion)
+	}
+
+	fullRef := repository
+	if registry != "" {
+		fullRef = strings.TrimSuffix(registry, "/") + "/" + strings.TrimPrefix(repository, "/")
+	}
+	if tag != "" && !strings.Contains(fullRef, "@") && !strings.Contains(filepath.Base(fullRef), ":") {
+		fullRef += ":" + tag
+	}
+
+	name, resolvedTag := splitImageRef(fullRef)
+	if name == "" {
+		return HelmImage{}, false
+	}
+
+	return HelmImage{
+		FullRef:    fullRef,
+		Name:       name,
+		Tag:        resolvedTag,
+		SourceFile: "values.yaml",
+		SourcePath: "image.registry,image.repository,image.tag",
+	}, true
+}
+
+func stringValue(value interface{}) string {
+	text, _ := value.(string)
+	return text
 }
 
 // renderChart renders all templates including subcharts with dummy values.
@@ -142,7 +249,7 @@ func renderChart(chrt *chart.Chart) (map[string]string, error) {
 // extractImagesFromRendered walks all rendered YAML documents and collects images.
 func extractImagesFromRendered(rendered map[string]string) []HelmImage {
 	seen := make(map[string]bool)
-	var images []HelmImage
+	images := make([]HelmImage, 0)
 
 	for templatePath, content := range rendered {
 		if !strings.HasSuffix(templatePath, ".yaml") && !strings.HasSuffix(templatePath, ".yml") {

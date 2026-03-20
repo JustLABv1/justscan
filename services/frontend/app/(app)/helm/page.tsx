@@ -126,9 +126,13 @@ export default function HelmPage() {
         chartName.trim() || undefined,
         chartVersion.trim() || undefined,
       );
-      setExtracted(result);
+      const images = Array.isArray(result.images) ? result.images : [];
+      setExtracted({
+        ...result,
+        images,
+      });
       // Pre-select all images
-      setSelected(new Set(result.images.map((img) => img.full_ref)));
+      setSelected(new Set(images.map((img) => img.full_ref)));
       setStep('preview');
     } catch (err: unknown) {
       setExtractError(err instanceof Error ? err.message : 'Extraction failed');

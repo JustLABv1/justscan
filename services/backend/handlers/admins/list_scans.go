@@ -45,7 +45,7 @@ func ListAdminScans(c *gin.Context, db *bun.DB) {
 	}
 	offset := (page - 1) * limit
 
-	var scans []AdminScanRow
+	scans := make([]AdminScanRow, 0)
 
 	q := db.NewSelect().
 		TableExpr("scans AS s").

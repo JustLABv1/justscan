@@ -31,7 +31,7 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 		}
 		offset := (page - 1) * limit
 
-		var scans []models.Scan
+		scans := make([]models.Scan, 0)
 		q := db.NewSelect().Model(&scans).
 			OrderExpr("created_at DESC").
 			Limit(limit).

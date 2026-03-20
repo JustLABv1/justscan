@@ -1,14 +1,14 @@
 'use client';
 import { DashboardStats, DashboardTrendPoint, getDashboardTrends, getStats, Scan } from '@/lib/api';
-import { timeAgo, fullDate } from '@/lib/time';
+import { fullDate, timeAgo } from '@/lib/time';
 import {
-  Activity01Icon,
-  Add01Icon,
-  AlertDiamondIcon,
-  CheckmarkBadge01Icon,
-  Clock01Icon,
-  EyeIcon,
-  Shield01Icon,
+    Activity01Icon,
+    Add01Icon,
+    AlertDiamondIcon,
+    CheckmarkBadge01Icon,
+    Clock01Icon,
+    EyeIcon,
+    Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -143,51 +143,127 @@ function RecentScanRow({ scan }: { scan: Scan }) {
 // ── Trend Chart ───────────────────────────────────────────────────────
 function TrendChart({ data }: { data: DashboardTrendPoint[] }) {
   if (data.length === 0) return null;
-  const W = 600, H = 160, PAD = { top: 10, right: 16, bottom: 30, left: 36 };
+
+  const W = 700, H = 200;
+  const PAD = { top: 16, right: 20, bottom: 36, left: 40 };
   const innerW = W - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
-  const maxVal = Math.max(...data.map(d => d.total), 1);
-  const xScale = (i: number) => PAD.left + (i / Math.max(data.length - 1, 1)) * innerW;
+  const maxVal = Math.max(...data.map(d => d.total), 4);
+  const n = data.length;
+
+  const xScale = (i: number) => PAD.left + (i / Math.max(n - 1, 1)) * innerW;
   const yScale = (v: number) => PAD.top + innerH - (v / maxVal) * innerH;
-  const line = (key: 'total' | 'completed' | 'failed') =>
-    data.map((d, i) => `${i === 0 ? 'M' : 'L'}${xScale(i).toFixed(1)},${yScale(d[key]).toFixed(1)}`).join(' ');
+
+  // Smooth cubic bezier line path
+  function smoothLine(key: 'total' | 'completed' | 'failed') {
+    if (n === 1) return `M${xScale(0)},${yScale(data[0][key])}`;
+    const pts = data.map((d, i) => [xScale(i), yScale(d[key])] as [number, number]);
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 1; i < pts.length; i++) {
+      const cpx = (pts[i - 1][0] + pts[i][0]) / 2;
+      d += ` C${cpx},${pts[i - 1][1]} ${cpx},${pts[i][1]} ${pts[i][0]},${pts[i][1]}`;
+    }
+    return d;
+  }
+
+  // Closed area path (line + bottom border)
+  function areaPath(key: 'total' | 'completed' | 'failed') {
+    const line = smoothLine(key);
+    const bottom = PAD.top + innerH;
+    return `${line} L${xScale(n - 1)},${bottom} L${xScale(0)},${bottom} Z`;
+  }
+
+  // Nice y-axis ticks
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(f * maxVal));
+
+  // X-axis labels: show at most 7 evenly spaced labels
+  const xStep = Math.ceil(n / 7);
+  const xLabels = data
+    .map((d, i) => ({ i, label: new Date(d.date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) }))
+    .filter(({ i }) => i % xStep === 0 || i === n - 1);
+
+  const SERIES = [
+    { key: 'total'     as const, color: '#a78bfa', id: 'grad-total',     label: 'Total'     },
+    { key: 'completed' as const, color: '#34d399', id: 'grad-completed', label: 'Completed' },
+    { key: 'failed'    as const, color: '#f87171', id: 'grad-failed',    label: 'Failed'    },
+  ];
 
   return (
     <div className="glass-panel rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Scan Activity (30 days)</h2>
-        <div className="flex items-center gap-4 text-xs text-zinc-500">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded-full inline-block" style={{background:'#a78bfa'}} />Total</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded-full inline-block" style={{background:'#34d399'}} />Completed</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded-full inline-block" style={{background:'#f87171'}} />Failed</span>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Scan Activity <span className="font-normal text-zinc-500">(30 days)</span></h2>
+        <div className="flex items-center gap-5 text-xs">
+          {SERIES.map(s => (
+            <span key={s.key} className="flex items-center gap-1.5 text-zinc-500">
+              <span className="w-5 h-0.5 inline-block rounded-full" style={{ background: s.color, boxShadow: `0 0 4px ${s.color}` }} />
+              {s.label}
+            </span>
+          ))}
         </div>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{height: 160}}>
-        {/* Y axis grid lines */}
-        {[0, 0.25, 0.5, 0.75, 1].map(f => (
-          <g key={f}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={yScale(f * maxVal)} y2={yScale(f * maxVal)} stroke="currentColor" strokeOpacity="0.08" strokeWidth="1" />
-            <text x={PAD.left - 4} y={yScale(f * maxVal) + 4} textAnchor="end" fontSize="9" fill="currentColor" opacity="0.4">{Math.round(f * maxVal)}</text>
+
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible" style={{ height: 200 }}>
+        <defs>
+          {SERIES.map(s => (
+            <linearGradient key={s.id} id={s.id} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor={s.color} stopOpacity="0.18" />
+              <stop offset="100%" stopColor={s.color} stopOpacity="0.01" />
+            </linearGradient>
+          ))}
+        </defs>
+
+        {/* Y-axis grid lines + labels */}
+        {yTicks.map(v => (
+          <g key={v}>
+            <line
+              x1={PAD.left} x2={W - PAD.right}
+              y1={yScale(v)} y2={yScale(v)}
+              stroke="currentColor" strokeOpacity="0.07" strokeWidth="1"
+              strokeDasharray={v === 0 ? undefined : '3 4'}
+            />
+            <text x={PAD.left - 8} y={yScale(v) + 4} textAnchor="end" fontSize="10" fill="currentColor" opacity="0.4">
+              {v}
+            </text>
           </g>
         ))}
-        {/* X axis date labels - every nth point */}
-        {data.map((d, i) => i % Math.ceil(data.length / 6) === 0 && (
-          <text key={i} x={xScale(i)} y={H - 4} textAnchor="middle" fontSize="8" fill="currentColor" opacity="0.4">
-            {new Date(d.date).toLocaleDateString('en', {month:'short', day:'numeric'})}
+
+        {/* X-axis date labels */}
+        {xLabels.map(({ i, label }) => (
+          <text key={i} x={xScale(i)} y={H - 6} textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.45">
+            {label}
           </text>
         ))}
+
+        {/* Area fills (behind lines) */}
+        {SERIES.map(s => (
+          <path key={`area-${s.key}`} d={areaPath(s.key)} fill={`url(#${s.id})`} />
+        ))}
+
         {/* Lines */}
-        <path d={line('total')} fill="none" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        <path d={line('completed')} fill="none" stroke="#34d399" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        <path d={line('failed')} fill="none" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        {/* Dots at last point */}
-        {data.length > 0 && (
-          <>
-            <circle cx={xScale(data.length-1)} cy={yScale(data[data.length-1].total)} r="3" fill="#a78bfa" />
-            <circle cx={xScale(data.length-1)} cy={yScale(data[data.length-1].completed)} r="3" fill="#34d399" />
-            <circle cx={xScale(data.length-1)} cy={yScale(data[data.length-1].failed)} r="3" fill="#f87171" />
-          </>
-        )}
+        {SERIES.map(s => (
+          <path
+            key={`line-${s.key}`}
+            d={smoothLine(s.key)}
+            fill="none"
+            stroke={s.color}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ filter: `drop-shadow(0 0 3px ${s.color}66)` }}
+          />
+        ))}
+
+        {/* End-point dots */}
+        {n > 0 && SERIES.map(s => (
+          <circle
+            key={`dot-${s.key}`}
+            cx={xScale(n - 1)}
+            cy={yScale(data[n - 1][s.key])}
+            r="3.5"
+            fill={s.color}
+            style={{ filter: `drop-shadow(0 0 4px ${s.color})` }}
+          />
+        ))}
       </svg>
     </div>
   );

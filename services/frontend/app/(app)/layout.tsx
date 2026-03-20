@@ -1,20 +1,21 @@
 'use client';
 import { clearToken, clearUser, getToken, getUser } from '@/lib/api';
 import {
-  ArrowLeft01Icon,
-  ArrowRight01Icon,
-  Building04Icon,
-  DashboardSquare01Icon,
-  EyeIcon,
-  GridTableIcon,
-  Logout02Icon,
-  Moon02Icon,
-  ServerStack01Icon,
-  Settings01Icon,
-  Shield01Icon,
-  ShieldKeyIcon,
-  Sun01Icon,
-  Tag01Icon,
+    ArrowLeft01Icon,
+    ArrowRight01Icon,
+    Building04Icon,
+    DashboardSquare01Icon,
+    EyeIcon,
+    GridTableIcon,
+    Logout02Icon,
+    Moon02Icon,
+    PackageIcon,
+    ServerStack01Icon,
+    Settings01Icon,
+    Shield01Icon,
+    ShieldKeyIcon,
+    Sun01Icon,
+    Tag01Icon,
 } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -27,6 +28,7 @@ import { ToastProvider } from '@/components/toast';
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon },
   { href: '/scans', label: 'Scans', Icon: Shield01Icon },
+  { href: '/helm', label: 'Helm Scan', Icon: PackageIcon },
   { href: '/watchlist', label: 'Watchlist', Icon: EyeIcon },
   { href: '/registries', label: 'Registries', Icon: ServerStack01Icon },
   { href: '/tags', label: 'Tags', Icon: Tag01Icon },

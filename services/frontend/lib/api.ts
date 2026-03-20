@@ -4,6 +4,16 @@ export const getToken = (): string | null =>
   typeof window !== 'undefined' ? localStorage.getItem('justscan_token') : null;
 export const setToken = (t: string) => localStorage.setItem('justscan_token', t);
 export const clearToken = () => localStorage.removeItem('justscan_token');
+export const getTokenType = (): 'admin' | 'user' | null => {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.type === 'admin' ? 'admin' : 'user';
+  } catch {
+    return null;
+  }
+};
 export const getUser = () => {
   if (typeof window === 'undefined') return null;
   const raw = localStorage.getItem('justscan_user');
@@ -58,11 +68,13 @@ export const getStats = () =>
   req<DashboardStats>('GET', '/api/v1/dashboard/stats');
 
 // Scans
-export const listScans = (page = 1, limit = 20, image?: string, status?: string, exact?: boolean) => {
+export const listScans = (page = 1, limit = 20, image?: string, status?: string, exact?: boolean, helmOnly?: boolean, helmChart?: string) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
   if (status) params.set('status', status);
   if (exact) params.set('exact', 'true');
+  if (helmOnly) params.set('helm_only', 'true');
+  if (helmChart) params.set('helm_chart', helmChart);
   return req<{ data: Scan[]; total: number }>('GET', `/api/v1/scans/?${params}`);
 };
 
@@ -227,6 +239,28 @@ export const listPublicVulnerabilities = (
   );
 };
 
+export const extractPublicHelmImages = (
+  chartUrl: string,
+  chartName?: string,
+  chartVersion?: string,
+) =>
+  publicReq<HelmExtractResponse>('POST', '/api/v1/public/helm/extract', {
+    chart_url: chartUrl,
+    chart_name: chartName,
+    chart_version: chartVersion,
+  });
+
+export const createPublicHelmScans = (
+  chartUrl: string,
+  images: Array<{ full_ref: string; source_path: string }>,
+  platform?: string,
+) =>
+  publicReq<{ scans: Scan[] }>('POST', '/api/v1/public/helm/scan', {
+    chart_url: chartUrl,
+    images,
+    platform: platform || undefined,
+  });
+
 // Admin settings
 export const getAdminSettings = () =>
   req<Record<string, string>>('GET', '/api/v1/admin/settings');
@@ -318,6 +352,45 @@ export const updateNotificationChannel = (id: string, data: Partial<Notification
 export const deleteNotificationChannel = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/admin/notifications/${id}`);
 
+// Helm chart scanning
+export interface HelmImage {
+  full_ref: string;
+  name: string;
+  tag: string;
+  source_file: string;
+  source_path: string;
+}
+
+export interface HelmExtractResponse {
+  chart_name: string;
+  chart_version: string;
+  images: HelmImage[];
+}
+
+export const extractHelmImages = (
+  chartUrl: string,
+  chartName?: string,
+  chartVersion?: string,
+) =>
+  req<HelmExtractResponse>('POST', '/api/v1/helm/extract', {
+    chart_url: chartUrl,
+    chart_name: chartName,
+    chart_version: chartVersion,
+  });
+
+export const createHelmScans = (
+  chartUrl: string,
+  images: Array<{ full_ref: string; source_path: string }>,
+  platform?: string,
+  tagIds?: string[],
+) =>
+  req<{ scans: Scan[] }>('POST', '/api/v1/helm/scan', {
+    chart_url: chartUrl,
+    images,
+    platform: platform || undefined,
+    tag_ids: tagIds,
+  });
+
 // Admin - rate limit
 export const updateRateLimit = (limit: number) =>
   req<{ limit: number }>('PUT', '/api/v1/admin/settings/rate-limit', { limit });
@@ -373,10 +446,11 @@ export const deleteShare = (scanId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/scans/${scanId}/share`);
 
 // Admin - all scans
-export const listAdminScans = (page = 1, limit = 50, image?: string, status?: string) => {
+export const listAdminScans = (page = 1, limit = 50, image?: string, status?: string, helmOnly?: boolean) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
   if (status) params.set('status', status);
+  if (helmOnly) params.set('helm_only', 'true');
   return req<{ data: AdminScan[]; total: number }>('GET', `/api/v1/admin/scans?${params}`);
 };
 
@@ -512,11 +586,15 @@ export interface Scan {
   os_name?: string;
   share_token?: string;
   share_visibility?: string;
+  helm_chart?: string;
+  helm_source_path?: string;
 }
 
 export interface AdminScan extends Omit<Scan, 'tags'> {
   owner_email: string;
   owner_username: string;
+  helm_chart?: string;
+  helm_source_path?: string;
 }
 
 export interface Vulnerability {

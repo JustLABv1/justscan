@@ -38,6 +38,7 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 		Health(v1)
 		Admin(v1, db)
 		Scans(v1, db)
+		Helm(v1, db)
 		Dashboard(v1, db)
 		Comments(v1, db)
 		Suppressions(v1, db)

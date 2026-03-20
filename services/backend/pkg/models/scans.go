@@ -34,6 +34,8 @@ type Scan struct {
 	CreatedAt       time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	ShareToken      *string    `bun:"share_token,type:varchar(64)" json:"share_token,omitempty"`
 	ShareVisibility *string    `bun:"share_visibility,type:varchar(20)" json:"share_visibility,omitempty"`
+	HelmChart       string     `bun:"helm_chart,type:text,default:''" json:"helm_chart,omitempty"`
+	HelmSourcePath  string     `bun:"helm_source_path,type:text,default:''" json:"helm_source_path,omitempty"`
 
 	// Relations (not stored in DB, populated on join)
 	Tags            []Tag           `bun:"m2m:scan_tags,join:Scan=Tag" json:"tags,omitempty"`

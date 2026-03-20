@@ -86,13 +86,17 @@ export default function HelmPage() {
     setHistoryLoading(true);
     try {
       const { data } = await listScans(1, 50, undefined, undefined, false, true);
-      setHelmHistory(data);
+      setHelmHistory(Array.isArray(data) ? data : []);
       if (adminMode) {
         const { data: adminData } = await listAdminScans(1, 50, undefined, undefined, true);
-        setAdminHelmHistory(adminData);
+        setAdminHelmHistory(Array.isArray(adminData) ? adminData : []);
+      } else {
+        setAdminHelmHistory([]);
       }
     } catch {
       // non-fatal
+      setHelmHistory([]);
+      setAdminHelmHistory([]);
     } finally {
       setHistoryLoading(false);
     }

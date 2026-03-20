@@ -1,4 +1,5 @@
 'use client';
+import { useToast } from '@/components/toast';
 import {
     addTagToScan,
     assignScanToOrg,
@@ -69,6 +70,22 @@ function SeverityBadge({ severity }: { severity: string }) {
   );
 }
 
+function SourceBadge({ source }: { source?: string }) {
+  const normalized = (source ?? '').trim().toLowerCase();
+  const isOSV = normalized === 'osv.dev';
+  return (
+    <span
+      className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0"
+      style={isOSV
+        ? { background: 'rgba(59,130,246,0.14)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.24)' }
+        : { background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.22)' }}
+      title={source || (isOSV ? 'OSV supplemental finding' : 'Trivy finding')}
+    >
+      {isOSV ? 'OSV.dev' : 'Trivy'}
+    </span>
+  );
+}
+
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { cls: string; label?: string }> = {
     completed: { cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' },
@@ -83,6 +100,28 @@ function StatusBadge({ status }: { status: string }) {
       <span className={`w-1.5 h-1.5 rounded-full ${status === 'running' ? 'animate-pulse bg-blue-400' : 'bg-current'}`} />
       {label ?? status}
     </span>
+  );
+}
+
+function ScannerDatabaseCard({
+  label,
+  updatedAt,
+  downloadedAt,
+}: {
+  label: string;
+  updatedAt?: string | null;
+  downloadedAt?: string | null;
+}) {
+  return (
+    <div className="rounded-xl border p-4" style={{ background: 'var(--glass-bg)', borderColor: 'var(--glass-border)' }}>
+      <p className="text-xs text-zinc-500 mb-1">{label}</p>
+      <p className="text-sm font-medium text-zinc-900 dark:text-white" title={updatedAt ? fullDate(updatedAt) : ''}>
+        {updatedAt ? `${timeAgo(updatedAt)} (${fullDate(updatedAt)})` : 'Unknown'}
+      </p>
+      <p className="text-xs text-zinc-500 mt-1" title={downloadedAt ? fullDate(downloadedAt) : ''}>
+        Downloaded {downloadedAt ? timeAgo(downloadedAt) : 'unknown'}
+      </p>
+    </div>
   );
 }
 
@@ -246,6 +285,7 @@ const LIMIT = 25;
 export default function ScanDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const toast = useToast();
   const [scan, setScan] = useState<Scan | null>(null);
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [vulnTotal, setVulnTotal] = useState(0);
@@ -471,8 +511,11 @@ export default function ScanDetailPage() {
     setReScanning(true);
     try {
       const newScan = await reScan(id);
+      toast.success('Re-scan queued');
       router.push(`/scans/${newScan.id}`);
-    } catch { /* ignore */ } finally {
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to queue re-scan');
+    } finally {
       setReScanning(false);
     }
   }
@@ -794,6 +837,28 @@ export default function ScanDetailPage() {
           </div>
         ))}
       </div>
+
+    {(scan.trivy_version || scan.trivy_vuln_db_updated_at || scan.trivy_java_db_updated_at) && (
+    <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="glass-panel rounded-xl p-4">
+      <p className="text-xs text-zinc-500 mb-1">Scanner</p>
+      <p className="text-sm font-medium text-zinc-900 dark:text-white">Trivy {scan.trivy_version || 'unknown'}</p>
+      <p className="text-xs text-zinc-500 mt-1">
+        {scan.completed_at ? `DB snapshot captured ${timeAgo(scan.completed_at)}` : 'DB snapshot captured when this scan completed'}
+      </p>
+      </div>
+      <ScannerDatabaseCard
+      label="Vulnerability DB"
+      updatedAt={scan.trivy_vuln_db_updated_at}
+      downloadedAt={scan.trivy_vuln_db_downloaded_at}
+      />
+      <ScannerDatabaseCard
+      label="Java DB"
+      updatedAt={scan.trivy_java_db_updated_at}
+      downloadedAt={scan.trivy_java_db_downloaded_at}
+      />
+    </div>
+    )}
 
       {/* Error banner — shown when scan failed */}
       {scan.status === 'failed' && scan.error_message && (
@@ -1185,6 +1250,7 @@ export default function ScanDetailPage() {
                           >
                             {v.vuln_id}
                           </a>
+                          <SourceBadge source={v.data_source} />
                           {v.suppression && (
                             <span
                               className="text-xs font-medium px-1.5 py-0.5 rounded-md capitalize shrink-0"

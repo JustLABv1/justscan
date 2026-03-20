@@ -13,6 +13,7 @@ import {
     deleteNotificationChannel,
     disableAdminUser,
     getAdminSettings,
+    getScannerHealth,
     listAdminScans,
     listAdminUsers,
     listAuditLogs,
@@ -20,6 +21,7 @@ import {
     listNotificationChannels,
     listTags,
     NotificationChannel,
+    ScannerHealth,
     setPublicScanEnabled,
     Tag,
     updateAdminUser,
@@ -34,6 +36,129 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+
+function formatDbAge(hours?: number | null): string {
+  if (hours == null || Number.isNaN(hours)) return 'Unknown';
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m`;
+  if (hours < 24) return `${hours >= 10 ? hours.toFixed(0) : hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
+}
+
+function scannerTone(status: 'healthy' | 'stale' | 'error') {
+  if (status === 'healthy') {
+    return { color: '#34d399', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.2)' };
+  }
+  if (status === 'stale') {
+    return { color: '#fbbf24', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.2)' };
+  }
+  return { color: '#f87171', bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.2)' };
+}
+
+function ScannerHealthPanel() {
+  const [health, setHealth] = useState<ScannerHealth | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setHealth(await getScannerHealth());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load scanner health');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return (
+    <div className="glass-panel rounded-2xl p-5 space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Scanner Health</h2>
+          <p className="text-sm text-zinc-500 mt-0.5">Live worker cache status from the current backend instance.</p>
+        </div>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="px-3 py-1.5 text-sm rounded-xl transition-all disabled:opacity-40"
+          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+        >
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          {error}
+        </div>
+      )}
+
+      {health && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: 'Healthy Workers', value: health.healthy_workers, color: '#34d399', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.18)' },
+              { label: 'Stale Workers', value: health.stale_workers, color: '#fbbf24', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.18)' },
+              { label: 'Oldest Vuln DB Snapshot', value: formatDbAge(health.oldest_vuln_db_age_hours), color: '#60a5fa', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.18)' },
+              { label: 'Oldest Java DB Snapshot', value: formatDbAge(health.oldest_java_db_age_hours), color: '#a78bfa', bg: 'rgba(124,58,237,0.1)', border: 'rgba(124,58,237,0.18)' },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl p-4" style={{ background: item.bg, border: `1px solid ${item.border}` }}>
+                <p className="text-xs text-zinc-500 mb-1">{item.label}</p>
+                <p className="text-lg font-bold" style={{ color: item.color }}>{item.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-xl px-4 py-3 text-xs text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            Status is based on the Trivy DB snapshot timestamps reported by each worker cache, not only when that cache was downloaded locally. Max allowed snapshot age: {health.max_allowed_age_hours}h.
+          </div>
+
+          <div className="space-y-2">
+            {health.workers.map((worker) => {
+              const tone = scannerTone(worker.status);
+              return (
+                <div key={worker.worker_id} className="rounded-xl p-4 space-y-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
+                        Worker {worker.worker_id}
+                      </span>
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md capitalize" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
+                        {worker.status}
+                      </span>
+                      <span className="text-xs text-zinc-500">Trivy {worker.trivy_version || 'unknown'}</span>
+                    </div>
+                    <span className="text-xs text-zinc-500" title={worker.cache_dir}>{worker.cache_dir}</span>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-3 text-xs">
+                    <div className="rounded-lg px-3 py-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                      <p className="text-zinc-500 mb-1">Vulnerability DB</p>
+                      <p className="text-zinc-700 dark:text-zinc-200">Snapshot age: {formatDbAge(worker.vuln_db_age_hours)}</p>
+                      <p className="text-zinc-500 mt-1">Updated: {worker.vuln_db_updated_at ? fullDate(worker.vuln_db_updated_at) : 'Unknown'}</p>
+                      <p className="text-zinc-500">Downloaded: {worker.vuln_db_downloaded_at ? fullDate(worker.vuln_db_downloaded_at) : 'Unknown'}</p>
+                    </div>
+                    <div className="rounded-lg px-3 py-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                      <p className="text-zinc-500 mb-1">Java DB</p>
+                      <p className="text-zinc-700 dark:text-zinc-200">Snapshot age: {formatDbAge(worker.java_db_age_hours)}</p>
+                      <p className="text-zinc-500 mt-1">Updated: {worker.java_db_updated_at ? fullDate(worker.java_db_updated_at) : 'Unknown'}</p>
+                      <p className="text-zinc-500">Downloaded: {worker.java_db_downloaded_at ? fullDate(worker.java_db_downloaded_at) : 'Unknown'}</p>
+                    </div>
+                  </div>
+                  {worker.error && <p className="text-xs" style={{ color: '#f87171' }}>{worker.error}</p>}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 // ── Settings Tab ──────────────────────────────────────────────────────
 function SettingsTab() {
@@ -90,6 +215,8 @@ function SettingsTab() {
 
   return (
     <div className="space-y-6">
+      <ScannerHealthPanel />
+
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
           {error}

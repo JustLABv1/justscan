@@ -1,11 +1,12 @@
 'use client';
 import { Logo } from '@/components/logo';
-import { getPublicScan, getToken, listPublicVulnerabilities, Scan, Vulnerability } from '@/lib/api';
+import { getPublicScan, getToken, listPublicVulnerabilities, reScanPublic, Scan, Vulnerability } from '@/lib/api';
 import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
+import { fullDate, timeAgo } from '@/lib/time';
 import { ListBox, Select } from '@heroui/react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -22,6 +23,44 @@ function SeverityBadge({ severity }: { severity: string }) {
     <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
       {cfg.label}
     </span>
+  );
+}
+
+function SourceBadge({ source }: { source?: string }) {
+  const normalized = (source ?? '').trim().toLowerCase();
+  const isOSV = normalized === 'osv.dev';
+  return (
+    <span
+      className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0"
+      style={isOSV
+        ? { background: 'rgba(59,130,246,0.14)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.24)' }
+        : { background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.22)' }}
+      title={source || (isOSV ? 'OSV supplemental finding' : 'Trivy finding')}
+    >
+      {isOSV ? 'OSV.dev' : 'Trivy'}
+    </span>
+  );
+}
+
+function ScannerDatabaseCard({
+  label,
+  updatedAt,
+  downloadedAt,
+}: {
+  label: string;
+  updatedAt?: string | null;
+  downloadedAt?: string | null;
+}) {
+  return (
+    <div className="rounded-2xl border p-4" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+      <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
+      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }} title={updatedAt ? fullDate(updatedAt) : ''}>
+        {updatedAt ? `${timeAgo(updatedAt)} (${fullDate(updatedAt)})` : 'Unknown'}
+      </p>
+      <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }} title={downloadedAt ? fullDate(downloadedAt) : ''}>
+        Downloaded {downloadedAt ? timeAgo(downloadedAt) : 'unknown'}
+      </p>
+    </div>
   );
 }
 
@@ -109,8 +148,10 @@ const LIMIT = 25;
 
 export default function PublicScanResultPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [scan, setScan] = useState<Scan | null>(null);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [vulnTotal, setVulnTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -123,6 +164,7 @@ export default function PublicScanResultPage() {
   const [sortBy, setSortBy] = useState('severity');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [vulnLoading, setVulnLoading] = useState(false);
+  const [reScanning, setReScanning] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -135,6 +177,7 @@ export default function PublicScanResultPage() {
       getPublicScan(id)
         .then(s => {
           setScan(s);
+          setActionError('');
           if (s.status === 'completed' || s.status === 'failed') {
             if (pollRef.current) clearInterval(pollRef.current);
             updatePublicHistoryEntry(id, {
@@ -172,6 +215,19 @@ export default function PublicScanResultPage() {
       .catch(() => {})
       .finally(() => setVulnLoading(false));
   }, [id, scan?.status, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleRescan() {
+    setReScanning(true);
+    setActionError('');
+    try {
+      const newScan = await reScanPublic(id);
+      router.push(`/public/scan/${newScan.id}`);
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : 'Failed to queue re-scan');
+    } finally {
+      setReScanning(false);
+    }
+  }
 
   const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl';
 
@@ -216,6 +272,23 @@ export default function PublicScanResultPage() {
               Export
             </Link>
           )}
+          {scan?.status === 'completed' && (
+            <button
+              onClick={handleRescan}
+              disabled={reScanning}
+              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#c4b5fd' }}
+            >
+              {reScanning
+                ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+                : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+                  </svg>
+                )}
+              Re-scan
+            </button>
+          )}
           <ThemeToggle />
           {isLoggedIn ? (
             <Link href="/scans"
@@ -233,6 +306,12 @@ export default function PublicScanResultPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+        {actionError && (
+          <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+            {actionError}
+          </div>
+        )}
+
         {/* Scan header */}
         <div>
           <Link href="/public/scan/image" className="inline-flex items-center gap-1.5 text-sm transition-colors mb-3"
@@ -283,6 +362,28 @@ export default function PublicScanResultPage() {
                 </div>
               ))}
             </div>
+
+            {(scan.trivy_version || scan.trivy_vuln_db_updated_at || scan.trivy_java_db_updated_at) && (
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="rounded-2xl border p-4" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                  <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Scanner</p>
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Trivy {scan.trivy_version || 'unknown'}</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>
+                    {scan.completed_at ? `DB snapshot captured ${timeAgo(scan.completed_at)}` : 'DB snapshot captured when this scan completed'}
+                  </p>
+                </div>
+                <ScannerDatabaseCard
+                  label="Vulnerability DB"
+                  updatedAt={scan.trivy_vuln_db_updated_at}
+                  downloadedAt={scan.trivy_vuln_db_downloaded_at}
+                />
+                <ScannerDatabaseCard
+                  label="Java DB"
+                  updatedAt={scan.trivy_java_db_updated_at}
+                  downloadedAt={scan.trivy_java_db_downloaded_at}
+                />
+              </div>
+            )}
 
             {/* Vulnerabilities */}
             <div className="space-y-3">
@@ -391,10 +492,13 @@ export default function PublicScanResultPage() {
                       >
                         <td className="px-4 py-3">
                           {v.vuln_id ? (
-                            <a href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`} target="_blank" rel="noreferrer"
-                              className="font-mono text-xs text-violet-600 dark:text-violet-400 hover:underline transition-colors">
-                              {v.vuln_id}
-                            </a>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <a href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`} target="_blank" rel="noreferrer"
+                                className="font-mono text-xs text-violet-600 dark:text-violet-400 hover:underline transition-colors">
+                                {v.vuln_id}
+                              </a>
+                              <SourceBadge source={v.data_source} />
+                            </div>
                           ) : <span style={{ color: 'var(--text-faint)' }}>—</span>}
                         </td>
                         <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{v.pkg_name}</td>

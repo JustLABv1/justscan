@@ -1,5 +1,5 @@
 'use client';
-import { DashboardStats, DashboardTrendPoint, getDashboardTrends, getStats, Scan } from '@/lib/api';
+import { DashboardStats, DashboardTrendPoint, getDashboardTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
     Activity01Icon,
@@ -84,6 +84,23 @@ function glassCard(tint?: string): React.CSSProperties {
     border: '1px solid var(--glass-border)',
     boxShadow: 'var(--glass-shadow)',
   };
+}
+
+function formatDbAge(hours?: number | null): string {
+  if (hours == null || Number.isNaN(hours)) return 'Unknown';
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m`;
+  if (hours < 24) return `${hours >= 10 ? hours.toFixed(0) : hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
+}
+
+function healthColors(status: 'healthy' | 'stale' | 'error') {
+  if (status === 'healthy') {
+    return { color: '#34d399', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.22)' };
+  }
+  if (status === 'stale') {
+    return { color: '#fbbf24', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.22)' };
+  }
+  return { color: '#f87171', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.22)' };
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -273,18 +290,34 @@ function TrendChart({ data }: { data: DashboardTrendPoint[] }) {
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [trends, setTrends] = useState<DashboardTrendPoint[]>([]);
+  const [scannerHealth, setScannerHealth] = useState<ScannerHealth | null>(null);
+  const [scannerHealthError, setScannerHealthError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const currentUser = getUser() as { role?: string } | null;
+  const isAdmin = currentUser?.role === 'admin' || getTokenType() === 'admin';
 
   useEffect(() => {
+    const healthPromise = isAdmin
+      ? getScannerHealth()
+          .then((health) => ({ health, error: '' }))
+          .catch((e: Error) => ({ health: null, error: e.message }))
+      : Promise.resolve({ health: null, error: '' });
+
     Promise.all([
       getStats(),
       getDashboardTrends().catch(() => [] as DashboardTrendPoint[]),
+      healthPromise,
     ])
-      .then(([s, t]) => { setStats(s); setTrends(t); })
+      .then(([s, t, healthResult]) => {
+        setStats(s);
+        setTrends(t);
+        setScannerHealth(healthResult.health);
+        setScannerHealthError(healthResult.error);
+      })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isAdmin]);
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -370,6 +403,71 @@ export default function DashboardPage() {
           );
         })}
       </div>
+
+      {isAdmin && (
+        <div className="relative rounded-2xl p-5 z-10" style={glassCard('rgba(59,130,246,0.06)')}>
+          <div className="flex items-start justify-between gap-3 mb-5">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Scanner Health</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">Current Trivy DB age across worker caches</p>
+            </div>
+            {scannerHealth && (
+              <span className="text-xs px-2 py-1 rounded-lg" style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.18)' }}>
+                Max age {scannerHealth.max_allowed_age_hours}h
+              </span>
+            )}
+          </div>
+
+          {scannerHealthError ? (
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+              {scannerHealthError}
+            </div>
+          ) : scannerHealth ? (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                {[
+                  { label: 'Healthy Workers', value: scannerHealth.healthy_workers, color: '#34d399', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.18)' },
+                  { label: 'Stale Workers', value: scannerHealth.stale_workers, color: '#fbbf24', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.18)' },
+                  { label: 'Oldest Vuln DB', value: formatDbAge(scannerHealth.oldest_vuln_db_age_hours), color: '#60a5fa', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.18)' },
+                  { label: 'Oldest Java DB', value: formatDbAge(scannerHealth.oldest_java_db_age_hours), color: '#a78bfa', bg: 'rgba(124,58,237,0.12)', border: 'rgba(124,58,237,0.18)' },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-xl p-4" style={{ background: item.bg, border: `1px solid ${item.border}` }}>
+                    <p className="text-xs text-zinc-500 mb-1">{item.label}</p>
+                    <p className="text-lg font-bold" style={{ color: item.color }}>{item.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                {scannerHealth.workers.map((worker) => {
+                  const tone = healthColors(worker.status);
+                  return (
+                    <div key={worker.worker_id} className="rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <span className="text-xs px-2 py-0.5 rounded-md font-semibold" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
+                          Worker {worker.worker_id}
+                        </span>
+                        <span className="text-xs px-2 py-0.5 rounded-md" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
+                          {worker.status}
+                        </span>
+                        <span className="text-xs text-zinc-500 truncate" title={worker.cache_dir}>{worker.cache_dir}</span>
+                      </div>
+                      <div className="flex items-center gap-4 flex-wrap text-xs">
+                        <span style={{ color: 'var(--text-muted)' }}>Trivy {worker.trivy_version || 'unknown'}</span>
+                        <span style={{ color: 'var(--text-muted)' }}>Vuln DB {formatDbAge(worker.vuln_db_age_hours)}</span>
+                        <span style={{ color: 'var(--text-muted)' }}>Java DB {formatDbAge(worker.java_db_age_hours)}</span>
+                        {worker.error && <span style={{ color: '#f87171' }}>{worker.error}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-zinc-500">No scanner health data available.</div>
+          )}
+        </div>
+      )}
 
       {/* ── Trend Chart ── */}
       <div className="relative z-10">

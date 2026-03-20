@@ -58,6 +58,20 @@ func InitWorker(db *bun.DB) {
 	jobQueue = make(chan ScanJob, 64)
 
 	for i := 0; i < concurrency; i++ {
+		cacheDir := workerCacheDir(i)
+		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+			log.Warnf("Scanner worker %d cache init failed: %v", i, err)
+		}
+		go func(workerID int, dir string) {
+			info, err := EnsureDatabasesFresh(context.Background(), dir)
+			if err != nil {
+				log.Warnf("Scanner worker %d trivy DB warmup failed: %v", workerID, err)
+				return
+			}
+			if info != nil && info.VulnerabilityDB.UpdatedAt != nil {
+				log.Infof("Scanner worker %d trivy DB ready (vuln updated %s)", workerID, info.VulnerabilityDB.UpdatedAt.Format(time.RFC3339))
+			}
+		}(i, cacheDir)
 		go workerLoop(i)
 	}
 
@@ -74,9 +88,7 @@ func EnqueueScan(scanID uuid.UUID, db *bun.DB, envVars []string, platform string
 
 func workerLoop(id int) {
 	log.Infof("Scanner worker %d ready", id)
-	// Each worker gets its own trivy cache directory to prevent DB lock conflicts
-	// when multiple workers run simultaneously.
-	cacheDir := filepath.Join(os.TempDir(), fmt.Sprintf("justscan-trivy-worker-%d", id))
+	cacheDir := workerCacheDir(id)
 	for job := range jobQueue {
 		processScan(job, cacheDir)
 	}
@@ -122,6 +134,12 @@ func processScan(job ScanJob, cacheDir string) {
 
 	log.Infof("Worker: starting scan %s for %s:%s", scanID, scan.ImageName, scan.ImageTag)
 
+	runtimeInfo, err := EnsureDatabasesFresh(ctx, cacheDir)
+	if err != nil {
+		setFailed(db, scan, "failed to refresh trivy databases: "+err.Error())
+		return
+	}
+
 	// Run vulnerability scan
 	trivyOut, trivyVersion, err := RunScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
 	if err != nil {
@@ -137,7 +155,6 @@ func processScan(job ScanJob, cacheDir string) {
 
 	// Parse and insert vulnerabilities
 	vulns := ParseVulnerabilities(trivyOut, scanID)
-	severityCounts := CountSeverities(vulns)
 
 	if len(vulns) > 0 {
 		for i := range vulns {
@@ -161,7 +178,7 @@ func processScan(job ScanJob, cacheDir string) {
 			Set("severity = CASE WHEN EXCLUDED.severity != '' THEN EXCLUDED.severity ELSE vuln_kb.severity END").
 			Set("cvss_score = CASE WHEN EXCLUDED.cvss_score > vuln_kb.cvss_score THEN EXCLUDED.cvss_score ELSE vuln_kb.cvss_score END").
 			Set("cvss_vector = CASE WHEN EXCLUDED.cvss_score > vuln_kb.cvss_score THEN EXCLUDED.cvss_vector ELSE vuln_kb.cvss_vector END").
-			Set("references = EXCLUDED.references").
+			Set(`"references" = EXCLUDED."references"`).
 			Set("exploit_available = EXCLUDED.exploit_available OR vuln_kb.exploit_available").
 			Set("fetched_at = now()").
 			Exec(context.Background()); err != nil {
@@ -170,6 +187,8 @@ func processScan(job ScanJob, cacheDir string) {
 			log.Debugf("Worker: upserted %d KB entries for scan %s", len(kbEntries), scanID)
 		}
 	}()
+
+	var osvVulns []models.Vulnerability
 
 	// Run SBOM scan (best-effort, don't fail the whole scan if it errors)
 	sbomOut, sbomErr := RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
@@ -186,8 +205,19 @@ func processScan(job ScanJob, cacheDir string) {
 			if _, err := db.NewInsert().Model(&components).Exec(context.Background()); err != nil {
 				log.Warnf("Worker: failed to store SBOM components for %s: %v", scanID, err)
 			}
+			osvVulns = AugmentJavaVulnerabilitiesFromOSV(ctx, db, scanID, components, vulns)
+			if len(osvVulns) > 0 {
+				if _, err := db.NewInsert().Model(&osvVulns).Exec(context.Background()); err != nil {
+					log.Warnf("Worker: failed to store OSV augmented findings for %s: %v", scanID, err)
+					osvVulns = nil
+				} else {
+					log.Infof("Worker: added %d OSV Java findings for scan %s", len(osvVulns), scanID)
+				}
+			}
 		}
 	}
+
+	severityCounts := CountSeverities(append(vulns, osvVulns...))
 
 	// If context was cancelled during SBOM, don't mark as completed
 	if ctx.Err() != nil {
@@ -198,7 +228,17 @@ func processScan(job ScanJob, cacheDir string) {
 	completedAt := time.Now()
 	scan.Status = models.ScanStatusCompleted
 	scan.CompletedAt = &completedAt
-	scan.TrivyVersion = trivyVersion
+	if runtimeInfo != nil && runtimeInfo.Version != "" {
+		scan.TrivyVersion = runtimeInfo.Version
+	} else {
+		scan.TrivyVersion = trivyVersion
+	}
+	if runtimeInfo != nil {
+		scan.TrivyVulnDBUpdatedAt = runtimeInfo.VulnerabilityDB.UpdatedAt
+		scan.TrivyVulnDBDownloadedAt = runtimeInfo.VulnerabilityDB.DownloadedAt
+		scan.TrivyJavaDBUpdatedAt = runtimeInfo.JavaDB.UpdatedAt
+		scan.TrivyJavaDBDownloadedAt = runtimeInfo.JavaDB.DownloadedAt
+	}
 	scan.ImageDigest = ExtractDigest(trivyOut)
 	if trivyOut.Metadata.ImageConfig != nil {
 		scan.Architecture = trivyOut.Metadata.ImageConfig.Architecture
@@ -215,6 +255,8 @@ func processScan(job ScanJob, cacheDir string) {
 
 	if _, err := db.NewUpdate().Model(scan).
 		Column("status", "completed_at", "trivy_version", "image_digest",
+			"trivy_vuln_db_updated_at", "trivy_vuln_db_downloaded_at",
+			"trivy_java_db_updated_at", "trivy_java_db_downloaded_at",
 			"critical_count", "high_count", "medium_count", "low_count", "unknown_count",
 			"architecture", "os_family", "os_name").
 		Where("id = ?", scanID).Exec(context.Background()); err != nil {

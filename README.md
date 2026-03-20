@@ -85,6 +85,8 @@ Open [http://localhost:3000](http://localhost:3000) and register the first user.
 | `scanner.trivy_path` | Path to Trivy binary | `trivy` |
 | `scanner.timeout` | Max scan duration in seconds | `600` |
 | `scanner.concurrency` | Number of concurrent scans | `2` |
+| `scanner.db_max_age_hours` | Maximum age of each Trivy DB before JustScan refreshes it automatically | `24` |
+| `scanner.enable_osv_java_augmentation` | Query the free OSV API for additional Maven/Java advisories and merge them into scan results | `true` |
 | `encryption.key` | Key for encrypting registry credentials at rest. Should be a 32-char string. | `""` |
 | `vuln_kb.nvd_api_key` | NVD API key for enriched CVE data (optional, see [Getting an NVD API key](#getting-an-nvd-api-key)) | `""` |
 | `vuln_kb.cache_days` | How long to cache NVD data | `7` |
@@ -112,6 +114,8 @@ scanner:
   trivy_path: trivy
   timeout: 600
   concurrency: 2
+  db_max_age_hours: 24
+  enable_osv_java_augmentation: true
 
 encryption:
   key: "replace-with-32-char-encryption-key"
@@ -160,6 +164,10 @@ docker compose up -d
 ```
 
 The compose file starts PostgreSQL, the backend, and the frontend together.
+
+When running from the published Docker images, JustScan now refreshes Trivy's vulnerability DB and Java DB on container startup and again before scans whenever the cached DBs exceed `scanner.db_max_age_hours`. The cache is stored under `/app/data/trivy-cache`, so it survives container restarts when `/app/data` is persisted.
+
+JustScan can also augment Java findings for Maven packages using the free OSV API. To avoid unnecessary outbound calls and stay within public-service limits, package/version query results are cached locally in the database and refreshed using the same cache window configured by `vuln_kb.cache_days`.
 
 ---
 

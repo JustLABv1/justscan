@@ -22,6 +22,8 @@ scanner:
   trivy_path: trivy
   timeout: 600
   concurrency: 2
+  db_max_age_hours: 24
+  enable_osv_java_augmentation: true
 
 encryption:
   key: ""

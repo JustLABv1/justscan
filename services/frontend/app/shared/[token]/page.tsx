@@ -23,6 +23,22 @@ function SeverityBadge({ severity }: { severity: string }) {
   );
 }
 
+function SourceBadge({ source }: { source?: string }) {
+  const normalized = (source ?? '').trim().toLowerCase();
+  const isOSV = normalized === 'osv.dev';
+  return (
+    <span
+      className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0"
+      style={isOSV
+        ? { background: 'rgba(59,130,246,0.14)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.24)' }
+        : { background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.22)' }}
+      title={source || (isOSV ? 'OSV supplemental finding' : 'Trivy finding')}
+    >
+      {isOSV ? 'OSV.dev' : 'Trivy'}
+    </span>
+  );
+}
+
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -124,6 +140,7 @@ export default function SharedScanPage() {
   const [vulnLoading, setVulnLoading] = useState(false);
   const [reScanning, setReScanning] = useState(false);
   const [comparingPrev, setComparingPrev] = useState(false);
+  const [actionError, setActionError] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -176,14 +193,17 @@ export default function SharedScanPage() {
 
   async function handleRescan() {
     setReScanning(true);
+    setActionError('');
     try {
       const result = await rescanShared(token);
       if (result.type === 'authenticated') {
         router.push(`/scans/${result.scan_id}`);
       } else {
-        router.push(`/scan/${result.scan_id}`);
+        router.push(`/public/scan/${result.scan_id}`);
       }
-    } catch { /* ignore */ } finally {
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : 'Failed to queue re-scan');
+    } finally {
       setReScanning(false);
     }
   }
@@ -308,6 +328,12 @@ export default function SharedScanPage() {
             </span>
           )}
         </div>
+
+        {actionError && (
+          <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+            {actionError}
+          </div>
+        )}
 
         {/* Image header */}
         <div>
@@ -456,10 +482,13 @@ export default function SharedScanPage() {
                       >
                         <td className="px-4 py-3">
                           {v.vuln_id ? (
-                            <a href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`} target="_blank" rel="noreferrer"
-                              className="font-mono text-xs text-violet-600 dark:text-violet-400 hover:underline transition-colors">
-                              {v.vuln_id}
-                            </a>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <a href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`} target="_blank" rel="noreferrer"
+                                className="font-mono text-xs text-violet-600 dark:text-violet-400 hover:underline transition-colors">
+                                {v.vuln_id}
+                              </a>
+                              <SourceBadge source={v.data_source} />
+                            </div>
                           ) : <span style={{ color: 'var(--text-faint)' }}>—</span>}
                         </td>
                         <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{v.pkg_name}</td>

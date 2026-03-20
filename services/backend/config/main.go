@@ -35,9 +35,11 @@ type RestfulConf struct {
 }
 
 type ScannerConf struct {
-	TrivyPath   string `mapstructure:"trivy_path"`
-	Timeout     int    `mapstructure:"timeout"`
-	Concurrency int    `mapstructure:"concurrency"`
+	TrivyPath                 string `mapstructure:"trivy_path"`
+	Timeout                   int    `mapstructure:"timeout"`
+	Concurrency               int    `mapstructure:"concurrency"`
+	DBMaxAgeHours             int    `mapstructure:"db_max_age_hours"`
+	EnableOSVJavaAugmentation bool   `mapstructure:"enable_osv_java_augmentation"`
 }
 
 type EncryptionConf struct {
@@ -85,18 +87,23 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 
 	// Bind specific environment variables
 	envBindings := map[string]string{
-		"log_level":                   "BACKEND_LOG_LEVEL",
-		"port":                        "BACKEND_PORT",
-		"database.server":             "BACKEND_DATABASE_SERVER",
-		"database.port":               "BACKEND_DATABASE_PORT",
-		"database.name":               "BACKEND_DATABASE_NAME",
-		"database.user":               "BACKEND_DATABASE_USER",
-		"database.password":           "BACKEND_DATABASE_PASSWORD",
-		"data_path":                   "BACKEND_DATA_PATH",
-		"encryption.key":              "BACKEND_ENCRYPTION_KEY",
-		"encryption.master_secret":    "BACKEND_ENCRYPTION_MASTER_SECRET",
-		"jwt.secret":                  "BACKEND_JWT_SECRET",
-		"runner.shared_runner_secret": "BACKEND_RUNNER_SHARED_RUNNER_SECRET",
+		"log_level":                            "BACKEND_LOG_LEVEL",
+		"port":                                 "BACKEND_PORT",
+		"database.server":                      "BACKEND_DATABASE_SERVER",
+		"database.port":                        "BACKEND_DATABASE_PORT",
+		"database.name":                        "BACKEND_DATABASE_NAME",
+		"database.user":                        "BACKEND_DATABASE_USER",
+		"database.password":                    "BACKEND_DATABASE_PASSWORD",
+		"scanner.trivy_path":                   "BACKEND_SCANNER_TRIVY_PATH",
+		"scanner.timeout":                      "BACKEND_SCANNER_TIMEOUT",
+		"scanner.concurrency":                  "BACKEND_SCANNER_CONCURRENCY",
+		"scanner.db_max_age_hours":             "BACKEND_SCANNER_DB_MAX_AGE_HOURS",
+		"scanner.enable_osv_java_augmentation": "BACKEND_SCANNER_ENABLE_OSV_JAVA_AUGMENTATION",
+		"data_path":                            "BACKEND_DATA_PATH",
+		"encryption.key":                       "BACKEND_ENCRYPTION_KEY",
+		"encryption.master_secret":             "BACKEND_ENCRYPTION_MASTER_SECRET",
+		"jwt.secret":                           "BACKEND_JWT_SECRET",
+		"runner.shared_runner_secret":          "BACKEND_RUNNER_SHARED_RUNNER_SECRET",
 	}
 
 	for configKey, envVar := range envBindings {
@@ -160,6 +167,16 @@ func (cm *ConfigurationManager) setDefaults(config *RestfulConf) {
 	if config.Database.Password == "" {
 		config.Database.Password = "postgres"
 	}
+	if config.Scanner.Timeout == 0 {
+		config.Scanner.Timeout = 600
+	}
+	if config.Scanner.Concurrency == 0 {
+		config.Scanner.Concurrency = 2
+	}
+	if config.Scanner.DBMaxAgeHours == 0 {
+		config.Scanner.DBMaxAgeHours = 24
+	}
+	config.Scanner.EnableOSVJavaAugmentation = true
 }
 
 // GetConfig returns a copy of the current configuration

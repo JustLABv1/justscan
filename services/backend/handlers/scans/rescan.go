@@ -26,7 +26,7 @@ func ReScan(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var orig models.Scan
-		if err := db.NewSelect().Model(&orig).Where("s.id = ?", scanID).Scan(c.Request.Context()); err != nil {
+		if err := db.NewSelect().Model(&orig).Where("id = ?", scanID).Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
 			return
 		}

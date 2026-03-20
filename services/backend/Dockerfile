@@ -21,6 +21,7 @@ RUN apk add --no-cache ca-certificates
 
 COPY --from=trivy-bin /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /app/backend/justscan-backend /app/
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
 RUN addgroup --system --gid 1001 justscan \
     && adduser --system --uid 1001 --ingroup justscan justscan
@@ -31,12 +32,18 @@ RUN mkdir -p /etc/justscan \
 RUN mkdir -p /app/data \
     && chown -R justscan:justscan /app/data
 
+RUN chmod +x /app/docker-entrypoint.sh
+
 RUN chown -R justscan:justscan /app
+
+ENV TRIVY_CACHE_DIR=/app/data/trivy-cache
 
 VOLUME [ "/etc/justscan", "/app/data" ]
 
 EXPOSE 8080
 
 USER justscan
+
+ENTRYPOINT [ "/app/docker-entrypoint.sh" ]
 
 CMD [ "/app/justscan-backend", "--config", "/etc/justscan/config.yaml" ]

@@ -1,13 +1,16 @@
 package scanner
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"justscan-backend/config"
@@ -15,6 +18,21 @@ import (
 
 	"github.com/google/uuid"
 )
+
+type TrivyDatabaseInfo struct {
+	Version      string
+	UpdatedAt    *time.Time
+	NextUpdate   *time.Time
+	DownloadedAt *time.Time
+}
+
+type TrivyRuntimeInfo struct {
+	Version         string
+	VulnerabilityDB TrivyDatabaseInfo
+	JavaDB          TrivyDatabaseInfo
+}
+
+var trivyRefreshLocks sync.Map
 
 // TrivyOutput is the top-level JSON structure from `trivy image --format json`
 type TrivyOutput struct {
@@ -144,6 +162,93 @@ func RunScan(ctx context.Context, imageName, imageTag string, envVars []string, 
 		return nil, "", fmt.Errorf("failed to parse trivy output: %w", err)
 	}
 	return &output, extractVersion(stderr.String()), nil
+}
+
+func EnsureDatabasesFresh(ctx context.Context, cacheDir string) (*TrivyRuntimeInfo, error) {
+	if cacheDir == "" {
+		cacheDir = trivyCacheRoot()
+	}
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create trivy cache dir: %w", err)
+	}
+
+	muAny, _ := trivyRefreshLocks.LoadOrStore(cacheDir, &sync.Mutex{})
+	mu := muAny.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+
+	info, err := GetTrivyRuntimeInfo(ctx, cacheDir)
+	if err != nil || shouldRefreshDatabases(info) {
+		if err := RefreshTrivyDatabases(ctx, cacheDir); err != nil {
+			return nil, err
+		}
+		info, err = GetTrivyRuntimeInfo(ctx, cacheDir)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return info, nil
+}
+
+func RefreshTrivyDatabases(ctx context.Context, cacheDir string) error {
+	trivyPath := config.Config.Scanner.TrivyPath
+	if trivyPath == "" {
+		trivyPath = "trivy"
+	}
+	timeout := config.Config.Scanner.Timeout
+	if timeout <= 0 {
+		timeout = 600
+	}
+	refreshCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout*2)*time.Second)
+	defer cancel()
+
+	commands := [][]string{
+		{"image", "--download-db-only", "--quiet"},
+		{"image", "--download-java-db-only", "--quiet"},
+	}
+	for _, args := range commands {
+		fullArgs := args
+		if cacheDir != "" {
+			fullArgs = append([]string{"--cache-dir", cacheDir}, args...)
+		}
+		cmd := exec.CommandContext(refreshCtx, trivyPath, fullArgs...)
+		cmd.Env = os.Environ()
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("trivy db refresh failed for %s: %w — output: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+		}
+	}
+	return nil
+}
+
+func GetTrivyRuntimeInfo(ctx context.Context, cacheDir string) (*TrivyRuntimeInfo, error) {
+	trivyPath := config.Config.Scanner.TrivyPath
+	if trivyPath == "" {
+		trivyPath = "trivy"
+	}
+	timeout := config.Config.Scanner.Timeout
+	if timeout <= 0 {
+		timeout = 300
+	}
+	versionCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	args := []string{"--version"}
+	if cacheDir != "" {
+		args = append([]string{"--cache-dir", cacheDir}, args...)
+	}
+	cmd := exec.CommandContext(versionCtx, trivyPath, args...)
+	cmd.Env = os.Environ()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read trivy version info: %w — output: %s", err, strings.TrimSpace(string(output)))
+	}
+	info := parseTrivyRuntimeInfo(string(output))
+	if info.Version == "" {
+		return nil, fmt.Errorf("failed to parse trivy runtime info")
+	}
+	return info, nil
 }
 
 // RunSBOMScan executes trivy in CycloneDX SBOM mode.
@@ -361,6 +466,109 @@ func normalizeSeverity(s string) string {
 	default:
 		return models.SeverityUnknown
 	}
+}
+
+func trivyCacheRoot() string {
+	if cacheDir := os.Getenv("TRIVY_CACHE_DIR"); cacheDir != "" {
+		return cacheDir
+	}
+	if _, err := os.Stat("/app/data"); err == nil {
+		return filepath.Join("/app/data", "trivy-cache")
+	}
+	return filepath.Join(os.TempDir(), "justscan-trivy")
+}
+
+func workerCacheDir(workerID int) string {
+	return filepath.Join(trivyCacheRoot(), fmt.Sprintf("worker-%d", workerID))
+}
+
+func shouldRefreshDatabases(info *TrivyRuntimeInfo) bool {
+	if info == nil {
+		return true
+	}
+	maxAge := time.Duration(config.Config.Scanner.DBMaxAgeHours) * time.Hour
+	if maxAge <= 0 {
+		maxAge = 24 * time.Hour
+	}
+	now := time.Now()
+	return dbNeedsRefresh(info.VulnerabilityDB, now, maxAge) || dbNeedsRefresh(info.JavaDB, now, maxAge)
+}
+
+func dbNeedsRefresh(info TrivyDatabaseInfo, now time.Time, maxAge time.Duration) bool {
+	if info.UpdatedAt == nil || info.DownloadedAt == nil {
+		return true
+	}
+	if now.Sub(*info.UpdatedAt) > maxAge {
+		return true
+	}
+	if info.NextUpdate != nil && now.After(*info.NextUpdate) {
+		return true
+	}
+	return false
+}
+
+func parseTrivyRuntimeInfo(raw string) *TrivyRuntimeInfo {
+	info := &TrivyRuntimeInfo{}
+	section := ""
+	scanner := bufio.NewScanner(strings.NewReader(raw))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		switch line {
+		case "Vulnerability DB:":
+			section = "vuln"
+			continue
+		case "Java DB:":
+			section = "java"
+			continue
+		}
+
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if section == "" {
+			if key == "Version" {
+				info.Version = value
+			}
+			continue
+		}
+		db := &info.VulnerabilityDB
+		if section == "java" {
+			db = &info.JavaDB
+		}
+		switch key {
+		case "Version":
+			db.Version = value
+		case "UpdatedAt":
+			db.UpdatedAt = parseTrivyTimestamp(value)
+		case "NextUpdate":
+			db.NextUpdate = parseTrivyTimestamp(value)
+		case "DownloadedAt":
+			db.DownloadedAt = parseTrivyTimestamp(value)
+		}
+	}
+	return info
+}
+
+func parseTrivyTimestamp(value string) *time.Time {
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02 15:04:05.999999999 -0700 MST",
+		"2006-01-02 15:04:05 -0700 MST",
+		"2006-01-02 15:04:05.999999999 -0700 -0700",
+	}
+	for _, layout := range layouts {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return &parsed
+		}
+	}
+	return nil
 }
 
 // preferredCVSSSources lists data source keys in descending preference order.

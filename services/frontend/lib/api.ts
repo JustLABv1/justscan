@@ -67,6 +67,9 @@ export const register = (username: string, email: string, password: string) =>
 export const getStats = () =>
   req<DashboardStats>('GET', '/api/v1/dashboard/stats');
 
+export const getScannerHealth = () =>
+  req<ScannerHealth>('GET', '/api/v1/dashboard/scanner-health');
+
 // Scans
 export const listScans = (page = 1, limit = 20, image?: string, status?: string, exact?: boolean, helmOnly?: boolean, helmChart?: string) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
@@ -211,6 +214,9 @@ export const getPublicSettings = () =>
 
 export const createPublicScan = (image: string, tag: string, platform?: string) =>
   publicReq<Scan>('POST', '/api/v1/public/scans', { image, tag, platform });
+
+export const reScanPublic = (id: string) =>
+  publicReq<Scan>('POST', `/api/v1/public/scans/${id}/rescan`);
 
 export const getPublicScan = (id: string) =>
   publicReq<Scan>('GET', `/api/v1/public/scans/${id}`);
@@ -577,6 +583,10 @@ export interface Scan {
   unknown_count: number;
   suppressed_count: number;
   trivy_version: string;
+  trivy_vuln_db_updated_at?: string | null;
+  trivy_vuln_db_downloaded_at?: string | null;
+  trivy_java_db_updated_at?: string | null;
+  trivy_java_db_downloaded_at?: string | null;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
@@ -608,6 +618,7 @@ export interface Vulnerability {
   title: string;
   description: string;
   cvss_score: number;
+  data_source?: string;
   references: string[];
   suppression?: Suppression | null;
   comments?: Comment[];
@@ -674,6 +685,33 @@ export interface DashboardStats {
   recent_scans: Scan[] | null;
   top_images: { image_name: string; count: number }[] | null;
   watchlist_count: number;
+}
+
+export interface ScannerHealthWorker {
+  worker_id: number;
+  cache_dir: string;
+  status: 'healthy' | 'stale' | 'error';
+  error?: string;
+  trivy_version: string;
+  vuln_db_updated_at?: string | null;
+  vuln_db_downloaded_at?: string | null;
+  vuln_db_age_hours?: number | null;
+  java_db_updated_at?: string | null;
+  java_db_downloaded_at?: string | null;
+  java_db_age_hours?: number | null;
+}
+
+export interface ScannerHealth {
+  generated_at: string;
+  cache_root: string;
+  max_allowed_age_hours: number;
+  total_workers: number;
+  healthy_workers: number;
+  stale_workers: number;
+  error_workers: number;
+  oldest_vuln_db_age_hours?: number | null;
+  oldest_java_db_age_hours?: number | null;
+  workers: ScannerHealthWorker[];
 }
 
 export interface AutoTagRule {

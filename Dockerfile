@@ -36,6 +36,7 @@ RUN apk update && apk add --no-cache \
     postgresql-client
 
 COPY --from=trivy-bin /usr/local/bin/trivy /usr/local/bin/trivy
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
 # Create user and group
 RUN addgroup --system --gid 1001 nodejs \
@@ -63,8 +64,11 @@ RUN mkdir -p /etc/justscan \
 RUN mkdir -p /app/data \
     && chown -R nextjs:nodejs /app/data
 
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Set environment variables
 ENV NODE_ENV=production
+ENV TRIVY_CACHE_DIR=/app/data/trivy-cache
 
 VOLUME [ "/etc/justscan", "/app/data" ]
 
@@ -74,7 +78,7 @@ EXPOSE 8080 3000
 USER nextjs
 
 # Use tini as the entrypoint
-ENTRYPOINT ["/sbin/tini", "--"]
+ENTRYPOINT ["/sbin/tini", "--", "/app/docker-entrypoint.sh"]
 
 # Start the backend and frontend
 CMD ["sh", "-c", "./justscan-backend --config /etc/justscan/config.yaml & node /app/server.js"]

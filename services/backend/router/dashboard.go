@@ -13,5 +13,6 @@ func Dashboard(router *gin.RouterGroup, db *bun.DB) {
 	{
 		d.GET("/stats", dashboard.GetStats(db))
 		d.GET("/trends", dashboard.GetTrends(db))
+		d.GET("/scanner-health", middlewares.Admin(db), dashboard.GetScannerHealth())
 	}
 }

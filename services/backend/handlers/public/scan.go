@@ -88,6 +88,50 @@ func CreatePublicScan(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
+// ReScanPublic creates a new anonymous scan using the same image/tag/platform as an existing public scan.
+func ReScanPublic(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !isPublicScanEnabled(c.Request.Context(), db) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "public scanning is currently disabled by the administrator"})
+			return
+		}
+
+		scanID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+			return
+		}
+
+		var orig models.Scan
+		if err := db.NewSelect().Model(&orig).
+			Where("id = ? AND user_id IS NULL", scanID).
+			Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
+			return
+		}
+
+		newScan := &models.Scan{
+			ImageName: orig.ImageName,
+			ImageTag:  orig.ImageTag,
+			Platform:  orig.Platform,
+			Status:    models.ScanStatusPending,
+			CreatedAt: time.Now(),
+		}
+		if _, err := db.NewInsert().Model(newScan).Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create rescan"})
+			return
+		}
+
+		scanner.EnqueueScan(newScan.ID, db, nil, orig.Platform)
+
+		clientIP := c.ClientIP()
+		go audit.Write(context.Background(), db, "public", "scan.public.rescan",
+			fmt.Sprintf("Public rescan created for %s:%s (original=%s, new=%s, ip=%s)", orig.ImageName, orig.ImageTag, orig.ID, newScan.ID, clientIP))
+
+		c.JSON(http.StatusCreated, newScan)
+	}
+}
+
 // GetPublicScan returns scan status and summary for a public (anonymous) scan.
 func GetPublicScan(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {

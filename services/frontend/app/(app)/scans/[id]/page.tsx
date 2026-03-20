@@ -607,6 +607,15 @@ export default function ScanDetailPage() {
                 {scan.architecture} · {scan.os_family} {scan.os_name}
               </p>
             )}
+            {scan.helm_chart && (
+              <p className="flex items-center gap-1.5 text-xs text-zinc-500 mt-1" title={scan.helm_source_path}>
+                <span className="font-medium text-violet-400">Helm</span>
+                <span className="font-mono truncate max-w-[320px]">{scan.helm_chart}</span>
+                {scan.helm_source_path && (
+                  <span className="text-zinc-400 truncate max-w-[200px]">· {scan.helm_source_path}</span>
+                )}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link
@@ -772,9 +781,6 @@ export default function ScanDetailPage() {
         <div className="glass-panel rounded-xl p-4 col-span-1">
           <p className="text-xs text-zinc-500 mb-2">Status</p>
           <StatusBadge status={scan.status} />
-          {scan.error_message && (
-            <p className="text-xs text-red-400 mt-2 line-clamp-2">{scan.error_message}</p>
-          )}
         </div>
         {sevCards.map(({ label, count, color, border }) => (
           <div key={label} className={`rounded-xl border ${border} p-4`} style={{
@@ -788,6 +794,20 @@ export default function ScanDetailPage() {
           </div>
         ))}
       </div>
+
+      {/* Error banner — shown when scan failed */}
+      {scan.status === 'failed' && scan.error_message && (
+        <div className="rounded-xl px-4 py-3 flex items-start gap-3"
+          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)' }}>
+          <svg className="shrink-0 mt-0.5" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-red-400 mb-0.5">Scan failed</p>
+            <pre className="text-xs text-red-300/80 whitespace-pre-wrap break-all font-mono leading-relaxed">{scan.error_message}</pre>
+          </div>
+        </div>
+      )}
 
       {/* Tags + Compliance compact bar */}
       {(allTags.length > 0 || allOrgs.length > 0 || compliance.length > 0) && (

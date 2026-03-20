@@ -27,6 +27,8 @@ type AdminScanRow struct {
 	CreatedAt       string  `bun:"created_at" json:"created_at"`
 	StartedAt       *string `bun:"started_at" json:"started_at"`
 	CompletedAt     *string `bun:"completed_at" json:"completed_at"`
+	HelmChart       string  `bun:"helm_chart" json:"helm_chart,omitempty"`
+	HelmSourcePath  string  `bun:"helm_source_path" json:"helm_source_path,omitempty"`
 	OwnerEmail      string  `bun:"owner_email" json:"owner_email,omitempty"`
 	OwnerUsername   string  `bun:"owner_username" json:"owner_username,omitempty"`
 }
@@ -49,8 +51,7 @@ func ListAdminScans(c *gin.Context, db *bun.DB) {
 		TableExpr("scans AS s").
 		ColumnExpr("s.id, s.image_name, s.image_tag, s.image_digest, s.status").
 		ColumnExpr("s.critical_count, s.high_count, s.medium_count, s.low_count, s.unknown_count, s.suppressed_count").
-		ColumnExpr("s.platform, s.architecture, s.created_at, s.started_at, s.completed_at").
-		ColumnExpr("COALESCE(u.email, '') AS owner_email, COALESCE(u.username, '') AS owner_username").
+		ColumnExpr("s.platform, s.architecture, s.created_at, s.started_at, s.completed_at").ColumnExpr("s.helm_chart, s.helm_source_path").ColumnExpr("COALESCE(u.email, '') AS owner_email, COALESCE(u.username, '') AS owner_username").
 		Join("LEFT JOIN users u ON u.id = s.user_id").
 		OrderExpr("s.created_at DESC").
 		Limit(limit).
@@ -71,6 +72,9 @@ func ListAdminScans(c *gin.Context, db *bun.DB) {
 		if t, err := time.Parse(time.RFC3339, to); err == nil {
 			q = q.Where("s.created_at <= ?", t)
 		}
+	}
+	if c.Query("helm_only") == "true" {
+		q = q.Where("s.helm_chart != ''")
 	}
 
 	total, err := q.ScanAndCount(c.Request.Context(), &scans)

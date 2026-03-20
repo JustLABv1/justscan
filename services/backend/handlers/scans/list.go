@@ -58,6 +58,12 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 			tagIDs := strings.Split(tags, ",")
 			q = q.Where("id IN (SELECT scan_id FROM scan_tags WHERE tag_id = ANY(?))", bun.In(tagIDs))
 		}
+		if c.Query("helm_only") == "true" {
+			q = q.Where("helm_chart != ''")
+		}
+		if helmChart := c.Query("helm_chart"); helmChart != "" {
+			q = q.Where("helm_chart = ?", helmChart)
+		}
 		if from := c.Query("from"); from != "" {
 			if t, err := time.Parse(time.RFC3339, from); err == nil {
 				q = q.Where("created_at >= ?", t)

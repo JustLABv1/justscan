@@ -28,6 +28,8 @@ scanner:
   trivy_path: trivy
   timeout: 600
   concurrency: 2
+  db_max_age_hours: 7
+  enable_osv_java_augmentation: true
 
 encryption:
   # 64-character hex string. Generate one with: openssl rand -hex 32

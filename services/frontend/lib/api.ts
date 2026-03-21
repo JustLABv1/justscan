@@ -451,6 +451,56 @@ export const createShare = (scanId: string, visibility: 'public' | 'authenticate
 export const deleteShare = (scanId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/scans/${scanId}/share`);
 
+// Status pages
+export const listStatusPages = () =>
+  req<{ data: StatusPage[] }>('GET', '/api/v1/status-pages/').then(r => r.data ?? []);
+
+export const createStatusPage = (data: StatusPagePayload) =>
+  req<StatusPage>('POST', '/api/v1/status-pages/', data);
+
+export const getStatusPage = (id: string) =>
+  req<StatusPageResponse>('GET', `/api/v1/status-pages/${id}`);
+
+export const updateStatusPage = (id: string, data: StatusPagePayload) =>
+  req<StatusPage>('PUT', `/api/v1/status-pages/${id}`, data);
+
+export const deleteStatusPage = (id: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/status-pages/${id}`);
+
+export const getStatusPageBySlug = (slug: string) =>
+  sharedReq<StatusPageResponse>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}`);
+
+export const listStatusPageTargetOptions = async () => {
+  const limit = 100;
+  let page = 1;
+  let total = 0;
+  const seen = new Map<string, StatusPageTargetOption>();
+
+  do {
+    const response = await listScans(page, limit);
+    total = response.total ?? 0;
+    for (const scan of response.data ?? []) {
+      const key = `${scan.image_name}:${scan.image_tag}`;
+      if (!seen.has(key)) {
+        seen.set(key, {
+          id: key,
+          image_name: scan.image_name,
+          image_tag: scan.image_tag,
+          label: key,
+          latest_scan_id: scan.id,
+          latest_status: scan.status,
+          observed_at: scan.completed_at ?? scan.created_at,
+          critical_count: scan.critical_count,
+          high_count: scan.high_count,
+        });
+      }
+    }
+    page += 1;
+  } while ((page - 1) * limit < total);
+
+  return Array.from(seen.values()).sort((left, right) => left.label.localeCompare(right.label));
+};
+
 // Admin - all scans
 export const listAdminScans = (page = 1, limit = 50, image?: string, status?: string, helmOnly?: boolean) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
@@ -857,5 +907,96 @@ export interface SBOMComponent {
   license: string;
   supplier: string;
   created_at: string;
+}
+
+export interface StatusPageTarget {
+  id?: string;
+  page_id?: string;
+  image_name: string;
+  image_tag: string;
+  display_order: number;
+  created_at?: string;
+}
+
+export interface StatusPageUpdate {
+  id?: string;
+  page_id?: string;
+  title: string;
+  body: string;
+  level: 'info' | 'maintenance' | 'incident';
+  active_from?: string | null;
+  active_until?: string | null;
+  created_by_user_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface StatusPage {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  visibility: 'private' | 'public' | 'authenticated';
+  include_all_tags: boolean;
+  stale_after_hours: number;
+  owner_user_id: string;
+  created_at: string;
+  updated_at: string;
+  targets?: StatusPageTarget[];
+  updates?: StatusPageUpdate[];
+}
+
+export interface StatusPageItem {
+  image_name: string;
+  image_tag: string;
+  latest_scan_id: string;
+  scan_status: string;
+  status: string;
+  error_message?: string;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  previous_critical_count?: number;
+  previous_high_count?: number;
+  previous_medium_count?: number;
+  previous_low_count?: number;
+  delta_critical_count?: number;
+  delta_high_count?: number;
+  delta_medium_count?: number;
+  delta_low_count?: number;
+  freshness_hours: number;
+  observed_at: string;
+  previous_scan_at?: string;
+  display_order: number;
+}
+
+export interface StatusPageResponse {
+  page: StatusPage;
+  items: StatusPageItem[];
+  now: string;
+}
+
+export interface StatusPagePayload {
+  name: string;
+  slug?: string;
+  description?: string;
+  visibility: 'private' | 'public' | 'authenticated';
+  include_all_tags: boolean;
+  stale_after_hours: number;
+  targets: StatusPageTarget[];
+  updates?: StatusPageUpdate[];
+}
+
+export interface StatusPageTargetOption {
+  id: string;
+  image_name: string;
+  image_tag: string;
+  label: string;
+  latest_scan_id: string;
+  latest_status: string;
+  observed_at: string;
+  critical_count: number;
+  high_count: number;
 }
 

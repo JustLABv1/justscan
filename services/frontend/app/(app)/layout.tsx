@@ -30,6 +30,7 @@ const navItems = [
   { href: '/scans', label: 'Scans', Icon: Shield01Icon },
   { href: '/helm', label: 'Helm Scan', Icon: PackageIcon },
   { href: '/watchlist', label: 'Watchlist', Icon: EyeIcon },
+  { href: '/status', label: 'Status Pages', Icon: EyeIcon },
   { href: '/registries', label: 'Registries', Icon: ServerStack01Icon },
   { href: '/tags', label: 'Tags', Icon: Tag01Icon },
   { href: '/orgs', label: 'Organizations', Icon: Building04Icon },

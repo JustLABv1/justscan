@@ -16,6 +16,7 @@ import (
 func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
+	Swagger(router)
 
 	allowOrigins := config.AllowOrigins
 	if len(allowOrigins) == 0 {
@@ -50,6 +51,7 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 		PublicScan(v1, db)
 		SharedScans(v1, db)
 		AutoTags(v1, db)
+		StatusPages(v1, db)
 	}
 
 	server := &http.Server{

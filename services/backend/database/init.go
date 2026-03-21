@@ -39,6 +39,7 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 	// Register m2m join models so bun can resolve their relations
 	db.RegisterModel((*models.ScanTag)(nil))
 	db.RegisterModel((*models.OrgScan)(nil))
+	db.RegisterModel((*models.StatusPageTarget)(nil))
 
 	maxOpenConns := 4 * runtime.GOMAXPROCS(0)
 	db.SetMaxOpenConns(maxOpenConns)

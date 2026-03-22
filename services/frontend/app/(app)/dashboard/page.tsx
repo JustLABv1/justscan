@@ -23,9 +23,13 @@ const SEV = [
 ];
 
 // ── stat card config ─────────────────────────────────────────────────
+type TrendKey = 'total' | 'completed' | 'failed';
+
 const STATS = [
   {
     key: 'total',
+    trendKey: 'total' as TrendKey | null,
+    invertTrend: false,
     label: 'Total Scans',
     Icon: Shield01Icon,
     tint: 'rgba(124,58,237,0.14)',
@@ -40,6 +44,8 @@ const STATS = [
   },
   {
     key: 'completed',
+    trendKey: 'completed' as TrendKey | null,
+    invertTrend: false,
     label: 'Completed',
     Icon: CheckmarkBadge01Icon,
     tint: 'rgba(16,185,129,0.11)',
@@ -51,6 +57,8 @@ const STATS = [
   },
   {
     key: 'failed',
+    trendKey: 'failed' as TrendKey | null,
+    invertTrend: true,
     label: 'Failed',
     Icon: AlertDiamondIcon,
     tint: 'rgba(239,68,68,0.11)',
@@ -62,6 +70,8 @@ const STATS = [
   },
   {
     key: 'watchlist',
+    trendKey: null as TrendKey | null,
+    invertTrend: false,
     label: 'Watchlist',
     Icon: EyeIcon,
     tint: 'rgba(59,130,246,0.11)',
@@ -93,14 +103,17 @@ function formatDbAge(hours?: number | null): string {
   return `${(hours / 24).toFixed(1)}d`;
 }
 
-function healthColors(status: 'healthy' | 'stale' | 'error') {
-  if (status === 'healthy') {
-    return { color: '#34d399', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.22)' };
-  }
-  if (status === 'stale') {
-    return { color: '#fbbf24', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.22)' };
-  }
-  return { color: '#f87171', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.22)' };
+
+function calcTrend(data: number[]): { pct: number; dir: 'up' | 'down' | 'flat' } {
+  if (data.length < 4) return { pct: 0, dir: 'flat' };
+  const half = Math.floor(data.length / 2);
+  const prev = data.slice(0, half).reduce((a, b) => a + b, 0) / half;
+  const curr = data.slice(half).reduce((a, b) => a + b, 0) / (data.length - half);
+  if (prev === 0 && curr === 0) return { pct: 0, dir: 'flat' };
+  if (prev === 0) return { pct: 100, dir: 'up' };
+  const rawPct = ((curr - prev) / prev) * 100;
+  const absPct = Math.abs(Math.round(rawPct));
+  return { pct: absPct, dir: absPct < 3 ? 'flat' : rawPct > 0 ? 'up' : 'down' };
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -157,134 +170,93 @@ function RecentScanRow({ scan }: { scan: Scan }) {
   );
 }
 
-// ── Trend Chart ───────────────────────────────────────────────────────
-function TrendChart({ data }: { data: DashboardTrendPoint[] }) {
-  if (data.length === 0) return null;
+// ── Mini Sparkline ────────────────────────────────────────────────────
+function MiniSparkline({ data, color, id }: { data: { date: string; value: number }[]; color: string; id: string }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  if (data.length < 2) return null;
 
-  const W = 700, H = 200;
-  const PAD = { top: 16, right: 20, bottom: 36, left: 40 };
-  const innerW = W - PAD.left - PAD.right;
-  const innerH = H - PAD.top - PAD.bottom;
-  const maxVal = Math.max(...data.map(d => d.total), 4);
-  const n = data.length;
+  const W = 200, H = 52, SPARK_TOP = 18, PAD = 3;
+  const sparkH = H - SPARK_TOP;
+  const values = data.map(d => d.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
 
-  const xScale = (i: number) => PAD.left + (i / Math.max(n - 1, 1)) * innerW;
-  const yScale = (v: number) => PAD.top + innerH - (v / maxVal) * innerH;
+  const pts = data.map((_, i) => [
+    (i / (data.length - 1)) * W,
+    SPARK_TOP + sparkH - PAD - ((values[i]! - min) / range) * (sparkH - PAD * 2),
+  ] as [number, number]);
 
-  // Smooth cubic bezier line path
-  function smoothLine(key: 'total' | 'completed' | 'failed') {
-    if (n === 1) return `M${xScale(0)},${yScale(data[0][key])}`;
-    const pts = data.map((d, i) => [xScale(i), yScale(d[key])] as [number, number]);
-    let d = `M${pts[0][0]},${pts[0][1]}`;
-    for (let i = 1; i < pts.length; i++) {
-      const cpx = (pts[i - 1][0] + pts[i][0]) / 2;
-      d += ` C${cpx},${pts[i - 1][1]} ${cpx},${pts[i][1]} ${pts[i][0]},${pts[i][1]}`;
-    }
-    return d;
+  let path = `M${pts[0]![0].toFixed(1)},${pts[0]![1].toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    const cpx = ((pts[i - 1]![0] + pts[i]![0]) / 2).toFixed(1);
+    path += ` C${cpx},${pts[i - 1]![1].toFixed(1)} ${cpx},${pts[i]![1].toFixed(1)} ${pts[i]![0].toFixed(1)},${pts[i]![1].toFixed(1)}`;
   }
 
-  // Closed area path (line + bottom border)
-  function areaPath(key: 'total' | 'completed' | 'failed') {
-    const line = smoothLine(key);
-    const bottom = PAD.top + innerH;
-    return `${line} L${xScale(n - 1)},${bottom} L${xScale(0)},${bottom} Z`;
-  }
+  const last = pts[pts.length - 1]!;
+  const gradId = `sg-${id}`;
 
-  // Nice y-axis ticks
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(f * maxVal));
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * W;
+    setHoverIdx(Math.max(0, Math.min(data.length - 1, Math.round((x / W) * (data.length - 1)))));
+  };
 
-  // X-axis labels: show at most 7 evenly spaced labels
-  const xStep = Math.ceil(n / 7);
-  const xLabels = data
-    .map((d, i) => ({ i, label: new Date(d.date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) }))
-    .filter(({ i }) => i % xStep === 0 || i === n - 1);
-
-  const SERIES = [
-    { key: 'total'     as const, color: '#a78bfa', id: 'grad-total',     label: 'Total'     },
-    { key: 'completed' as const, color: '#34d399', id: 'grad-completed', label: 'Completed' },
-    { key: 'failed'    as const, color: '#f87171', id: 'grad-failed',    label: 'Failed'    },
-  ];
+  const hp = hoverIdx !== null ? pts[hoverIdx] : null;
+  const hd = hoverIdx !== null ? data[hoverIdx] : null;
 
   return (
-    <div className="glass-panel rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Scan Activity <span className="font-normal text-zinc-500">(30 days)</span></h2>
-        <div className="flex items-center gap-5 text-xs">
-          {SERIES.map(s => (
-            <span key={s.key} className="flex items-center gap-1.5 text-zinc-500">
-              <span className="w-5 h-0.5 inline-block rounded-full" style={{ background: s.color, boxShadow: `0 0 4px ${s.color}` }} />
-              {s.label}
-            </span>
-          ))}
-        </div>
-      </div>
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="w-full cursor-crosshair"
+      style={{ height: H }}
+      aria-hidden
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setHoverIdx(null)}
+    >
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible" style={{ height: 200 }}>
-        <defs>
-          {SERIES.map(s => (
-            <linearGradient key={s.id} id={s.id} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor={s.color} stopOpacity="0.18" />
-              <stop offset="100%" stopColor={s.color} stopOpacity="0.01" />
-            </linearGradient>
-          ))}
-        </defs>
+      <path d={`${path} L${W},${H} L0,${H} Z`} fill={`url(#${gradId})`} />
+      <path d={path} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+        style={{ filter: `drop-shadow(0 0 2px ${color}88)` }} />
 
-        {/* Y-axis grid lines + labels */}
-        {yTicks.map(v => (
-          <g key={v}>
-            <line
-              x1={PAD.left} x2={W - PAD.right}
-              y1={yScale(v)} y2={yScale(v)}
-              stroke="currentColor" strokeOpacity="0.07" strokeWidth="1"
-              strokeDasharray={v === 0 ? undefined : '3 4'}
-            />
-            <text x={PAD.left - 8} y={yScale(v) + 4} textAnchor="end" fontSize="10" fill="currentColor" opacity="0.4">
-              {v}
-            </text>
-          </g>
-        ))}
-
-        {/* X-axis date labels */}
-        {xLabels.map(({ i, label }) => (
-          <text key={i} x={xScale(i)} y={H - 6} textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.45">
-            {label}
-          </text>
-        ))}
-
-        {/* Area fills (behind lines) */}
-        {SERIES.map(s => (
-          <path key={`area-${s.key}`} d={areaPath(s.key)} fill={`url(#${s.id})`} />
-        ))}
-
-        {/* Lines */}
-        {SERIES.map(s => (
-          <path
-            key={`line-${s.key}`}
-            d={smoothLine(s.key)}
-            fill="none"
-            stroke={s.color}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ filter: `drop-shadow(0 0 3px ${s.color}66)` }}
-          />
-        ))}
-
-        {/* End-point dots */}
-        {n > 0 && SERIES.map(s => (
-          <circle
-            key={`dot-${s.key}`}
-            cx={xScale(n - 1)}
-            cy={yScale(data[n - 1][s.key])}
-            r="3.5"
-            fill={s.color}
-            style={{ filter: `drop-shadow(0 0 4px ${s.color})` }}
-          />
-        ))}
-      </svg>
-    </div>
+      {hp && hd ? (
+        <>
+          <line x1={hp[0]} x2={hp[0]} y1={SPARK_TOP} y2={H}
+            stroke={color} strokeOpacity="0.25" strokeWidth="1" strokeDasharray="2 3" />
+          <circle cx={hp[0]} cy={hp[1]} r="3" fill={color}
+            style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
+          {(() => {
+            const dateStr = new Date(hd.date).toLocaleDateString('en', { month: 'short', day: 'numeric' });
+            const pillW = 78;
+            const pillX = Math.max(1, Math.min(W - pillW - 1, hp[0] - pillW / 2));
+            return (
+              <g>
+                <rect x={pillX} y={1.5} width={pillW} height={14} rx={3.5}
+                  fill="rgba(10,10,15,0.82)" stroke={color} strokeOpacity={0.4} strokeWidth={0.75} />
+                <text x={pillX + 8} y={11.5} fontSize={9} fontWeight="700" fill={color} fontFamily="ui-monospace,monospace">
+                  {hd.value}
+                </text>
+                <text x={pillX + pillW - 6} y={11.5} textAnchor="end" fontSize={8.5} fill="rgba(255,255,255,0.5)" fontFamily="ui-sans-serif,system-ui">
+                  {dateStr}
+                </text>
+              </g>
+            );
+          })()}
+        </>
+      ) : (
+        <circle cx={last[0]} cy={last[1]} r="2.5" fill={color}
+          style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
+      )}
+    </svg>
   );
 }
+
 
 // ── page ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
@@ -374,105 +346,88 @@ export default function DashboardPage() {
 
       {/* ── Stat cards ── */}
       <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-3 z-10">
-        {STATS.map(({ key, label, Icon, tint, iconColor, iconBg, glow, getValue, getSub }) => {
+        {STATS.map(({ key, trendKey, invertTrend, label, Icon, tint, iconColor, iconBg, glow, getValue, getSub }) => {
           const value = getValue(stats);
           const sub = getSub(stats);
+          const sparkData = trendKey ? trends.slice(-14).map(d => ({ date: d.date, value: d[trendKey] })) : null;
+          const trend = sparkData && sparkData.length >= 4 ? calcTrend(sparkData.map(d => d.value)) : null;
+          const trendColor = trend && trend.dir !== 'flat'
+            ? ((invertTrend ? trend.dir === 'down' : trend.dir === 'up') ? '#34d399' : '#f87171')
+            : null;
           return (
-            <div key={key} className="relative flex items-center gap-3 rounded-xl px-4 py-3 overflow-hidden" style={glassCard(tint)}>
+            <div key={key} className="relative flex flex-col rounded-xl px-4 pt-3 pb-2 overflow-hidden gap-1.5" style={glassCard(tint)}>
               {/* Watermark */}
               <div className="absolute -right-2 -bottom-2 opacity-[0.05] pointer-events-none">
                 <Icon size={56} color={iconColor} />
               </div>
-              {/* Icon badge */}
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: iconBg, boxShadow: `0 0 14px ${glow}` }}>
-                <Icon size={17} color={iconColor} />
-              </div>
-              {/* Text */}
-              <div className="min-w-0">
-                <p className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight tabular-nums leading-none">{value}</p>
-                <p className="text-xs text-zinc-500 mt-0.5 truncate">{label}</p>
-                {sub && (
-                  <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: '#60a5fa' }}>
-                    {sub.pulse && <span className="w-1 h-1 rounded-full bg-blue-400 animate-pulse shrink-0" />}
-                    {sub.text}
-                  </p>
+              {/* Top row: icon + value + trend badge */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: iconBg, boxShadow: `0 0 14px ${glow}` }}>
+                    <Icon size={17} color={iconColor} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight tabular-nums leading-none">{value}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5 truncate">{label}</p>
+                    {sub && (
+                      <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: '#60a5fa' }}>
+                        {sub.pulse && <span className="w-1 h-1 rounded-full bg-blue-400 animate-pulse shrink-0" />}
+                        {sub.text}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {trend && trend.dir !== 'flat' && trendColor && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md shrink-0 mt-0.5 tabular-nums"
+                    style={{ color: trendColor, background: `${trendColor}1a`, border: `1px solid ${trendColor}30` }}>
+                    {trend.dir === 'up' ? '↑' : '↓'} {trend.pct}%
+                  </span>
                 )}
               </div>
+              {/* Sparkline */}
+              {sparkData && sparkData.length >= 2 && (
+                <div className="-mx-1">
+                  <MiniSparkline data={sparkData} color={iconColor} id={key} />
+                </div>
+              )}
             </div>
           );
         })}
       </div>
 
       {isAdmin && (
-        <div className="relative rounded-2xl p-5 z-10" style={glassCard('rgba(59,130,246,0.06)')}>
-          <div className="flex items-start justify-between gap-3 mb-5">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Scanner Health</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">Current Trivy DB age across worker caches</p>
-            </div>
-            {scannerHealth && (
-              <span className="text-xs px-2 py-1 rounded-lg" style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.18)' }}>
-                Max age {scannerHealth.max_allowed_age_hours}h
-              </span>
-            )}
-          </div>
-
+        <div className="relative flex items-center flex-wrap gap-x-5 gap-y-2 rounded-xl px-4 py-2.5 z-10" style={glassCard('rgba(59,130,246,0.05)')}>
+          <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 shrink-0">Scanner Health</span>
           {scannerHealthError ? (
-            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
-              {scannerHealthError}
-            </div>
+            <span className="text-xs" style={{ color: '#f87171' }}>{scannerHealthError}</span>
           ) : scannerHealth ? (
             <>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-                {[
-                  { label: 'Healthy Workers', value: scannerHealth.healthy_workers, color: '#34d399', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.18)' },
-                  { label: 'Stale Workers', value: scannerHealth.stale_workers, color: '#fbbf24', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.18)' },
-                  { label: 'Oldest Vuln DB', value: formatDbAge(scannerHealth.oldest_vuln_db_age_hours), color: '#60a5fa', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.18)' },
-                  { label: 'Oldest Java DB', value: formatDbAge(scannerHealth.oldest_java_db_age_hours), color: '#a78bfa', bg: 'rgba(124,58,237,0.12)', border: 'rgba(124,58,237,0.18)' },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-xl p-4" style={{ background: item.bg, border: `1px solid ${item.border}` }}>
-                    <p className="text-xs text-zinc-500 mb-1">{item.label}</p>
-                    <p className="text-lg font-bold" style={{ color: item.color }}>{item.value}</p>
-                  </div>
-                ))}
+              <div className="flex items-center gap-3">
+                <span className="flex items-center gap-1.5 text-xs text-zinc-500">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#34d399', boxShadow: '0 0 5px #34d399' }} />
+                  {scannerHealth.healthy_workers} healthy
+                </span>
+                {scannerHealth.stale_workers > 0 && (
+                  <span className="flex items-center gap-1.5 text-xs text-zinc-500">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#fbbf24', boxShadow: '0 0 5px #fbbf24' }} />
+                    {scannerHealth.stale_workers} stale
+                  </span>
+                )}
               </div>
-
-              <div className="space-y-2">
-                {scannerHealth.workers.map((worker) => {
-                  const tone = healthColors(worker.status);
-                  return (
-                    <div key={worker.worker_id} className="rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                      <div className="flex items-center gap-2 flex-wrap min-w-0">
-                        <span className="text-xs px-2 py-0.5 rounded-md font-semibold" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
-                          Worker {worker.worker_id}
-                        </span>
-                        <span className="text-xs px-2 py-0.5 rounded-md" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
-                          {worker.status}
-                        </span>
-                        <span className="text-xs text-zinc-500 truncate" title={worker.cache_dir}>{worker.cache_dir}</span>
-                      </div>
-                      <div className="flex items-center gap-4 flex-wrap text-xs">
-                        <span style={{ color: 'var(--text-muted)' }}>Trivy {worker.trivy_version || 'unknown'}</span>
-                        <span style={{ color: 'var(--text-muted)' }}>Vuln DB {formatDbAge(worker.vuln_db_age_hours)}</span>
-                        <span style={{ color: 'var(--text-muted)' }}>Java DB {formatDbAge(worker.java_db_age_hours)}</span>
-                        {worker.error && <span style={{ color: '#f87171' }}>{worker.error}</span>}
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="flex items-center gap-4 text-xs text-zinc-500 ml-auto">
+                <span>Vuln DB <span className="font-semibold text-zinc-700 dark:text-zinc-300">{formatDbAge(scannerHealth.oldest_vuln_db_age_hours)}</span></span>
+                <span>Java DB <span className="font-semibold text-zinc-700 dark:text-zinc-300">{formatDbAge(scannerHealth.oldest_java_db_age_hours)}</span></span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.18)' }}>
+                  Max {scannerHealth.max_allowed_age_hours}h
+                </span>
               </div>
             </>
           ) : (
-            <div className="text-sm text-zinc-500">No scanner health data available.</div>
+            <span className="text-xs text-zinc-500">No data available</span>
           )}
         </div>
       )}
-
-      {/* ── Trend Chart ── */}
-      <div className="relative z-10">
-        <TrendChart data={trends} />
-      </div>
 
       {/* ── Vulnerability landscape ── */}
       <div className="relative rounded-2xl p-5 z-10" style={glassCard()}>

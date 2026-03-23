@@ -1,4 +1,4 @@
-FROM aquasec/trivy:latest AS trivy-bin
+FROM aquasecurity/trivy:latest AS trivy-bin
 
 FROM node:24.7-alpine AS base
 

@@ -38,13 +38,12 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
   const cy = 44;
   const circumference = 2 * Math.PI * r;
 
-  let offset = 0;
-  const slices = data.map(d => {
+  const slices = data.map((d, i) => {
     const pct = d.value / total;
     const dashArray = `${pct * circumference} ${circumference}`;
-    const slice = { ...d, dashArray, dashOffset: circumference - offset * circumference };
-    offset += pct;
-    return slice;
+    const prevOffset = data.slice(0, i).reduce((s, x) => s + x.value / total, 0);
+    const dashOffset = circumference - prevOffset * circumference;
+    return { ...d, dashArray, dashOffset };
   });
 
   return (

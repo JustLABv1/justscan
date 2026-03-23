@@ -1,34 +1,34 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import {
-    AdminScan,
-    AdminUser,
-    AuditLog,
-    AutoTagRule,
-    createAdminUser,
-    createAutoTagRule,
-    createNotificationChannel,
-    deleteAdminUser,
-    deleteAutoTagRule,
-    deleteNotificationChannel,
-    disableAdminUser,
-    getAdminSettings,
-    getScannerHealth,
-    listAdminScans,
-    listAdminUsers,
-    listAuditLogs,
-    listAutoTagRules,
-    listNotificationChannels,
-    listTags,
-    NotificationChannel,
-    ScannerHealth,
-    setPublicScanEnabled,
-    Tag,
-    updateAdminUser,
-    updateAutoTagRule,
-    updateNotificationChannel,
-    updateRateLimit,
-    updateRegisterRateLimit,
+  AdminScan,
+  AdminUser,
+  AuditLog,
+  AutoTagRule,
+  createAdminUser,
+  createAutoTagRule,
+  createNotificationChannel,
+  deleteAdminUser,
+  deleteAutoTagRule,
+  deleteNotificationChannel,
+  disableAdminUser,
+  getAdminSettings,
+  getScannerHealth,
+  listAdminScans,
+  listAdminUsers,
+  listAuditLogs,
+  listAutoTagRules,
+  listNotificationChannels,
+  listTags,
+  NotificationChannel,
+  ScannerHealth,
+  setPublicScanEnabled,
+  Tag,
+  updateAdminUser,
+  updateAutoTagRule,
+  updateNotificationChannel,
+  updateRateLimit,
+  updateRegisterRateLimit,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
@@ -238,8 +238,6 @@ function SettingsTab() {
 
   return (
     <div className="space-y-6">
-      <ScannerHealthPanel />
-
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
           {error}
@@ -368,6 +366,15 @@ function SettingsTab() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Scanner Tab ──────────────────────────────────────────────────────
+function ScannerTab() {
+  return (
+    <div className="space-y-6">
+      <ScannerHealthPanel />
     </div>
   );
 }
@@ -1533,10 +1540,11 @@ function ScansTab() {
 
 // ── Page ───────────────────────────────────────────────────── ──────────────────────────────────────────────────────────────
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'settings' | 'users' | 'autotags' | 'audit' | 'notifications' | 'scans'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'scanner' | 'users' | 'autotags' | 'audit' | 'notifications' | 'scans'>('settings');
 
   const tabs: { value: typeof activeTab; label: string }[] = [
     { value: 'settings', label: 'Settings' },
+    { value: 'scanner', label: 'Scanner' },
     { value: 'users', label: 'Users' },
     { value: 'autotags', label: 'Auto Tags' },
     { value: 'audit', label: 'Audit Log' },
@@ -1565,6 +1573,7 @@ export default function AdminPage() {
       </div>
 
       {activeTab === 'settings' && <SettingsTab />}
+      {activeTab === 'scanner' && <ScannerTab />}
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'autotags' && <AutoTagsTab />}
       {activeTab === 'audit' && <AuditLogTab />}

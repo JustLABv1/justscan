@@ -89,6 +89,14 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 		}
 	}
 
+	var registerRateLimitSetting models.SystemSetting
+	if err := db.NewSelect().Model(&registerRateLimitSetting).Where("key = ?", "register_rate_limit").Scan(ctx); err == nil {
+		if v, err := strconv.Atoi(registerRateLimitSetting.Value); err == nil && v > 0 {
+			middlewares.SetAuthRegisterRateLimit(v)
+			log.Infof("Registration rate limit loaded from DB: %d/hour", v)
+		}
+	}
+
 	return db
 }
 

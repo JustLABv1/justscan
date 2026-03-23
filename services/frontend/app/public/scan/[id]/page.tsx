@@ -169,7 +169,6 @@ export default function PublicScanResultPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setIsLoggedIn(!!getToken()), []);
 
   useEffect(() => {
@@ -208,7 +207,6 @@ export default function PublicScanResultPage() {
 
   useEffect(() => {
     if (!scan || scan.status !== 'completed') return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVulnLoading(true);
     listPublicVulnerabilities(id, page, LIMIT, severityFilter || undefined, pkgFilter || undefined, hasFix || undefined, minCvss || undefined, sortBy, sortDir)
       .then(res => { setVulns(res.data ?? []); setVulnTotal(res.total); })

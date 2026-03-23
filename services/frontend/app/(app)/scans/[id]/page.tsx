@@ -336,14 +336,17 @@ export default function ScanDetailPage() {
   const [suppressError, setSuppressError] = useState('');
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scanStatus = scan?.status;
 
-  const loadScan = useCallback(() => {
-    return getScan(id).then(setScan).catch((e) => setError(e.message));
+  const loadScan = useCallback(async () => {
+    const nextScan = await getScan(id);
+    setScan(nextScan);
+    return nextScan;
   }, [id]);
 
   // Initial load
   useEffect(() => {
-    loadScan().finally(() => setLoading(false));
+    loadScan().catch((e: Error) => setError(e.message)).finally(() => setLoading(false));
     listTags().then(setAllTags).catch(() => {});
     getScanCompliance(id).then(setCompliance).catch(() => {});
     listOrgs().then(setAllOrgs).catch(() => {});
@@ -351,22 +354,20 @@ export default function ScanDetailPage() {
 
   // Poll every 3s while scan is pending or running
   useEffect(() => {
-    if (!scan) return;
-    if (scan.status !== 'pending' && scan.status !== 'running') return;
+    if (!scanStatus) return;
+    if (scanStatus !== 'pending' && scanStatus !== 'running') return;
     const interval = setInterval(() => {
-      loadScan().then(() => {
-        setScan(prev => {
-          if (prev && (prev.status === 'completed' || prev.status === 'failed')) {
-            clearInterval(interval);
-            // Load vulns and compliance now that it's done
-            getScanCompliance(id).then(setCompliance).catch(() => {});
-          }
-          return prev;
-        });
-      });
+    loadScan()
+      .then((nextScan) => {
+      if (nextScan.status === 'completed' || nextScan.status === 'failed') {
+        clearInterval(interval);
+        getScanCompliance(id).then(setCompliance).catch(() => {});
+      }
+      })
+      .catch(() => {});
     }, 3000);
     return () => clearInterval(interval);
-  }, [scan?.status, id, loadScan]);
+  }, [scanStatus, id, loadScan]);
 
   useEffect(() => {
     if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);

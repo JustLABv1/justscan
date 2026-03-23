@@ -177,3 +177,13 @@
     transform: translateY(0) scale(1);
   }
 }
+
+/* Status page redesign — staggered item entrance */
+@keyframes item-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.status-item-enter {
+  animation: item-enter 360ms ease-out both;
+}

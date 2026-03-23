@@ -3,6 +3,7 @@ package router
 import (
 	"justscan-backend/handlers/auths"
 	"justscan-backend/handlers/tokens"
+	"justscan-backend/middlewares"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -14,7 +15,7 @@ func Auth(router *gin.RouterGroup, db *bun.DB) {
 		auth.POST("/login", func(c *gin.Context) {
 			tokens.GenerateTokenUser(db, c)
 		})
-		auth.POST("/register", func(c *gin.Context) {
+		auth.POST("/register", middlewares.AuthRegisterRateLimit(), func(c *gin.Context) {
 			auths.RegisterUser(c, db)
 		})
 		auth.POST("/user/taken", func(c *gin.Context) {

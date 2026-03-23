@@ -170,7 +170,7 @@ export default function PublicHelmScanPage() {
     }, 3000);
 
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [step, scanResults]);
+  }, [currentGroupId, scanResults, step]);
 
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault();

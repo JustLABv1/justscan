@@ -1,4 +1,4 @@
-FROM aquasec/trivy:latest AS trivy-bin
+FROM aquasecurity/trivy:latest AS trivy-bin
 
 FROM golang:1.25-alpine AS builder
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"

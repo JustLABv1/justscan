@@ -2,7 +2,7 @@
 import { Logo } from '@/components/logo';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 // ---------------------------------------------------------------------------
 // Scanner animation — pure CSS keyframes, no external libs
@@ -263,11 +263,7 @@ const STEPS = [
 // ---------------------------------------------------------------------------
 export default function LandingPage() {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
 
   const isDark = mounted && resolvedTheme === 'dark';
 
@@ -337,6 +333,13 @@ export default function LandingPage() {
               )}
             </button>
           )}
+          <Link href="/swagger/index.html"
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm px-4 py-2 rounded-xl font-medium transition-all hover:opacity-90"
+            style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+            API docs
+          </Link>
           <Link href="/login"
             className="text-sm px-4 py-2 rounded-xl font-medium transition-all hover:opacity-90"
             style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: 'white', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}>

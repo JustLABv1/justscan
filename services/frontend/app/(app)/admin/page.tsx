@@ -28,6 +28,7 @@ import {
     updateAutoTagRule,
     updateNotificationChannel,
     updateRateLimit,
+    updateRegisterRateLimit,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
@@ -165,8 +166,11 @@ function SettingsTab() {
   const [publicScanEnabled, setPublicScanEnabledState] = useState<boolean | null>(null);
   const [rateLimit, setRateLimitState] = useState<number>(5);
   const [rateLimitInput, setRateLimitInput] = useState('5');
+  const [registerRateLimit, setRegisterRateLimitState] = useState<number>(10);
+  const [registerRateLimitInput, setRegisterRateLimitInput] = useState('10');
   const [saving, setSaving] = useState(false);
   const [savingRl, setSavingRl] = useState(false);
+  const [savingRegisterRl, setSavingRegisterRl] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -175,8 +179,11 @@ function SettingsTab() {
       .then(settings => {
         setPublicScanEnabledState(settings['public_scan_enabled'] !== 'false');
         const rl = parseInt(settings['public_scan_rate_limit'] ?? '5', 10);
+        const registrationRl = parseInt(settings['register_rate_limit'] ?? '10', 10);
         setRateLimitState(rl);
         setRateLimitInput(String(rl));
+        setRegisterRateLimitState(registrationRl);
+        setRegisterRateLimitInput(String(registrationRl));
       })
       .catch(() => setError('Failed to load settings'));
   }, []);
@@ -213,6 +220,22 @@ function SettingsTab() {
     }
   }
 
+  async function handleSaveRegisterRateLimit() {
+    const value = parseInt(registerRateLimitInput, 10);
+    if (isNaN(value) || value < 1 || value > 1000) { setError('Registration rate limit must be between 1 and 1000'); return; }
+    setSavingRegisterRl(true); setError(''); setSuccess('');
+    try {
+      await updateRegisterRateLimit(value);
+      setRegisterRateLimitState(value);
+      setSuccess('Registration rate limit updated');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to update registration rate limit');
+    } finally {
+      setSavingRegisterRl(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <ScannerHealthPanel />
@@ -234,7 +257,7 @@ function SettingsTab() {
           <p className="text-sm text-zinc-500 mt-0.5">
             Allow unauthenticated users to scan Docker images at{' '}
             <a href="/scan" target="_blank" className="text-violet-500 hover:underline">/scan</a>.
-            Rate limited to 5 scans per hour per IP.
+            Rate limited per IP and managed below.
           </p>
         </div>
 
@@ -315,6 +338,32 @@ function SettingsTab() {
             style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}
           >
             {savingRl && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            Save
+          </button>
+        </div>
+      </div>
+
+      <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Registration Rate Limit</h2>
+          <p className="text-sm text-zinc-500 mt-0.5">Maximum number of new accounts allowed per IP address per hour.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            min={1} max={1000}
+            className={inputCls + ' max-w-[120px]'}
+            value={registerRateLimitInput}
+            onChange={e => setRegisterRateLimitInput(e.target.value)}
+          />
+          <span className="text-sm text-zinc-500">registrations per IP / hour</span>
+          <button
+            onClick={handleSaveRegisterRateLimit}
+            disabled={savingRegisterRl || registerRateLimitInput === String(registerRateLimit)}
+            className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 flex items-center gap-2 transition-all hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}
+          >
+            {savingRegisterRl && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Save
           </button>
         </div>

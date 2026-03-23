@@ -6,6 +6,7 @@ import {
     Building04Icon,
     DashboardSquare01Icon,
     EyeIcon,
+    FileExportIcon,
     GridTableIcon,
     Logout02Icon,
     Moon02Icon,
@@ -191,6 +192,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {collapsed ? <ArrowRight01Icon size={14} /> : <ArrowLeft01Icon size={14} />}
             </button>
           </div>
+
+          <Link
+            href="/swagger/index.html"
+            target="_blank"
+            rel="noreferrer"
+            title="Open API docs"
+            className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} gap-2 rounded-xl px-2 py-2 text-xs font-medium transition-all duration-150 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100`}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          >
+            <span className="flex items-center gap-2 overflow-hidden">
+              <FileExportIcon size={14} className="shrink-0" />
+              <span style={{ maxWidth: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1 }} className="overflow-hidden transition-all duration-300 whitespace-nowrap">
+                API Docs
+              </span>
+            </span>
+            {!collapsed && <span className="text-[10px] uppercase tracking-[0.18em] text-zinc-400">Swagger</span>}
+          </Link>
 
           {/* User row */}
           <Link

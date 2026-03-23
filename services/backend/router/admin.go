@@ -50,6 +50,9 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.PUT("/settings/rate-limit", func(c *gin.Context) {
 			admins.UpdateRateLimit(c, db)
 		})
+		admin.PUT("/settings/register-rate-limit", func(c *gin.Context) {
+			admins.UpdateRegistrationRateLimit(c, db)
+		})
 		// all scans (including anonymous public scans)
 		admin.GET("/scans", func(c *gin.Context) {
 			admins.ListAdminScans(c, db)

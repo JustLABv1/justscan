@@ -401,6 +401,9 @@ export const createHelmScans = (
 export const updateRateLimit = (limit: number) =>
   req<{ limit: number }>('PUT', '/api/v1/admin/settings/rate-limit', { limit });
 
+export const updateRegisterRateLimit = (limit: number) =>
+  req<{ limit: number }>('PUT', '/api/v1/admin/settings/register-rate-limit', { limit });
+
 // Vuln KB
 export const listKBEntries = (q?: string, severity?: string, page = 1, limit = 50, exploit?: boolean, minCvss?: number, publishedAfter?: string) => {
   const params = new URLSearchParams();

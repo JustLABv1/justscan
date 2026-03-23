@@ -1,4 +1,4 @@
-FROM aquasecurity/trivy:latest AS trivy-bin
+FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
 
 FROM node:24.7-alpine AS base
 

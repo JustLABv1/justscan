@@ -322,7 +322,7 @@ export default function StatusPagesPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                     <div className="space-y-1.5">
                       <Label className={fieldLabelCls}>Name</Label>
-                      <Input className={fieldCls} placeholder="Production Containers" value={name} onChange={event => setName(event.target.value)} isRequired />
+                      <Input className={fieldCls} placeholder="Production Containers" value={name} onChange={event => setName(event.target.value)} required />
                     </div>
                     <div className="space-y-1.5">
                       <Label className={fieldLabelCls}>Slug</Label>
@@ -396,47 +396,49 @@ export default function StatusPagesPage() {
                     </div>
                   </div>
 
-                  <Select
-                    placeholder={loadingOptions ? 'Loading image tags...' : 'Select one or more image tags'}
-                    selectionMode="multiple"
-                    selectedKeys={selectedTargetKeys}
-                    onSelectionChange={selection => {
-                      if (selection === 'all') {
-                        setSelectedTargetKeys(new Set(targetOptions.map(option => option.id)));
-                        return;
-                      }
-                      setSelectedTargetKeys(new Set(Array.from(selection).map(String)));
-                    }}
-                    isDisabled={includeAllTags}
-                    className="w-full"
-                  >
+                  <div className="space-y-1.5">
                     <Label className={fieldLabelCls}>Selected Image Tags</Label>
-                    <Select.Trigger className={`${selectTriggerCls} min-h-12`}>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox selectionMode="multiple">
-                        {targetOptions.map(option => (
-                          <ListBox.Item id={option.id} key={option.id} textValue={option.label}>
-                            <div className="grid w-full grid-cols-[minmax(0,1fr)_3rem_1.25rem] items-start gap-3">
-                              <div className="min-w-0">
-                                <p className="font-mono text-sm break-words text-zinc-800 dark:text-zinc-100">{option.label}</p>
-                                <p className="text-xs text-zinc-500 mt-0.5">{option.latest_status} · {timeAgo(option.observed_at)}</p>
+                    <div
+                      className={`rounded-xl overflow-hidden border${includeAllTags ? ' opacity-50 pointer-events-none' : ''}`}
+                      style={{ borderColor: 'var(--glass-border)', background: 'var(--input-bg)' }}
+                    >
+                      {loadingOptions ? (
+                        <p className="px-3 py-3 text-sm text-zinc-500">Loading image tags…</p>
+                      ) : (
+                        <ListBox
+                          selectionMode="multiple"
+                          selectedKeys={selectedTargetKeys}
+                          onSelectionChange={selection => {
+                            if (selection === 'all') {
+                              setSelectedTargetKeys(new Set(targetOptions.map(option => option.id)));
+                              return;
+                            }
+                            setSelectedTargetKeys(new Set(Array.from(selection as Set<string>)));
+                          }}
+                          aria-label="Selected image tags"
+                          className="max-h-64 overflow-y-auto"
+                        >
+                          {targetOptions.map(option => (
+                            <ListBox.Item id={option.id} key={option.id} textValue={option.label}>
+                              <div className="grid w-full grid-cols-[minmax(0,1fr)_3rem_1.25rem] items-start gap-3">
+                                <div className="min-w-0">
+                                  <p className="font-mono text-sm break-words text-zinc-800 dark:text-zinc-100">{option.label}</p>
+                                  <p className="text-xs text-zinc-500 mt-0.5">{option.latest_status} · {timeAgo(option.observed_at)}</p>
+                                </div>
+                                <div className="pt-0.5 text-right text-xs text-zinc-500">
+                                  <p>C {option.critical_count}</p>
+                                  <p>H {option.high_count}</p>
+                                </div>
+                                <div className="flex justify-end pt-0.5">
+                                  <ListBox.ItemIndicator className="shrink-0 text-violet-400" />
+                                </div>
                               </div>
-                              <div className="pt-0.5 text-right text-xs text-zinc-500">
-                                <p>C {option.critical_count}</p>
-                                <p>H {option.high_count}</p>
-                              </div>
-                              <div className="flex justify-end pt-0.5">
-                                <ListBox.ItemIndicator className="shrink-0 text-violet-400" />
-                              </div>
-                            </div>
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      )}
+                    </div>
+                  </div>
                   <p className="text-xs text-zinc-500">Choose one or more `image:tag` entries, or enable “Include all image tags”.</p>
                   {!includeAllTags && selectedTargets.length > 0 && (
                     <div className="flex flex-wrap gap-2">

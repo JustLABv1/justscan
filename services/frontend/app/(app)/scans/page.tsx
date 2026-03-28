@@ -51,7 +51,7 @@ function StatusBadge({ status }: { status: string }) {
       className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap"
       style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}` }}
     >
-      <span className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`} />
+      <span className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`} aria-hidden />
       {s.label ?? status}
     </span>
   );
@@ -126,14 +126,14 @@ function ImageChildren({
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                  <th className="w-8 px-3 py-2" />
-                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Tag</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Tags</th>
-                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }}>C</th>
-                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }}>H</th>
-                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }}>M</th>
-                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }}>L</th>
+                  <th className="w-8 px-3 py-2" scope="col" />
+                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Tag</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Status</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Tags</th>
+                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }} title="Critical vulnerabilities" scope="col"><abbr title="Critical">C</abbr></th>
+                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }} title="High vulnerabilities" scope="col"><abbr title="High">H</abbr></th>
+                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }} title="Medium vulnerabilities" scope="col"><abbr title="Medium">M</abbr></th>
+                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }} title="Low vulnerabilities" scope="col"><abbr title="Low">L</abbr></th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Date</th>
                   <th className="px-4 py-2" />
                 </tr>
@@ -197,16 +197,18 @@ function ImageChildren({
                             onClick={e => { e.stopPropagation(); onCancel(scan.id); }}
                             className="text-zinc-400 hover:text-amber-400 transition-colors"
                             title="Cancel scan"
+                            aria-label="Cancel scan"
                           >
-                            <Cancel01Icon size={15} />
+                            <Cancel01Icon size={15} aria-hidden />
                           </button>
                         )}
                         <button
                           onClick={e => { e.stopPropagation(); onDelete(scan.id); }}
                           className="text-zinc-400 hover:text-red-400 transition-colors"
                           title="Delete scan"
+                          aria-label="Delete scan"
                         >
-                          <Delete01Icon size={15} />
+                          <Delete01Icon size={15} aria-hidden />
                         </button>
                       </div>
                     </td>

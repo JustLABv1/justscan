@@ -77,6 +77,28 @@ func InitWorker(db *bun.DB) {
 
 	log.Infof("Scanner worker pool started with concurrency=%d", concurrency)
 
+	// Periodically refresh trivy databases for all workers so they stay current
+	// even when no scans are running (e.g. after a startup where the initial
+	// warmup failed due to the network not being ready yet).
+	go func() {
+		refreshInterval := time.Duration(config.Config.Scanner.DBMaxAgeHours) * time.Hour
+		if refreshInterval <= 0 {
+			refreshInterval = 12 * time.Hour
+		}
+		ticker := time.NewTicker(refreshInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			for i := 0; i < concurrency; i++ {
+				dir := workerCacheDir(i)
+				if _, err := EnsureDatabasesFresh(context.Background(), dir); err != nil {
+					log.Warnf("Periodic DB refresh for worker %d failed: %v", i, err)
+				} else {
+					log.Infof("Periodic DB refresh for worker %d completed", i)
+				}
+			}
+		}
+	}()
+
 	// Backfill vuln_kb from existing vulnerabilities (best-effort, runs once in background)
 	go backfillKB(db)
 }

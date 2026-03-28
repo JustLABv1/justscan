@@ -116,7 +116,7 @@ function ScannerHealthPanel() {
           </div>
 
           <div className="rounded-xl px-4 py-3 text-xs text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-            Status is based on the Trivy DB snapshot timestamps reported by each worker cache, not only when that cache was downloaded locally. Max allowed snapshot age: {health.max_allowed_age_hours}h.
+            Status is based on when each worker last downloaded its local DB copy. A worker is healthy if it downloaded within the last {health.max_allowed_age_hours}h.
           </div>
 
           <div className="space-y-2">

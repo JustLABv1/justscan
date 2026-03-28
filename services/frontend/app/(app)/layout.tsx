@@ -12,6 +12,7 @@ import {
   Logout02Icon,
   Moon02Icon,
   PackageIcon,
+  Search01Icon,
   ServerStack01Icon,
   Settings01Icon,
   Shield01Icon,
@@ -25,6 +26,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { Logo } from '@/components/logo';
+import { SearchModal } from '@/components/search';
 import { ToastProvider } from '@/components/toast';
 
 const navItems = [
@@ -47,6 +49,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<{ username?: string; email?: string; role?: string } | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     if (!getToken()) {
@@ -58,6 +61,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setAuthReady(true);
     if (localStorage.getItem('sidebar_collapsed') === 'true') setCollapsed(true);
   }, [router]);
+
+  // Global Cmd+K / Ctrl+K shortcut to open search
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   function toggleCollapsed() {
     setCollapsed(prev => {
@@ -86,6 +101,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <ToastProvider>
+    {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
     <div className="flex h-screen app-bg overflow-hidden">
       {/* Sidebar */}
       <aside
@@ -123,6 +139,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           >
             JustScan
           </span>
+        </div>
+
+        {/* Search button */}
+        <div className="px-2 pb-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <button
+            onClick={() => setSearchOpen(true)}
+            title="Search (⌘K)"
+            aria-label="Open search"
+            className={`w-full flex items-center rounded-xl px-3 py-2 text-sm transition-all duration-150 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 ${collapsed ? 'justify-center' : 'gap-2.5'}`}
+            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(167,139,250,0.3)')}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--glass-border)')}
+          >
+            <Search01Icon size={15} className="shrink-0" />
+            <span
+              className="flex-1 text-left overflow-hidden transition-all duration-300 text-xs"
+              style={{ maxWidth: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1 }}
+            >
+              Search…
+            </span>
+            {!collapsed && (
+              <kbd className="text-[9px] font-mono px-1 py-0.5 rounded text-zinc-500"
+                style={{ background: 'var(--row-divider)', border: '1px solid var(--glass-border)' }}>
+                ⌘K
+              </kbd>
+            )}
+          </button>
         </div>
 
         {/* Navigation */}

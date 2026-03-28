@@ -495,16 +495,15 @@ func shouldRefreshDatabases(info *TrivyRuntimeInfo) bool {
 }
 
 func dbNeedsRefresh(info TrivyDatabaseInfo, now time.Time, maxAge time.Duration) bool {
-	if info.UpdatedAt == nil || info.DownloadedAt == nil {
+	if info.DownloadedAt == nil {
 		return true
 	}
-	if now.Sub(*info.UpdatedAt) > maxAge {
-		return true
-	}
-	if info.NextUpdate != nil && now.After(*info.NextUpdate) {
-		return true
-	}
-	return false
+	// Use DownloadedAt (when we last synced locally) as the sole freshness signal.
+	// UpdatedAt is the upstream publication date and doesn't change until Trivy
+	// publishes a new DB — it caused constant re-downloads when checked directly.
+	// NextUpdate is set from the DB metadata at publish time, so it can be days in
+	// the past if the upstream DB hasn't been re-published, making it unreliable.
+	return now.Sub(*info.DownloadedAt) > maxAge
 }
 
 func parseTrivyRuntimeInfo(raw string) *TrivyRuntimeInfo {

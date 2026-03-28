@@ -1,5 +1,5 @@
 'use client';
-import { DashboardStats, DashboardTrendPoint, getDashboardTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
+import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
     Activity01Icon,
@@ -258,10 +258,206 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
 }
 
 
+// ── Vulnerability Trend Chart ─────────────────────────────────────────
+const VULN_TREND_LINES = [
+  { key: 'critical' as const, label: 'Critical', color: '#f87171', width: 2 },
+  { key: 'high'     as const, label: 'High',     color: '#fb923c', width: 1.5 },
+  { key: 'medium'   as const, label: 'Medium',   color: '#fbbf24', width: 1 },
+  { key: 'low'      as const, label: 'Low',      color: '#60a5fa', width: 1 },
+];
+
+function VulnTrendChart({ data, period, onPeriod }: {
+  data: DashboardVulnTrendPoint[];
+  period: number;
+  onPeriod: (d: number) => void;
+}) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  const W = 600, H = 140, PAD_T = 8, PAD_B = 24, PAD_X = 4;
+  const chartH = H - PAD_T - PAD_B;
+
+  const allValues = data.flatMap(d => [d.critical, d.high, d.medium, d.low]);
+  const maxVal = Math.max(...allValues, 1);
+
+  function xPos(i: number) {
+    return data.length < 2
+      ? W / 2
+      : PAD_X + (i / (data.length - 1)) * (W - PAD_X * 2);
+  }
+  function yPos(v: number) {
+    return PAD_T + chartH - (v / maxVal) * chartH;
+  }
+
+  function makePath(key: 'critical' | 'high' | 'medium' | 'low') {
+    if (data.length < 2) return '';
+    const pts = data.map((d, i) => [xPos(i), yPos(d[key])] as [number, number]);
+    let p = `M${pts[0]![0].toFixed(1)},${pts[0]![1].toFixed(1)}`;
+    for (let i = 1; i < pts.length; i++) {
+      const cpx = ((pts[i - 1]![0] + pts[i]![0]) / 2).toFixed(1);
+      p += ` C${cpx},${pts[i - 1]![1].toFixed(1)} ${cpx},${pts[i]![1].toFixed(1)} ${pts[i]![0].toFixed(1)},${pts[i]![1].toFixed(1)}`;
+    }
+    return p;
+  }
+
+  const hoverPoint = hoverIdx !== null ? data[hoverIdx] : null;
+  const hoverX = hoverIdx !== null ? xPos(hoverIdx) : null;
+
+  const PERIODS = [7, 14, 30] as const;
+
+  return (
+    <div className="relative rounded-2xl p-5 z-10" style={glassCard()}>
+      <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
+        style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.2), transparent)' }} />
+
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+            style={{ background: 'rgba(124,58,237,0.2)', boxShadow: '0 0 14px rgba(124,58,237,0.3)' }}>
+            <Activity01Icon size={17} color="#a78bfa" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Vulnerability Trend</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">Findings from completed scans over time</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {PERIODS.map(d => (
+            <button
+              key={d}
+              onClick={() => onPeriod(d)}
+              className="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150"
+              style={period === d
+                ? { background: 'rgba(124,58,237,0.25)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)' }
+                : { background: 'var(--row-hover)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }}
+              aria-pressed={period === d}
+              aria-label={`Show last ${d} days`}
+            >
+              {d}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {data.length === 0 ? (
+        <p className="text-sm text-zinc-500 py-8 text-center">No completed scans in this period</p>
+      ) : (
+        <>
+          {/* Legend */}
+          <div className="flex items-center gap-4 mb-3 flex-wrap">
+            {VULN_TREND_LINES.map(({ key, label, color }) => (
+              <span key={key} className="flex items-center gap-1.5 text-xs" style={{ color }}>
+                <span className="w-4 h-0.5 rounded-full inline-block" style={{ background: color, boxShadow: `0 0 4px ${color}80` }} />
+                {label}
+              </span>
+            ))}
+          </div>
+
+          {/* Chart */}
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            className="w-full cursor-crosshair"
+            style={{ height: H }}
+            aria-label={`Vulnerability trend chart for the last ${period} days`}
+            onMouseMove={e => {
+              const r = e.currentTarget.getBoundingClientRect();
+              const x = ((e.clientX - r.left) / r.width) * W;
+              const idx = Math.round((x / W) * (data.length - 1));
+              setHoverIdx(Math.max(0, Math.min(data.length - 1, idx)));
+            }}
+            onMouseLeave={() => setHoverIdx(null)}
+          >
+            {/* Zero axis line */}
+            <line x1={0} x2={W} y1={PAD_T + chartH} y2={PAD_T + chartH}
+              stroke="var(--row-divider)" strokeWidth="1" />
+
+            {/* Grid lines (3 horizontal) */}
+            {[0.25, 0.5, 0.75].map(f => (
+              <line key={f}
+                x1={0} x2={W}
+                y1={(PAD_T + chartH - f * chartH).toFixed(1)}
+                y2={(PAD_T + chartH - f * chartH).toFixed(1)}
+                stroke="var(--row-divider)" strokeWidth="0.5" strokeDasharray="4 4" />
+            ))}
+
+            {/* Trend lines */}
+            {VULN_TREND_LINES.map(({ key, color, width }) => {
+              const path = makePath(key);
+              return path ? (
+                <path key={key} d={path} fill="none" stroke={color}
+                  strokeWidth={width} strokeLinecap="round" strokeLinejoin="round"
+                  style={{ filter: `drop-shadow(0 0 3px ${color}60)` }} />
+              ) : null;
+            })}
+
+            {/* Hover vertical line */}
+            {hoverX !== null && (
+              <line x1={hoverX} x2={hoverX} y1={PAD_T} y2={PAD_T + chartH}
+                stroke="rgba(167,139,250,0.3)" strokeWidth="1" strokeDasharray="3 3" />
+            )}
+
+            {/* Hover dots */}
+            {hoverIdx !== null && hoverPoint && VULN_TREND_LINES.map(({ key, color }) => (
+              <circle key={key}
+                cx={xPos(hoverIdx)}
+                cy={yPos(hoverPoint[key])}
+                r="3.5" fill={color}
+                style={{ filter: `drop-shadow(0 0 5px ${color})` }} />
+            ))}
+
+            {/* Hover tooltip */}
+            {hoverIdx !== null && hoverPoint && (() => {
+              const dateStr = new Date(hoverPoint.date).toLocaleDateString('en', { month: 'short', day: 'numeric' });
+              const tipX = hoverX!;
+              const tipW = 110, tipH = 86;
+              const tipXclamped = Math.max(2, Math.min(W - tipW - 2, tipX - tipW / 2));
+              return (
+                <g>
+                  <rect x={tipXclamped} y={2} width={tipW} height={tipH} rx={5}
+                    fill="rgba(10,10,15,0.88)" stroke="rgba(167,139,250,0.25)" strokeWidth="0.75" />
+                  <text x={tipXclamped + 8} y={16} fontSize={9} fontWeight="600"
+                    fill="rgba(255,255,255,0.5)" fontFamily="ui-sans-serif,system-ui">
+                    {dateStr}
+                  </text>
+                  {VULN_TREND_LINES.map(({ key, label, color }, li) => (
+                    <g key={key}>
+                      <rect x={tipXclamped + 8} y={22 + li * 15} width={6} height={6} rx={1.5} fill={color} />
+                      <text x={tipXclamped + 18} y={29 + li * 15} fontSize={9} fill={color} fontFamily="ui-monospace,monospace">
+                        {label}: {hoverPoint[key]}
+                      </text>
+                    </g>
+                  ))}
+                </g>
+              );
+            })()}
+
+            {/* X-axis date labels */}
+            {data.length > 0 && (() => {
+              const step = Math.max(1, Math.floor(data.length / 5));
+              return data.filter((_, i) => i === 0 || i === data.length - 1 || i % step === 0).map((d, _, arr) => {
+                const origIdx = data.indexOf(d);
+                const dateStr = new Date(d.date).toLocaleDateString('en', { month: 'short', day: 'numeric' });
+                const x = xPos(origIdx);
+                return (
+                  <text key={d.date} x={x} y={H - 4} textAnchor="middle"
+                    fontSize={8} fill="rgba(113,113,122,0.7)" fontFamily="ui-sans-serif,system-ui">
+                    {dateStr}
+                  </text>
+                );
+              });
+            })()}
+          </svg>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── page ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [trends, setTrends] = useState<DashboardTrendPoint[]>([]);
+  const [vulnTrends, setVulnTrends] = useState<DashboardVulnTrendPoint[]>([]);
+  const [vulnTrendPeriod, setVulnTrendPeriod] = useState(30);
   const [scannerHealth, setScannerHealth] = useState<ScannerHealth | null>(null);
   const [scannerHealthError, setScannerHealthError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -279,17 +475,26 @@ export default function DashboardPage() {
     Promise.all([
       getStats(),
       getDashboardTrends().catch(() => [] as DashboardTrendPoint[]),
+      getDashboardVulnTrends(vulnTrendPeriod).catch(() => [] as DashboardVulnTrendPoint[]),
       healthPromise,
     ])
-      .then(([s, t, healthResult]) => {
+      .then(([s, t, vt, healthResult]) => {
         setStats(s);
         setTrends(t);
+        setVulnTrends(vt);
         setScannerHealth(healthResult.health);
         setScannerHealthError(healthResult.error);
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [isAdmin]);
+  }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleVulnPeriodChange(days: number) {
+    setVulnTrendPeriod(days);
+    getDashboardVulnTrends(days)
+      .then(setVulnTrends)
+      .catch(() => setVulnTrends([]));
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -487,6 +692,9 @@ export default function DashboardPage() {
           })}
         </div>
       </div>
+
+      {/* ── Vulnerability Trend Chart ── */}
+      <VulnTrendChart data={vulnTrends} period={vulnTrendPeriod} onPeriod={handleVulnPeriodChange} />
 
       {/* ── Bottom row ── */}
       <div className="relative grid md:grid-cols-2 gap-4 z-10">

@@ -304,6 +304,14 @@ export const getScanTrends = (imageName?: string, imageTag?: string, days = 30) 
 export const getDashboardTrends = () =>
   req<{ data: DashboardTrendPoint[] }>('GET', '/api/v1/dashboard/trends').then(r => r.data ?? []);
 
+// Dashboard vulnerability trends
+export const getDashboardVulnTrends = (days = 30) =>
+  req<{ data: DashboardVulnTrendPoint[] }>('GET', `/api/v1/dashboard/vuln-trends?days=${days}`).then(r => r.data ?? []);
+
+// Global search
+export const search = (q: string) =>
+  req<{ images: SearchImageResult[]; vulns: SearchVulnResult[] }>('GET', `/api/v1/search/?q=${encodeURIComponent(q)}`);
+
 // Org risk score
 export const getOrgRiskScore = (orgId: string) =>
   req<OrgRiskScore>('GET', `/api/v1/orgs/${orgId}/risk`);
@@ -797,6 +805,27 @@ export interface DashboardTrendPoint {
   total: number;
   completed: number;
   failed: number;
+}
+
+export interface DashboardVulnTrendPoint {
+  date: string;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  unknown: number;
+}
+
+export interface SearchImageResult {
+  image_name: string;
+  scan_count: number;
+}
+
+export interface SearchVulnResult {
+  vuln_id: string;
+  pkg_name: string;
+  severity: string;
+  scan_count: number;
 }
 
 export interface OrgRiskScore {

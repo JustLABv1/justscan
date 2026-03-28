@@ -52,6 +52,7 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 		SharedScans(v1, db)
 		AutoTags(v1, db)
 		StatusPages(v1, db)
+		Search(v1, db)
 	}
 
 	server := &http.Server{

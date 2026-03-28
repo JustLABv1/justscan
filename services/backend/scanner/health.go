@@ -71,10 +71,10 @@ func GetHealthReport(ctx context.Context) HealthReport {
 		worker.TrivyVersion = info.Version
 		worker.VulnDBUpdatedAt = info.VulnerabilityDB.UpdatedAt
 		worker.VulnDBDownloadedAt = info.VulnerabilityDB.DownloadedAt
-		worker.VulnDBAgeHours = ageHours(now, info.VulnerabilityDB.UpdatedAt)
+		worker.VulnDBAgeHours = ageHours(now, info.VulnerabilityDB.DownloadedAt)
 		worker.JavaDBUpdatedAt = info.JavaDB.UpdatedAt
 		worker.JavaDBDownloadedAt = info.JavaDB.DownloadedAt
-		worker.JavaDBAgeHours = ageHours(now, info.JavaDB.UpdatedAt)
+		worker.JavaDBAgeHours = ageHours(now, info.JavaDB.DownloadedAt)
 
 		if shouldRefreshDatabases(info) {
 			worker.Status = "stale"

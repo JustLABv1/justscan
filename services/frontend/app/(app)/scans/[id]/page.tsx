@@ -1,5 +1,7 @@
 'use client';
 import { useToast } from '@/components/toast';
+import { SeverityBadge, SourceBadge, StatusBadge } from '@/components/ui/badges';
+import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import {
     addTagToScan,
     assignScanToOrg,
@@ -41,16 +43,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
-const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  CRITICAL: { label: 'Critical', color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20' },
-  HIGH:     { label: 'High',     color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
-  MEDIUM:   { label: 'Medium',   color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
-  LOW:      { label: 'Low',      color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20' },
-  UNKNOWN:  { label: 'Unknown',  color: 'text-zinc-400',   bg: 'bg-zinc-500/10',   border: 'border-zinc-500/20' },
-};
-
 function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
-  // null means this vulnerability was not found in any earlier scan of this image — it's new.
   if (!firstSeenAt) {
     return (
       <span className="text-xs font-semibold px-2 py-0.5 rounded-md" style={{ color: '#fb923c', background: 'rgba(249,115,22,0.12)' }}>
@@ -59,48 +52,6 @@ function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
     );
   }
   return <span className="text-xs text-zinc-500">{timeAgo(firstSeenAt)}</span>;
-}
-
-function SeverityBadge({ severity }: { severity: string }) {
-  const cfg = SEV_CONFIG[severity] ?? SEV_CONFIG.UNKNOWN;
-  return (
-    <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
-      {cfg.label}
-    </span>
-  );
-}
-
-function SourceBadge({ source }: { source?: string }) {
-  const normalized = (source ?? '').trim().toLowerCase();
-  const isOSV = normalized === 'osv.dev';
-  return (
-    <span
-      className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0"
-      style={isOSV
-        ? { background: 'rgba(59,130,246,0.14)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.24)' }
-        : { background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.22)' }}
-      title={source || (isOSV ? 'OSV supplemental finding' : 'Trivy finding')}
-    >
-      {isOSV ? 'OSV.dev' : 'Trivy'}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { cls: string; label?: string }> = {
-    completed: { cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' },
-    failed:    { cls: 'bg-red-500/15 text-red-400 border-red-500/20' },
-    running:   { cls: 'bg-blue-500/15 text-blue-400 border-blue-500/20' },
-    pending:   { cls: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/20', label: 'queued' },
-    cancelled: { cls: 'bg-amber-500/15 text-amber-400 border-amber-500/20' },
-  };
-  const { cls, label } = map[status] ?? map.pending;
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${cls}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${status === 'running' ? 'animate-pulse bg-blue-400' : 'bg-current'}`} />
-      {label ?? status}
-    </span>
-  );
 }
 
 function ScannerDatabaseCard({
@@ -290,7 +241,7 @@ export default function ScanDetailPage() {
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [vulnTotal, setVulnTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [activeTab, setActiveTab] = useState<'vulns' | 'sbom'>('vulns');
+  const [activeTab, setActiveTab] = useState<'vulns' | 'sbom' | 'details'>('vulns');
   const [sbomComponents, setSbomComponents] = useState<SBOMComponent[]>([]);
   const [sbomTotal, setSbomTotal] = useState(0);
   const [sbomLoading, setSbomLoading] = useState(false);
@@ -599,11 +550,7 @@ export default function ScanDetailPage() {
     }
   }
 
-  if (loading) return (
-    <div className="flex justify-center items-center h-64">
-      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
-    </div>
-  );
+  if (loading) return <ScanDetailSkeleton />;
 
   if (error) return (
     <div className="p-6">
@@ -620,10 +567,10 @@ export default function ScanDetailPage() {
   const currentUser = getUser();
 
   const sevCards = [
-    { count: scan.critical_count, ...SEV_CONFIG.CRITICAL },
-    { count: scan.high_count,     ...SEV_CONFIG.HIGH },
-    { count: scan.medium_count,   ...SEV_CONFIG.MEDIUM },
-    { count: scan.low_count,      ...SEV_CONFIG.LOW },
+    { count: scan.critical_count, label: 'Critical', color: 'text-red-400',    border: 'border-red-500/20'    },
+    { count: scan.high_count,     label: 'High',     color: 'text-orange-400', border: 'border-orange-500/20' },
+    { count: scan.medium_count,   label: 'Medium',   color: 'text-yellow-400', border: 'border-yellow-500/20' },
+    { count: scan.low_count,      label: 'Low',      color: 'text-blue-400',   border: 'border-blue-500/20'   },
   ];
 
   return (
@@ -839,27 +786,7 @@ export default function ScanDetailPage() {
         ))}
       </div>
 
-    {(scan.trivy_version || scan.trivy_vuln_db_updated_at || scan.trivy_java_db_updated_at) && (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-      <div className="glass-panel rounded-xl p-4">
-      <p className="text-xs text-zinc-500 mb-1">Scanner</p>
-      <p className="text-sm font-medium text-zinc-900 dark:text-white">Trivy {scan.trivy_version || 'unknown'}</p>
-      <p className="text-xs text-zinc-500 mt-1">
-        {scan.completed_at ? `DB snapshot captured ${timeAgo(scan.completed_at)}` : 'DB snapshot captured when this scan completed'}
-      </p>
-      </div>
-      <ScannerDatabaseCard
-      label="Vulnerability DB"
-      updatedAt={scan.trivy_vuln_db_updated_at}
-      downloadedAt={scan.trivy_vuln_db_downloaded_at}
-      />
-      <ScannerDatabaseCard
-      label="Java DB"
-      updatedAt={scan.trivy_java_db_updated_at}
-      downloadedAt={scan.trivy_java_db_downloaded_at}
-      />
-    </div>
-    )}
+    {/* Scanner info moved to Details tab */}
 
       {/* Error banner — shown when scan failed */}
       {scan.status === 'failed' && scan.error_message && (
@@ -875,137 +802,7 @@ export default function ScanDetailPage() {
         </div>
       )}
 
-      {/* Tags + Compliance compact bar */}
-      {(allTags.length > 0 || allOrgs.length > 0 || compliance.length > 0) && (
-        <div className="glass-panel rounded-xl px-4 py-3">
-          <div className="flex items-center gap-4 flex-wrap">
-            {/* Tags inline */}
-            {allTags.length > 0 && (
-              <div className={`flex items-center gap-2 flex-wrap ${(allOrgs.length > 0 || compliance.length > 0) ? 'pr-4 border-r border-zinc-200 dark:border-zinc-800' : ''}`}>
-                <PencilEdit01Icon size={13} className="text-zinc-500 shrink-0" />
-                {allTags.map((tag) => {
-                  const active = (scan.tags ?? []).some((t) => t.id === tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      onClick={() => toggleTag(tag)}
-                      disabled={tagLoading === tag.id}
-                      className={`text-xs px-2.5 py-0.5 rounded-full font-medium border transition-all disabled:opacity-50 ${
-                        !active ? 'text-zinc-500 border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600' : ''
-                      }`}
-                      style={active ? { background: tag.color + '22', color: tag.color, borderColor: tag.color + '50' } : undefined}
-                    >
-                      {tag.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Compliance inline */}
-            {(allOrgs.length > 0 || compliance.length > 0) && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <ShieldKeyIcon size={13} className="text-zinc-500 shrink-0" />
-                {compliance.length === 0 ? (
-                  <>
-                    <span className="text-xs text-zinc-500">No org assigned</span>
-                    {allOrgs.map((org) => (
-                      <button
-                        key={org.id}
-                        onClick={() => handleAssignOrg(org.id)}
-                        className="text-xs px-2.5 py-0.5 rounded-full font-medium border transition-colors"
-                        style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
-                      >
-                        + {org.name}
-                      </button>
-                    ))}
-                  </>
-                ) : (
-                  <>
-                    {Object.entries(
-                      compliance.reduce(
-                        (acc, r) => {
-                          const key = r.org_name ?? r.org_id;
-                          if (!acc[key]) acc[key] = { org_id: r.org_id, org_name: r.org_name ?? r.org_id, results: [] };
-                          acc[key].results.push(r);
-                          return acc;
-                        },
-                        {} as Record<string, { org_id: string; org_name: string; results: ComplianceResult[] }>,
-                      ),
-                    ).map(([, { org_id, org_name, results }]) => {
-                      const allPass = results.every((r) => r.status === 'pass');
-                      return (
-                        <div key={org_id} className="flex items-center gap-1">
-                          <button
-                            onClick={() => setExpandedOrg(expandedOrg === org_id ? null : org_id)}
-                            className="flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-full font-medium border transition-all"
-                            style={allPass
-                              ? { background: 'rgba(16,185,129,0.1)', color: '#34d399', borderColor: 'rgba(16,185,129,0.25)' }
-                              : { background: 'rgba(239,68,68,0.1)', color: '#f87171', borderColor: 'rgba(239,68,68,0.25)' }}
-                          >
-                            {allPass ? '✓' : '✗'} {org_name}
-                          </button>
-                          <button
-                            onClick={() => handleRemoveOrg(org_id)}
-                            className="text-zinc-500 hover:text-red-400 transition-colors text-sm px-1"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      );
-                    })}
-                    {allOrgs
-                      .filter((o) => !compliance.some((c) => c.org_id === o.id))
-                      .map((org) => (
-                        <button
-                          key={org.id}
-                          onClick={() => handleAssignOrg(org.id)}
-                          className="text-xs px-2.5 py-0.5 rounded-full font-medium border transition-colors"
-                          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
-                        >
-                          + {org.name}
-                        </button>
-                      ))}
-                    <button
-                      onClick={handleReEvaluate}
-                      disabled={complianceLoading}
-                      className="text-xs text-zinc-500 hover:text-violet-400 transition-colors disabled:opacity-40 ml-1"
-                    >
-                      {complianceLoading ? '…' : 'Re-evaluate'}
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Expandable compliance details */}
-          {expandedOrg && (
-            <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-1.5">
-              {compliance.filter((r) => r.org_id === expandedOrg).map((r) => (
-                <div key={r.id} className="space-y-0.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`text-xs ${r.status === 'pass' ? 'text-emerald-500' : 'text-red-400'}`}>
-                      {r.status === 'pass' ? '✓' : '✗'}
-                    </span>
-                    <span className="text-xs text-zinc-500">{r.policy_name}</span>
-                  </div>
-                  {r.violations && r.violations.length > 0 && (
-                    <ul className="ml-4 space-y-0.5">
-                      {r.violations.slice(0, 3).map((v, i) => (
-                        <li key={i} className="text-xs text-zinc-500">{v.message}</li>
-                      ))}
-                      {r.violations.length > 3 && (
-                        <li className="text-xs text-zinc-500">+{r.violations.length - 3} more</li>
-                      )}
-                    </ul>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Tags + Compliance + Scanner info → moved to Details tab */}
 
       {/* Scanning animation */}
       {(scan.status === 'pending' || scan.status === 'running') && (
@@ -1016,16 +813,20 @@ export default function ScanDetailPage() {
       {scan.status !== 'pending' && scan.status !== 'running' && (
         <div className="flex items-center gap-1 p-1 rounded-xl w-fit"
           style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-          {(['vulns', 'sbom'] as const).map(tab => (
+          {([
+            { id: 'vulns',   label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities' },
+            { id: 'sbom',    label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
+            { id: 'details', label: 'Details' },
+          ] as { id: 'vulns' | 'sbom' | 'details'; label: string }[]).map(({ id, label }) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              key={id}
+              onClick={() => setActiveTab(id)}
               className="px-4 py-1.5 text-sm font-medium rounded-lg transition-all"
-              style={activeTab === tab
+              style={activeTab === id
                 ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', boxShadow: '0 0 12px rgba(124,58,237,0.3)' }
                 : { color: 'var(--text-muted)' }}
             >
-              {tab === 'vulns' ? `Vulnerabilities${vulnTotal ? ` (${vulnTotal})` : ''}` : `SBOM${sbomTotal ? ` (${sbomTotal})` : ''}`}
+              {label}
             </button>
           ))}
         </div>
@@ -1500,6 +1301,159 @@ export default function ScanDetailPage() {
           </div>
         )}
       </div>}
+
+      {/* Details tab */}
+      {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'details' && (
+        <div className="space-y-4">
+
+          {/* Scanner info */}
+          {(scan.trivy_version || scan.trivy_vuln_db_updated_at || scan.trivy_java_db_updated_at) && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Scanner</p>
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="glass-panel rounded-xl p-4">
+                  <p className="text-xs text-zinc-500 mb-1">Scanner</p>
+                  <p className="text-sm font-medium text-zinc-900 dark:text-white">Trivy {scan.trivy_version || 'unknown'}</p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    {scan.completed_at ? `DB snapshot captured ${timeAgo(scan.completed_at)}` : 'DB snapshot captured when this scan completed'}
+                  </p>
+                </div>
+                <ScannerDatabaseCard
+                  label="Vulnerability DB"
+                  updatedAt={scan.trivy_vuln_db_updated_at}
+                  downloadedAt={scan.trivy_vuln_db_downloaded_at}
+                />
+                <ScannerDatabaseCard
+                  label="Java DB"
+                  updatedAt={scan.trivy_java_db_updated_at}
+                  downloadedAt={scan.trivy_java_db_downloaded_at}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Tags */}
+          {allTags.length > 0 && (
+            <div className="glass-panel rounded-xl px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>Tags</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {allTags.map((tag) => {
+                  const active = (scan.tags ?? []).some((t) => t.id === tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      onClick={() => toggleTag(tag)}
+                      disabled={tagLoading === tag.id}
+                      className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-all disabled:opacity-50 ${
+                        !active ? 'text-zinc-500 border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600' : ''
+                      }`}
+                      style={active ? { background: tag.color + '22', color: tag.color, borderColor: tag.color + '50' } : undefined}
+                    >
+                      {tag.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Compliance */}
+          {(allOrgs.length > 0 || compliance.length > 0) && (
+            <div className="glass-panel rounded-xl px-4 py-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Compliance</p>
+                {compliance.length > 0 && (
+                  <button
+                    onClick={handleReEvaluate}
+                    disabled={complianceLoading}
+                    className="text-xs text-zinc-500 hover:text-violet-400 transition-colors disabled:opacity-40"
+                  >
+                    {complianceLoading ? '…' : 'Re-evaluate'}
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {compliance.length === 0 ? (
+                  <>
+                    <span className="text-xs text-zinc-500">No org assigned —</span>
+                    {allOrgs.map((org) => (
+                      <button
+                        key={org.id}
+                        onClick={() => handleAssignOrg(org.id)}
+                        className="text-xs px-2.5 py-1 rounded-full font-medium border transition-colors"
+                        style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
+                      >
+                        + {org.name}
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    {Object.entries(
+                      compliance.reduce((acc, r) => {
+                        const key = r.org_name ?? r.org_id;
+                        if (!acc[key]) acc[key] = { org_id: r.org_id, org_name: r.org_name ?? r.org_id, results: [] };
+                        acc[key].results.push(r);
+                        return acc;
+                      }, {} as Record<string, { org_id: string; org_name: string; results: ComplianceResult[] }>),
+                    ).map(([, { org_id, org_name, results }]) => {
+                      const allPass = results.every((r) => r.status === 'pass');
+                      return (
+                        <div key={org_id} className="flex items-center gap-1">
+                          <button
+                            onClick={() => setExpandedOrg(expandedOrg === org_id ? null : org_id)}
+                            className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium border transition-all"
+                            style={allPass
+                              ? { background: 'rgba(16,185,129,0.1)', color: '#34d399', borderColor: 'rgba(16,185,129,0.25)' }
+                              : { background: 'rgba(239,68,68,0.1)', color: '#f87171', borderColor: 'rgba(239,68,68,0.25)' }}
+                          >
+                            {allPass ? '✓' : '✗'} {org_name}
+                          </button>
+                          <button onClick={() => handleRemoveOrg(org_id)} className="text-zinc-500 hover:text-red-400 transition-colors text-sm px-1">×</button>
+                        </div>
+                      );
+                    })}
+                    {allOrgs.filter((o) => !compliance.some((c) => c.org_id === o.id)).map((org) => (
+                      <button
+                        key={org.id}
+                        onClick={() => handleAssignOrg(org.id)}
+                        className="text-xs px-2.5 py-1 rounded-full font-medium border transition-colors"
+                        style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
+                      >
+                        + {org.name}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+              {expandedOrg && (
+                <div className="mt-2 pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-1.5">
+                  {compliance.filter((r) => r.org_id === expandedOrg).map((r) => (
+                    <div key={r.id} className="space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs ${r.status === 'pass' ? 'text-emerald-500' : 'text-red-400'}`}>
+                          {r.status === 'pass' ? '✓' : '✗'}
+                        </span>
+                        <span className="text-xs text-zinc-500">{r.policy_name}</span>
+                      </div>
+                      {r.violations && r.violations.length > 0 && (
+                        <ul className="ml-4 space-y-0.5">
+                          {r.violations.slice(0, 3).map((v, i) => (
+                            <li key={i} className="text-xs text-zinc-500">{v.message}</li>
+                          ))}
+                          {r.violations.length > 3 && (
+                            <li className="text-xs text-zinc-500">+{r.violations.length - 3} more</li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

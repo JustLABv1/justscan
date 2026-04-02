@@ -263,7 +263,7 @@ export default function SharedScanPage() {
               Export
             </Link>
           )}
-          {scan?.status === 'completed' && (
+          {(scan?.status === 'completed' || scan?.status === 'failed') && (
             <button
               onClick={handleRescan}
               disabled={reScanning}

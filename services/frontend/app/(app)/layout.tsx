@@ -12,6 +12,7 @@ import {
   Logout02Icon,
   Moon02Icon,
   PackageIcon,
+  PlusSignIcon,
   Search01Icon,
   ServerStack01Icon,
   Settings01Icon,
@@ -29,17 +30,37 @@ import { Logo } from '@/components/logo';
 import { SearchModal } from '@/components/search';
 import { ToastProvider } from '@/components/toast';
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon },
-  { href: '/scans', label: 'Scans', Icon: Shield01Icon },
-  { href: '/helm', label: 'Helm Scan', Icon: PackageIcon },
-  { href: '/watchlist', label: 'Watchlist', Icon: AiContentGenerator01Icon },
-  { href: '/status', label: 'Status Pages', Icon: EyeIcon },
-  { href: '/registries', label: 'Registries', Icon: ServerStack01Icon },
-  { href: '/tags', label: 'Tags', Icon: Tag01Icon },
-  { href: '/orgs', label: 'Organizations', Icon: Building04Icon },
-  { href: '/vulnkb', label: 'Vuln KB', Icon: ShieldKeyIcon },
-  { href: '/suppressions', label: 'Suppressions', Icon: GridTableIcon },
+const navGroups = [
+  {
+    label: 'Primary',
+    items: [
+      { href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon },
+      { href: '/scans',     label: 'Scans',     Icon: Shield01Icon },
+    ],
+  },
+  {
+    label: 'Scanning',
+    items: [
+      { href: '/helm',      label: 'Helm Scan',  Icon: PackageIcon },
+      { href: '/watchlist', label: 'Watchlist',  Icon: AiContentGenerator01Icon },
+    ],
+  },
+  {
+    label: 'Security',
+    items: [
+      { href: '/vulnkb',      label: 'Vuln KB',     Icon: ShieldKeyIcon },
+      { href: '/suppressions', label: 'Suppressions', Icon: GridTableIcon },
+    ],
+  },
+  {
+    label: 'Manage',
+    items: [
+      { href: '/status',     label: 'Status Pages',  Icon: EyeIcon },
+      { href: '/registries', label: 'Registries',    Icon: ServerStack01Icon },
+      { href: '/tags',       label: 'Tags',          Icon: Tag01Icon },
+      { href: '/orgs',       label: 'Organizations', Icon: Building04Icon },
+    ],
+  },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -141,8 +162,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </span>
         </div>
 
-        {/* Search button */}
-        <div className="px-2 pb-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        {/* Search + New Scan */}
+        <div className="px-2 pb-2 space-y-1.5" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          {/* Search */}
           <button
             onClick={() => setSearchOpen(true)}
             title="Search (⌘K)"
@@ -166,47 +188,80 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </kbd>
             )}
           </button>
+
+          {/* New Scan CTA */}
+          <Link
+            href="/scans?new=1"
+            title={collapsed ? 'New Scan' : undefined}
+            className={`w-full flex items-center rounded-xl transition-all duration-150 btn-primary-sm ${collapsed ? 'justify-center px-2' : 'gap-2 px-3'}`}
+          >
+            <PlusSignIcon size={14} className="shrink-0" />
+            <span
+              className="overflow-hidden transition-all duration-300"
+              style={{ maxWidth: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1 }}
+            >
+              New Scan
+            </span>
+          </Link>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-0.5">
-          {[...navItems, ...(user?.role === 'admin' ? [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] : [])].map(({ href, label, Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + '/');
-            return (
-              <Link
-                key={href}
-                href={href}
-                title={collapsed ? label : undefined}
-                className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
-                  transition-all duration-150 overflow-hidden whitespace-nowrap group
-                  ${active ? 'text-violet-600 dark:text-violet-200' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                style={active ? {
-                  background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                  boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.2), 0 2px 8px rgba(124,58,237,0.08)',
-                } : undefined}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2">
+          {[
+            ...navGroups,
+            ...(user?.role === 'admin'
+              ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
+              : []),
+          ].map(({ label, items }) => (
+            <div key={label} className="mb-1">
+              {/* Section label — hidden when collapsed */}
+              <div
+                className="nav-section-label transition-all duration-300 overflow-hidden"
+                style={{ maxHeight: collapsed ? 0 : 28, opacity: collapsed ? 0 : 1, paddingTop: collapsed ? 0 : undefined, paddingBottom: collapsed ? 0 : undefined }}
               >
-                {!active && (
-                  <span
-                    className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                    style={{ background: 'var(--row-hover)' }}
-                  />
-                )}
-                {active && (
-                  <span
-                    className="absolute left-0 inset-y-2 w-0.5 rounded-full"
-                    style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
-                  />
-                )}
-                <Icon size={18} className="shrink-0 relative z-10" />
-                <span
-                  className="overflow-hidden transition-all duration-300 relative z-10"
-                  style={{ maxWidth: collapsed ? 0 : 160, opacity: collapsed ? 0 : 1 }}
-                >
-                  {label}
-                </span>
-              </Link>
-            );
-          })}
+                {label}
+              </div>
+              <div className="space-y-0.5">
+                {items.map(({ href, label: itemLabel, Icon }) => {
+                  const active = pathname === href || pathname.startsWith(href + '/');
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      title={collapsed ? itemLabel : undefined}
+                      className={`relative flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium
+                        transition-all duration-150 overflow-hidden whitespace-nowrap group
+                        ${active ? 'text-violet-600 dark:text-violet-200' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                      style={active ? {
+                        background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                        boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.2), 0 2px 8px rgba(124,58,237,0.08)',
+                      } : undefined}
+                    >
+                      {!active && (
+                        <span
+                          className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                          style={{ background: 'var(--row-hover)' }}
+                        />
+                      )}
+                      {active && (
+                        <span
+                          className="absolute left-0 inset-y-2 w-0.5 rounded-full"
+                          style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
+                        />
+                      )}
+                      <Icon size={18} className="shrink-0 relative z-10" />
+                      <span
+                        className="overflow-hidden transition-all duration-300 relative z-10"
+                        style={{ maxWidth: collapsed ? 0 : 160, opacity: collapsed ? 0 : 1 }}
+                      >
+                        {itemLabel}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* Footer */}

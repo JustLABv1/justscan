@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"helm.sh/helm/v3/pkg/action"
@@ -18,6 +19,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"sigs.k8s.io/yaml"
 )
+
+var digestSuffixPattern = regexp.MustCompile(`:([A-Za-z][A-Za-z0-9+._-]*:[0-9a-fA-F]{32,})$`)
 
 // HelmImage represents a container image found in a Helm chart template.
 type HelmImage struct {
@@ -160,16 +163,12 @@ func extractImagesFromChartAnnotations(chrt *chart.Chart) []HelmImage {
 
 	images := make([]HelmImage, 0, len(entries))
 	for index, entry := range entries {
-		fullRef := strings.TrimSpace(entry.Image)
-		if fullRef == "" {
-			continue
-		}
-		name, tag := splitImageRef(fullRef)
-		if name == "" {
+		normalizedRef, name, tag := NormalizeHelmImageRef(entry.Image)
+		if normalizedRef == "" || name == "" {
 			continue
 		}
 		images = append(images, HelmImage{
-			FullRef:    fullRef,
+			FullRef:    normalizedRef,
 			Name:       name,
 			Tag:        tag,
 			SourceFile: "Chart.yaml",
@@ -209,13 +208,13 @@ func extractImageFromValues(chrt *chart.Chart) (HelmImage, bool) {
 		fullRef += ":" + tag
 	}
 
-	name, resolvedTag := splitImageRef(fullRef)
-	if name == "" {
+	normalizedRef, name, resolvedTag := NormalizeHelmImageRef(fullRef)
+	if normalizedRef == "" || name == "" {
 		return HelmImage{}, false
 	}
 
 	return HelmImage{
-		FullRef:    fullRef,
+		FullRef:    normalizedRef,
 		Name:       name,
 		Tag:        resolvedTag,
 		SourceFile: "values.yaml",
@@ -291,12 +290,12 @@ func extractImagesFromYAMLDoc(docYAML, templatePath string) []HelmImage {
 		if rawImage == "" || strings.Contains(rawImage, "{{") {
 			return // skip empty or un-rendered template expressions
 		}
-		name, tag := splitImageRef(rawImage)
-		if name == "" {
+		normalizedRef, name, tag := NormalizeHelmImageRef(rawImage)
+		if normalizedRef == "" || name == "" {
 			return
 		}
 		images = append(images, HelmImage{
-			FullRef:    rawImage,
+			FullRef:    normalizedRef,
 			Name:       name,
 			Tag:        tag,
 			SourceFile: sourceName,
@@ -370,24 +369,61 @@ func walkForImages(obj interface{}, path string, add func(string, string)) {
 	}
 }
 
+// NormalizeHelmImageRef normalizes raw image references so digest-based images
+// use the canonical name@sha256:digest format while still exposing name/tag parts.
+func NormalizeHelmImageRef(ref string) (normalized, name, tag string) {
+	trimmed := strings.TrimSpace(ref)
+	if trimmed == "" {
+		return "", "", ""
+	}
+
+	if idx := strings.LastIndex(trimmed, "@"); idx != -1 {
+		base, digest := trimmed[:idx], strings.TrimSpace(trimmed[idx+1:])
+		namePart, _, _ := splitTagFromName(base)
+		if namePart == "" || digest == "" {
+			return "", "", ""
+		}
+		return namePart + "@" + digest, namePart, digest
+	}
+
+	if match := digestSuffixPattern.FindStringSubmatch(trimmed); len(match) == 2 {
+		digest := match[1]
+		base := strings.TrimSuffix(trimmed, ":"+digest)
+		namePart, _, _ := splitTagFromName(base)
+		if namePart == "" {
+			return "", "", ""
+		}
+		return namePart + "@" + digest, namePart, digest
+	}
+
+	namePart, resolvedTag, explicitTag := splitTagFromName(trimmed)
+	if namePart == "" {
+		return "", "", ""
+	}
+	if explicitTag {
+		return namePart + ":" + resolvedTag, namePart, resolvedTag
+	}
+	return namePart, namePart, resolvedTag
+}
+
 // splitImageRef splits "nginx:1.25.0" into ("nginx", "1.25.0").
 // Handles digests like "nginx@sha256:abc" → ("nginx", "sha256:abc").
 // Returns ("", "") for empty input.
 func splitImageRef(ref string) (name, tag string) {
+	_, name, tag = NormalizeHelmImageRef(ref)
+	return name, tag
+}
+
+func splitTagFromName(ref string) (name, tag string, explicitTag bool) {
 	if ref == "" {
-		return "", ""
+		return "", "", false
 	}
-	// Handle digest references
-	if idx := strings.Index(ref, "@"); idx != -1 {
-		return ref[:idx], ref[idx+1:]
-	}
-	// Handle tag references — find the last colon after any slash
 	lastSlash := strings.LastIndex(ref, "/")
 	lastColon := strings.LastIndex(ref, ":")
 	if lastColon > lastSlash {
-		return ref[:lastColon], ref[lastColon+1:]
+		return ref[:lastColon], ref[lastColon+1:], true
 	}
-	return ref, "latest"
+	return ref, "latest", false
 }
 
 // getMap safely navigates a map[string]interface{} chain.

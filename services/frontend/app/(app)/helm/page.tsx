@@ -1,33 +1,34 @@
 'use client';
 import { useToast } from '@/components/toast';
 import {
-  AdminScan,
-  createHelmScans,
-  createShare,
-  extractHelmImages,
-  getTokenType,
-  HelmExtractResponse,
-  listAdminScans,
-  listScans,
-  listTags,
-  Scan,
-  Tag,
+    createHelmScans,
+    createShare,
+    extractHelmImages,
+    getTokenType,
+    HelmExtractResponse,
+    HelmScanRunSummary,
+    listHelmScanRuns,
+    listTags,
+    Tag,
 } from '@/lib/api';
+import { timeAgo } from '@/lib/time';
 import { ListBox, Select } from '@heroui/react';
 import {
-  ArrowLeft01Icon,
-  CheckmarkSquare02Icon,
-  Globe02Icon,
-  PackageIcon,
-  SquareIcon,
+    ArrowLeft01Icon,
+    CheckmarkSquare02Icon,
+    Globe02Icon,
+    PackageIcon,
+    Refresh01Icon,
+    SquareIcon,
 } from 'hugeicons-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 const inputCls =
   'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
-type Step = 'input' | 'preview' | 'results';
+type Step = 'input' | 'preview';
 
 const PLATFORMS = [
   { id: '__auto__', label: 'Auto-detect' },
@@ -42,19 +43,16 @@ const PLATFORMS = [
 ];
 
 export default function HelmPage() {
+  const router = useRouter();
   const toast = useToast();
 
-  // Step state
   const [step, setStep] = useState<Step>('input');
-
-  // Step 1 – input
   const [chartURL, setChartURL] = useState('');
   const [chartName, setChartName] = useState('');
   const [chartVersion, setChartVersion] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
 
-  // Step 2 – preview
   const [extracted, setExtracted] = useState<HelmExtractResponse | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [platform, setPlatform] = useState('');
@@ -63,12 +61,7 @@ export default function HelmPage() {
   const [scanning, setScanning] = useState(false);
   const [makePublic, setMakePublic] = useState(false);
 
-  // Step 3 – results
-  const [createdScans, setCreatedScans] = useState<Scan[]>([]);
-
-  // History
-  const [helmHistory, setHelmHistory] = useState<Scan[]>([]);
-  const [adminHelmHistory, setAdminHelmHistory] = useState<AdminScan[]>([]);
+  const [helmRuns, setHelmRuns] = useState<HelmScanRunSummary[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -78,47 +71,39 @@ export default function HelmPage() {
     try {
       setAvailableTags(await listTags());
     } catch {
-      // tags are optional — non-fatal
+      // Tags are optional.
     }
   }, []);
 
-  const loadHistory = useCallback(async (adminMode: boolean) => {
+  const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const { data } = await listScans(1, 50, undefined, undefined, false, true);
-      setHelmHistory(Array.isArray(data) ? data : []);
-      if (adminMode) {
-        const { data: adminData } = await listAdminScans(1, 50, undefined, undefined, true);
-        setAdminHelmHistory(Array.isArray(adminData) ? adminData : []);
-      } else {
-        setAdminHelmHistory([]);
-      }
+      const { data } = await listHelmScanRuns(1, 24);
+      setHelmRuns(Array.isArray(data) ? data : []);
     } catch {
-      // non-fatal
-      setHelmHistory([]);
-      setAdminHelmHistory([]);
+      setHelmRuns([]);
     } finally {
       setHistoryLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    const admin = getTokenType() === 'admin';
-    setIsAdmin(admin);
+    setIsAdmin(getTokenType() === 'admin');
     loadTags();
-    loadHistory(admin);
-  }, [loadTags, loadHistory]);
+    loadHistory();
+  }, [loadHistory, loadTags]);
 
-  // ---- Step 1: extract ----
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault();
     setExtractError('');
+
     const url = chartURL.trim();
     if (!url) return;
     if (!isOCI && !chartName.trim()) {
       setExtractError('Chart name is required for HTTP repository URLs.');
       return;
     }
+
     setExtracting(true);
     try {
       const result = await extractHelmImages(
@@ -127,11 +112,7 @@ export default function HelmPage() {
         chartVersion.trim() || undefined,
       );
       const images = Array.isArray(result.images) ? result.images : [];
-      setExtracted({
-        ...result,
-        images,
-      });
-      // Pre-select all images
+      setExtracted({ ...result, images });
       setSelected(new Set(images.map((img) => img.full_ref)));
       setStep('preview');
     } catch (err: unknown) {
@@ -141,9 +122,9 @@ export default function HelmPage() {
     }
   }
 
-  // ---- Step 2: scan ----
   async function handleScan() {
     if (!extracted || selected.size === 0) return;
+
     setScanning(true);
     try {
       const images = extracted.images
@@ -158,28 +139,19 @@ export default function HelmPage() {
         images,
         platform || undefined,
         selectedTagIds.size > 0 ? Array.from(selectedTagIds) : undefined,
+        extracted.chart_name,
+        extracted.chart_version,
       );
 
-      let scans = result.scans ?? [];
-
-      if (makePublic && scans.length > 0) {
-        scans = await Promise.all(
-          scans.map(async (scan) => {
-            try {
-              const share = await createShare(scan.id, 'public');
-              return { ...scan, share_token: share.share_token, share_visibility: share.share_visibility };
-            } catch {
-              return scan;
-            }
-          }),
+      if (makePublic && (result.scans?.length ?? 0) > 0) {
+        await Promise.all(
+          result.scans.map((scan) => createShare(scan.id, 'public').catch(() => null)),
         );
       }
 
-      setCreatedScans(scans);
-      setStep('results');
-      // Reload history so new scans appear
-      loadHistory(isAdmin);
-      toast.success(`${scans.length ?? 0} scans queued`);
+      await loadHistory();
+      toast.success(`${result.scans.length} image${result.scans.length === 1 ? '' : 's'} queued in Helm run ${result.run.id.slice(0, 8)}`);
+      router.push(`/helm/runs/${result.run.id}`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to create scans');
     } finally {
@@ -187,14 +159,13 @@ export default function HelmPage() {
     }
   }
 
-  // ---- helpers ----
   function toggleAll() {
     if (!extracted) return;
     if (selected.size === extracted.images.length) {
       setSelected(new Set());
-    } else {
-      setSelected(new Set(extracted.images.map((i) => i.full_ref)));
+      return;
     }
+    setSelected(new Set(extracted.images.map((image) => image.full_ref)));
   }
 
   function toggleRow(ref: string) {
@@ -215,46 +186,36 @@ export default function HelmPage() {
     });
   }
 
-  function reset() {
-    setStep('input');
-    setExtracted(null);
-    setSelected(new Set());
-    setCreatedScans([]);
-    setExtractError('');
-    setChartVersion('');
-    setChartName('');
-    setPlatform('');
-    setSelectedTagIds(new Set());
-    setMakePublic(false);
-  }
-
-  // ---- render ----
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <PackageIcon size={22} className="text-violet-500 shrink-0" />
-        <div>
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            Helm Chart Scan
-          </h1>
-          <p className="text-sm text-zinc-500 mt-0.5">
-            Extract container images from a Helm chart and scan them for vulnerabilities.
-          </p>
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div className="flex items-center gap-3 justify-between">
+        <div className="flex items-center gap-3">
+          <PackageIcon size={22} className="text-violet-500 shrink-0" />
+          <div>
+            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Helm Scan Runs</h1>
+            <p className="text-sm text-zinc-500 mt-0.5">
+              Queue a chart run once, keep it as a first-class record, and drill into the child scans by run ID.
+            </p>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={loadHistory}
+          disabled={historyLoading}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl transition-colors text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 disabled:opacity-50"
+          style={{ border: '1px solid var(--border-subtle)' }}
+        >
+          <Refresh01Icon size={14} className={historyLoading ? 'animate-spin' : ''} />
+          Refresh history
+        </button>
       </div>
 
-      {/* Step indicator */}
       <StepBar current={step} />
 
-      {/* ---- STEP 1: INPUT ---- */}
       {step === 'input' && (
         <div
           className="rounded-2xl p-6 space-y-5"
-          style={{
-            background: 'var(--card-bg)',
-            border: '1px solid var(--border-subtle)',
-          }}
+          style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}
         >
           <form onSubmit={handleExtract} className="space-y-4">
             <div>
@@ -278,7 +239,7 @@ export default function HelmPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                    Chart Name {!isOCI && <span className="text-red-400">*</span>}
+                    Chart Name <span className="text-red-400">*</span>
                   </label>
                   <input
                     className={inputCls}
@@ -339,20 +300,12 @@ export default function HelmPage() {
         </div>
       )}
 
-      {/* ---- STEP 1: HISTORY ---- */}
       {step === 'input' && (
-        <HelmHistory
-          history={helmHistory}
-          adminHistory={isAdmin ? adminHelmHistory : []}
-          isAdmin={isAdmin}
-          loading={historyLoading}
-        />
+        <HelmRunHistory runs={helmRuns} isAdmin={isAdmin} loading={historyLoading} />
       )}
 
-      {/* ---- STEP 2: PREVIEW ---- */}
       {step === 'preview' && extracted && (
         <div className="space-y-4">
-          {/* Summary bar */}
           <div
             className="rounded-2xl px-5 py-4 flex items-center justify-between gap-4"
             style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}
@@ -361,13 +314,11 @@ export default function HelmPage() {
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 {extracted.chart_name}
                 {extracted.chart_version && (
-                  <span className="ml-2 text-xs font-normal text-zinc-400">
-                    v{extracted.chart_version}
-                  </span>
+                  <span className="ml-2 text-xs font-normal text-zinc-400">v{extracted.chart_version}</span>
                 )}
               </p>
               <p className="text-xs text-zinc-500 mt-0.5">
-                Found {extracted.images.length} image{extracted.images.length !== 1 ? 's' : ''} &nbsp;·&nbsp;{' '}
+                Found {extracted.images.length} image{extracted.images.length !== 1 ? 's' : ''} &nbsp;·&nbsp;
                 <span className="text-violet-500 font-medium">{selected.size} selected</span>
               </p>
             </div>
@@ -380,17 +331,15 @@ export default function HelmPage() {
             </button>
           </div>
 
-          {/* Options row */}
           <div
             className="rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4"
             style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}
           >
-            {/* Platform */}
             <div className="flex items-center gap-2 min-w-[200px]">
               <label className="text-xs text-zinc-500 whitespace-nowrap">Platform</label>
               <Select
                 selectedKey={platform || '__auto__'}
-                onSelectionChange={(k) => setPlatform(String(k === '__auto__' ? '' : k))}
+                onSelectionChange={(key) => setPlatform(String(key === '__auto__' ? '' : key))}
               >
                 <Select.Trigger className="flex-1 px-3 py-1.5 text-sm rounded-xl glass-input">
                   <Select.Value />
@@ -398,9 +347,9 @@ export default function HelmPage() {
                 </Select.Trigger>
                 <Select.Popover>
                   <ListBox>
-                    {PLATFORMS.map((p) => (
-                      <ListBox.Item key={p.id} id={p.id}>
-                        {p.label}
+                    {PLATFORMS.map((platformOption) => (
+                      <ListBox.Item key={platformOption.id} id={platformOption.id}>
+                        {platformOption.label}
                       </ListBox.Item>
                     ))}
                   </ListBox>
@@ -408,7 +357,6 @@ export default function HelmPage() {
               </Select>
             </div>
 
-            {/* Tags inline toggle */}
             {availableTags.length > 0 && (
               <div className="flex items-center gap-2 flex-wrap">
                 <label className="text-xs text-zinc-500 whitespace-nowrap">Tags</label>
@@ -435,33 +383,27 @@ export default function HelmPage() {
               </div>
             )}
 
-            {/* Public share toggle */}
             <div className="ml-auto flex items-center gap-2">
               <Globe02Icon size={14} className={makePublic ? 'text-violet-500' : 'text-zinc-400'} />
               <button
                 type="button"
-                onClick={() => setMakePublic((v) => !v)}
+                onClick={() => setMakePublic((value) => !value)}
                 className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none"
                 style={{ background: makePublic ? '#7c3aed' : 'var(--border-subtle)' }}
-                title={makePublic ? 'Results will be shared publicly' : 'Make scan results publicly accessible'}
+                title={makePublic ? 'Result scans will be shared publicly' : 'Create public share links after queueing'}
               >
                 <span
                   className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform"
                   style={{ transform: makePublic ? 'translateX(18px)' : 'translateX(2px)' }}
                 />
               </button>
-              <label className="text-xs text-zinc-500 cursor-pointer" onClick={() => setMakePublic((v) => !v)}>
+              <label className="text-xs text-zinc-500 cursor-pointer" onClick={() => setMakePublic((value) => !value)}>
                 Share publicly
               </label>
             </div>
           </div>
 
-          {/* Image table */}
-          <div
-            className="rounded-2xl overflow-hidden"
-            style={{ border: '1px solid var(--border-subtle)' }}
-          >
-            {/* Table header */}
+          <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
             <div
               className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide"
               style={{ background: 'var(--table-header-bg)', borderBottom: '1px solid var(--border-subtle)' }}
@@ -502,14 +444,9 @@ export default function HelmPage() {
                       <SquareIcon size={16} className="text-zinc-400" />
                     )}
                   </span>
-                  <span className="flex-1 text-sm font-mono text-zinc-800 dark:text-zinc-200 truncate">
-                    {img.name}
-                  </span>
+                  <span className="flex-1 text-sm font-mono text-zinc-800 dark:text-zinc-200 truncate">{img.name}</span>
                   <span className="w-32 text-xs font-mono text-zinc-500 truncate">{img.tag || 'latest'}</span>
-                  <span
-                    className="w-48 hidden sm:block text-xs text-zinc-400 truncate"
-                    title={`${img.source_file} › ${img.source_path}`}
-                  >
+                  <span className="w-48 hidden sm:block text-xs text-zinc-400 truncate" title={`${img.source_file} › ${img.source_path}`}>
                     {img.source_file}
                   </span>
                 </div>
@@ -517,7 +454,6 @@ export default function HelmPage() {
             })}
           </div>
 
-          {/* Actions */}
           <div className="flex items-center justify-between gap-4 pt-1">
             <button
               type="button"
@@ -539,312 +475,133 @@ export default function HelmPage() {
                 boxShadow: '0 2px 8px rgba(124,58,237,0.3)',
               }}
             >
-              {scanning
-                ? 'Queuing scans…'
-                : `Scan ${selected.size} selected image${selected.size !== 1 ? 's' : ''}`}
+              {scanning ? 'Queuing Helm run…' : `Queue ${selected.size} selected image${selected.size !== 1 ? '' : 's'}`}
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* ---- STEP 3: RESULTS ---- */}
-      {step === 'results' && (
-        <div className="space-y-4">
-          <div
-            className="rounded-2xl px-5 py-4"
-            style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}
-          >
-            <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-0.5">
-              {createdScans.length} scan{createdScans.length !== 1 ? 's' : ''} queued
-            </p>
-            <p className="text-sm text-zinc-500">
-              from{' '}
-              <span className="font-mono text-xs text-violet-500">{chartURL}</span>
-            </p>
-          </div>
-
-          <div
-            className="rounded-2xl overflow-hidden"
-            style={{ border: '1px solid var(--border-subtle)' }}
-          >
-            <div
-              className="flex gap-4 px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide"
-              style={{ background: 'var(--table-header-bg)', borderBottom: '1px solid var(--border-subtle)' }}
-            >
-              <span className="flex-1">Image</span>
-              <span className="w-32">Tag</span>
-              {makePublic && <span className="w-36 hidden sm:block">Share link</span>}
-              <span className="w-24 text-right">Scan</span>
-            </div>
-            {createdScans.map((scan) => (
-              <div
-                key={scan.id}
-                className="flex items-center gap-4 px-4 py-3"
-                style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--card-bg)' }}
-              >
-                <span className="flex-1 text-sm font-mono text-zinc-800 dark:text-zinc-200 truncate">
-                  {scan.image_name}
-                </span>
-                <span className="w-32 text-xs font-mono text-zinc-500 truncate">
-                  {scan.image_tag}
-                </span>
-                {makePublic && (
-                  <span className="w-36 hidden sm:block">
-                    {scan.share_token ? (
-                      <CopyShareButton token={scan.share_token} />
-                    ) : (
-                      <span className="text-xs text-zinc-400">—</span>
-                    )}
-                  </span>
-                )}
-                <span className="w-24 text-right">
-                  <Link
-                    href={`/scans/${scan.id}`}
-                    className="text-xs text-violet-500 hover:text-violet-400 font-medium"
-                  >
-                    View →
-                  </Link>
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-3 pt-1">
-            <button
-              type="button"
-              onClick={reset}
-              className="px-4 py-2.5 text-sm rounded-xl transition-all text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-              style={{ border: '1px solid var(--border-subtle)' }}
-            >
-              Scan another chart
-            </button>
-            <Link
-              href="/scans"
-              className="px-5 py-2.5 text-sm font-medium rounded-xl transition-all"
-              style={{
-                background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                color: '#fff',
-                boxShadow: '0 2px 8px rgba(124,58,237,0.3)',
-              }}
-            >
-              View all scans
-            </Link>
           </div>
         </div>
       )}
     </div>
   );
-}
-
-// ---- CopyShareButton ----
-function CopyShareButton({ token }: { token: string }) {
-  const [copied, setCopied] = useState(false);
-  const url = typeof window !== 'undefined'
-    ? `${window.location.origin}/shared/${token}`
-    : `/shared/${token}`;
-  return (
-    <button
-      onClick={() => {
-        navigator.clipboard.writeText(url).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        });
-      }}
-      className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg transition-colors"
-      style={{
-        background: copied ? 'rgba(52,211,153,0.1)' : 'rgba(124,58,237,0.08)',
-        border: `1px solid ${copied ? 'rgba(52,211,153,0.3)' : 'rgba(124,58,237,0.2)'}`,
-        color: copied ? '#34d399' : '#a78bfa',
-      }}
-      title={url}
-    >
-      {copied ? (
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      ) : (
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-      )}
-      {copied ? 'Copied!' : 'Copy link'}
-    </button>
-  );
-}
-
-// ---- HelmHistory ----
-interface HelmHistoryProps {
-  history: Scan[];
-  adminHistory: AdminScan[];
-  isAdmin: boolean;
-  loading: boolean;
-}
-
-function groupByChart<T extends { helm_chart?: string }>(scans: T[]): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  for (const scan of scans) {
-    const key = scan.helm_chart ?? '';
-    if (!key) continue;
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(scan);
-  }
-  return map;
 }
 
 function statusDot(status: string) {
   switch (status) {
-    case 'completed': return 'bg-emerald-500';
-    case 'failed':    return 'bg-red-500';
-    case 'running':   return 'bg-blue-400 animate-pulse';
-    default:          return 'bg-zinc-400 animate-pulse';
+    case 'completed':
+      return 'bg-emerald-500';
+    case 'failed':
+      return 'bg-red-500';
+    case 'running':
+      return 'bg-blue-400 animate-pulse';
+    default:
+      return 'bg-zinc-400 animate-pulse';
   }
 }
 
-function HelmHistory({ history, adminHistory, isAdmin, loading }: HelmHistoryProps) {
-  const userGroups = groupByChart(history);
-  const adminGroups = isAdmin ? groupByChart(adminHistory) : new Map();
-
+function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]; isAdmin: boolean; loading: boolean }) {
   if (loading) {
-    return (
-      <div className="text-xs text-zinc-400 text-center py-4">Loading history…</div>
-    );
+    return <div className="text-xs text-zinc-400 text-center py-4">Loading Helm runs…</div>;
   }
 
-  if (userGroups.size === 0 && adminGroups.size === 0) return null;
-
   return (
-    <div className="space-y-5">
-      {/* User history */}
-      {userGroups.size > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            Your recent Helm scans
-          </h2>
-          <div
-            className="rounded-2xl overflow-hidden"
-            style={{ border: '1px solid var(--border-subtle)' }}
-          >
-            {Array.from(userGroups.entries()).map(([chartUrl, scans], idx, arr) => (
-              <ChartHistoryRow
-                key={chartUrl}
-                chartUrl={chartUrl}
-                scans={scans}
-                isLast={idx === arr.length - 1}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+    <section className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Recent Helm runs</h2>
+        <span className="text-xs text-zinc-400">{runs.length} visible</span>
+      </div>
 
-      {/* Admin: all users' helm scans */}
-      {isAdmin && adminGroups.size > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            All users — Helm scans
-            <span className="ml-1.5 text-xs font-normal text-zinc-400">(admin view)</span>
-          </h2>
-          <div
-            className="rounded-2xl overflow-hidden"
-            style={{ border: '1px solid var(--border-subtle)' }}
-          >
-            {Array.from(adminGroups.entries()).map(([chartUrl, scans], idx, arr) => (
-              <ChartHistoryRow
-                key={chartUrl}
-                chartUrl={chartUrl}
-                scans={scans as AdminScan[]}
-                isLast={idx === arr.length - 1}
-                showOwner
-              />
-            ))}
-          </div>
-        </section>
+      {runs.length === 0 ? (
+        <div
+          className="rounded-2xl px-5 py-8 text-center text-sm text-zinc-400"
+          style={{ border: '1px solid var(--border-subtle)', background: 'var(--card-bg)' }}
+        >
+          No Helm runs yet. Queue one above to start tracking chart history by run ID.
+        </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {runs.map((run) => (
+            <Link
+              key={run.id}
+              href={`/helm/runs/${run.id}`}
+              className="rounded-2xl p-4 transition-colors hover:bg-violet-500/5"
+              style={{ border: '1px solid var(--border-subtle)', background: 'var(--card-bg)' }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate" title={run.chart_name || run.chart_url}>
+                    {run.chart_name || run.chart_url.replace(/^oci:\/\//, '')}
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-1 truncate" title={run.chart_url}>
+                    {run.chart_url.replace(/^oci:\/\//, '')}
+                  </p>
+                </div>
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusDot(run.active_images > 0 ? 'running' : run.failed_images > 0 ? 'failed' : 'completed')}`} />
+              </div>
+
+              <div className="flex items-center gap-2 mt-3 text-xs text-zinc-500 flex-wrap">
+                {run.chart_version && <span>v{run.chart_version}</span>}
+                <span>{run.total_images} image{run.total_images === 1 ? '' : 's'}</span>
+                <span>Started {timeAgo(run.created_at)}</span>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 mt-4 text-center">
+                <RunMetric label="Done" value={run.completed_images} tone="text-emerald-400" />
+                <RunMetric label="Fail" value={run.failed_images} tone="text-red-400" />
+                <RunMetric label="High" value={run.high_count} tone="text-orange-400" />
+                <RunMetric label="Crit" value={run.critical_count} tone="text-red-400 font-bold" />
+              </div>
+
+              <div className="flex items-center justify-between gap-2 mt-4 text-xs text-zinc-400">
+                <span className="font-mono">Run {run.id.slice(0, 8)}</span>
+                {isAdmin && run.owner_username ? <span>{run.owner_username}</span> : <span>Open run →</span>}
+              </div>
+            </Link>
+          ))}
+        </div>
       )}
-    </div>
+    </section>
   );
 }
 
-function ChartHistoryRow({
-  chartUrl,
-  scans,
-  isLast,
-  showOwner = false,
-}: {
-  chartUrl: string;
-  scans: Array<Scan & { owner_email?: string; owner_username?: string }>;
-  isLast: boolean;
-  showOwner?: boolean;
-}) {
-  const total = scans.length;
-  const latest = scans[0];
-  const critical = scans.reduce((s, x) => s + (x.critical_count ?? 0), 0);
-  const high = scans.reduce((s, x) => s + (x.high_count ?? 0), 0);
-  const owners = showOwner
-    ? [...new Set(scans.map((s) => (s as AdminScan).owner_username).filter(Boolean))].join(', ')
-    : '';
-  const detailHref = `/helm/chart?url=${encodeURIComponent(chartUrl)}`;
-
+function RunMetric({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
-    <Link
-      href={detailHref}
-      className="flex items-center gap-3 px-4 py-3 group transition-colors hover:bg-violet-500/5"
-      style={{ borderBottom: isLast ? 'none' : '1px solid var(--border-subtle)', background: 'var(--card-bg)' }}
-    >
-      <span className={`w-2 h-2 rounded-full shrink-0 ${statusDot(latest.status)}`} />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-mono truncate text-zinc-800 dark:text-zinc-200 group-hover:text-violet-500 transition-colors" title={chartUrl}>
-          {chartUrl.replace(/^oci:\/\//, '')}
-        </p>
-        <p className="text-xs text-zinc-500 mt-0.5">
-          {total} image{total !== 1 ? 's' : ''}
-          {showOwner && owners && (
-            <span className="ml-2 text-zinc-400">· {owners}</span>
-          )}
-        </p>
-      </div>
-      {(critical > 0 || high > 0) && (
-        <div className="flex items-center gap-1.5 text-xs font-mono shrink-0">
-          {critical > 0 && <span className="text-red-500">{critical}C</span>}
-          {high > 0    && <span className="text-orange-500">{high}H</span>}
-        </div>
-      )}
-      <svg className="w-4 h-4 shrink-0 text-zinc-400 group-hover:text-violet-500 transition-colors" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
-    </Link>
+    <div className="rounded-xl px-2 py-2" style={{ background: 'var(--table-header-bg)' }}>
+      <div className={`text-sm font-semibold ${value > 0 ? tone : 'text-zinc-400'}`}>{value}</div>
+      <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
+    </div>
   );
 }
 
 function StepBar({ current }: { current: Step }) {
   const steps: { key: Step; label: string }[] = [
-    { key: 'input', label: 'Chart URL' },
+    { key: 'input', label: 'Chart' },
     { key: 'preview', label: 'Review Images' },
-    { key: 'results', label: 'Results' },
   ];
-  const idx = steps.findIndex((s) => s.key === current);
+  const idx = steps.findIndex((step) => step.key === current);
+
   return (
     <div className="flex items-center gap-2">
-      {steps.map((s, i) => (
-        <div key={s.key} className="flex items-center gap-2">
+      {steps.map((step, index) => (
+        <div key={step.key} className="flex items-center gap-2">
           <div className="flex items-center gap-2">
             <div
               className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
               style={{
-                background:
-                  i <= idx
-                    ? 'linear-gradient(135deg,#7c3aed,#6d28d9)'
-                    : 'var(--table-header-bg)',
-                color: i <= idx ? '#fff' : 'var(--text-muted)',
-                border: i <= idx ? 'none' : '1px solid var(--border-subtle)',
+                background: index <= idx ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'var(--table-header-bg)',
+                color: index <= idx ? '#fff' : 'var(--text-muted)',
+                border: index <= idx ? 'none' : '1px solid var(--border-subtle)',
               }}
             >
-              {i + 1}
+              {index + 1}
             </div>
             <span
               className="text-sm font-medium hidden sm:block"
-              style={{ color: i <= idx ? 'var(--text-primary)' : 'var(--text-muted)' }}
+              style={{ color: index <= idx ? 'var(--text-primary)' : 'var(--text-muted)' }}
             >
-              {s.label}
+              {step.label}
             </span>
           </div>
-          {i < steps.length - 1 && (
-            <div
-              className="h-px flex-1 min-w-[24px]"
-              style={{ background: i < idx ? '#7c3aed' : 'var(--border-subtle)' }}
-            />
+          {index < steps.length - 1 && (
+            <div className="h-px flex-1 min-w-[24px]" style={{ background: index < idx ? '#7c3aed' : 'var(--border-subtle)' }} />
           )}
         </div>
       ))}

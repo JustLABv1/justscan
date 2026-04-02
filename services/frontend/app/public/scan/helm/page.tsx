@@ -1,11 +1,11 @@
 'use client';
 import { Logo } from '@/components/logo';
-import { createPublicHelmScans, extractPublicHelmImages, getPublicScan, getToken, HelmExtractResponse, HelmImage, Scan } from '@/lib/api';
-import { addToHelmPublicHistory, addToPublicHistory, getHelmPublicHistory, HelmScanGroup, timeAgo, updateHelmPublicHistoryEntry, updatePublicHistoryEntry } from '@/lib/publicScanHistory';
+import { createPublicHelmScans, extractPublicHelmImages, getPublicHelmScanRun, getToken, HelmExtractResponse, HelmImage, Scan } from '@/lib/api';
+import { addToHelmPublicHistory, addToPublicHistory, getHelmPublicHistory, PublicHelmRunHistoryEntry, timeAgo, updateHelmPublicHistoryEntry } from '@/lib/publicScanHistory';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const PLATFORMS = [
   { value: '', label: 'Auto (detect)' },
@@ -15,28 +15,37 @@ const PLATFORMS = [
   { value: 'windows/amd64', label: 'windows/amd64' },
 ];
 
-function statusStyle(status: string) {
-  switch (status) {
-    case 'completed': return { color: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' };
-    case 'failed':    return { color: 'text-red-500 dark:text-red-400',         dot: 'bg-red-500' };
-    case 'running':   return { color: 'text-blue-500 dark:text-blue-400',        dot: 'bg-blue-400' };
-    default:          return { color: 'text-zinc-500',                           dot: 'bg-zinc-400' };
-  }
+type Step = 'form' | 'extracting' | 'review' | 'scanning';
+
+function toRunHistoryEntry(detail: {
+  run: {
+    id: string;
+    chart_url: string;
+    chart_name?: string;
+    chart_version?: string;
+    platform?: string;
+    created_at: string;
+  };
+  items: Array<{ latest_scan: Scan }>;
+}): PublicHelmRunHistoryEntry {
+  const latestScans = detail.items.map((item) => item.latest_scan);
+  return {
+    id: detail.run.id,
+    chart_url: detail.run.chart_url,
+    chart_name: detail.run.chart_name || undefined,
+    chart_version: detail.run.chart_version || undefined,
+    platform: detail.run.platform || undefined,
+    total_images: latestScans.length,
+    completed_images: latestScans.filter((scan) => scan.status === 'completed').length,
+    failed_images: latestScans.filter((scan) => scan.status === 'failed').length,
+    active_images: latestScans.filter((scan) => scan.status !== 'completed' && scan.status !== 'failed').length,
+    critical_count: latestScans.reduce((sum, scan) => sum + (scan.critical_count ?? 0), 0),
+    high_count: latestScans.reduce((sum, scan) => sum + (scan.high_count ?? 0), 0),
+    medium_count: latestScans.reduce((sum, scan) => sum + (scan.medium_count ?? 0), 0),
+    low_count: latestScans.reduce((sum, scan) => sum + (scan.low_count ?? 0), 0),
+    created_at: detail.run.created_at,
+  };
 }
-
-type ScanResult = {
-  id: string;
-  image_name: string;
-  image_tag: string;
-  status: string;
-  critical_count: number;
-  high_count: number;
-  medium_count: number;
-  low_count: number;
-  created_at: string;
-};
-
-type Step = 'form' | 'extracting' | 'review' | 'scanning' | 'results';
 
 export default function PublicHelmScanPage() {
   const router = useRouter();
@@ -60,117 +69,47 @@ export default function PublicHelmScanPage() {
   const [images, setImages] = useState<HelmImage[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  // Scan results
-  const [scanResults, setScanResults] = useState<ScanResult[]>([]);
-  const [currentGroupId, setCurrentGroupId] = useState<string | null>(null);
-  const [helmHistory, setHelmHistory] = useState<HelmScanGroup[]>([]);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [helmHistory, setHelmHistory] = useState<PublicHelmRunHistoryEntry[]>([]);
 
   const isDark = mounted && resolvedTheme === 'dark';
   const isOCI = chartUrl.startsWith('oci://');
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    let cancelled = false;
+
+    async function loadHistory() {
+      const initialHistory = getHelmPublicHistory();
+      if (cancelled) return;
+
+      if (initialHistory.length === 0) {
+        setHelmHistory([]);
+        return;
+      }
+
+      const refreshedHistory = await Promise.all(initialHistory.map(async (entry) => {
+        try {
+          const detail = await getPublicHelmScanRun(entry.id);
+          const nextEntry = toRunHistoryEntry(detail);
+          updateHelmPublicHistoryEntry(entry.id, nextEntry);
+          return nextEntry;
+        } catch {
+          return entry;
+        }
+      }));
+
+      if (!cancelled) {
+        setHelmHistory(refreshedHistory);
+      }
+    }
+
     setMounted(true);
     setIsLoggedIn(!!getToken());
-    const history = getHelmPublicHistory();
-    setHelmHistory(history);
-    // Restore last active group if navigated back
-    const lastGroupId = typeof window !== 'undefined' ? sessionStorage.getItem('helm_active_group') : null;
-    if (lastGroupId) {
-      const group = history.find(g => g.group_id === lastGroupId);
-      if (group && group.scans.length > 1) {
-        setCurrentGroupId(group.group_id);
-        setScanResults(group.scans.map(s => ({
-          id: s.id,
-          image_name: s.image_name,
-          image_tag: s.image_tag,
-          status: s.status,
-          critical_count: s.critical_count,
-          high_count: s.high_count,
-          medium_count: s.medium_count,
-          low_count: s.low_count,
-          created_at: s.created_at,
-        })));
-        setStep('results');
-      }
-    }
+    loadHistory().catch(() => setHelmHistory(getHelmPublicHistory()));
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  // Poll scan statuses
-  useEffect(() => {
-    if (step !== 'results' && step !== 'scanning') return;
-    if (pollRef.current) clearInterval(pollRef.current);
-
-    const active = scanResults.filter(s => s.status === 'pending' || s.status === 'running');
-    if (active.length === 0) {
-      // Defer state update to avoid synchronous setState in effect
-      const t = setTimeout(() => { if (step === 'scanning') setStep('results'); }, 0);
-      return () => clearTimeout(t);
-    }
-
-    pollRef.current = setInterval(async () => {
-      let anyChange = false;
-      const updates = await Promise.all(
-        active.map(async r => {
-          try {
-            const fresh = await getPublicScan(r.id);
-            if (fresh.status !== r.status) {
-              updatePublicHistoryEntry(r.id, {
-                status: fresh.status,
-                critical_count: fresh.critical_count ?? 0,
-                high_count: fresh.high_count ?? 0,
-                medium_count: fresh.medium_count ?? 0,
-                low_count: fresh.low_count ?? 0,
-                unknown_count: fresh.unknown_count ?? 0,
-              });
-              anyChange = true;
-              return { id: r.id, status: fresh.status, critical_count: fresh.critical_count ?? 0, high_count: fresh.high_count ?? 0, medium_count: fresh.medium_count ?? 0, low_count: fresh.low_count ?? 0 };
-            }
-          } catch { /* ignore */ }
-          return null;
-        })
-      );
-
-      if (anyChange) {
-        setScanResults(prev => prev.map(r => {
-          const upd = updates.find(u => u?.id === r.id);
-          return upd ? { ...r, ...upd } : r;
-        }));
-        // Update helm history group
-        if (currentGroupId) {
-          const allScans = scanResults.map(r => {
-            const upd = updates.find(u => u?.id === r.id);
-            return upd ? { ...r, ...upd } : r;
-          });
-          updateHelmPublicHistoryEntry(currentGroupId, {
-            scans: allScans.map(r => ({
-              id: r.id,
-              image_name: r.image_name,
-              image_tag: r.image_tag,
-              status: r.status,
-              critical_count: r.critical_count,
-              high_count: r.high_count,
-              medium_count: r.medium_count,
-              low_count: r.low_count,
-              created_at: r.created_at,
-            })),
-          });
-          setHelmHistory(getHelmPublicHistory());
-        }
-        // Check if all done
-        const remaining = active.filter(r => {
-          const upd = updates.find(u => u?.id === r.id);
-          return !upd || (upd.status !== 'completed' && upd.status !== 'failed');
-        });
-        if (remaining.length === 0) {
-          setStep('results');
-        }
-      }
-    }, 3000);
-
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [currentGroupId, scanResults, step]);
 
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault();
@@ -204,69 +143,48 @@ export default function PublicHelmScanPage() {
         chartUrl.trim(),
         selectedImages.map(img => ({ full_ref: img.full_ref, source_path: img.source_path })),
         platform || undefined,
+        chartInfo.name || undefined,
+        chartInfo.version || undefined,
       );
 
-      const results: ScanResult[] = (res.scans ?? []).map((s: Scan) => ({
-        id: s.id,
-        image_name: s.image_name,
-        image_tag: s.image_tag,
-        status: s.status,
-        critical_count: s.critical_count ?? 0,
-        high_count: s.high_count ?? 0,
-        medium_count: s.medium_count ?? 0,
-        low_count: s.low_count ?? 0,
-        created_at: s.created_at,
-      }));
+      if (!res.run?.id) {
+        throw new Error('Helm run was created without a persisted run ID');
+      }
 
       // Add to localStorage history
-      results.forEach(r => addToPublicHistory({
-        id: r.id,
-        image_name: r.image_name,
-        image_tag: r.image_tag,
+      (res.scans ?? []).forEach((scan: Scan) => addToPublicHistory({
+        id: scan.id,
+        image_name: scan.image_name,
+        image_tag: scan.image_tag,
         platform: platform || undefined,
-        status: r.status,
-        critical_count: r.critical_count,
-        high_count: r.high_count,
-        medium_count: r.medium_count,
-        low_count: r.low_count,
+        status: scan.status,
+        critical_count: scan.critical_count ?? 0,
+        high_count: scan.high_count ?? 0,
+        medium_count: scan.medium_count ?? 0,
+        low_count: scan.low_count ?? 0,
         unknown_count: 0,
-        created_at: r.created_at,
+        created_at: scan.created_at,
       }));
 
-      // Add helm group to history
-      const groupId = results[0]?.id ?? crypto.randomUUID();
-      setCurrentGroupId(groupId);
-      const helmGroup: HelmScanGroup = {
-        group_id: groupId,
-        chart_url: chartUrl.trim(),
-        chart_name: chartInfo.name || undefined,
-        chart_version: chartInfo.version || undefined,
-        scans: results.map(r => ({
-          id: r.id,
-          image_name: r.image_name,
-          image_tag: r.image_tag,
-          status: r.status,
-          critical_count: r.critical_count,
-          high_count: r.high_count,
-          medium_count: r.medium_count,
-          low_count: r.low_count,
-          created_at: r.created_at,
-        })),
-        created_at: results[0]?.created_at ?? new Date().toISOString(),
+      const createdEntry: PublicHelmRunHistoryEntry = {
+        id: res.run.id,
+        chart_url: res.run.chart_url,
+        chart_name: res.run.chart_name || undefined,
+        chart_version: res.run.chart_version || undefined,
+        platform: res.run.platform || undefined,
+        total_images: res.scans.length,
+        completed_images: res.scans.filter((scan) => scan.status === 'completed').length,
+        failed_images: res.scans.filter((scan) => scan.status === 'failed').length,
+        active_images: res.scans.filter((scan) => scan.status !== 'completed' && scan.status !== 'failed').length,
+        critical_count: res.scans.reduce((sum, scan) => sum + (scan.critical_count ?? 0), 0),
+        high_count: res.scans.reduce((sum, scan) => sum + (scan.high_count ?? 0), 0),
+        medium_count: res.scans.reduce((sum, scan) => sum + (scan.medium_count ?? 0), 0),
+        low_count: res.scans.reduce((sum, scan) => sum + (scan.low_count ?? 0), 0),
+        created_at: res.run.created_at,
       };
-      addToHelmPublicHistory(helmGroup);
+      addToHelmPublicHistory(createdEntry);
       setHelmHistory(getHelmPublicHistory());
-
-      setScanResults(results);
-
-      if (results.length === 1) {
-        // Single scan → navigate directly to result page
-        sessionStorage.removeItem('helm_active_group');
-        router.push(`/public/scan/${results[0].id}`);
-      } else {
-        // Multiple scans → show results list; persist group so back-nav works
-        sessionStorage.setItem('helm_active_group', groupId);
-      }
+      router.push(`/public/scan/helm/runs/${res.run.id}`);
     } catch (err: unknown) {
       setScanError(err instanceof Error ? err.message : 'Failed to start scans');
       setStep('review');
@@ -285,21 +203,8 @@ export default function PublicHelmScanPage() {
   function selectAll() { setSelected(new Set(images.map(i => i.full_ref))); }
   function deselectAll() { setSelected(new Set()); }
 
-  function restoreGroup(group: HelmScanGroup) {
-    setCurrentGroupId(group.group_id);
-    setScanResults(group.scans.map(s => ({
-      id: s.id,
-      image_name: s.image_name,
-      image_tag: s.image_tag,
-      status: s.status,
-      critical_count: s.critical_count,
-      high_count: s.high_count,
-      medium_count: s.medium_count,
-      low_count: s.low_count,
-      created_at: s.created_at,
-    })));
-    sessionStorage.setItem('helm_active_group', group.group_id);
-    setStep('results');
+  function openRun(run: PublicHelmRunHistoryEntry) {
+    router.push(`/public/scan/helm/runs/${run.id}`);
   }
 
   return (
@@ -518,16 +423,13 @@ export default function PublicHelmScanPage() {
                 <div className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
               </div>
               <div className="rounded-2xl overflow-hidden divide-y" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-                {helmHistory.slice(0, 5).map(group => {
-                  const displayUrl = group.chart_url.replace(/^oci:\/\//, '');
-                  const isGroupOCI = group.chart_url.startsWith('oci://');
-                  const done = group.scans.filter(s => s.status === 'completed' || s.status === 'failed').length;
-                  const critical = group.scans.reduce((a, s) => a + s.critical_count, 0);
-                  const high = group.scans.reduce((a, s) => a + s.high_count, 0);
+                {helmHistory.slice(0, 5).map((run) => {
+                  const displayUrl = run.chart_url.replace(/^oci:\/\//, '');
+                  const isGroupOCI = run.chart_url.startsWith('oci://');
                   return (
                     <button
-                      key={group.group_id}
-                      onClick={() => restoreGroup(group)}
+                      key={run.id}
+                      onClick={() => openRun(run)}
                       className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors group"
                       style={{ borderTop: '1px solid var(--row-divider)' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
@@ -545,18 +447,18 @@ export default function PublicHelmScanPage() {
                             }}>
                             {isGroupOCI ? 'OCI' : 'HTTP'}
                           </span>
-                          {group.chart_version && (
-                            <span className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>v{group.chart_version}</span>
+                          {run.chart_version && (
+                            <span className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>v{run.chart_version}</span>
                           )}
                           <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
-                            {done}/{group.scans.length} scanned · {timeAgo(group.created_at)}
+                            {run.completed_images + run.failed_images}/{run.total_images} scanned · {timeAgo(run.created_at)}
                           </span>
                         </div>
                       </div>
                       <div className="hidden sm:flex items-center gap-2 shrink-0 text-xs font-mono">
-                        {critical > 0 && <span className="text-red-500">{critical}C</span>}
-                        {high > 0 && <span className="text-orange-500">{high}H</span>}
-                        {critical === 0 && high === 0 && done === group.scans.length && done > 0 && (
+                        {run.critical_count > 0 && <span className="text-red-500">{run.critical_count}C</span>}
+                        {run.high_count > 0 && <span className="text-orange-500">{run.high_count}H</span>}
+                        {run.critical_count === 0 && run.high_count === 0 && run.completed_images > 0 && run.active_images === 0 && run.failed_images === 0 && (
                           <span className="text-emerald-600">Clean</span>
                         )}
                       </div>
@@ -666,85 +568,11 @@ export default function PublicHelmScanPage() {
                   {step === 'scanning' ? (
                     <span className="flex items-center justify-center gap-2">
                       <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                      Starting scans…
+                      Creating Helm run…
                     </span>
                   ) : `Scan ${selected.size} image${selected.size !== 1 ? 's' : ''} →`}
                 </button>
               </div>
-            </div>
-          )}
-
-          {/* Step 3 — Results (multiple scans) */}
-          {(step === 'results' || (step === 'scanning' && scanResults.length > 1)) && scanResults.length > 1 && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                  Scan results
-                  <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-faint)' }}>
-                    {scanResults.filter(r => r.status === 'completed' || r.status === 'failed').length} / {scanResults.length} done
-                  </span>
-                </h2>
-                <button
-                  onClick={() => { sessionStorage.removeItem('helm_active_group'); setStep('form'); setChartUrl(''); setChartName(''); setChartVersion(''); setImages([]); setSelected(new Set()); setScanResults([]); setCurrentGroupId(null); }}
-                  className="text-xs px-3 py-1.5 rounded-xl transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
-                >
-                  Scan another chart
-                </button>
-              </div>
-
-              <div className="rounded-2xl overflow-hidden divide-y" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-                {scanResults.map(r => {
-                  const st = statusStyle(r.status);
-                  const isActive = r.status === 'pending' || r.status === 'running';
-                  return (
-                    <div
-                      key={r.id}
-                      onClick={() => { if (currentGroupId) sessionStorage.setItem('helm_active_group', currentGroupId); router.push(`/public/scan/${r.id}`); }}
-                      onKeyDown={e => { if (e.key === 'Enter') { if (currentGroupId) sessionStorage.setItem('helm_active_group', currentGroupId); router.push(`/public/scan/${r.id}`); } }}
-                      role="link"
-                      tabIndex={0}
-                      className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors group"
-                      style={{ borderTop: '1px solid var(--row-divider)' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-mono text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                          {r.image_name}:{r.image_tag}
-                        </p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>{timeAgo(r.created_at)}</p>
-                      </div>
-
-                      <div className={`flex items-center gap-1.5 text-xs font-medium shrink-0 ${st.color}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${st.dot} ${isActive ? 'animate-pulse' : ''}`} />
-                        {r.status}
-                      </div>
-
-                      {r.status === 'completed' && (
-                        <div className="hidden sm:flex items-center gap-2 shrink-0 text-xs font-mono">
-                          {r.critical_count > 0 && <span className="text-red-500">{r.critical_count}C</span>}
-                          {r.high_count > 0     && <span className="text-orange-500">{r.high_count}H</span>}
-                          {r.medium_count > 0   && <span className="text-yellow-600">{r.medium_count}M</span>}
-                          {r.low_count > 0      && <span className="text-blue-500">{r.low_count}L</span>}
-                          {r.critical_count === 0 && r.high_count === 0 && r.medium_count === 0 && r.low_count === 0 && (
-                            <span className="text-emerald-600">Clean</span>
-                          )}
-                        </div>
-                      )}
-
-                      <svg className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" width="14" height="14"
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                        style={{ color: 'var(--text-muted)' }}>
-                        <polyline points="9 18 15 12 9 6"/>
-                      </svg>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="text-xs text-center" style={{ color: 'var(--text-faint)' }}>
-                Stored locally on this device · Sign in to keep scans permanently
-              </p>
             </div>
           )}
         </div>

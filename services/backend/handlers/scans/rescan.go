@@ -38,12 +38,17 @@ func ReScan(db *bun.DB) gin.HandlerFunc {
 		}
 
 		newScan := &models.Scan{
-			ImageName: orig.ImageName,
-			ImageTag:  orig.ImageTag,
-			Platform:  orig.Platform,
-			Status:    models.ScanStatusPending,
-			UserID:    &userID,
-			CreatedAt: time.Now(),
+			ImageName:        orig.ImageName,
+			ImageTag:         orig.ImageTag,
+			Platform:         orig.Platform,
+			HelmScanRunID:    orig.HelmScanRunID,
+			HelmChart:        orig.HelmChart,
+			HelmChartName:    orig.HelmChartName,
+			HelmChartVersion: orig.HelmChartVersion,
+			HelmSourcePath:   orig.HelmSourcePath,
+			Status:           models.ScanStatusPending,
+			UserID:           &userID,
+			CreatedAt:        time.Now(),
 		}
 		if _, err := db.NewInsert().Model(newScan).Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create rescan"})

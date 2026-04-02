@@ -13,5 +13,7 @@ func Helm(router *gin.RouterGroup, db *bun.DB) {
 	{
 		h.POST("/extract", helm.ExtractImages(db))
 		h.POST("/scan", helm.CreateScans(db))
+		h.GET("/runs", helm.ListRuns(db))
+		h.GET("/runs/:id", helm.GetRun(db))
 	}
 }

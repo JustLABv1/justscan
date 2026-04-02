@@ -260,12 +260,19 @@ export const createPublicHelmScans = (
   chartUrl: string,
   images: Array<{ full_ref: string; source_path: string }>,
   platform?: string,
+  chartName?: string,
+  chartVersion?: string,
 ) =>
-  publicReq<{ scans: Scan[] }>('POST', '/api/v1/public/helm/scan', {
+  publicReq<{ run?: HelmScanRun; scans: Scan[] }>('POST', '/api/v1/public/helm/scan', {
     chart_url: chartUrl,
     images,
     platform: platform || undefined,
+    chart_name: chartName,
+    chart_version: chartVersion,
   });
+
+export const getPublicHelmScanRun = (id: string) =>
+  publicReq<HelmScanRunDetail>('GET', `/api/v1/public/helm/runs/${id}`);
 
 // Admin settings
 export const getAdminSettings = () =>
@@ -381,6 +388,40 @@ export interface HelmExtractResponse {
   images: HelmImage[];
 }
 
+export interface HelmScanRun {
+  id: string;
+  user_id?: string;
+  chart_url: string;
+  chart_name?: string;
+  chart_version?: string;
+  platform?: string;
+  created_at: string;
+}
+
+export interface HelmScanRunSummary extends HelmScanRun {
+  total_images: number;
+  completed_images: number;
+  failed_images: number;
+  active_images: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  owner_email?: string;
+  owner_username?: string;
+}
+
+export interface HelmRunItem {
+  key: string;
+  attempt_count: number;
+  latest_scan: Scan;
+}
+
+export interface HelmScanRunDetail {
+  run: HelmScanRun;
+  items: HelmRunItem[];
+}
+
 export const extractHelmImages = (
   chartUrl: string,
   chartName?: string,
@@ -397,13 +438,26 @@ export const createHelmScans = (
   images: Array<{ full_ref: string; source_path: string }>,
   platform?: string,
   tagIds?: string[],
+  chartName?: string,
+  chartVersion?: string,
 ) =>
-  req<{ scans: Scan[] }>('POST', '/api/v1/helm/scan', {
+  req<{ run: HelmScanRun; scans: Scan[] }>('POST', '/api/v1/helm/scan', {
     chart_url: chartUrl,
     images,
     platform: platform || undefined,
     tag_ids: tagIds,
+    chart_name: chartName,
+    chart_version: chartVersion,
   });
+
+export const listHelmScanRuns = (page = 1, limit = 20, chartUrl?: string) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (chartUrl) params.set('chart_url', chartUrl);
+  return req<{ data: HelmScanRunSummary[]; total: number }>('GET', `/api/v1/helm/runs?${params}`);
+};
+
+export const getHelmScanRun = (id: string) =>
+  req<HelmScanRunDetail>('GET', `/api/v1/helm/runs/${id}`);
 
 // Admin - rate limit
 export const updateRateLimit = (limit: number) =>
@@ -655,9 +709,13 @@ export interface Scan {
   architecture?: string;
   os_family?: string;
   os_name?: string;
+  platform?: string;
   share_token?: string;
   share_visibility?: string;
+  helm_scan_run_id?: string;
   helm_chart?: string;
+  helm_chart_name?: string;
+  helm_chart_version?: string;
   helm_source_path?: string;
 }
 
@@ -665,6 +723,8 @@ export interface AdminScan extends Omit<Scan, 'tags'> {
   owner_email: string;
   owner_username: string;
   helm_chart?: string;
+  helm_chart_name?: string;
+  helm_chart_version?: string;
   helm_source_path?: string;
 }
 

@@ -12,7 +12,7 @@ import {
     Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // ── severity config ──────────────────────────────────────────────────
 const SEV = [
@@ -174,9 +174,17 @@ function RecentScanRow({ scan }: { scan: Scan }) {
 // ── Mini Sparkline ────────────────────────────────────────────────────
 function MiniSparkline({ data, color, id }: { data: { date: string; value: number }[]; color: string; id: string }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(200);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(([entry]) => setW(entry!.contentRect.width));
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
   if (data.length < 2) return null;
 
-  const W = 200, H = 52, SPARK_TOP = 18, PAD = 3;
+  const H = 52, SPARK_TOP = 18, PAD = 3;
   const sparkH = H - SPARK_TOP;
   const values = data.map(d => d.value);
   const min = Math.min(...values);
@@ -207,6 +215,7 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
   const hd = hoverIdx !== null ? data[hoverIdx] : null;
 
   return (
+    <div ref={containerRef} className="w-full">
     <svg
       viewBox={`0 0 ${W} ${H}`}
       className="w-full cursor-crosshair"
@@ -255,17 +264,53 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
           style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
       )}
     </svg>
+    </div>
   );
 }
 
 
 // ── Vulnerability Trend Chart ─────────────────────────────────────────
-const VULN_TREND_LINES = [
-  { key: 'critical' as const, label: 'Critical', color: '#f87171', width: 2 },
-  { key: 'high'     as const, label: 'High',     color: '#fb923c', width: 1.5 },
-  { key: 'medium'   as const, label: 'Medium',   color: '#fbbf24', width: 1 },
-  { key: 'low'      as const, label: 'Low',      color: '#60a5fa', width: 1 },
+
+// Stack order: low at bottom, critical at top (most severe is most visible)
+const STACK = [
+  { key: 'low'      as const, label: 'Low',      color: '#60a5fa', opacity: 0.82 },
+  { key: 'medium'   as const, label: 'Medium',   color: '#fbbf24', opacity: 0.85 },
+  { key: 'high'     as const, label: 'High',     color: '#fb923c', opacity: 0.88 },
+  { key: 'critical' as const, label: 'Critical', color: '#f87171', opacity: 0.92 },
 ];
+
+// Fill every calendar day in the period so gaps are visible as zeros
+function fillDates(data: DashboardVulnTrendPoint[], days: number): DashboardVulnTrendPoint[] {
+  const map = new Map(data.map(d => [d.date, d]));
+  const result: DashboardVulnTrendPoint[] = [];
+  const today = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    result.push(map.get(key) ?? { date: key, critical: 0, high: 0, medium: 0, low: 0, unknown: 0 });
+  }
+  return result;
+}
+
+// Compute 4–5 human-readable Y-axis tick values that cover maxVal
+function niceTicks(maxVal: number): number[] {
+  if (maxVal === 0) return [0, 25, 50, 75, 100];
+  const magnitude = Math.pow(10, Math.floor(Math.log10(maxVal)));
+  const normalised = maxVal / magnitude;
+  const niceMax =
+    normalised <= 1 ? magnitude :
+    normalised <= 2 ? 2 * magnitude :
+    normalised <= 5 ? 5 * magnitude :
+    10 * magnitude;
+  const step = niceMax / 4;
+  return [0, 1, 2, 3, 4].map(i => Math.round(i * step));
+}
+
+function fmtTick(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k`;
+  return String(n);
+}
 
 function VulnTrendChart({ data, period, onPeriod }: {
   data: DashboardVulnTrendPoint[];
@@ -273,36 +318,55 @@ function VulnTrendChart({ data, period, onPeriod }: {
   onPeriod: (d: number) => void;
 }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(600);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(([entry]) => setW(entry!.contentRect.width));
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
-  const W = 600, H = 140, PAD_T = 8, PAD_B = 24, PAD_X = 4;
+  const filled = fillDates(data, period);
+  const hasData = filled.some(d => d.critical + d.high + d.medium + d.low > 0);
+
+  // SVG layout
+  const H = 160;
+  const PAD_L = 42, PAD_R = 8, PAD_T = 10, PAD_B = 26;
+  const chartW = W - PAD_L - PAD_R;
   const chartH = H - PAD_T - PAD_B;
 
-  const allValues = data.flatMap(d => [d.critical, d.high, d.medium, d.low]);
-  const maxVal = Math.max(...allValues, 1);
+  // Y scale
+  const stackMax = Math.max(...filled.map(d => d.critical + d.high + d.medium + d.low), 1);
+  const ticks = niceTicks(stackMax);
+  const topTick = ticks[ticks.length - 1]!;
 
-  function xPos(i: number) {
-    return data.length < 2
-      ? W / 2
-      : PAD_X + (i / (data.length - 1)) * (W - PAD_X * 2);
-  }
-  function yPos(v: number) {
-    return PAD_T + chartH - (v / maxVal) * chartH;
+  function yVal(v: number) {
+    return PAD_T + chartH - (v / topTick) * chartH;
   }
 
-  function makePath(key: 'critical' | 'high' | 'medium' | 'low') {
-    if (data.length < 2) return '';
-    const pts = data.map((d, i) => [xPos(i), yPos(d[key])] as [number, number]);
-    let p = `M${pts[0]![0].toFixed(1)},${pts[0]![1].toFixed(1)}`;
-    for (let i = 1; i < pts.length; i++) {
-      const cpx = ((pts[i - 1]![0] + pts[i]![0]) / 2).toFixed(1);
-      p += ` C${cpx},${pts[i - 1]![1].toFixed(1)} ${cpx},${pts[i]![1].toFixed(1)} ${pts[i]![0].toFixed(1)},${pts[i]![1].toFixed(1)}`;
-    }
-    return p;
+  // Bar dimensions
+  const n = filled.length;
+  const barSlot = chartW / n;
+  const barW = Math.min(28, barSlot * 0.68);
+
+  function barX(i: number) {
+    return PAD_L + (i + 0.5) * barSlot - barW / 2;
   }
 
-  const hoverPoint = hoverIdx !== null ? data[hoverIdx] : null;
-  const hoverX = hoverIdx !== null ? xPos(hoverIdx) : null;
+  // Hover detection: convert SVG x to bar index
+  function svgXtoIdx(svgX: number) {
+    const rel = svgX - PAD_L;
+    return Math.max(0, Math.min(n - 1, Math.floor(rel / barSlot)));
+  }
 
+  // X-axis labels: show at most 7, evenly distributed
+  const xLabelStep = Math.max(1, Math.ceil(n / 7));
+  const xLabelIndices = new Set<number>();
+  for (let i = 0; i < n; i += xLabelStep) xLabelIndices.add(i);
+  xLabelIndices.add(n - 1);
+
+  const hoverPoint = hoverIdx !== null ? filled[hoverIdx] : null;
   const PERIODS = [7, 14, 30] as const;
 
   return (
@@ -310,15 +374,16 @@ function VulnTrendChart({ data, period, onPeriod }: {
       <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
         style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.2), transparent)' }} />
 
-      <div className="flex items-start justify-between mb-4">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: 'rgba(124,58,237,0.2)', boxShadow: '0 0 14px rgba(124,58,237,0.3)' }}>
             <Activity01Icon size={17} color="#a78bfa" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Vulnerability Trend</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Findings from completed scans over time</p>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Avg. Findings per Scan</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">Average vulnerabilities per completed scan, by day</p>
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -339,116 +404,168 @@ function VulnTrendChart({ data, period, onPeriod }: {
         </div>
       </div>
 
-      {data.length === 0 ? (
-        <p className="text-sm text-zinc-500 py-8 text-center">No completed scans in this period</p>
+      {/* Legend */}
+      <div className="flex items-center gap-4 mb-3 flex-wrap">
+        {[...STACK].reverse().map(({ key, label, color }) => (
+          <span key={key} className="flex items-center gap-1.5 text-xs" style={{ color }}>
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: color }} />
+            {label}
+          </span>
+        ))}
+      </div>
+
+      <div ref={containerRef} className="w-full">
+      {!hasData ? (
+        <div className="flex items-center justify-center text-sm text-zinc-500 py-10">
+          No completed scans in this period
+        </div>
       ) : (
-        <>
-          {/* Legend */}
-          <div className="flex items-center gap-4 mb-3 flex-wrap">
-            {VULN_TREND_LINES.map(({ key, label, color }) => (
-              <span key={key} className="flex items-center gap-1.5 text-xs" style={{ color }}>
-                <span className="w-4 h-0.5 rounded-full inline-block" style={{ background: color, boxShadow: `0 0 4px ${color}80` }} />
-                {label}
-              </span>
-            ))}
-          </div>
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full cursor-crosshair select-none"
+          style={{ height: H }}
+          aria-label={`Average vulnerabilities per scan — last ${period} days`}
+          onMouseMove={e => {
+            const r = e.currentTarget.getBoundingClientRect();
+            const svgX = ((e.clientX - r.left) / r.width) * W;
+            setHoverIdx(svgXtoIdx(svgX));
+          }}
+          onMouseLeave={() => setHoverIdx(null)}
+        >
+          {/* Y-axis gridlines + labels */}
+          {ticks.map(t => {
+            const y = yVal(t);
+            const isBase = t === 0;
+            return (
+              <g key={t}>
+                <line
+                  x1={PAD_L} x2={W - PAD_R} y1={y} y2={y}
+                  stroke="var(--row-divider)"
+                  strokeWidth={isBase ? 1 : 0.5}
+                  strokeDasharray={isBase ? undefined : '4 4'}
+                />
+                <text
+                  x={PAD_L - 5} y={y + 3.5}
+                  textAnchor="end" fontSize={8}
+                  fill="rgba(113,113,122,0.75)"
+                  fontFamily="ui-sans-serif,system-ui"
+                >
+                  {fmtTick(t)}
+                </text>
+              </g>
+            );
+          })}
 
-          {/* Chart */}
-          <svg
-            viewBox={`0 0 ${W} ${H}`}
-            className="w-full cursor-crosshair"
-            style={{ height: H }}
-            aria-label={`Vulnerability trend chart for the last ${period} days`}
-            onMouseMove={e => {
-              const r = e.currentTarget.getBoundingClientRect();
-              const x = ((e.clientX - r.left) / r.width) * W;
-              const idx = Math.round((x / W) * (data.length - 1));
-              setHoverIdx(Math.max(0, Math.min(data.length - 1, idx)));
-            }}
-            onMouseLeave={() => setHoverIdx(null)}
-          >
-            {/* Zero axis line */}
-            <line x1={0} x2={W} y1={PAD_T + chartH} y2={PAD_T + chartH}
-              stroke="var(--row-divider)" strokeWidth="1" />
+          {/* Stacked bars */}
+          {filled.map((d, i) => {
+            const isHovered = hoverIdx === i;
+            let baseline = PAD_T + chartH; // start at bottom
 
-            {/* Grid lines (3 horizontal) */}
-            {[0.25, 0.5, 0.75].map(f => (
-              <line key={f}
-                x1={0} x2={W}
-                y1={(PAD_T + chartH - f * chartH).toFixed(1)}
-                y2={(PAD_T + chartH - f * chartH).toFixed(1)}
-                stroke="var(--row-divider)" strokeWidth="0.5" strokeDasharray="4 4" />
-            ))}
+            return (
+              <g key={d.date}>
+                {/* Hover highlight background */}
+                {isHovered && (
+                  <rect
+                    x={PAD_L + i * barSlot} y={PAD_T}
+                    width={barSlot} height={chartH}
+                    fill="rgba(167,139,250,0.06)"
+                  />
+                )}
 
-            {/* Trend lines */}
-            {VULN_TREND_LINES.map(({ key, color, width }) => {
-              const path = makePath(key);
-              return path ? (
-                <path key={key} d={path} fill="none" stroke={color}
-                  strokeWidth={width} strokeLinecap="round" strokeLinejoin="round"
-                  style={{ filter: `drop-shadow(0 0 3px ${color}60)` }} />
-              ) : null;
-            })}
+                {/* Bar segments, bottom → top */}
+                {STACK.map(({ key, color, opacity }) => {
+                  const val = d[key];
+                  if (val <= 0) return null;
+                  const segH = (val / topTick) * chartH;
+                  const y = baseline - segH;
+                  baseline = y;
+                  return (
+                    <rect
+                      key={key}
+                      x={barX(i)} y={y}
+                      width={barW} height={segH}
+                      fill={color} fillOpacity={isHovered ? 1 : opacity}
+                      rx={i === 0 || val === d[key] ? 1 : 0}
+                    />
+                  );
+                })}
 
-            {/* Hover vertical line */}
-            {hoverX !== null && (
-              <line x1={hoverX} x2={hoverX} y1={PAD_T} y2={PAD_T + chartH}
-                stroke="rgba(167,139,250,0.3)" strokeWidth="1" strokeDasharray="3 3" />
-            )}
+                {/* Top rounded cap on hovered bar */}
+                {isHovered && (() => {
+                  const total = d.critical + d.high + d.medium + d.low;
+                  if (total === 0) return null;
+                  const topY = PAD_T + chartH - (total / topTick) * chartH;
+                  return <rect x={barX(i)} y={topY} width={barW} height={2} rx={1} fill="rgba(255,255,255,0.4)" />;
+                })()}
+              </g>
+            );
+          })}
 
-            {/* Hover dots */}
-            {hoverIdx !== null && hoverPoint && VULN_TREND_LINES.map(({ key, color }) => (
-              <circle key={key}
-                cx={xPos(hoverIdx)}
-                cy={yPos(hoverPoint[key])}
-                r="3.5" fill={color}
-                style={{ filter: `drop-shadow(0 0 5px ${color})` }} />
-            ))}
+          {/* X-axis date labels */}
+          {filled.map((d, i) => {
+            if (!xLabelIndices.has(i)) return null;
+            const dateStr = new Date(d.date + 'T12:00:00Z').toLocaleDateString('en', { month: 'short', day: 'numeric' });
+            return (
+              <text
+                key={d.date}
+                x={PAD_L + (i + 0.5) * barSlot}
+                y={H - 5}
+                textAnchor="middle" fontSize={8}
+                fill="rgba(113,113,122,0.7)"
+                fontFamily="ui-sans-serif,system-ui"
+              >
+                {dateStr}
+              </text>
+            );
+          })}
 
-            {/* Hover tooltip */}
-            {hoverIdx !== null && hoverPoint && (() => {
-              const dateStr = new Date(hoverPoint.date).toLocaleDateString('en', { month: 'short', day: 'numeric' });
-              const tipX = hoverX!;
-              const tipW = 110, tipH = 86;
-              const tipXclamped = Math.max(2, Math.min(W - tipW - 2, tipX - tipW / 2));
-              return (
-                <g>
-                  <rect x={tipXclamped} y={2} width={tipW} height={tipH} rx={5}
-                    fill="rgba(10,10,15,0.88)" stroke="rgba(167,139,250,0.25)" strokeWidth="0.75" />
-                  <text x={tipXclamped + 8} y={16} fontSize={9} fontWeight="600"
-                    fill="rgba(255,255,255,0.5)" fontFamily="ui-sans-serif,system-ui">
-                    {dateStr}
+          {/* Hover tooltip */}
+          {hoverIdx !== null && hoverPoint && (() => {
+            const total = hoverPoint.critical + hoverPoint.high + hoverPoint.medium + hoverPoint.low;
+            const dateStr = new Date(hoverPoint.date + 'T12:00:00Z').toLocaleDateString('en', { month: 'short', day: 'numeric' });
+            const tipW = 122, tipH = total === 0 ? 36 : 94;
+            const tipX = Math.max(PAD_L + 2, Math.min(W - PAD_R - tipW - 2, PAD_L + (hoverIdx + 0.5) * barSlot - tipW / 2));
+            const tipY = PAD_T + 2;
+
+            return (
+              <g>
+                <rect x={tipX} y={tipY} width={tipW} height={tipH} rx={5}
+                  fill="rgba(10,10,15,0.9)" stroke="rgba(167,139,250,0.25)" strokeWidth="0.75" />
+                {/* Date */}
+                <text x={tipX + 10} y={tipY + 14} fontSize={9} fontWeight="600"
+                  fill="rgba(255,255,255,0.55)" fontFamily="ui-sans-serif,system-ui">
+                  {dateStr}
+                </text>
+                {total === 0 ? (
+                  <text x={tipX + 10} y={tipY + 27} fontSize={9} fill="rgba(113,113,122,0.8)" fontFamily="ui-sans-serif,system-ui">
+                    No scans
                   </text>
-                  {VULN_TREND_LINES.map(({ key, label, color }, li) => (
-                    <g key={key}>
-                      <rect x={tipXclamped + 8} y={22 + li * 15} width={6} height={6} rx={1.5} fill={color} />
-                      <text x={tipXclamped + 18} y={29 + li * 15} fontSize={9} fill={color} fontFamily="ui-monospace,monospace">
-                        {label}: {hoverPoint[key]}
-                      </text>
-                    </g>
-                  ))}
-                </g>
-              );
-            })()}
-
-            {/* X-axis date labels */}
-            {data.length > 0 && (() => {
-              const step = Math.max(1, Math.floor(data.length / 5));
-              return data.filter((_, i) => i === 0 || i === data.length - 1 || i % step === 0).map((d, _, arr) => {
-                const origIdx = data.indexOf(d);
-                const dateStr = new Date(d.date).toLocaleDateString('en', { month: 'short', day: 'numeric' });
-                const x = xPos(origIdx);
-                return (
-                  <text key={d.date} x={x} y={H - 4} textAnchor="middle"
-                    fontSize={8} fill="rgba(113,113,122,0.7)" fontFamily="ui-sans-serif,system-ui">
-                    {dateStr}
-                  </text>
-                );
-              });
-            })()}
-          </svg>
-        </>
+                ) : (
+                  <>
+                    {[...STACK].reverse().map(({ key, label, color }, li) => (
+                      <g key={key}>
+                        <rect x={tipX + 10} y={tipY + 21 + li * 14} width={6} height={6} rx={1.5} fill={color} />
+                        <text x={tipX + 20} y={tipY + 28 + li * 14} fontSize={9} fill={color} fontFamily="ui-monospace,monospace">
+                          {label}: {hoverPoint[key]}
+                        </text>
+                      </g>
+                    ))}
+                    {/* Total */}
+                    <line x1={tipX + 10} x2={tipX + tipW - 10}
+                      y1={tipY + 78} y2={tipY + 78}
+                      stroke="rgba(255,255,255,0.1)" strokeWidth="0.5" />
+                    <text x={tipX + 10} y={tipY + 89} fontSize={9} fontWeight="600"
+                      fill="rgba(255,255,255,0.45)" fontFamily="ui-monospace,monospace">
+                      Total: {total}
+                    </text>
+                  </>
+                )}
+              </g>
+            );
+          })()}
+        </svg>
       )}
+      </div>
     </div>
   );
 }

@@ -48,7 +48,7 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
 
   return (
     <svg width={88} height={88} viewBox="0 0 88 88" className="shrink-0">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={10} />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--status-donut-track)" strokeWidth={10} />
       {slices.map(s => (
         <circle
           key={s.label}
@@ -62,7 +62,7 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
           style={{ transform: 'rotate(-90deg)', transformOrigin: `${cx}px ${cy}px`, transition: 'stroke-dasharray 600ms ease' }}
         />
       ))}
-      <text x={cx} y={cy + 5} textAnchor="middle" fontSize={14} fontWeight={600} fill="white">{total}</text>
+      <text x={cx} y={cy + 5} textAnchor="middle" fontSize={14} fontWeight={600} fill="var(--text-primary)">{total}</text>
     </svg>
   );
 }
@@ -73,7 +73,7 @@ function SeverityBar({ item }: { item: StatusPageItem }) {
   if (total === 0) {
     return (
       <div className="flex items-center gap-3">
-        <div className="h-1.5 flex-1 rounded-full bg-white/5" />
+        <div className="h-1.5 flex-1 rounded-full" style={{ background: 'var(--status-bar-track)' }} />
         <span className="text-xs text-zinc-500 tabular-nums w-12 text-right">0 vulns</span>
       </div>
     );
@@ -87,7 +87,7 @@ function SeverityBar({ item }: { item: StatusPageItem }) {
 
   return (
     <div className="flex items-center gap-3">
-      <div className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
+      <div className="flex h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--status-bar-track)' }}>
         {segments.map(s => (
           <div
             key={s.key}
@@ -116,7 +116,7 @@ function Delta({ value }: { value?: number }) {
 function StatusDot({ status }: { status: string }) {
   const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium capitalize text-zinc-400">
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium capitalize text-zinc-500 dark:text-zinc-400">
       <span className="relative flex h-2 w-2">
         {(status === 'running' || status === 'pending') && (
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: color }} />
@@ -135,13 +135,14 @@ function MetricTile({
   label: string; value: React.ReactNode; delta?: number; color?: string; sub?: string;
 }) {
   return (
-    <div className="flex flex-col justify-between rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3.5 gap-2">
+    <div className="flex flex-col justify-between rounded-2xl px-4 py-3.5 gap-2"
+      style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">{label}</p>
       <div className="flex items-end justify-between gap-2">
         <span className="text-2xl font-semibold tabular-nums leading-none" style={{ color: color ?? 'var(--text-primary)' }}>
           {value}
         </span>
-        {delta !== undefined ? <Delta value={delta} /> : sub ? <span className="text-[11px] text-zinc-600">{sub}</span> : null}
+        {delta !== undefined ? <Delta value={delta} /> : sub ? <span className="text-[11px] text-zinc-500">{sub}</span> : null}
       </div>
     </div>
   );
@@ -153,8 +154,20 @@ function ItemCard({ item, index }: { item: StatusPageItem; index: number }) {
 
   return (
     <div
-      className="status-item-enter relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] transition-all duration-200 hover:border-white/[0.1] hover:bg-white/[0.04]"
-      style={{ animationDelay: `${index * 60}ms` }}
+      className="status-item-enter relative overflow-hidden rounded-2xl transition-all duration-200"
+      style={{
+        background: 'var(--status-card-bg)',
+        border: '1px solid var(--status-card-border)',
+        animationDelay: `${index * 60}ms`,
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLDivElement).style.background = 'var(--status-card-hover-bg)';
+        (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--status-card-hover-border)';
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLDivElement).style.background = 'var(--status-card-bg)';
+        (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--status-card-border)';
+      }}
     >
       {/* left accent bar */}
       <div className="absolute inset-y-0 left-0 w-0.5 rounded-full" style={{ background: color }} />
@@ -164,17 +177,19 @@ function ItemCard({ item, index }: { item: StatusPageItem; index: number }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+              <span className="rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500"
+                style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)' }}>
                 Image
               </span>
-              <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] text-zinc-400">
+              <span className="rounded-full px-2 py-0.5 text-[10px] text-zinc-500 dark:text-zinc-400"
+                style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)' }}>
                 {item.image_tag}
               </span>
             </div>
-            <p className="font-mono text-sm font-medium text-zinc-100 break-all leading-relaxed">
+            <p className="font-mono text-sm font-medium break-all leading-relaxed" style={{ color: 'var(--text-primary)' }}>
               {item.image_name}
             </p>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-zinc-600">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-zinc-500">
               <span>Observed {timeAgo(item.observed_at)}</span>
               <span>·</span>
               <span className="capitalize">Scan {item.scan_status}</span>
@@ -208,8 +223,8 @@ function ItemCard({ item, index }: { item: StatusPageItem; index: number }) {
         {/* error */}
         {item.error_message && (
           <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-red-400 mb-1.5">Scan Error</p>
-            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-red-300/80">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-red-500 dark:text-red-400 mb-1.5">Scan Error</p>
+            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-red-700/80 dark:text-red-300/80">
               {item.error_message}
             </pre>
           </div>
@@ -222,7 +237,7 @@ function ItemCard({ item, index }: { item: StatusPageItem; index: number }) {
 // ── Thin auto-refresh progress bar (top of page) ──────────────────────────────
 function RefreshBar({ progress }: { progress: number }) {
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 h-[2px] bg-white/5">
+    <div className="fixed top-0 left-0 right-0 z-50 h-[2px]" style={{ background: 'var(--status-bar-track)' }}>
       <div
         className="h-full transition-all duration-1000 ease-linear"
         style={{ width: `${progress}%`, background: 'linear-gradient(90deg, #7c3aed, #a78bfa)' }}
@@ -309,7 +324,7 @@ export default function PublicStatusPage() {
           <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
             <Logo size={18} className="text-white" />
           </div>
-          <div className="w-6 h-6 rounded-full border-2 border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       </div>
     );
@@ -319,12 +334,13 @@ export default function PublicStatusPage() {
   if (!data) {
     return (
       <div className="min-h-screen app-bg flex items-center justify-center px-6">
-        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-8 max-w-md text-center space-y-4">
+        <div className="rounded-2xl p-8 max-w-md text-center space-y-4"
+          style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
           <div className="w-11 h-11 rounded-2xl mx-auto flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
             <Logo size={18} className="text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-zinc-100">Status Page Unavailable</h1>
+            <h1 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Status Page Unavailable</h1>
             <p className="text-sm text-zinc-500 mt-1.5">{error}</p>
           </div>
           {needsAuth && !getToken() && (
@@ -344,21 +360,24 @@ export default function PublicStatusPage() {
       <RefreshBar progress={refreshProgress} />
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <header className="border-b border-white/[0.06] px-6 py-4">
+      <header className="px-6 py-4" style={{ borderBottom: '1px solid var(--status-header-border)' }}>
         <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
               <Logo size={16} className="text-white" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-600">JustScan Status</p>
-              <h1 className="text-xl font-semibold text-zinc-100 leading-tight">{data.page.name}</h1>
+              <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">JustScan Status</p>
+              <h1 className="text-xl font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>{data.page.name}</h1>
             </div>
           </div>
           <div className="flex items-center gap-3 text-[11px] text-zinc-500">
-            <span className="capitalize rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-1">{data.page.visibility}</span>
+            <span className="capitalize rounded-full px-2.5 py-1"
+              style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)' }}>
+              {data.page.visibility}
+            </span>
             <span>Updated {timeAgo(data.page.updated_at)}</span>
-            <span className="tabular-nums text-zinc-600">Refresh in {secondsRemaining}s</span>
+            <span className="tabular-nums text-zinc-400 dark:text-zinc-600">Refresh in {secondsRemaining}s</span>
           </div>
         </div>
       </header>
@@ -374,8 +393,8 @@ export default function PublicStatusPage() {
           }`}>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-zinc-100">{activeUpdate.title}</p>
-                {activeUpdate.body && <p className="text-sm text-zinc-400 mt-1">{activeUpdate.body}</p>}
+                <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{activeUpdate.title}</p>
+                {activeUpdate.body && <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">{activeUpdate.body}</p>}
               </div>
               <span className="text-[10px] uppercase tracking-widest text-zinc-500">{activeUpdate.level}</span>
             </div>
@@ -391,8 +410,8 @@ export default function PublicStatusPage() {
               {donutData.map(d => (
                 <div key={d.label} className="flex items-center gap-2 text-[11px]">
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                  <span className="capitalize text-zinc-400">{d.label}</span>
-                  <span className="font-semibold text-zinc-200 tabular-nums">{d.value}</span>
+                  <span className="capitalize text-zinc-500 dark:text-zinc-400">{d.label}</span>
+                  <span className="font-semibold tabular-nums" style={{ color: 'var(--text-secondary)' }}>{d.value}</span>
                 </div>
               ))}
             </div>
@@ -400,19 +419,22 @@ export default function PublicStatusPage() {
 
           {/* stat tiles */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 flex-1 w-full">
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3.5 flex flex-col justify-between gap-3">
+            <div className="rounded-2xl px-4 py-3.5 flex flex-col justify-between gap-3"
+              style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Tracked Tags</p>
-              <p className="text-3xl font-semibold tabular-nums text-zinc-100">{summary.total}</p>
+              <p className="text-3xl font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>{summary.total}</p>
             </div>
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3.5 flex flex-col justify-between gap-3">
+            <div className="rounded-2xl px-4 py-3.5 flex flex-col justify-between gap-3"
+              style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Critical</p>
-              <p className="text-3xl font-semibold tabular-nums" style={{ color: summary.critical > 0 ? SEV.critical : '#52525b' }}>
+              <p className="text-3xl font-semibold tabular-nums" style={{ color: summary.critical > 0 ? SEV.critical : 'var(--text-faint)' }}>
                 {summary.critical.toLocaleString()}
               </p>
             </div>
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3.5 flex flex-col justify-between gap-3">
+            <div className="rounded-2xl px-4 py-3.5 flex flex-col justify-between gap-3"
+              style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">High</p>
-              <p className="text-3xl font-semibold tabular-nums" style={{ color: summary.high > 0 ? SEV.high : '#52525b' }}>
+              <p className="text-3xl font-semibold tabular-nums" style={{ color: summary.high > 0 ? SEV.high : 'var(--text-faint)' }}>
                 {summary.high.toLocaleString()}
               </p>
             </div>
@@ -430,7 +452,7 @@ export default function PublicStatusPage() {
             <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-500">
               Tracked Image Tags
             </h2>
-            <span className="text-[11px] text-zinc-600">{data.items.length} images</span>
+            <span className="text-[11px] text-zinc-400 dark:text-zinc-600">{data.items.length} images</span>
           </div>
           <div className="space-y-3">
             {data.items.map((item, i) => (

@@ -36,11 +36,11 @@ func GetVulnTrends(db *bun.DB) gin.HandlerFunc {
 		db.NewSelect().
 			TableExpr("scans").
 			ColumnExpr("to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date").
-			ColumnExpr("COALESCE(SUM(critical_count), 0) AS critical").
-			ColumnExpr("COALESCE(SUM(high_count), 0) AS high").
-			ColumnExpr("COALESCE(SUM(medium_count), 0) AS medium").
-			ColumnExpr("COALESCE(SUM(low_count), 0) AS low").
-			ColumnExpr("COALESCE(SUM(unknown_count), 0) AS unknown").
+			ColumnExpr("ROUND(COALESCE(SUM(critical_count), 0)::numeric / COUNT(*))::bigint AS critical").
+			ColumnExpr("ROUND(COALESCE(SUM(high_count), 0)::numeric / COUNT(*))::bigint AS high").
+			ColumnExpr("ROUND(COALESCE(SUM(medium_count), 0)::numeric / COUNT(*))::bigint AS medium").
+			ColumnExpr("ROUND(COALESCE(SUM(low_count), 0)::numeric / COUNT(*))::bigint AS low").
+			ColumnExpr("ROUND(COALESCE(SUM(unknown_count), 0)::numeric / COUNT(*))::bigint AS unknown").
 			Where("status = 'completed'").
 			Where("created_at >= ?", cutoff).
 			GroupExpr("date").

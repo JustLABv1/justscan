@@ -1,6 +1,9 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { SevCount, StatusBadge } from '@/components/ui/badges';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ImageRowSkeleton } from '@/components/ui/skeleton';
 import {
   cancelScan,
   createScan,
@@ -22,48 +25,13 @@ import {
   FilterIcon,
   GitCompareIcon,
   PlusSignIcon,
+  Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
-
-const SEV: Record<string, string> = {
-  critical: 'text-red-400 font-bold',
-  high:     'text-orange-400',
-  medium:   'text-yellow-400',
-  low:      'text-blue-400',
-};
-
-const STATUS_STYLE: Record<string, { color: string; bg: string; border: string; label?: string }> = {
-  completed: { color: '#34d399', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.22)' },
-  failed:    { color: '#f87171', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.22)'  },
-  running:   { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.22)' },
-  pending:   { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)', label: 'queued' },
-  cancelled: { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.20)' },
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_STYLE[status] ?? STATUS_STYLE.pending;
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap"
-      style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}` }}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`} aria-hidden />
-      {s.label ?? status}
-    </span>
-  );
-}
-
-function SevCount({ count, cls }: { count: number; cls: string }) {
-  return (
-    <span className={`font-mono text-sm ${count ? cls : 'text-zinc-400 dark:text-zinc-700'}`}>
-      {count || '—'}
-    </span>
-  );
-}
 
 // ── Child rows (scans for one image) ─────────────────────────────────
 function ImageChildren({
@@ -183,10 +151,10 @@ function ImageChildren({
                         ))}
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-center"><SevCount count={scan.critical_count} cls={SEV.critical} /></td>
-                    <td className="px-3 py-3 text-center"><SevCount count={scan.high_count} cls={SEV.high} /></td>
-                    <td className="px-3 py-3 text-center"><SevCount count={scan.medium_count} cls={SEV.medium} /></td>
-                    <td className="px-3 py-3 text-center"><SevCount count={scan.low_count} cls={SEV.low} /></td>
+                    <td className="px-3 py-3 text-center"><SevCount count={scan.critical_count} level="critical" /></td>
+                    <td className="px-3 py-3 text-center"><SevCount count={scan.high_count} level="high" /></td>
+                    <td className="px-3 py-3 text-center"><SevCount count={scan.medium_count} level="medium" /></td>
+                    <td className="px-3 py-3 text-center"><SevCount count={scan.low_count} level="low" /></td>
                     <td className="px-4 py-3 text-xs text-zinc-500 whitespace-nowrap" title={fullDate(scan.created_at)}>
                       {timeAgo(scan.created_at)}
                     </td>
@@ -300,6 +268,14 @@ export default function ScansPage() {
 
   useEffect(() => { load(page, imageFilter); }, [load, page]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { listTags().then(setAvailableTags).catch(() => {}); }, []);
+
+  // Auto-open new scan modal when navigated from sidebar CTA (?new=1)
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      modal.open();
+      router.replace('/scans');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-refresh top-level when any image has an active scan
   useEffect(() => {
@@ -565,17 +541,16 @@ export default function ScansPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={9} className="py-16 text-center">
-                  <div className="flex justify-center">
-                    <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
-                  </div>
-                </td>
-              </tr>
+              Array.from({ length: 5 }).map((_, i) => <ImageRowSkeleton key={i} />)
             ) : images.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-16 text-center text-zinc-500 text-sm">
-                  {imageFilter ? 'No images match your filter.' : 'No scans yet. Create one to get started.'}
+                <td colSpan={9} className="py-4">
+                  <EmptyState
+                    icon={<Shield01Icon size={28} />}
+                    title={imageFilter ? 'No images match your filter' : 'No scans yet'}
+                    description={imageFilter ? 'Try a different search term or clear the filter.' : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.'}
+                    action={imageFilter ? undefined : { label: '+ New Scan', onClick: modal.open }}
+                  />
                 </td>
               </tr>
             ) : images.map((img, i) => {
@@ -658,10 +633,10 @@ export default function ScansPage() {
                     </td>
 
                     {/* Severity from latest scan */}
-                    <td className="px-3 py-3.5 text-center"><SevCount count={img.critical_count} cls={SEV.critical} /></td>
-                    <td className="px-3 py-3.5 text-center"><SevCount count={img.high_count}    cls={SEV.high}     /></td>
-                    <td className="px-3 py-3.5 text-center"><SevCount count={img.medium_count}  cls={SEV.medium}   /></td>
-                    <td className="px-3 py-3.5 text-center"><SevCount count={img.low_count}     cls={SEV.low}      /></td>
+                    <td className="px-3 py-3.5 text-center"><SevCount count={img.critical_count} level="critical" /></td>
+                    <td className="px-3 py-3.5 text-center"><SevCount count={img.high_count}    level="high"     /></td>
+                    <td className="px-3 py-3.5 text-center"><SevCount count={img.medium_count}  level="medium"   /></td>
+                    <td className="px-3 py-3.5 text-center"><SevCount count={img.low_count}     level="low"      /></td>
                   </tr>
 
                   {/* Expanded children */}

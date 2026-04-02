@@ -2,6 +2,10 @@
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
+const SCAN_PAGE_SIZE = 100;
+const VULN_PAGE_SIZE = 500;
+const PAGE_BATCH_SIZE = 4;
+
 interface Comment { id: string; user_id: string; content: string; username?: string; created_at: string; }
 interface Tag { id: string; name: string; color: string; }
 interface Vulnerability {
@@ -17,7 +21,7 @@ interface Scan {
   low_count: number; unknown_count: number; suppressed_count: number;
   trivy_version: string; started_at: string | null; completed_at: string | null;
   created_at: string; architecture?: string; os_family?: string; os_name?: string;
-  image_location?: string;
+  image_location?: string; helm_chart?: string; helm_source_path?: string;
   tags?: Tag[];
 }
 
@@ -42,6 +46,25 @@ interface Filters {
   showStarted: boolean;
   showCompleted: boolean;
   showTrivyVersion: boolean;
+}
+
+interface PaginatedResponse<T> {
+  data?: T[];
+  total?: number;
+  page?: number;
+  limit?: number;
+}
+
+interface HelmRunDetailResponse {
+  run: {
+    id: string;
+    chart_url: string;
+  };
+  items: Array<{
+    key: string;
+    attempt_count: number;
+    latest_scan: Scan;
+  }>;
 }
 
 const SEV_COLORS: Record<string, { bg: string; text: string; light: string }> = {
@@ -84,6 +107,84 @@ function filterVulns(vulns: Vulnerability[], f: Filters): Vulnerability[] {
     if (f.onlyHasFix && !v.fixed_version) return false;
     return true;
   });
+}
+
+async function fetchPaginatedCollection<T>(
+  fetchPage: (page: number) => Promise<PaginatedResponse<T>>,
+  defaultPageSize: number,
+): Promise<T[]> {
+  const firstPage = await fetchPage(1);
+  const firstItems = firstPage.data ?? [];
+  const total = firstPage.total ?? firstItems.length;
+  const pageSize = firstPage.limit && firstPage.limit > 0 ? firstPage.limit : defaultPageSize;
+
+  if (total <= firstItems.length || pageSize <= 0) {
+    return firstItems;
+  }
+
+  const totalPages = Math.ceil(total / pageSize);
+  const allItems = [...firstItems];
+
+  for (let startPage = 2; startPage <= totalPages; startPage += PAGE_BATCH_SIZE) {
+    const pages: number[] = [];
+    for (let page = startPage; page < startPage + PAGE_BATCH_SIZE && page <= totalPages; page++) {
+      pages.push(page);
+    }
+
+    const responses = await Promise.all(pages.map(fetchPage));
+    for (const response of responses) {
+      allItems.push(...(response.data ?? []));
+    }
+  }
+
+  return allItems;
+}
+
+async function fetchScan(api: string, headers: HeadersInit, scanId: string): Promise<Scan | null> {
+  const response = await fetch(`${api}/api/v1/scans/${scanId}`, { headers });
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json();
+}
+
+async function fetchAllVulnerabilities(api: string, headers: HeadersInit, scanId: string): Promise<Vulnerability[]> {
+  return fetchPaginatedCollection<Vulnerability>(async (page) => {
+    const response = await fetch(`${api}/api/v1/scans/${scanId}/vulnerabilities?page=${page}&limit=${VULN_PAGE_SIZE}`, { headers });
+    if (!response.ok) {
+      throw new Error(`Failed to load vulnerabilities for scan ${scanId}`);
+    }
+
+    return response.json();
+  }, VULN_PAGE_SIZE);
+}
+
+async function fetchAllChartScans(api: string, headers: HeadersInit, helmChart: string): Promise<Scan[]> {
+  return fetchPaginatedCollection<Scan>(async (page) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(SCAN_PAGE_SIZE),
+      helm_chart: helmChart,
+    });
+
+    const response = await fetch(`${api}/api/v1/scans/?${params.toString()}`, { headers });
+    if (!response.ok) {
+      throw new Error('Failed to load Helm chart scans');
+    }
+
+    return response.json();
+  }, SCAN_PAGE_SIZE);
+}
+
+async function fetchRunScans(api: string, headers: HeadersInit, helmRun: string): Promise<Scan[]> {
+  const response = await fetch(`${api}/api/v1/helm/runs/${helmRun}`, { headers });
+  if (!response.ok) {
+    throw new Error('Failed to load Helm run');
+  }
+
+  const detail: HelmRunDetailResponse = await response.json();
+  return (detail.items ?? []).map((item) => item.latest_scan);
 }
 
 function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => void }) {
@@ -234,6 +335,8 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
             ...(filters.showStarted ? [['Started', fmt(scan.started_at), false] as [string, string, boolean]] : []),
             ...(filters.showCompleted ? [['Completed', fmt(scan.completed_at), false] as [string, string, boolean]] : []),
             ...(filters.showTrivyVersion ? [['Trivy Version', scan.trivy_version || '—', false] as [string, string, boolean]] : []),
+            ...(scan.helm_chart ? [['Helm Chart', scan.helm_chart, true] as [string, string, boolean]] : []),
+            ...(scan.helm_source_path ? [['Helm Source', scan.helm_source_path, false] as [string, string, boolean]] : []),
             ...(scan.os_family ? [['OS', `${scan.os_family} ${scan.os_name}`.trim(), false] as [string, string, boolean]] : []),
             ...(scan.architecture ? [['Architecture', scan.architecture, false] as [string, string, boolean]] : []),
             ...(scan.tags && scan.tags.length > 0 ? [['Tags', scan.tags.map(t => t.name).join(', '), false] as [string, string, boolean]] : []),
@@ -498,7 +601,15 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
 
 function PrintReport() {
   const params = useSearchParams();
-  const scanIds = (params.get('scans') ?? '').split(',').filter(Boolean);
+  const scansParam = params.get('scans') ?? '';
+  const helmChart = params.get('helmChart') ?? '';
+  const helmRun = params.get('helmRun') ?? '';
+  const scanIds = scansParam.split(',').filter(Boolean);
+  const token = typeof window !== 'undefined' ? localStorage.getItem('justscan_token') : null;
+  const hasRequestTarget = scanIds.length > 0 || Boolean(helmChart) || Boolean(helmRun);
+  const requestError = !hasRequestTarget
+    ? 'No scan IDs, Helm chart, or Helm run provided.'
+    : (token ? '' : 'Not authenticated.');
 
   const [data, setData] = useState<ScanData[]>([]);
   const [error, setError] = useState('');
@@ -517,30 +628,42 @@ function PrintReport() {
   });
 
   useEffect(() => {
-    if (!scanIds.length) { setError('No scan IDs provided.'); return; }
-    const token = localStorage.getItem('justscan_token');
-    if (!token) { setError('Not authenticated.'); return; }
+    if (requestError || !token) {
+      return;
+    }
+
+    const requestedScanIds = scansParam.split(',').filter(Boolean);
 
     const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
     const headers = { Authorization: `Bearer ${token}` };
 
-    Promise.all(scanIds.map(async (scanId): Promise<ScanData | null> => {
-      const [scanRes, vulnRes] = await Promise.all([
-        fetch(`${api}/api/v1/scans/${scanId}`, { headers }),
-        fetch(`${api}/api/v1/scans/${scanId}/vulnerabilities?page=1&limit=500`, { headers }),
-      ]);
-      if (!scanRes.ok) return null;
-      const scan: Scan = await scanRes.json();
-      const vulnData = vulnRes.ok ? await vulnRes.json() : { data: [] };
-      return { scan, vulns: vulnData.data ?? [] };
-    })).then(results => {
-      const valid = results.filter((r): r is ScanData => r !== null);
-      if (!valid.length) setError('Failed to load scans.');
-      else setData(valid);
-    }).catch(e => setError(e.message));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    async function loadReport() {
+      setError('');
 
+      const scansToLoad = requestedScanIds.length
+        ? (await Promise.all(requestedScanIds.map((scanId) => fetchScan(api, headers, scanId)))).filter((scan): scan is Scan => scan !== null)
+        : helmRun
+          ? await fetchRunScans(api, headers, helmRun)
+          : await fetchAllChartScans(api, headers, helmChart);
+
+      if (!scansToLoad.length) {
+        setError(requestedScanIds.length ? 'Failed to load scans.' : helmRun ? 'No scans found for this Helm run.' : 'No scans found for this Helm chart.');
+        setData([]);
+        return;
+      }
+
+      const results = await Promise.all(scansToLoad.map(async (scan): Promise<ScanData> => ({
+        scan,
+        vulns: await fetchAllVulnerabilities(api, headers, scan.id),
+      })));
+
+      setData(results);
+    }
+
+    loadReport().catch((e) => setError(e instanceof Error ? e.message : 'Failed to load report.'));
+  }, [helmChart, helmRun, requestError, scansParam, token]);
+
+    if (requestError) return <div style={{ padding: 40, color: '#dc2626', fontFamily: 'sans-serif' }}><strong>Error:</strong> {requestError}</div>;
   if (error) return <div style={{ padding: 40, color: '#dc2626', fontFamily: 'sans-serif' }}><strong>Error:</strong> {error}</div>;
   if (!data.length) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#6b7280', gap: 12 }}>
@@ -551,6 +674,8 @@ function PrintReport() {
   );
 
   const totalActive = data.reduce((sum, d) => sum + filterVulns(d.vulns.filter(v => !v.suppression), filters).length, 0);
+  const resolvedHelmChart = helmChart || data.find(({ scan }) => scan.helm_chart)?.scan.helm_chart || '';
+  const reportTitle = resolvedHelmChart ? 'Helm Chart Security Report' : 'Security Vulnerability Report';
 
   return (
     <>
@@ -567,17 +692,27 @@ function PrintReport() {
         body { margin: 0; padding: 0; background: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; }
       `}</style>
 
-      <div style={{ maxWidth: '210mm', margin: '0 auto', padding: '32px 40px' }}>
+      <div style={{ width: '100%', maxWidth: '178mm', margin: '0 auto', padding: '24px 0 32px' }}>
 
         {/* Report header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: 20, marginBottom: 28 }}>
           <div style={{ borderLeft: '5px solid #7c3aed', paddingLeft: 16 }}>
-            <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>Security Vulnerability Report</h1>
+            <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>{reportTitle}</h1>
             <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 0' }}>
               Generated {new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </p>
+            {resolvedHelmChart && (
+              <p style={{ fontFamily: 'monospace', fontSize: 11, color: '#6b7280', margin: '8px 0 0', wordBreak: 'break-all' }}>
+                Chart: {resolvedHelmChart}
+              </p>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
+            {resolvedHelmChart && (
+              <span style={{ background: '#ede9fe', color: '#7c3aed', fontWeight: 700, fontSize: 13, padding: '4px 12px', borderRadius: 999, border: '1px solid #c4b5fd' }}>
+                Helm chart
+              </span>
+            )}
             <span style={{ background: '#ede9fe', color: '#7c3aed', fontWeight: 700, fontSize: 13, padding: '4px 12px', borderRadius: 999, border: '1px solid #c4b5fd' }}>
               {data.length} image{data.length !== 1 ? 's' : ''}
             </span>
@@ -593,7 +728,7 @@ function PrintReport() {
             <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #7c3aed', paddingBottom: 6, display: 'inline-block' }}>
               Summary
             </p>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
               <thead>
                 <tr style={{ background: '#f9fafb' }}>
                   {['Image', 'Status', 'Critical', 'High', 'Medium', 'Low'].map(h => (
@@ -604,8 +739,8 @@ function PrintReport() {
               <tbody>
                 {data.map(({ scan }) => (
                   <tr key={scan.id}>
-                    <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 11 }}>
-                      <a href={`#scan-${scan.id}`} style={{ color: '#7c3aed', textDecoration: 'none' }}>{scan.image_name}:{scan.image_tag}</a>
+                    <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 11, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
+                      <a href={`#scan-${scan.id}`} style={{ color: '#7c3aed', textDecoration: 'none', wordBreak: 'break-all', overflowWrap: 'anywhere' }}>{scan.image_name}:{scan.image_tag}</a>
                     </td>
                     <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', textAlign: 'center' }}>
                       <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: scan.status === 'completed' ? '#dcfce7' : '#fef2f2', color: scan.status === 'completed' ? '#15803d' : '#dc2626' }}>{scan.status}</span>

@@ -257,6 +257,15 @@ export default function PublicScanResultPage() {
         </Link>
 
         <div className="flex items-center gap-2">
+          {scan?.helm_scan_run_id && (
+            <Link
+              href={`/public/scan/helm/runs/${scan.helm_scan_run_id}`}
+              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+            >
+              Helm run →
+            </Link>
+          )}
           {scan?.status === 'completed' && (
             <Link
               href={`/reports/print?scans=${id}`}
@@ -270,7 +279,7 @@ export default function PublicScanResultPage() {
               Export
             </Link>
           )}
-          {scan?.status === 'completed' && (
+          {(scan?.status === 'completed' || scan?.status === 'failed') && (
             <button
               onClick={handleRescan}
               disabled={reScanning}
@@ -319,6 +328,18 @@ export default function PublicScanResultPage() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             New scan
           </Link>
+          {scan?.helm_scan_run_id && (
+            <Link
+              href={`/public/scan/helm/runs/${scan.helm_scan_run_id}`}
+              className="inline-flex items-center gap-1.5 text-sm transition-colors mb-3 ml-3"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              Back to Helm run
+            </Link>
+          )}
           <h1 className="text-xl font-bold font-mono break-all" style={{ color: 'var(--text-primary)' }}>{imageName}</h1>
           {scan?.image_digest && <p className="text-xs font-mono mt-1 break-all" style={{ color: 'var(--text-faint)' }}>{scan.image_digest}</p>}
           {scan?.architecture && (

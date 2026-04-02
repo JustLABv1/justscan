@@ -1,5 +1,6 @@
 'use client';
 import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
+import { ChartSkeleton, RecentScanRowSkeleton, StatCardSkeleton } from '@/components/ui/skeleton';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
     Activity01Icon,
@@ -497,8 +498,48 @@ export default function DashboardPage() {
   }
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+    <div className="relative p-6 space-y-5 max-w-7xl mx-auto">
+      {/* Header skeleton */}
+      <div className="flex items-start justify-between">
+        <div className="space-y-2">
+          <div className="skeleton h-8 w-36 rounded-lg" />
+          <div className="skeleton h-4 w-52 rounded" />
+        </div>
+        <div className="skeleton h-9 w-28 rounded-xl" />
+      </div>
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
+      </div>
+      {/* Recent scans + severity */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-4">
+        <div className="rounded-2xl p-5"
+          style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="skeleton w-9 h-9 rounded-xl" />
+            <div className="space-y-1.5">
+              <div className="skeleton h-4 w-28 rounded" />
+              <div className="skeleton h-3 w-36 rounded" />
+            </div>
+          </div>
+          {Array.from({ length: 6 }).map((_, i) => <RecentScanRowSkeleton key={i} />)}
+        </div>
+        <div className="rounded-2xl p-5"
+          style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
+          <div className="skeleton h-4 w-36 rounded mb-4" />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="mb-3">
+              <div className="flex justify-between mb-1.5">
+                <div className="skeleton h-3 w-16 rounded" />
+                <div className="skeleton h-3 w-12 rounded" />
+              </div>
+              <div className="skeleton h-2 w-full rounded-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Chart skeleton */}
+      <ChartSkeleton />
     </div>
   );
 

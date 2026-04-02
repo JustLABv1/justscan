@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"justscan-backend/functions/audit"
@@ -31,61 +30,91 @@ func CreatePublicHelmScans(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var req struct {
-			ChartURL string                `json:"chart_url" binding:"required"`
-			Images   []publicHelmScanImage `json:"images" binding:"required,min=1"`
-			Platform string                `json:"platform"`
+			ChartURL     string                `json:"chart_url" binding:"required"`
+			ChartName    string                `json:"chart_name"`
+			ChartVersion string                `json:"chart_version"`
+			Images       []publicHelmScanImage `json:"images" binding:"required,min=1"`
+			Platform     string                `json:"platform"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
 			return
 		}
 
-		var created []models.Scan
-		now := time.Now()
+		type normalizedScanImage struct {
+			Name       string
+			Tag        string
+			SourcePath string
+		}
 
+		validImages := make([]normalizedScanImage, 0, len(req.Images))
 		for _, img := range req.Images {
-			name, tag := splitPublicHelmRef(img.FullRef)
+			_, name, tag := scanner.NormalizeHelmImageRef(img.FullRef)
 			if name == "" {
 				continue
 			}
+			validImages = append(validImages, normalizedScanImage{
+				Name:       name,
+				Tag:        tag,
+				SourcePath: img.SourcePath,
+			})
+		}
+		if len(validImages) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "no valid images found in request"})
+			return
+		}
 
-			scan := &models.Scan{
-				ImageName:      name,
-				ImageTag:       tag,
-				Platform:       req.Platform,
-				Status:         models.ScanStatusPending,
-				CreatedAt:      now,
-				HelmChart:      req.ChartURL,
-				HelmSourcePath: img.SourcePath,
-				// UserID is nil — marks as public scan
+		run := &models.HelmScanRun{
+			ChartURL:     req.ChartURL,
+			ChartName:    req.ChartName,
+			ChartVersion: req.ChartVersion,
+			Platform:     req.Platform,
+			CreatedAt:    time.Now(),
+		}
+
+		var created []models.Scan
+		if err := db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
+			if _, err := tx.NewInsert().Model(run).Exec(ctx); err != nil {
+				return err
 			}
 
-			if _, err := db.NewInsert().Model(scan).Exec(c.Request.Context()); err != nil {
-				log.Errorf("CreatePublicHelmScans DB insert error for %s: %v", img.FullRef, err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create scan for " + img.FullRef})
-				return
+			created = make([]models.Scan, 0, len(validImages))
+			for _, img := range validImages {
+				scan := &models.Scan{
+					ImageName:        img.Name,
+					ImageTag:         img.Tag,
+					Platform:         req.Platform,
+					Status:           models.ScanStatusPending,
+					CreatedAt:        run.CreatedAt,
+					HelmScanRunID:    &run.ID,
+					HelmChart:        req.ChartURL,
+					HelmChartName:    req.ChartName,
+					HelmChartVersion: req.ChartVersion,
+					HelmSourcePath:   img.SourcePath,
+				}
+
+				if _, err := tx.NewInsert().Model(scan).Exec(ctx); err != nil {
+					return err
+				}
+
+				created = append(created, *scan)
 			}
 
+			return nil
+		}); err != nil {
+			log.Errorf("CreatePublicHelmScans DB insert error for %s: %v", req.ChartURL, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create Helm scan run"})
+			return
+		}
+
+		for _, scan := range created {
 			scanner.EnqueueScan(scan.ID, db, nil, req.Platform)
-			created = append(created, *scan)
 		}
 
 		clientIP := c.ClientIP()
 		go audit.Write(context.Background(), db, "public", "scan.public.helm.create",
-			fmt.Sprintf("Public helm scan created from %s (%d images, ip=%s)", req.ChartURL, len(created), clientIP))
+			fmt.Sprintf("Public helm scan run %s created from %s (%d images, ip=%s)", run.ID, req.ChartURL, len(created), clientIP))
 
-		c.JSON(http.StatusCreated, gin.H{"scans": created})
+		c.JSON(http.StatusCreated, gin.H{"run": run, "scans": created})
 	}
-}
-
-func splitPublicHelmRef(ref string) (name, tag string) {
-	ref = strings.TrimSpace(ref)
-	if ref == "" {
-		return "", ""
-	}
-	idx := strings.LastIndex(ref, ":")
-	if idx <= 0 || strings.Contains(ref[idx:], "/") {
-		return ref, "latest"
-	}
-	return ref[:idx], ref[idx+1:]
 }

@@ -26,11 +26,16 @@ func RescanShared(db *bun.DB) gin.HandlerFunc {
 		}
 
 		newScan := &models.Scan{
-			ImageName: orig.ImageName,
-			ImageTag:  orig.ImageTag,
-			Platform:  orig.Platform,
-			Status:    models.ScanStatusPending,
-			CreatedAt: time.Now(),
+			ImageName:        orig.ImageName,
+			ImageTag:         orig.ImageTag,
+			Platform:         orig.Platform,
+			HelmScanRunID:    orig.HelmScanRunID,
+			HelmChart:        orig.HelmChart,
+			HelmChartName:    orig.HelmChartName,
+			HelmChartVersion: orig.HelmChartVersion,
+			HelmSourcePath:   orig.HelmSourcePath,
+			Status:           models.ScanStatusPending,
+			CreatedAt:        time.Now(),
 		}
 
 		// Determine caller authentication status

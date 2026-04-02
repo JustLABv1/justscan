@@ -1,6 +1,8 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { createTag, deleteTag, listTags, Tag, updateTag } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Tag01Icon } from 'hugeicons-react';
@@ -79,14 +81,26 @@ export default function TagsPage() {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-16">
-          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="glass-panel rounded-2xl overflow-hidden">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 px-4 py-3.5"
+              style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}>
+              <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+              <Skeleton className="h-4 w-28 rounded" />
+              <div className="flex-1" />
+              <Skeleton className="h-4 w-16 rounded" />
+              <Skeleton className="h-7 w-7 rounded-lg" />
+              <Skeleton className="h-7 w-7 rounded-lg" />
+            </div>
+          ))}
         </div>
       ) : tags.length === 0 ? (
-        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
-          <Tag01Icon size={32} color="rgba(113,113,122,0.5)" />
-          <p className="text-sm text-zinc-500">No tags yet. Create one to organize your scans.</p>
-        </div>
+        <EmptyState
+          icon={<Tag01Icon size={28} />}
+          title="No tags yet"
+          description="Create color-coded tags to group and filter your scans. Tags can be assigned to any scan."
+          action={{ label: '+ New Tag', onClick: openCreate }}
+        />
       ) : (
         <div className="glass-panel rounded-2xl overflow-hidden">
           {tags.map((tag, i) => (

@@ -1,6 +1,8 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { EmptyState } from '@/components/ui/empty-state';
+import { TableRowSkeleton } from '@/components/ui/skeleton';
 import {
     createWatchlistItem, deleteWatchlistItem, listRegistries, listWatchlist,
     Registry, triggerWatchlistScan, updateWatchlistItem, WatchlistItem,
@@ -100,14 +102,30 @@ export default function WatchlistPage() {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-16">
-          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="glass-panel rounded-2xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Schedule</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Registry</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Last Scan</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 4 }).map((_, i) => <TableRowSkeleton key={i} cols={6} />)}
+            </tbody>
+          </table>
         </div>
       ) : items.length === 0 ? (
-        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
-          <EyeIcon size={32} color="rgba(113,113,122,0.5)" />
-          <p className="text-sm text-zinc-500">No images being watched. Add one to auto-scan on a schedule.</p>
-        </div>
+        <EmptyState
+          icon={<EyeIcon size={28} />}
+          title="No images being watched"
+          description="Add a Docker image to auto-scan it on a recurring schedule and get notified when new vulnerabilities appear."
+          action={{ label: '+ Add Image', onClick: openCreate }}
+        />
       ) : (
         <div className="glass-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">

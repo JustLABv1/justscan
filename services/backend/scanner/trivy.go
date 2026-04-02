@@ -135,10 +135,7 @@ func RunScan(ctx context.Context, imageName, imageTag string, envVars []string, 
 	scanCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	imageRef := imageName
-	if imageTag != "" {
-		imageRef = imageName + ":" + imageTag
-	}
+	imageRef := buildImageRef(imageName, imageTag)
 	args := []string{"image", "--format", "json", "--exit-code", "0", "--no-progress"}
 	if cacheDir != "" {
 		args = append(args, "--cache-dir", cacheDir)
@@ -265,10 +262,7 @@ func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []stri
 	scanCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	imageRef := imageName
-	if imageTag != "" {
-		imageRef = imageName + ":" + imageTag
-	}
+	imageRef := buildImageRef(imageName, imageTag)
 	args := []string{"image", "--format", "cyclonedx", "--exit-code", "0", "--no-progress"}
 	if cacheDir != "" {
 		args = append(args, "--cache-dir", cacheDir)
@@ -292,6 +286,24 @@ func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []stri
 		return nil, fmt.Errorf("failed to parse trivy sbom output: %w", err)
 	}
 	return &sbom, nil
+}
+
+func buildImageRef(imageName, imageTag string) string {
+	trimmedName := strings.TrimSpace(imageName)
+	trimmedTag := strings.TrimSpace(imageTag)
+	if trimmedName == "" {
+		return ""
+	}
+	if trimmedTag == "" {
+		return trimmedName
+	}
+	if strings.Contains(trimmedName, "@") {
+		return trimmedName
+	}
+	if strings.Contains(trimmedTag, ":") && strings.LastIndex(trimmedTag, ":") > 0 {
+		return trimmedName + "@" + trimmedTag
+	}
+	return trimmedName + ":" + trimmedTag
 }
 
 // ParseVulnerabilities converts Trivy output to model Vulnerabilities, deduplicating by VulnID+PkgName.

@@ -38,7 +38,10 @@ type Scan struct {
 	CreatedAt               time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	ShareToken              *string    `bun:"share_token,type:varchar(64)" json:"share_token,omitempty"`
 	ShareVisibility         *string    `bun:"share_visibility,type:varchar(20)" json:"share_visibility,omitempty"`
+	HelmScanRunID           *uuid.UUID `bun:"helm_scan_run_id,type:uuid" json:"helm_scan_run_id,omitempty"`
 	HelmChart               string     `bun:"helm_chart,type:text,default:''" json:"helm_chart,omitempty"`
+	HelmChartName           string     `bun:"helm_chart_name,type:text,default:''" json:"helm_chart_name,omitempty"`
+	HelmChartVersion        string     `bun:"helm_chart_version,type:text,default:''" json:"helm_chart_version,omitempty"`
 	HelmSourcePath          string     `bun:"helm_source_path,type:text,default:''" json:"helm_source_path,omitempty"`
 
 	// Relations (not stored in DB, populated on join)

@@ -3,19 +3,19 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import {
-    createStatusPage,
-    deleteStatusPage,
-    getStatusPage,
-    listStatusPages,
-    listStatusPageTargetOptions,
-    StatusPage,
-    StatusPagePayload,
-    StatusPageTarget,
-    StatusPageTargetOption,
-    updateStatusPage,
+  createStatusPage,
+  deleteStatusPage,
+  getStatusPage,
+  listStatusPages,
+  listStatusPageTargetOptions,
+  StatusPage,
+  StatusPagePayload,
+  StatusPageTarget,
+  StatusPageTargetOption,
+  updateStatusPage,
 } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
-import { Button, Card, Input, Label, ListBox, Modal, Select, Switch, TextArea, useOverlayState } from '@heroui/react';
+import { Button, Card, Checkbox, Input, Label, ListBox, Modal, Select, Switch, TextArea, useOverlayState } from '@heroui/react';
 import { Delete01Icon, EyeIcon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -27,6 +27,45 @@ const fieldLabelCls = 'block text-sm font-medium text-zinc-600 dark:text-zinc-30
 
 const visibilityOptions: Array<StatusPage['visibility']> = ['private', 'authenticated', 'public'];
 const updateLevelOptions = ['info', 'maintenance', 'incident'] as const;
+const exactSelectionBadgeStyle = {
+  background: 'rgba(124,58,237,0.12)',
+  border: '1px solid rgba(124,58,237,0.22)',
+  color: '#c4b5fd',
+};
+
+type ParsedImagePattern = {
+  pattern: string;
+  regex: RegExp | null;
+  error: string;
+};
+
+function splitImagePatterns(value: string) {
+  const seen = new Set<string>();
+  return value
+    .split(/\r?\n/)
+    .map(pattern => pattern.trim())
+    .filter(pattern => {
+      if (!pattern || seen.has(pattern)) {
+        return false;
+      }
+      seen.add(pattern);
+      return true;
+    });
+}
+
+function matchesPattern(regex: RegExp, option: StatusPageTargetOption) {
+  return regex.test(option.label) || regex.test(option.image_name) || regex.test(option.image_tag);
+}
+
+function describeScope(page: StatusPage) {
+  if (page.include_all_tags) {
+    return 'All image tags';
+  }
+  if ((page.image_patterns ?? []).length > 0) {
+    return 'Exact tags + regex';
+  }
+  return 'Curated tags';
+}
 
 export default function StatusPagesPage() {
   const [pages, setPages] = useState<StatusPage[]>([]);
@@ -44,6 +83,8 @@ export default function StatusPagesPage() {
   const [includeAllTags, setIncludeAllTags] = useState(false);
   const [staleAfterHours, setStaleAfterHours] = useState('72');
   const [selectedTargetKeys, setSelectedTargetKeys] = useState<Set<string>>(new Set());
+  const [targetQuery, setTargetQuery] = useState('');
+  const [imagePatternText, setImagePatternText] = useState('');
   const [updateTitle, setUpdateTitle] = useState('');
   const [updateBody, setUpdateBody] = useState('');
   const [updateLevel, setUpdateLevel] = useState<(typeof updateLevelOptions)[number]>('info');
@@ -109,11 +150,62 @@ export default function StatusPagesPage() {
       .filter((target): target is StatusPageTarget => Boolean(target));
   }, [selectedTargetKeys, targetOptions]);
 
-  const selectedTargetSummary = useMemo(() => {
-    if (selectedTargets.length === 0) return 'No image tags selected';
-    if (selectedTargets.length === 1) return `${selectedTargets[0].image_name}:${selectedTargets[0].image_tag}`;
-    return `${selectedTargets.length} image tags selected`;
-  }, [selectedTargets]);
+  const parsedImagePatterns = useMemo<ParsedImagePattern[]>(() => {
+    return splitImagePatterns(imagePatternText).map(pattern => {
+      try {
+        return {
+          pattern,
+          regex: new RegExp(pattern),
+          error: '',
+        };
+      } catch (error) {
+        return {
+          pattern,
+          regex: null,
+          error: error instanceof Error ? error.message : 'Invalid regex pattern',
+        };
+      }
+    });
+  }, [imagePatternText]);
+
+  const imagePatterns = useMemo(
+    () => parsedImagePatterns.filter(pattern => !pattern.error).map(pattern => pattern.pattern),
+    [parsedImagePatterns],
+  );
+
+  const invalidImagePatterns = useMemo(
+    () => parsedImagePatterns.filter(pattern => Boolean(pattern.error)),
+    [parsedImagePatterns],
+  );
+
+  const filteredTargetOptions = useMemo(() => {
+    const query = targetQuery.trim().toLowerCase();
+    if (!query) {
+      return targetOptions;
+    }
+    return targetOptions.filter(option => (
+      option.label.toLowerCase().includes(query)
+      || option.image_name.toLowerCase().includes(query)
+      || option.image_tag.toLowerCase().includes(query)
+      || option.latest_status.toLowerCase().includes(query)
+    ));
+  }, [targetOptions, targetQuery]);
+
+  const regexMatchedOptions = useMemo(() => {
+    const regexes = parsedImagePatterns.flatMap(pattern => (pattern.regex ? [pattern.regex] : []));
+    if (includeAllTags || regexes.length === 0) {
+      return [];
+    }
+
+    return targetOptions.filter(option => {
+      if (selectedTargetKeys.has(option.id)) {
+        return false;
+      }
+      return regexes.some(regex => matchesPattern(regex, option));
+    });
+  }, [includeAllTags, parsedImagePatterns, selectedTargetKeys, targetOptions]);
+
+  const scopeIsValid = includeAllTags || selectedTargets.length > 0 || imagePatterns.length > 0;
 
   function resetForm() {
     setEditing(null);
@@ -124,6 +216,8 @@ export default function StatusPagesPage() {
     setIncludeAllTags(false);
     setStaleAfterHours('72');
     setSelectedTargetKeys(new Set());
+    setTargetQuery('');
+    setImagePatternText('');
     setUpdateTitle('');
     setUpdateBody('');
     setUpdateLevel('info');
@@ -147,6 +241,8 @@ export default function StatusPagesPage() {
       setIncludeAllTags(full.page.include_all_tags);
       setStaleAfterHours(String(full.page.stale_after_hours));
       setSelectedTargetKeys(new Set((full.page.targets ?? []).map(target => `${target.image_name}:${target.image_tag}`)));
+      setTargetQuery('');
+      setImagePatternText((full.page.image_patterns ?? []).join('\n'));
       const firstUpdate = full.page.updates?.[0];
       setUpdateTitle(firstUpdate?.title ?? '');
       setUpdateBody(firstUpdate?.body ?? '');
@@ -186,6 +282,7 @@ export default function StatusPagesPage() {
       description,
       visibility,
       include_all_tags: includeAllTags,
+      image_patterns: imagePatterns,
       stale_after_hours: Number(staleAfterHours) || 72,
       targets: selectedTargets,
       updates: updateTitle.trim()
@@ -280,7 +377,7 @@ export default function StatusPagesPage() {
                       {page.visibility}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-zinc-500">{page.include_all_tags ? 'All image tags' : `${page.targets?.length ?? 0} selected`}</td>
+                  <td className="px-4 py-3 text-xs text-zinc-500">{describeScope(page)}</td>
                   <td className="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-300">/status/{page.slug}</td>
                   <td className="px-4 py-3 text-xs text-zinc-500">{timeAgo(page.updated_at)}</td>
                   <td className="px-4 py-3">
@@ -305,7 +402,7 @@ export default function StatusPagesPage() {
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
-          <Modal.Container size="lg" placement="center">
+          <Modal.Container size="cover" placement="center">
             <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editing ? 'Edit Status Page' : 'Create Status Page'}</Modal.Heading>
@@ -396,68 +493,231 @@ export default function StatusPagesPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <Label className={fieldLabelCls}>Selected Image Tags</Label>
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.95fr)]">
                     <div
-                      className={`rounded-xl overflow-hidden border${includeAllTags ? ' opacity-50 pointer-events-none' : ''}`}
+                      className={`space-y-3 rounded-2xl border p-4${includeAllTags ? ' opacity-50' : ''}`}
                       style={{ borderColor: 'var(--glass-border)', background: 'var(--input-bg)' }}
                     >
-                      {loadingOptions ? (
-                        <p className="px-3 py-3 text-sm text-zinc-500">Loading image tags…</p>
-                      ) : (
-                        <ListBox
-                          selectionMode="multiple"
-                          selectedKeys={selectedTargetKeys}
-                          onSelectionChange={selection => {
-                            if (selection === 'all') {
-                              setSelectedTargetKeys(new Set(targetOptions.map(option => option.id)));
-                              return;
-                            }
-                            setSelectedTargetKeys(new Set(Array.from(selection as Set<string>)));
-                          }}
-                          aria-label="Selected image tags"
-                          className="max-h-64 overflow-y-auto"
-                        >
-                          {targetOptions.map(option => (
-                            <ListBox.Item id={option.id} key={option.id} textValue={option.label}>
-                              <div className="grid w-full grid-cols-[minmax(0,1fr)_3rem_1.25rem] items-start gap-3">
-                                <div className="min-w-0">
-                                  <p className="font-mono text-sm break-words text-zinc-800 dark:text-zinc-100">{option.label}</p>
-                                  <p className="text-xs text-zinc-500 mt-0.5">{option.latest_status} · {timeAgo(option.observed_at)}</p>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Exact Image Tags</p>
+                          <p className="mt-1 text-xs leading-5 text-zinc-500">Pick individual `image:tag` entries for a tightly curated page.</p>
+                        </div>
+                        <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={exactSelectionBadgeStyle}>
+                          {selectedTargets.length} selected
+                        </span>
+                      </div>
+
+                      <Input
+                        className={`${fieldCls} font-mono`}
+                        placeholder="Filter by image, tag, or status"
+                        value={targetQuery}
+                        onChange={event => setTargetQuery(event.target.value)}
+                        disabled={includeAllTags}
+                      />
+
+                      <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                        {loadingOptions ? (
+                          <p className="px-4 py-4 text-sm text-zinc-500">Loading image tags…</p>
+                        ) : filteredTargetOptions.length === 0 ? (
+                          <p className="px-4 py-8 text-sm text-zinc-500">
+                            {targetQuery.trim() ? 'No image tags match the current filter.' : 'No tracked image tags are available yet.'}
+                          </p>
+                        ) : (
+                          <div className="max-h-80 overflow-y-auto divide-y">
+                            {filteredTargetOptions.map(option => {
+                              const isSelected = selectedTargetKeys.has(option.id);
+                              return (
+                                <div
+                                  key={option.id}
+                                  className="px-3 py-3 transition-colors"
+                                  style={isSelected
+                                    ? { background: 'rgba(124,58,237,0.09)' }
+                                    : undefined}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <Checkbox
+                                      isSelected={isSelected}
+                                      onChange={(checked: boolean) => {
+                                        setSelectedTargetKeys(current => {
+                                          const next = new Set(current);
+                                          if (checked) {
+                                            next.add(option.id);
+                                          } else {
+                                            next.delete(option.id);
+                                          }
+                                          return next;
+                                        });
+                                      }}
+                                      isDisabled={includeAllTags}
+                                    >
+                                      <Checkbox.Control className="mt-1 border border-zinc-500/40 data-[selected=true]:border-violet-500 data-[selected=true]:bg-violet-600">
+                                        <Checkbox.Indicator />
+                                      </Checkbox.Control>
+                                    </Checkbox>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedTargetKeys(current => {
+                                          const next = new Set(current);
+                                          if (next.has(option.id)) {
+                                            next.delete(option.id);
+                                          } else {
+                                            next.add(option.id);
+                                          }
+                                          return next;
+                                        });
+                                      }}
+                                      disabled={includeAllTags}
+                                      className="min-w-0 flex-1 text-left"
+                                    >
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <p className="font-mono text-sm break-all text-zinc-800 dark:text-zinc-100">{option.label}</p>
+                                        <span
+                                          className="rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize"
+                                          style={option.latest_status === 'failed'
+                                            ? { background: 'rgba(239,68,68,0.12)', color: '#f87171' }
+                                            : option.latest_status === 'completed'
+                                              ? { background: 'rgba(34,197,94,0.12)', color: '#4ade80' }
+                                              : { background: 'rgba(59,130,246,0.12)', color: '#93c5fd' }}
+                                        >
+                                          {option.latest_status}
+                                        </span>
+                                      </div>
+                                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                                        <span>Seen {timeAgo(option.observed_at)}</span>
+                                        <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171' }}>
+                                          C {option.critical_count}
+                                        </span>
+                                        <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: 'rgba(249,115,22,0.1)', color: '#fb923c' }}>
+                                          H {option.high_count}
+                                        </span>
+                                      </div>
+                                    </button>
+                                  </div>
                                 </div>
-                                <div className="pt-0.5 text-right text-xs text-zinc-500">
-                                  <p>C {option.critical_count}</p>
-                                  <p>H {option.high_count}</p>
-                                </div>
-                                <div className="flex justify-end pt-0.5">
-                                  <ListBox.ItemIndicator className="shrink-0 text-violet-400" />
-                                </div>
-                              </div>
-                            </ListBox.Item>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div
+                      className={`space-y-3 rounded-2xl border p-4${includeAllTags ? ' opacity-50' : ''}`}
+                      style={{ borderColor: 'var(--glass-border)', background: 'var(--input-bg)' }}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Regex Include Patterns</p>
+                          <p className="mt-1 text-xs leading-5 text-zinc-500">One RE2-compatible regex per line. Patterns match against `image:tag`, image name, and tag.</p>
+                        </div>
+                        <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={exactSelectionBadgeStyle}>
+                          {imagePatterns.length} active
+                        </span>
+                      </div>
+
+                      <TextArea
+                        className={`${textareaCls} min-h-40 font-mono`}
+                        placeholder={`^ghcr\\.io/acme/.+:prod-.*$\n^nginx$\n^.*:stable$`}
+                        value={imagePatternText}
+                        onChange={event => setImagePatternText(event.target.value)}
+                        disabled={includeAllTags}
+                      />
+
+                      <p className="text-xs leading-5 text-zinc-500">Use regex when the scope is tag-driven or too large to maintain manually. Invalid patterns block save.</p>
+
+                      {invalidImagePatterns.length > 0 && (
+                        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-3 py-3 text-xs text-red-400">
+                          {invalidImagePatterns.map(pattern => (
+                            <p key={pattern.pattern} className="font-mono break-all">{pattern.pattern}: {pattern.error}</p>
                           ))}
-                        </ListBox>
+                        </div>
                       )}
+
+                      <div className="rounded-2xl border px-3 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Preview</p>
+                          <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={exactSelectionBadgeStyle}>
+                            {regexMatchedOptions.length} matching
+                          </span>
+                        </div>
+
+                        {imagePatterns.length === 0 ? (
+                          <p className="mt-3 text-xs leading-5 text-zinc-500">Add a pattern to preview the tracked tags it would include.</p>
+                        ) : regexMatchedOptions.length === 0 ? (
+                          <p className="mt-3 text-xs leading-5 text-zinc-500">Current patterns do not match any tracked image tags outside your exact selections.</p>
+                        ) : (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {regexMatchedOptions.slice(0, 10).map(option => (
+                              <span
+                                key={option.id}
+                                className="rounded-full px-2.5 py-1 text-xs font-mono"
+                                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.2)', color: '#93c5fd' }}
+                              >
+                                {option.label}
+                              </span>
+                            ))}
+                            {regexMatchedOptions.length > 10 && (
+                              <span className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--glass-border)' }}>
+                                +{regexMatchedOptions.length - 10} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <p className="text-xs text-zinc-500">Choose one or more `image:tag` entries, or enable “Include all image tags”.</p>
-                  {!includeAllTags && selectedTargets.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedTargets.map(target => (
-                        <span
-                          key={`${target.image_name}:${target.image_tag}`}
-                          className="rounded-full px-2.5 py-1 text-xs font-medium"
-                          style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.22)', color: '#c4b5fd' }}
-                        >
-                          {target.image_name}:{target.image_tag}
-                        </span>
-                      ))}
+
+                  <p className="text-xs text-zinc-500">Choose one or more exact `image:tag` entries, add regex include patterns, or enable “Include all image tags”.</p>
+
+                  {!includeAllTags && (selectedTargets.length > 0 || imagePatterns.length > 0) && (
+                    <div className="space-y-3 rounded-2xl border px-4 py-4" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Publish Scope</p>
+                          <p className="mt-1 text-xs text-zinc-500">{selectedTargets.length} exact tag{selectedTargets.length === 1 ? '' : 's'} and {imagePatterns.length} regex pattern{imagePatterns.length === 1 ? '' : 's'} configured.</p>
+                        </div>
+                      </div>
+
+                      {selectedTargets.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {selectedTargets.slice(0, 12).map(target => (
+                            <span
+                              key={`${target.image_name}:${target.image_tag}`}
+                              className="rounded-full px-2.5 py-1 text-xs font-medium"
+                              style={exactSelectionBadgeStyle}
+                            >
+                              {target.image_name}:{target.image_tag}
+                            </span>
+                          ))}
+                          {selectedTargets.length > 12 && (
+                            <span className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--glass-border)' }}>
+                              +{selectedTargets.length - 12} more exact tags
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {imagePatterns.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {imagePatterns.map(pattern => (
+                            <span
+                              key={pattern}
+                              className="rounded-full px-2.5 py-1 text-xs font-mono"
+                              style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.2)', color: '#93c5fd' }}
+                            >
+                              {pattern}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
-                  {!includeAllTags && selectedTargets.length === 0 && !loadingOptions && (
-                    <p className="text-xs text-zinc-500">{selectedTargetSummary}</p>
-                  )}
-                  {!includeAllTags && !loadingOptions && selectedTargets.length === 0 && (
-                    <p className="text-xs text-red-400">Select at least one image tag.</p>
+
+                  {!includeAllTags && !loadingOptions && !scopeIsValid && (
+                    <p className="text-xs text-red-400">Select at least one exact image tag or add a regex include pattern.</p>
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
@@ -492,7 +752,7 @@ export default function StatusPagesPage() {
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <Button onPress={modal.close} className="rounded-xl" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>Cancel</Button>
-                <Button type="submit" form="status-page-form" isDisabled={saving || (!includeAllTags && selectedTargets.length === 0)}
+                <Button type="submit" form="status-page-form" isDisabled={saving || invalidImagePatterns.length > 0 || !scopeIsValid}
                   className="rounded-xl text-white"
                   style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}

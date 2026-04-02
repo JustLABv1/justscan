@@ -1,41 +1,119 @@
 'use client';
 
 import { Logo } from '@/components/logo';
-import { ApiError, getStatusPageBySlug, getToken, StatusPageItem, StatusPageResponse } from '@/lib/api';
+import { ApiError, getStatusPageBySlug, getToken, listStatusPageItemVulnerabilities, StatusPageItem, StatusPageResponse, Vulnerability } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
+import { Button, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const AUTO_REFRESH_MS = 30000;
+const VULN_PAGE_SIZE = 25;
+const STATUS_SELECT_TRIGGER_CLS = 'glass-input min-h-11 rounded-full px-3 text-sm';
+const STATUS_INPUT_CLS = 'glass-input min-h-11 rounded-xl px-3 text-sm outline-none';
+const STATUS_PRIORITY: Record<string, number> = {
+  failed: 0,
+  degraded: 1,
+  stale: 2,
+  running: 3,
+  pending: 4,
+  healthy: 5,
+  cancelled: 6,
+};
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'failed', label: 'Failed' },
+  { key: 'degraded', label: 'Degraded' },
+  { key: 'stale', label: 'Stale' },
+  { key: 'healthy', label: 'Healthy' },
+] as const;
+const SORT_OPTIONS = [
+  { key: 'display', label: 'Configured order' },
+  { key: 'worst', label: 'Worst first' },
+  { key: 'stale', label: 'Stalest first' },
+  { key: 'latest', label: 'Newest scan' },
+] as const;
+const VULN_SEVERITY_OPTIONS = [
+  { key: '__all__', label: 'All severities' },
+  { key: 'CRITICAL', label: 'Critical' },
+  { key: 'HIGH', label: 'High' },
+  { key: 'MEDIUM', label: 'Medium' },
+  { key: 'LOW', label: 'Low' },
+] as const;
 
-// ── Severity colours (used only in charts + numbers) ──────────────────────────
 const SEV = {
   critical: '#ef4444',
-  high:     '#f97316',
-  medium:   '#eab308',
-  low:      '#71717a',
+  high: '#f97316',
+  medium: '#eab308',
+  low: '#71717a',
 } as const;
 
-// ── Status dot colours ────────────────────────────────────────────────────────
 const STATUS_COLOR: Record<string, string> = {
-  healthy:   '#22c55e',
-  degraded:  '#f97316',
-  stale:     '#eab308',
-  failed:    '#ef4444',
-  pending:   '#a78bfa',
-  running:   '#60a5fa',
+  healthy: '#22c55e',
+  degraded: '#f97316',
+  stale: '#eab308',
+  failed: '#ef4444',
+  pending: '#a78bfa',
+  running: '#60a5fa',
   cancelled: '#52525b',
 };
+const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  CRITICAL: { label: 'Critical', color: 'text-red-500 dark:text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' },
+  HIGH: { label: 'High', color: 'text-orange-500 dark:text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+  MEDIUM: { label: 'Medium', color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
+  LOW: { label: 'Low', color: 'text-blue-500 dark:text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
+  UNKNOWN: { label: 'Unknown', color: 'text-zinc-500', bg: 'bg-zinc-500/10', border: 'border-zinc-500/20' },
+};
 
-// ── Tiny inline SVG donut chart ───────────────────────────────────────────────
+type FilterKey = (typeof FILTERS)[number]['key'];
+type SortKey = (typeof SORT_OPTIONS)[number]['key'];
+type VulnerabilitySortKey = 'vuln_id' | 'pkg_name' | 'installed_version' | 'fixed_version' | 'severity' | 'cvss_score';
+
+function SeverityBadge({ severity }: { severity: string }) {
+  const cfg = SEV_CONFIG[severity] ?? SEV_CONFIG.UNKNOWN;
+  return (
+    <span className={`inline-block rounded-full border px-2 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
+function SourceBadge({ source }: { source?: string }) {
+  const normalized = (source ?? '').trim().toLowerCase();
+  const isOSV = normalized === 'osv.dev';
+  return (
+    <span
+      className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
+      style={isOSV
+        ? { background: 'rgba(59,130,246,0.14)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.24)' }
+        : { background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.22)' }}
+      title={source || (isOSV ? 'OSV supplemental finding' : 'Trivy finding')}
+    >
+      {isOSV ? 'OSV.dev' : 'Trivy'}
+    </span>
+  );
+}
+
+function getStatusRank(status: string) {
+  return STATUS_PRIORITY[status] ?? 99;
+}
+
+function formatStatusLabel(status: string) {
+  return status.replace(/_/g, ' ');
+}
+
+function getFindingTotal(item: StatusPageItem) {
+  return item.critical_count + item.high_count + item.medium_count + item.low_count;
+}
+
 function DonutChart({ data }: { data: { label: string; value: number; color: string }[] }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   if (total === 0) return null;
 
-  const r = 36;
-  const cx = 44;
-  const cy = 44;
+  const r = 42;
+  const cx = 52;
+  const cy = 52;
   const circumference = 2 * Math.PI * r;
 
   const slices = data.map((d, i) => {
@@ -47,47 +125,49 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
   });
 
   return (
-    <svg width={88} height={88} viewBox="0 0 88 88" className="shrink-0">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--status-donut-track)" strokeWidth={10} />
+    <svg width={104} height={104} viewBox="0 0 104 104" className="shrink-0">
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--status-donut-track)" strokeWidth={11} />
       {slices.map(s => (
         <circle
           key={s.label}
-          cx={cx} cy={cy} r={r}
+          cx={cx}
+          cy={cy}
+          r={r}
           fill="none"
           stroke={s.color}
-          strokeWidth={10}
+          strokeWidth={11}
           strokeDasharray={s.dashArray}
           strokeDashoffset={s.dashOffset}
           strokeLinecap="butt"
           style={{ transform: 'rotate(-90deg)', transformOrigin: `${cx}px ${cy}px`, transition: 'stroke-dasharray 600ms ease' }}
         />
       ))}
-      <text x={cx} y={cy + 5} textAnchor="middle" fontSize={14} fontWeight={600} fill="var(--text-primary)">{total}</text>
+      <text x={cx} y={cy - 2} textAnchor="middle" fontSize={26} fontWeight={650} fill="var(--text-primary)">{total}</text>
+      <text x={cx} y={cy + 18} textAnchor="middle" fontSize={11} letterSpacing="0.12em" fill="var(--text-muted)">TAGS</text>
     </svg>
   );
 }
 
-// ── Horizontal stacked bar for severity breakdown ─────────────────────────────
 function SeverityBar({ item }: { item: StatusPageItem }) {
-  const total = item.critical_count + item.high_count + item.medium_count + item.low_count;
+  const total = getFindingTotal(item);
   if (total === 0) {
     return (
       <div className="flex items-center gap-3">
-        <div className="h-1.5 flex-1 rounded-full" style={{ background: 'var(--status-bar-track)' }} />
-        <span className="text-xs text-zinc-500 tabular-nums w-12 text-right">0 vulns</span>
+        <div className="h-2 flex-1 rounded-full" style={{ background: 'var(--status-bar-track)' }} />
+        <span className="min-w-[82px] text-right text-[12px] font-medium tabular-nums text-zinc-500">0 findings</span>
       </div>
     );
   }
   const segments = [
     { key: 'critical', count: item.critical_count, color: SEV.critical },
-    { key: 'high',     count: item.high_count,     color: SEV.high },
-    { key: 'medium',   count: item.medium_count,   color: SEV.medium },
-    { key: 'low',      count: item.low_count,       color: SEV.low },
+    { key: 'high', count: item.high_count, color: SEV.high },
+    { key: 'medium', count: item.medium_count, color: SEV.medium },
+    { key: 'low', count: item.low_count, color: SEV.low },
   ].filter(s => s.count > 0);
 
   return (
     <div className="flex items-center gap-3">
-      <div className="flex h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--status-bar-track)' }}>
+      <div className="flex h-2 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--status-bar-track)' }}>
         {segments.map(s => (
           <div
             key={s.key}
@@ -96,100 +176,469 @@ function SeverityBar({ item }: { item: StatusPageItem }) {
           />
         ))}
       </div>
-      <span className="text-xs text-zinc-500 tabular-nums w-16 text-right">{total.toLocaleString()} vulns</span>
+      <span className="min-w-[82px] text-right text-[12px] font-medium tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+        {total.toLocaleString()} findings
+      </span>
     </div>
   );
 }
 
-// ── Delta badge ───────────────────────────────────────────────────────────────
 function Delta({ value }: { value?: number }) {
   if (!value) return null;
   const up = value > 0;
   return (
-    <span className={`text-[10px] font-medium tabular-nums ${up ? 'text-red-400' : 'text-emerald-400'}`}>
+    <span className={`text-[11px] font-semibold tabular-nums ${up ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
       {up ? `+${value}` : value}
     </span>
   );
 }
 
-// ── Status indicator dot ──────────────────────────────────────────────────────
 function StatusDot({ status }: { status: string }) {
   const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium capitalize text-zinc-500 dark:text-zinc-400">
-      <span className="relative flex h-2 w-2">
+    <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium capitalize"
+      style={{
+        color: 'var(--text-secondary)',
+        background: 'var(--status-pill-bg)',
+        border: '1px solid var(--status-pill-border)',
+      }}>
+      <span className="relative flex h-2.5 w-2.5">
         {(status === 'running' || status === 'pending') && (
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: color }} />
         )}
-        <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: color }} />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: color }} />
       </span>
-      {status}
+      {formatStatusLabel(status)}
     </span>
   );
 }
 
-// ── Single metric tile ────────────────────────────────────────────────────────
-function MetricTile({
-  label, value, delta, color, sub,
+function SummaryCard({
+  label,
+  value,
+  detail,
+  color,
 }: {
-  label: string; value: React.ReactNode; delta?: number; color?: string; sub?: string;
+  label: string;
+  value: React.ReactNode;
+  detail: string;
+  color?: string;
 }) {
   return (
-    <div className="flex flex-col justify-between rounded-2xl px-4 py-3.5 gap-2"
+    <div className="status-card status-metric flex flex-col justify-between rounded-3xl px-5 py-4 gap-3"
       style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">{label}</p>
-      <div className="flex items-end justify-between gap-2">
-        <span className="text-2xl font-semibold tabular-nums leading-none" style={{ color: color ?? 'var(--text-primary)' }}>
-          {value}
-        </span>
-        {delta !== undefined ? <Delta value={delta} /> : sub ? <span className="text-[11px] text-zinc-500">{sub}</span> : null}
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{label}</p>
+      <span className="text-3xl font-semibold tabular-nums leading-none" style={{ color: color ?? 'var(--text-primary)' }}>
+        {value}
+      </span>
+      <p className="text-[13px] leading-5 text-zinc-500">{detail}</p>
+    </div>
+  );
+}
+
+function SeverityStat({
+  label,
+  value,
+  delta,
+  color,
+}: {
+  label: string;
+  value: number;
+  delta?: number;
+  color: string;
+}) {
+  return (
+    <div className="rounded-2xl px-3.5 py-3 min-w-[110px]"
+      style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">{label}</p>
+      <div className="mt-2 flex items-end justify-between gap-3">
+        <span className="text-2xl font-semibold tabular-nums leading-none" style={{ color }}>{value}</span>
+        <Delta value={delta} />
       </div>
     </div>
   );
 }
 
-// ── Image item card ───────────────────────────────────────────────────────────
-function ItemCard({ item, index }: { item: StatusPageItem; index: number }) {
+function FilterChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      size="sm"
+      variant={active ? 'primary' : 'secondary'}
+      onPress={onClick}
+      className="rounded-full px-3.5 text-sm font-medium"
+      style={active ? undefined : { color: 'var(--text-secondary)' }}
+    >
+      <span>{label}</span>
+      <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums"
+        style={{
+          background: active ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.05)',
+          color: active ? '#ffffff' : 'var(--text-secondary)',
+        }}>
+        {count}
+      </span>
+    </Button>
+  );
+}
+
+function StatusItemVulnerabilityModal({
+  slug,
+  item,
+  state,
+  onClose,
+}: {
+  slug: string;
+  item: StatusPageItem | null;
+  state: ReturnType<typeof useOverlayState>;
+  onClose: () => void;
+}) {
+  const [vulns, setVulns] = useState<Vulnerability[]>([]);
+  const [vulnTotal, setVulnTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [severityFilter, setSeverityFilter] = useState('');
+  const [pkgInput, setPkgInput] = useState('');
+  const [pkgFilter, setPkgFilter] = useState('');
+  const [minCvss, setMinCvss] = useState(0);
+  const [minCvssInput, setMinCvssInput] = useState('');
+  const [hasFix, setHasFix] = useState(false);
+  const [sortBy, setSortBy] = useState<VulnerabilitySortKey>('severity');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const reportHref = (() => {
+    if (!item?.latest_scan_id) return '';
+    const params = new URLSearchParams({
+      scanId: item.latest_scan_id,
+      sortBy,
+      sortDir,
+    });
+    if (severityFilter) params.set('severity', severityFilter);
+    if (pkgInput.trim()) params.set('pkg', pkgInput.trim());
+    if (minCvss > 0) params.set('minCvss', String(minCvss));
+    if (hasFix) params.set('hasFix', 'true');
+    return `/status/${encodeURIComponent(slug)}/report?${params.toString()}`;
+  })();
+
+  useEffect(() => {
+    if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
+    pkgDebounceRef.current = setTimeout(() => {
+      setPkgFilter(pkgInput);
+      setPage(1);
+    }, 350);
+
+    return () => {
+      if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
+    };
+  }, [pkgInput]);
+
+  useEffect(() => {
+    if (!item?.latest_scan_id) return;
+
+    listStatusPageItemVulnerabilities(
+      slug,
+      item.latest_scan_id,
+      page,
+      VULN_PAGE_SIZE,
+      severityFilter || undefined,
+      pkgFilter || undefined,
+      hasFix || undefined,
+      minCvss || undefined,
+      sortBy,
+      sortDir,
+    )
+      .then(result => {
+        setVulns(result.data ?? []);
+        setVulnTotal(result.total ?? 0);
+        setError('');
+      })
+      .catch(err => {
+        setError(err instanceof Error ? err.message : 'Failed to load vulnerabilities');
+      })
+      .finally(() => setLoading(false));
+  }, [slug, item?.latest_scan_id, page, severityFilter, pkgFilter, hasFix, minCvss, sortBy, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(vulnTotal / VULN_PAGE_SIZE));
+
+  return (
+    <Modal state={state}>
+      <Modal.Backdrop>
+        <Modal.Container size="lg" placement="center">
+          <Modal.Dialog className="glass-modal overflow-hidden rounded-[28px] w-[min(1120px,calc(100vw-1.5rem))] max-w-none">
+            <Modal.Body className="px-0 py-0">
+              <div className="border-b px-6 py-5" style={{ borderColor: 'var(--border-subtle)' }}>
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Vulnerability drill-down</p>
+                    <div>
+                      <h3 className="font-mono text-base font-semibold sm:text-lg" style={{ color: 'var(--text-primary)' }}>
+                        {item ? `${item.image_name}:${item.image_tag}` : 'Loading item'}
+                      </h3>
+                      {item && (
+                        <p className="mt-1 text-[13px] leading-6 text-zinc-500">
+                          Latest snapshot {timeAgo(item.observed_at)}. {vulnTotal.toLocaleString()} matching finding{vulnTotal === 1 ? '' : 's'}.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {item && <StatusDot status={item.status} />}
+                </div>
+              </div>
+
+              <div className="space-y-4 px-6 py-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select selectedKey={severityFilter || '__all__'} onSelectionChange={key => { setLoading(true); setSeverityFilter(String(key === '__all__' ? '' : key)); setPage(1); }} className="w-full min-w-[180px] sm:w-auto" aria-label="Filter vulnerabilities by severity">
+                    <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {VULN_SEVERITY_OPTIONS.map(option => (
+                          <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
+                            {option.label}
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+
+                  <input
+                    type="text"
+                    value={pkgInput}
+                    onChange={event => { setLoading(true); setPkgInput(event.target.value); }}
+                    placeholder="Package name"
+                    className={`${STATUS_INPUT_CLS} min-w-[180px] flex-1`}
+                    style={{ color: 'var(--text-primary)' }}
+                  />
+
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.1}
+                    value={minCvssInput}
+                    onChange={event => {
+                      setLoading(true);
+                      setMinCvssInput(event.target.value);
+                      const value = parseFloat(event.target.value);
+                      setMinCvss(Number.isNaN(value) ? 0 : value);
+                      setPage(1);
+                    }}
+                    placeholder="Min CVSS"
+                    className={`${STATUS_INPUT_CLS} w-[120px]`}
+                    style={{ color: 'var(--text-primary)' }}
+                  />
+
+                  <Button size="sm" variant={hasFix ? 'primary' : 'secondary'} onPress={() => { setLoading(true); setHasFix(value => !value); setPage(1); }} className="rounded-full px-4 text-sm font-medium">
+                    Has Fix
+                  </Button>
+                </div>
+
+                {error && (
+                  <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-500 dark:text-red-400">
+                    {error}
+                  </div>
+                )}
+
+                <div className="overflow-hidden rounded-3xl" style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[840px] text-sm">
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                          {([
+                            { label: 'CVE ID', key: 'vuln_id' },
+                            { label: 'Package', key: 'pkg_name' },
+                            { label: 'Installed', key: 'installed_version' },
+                            { label: 'Fixed In', key: 'fixed_version' },
+                            { label: 'Severity', key: 'severity' },
+                            { label: 'CVSS', key: 'cvss_score' },
+                          ] as { label: string; key: VulnerabilitySortKey }[]).map(({ label, key }) => {
+                            const active = sortBy === key;
+                            return (
+                              <th
+                                key={key}
+                                onClick={() => {
+                                  setLoading(true);
+                                  if (active) {
+                                    setSortDir(current => current === 'asc' ? 'desc' : 'asc');
+                                  } else {
+                                    setSortBy(key);
+                                    setSortDir('asc');
+                                  }
+                                  setPage(1);
+                                }}
+                                className="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wider"
+                                style={{ color: active ? '#7c3aed' : 'var(--text-faint)' }}
+                              >
+                                <span className="inline-flex items-center gap-1">
+                                  {label}
+                                  {active && <span>{sortDir === 'desc' ? '↓' : '↑'}</span>}
+                                </span>
+                              </th>
+                            );
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loading ? (
+                          <tr>
+                            <td colSpan={6} className="py-12 text-center">
+                              <div className="flex justify-center">
+                                <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500" />
+                              </div>
+                            </td>
+                          </tr>
+                        ) : vulns.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-12 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
+                              {vulnTotal === 0 ? 'No vulnerabilities found for this image tag.' : 'No results match your filters.'}
+                            </td>
+                          </tr>
+                        ) : vulns.map((vuln, index) => (
+                          <tr
+                            key={vuln.id}
+                            style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
+                            onMouseEnter={event => (event.currentTarget.style.background = 'var(--row-hover)')}
+                            onMouseLeave={event => (event.currentTarget.style.background = 'transparent')}
+                          >
+                            <td className="px-4 py-3 align-top">
+                              {vuln.vuln_id ? (
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <a
+                                      href={`https://nvd.nist.gov/vuln/detail/${vuln.vuln_id}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="font-mono text-xs text-violet-600 transition-colors hover:underline dark:text-violet-400"
+                                    >
+                                      {vuln.vuln_id}
+                                    </a>
+                                    <SourceBadge source={vuln.data_source} />
+                                  </div>
+                                  {vuln.title && (
+                                    <p className="max-w-[280px] text-xs leading-5 text-zinc-500">{vuln.title}</p>
+                                  )}
+                                </div>
+                              ) : <span style={{ color: 'var(--text-faint)' }}>—</span>}
+                            </td>
+                            <td className="px-4 py-3 font-mono text-xs align-top" style={{ color: 'var(--text-secondary)' }}>{vuln.pkg_name}</td>
+                            <td className="px-4 py-3 font-mono text-xs align-top" style={{ color: 'var(--text-muted)' }}>{vuln.installed_version || '—'}</td>
+                            <td className="px-4 py-3 font-mono text-xs align-top text-emerald-600 dark:text-emerald-500">
+                              {vuln.fixed_version || <span style={{ color: 'var(--text-faint)' }}>—</span>}
+                            </td>
+                            <td className="px-4 py-3 align-top"><SeverityBadge severity={vuln.severity} /></td>
+                            <td className="px-4 py-3 font-mono text-xs align-top" style={{ color: 'var(--text-muted)' }}>
+                              {vuln.cvss_score ? vuln.cvss_score.toFixed(1) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </Modal.Body>
+
+            <Modal.Footer className="flex items-center justify-between gap-3 px-6 py-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{vulnTotal.toLocaleString()} total findings</span>
+              <div className="flex items-center gap-2">
+                {reportHref && (
+                  <Button size="sm" variant="primary" onPress={() => window.open(reportHref, '_blank', 'noopener,noreferrer')} className="rounded-full px-4">
+                    Generate report
+                  </Button>
+                )}
+                <Button size="sm" variant="secondary" isDisabled={page <= 1} onPress={() => { setLoading(true); setPage(current => Math.max(1, current - 1)); }} className="rounded-full px-4">
+                  Prev
+                </Button>
+                <span className="px-2 text-sm" style={{ color: 'var(--text-muted)' }}>{page} / {totalPages}</span>
+                <Button size="sm" variant="secondary" isDisabled={page >= totalPages} onPress={() => { setLoading(true); setPage(current => Math.min(totalPages, current + 1)); }} className="rounded-full px-4">
+                  Next
+                </Button>
+                <Button size="sm" variant="secondary" onPress={onClose} className="rounded-full px-4">
+                  Close
+                </Button>
+              </div>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
+  );
+}
+
+function ItemCard({ item, index, onOpen }: { item: StatusPageItem; index: number; onOpen: (item: StatusPageItem) => void }) {
   const color = STATUS_COLOR[item.status] ?? STATUS_COLOR.pending;
+  const totalFindings = getFindingTotal(item);
+  const severityStats = [
+    { label: 'Critical', value: item.critical_count, delta: item.delta_critical_count, color: SEV.critical },
+    { label: 'High', value: item.high_count, delta: item.delta_high_count, color: SEV.high },
+    { label: 'Medium', value: item.medium_count, delta: item.delta_medium_count, color: SEV.medium },
+    { label: 'Low', value: item.low_count, delta: item.delta_low_count, color: SEV.low },
+  ].filter(metric => metric.value > 0);
+  const canOpen = Boolean(item.latest_scan_id);
 
   return (
     <div
-      className="status-item-enter relative overflow-hidden rounded-2xl transition-all duration-200"
+      className="status-item-enter status-card relative overflow-hidden rounded-3xl"
       style={{
         background: 'var(--status-card-bg)',
         border: '1px solid var(--status-card-border)',
         animationDelay: `${index * 60}ms`,
+        cursor: canOpen ? 'pointer' : 'default',
       }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLDivElement).style.background = 'var(--status-card-hover-bg)';
-        (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--status-card-hover-border)';
+      role={canOpen ? 'button' : undefined}
+      tabIndex={canOpen ? 0 : -1}
+      onClick={() => {
+        if (canOpen) onOpen(item);
       }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLDivElement).style.background = 'var(--status-card-bg)';
-        (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--status-card-border)';
+      onKeyDown={event => {
+        if (!canOpen) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen(item);
+        }
       }}
     >
-      {/* left accent bar */}
-      <div className="absolute inset-y-0 left-0 w-0.5 rounded-full" style={{ background: color }} />
+      <div className="absolute inset-y-0 left-0 w-1 rounded-full" style={{ background: color }} />
 
-      <div className="px-5 py-4 md:px-6 md:py-5 space-y-4">
-        {/* header row */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
+      <div className="px-5 py-5 md:px-6 md:py-6 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500"
-                style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)' }}>
-                Image
-              </span>
-              <span className="rounded-full px-2 py-0.5 text-[10px] text-zinc-500 dark:text-zinc-400"
-                style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)' }}>
+              <StatusDot status={item.status} />
+              <span className="rounded-full px-2.5 py-1 text-[12px] font-medium"
+                style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
                 {item.image_tag}
               </span>
+              <span className="rounded-full px-2.5 py-1 text-[12px] font-medium"
+                style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                Freshness {item.freshness_hours}h
+              </span>
+              <span className="rounded-full px-2.5 py-1 text-[12px] font-medium"
+                style={{
+                  color: totalFindings > 0 ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  background: totalFindings > 0 ? 'rgba(239,68,68,0.08)' : 'var(--status-pill-bg)',
+                  border: totalFindings > 0 ? '1px solid rgba(239,68,68,0.16)' : '1px solid var(--status-pill-border)',
+                }}>
+                {totalFindings > 0 ? `${totalFindings.toLocaleString()} findings` : 'No active findings'}
+              </span>
             </div>
-            <p className="font-mono text-sm font-medium break-all leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+            <p className="font-mono text-[15px] font-medium break-all leading-relaxed sm:text-base" style={{ color: 'var(--text-primary)' }}>
               {item.image_name}
             </p>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-zinc-500">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-zinc-500">
               <span>Observed {timeAgo(item.observed_at)}</span>
               <span>·</span>
               <span className="capitalize">Scan {item.scan_status}</span>
@@ -201,32 +650,40 @@ function ItemCard({ item, index }: { item: StatusPageItem; index: number }) {
               )}
             </div>
           </div>
-          <StatusDot status={item.status} />
         </div>
 
-        {/* severity bar */}
         <SeverityBar item={item} />
 
-        {/* metrics grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-          <MetricTile label="Critical" value={item.critical_count} delta={item.delta_critical_count} color={item.critical_count > 0 ? SEV.critical : undefined} />
-          <MetricTile label="High"     value={item.high_count}     delta={item.delta_high_count}     color={item.high_count > 0     ? SEV.high     : undefined} />
-          <MetricTile label="Medium"   value={item.medium_count}   delta={item.delta_medium_count}   color={item.medium_count > 0   ? SEV.medium   : undefined} />
-          <MetricTile
-            label="Freshness"
-            value={`${item.freshness_hours}h`}
-            sub={item.latest_scan_id ? 'tracked' : 'awaiting'}
-            color="var(--text-primary)"
-          />
+        <div className="flex flex-wrap gap-2.5">
+          {severityStats.length > 0 ? severityStats.map(metric => (
+            <SeverityStat
+              key={metric.label}
+              label={metric.label}
+              value={metric.value}
+              delta={metric.delta}
+              color={metric.color}
+            />
+          )) : (
+            <div className="rounded-2xl px-4 py-3 text-[13px] leading-6"
+              style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)', color: 'var(--text-secondary)' }}>
+              No active findings. This tag is currently clear in the latest completed scan.
+            </div>
+          )}
         </div>
 
-        {/* error */}
         {item.error_message && (
           <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-red-500 dark:text-red-400 mb-1.5">Scan Error</p>
-            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-red-700/80 dark:text-red-300/80">
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-red-500 dark:text-red-400">Scan Error</p>
+            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-red-700/80 dark:text-red-300/80">
               {item.error_message}
             </pre>
+          </div>
+        )}
+
+        {canOpen && (
+          <div className="flex items-center justify-between border-t pt-3 text-[12px]" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
+            <span>Open image details to inspect individual CVEs, sort columns, and apply CVSS filters.</span>
+            <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Open</span>
           </div>
         )}
       </div>
@@ -234,7 +691,6 @@ function ItemCard({ item, index }: { item: StatusPageItem; index: number }) {
   );
 }
 
-// ── Thin auto-refresh progress bar (top of page) ──────────────────────────────
 function RefreshBar({ progress }: { progress: number }) {
   return (
     <div className="fixed top-0 left-0 right-0 z-50 h-[2px]" style={{ background: 'var(--status-bar-track)' }}>
@@ -246,63 +702,106 @@ function RefreshBar({ progress }: { progress: number }) {
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
 export default function PublicStatusPage() {
   const { slug } = useParams<{ slug: string }>();
   const [data, setData] = useState<StatusPageResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [needsAuth, setNeedsAuth] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [sortBy, setSortBy] = useState<SortKey>('display');
+  const [activeItem, setActiveItem] = useState<StatusPageItem | null>(null);
+  const mountedRef = useRef(true);
+  const vulnerabilityModal = useOverlayState();
+
+  function openItemDetails(item: StatusPageItem) {
+    setActiveItem(item);
+    vulnerabilityModal.open();
+  }
+
+  function closeItemDetails() {
+    vulnerabilityModal.close();
+  }
+
+  const load = useCallback(async (showLoader: boolean) => {
+    if (showLoader) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+
+    try {
+      const result = await getStatusPageBySlug(slug);
+      if (!mountedRef.current) return;
+      setData(result);
+      setError('');
+      setNeedsAuth(false);
+      setLastLoadedAt(Date.now());
+    } catch (err: unknown) {
+      if (!mountedRef.current) return;
+      if (err instanceof ApiError && err.status === 401) {
+        setNeedsAuth(true);
+        setError('This status page requires authentication.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load status page');
+      }
+    } finally {
+      if (!mountedRef.current) return;
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [slug]);
 
   useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
     const ticker = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(ticker);
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(prev => prev); // keep existing data visible during refresh
-      try {
-        const result = await getStatusPageBySlug(slug);
-        if (cancelled) return;
-        setData(result);
-        setError('');
-        setNeedsAuth(false);
-      } catch (err: unknown) {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 401) {
-          setNeedsAuth(true);
-          setError('This status page requires authentication.');
-        } else {
-          setError(err instanceof Error ? err.message : 'Failed to load status page');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-          setLastLoadedAt(Date.now());
-        }
-      }
-    }
-    load();
-    const interval = setInterval(load, AUTO_REFRESH_MS);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [slug]);
+    void load(true);
+    const interval = setInterval(() => {
+      void load(false);
+    }, AUTO_REFRESH_MS);
+
+    return () => clearInterval(interval);
+  }, [load]);
 
   const summary = useMemo(() => {
     const items = data?.items ?? [];
     return items.reduce(
       (acc, item) => {
         acc.total += 1;
+        acc.attention += item.status === 'healthy' ? 0 : 1;
         acc.critical += item.critical_count;
         acc.high += item.high_count;
         acc.medium += item.medium_count;
+        acc.low += item.low_count;
+        acc.findings += getFindingTotal(item);
+        acc.stale += item.status === 'stale' ? 1 : 0;
         acc.statuses[item.status] = (acc.statuses[item.status] ?? 0) + 1;
         return acc;
       },
-      { total: 0, critical: 0, high: 0, medium: 0, statuses: {} as Record<string, number> },
+      {
+        total: 0,
+        attention: 0,
+        critical: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+        findings: 0,
+        stale: 0,
+        statuses: {} as Record<string, number>,
+      },
     );
   }, [data]);
 
@@ -310,13 +809,107 @@ export default function PublicStatusPage() {
   const refreshProgress = Math.min(100, (elapsedMs / AUTO_REFRESH_MS) * 100);
   const secondsRemaining = Math.max(0, Math.ceil((AUTO_REFRESH_MS - Math.min(elapsedMs, AUTO_REFRESH_MS)) / 1000));
 
-  const donutData = Object.entries(summary.statuses).map(([status, count]) => ({
-    label: status,
-    value: count,
-    color: STATUS_COLOR[status] ?? '#52525b',
-  }));
+  const donutData = useMemo(
+    () => Object.entries(summary.statuses)
+      .sort(([left], [right]) => getStatusRank(left) - getStatusRank(right))
+      .map(([status, count]) => ({
+        label: status,
+        value: count,
+        color: STATUS_COLOR[status] ?? '#52525b',
+      })),
+    [summary.statuses],
+  );
 
-  // ── Loading ────────────────────────────────────────────────────────────────
+  const filterCounts = useMemo(
+    () => ({
+      all: data?.items.length ?? 0,
+      failed: data?.items.filter(item => item.status === 'failed').length ?? 0,
+      degraded: data?.items.filter(item => item.status === 'degraded').length ?? 0,
+      stale: data?.items.filter(item => item.status === 'stale').length ?? 0,
+      healthy: data?.items.filter(item => item.status === 'healthy').length ?? 0,
+    }),
+    [data],
+  );
+
+  const healthState = useMemo(() => {
+    if (summary.statuses.failed) {
+      return {
+        title: 'Failures detected',
+        description: `${summary.statuses.failed} image tag${summary.statuses.failed === 1 ? '' : 's'} currently need immediate attention.`,
+        color: SEV.critical,
+      };
+    }
+    if (summary.statuses.degraded) {
+      return {
+        title: 'Degraded coverage',
+        description: `${summary.statuses.degraded} tag${summary.statuses.degraded === 1 ? '' : 's'} have active findings but no current failures.`,
+        color: SEV.high,
+      };
+    }
+    if (summary.statuses.stale) {
+      return {
+        title: 'Freshness gap',
+        description: `${summary.statuses.stale} tag${summary.statuses.stale === 1 ? '' : 's'} are stale and should be refreshed soon.`,
+        color: SEV.medium,
+      };
+    }
+    if (summary.statuses.running || summary.statuses.pending) {
+      return {
+        title: 'Scan activity in progress',
+        description: 'The page is healthy overall, with live scans still in motion.',
+        color: STATUS_COLOR.running,
+      };
+    }
+    return {
+      title: 'Everything looks healthy',
+      description: 'All tracked tags are currently healthy in the latest snapshot.',
+      color: STATUS_COLOR.healthy,
+    };
+  }, [summary]);
+
+  const visibleItems = useMemo(() => {
+    const items = [...(data?.items ?? [])];
+    const filtered = filter === 'all'
+      ? items
+      : items.filter(item => item.status === filter);
+
+    filtered.sort((left, right) => {
+      if (sortBy === 'worst') {
+        return (
+          getStatusRank(left.status) - getStatusRank(right.status)
+          || right.critical_count - left.critical_count
+          || right.high_count - left.high_count
+          || right.medium_count - left.medium_count
+          || right.low_count - left.low_count
+          || right.freshness_hours - left.freshness_hours
+        );
+      }
+
+      if (sortBy === 'stale') {
+        return (
+          right.freshness_hours - left.freshness_hours
+          || getStatusRank(left.status) - getStatusRank(right.status)
+          || right.critical_count - left.critical_count
+        );
+      }
+
+      if (sortBy === 'latest') {
+        return (
+          new Date(right.observed_at).getTime() - new Date(left.observed_at).getTime()
+          || getStatusRank(left.status) - getStatusRank(right.status)
+        );
+      }
+
+      return (
+        left.display_order - right.display_order
+        || left.image_name.localeCompare(right.image_name)
+        || left.image_tag.localeCompare(right.image_tag)
+      );
+    });
+
+    return filtered;
+  }, [data, filter, sortBy]);
+
   if (loading && !data) {
     return (
       <div className="min-h-screen flex items-center justify-center app-bg">
@@ -330,7 +923,6 @@ export default function PublicStatusPage() {
     );
   }
 
-  // ── Error / no data ────────────────────────────────────────────────────────
   if (!data) {
     return (
       <div className="min-h-screen app-bg flex items-center justify-center px-6">
@@ -358,109 +950,204 @@ export default function PublicStatusPage() {
   return (
     <div className="min-h-screen app-bg">
       <RefreshBar progress={refreshProgress} />
-
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <header className="px-6 py-4" style={{ borderBottom: '1px solid var(--status-header-border)' }}>
-        <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
-              <Logo size={16} className="text-white" />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">JustScan Status</p>
-              <h1 className="text-xl font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>{data.page.name}</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 text-[11px] text-zinc-500">
-            <span className="capitalize rounded-full px-2.5 py-1"
-              style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)' }}>
-              {data.page.visibility}
-            </span>
-            <span>Updated {timeAgo(data.page.updated_at)}</span>
-            <span className="tabular-nums text-zinc-400 dark:text-zinc-600">Refresh in {secondsRemaining}s</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-6 py-8 space-y-8">
-
-        {/* ── Active update banner ─────────────────────────────────────────── */}
-        {activeUpdate && (
-          <div className={`rounded-2xl border px-5 py-4 ${
-            activeUpdate.level === 'incident'    ? 'border-red-500/20 bg-red-500/5' :
-            activeUpdate.level === 'maintenance' ? 'border-yellow-500/20 bg-yellow-500/5' :
-                                                   'border-blue-500/20 bg-blue-500/5'
-          }`}>
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{activeUpdate.title}</p>
-                {activeUpdate.body && <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">{activeUpdate.body}</p>}
-              </div>
-              <span className="text-[10px] uppercase tracking-widest text-zinc-500">{activeUpdate.level}</span>
-            </div>
-          </div>
-        )}
-
-        {/* ── Summary ──────────────────────────────────────────────────────── */}
-        <section className="flex flex-col sm:flex-row items-start gap-6">
-          {/* donut + legend */}
-          <div className="flex items-center gap-5 shrink-0">
-            <DonutChart data={donutData} />
-            <div className="space-y-1.5">
-              {donutData.map(d => (
-                <div key={d.label} className="flex items-center gap-2 text-[11px]">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                  <span className="capitalize text-zinc-500 dark:text-zinc-400">{d.label}</span>
-                  <span className="font-semibold tabular-nums" style={{ color: 'var(--text-secondary)' }}>{d.value}</span>
+      <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 sm:py-8 xl:px-10">
+        <section className="status-hero overflow-hidden rounded-[32px] px-5 py-5 sm:px-7 sm:py-6 lg:px-8"
+          style={{ background: 'var(--glass-bg)', border: '1px solid var(--status-header-border)', boxShadow: 'var(--glass-shadow)' }}>
+          <div className="relative z-10 space-y-6">
+            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+              <div className="max-w-4xl space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl shrink-0" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
+                    <Logo size={18} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">JustScan Status</p>
+                    <h1 className="text-2xl font-semibold leading-tight sm:text-3xl" style={{ color: 'var(--text-primary)' }}>{data.page.name}</h1>
+                  </div>
                 </div>
+
+                {data.page.description && (
+                  <p className="max-w-2xl text-[15px] leading-7 text-zinc-600 dark:text-zinc-300">{data.page.description}</p>
+                )}
+
+                <div className="flex flex-wrap gap-2 text-sm">
+                  <span className="rounded-full px-3 py-1.5 capitalize"
+                    style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                    {data.page.visibility}
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+                    style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                    Snapshot {timeAgo(data.now)}
+                  </span>
+                  <span className="rounded-full px-3 py-1.5"
+                    style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                    Stale after {data.page.stale_after_hours}h
+                  </span>
+                </div>
+              </div>
+
+              <div className="w-full max-w-md space-y-3 xl:ml-6">
+                <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
+                  <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium"
+                    style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                    <span className={`h-2.5 w-2.5 rounded-full ${refreshing ? 'animate-pulse' : ''}`} style={{ background: refreshing ? STATUS_COLOR.running : STATUS_COLOR.healthy }} />
+                    {refreshing ? 'Refreshing now' : `Auto refresh in ${secondsRemaining}s`}
+                  </span>
+                  <Button
+                    size="sm"
+                    isPending={refreshing}
+                    onPress={() => void load(false)}
+                    className="rounded-full px-4 text-sm font-semibold"
+                  >
+                    {refreshing ? 'Refreshing...' : 'Refresh now'}
+                  </Button>
+                </div>
+
+                <div className="rounded-3xl px-4 py-4"
+                  style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
+                  <div className="flex items-center justify-between text-[13px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    <span>Live snapshot cadence</span>
+                    <span className="tabular-nums">{secondsRemaining}s</span>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full" style={{ background: 'var(--status-bar-track)' }}>
+                    <div className="h-full transition-all duration-1000 ease-linear" style={{ width: `${refreshProgress}%`, background: 'linear-gradient(90deg, #7c3aed, #a78bfa)' }} />
+                  </div>
+                  <p className="mt-3 text-[13px] leading-6 text-zinc-500">
+                    The page refreshes every 30 seconds and keeps the current snapshot visible during background polling.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {activeUpdate && (
+              <div className={`rounded-3xl border px-5 py-4 ${
+                activeUpdate.level === 'incident' ? 'border-red-500/20 bg-red-500/5' :
+                activeUpdate.level === 'maintenance' ? 'border-yellow-500/20 bg-yellow-500/5' :
+                'border-blue-500/20 bg-blue-500/5'
+              }`}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Active update</p>
+                    <p className="mt-1 text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{activeUpdate.title}</p>
+                    {activeUpdate.body && <p className="mt-1.5 text-[14px] leading-6 text-zinc-500 dark:text-zinc-400">{activeUpdate.body}</p>}
+                  </div>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{activeUpdate.level}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.95fr)] xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.9fr)]">
+              <div className="status-card rounded-[28px] px-5 py-5 sm:px-6"
+                style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-center gap-5">
+                    <DonutChart data={donutData} />
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Overall health</p>
+                        <h2 className="mt-1 text-2xl font-semibold" style={{ color: healthState.color }}>{healthState.title}</h2>
+                        <p className="mt-2 max-w-xl text-[14px] leading-6 text-zinc-500">{healthState.description}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {donutData.map(segment => (
+                          <span
+                            key={segment.label}
+                            className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-medium capitalize"
+                            style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}
+                          >
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ background: segment.color }} />
+                            {formatStatusLabel(segment.label)}
+                            <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>{segment.value}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4 xl:grid-cols-2">
+                <SummaryCard label="Tracked tags" value={summary.total} detail="Image tags currently included in this public status page." />
+                <SummaryCard label="Needs attention" value={summary.attention} detail="Tags that are failed, degraded, stale, or still processing." color={summary.attention > 0 ? SEV.high : 'var(--text-primary)'} />
+                <SummaryCard label="Critical findings" value={summary.critical.toLocaleString()} detail="Critical issues across all tracked tags in the latest snapshot." color={summary.critical > 0 ? SEV.critical : 'var(--text-faint)'} />
+                <SummaryCard label="Stale tags" value={summary.stale} detail="Tags that have exceeded the freshness threshold for this page." color={summary.stale > 0 ? SEV.medium : 'var(--text-faint)'} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-8 space-y-4">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-[12px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Tracked Image Tags</h2>
+              <p className="mt-2 text-[14px] leading-6 text-zinc-500">
+                Showing {visibleItems.length} of {data.items.length} image tags. Use the filters to focus on the items that need action.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                {FILTERS.map(option => (
+                  <FilterChip
+                    key={option.key}
+                    label={option.label}
+                    count={filterCounts[option.key]}
+                    active={filter === option.key}
+                    onClick={() => setFilter(option.key)}
+                  />
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3 xl:min-w-[280px] xl:justify-end">
+                <span className="text-sm text-zinc-500">Sort</span>
+                <Select selectedKey={sortBy} onSelectionChange={key => setSortBy(String(key) as SortKey)} className="w-full max-w-[240px]" aria-label="Sort image tags">
+                  <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {SORT_OPTIONS.map(option => (
+                        <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
+                          {option.label}
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {visibleItems.length > 0 ? (
+            <div className="space-y-3">
+              {visibleItems.map((item, index) => (
+                <ItemCard key={`${item.image_name}:${item.image_tag}`} item={item} index={index} onOpen={openItemDetails} />
               ))}
             </div>
-          </div>
-
-          {/* stat tiles */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 flex-1 w-full">
-            <div className="rounded-2xl px-4 py-3.5 flex flex-col justify-between gap-3"
+          ) : (
+            <div className="rounded-[28px] px-6 py-12 text-center"
               style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Tracked Tags</p>
-              <p className="text-3xl font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>{summary.total}</p>
-            </div>
-            <div className="rounded-2xl px-4 py-3.5 flex flex-col justify-between gap-3"
-              style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Critical</p>
-              <p className="text-3xl font-semibold tabular-nums" style={{ color: summary.critical > 0 ? SEV.critical : 'var(--text-faint)' }}>
-                {summary.critical.toLocaleString()}
+              <p className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>No image tags match this view</p>
+              <p className="mt-2 text-[14px] leading-6 text-zinc-500">
+                Try a different filter or sort order to bring the relevant tags back into view.
               </p>
             </div>
-            <div className="rounded-2xl px-4 py-3.5 flex flex-col justify-between gap-3"
-              style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">High</p>
-              <p className="text-3xl font-semibold tabular-nums" style={{ color: summary.high > 0 ? SEV.high : 'var(--text-faint)' }}>
-                {summary.high.toLocaleString()}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* description */}
-        {data.page.description && (
-          <p className="text-sm text-zinc-500 -mt-2">{data.page.description}</p>
-        )}
-
-        {/* ── Image tag list ────────────────────────────────────────────────── */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Tracked Image Tags
-            </h2>
-            <span className="text-[11px] text-zinc-400 dark:text-zinc-600">{data.items.length} images</span>
-          </div>
-          <div className="space-y-3">
-            {data.items.map((item, i) => (
-              <ItemCard key={`${item.image_name}:${item.image_tag}`} item={item} index={i} />
-            ))}
-          </div>
+          )}
         </section>
       </main>
+
+      {activeItem && vulnerabilityModal.isOpen && (
+        <StatusItemVulnerabilityModal
+          key={activeItem.latest_scan_id}
+          slug={slug}
+          item={activeItem}
+          state={vulnerabilityModal}
+          onClose={closeItemDetails}
+        />
+      )}
     </div>
   );
 }

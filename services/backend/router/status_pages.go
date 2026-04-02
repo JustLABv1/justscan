@@ -10,6 +10,7 @@ import (
 
 func StatusPages(router *gin.RouterGroup, db *bun.DB) {
 	router.GET("/status-pages/slug/:slug", statuspages.ViewStatusPageBySlug(db))
+	router.GET("/status-pages/slug/:slug/items/:scanId/vulnerabilities", statuspages.ViewStatusPageItemVulnerabilitiesBySlug(db))
 
 	s := router.Group("/status-pages").Use(middlewares.Auth(db))
 	{

@@ -535,6 +535,31 @@ export const deleteStatusPage = (id: string) =>
 export const getStatusPageBySlug = (slug: string) =>
   sharedReq<StatusPageResponse>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}`);
 
+export const listStatusPageItemVulnerabilities = (
+  slug: string,
+  scanId: string,
+  page = 1,
+  limit = 25,
+  severity?: string,
+  pkg?: string,
+  hasFix?: boolean,
+  minCvss?: number,
+  sortBy?: string,
+  sortDir?: 'asc' | 'desc',
+) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (severity) params.set('severity', severity);
+  if (pkg) params.set('pkg', pkg);
+  if (hasFix) params.set('has_fix', 'true');
+  if (minCvss) params.set('min_cvss', String(minCvss));
+  if (sortBy) params.set('sort_by', sortBy);
+  if (sortDir) params.set('sort_dir', sortDir);
+  return sharedReq<{ data: Vulnerability[]; total: number }>(
+    'GET',
+    `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/items/${encodeURIComponent(scanId)}/vulnerabilities?${params}`,
+  );
+};
+
 export const listStatusPageTargetOptions = async () => {
   const limit = 100;
   let page = 1;
@@ -1030,6 +1055,7 @@ export interface StatusPage {
   description: string;
   visibility: 'private' | 'public' | 'authenticated';
   include_all_tags: boolean;
+  image_patterns?: string[];
   stale_after_hours: number;
   owner_user_id: string;
   created_at: string;
@@ -1075,6 +1101,7 @@ export interface StatusPagePayload {
   description?: string;
   visibility: 'private' | 'public' | 'authenticated';
   include_all_tags: boolean;
+  image_patterns?: string[];
   stale_after_hours: number;
   targets: StatusPageTarget[];
   updates?: StatusPageUpdate[];

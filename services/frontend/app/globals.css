@@ -37,6 +37,12 @@
   --text-muted: #71717a;
   --text-faint: #a1a1aa;
 
+  /* HeroUI semantic accent */
+  --accent: oklch(0.56 0.24 295.5);
+  --accent-foreground: var(--snow);
+  --focus: var(--accent);
+  --link: var(--accent);
+
   /* Section borders */
   --border-subtle: rgba(0,0,0,0.07);
 
@@ -85,6 +91,12 @@
   --text-secondary: #d4d4d8;
   --text-muted: #71717a;
   --text-faint: #52525b;
+
+  /* HeroUI semantic accent */
+  --accent: oklch(0.68 0.2 292.5);
+  --accent-foreground: var(--snow);
+  --focus: var(--accent);
+  --link: var(--accent);
 
   /* Section borders */
   --border-subtle: rgba(255,255,255,0.07);

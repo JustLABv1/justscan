@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,6 +41,7 @@ type statusPagePayload struct {
 	Description     string                    `json:"description"`
 	Visibility      string                    `json:"visibility" binding:"required"`
 	IncludeAllTags  bool                      `json:"include_all_tags"`
+	ImagePatterns   []string                  `json:"image_patterns"`
 	StaleAfterHours int                       `json:"stale_after_hours"`
 	Targets         []statusPageTargetPayload `json:"targets"`
 	Updates         []statusPageUpdatePayload `json:"updates"`
@@ -190,12 +193,13 @@ func UpdateStatusPage(db *bun.DB) gin.HandlerFunc {
 		page.Description = updated.Description
 		page.Visibility = updated.Visibility
 		page.IncludeAllTags = updated.IncludeAllTags
+		page.ImagePatterns = updated.ImagePatterns
 		page.StaleAfterHours = updated.StaleAfterHours
 		page.UpdatedAt = updated.UpdatedAt
 
 		err = db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
 			if _, err := tx.NewUpdate().Model(page).
-				Column("name", "slug", "description", "visibility", "include_all_tags", "stale_after_hours", "updated_at").
+				Column("name", "slug", "description", "visibility", "include_all_tags", "image_patterns", "stale_after_hours", "updated_at").
 				Where("id = ?", page.ID).
 				Exec(ctx); err != nil {
 				return err
@@ -251,28 +255,141 @@ func DeleteStatusPage(db *bun.DB) gin.HandlerFunc {
 
 func ViewStatusPageBySlug(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var page models.StatusPage
-		if err := db.NewSelect().Model(&page).Where("slug = ?", c.Param("slug")).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "status page not found"})
+		page, ok := loadViewablePageBySlug(c, db)
+		if !ok {
 			return
 		}
 
-		if !canViewStatusPage(c, &page) {
-			return
-		}
-
-		if err := hydratePageRelations(c, db, &page, true); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load status page"})
-			return
-		}
-
-		items, err := loadStatusPageItems(c, db, &page)
+		items, err := loadStatusPageItems(c, db, page)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load status page items"})
 			return
 		}
 
-		c.JSON(http.StatusOK, statusPageResponse{Page: &page, Items: items, Now: time.Now().UTC()})
+		c.JSON(http.StatusOK, statusPageResponse{Page: page, Items: items, Now: time.Now().UTC()})
+	}
+}
+
+func ViewStatusPageItemVulnerabilitiesBySlug(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		page, ok := loadViewablePageBySlug(c, db)
+		if !ok {
+			return
+		}
+
+		items, err := loadStatusPageItems(c, db, page)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load status page items"})
+			return
+		}
+
+		scanIDParam := c.Param("scanId")
+		var matched *StatusPageItem
+		for i := range items {
+			if items[i].LatestScanID == scanIDParam {
+				matched = &items[i]
+				break
+			}
+		}
+		if matched == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "status page item not found"})
+			return
+		}
+
+		scanID, err := uuid.Parse(scanIDParam)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+			return
+		}
+
+		pageNumber, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "25"))
+		if pageNumber < 1 {
+			pageNumber = 1
+		}
+		if limit < 1 || limit > 500 {
+			limit = 25
+		}
+		offset := (pageNumber - 1) * limit
+
+		allowedCols := map[string]string{
+			"vuln_id":           "vuln_id",
+			"pkg_name":          "pkg_name",
+			"severity":          "CASE severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 WHEN 'LOW' THEN 4 ELSE 5 END",
+			"cvss_score":        "cvss_score",
+			"installed_version": "installed_version",
+			"fixed_version":     "fixed_version",
+		}
+		sortCol := "severity"
+		sortDir := "asc"
+		if value := c.Query("sort_by"); value != "" {
+			if _, exists := allowedCols[value]; exists {
+				sortCol = value
+			}
+		}
+		if value := c.Query("sort_dir"); value == "desc" {
+			sortDir = "desc"
+		}
+		orderExpr := allowedCols[sortCol] + " " + sortDir
+		if sortCol != "vuln_id" {
+			orderExpr += ", vuln_id asc"
+		}
+
+		var vulns []models.Vulnerability
+		q := db.NewSelect().Model(&vulns).
+			Where("scan_id = ?", scanID).
+			OrderExpr(orderExpr).
+			Limit(limit).
+			Offset(offset)
+
+		if sev := c.Query("severity"); sev != "" {
+			q = q.Where("severity = ?", sev)
+		}
+		if pkg := c.Query("pkg"); pkg != "" {
+			q = q.Where("pkg_name ILIKE ?", "%"+pkg+"%")
+		}
+		if c.Query("has_fix") == "true" {
+			q = q.Where("fixed_version != ''")
+		}
+		if minCVSS := c.Query("min_cvss"); minCVSS != "" {
+			q = q.Where("cvss_score >= ?", minCVSS)
+		}
+
+		total, err := q.Count(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count vulnerabilities"})
+			return
+		}
+
+		if err := q.Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list vulnerabilities"})
+			return
+		}
+
+		vulnIDs := make([]string, len(vulns))
+		for i, vuln := range vulns {
+			vulnIDs[i] = vuln.VulnID
+		}
+		if len(vulnIDs) > 0 {
+			var kbEntries []models.VulnKBEntry
+			db.NewSelect().Model(&kbEntries).Where("vuln_id IN (?)", bun.In(vulnIDs)).Scan(c.Request.Context()) //nolint:errcheck
+			kbMap := make(map[string]*models.VulnKBEntry, len(kbEntries))
+			for i := range kbEntries {
+				kbMap[kbEntries[i].VulnID] = &kbEntries[i]
+			}
+			for i := range vulns {
+				if kb, exists := kbMap[vulns[i].VulnID]; exists {
+					vulns[i].KBEntry = kb
+				}
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"data":  vulns,
+			"total": total,
+			"page":  pageNumber,
+			"limit": limit,
+		})
 	}
 }
 
@@ -306,6 +423,20 @@ func loadManagedPage(c *gin.Context, db *bun.DB) (*models.StatusPage, uuid.UUID,
 	return page, userID, nil
 }
 
+func loadViewablePageBySlug(c *gin.Context, db *bun.DB) (*models.StatusPage, bool) {
+	page := &models.StatusPage{}
+	if err := db.NewSelect().Model(page).Where("slug = ?", c.Param("slug")).Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "status page not found"})
+		return nil, false
+	}
+
+	if !canViewStatusPage(c, page) {
+		return nil, false
+	}
+
+	return page, true
+}
+
 func hydratePageRelations(c *gin.Context, db *bun.DB, page *models.StatusPage, activeOnly bool) error {
 	if err := db.NewSelect().Model(&page.Targets).
 		Where("page_id = ?", page.ID).
@@ -328,8 +459,21 @@ func loadStatusPageItems(c *gin.Context, db *bun.DB, page *models.StatusPage) ([
 		return nil, err
 	}
 
-	if !page.IncludeAllTags && len(page.Targets) == 0 {
+	if !page.IncludeAllTags && len(page.Targets) == 0 && len(page.ImagePatterns) == 0 {
 		return []StatusPageItem{}, nil
+	}
+
+	compiledPatterns, err := compileStatusPagePatterns(page.ImagePatterns)
+	if err != nil {
+		return nil, err
+	}
+
+	exactTargetOrders := make(map[string]int, len(page.Targets))
+	for _, target := range page.Targets {
+		key := statusPageTargetKey(target.ImageName, target.ImageTag)
+		if _, exists := exactTargetOrders[key]; !exists {
+			exactTargetOrders[key] = target.DisplayOrder
+		}
 	}
 
 	args := []any{page.OwnerUserID}
@@ -381,19 +525,10 @@ SELECT
     p.previous_high_count,
     p.previous_medium_count,
     p.previous_low_count,
-    p.previous_scan_at,
-    COALESCE(t.display_order, 0) AS display_order
+    p.previous_scan_at
 FROM latest l
 LEFT JOIN previous p ON p.image_name = l.image_name AND p.image_tag = l.image_tag
-LEFT JOIN status_page_targets t ON t.page_id = ? AND t.image_name = l.image_name AND t.image_tag = l.image_tag
-`
-	args = append(args, page.ID)
-
-	if page.IncludeAllTags {
-		query += `ORDER BY COALESCE(t.display_order, 0) ASC, l.image_name ASC, l.image_tag ASC`
-	} else {
-		query += `WHERE t.page_id IS NOT NULL ORDER BY t.display_order ASC, l.image_name ASC, l.image_tag ASC`
-	}
+ORDER BY l.image_name ASC, l.image_tag ASC`
 
 	rows, err := db.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
@@ -403,6 +538,8 @@ LEFT JOIN status_page_targets t ON t.page_id = ? AND t.image_name = l.image_name
 
 	now := time.Now().UTC()
 	items := make([]StatusPageItem, 0)
+	exactItems := make([]StatusPageItem, 0, len(page.Targets))
+	patternItems := make([]StatusPageItem, 0)
 	for rows.Next() {
 		var item StatusPageItem
 		var prevCritical sql.NullInt64
@@ -426,7 +563,6 @@ LEFT JOIN status_page_targets t ON t.page_id = ? AND t.image_name = l.image_name
 			&prevMedium,
 			&prevLow,
 			&previousScanAt,
-			&item.DisplayOrder,
 		); err != nil {
 			return nil, err
 		}
@@ -462,11 +598,48 @@ LEFT JOIN status_page_targets t ON t.page_id = ? AND t.image_name = l.image_name
 			item.PreviousScanAt = &value
 		}
 
-		items = append(items, item)
+		if page.IncludeAllTags {
+			items = append(items, item)
+			continue
+		}
+
+		if displayOrder, exists := exactTargetOrders[statusPageTargetKey(item.ImageName, item.ImageTag)]; exists {
+			item.DisplayOrder = displayOrder
+			exactItems = append(exactItems, item)
+			continue
+		}
+
+		if matchesStatusPagePatterns(compiledPatterns, item.ImageName, item.ImageTag) {
+			patternItems = append(patternItems, item)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
+	if page.IncludeAllTags {
+		if items == nil {
+			return []StatusPageItem{}, nil
+		}
+		return items, nil
+	}
+
+	sort.Slice(exactItems, func(i, j int) bool {
+		if exactItems[i].DisplayOrder == exactItems[j].DisplayOrder {
+			return statusPageItemLess(exactItems[i], exactItems[j])
+		}
+		return exactItems[i].DisplayOrder < exactItems[j].DisplayOrder
+	})
+	sort.Slice(patternItems, func(i, j int) bool {
+		return statusPageItemLess(patternItems[i], patternItems[j])
+	})
+	for index := range patternItems {
+		patternItems[index].DisplayOrder = len(exactItems) + index + 1
+	}
+
+	items = append(exactItems, patternItems...)
 	if items == nil {
-		items = []StatusPageItem{}
+		return []StatusPageItem{}, nil
 	}
 
 	return items, nil
@@ -512,6 +685,11 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 		staleAfterHours = 72
 	}
 
+	imagePatterns, err := normalizeStatusPagePatterns(body.ImagePatterns)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	now := time.Now().UTC()
 	pageID := uuid.New()
 	page := &models.StatusPage{
@@ -521,6 +699,7 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 		Description:     strings.TrimSpace(body.Description),
 		Visibility:      visibility,
 		IncludeAllTags:  body.IncludeAllTags,
+		ImagePatterns:   imagePatterns,
 		StaleAfterHours: staleAfterHours,
 		OwnerUserID:     userID,
 		CreatedAt:       now,
@@ -553,8 +732,8 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 			CreatedAt:    now,
 		})
 	}
-	if !page.IncludeAllTags && len(targets) == 0 {
-		return nil, nil, nil, fmt.Errorf("at least one target is required when include_all_tags is false")
+	if !page.IncludeAllTags && len(targets) == 0 && len(imagePatterns) == 0 {
+		return nil, nil, nil, fmt.Errorf("at least one exact target or image regex is required when include_all_tags is false")
 	}
 
 	updates := make([]models.StatusPageUpdate, 0, len(body.Updates))
@@ -585,6 +764,64 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 	}
 
 	return page, targets, updates, nil
+}
+
+func normalizeStatusPagePatterns(patterns []string) (models.StringList, error) {
+	seen := make(map[string]struct{}, len(patterns))
+	normalized := make(models.StringList, 0, len(patterns))
+	for _, rawPattern := range patterns {
+		pattern := strings.TrimSpace(rawPattern)
+		if pattern == "" {
+			continue
+		}
+		if _, err := regexp.Compile(pattern); err != nil {
+			return nil, fmt.Errorf("invalid image regex %q: %w", pattern, err)
+		}
+		if _, exists := seen[pattern]; exists {
+			continue
+		}
+		seen[pattern] = struct{}{}
+		normalized = append(normalized, pattern)
+	}
+	return normalized, nil
+}
+
+func compileStatusPagePatterns(patterns models.StringList) ([]*regexp.Regexp, error) {
+	compiled := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid stored image regex %q: %w", pattern, err)
+		}
+		compiled = append(compiled, re)
+	}
+	return compiled, nil
+}
+
+func matchesStatusPagePatterns(patterns []*regexp.Regexp, imageName, imageTag string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+
+	fullReference := imageName + ":" + imageTag
+	for _, pattern := range patterns {
+		if pattern.MatchString(fullReference) || pattern.MatchString(imageName) || pattern.MatchString(imageTag) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func statusPageTargetKey(imageName, imageTag string) string {
+	return imageName + "::" + imageTag
+}
+
+func statusPageItemLess(left, right StatusPageItem) bool {
+	if left.ImageName == right.ImageName {
+		return left.ImageTag < right.ImageTag
+	}
+	return left.ImageName < right.ImageName
 }
 
 func requireAuthContext(c *gin.Context) (uuid.UUID, string, bool) {

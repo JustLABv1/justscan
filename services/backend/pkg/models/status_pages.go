@@ -22,6 +22,7 @@ type StatusPage struct {
 	Description     string             `bun:"description,type:text,default:''" json:"description"`
 	Visibility      string             `bun:"visibility,type:varchar(20),notnull,default:'private'" json:"visibility"`
 	IncludeAllTags  bool               `bun:"include_all_tags,type:boolean,notnull,default:false" json:"include_all_tags"`
+	ImagePatterns   StringList         `bun:"image_patterns,type:jsonb,notnull,default:'[]'" json:"image_patterns"`
 	StaleAfterHours int                `bun:"stale_after_hours,type:int,notnull,default:72" json:"stale_after_hours"`
 	OwnerUserID     uuid.UUID          `bun:"owner_user_id,type:uuid,notnull" json:"owner_user_id"`
 	CreatedAt       time.Time          `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`

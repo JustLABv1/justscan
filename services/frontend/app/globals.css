@@ -39,6 +39,17 @@
 
   /* Section borders */
   --border-subtle: rgba(0,0,0,0.07);
+
+  /* Status page */
+  --status-donut-track: rgba(0,0,0,0.07);
+  --status-card-bg: #ffffff;
+  --status-card-border: rgba(0,0,0,0.09);
+  --status-card-hover-bg: rgba(0,0,0,0.02);
+  --status-card-hover-border: rgba(0,0,0,0.14);
+  --status-pill-bg: rgba(0,0,0,0.04);
+  --status-pill-border: rgba(0,0,0,0.09);
+  --status-bar-track: rgba(0,0,0,0.08);
+  --status-header-border: rgba(0,0,0,0.09);
 }
 
 .dark {
@@ -77,6 +88,17 @@
 
   /* Section borders */
   --border-subtle: rgba(255,255,255,0.07);
+
+  /* Status page */
+  --status-donut-track: rgba(255,255,255,0.06);
+  --status-card-bg: rgba(255,255,255,0.02);
+  --status-card-border: rgba(255,255,255,0.06);
+  --status-card-hover-bg: rgba(255,255,255,0.04);
+  --status-card-hover-border: rgba(255,255,255,0.10);
+  --status-pill-bg: rgba(255,255,255,0.04);
+  --status-pill-border: rgba(255,255,255,0.08);
+  --status-bar-track: rgba(255,255,255,0.05);
+  --status-header-border: rgba(255,255,255,0.06);
 }
 
 /* ── Utility classes ─────────────────────────────────────────────────── */

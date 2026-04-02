@@ -15,7 +15,7 @@ import {
   updateStatusPage,
 } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
-import { Button, Card, Checkbox, Input, Label, ListBox, Modal, Select, Switch, TextArea, useOverlayState } from '@heroui/react';
+import { Button, Card, Input, Label, ListBox, Select, Switch, TextArea, useOverlayState } from '@heroui/react';
 import { Delete01Icon, EyeIcon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -134,6 +134,27 @@ export default function StatusPagesPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!modal.isOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        modal.close();
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [modal]);
 
   const selectedTargets = useMemo(() => {
     const keys = Array.from(selectedTargetKeys).map(String);
@@ -400,15 +421,36 @@ export default function StatusPagesPage() {
         </Card>
       )}
 
-      <Modal state={modal}>
-        <Modal.Backdrop isDismissable>
-          <Modal.Container size="cover" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editing ? 'Edit Status Page' : 'Create Status Page'}</Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
-              </Modal.Header>
-              <Modal.Body className="px-6 py-5">
+      {modal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <button
+            type="button"
+            aria-label="Close status page editor"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={modal.close}
+          />
+
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="status-page-modal-heading"
+            className="glass-modal relative z-10 grid max-h-[calc(100dvh-2rem)] w-[min(1120px,calc(100vw-1.5rem))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl"
+          >
+            <div className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <div className="flex items-center justify-between gap-4">
+                <h2 id="status-page-modal-heading" className="text-zinc-900 dark:text-white font-semibold">{editing ? 'Edit Status Page' : 'Create Status Page'}</h2>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={modal.close}
+                  className="rounded-md px-2 py-1 text-sm text-zinc-500 transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
+                >
+                  x
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 overflow-y-auto overscroll-contain px-6 py-5">
                 <form id="status-page-form" onSubmit={handleSubmit} className="space-y-4">
                   {formError && (
                     <div className="rounded-xl px-3 py-2.5 text-sm"
@@ -528,17 +570,30 @@ export default function StatusPagesPage() {
                             {filteredTargetOptions.map(option => {
                               const isSelected = selectedTargetKeys.has(option.id);
                               return (
-                                <div
+                                <label
                                   key={option.id}
-                                  className="px-3 py-3 transition-colors"
+                                  className="flex items-start gap-3 px-3 py-3 cursor-pointer transition-colors"
                                   style={isSelected
                                     ? { background: 'rgba(124,58,237,0.09)' }
                                     : undefined}
                                 >
-                                  <div className="flex items-start gap-3">
-                                    <Checkbox
-                                      isSelected={isSelected}
-                                      onChange={(checked: boolean) => {
+                                  {/* Wrap the visual checkbox in a relative container so the
+                                      native input can be overlaid exactly on top of it.
+                                      This ensures that when the input receives focus after a click,
+                                      the browser's scroll-to-element moves to the exact spot the
+                                      user already clicked — resulting in zero scroll movement. */}
+                                  <span className="relative mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors"
+                                    style={isSelected
+                                      ? { borderColor: '#7c3aed', background: '#7c3aed' }
+                                      : { borderColor: 'rgba(113,113,122,0.4)' }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      disabled={includeAllTags}
+                                      className="absolute inset-0 cursor-pointer opacity-0"
+                                      onChange={(e) => {
+                                        const checked = e.target.checked;
                                         setSelectedTargetKeys(current => {
                                           const next = new Set(current);
                                           if (checked) {
@@ -549,28 +604,15 @@ export default function StatusPagesPage() {
                                           return next;
                                         });
                                       }}
-                                      isDisabled={includeAllTags}
-                                    >
-                                      <Checkbox.Control className="mt-1 border border-zinc-500/40 data-[selected=true]:border-violet-500 data-[selected=true]:bg-violet-600">
-                                        <Checkbox.Indicator />
-                                      </Checkbox.Control>
-                                    </Checkbox>
+                                    />
+                                    {isSelected && (
+                                      <svg className="h-3 w-3 text-white pointer-events-none" viewBox="0 0 12 12" fill="none">
+                                        <path d="M2.5 6l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                    )}
+                                  </span>
 
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedTargetKeys(current => {
-                                          const next = new Set(current);
-                                          if (next.has(option.id)) {
-                                            next.delete(option.id);
-                                          } else {
-                                            next.add(option.id);
-                                          }
-                                          return next;
-                                        });
-                                      }}
-                                      disabled={includeAllTags}
-                                      className="min-w-0 flex-1 text-left"
+                                  <span className="min-w-0 flex-1 text-left"
                                     >
                                       <div className="flex flex-wrap items-center gap-2">
                                         <p className="font-mono text-sm break-all text-zinc-800 dark:text-zinc-100">{option.label}</p>
@@ -594,9 +636,8 @@ export default function StatusPagesPage() {
                                           H {option.high_count}
                                         </span>
                                       </div>
-                                    </button>
-                                  </div>
-                                </div>
+                                    </span>
+                                </label>
                               );
                             })}
                           </div>
@@ -672,8 +713,11 @@ export default function StatusPagesPage() {
 
                   <p className="text-xs text-zinc-500">Choose one or more exact `image:tag` entries, add regex include patterns, or enable “Include all image tags”.</p>
 
-                  {!includeAllTags && (selectedTargets.length > 0 || imagePatterns.length > 0) && (
-                    <div className="space-y-3 rounded-2xl border px-4 py-4" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                  {!includeAllTags && (
+                    <div
+                      className="space-y-3 rounded-2xl border px-4 py-4 min-h-[8.5rem]"
+                      style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)', overflowAnchor: 'none' }}
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Publish Scope</p>
@@ -682,7 +726,8 @@ export default function StatusPagesPage() {
                       </div>
 
                       {selectedTargets.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="max-h-24 overflow-y-auto [overflow-anchor:none]">
+                          <div className="flex flex-wrap gap-2">
                           {selectedTargets.slice(0, 12).map(target => (
                             <span
                               key={`${target.image_name}:${target.image_tag}`}
@@ -697,11 +742,13 @@ export default function StatusPagesPage() {
                               +{selectedTargets.length - 12} more exact tags
                             </span>
                           )}
+                          </div>
                         </div>
                       )}
 
                       {imagePatterns.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="max-h-24 overflow-y-auto [overflow-anchor:none]">
+                          <div className="flex flex-wrap gap-2">
                           {imagePatterns.map(pattern => (
                             <span
                               key={pattern}
@@ -711,7 +758,12 @@ export default function StatusPagesPage() {
                               {pattern}
                             </span>
                           ))}
+                          </div>
                         </div>
+                      )}
+
+                      {selectedTargets.length === 0 && imagePatterns.length === 0 && (
+                        <p className="text-xs leading-5 text-zinc-500">Selections and regex matches will appear here without changing the modal height.</p>
                       )}
                     </div>
                   )}
@@ -749,8 +801,9 @@ export default function StatusPagesPage() {
                     <TextArea className={textareaCls} value={updateBody} onChange={event => setUpdateBody(event.target.value)} placeholder="We are re-scanning images after a registry credential rotation. Short-lived stale states are expected." />
                   </div>
                 </form>
-              </Modal.Body>
-              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+            </div>
+
+            <div className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <Button onPress={modal.close} className="rounded-xl" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>Cancel</Button>
                 <Button type="submit" form="status-page-form" isDisabled={saving || invalidImagePatterns.length > 0 || !scopeIsValid}
                   className="rounded-xl text-white"
@@ -758,11 +811,10 @@ export default function StatusPagesPage() {
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Create'}
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+            </div>
+          </div>
+        </div>
+      )}
       {dialog}
     </div>
   );

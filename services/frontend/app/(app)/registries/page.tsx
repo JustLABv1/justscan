@@ -52,6 +52,8 @@ export default function RegistriesPage() {
   const [editing, setEditing] = useState<RegistryWithHealth | null>(null);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
+  const [xrayUrl, setXrayUrl] = useState('');
+  const [xrayArtifactoryId, setXrayArtifactoryId] = useState('default');
   const [authType, setAuthType] = useState<'none' | 'basic' | 'token' | 'aws_ecr'>('none');
   const [scanProvider, setScanProvider] = useState<'trivy' | 'artifactory_xray'>('trivy');
   const [username, setUsername] = useState('');
@@ -73,18 +75,28 @@ export default function RegistriesPage() {
   useEffect(() => { load(); }, [load]);
 
   function openCreate() {
-    setEditing(null); setName(''); setUrl(''); setAuthType('none'); setScanProvider('trivy'); setUsername(''); setPassword(''); setFormError('');
+    setEditing(null); setName(''); setUrl(''); setXrayUrl(''); setXrayArtifactoryId('default'); setAuthType('none'); setScanProvider('trivy'); setUsername(''); setPassword(''); setFormError('');
     modal.open();
   }
   function openEdit(r: RegistryWithHealth) {
-    setEditing(r); setName(r.name); setUrl(r.url); setAuthType(r.auth_type ?? 'none'); setScanProvider(r.scan_provider ?? 'trivy'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
+    setEditing(r); setName(r.name); setUrl(r.url); setXrayUrl(r.xray_url ?? ''); setXrayArtifactoryId(r.xray_artifactory_id ?? 'default'); setAuthType(r.auth_type ?? 'none'); setScanProvider(r.scan_provider ?? 'trivy'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
     modal.open();
   }
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setFormError(''); setSaving(true);
     try {
-      if (editing) { await updateRegistry(editing.id, { name, url, auth_type: authType, scan_provider: scanProvider, username, ...(password ? { password } : {}) }); toast.success('Registry updated'); }
-      else { await createRegistry({ name, url, auth_type: authType, scan_provider: scanProvider, username: username || undefined, password: password || undefined }); toast.success('Registry added'); }
+      const payload = {
+        name,
+        url,
+        xray_url: scanProvider === 'artifactory_xray' ? xrayUrl || undefined : undefined,
+        xray_artifactory_id: scanProvider === 'artifactory_xray' ? xrayArtifactoryId || 'default' : undefined,
+        auth_type: authType,
+        scan_provider: scanProvider,
+        username,
+        ...(password ? { password } : {}),
+      };
+      if (editing) { await updateRegistry(editing.id, payload); toast.success('Registry updated'); }
+      else { await createRegistry(payload); toast.success('Registry added'); }
       modal.close(); await load();
     } catch (err: unknown) { setFormError(err instanceof Error ? err.message : 'Failed to save'); }
     finally { setSaving(false); }
@@ -141,7 +153,7 @@ export default function RegistriesPage() {
         <div className="mt-0.5 w-2 h-2 rounded-full shrink-0" style={{ background: '#60a5fa' }} />
         <div className="space-y-1">
           <p className="font-medium text-zinc-800 dark:text-zinc-100">Provider choice is configured here in the frontend.</p>
-          <p className="text-zinc-600 dark:text-zinc-400">You do not need to edit backend/config.yaml to assign a registry to Trivy or Artifactory Xray. That choice is stored with the registry record in JustScan.</p>
+          <p className="text-zinc-600 dark:text-zinc-400">You do not need to edit backend/config.yaml to assign a registry to Trivy or Artifactory Xray. Provider selection, Xray base URL, and Artifactory ID are stored with the registry record in JustScan.</p>
         </div>
       </div>
 
@@ -288,6 +300,34 @@ export default function RegistriesPage() {
                       This is stored in JustScan and does not require editing backend/config.yaml.
                     </p>
                   </div>
+                  {scanProvider === 'artifactory_xray' && (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Xray Base URL</label>
+                        <input
+                          className={inputCls + ' font-mono'}
+                          placeholder="https://jfrog.example.com"
+                          value={xrayUrl}
+                          onChange={(e) => setXrayUrl(e.target.value)}
+                        />
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Leave empty to reuse the registry URL. Set this when your Docker registry host differs from the JFrog platform/Xray host.
+                        </p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Artifactory ID</label>
+                        <input
+                          className={inputCls}
+                          placeholder="default"
+                          value={xrayArtifactoryId}
+                          onChange={(e) => setXrayArtifactoryId(e.target.value)}
+                        />
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          This prefixes artifact summary paths in Xray. In most JFrog setups the correct value is <span className="font-mono">default</span>.
+                        </p>
+                      </div>
+                    </>
+                  )}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Auth Type</label>
                     <Select selectedKey={authType} onSelectionChange={k => setAuthType(k as 'none' | 'basic' | 'token' | 'aws_ecr')}>
@@ -308,7 +348,7 @@ export default function RegistriesPage() {
                   {scanProvider === 'artifactory_xray' && (
                     <div className="rounded-xl px-3 py-2.5 text-xs"
                       style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)', color: '#d97706' }}>
-                      The provider selection is saved now. Until the Artifactory Xray adapter is implemented, scans tied to this provider will automatically fall back to the built-in Trivy scanner instead of failing.
+                      Xray scans require image references that map cleanly to an Artifactory repository path, for example <span className="font-mono">plain-images/debian:12-slim</span> or <span className="font-mono">registry.example.com/plain-images/debian:12-slim</span>.
                     </div>
                   )}
                   <div className="space-y-1.5">

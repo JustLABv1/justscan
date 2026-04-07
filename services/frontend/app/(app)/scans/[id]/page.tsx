@@ -36,7 +36,7 @@ import { fullDate, timeAgo } from '@/lib/time';
 import { Calendar, DateField, DatePicker, ListBox, Select } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
-import { ArrowLeft01Icon, Cancel01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, GitCompareIcon, PencilEdit01Icon, Refresh01Icon, Share01Icon, ShieldKeyIcon } from 'hugeicons-react';
+import { ArrowLeft01Icon, Cancel01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, GitCompareIcon, Refresh01Icon, Share01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -77,9 +77,10 @@ function ScannerDatabaseCard({
 }
 
 // ── Scanning animation shown while pending/running ───────────────────
-function ScanningAnimation({ status, startedAt }: { status: string; startedAt: string | null }) {
+function ScanningAnimation({ status, externalStatus, startedAt }: { status: string; externalStatus?: string; startedAt: string | null }) {
   const [elapsed, setElapsed] = useState(0);
   const [phase, setPhase] = useState(0);
+  const waitingForXray = externalStatus === 'waiting_for_xray';
 
   const phases = [
     'Pulling image layers…',
@@ -109,7 +110,6 @@ function ScanningAnimation({ status, startedAt }: { status: string; startedAt: s
       className="glass-panel rounded-2xl overflow-hidden"
       style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.06) 0%, rgba(59,130,246,0.04) 100%)' }}
     >
-      {/* Top bar */}
       <div
         className="h-0.5 w-full relative overflow-hidden"
         style={{ background: 'rgba(124,58,237,0.15)' }}
@@ -153,11 +153,8 @@ function ScanningAnimation({ status, startedAt }: { status: string; startedAt: s
       `}</style>
 
       <div className="p-10 flex flex-col items-center gap-8">
-        {/* Radar — pure SVG for precise positioning */}
         <svg width="160" height="160" viewBox="0 0 160 160" style={{ overflow: 'visible' }}>
-          {/* Radial glow background */}
-          <circle cx="80" cy="80" r="76"
-            fill="url(#radarGlow)" />
+          <circle cx="80" cy="80" r="76" fill="url(#radarGlow)" />
           <defs>
             <radialGradient id="radarGlow" cx="50%" cy="50%" r="50%">
               <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.07" />
@@ -165,7 +162,6 @@ function ScanningAnimation({ status, startedAt }: { status: string; startedAt: s
             </radialGradient>
           </defs>
 
-          {/* Rings */}
           <circle cx="80" cy="80" r="76" stroke="rgba(124,58,237,0.18)" strokeWidth="1" fill="none"
             style={{ animation: 'ringPulse3 3s ease-in-out infinite' }} />
           <circle cx="80" cy="80" r="56" stroke="rgba(124,58,237,0.25)" strokeWidth="1" fill="none"
@@ -173,41 +169,33 @@ function ScanningAnimation({ status, startedAt }: { status: string; startedAt: s
           <circle cx="80" cy="80" r="36" stroke="rgba(124,58,237,0.35)" strokeWidth="1" fill="none"
             style={{ animation: 'ringPulse1 3s ease-in-out infinite 0.8s' }} />
 
-          {/* Cross-hairs — clipped to outer ring */}
           <line x1="4" y1="80" x2="156" y2="80" stroke="rgba(124,58,237,0.12)" strokeWidth="1" />
           <line x1="80" y1="4" x2="80" y2="156" stroke="rgba(124,58,237,0.12)" strokeWidth="1" />
 
-          {/* Rotating sweep group — origin at exact center (80,80) */}
           <g style={{ transformOrigin: '80px 80px', animation: 'radarSweep 3s linear infinite' }}>
-            {/* Wedge: from center, straight up (80,4), arc CW ~90° to (156,80), back to center */}
-            <path d="M 80 80 L 80 4 A 76 76 0 0 1 156 80 Z"
-              fill="rgba(124,58,237,0.13)" />
-            {/* Arm: center (80,80) to top (80,4) — rotates with group */}
+            <path d="M 80 80 L 80 4 A 76 76 0 0 1 156 80 Z" fill="rgba(124,58,237,0.13)" />
             <line x1="80" y1="80" x2="80" y2="4"
               stroke="rgba(167,139,250,0.85)" strokeWidth="1.5" strokeLinecap="round" />
           </g>
 
-          {/* Center glow */}
           <circle cx="80" cy="80" r="7" fill="rgba(167,139,250,0.2)" />
-          {/* Center dot */}
           <circle cx="80" cy="80" r="3.5" fill="#a78bfa"
             style={{ filter: 'drop-shadow(0 0 5px rgba(167,139,250,0.9))' }} />
         </svg>
 
-        {/* Text */}
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-2.5">
             <span
               className="text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-widest"
               style={{
-                background: status === 'running' ? 'rgba(59,130,246,0.12)' : 'rgba(161,161,170,0.1)',
-                border: `1px solid ${status === 'running' ? 'rgba(59,130,246,0.25)' : 'rgba(161,161,170,0.2)'}`,
-                color: status === 'running' ? '#60a5fa' : '#a1a1aa',
+                background: waitingForXray ? 'rgba(245,158,11,0.12)' : status === 'running' ? 'rgba(59,130,246,0.12)' : 'rgba(161,161,170,0.1)',
+                border: `1px solid ${waitingForXray ? 'rgba(245,158,11,0.25)' : status === 'running' ? 'rgba(59,130,246,0.25)' : 'rgba(161,161,170,0.2)'}`,
+                color: waitingForXray ? '#f59e0b' : status === 'running' ? '#60a5fa' : '#a1a1aa',
               }}
             >
               <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle animate-pulse"
-                style={{ background: status === 'running' ? '#60a5fa' : '#a1a1aa' }} />
-              {status}
+                style={{ background: waitingForXray ? '#f59e0b' : status === 'running' ? '#60a5fa' : '#a1a1aa' }} />
+              {waitingForXray ? 'Waiting for Xray' : status === 'running' ? 'Scan in progress' : 'Queued'}
             </span>
             {elapsed > 0 && (
               <span className="text-xs text-zinc-500 font-mono">{elapsedStr}</span>
@@ -219,7 +207,11 @@ function ScanningAnimation({ status, startedAt }: { status: string; startedAt: s
             key={phase}
             style={{ animation: 'fadePhase 1.8s ease-in-out forwards', minHeight: 20 }}
           >
-            {status === 'pending' ? 'Waiting for scanner…' : phases[phase]}
+            {waitingForXray
+              ? 'Xray is still processing this image. Results will import automatically once they are ready.'
+              : status === 'pending'
+                ? 'Waiting for scanner…'
+                : phases[phase]}
           </p>
 
           <p className="text-xs text-zinc-500/50 mt-1">
@@ -771,7 +763,12 @@ export default function ScanDetailPage() {
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="glass-panel rounded-xl p-4 col-span-1">
           <p className="text-xs text-zinc-500 mb-2">Status</p>
-          <StatusBadge status={scan.status} />
+          <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+          {scan.external_status && scan.scan_provider === 'artifactory_xray' && (
+            <p className="text-[11px] text-zinc-500 mt-2">
+              External state: {scan.external_status.replace(/_/g, ' ')}
+            </p>
+          )}
         </div>
         {sevCards.map(({ label, count, color, border }) => (
           <div key={label} className={`rounded-xl border ${border} p-4`} style={{
@@ -806,7 +803,7 @@ export default function ScanDetailPage() {
 
       {/* Scanning animation */}
       {(scan.status === 'pending' || scan.status === 'running') && (
-        <ScanningAnimation status={scan.status} startedAt={scan.started_at} />
+        <ScanningAnimation status={scan.status} externalStatus={scan.external_status} startedAt={scan.started_at} />
       )}
 
       {/* Tab bar */}

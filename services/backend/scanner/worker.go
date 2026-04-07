@@ -156,6 +156,21 @@ func processScan(job ScanJob, cacheDir string) {
 
 	log.Infof("Worker: starting scan %s for %s:%s", scanID, scan.ImageName, scan.ImageTag)
 
+	if scan.ScanProvider == models.ScanProviderArtifactoryXray {
+		if err := processXrayScan(ctx, db, scan); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			setFailed(db, scan, err.Error())
+			return
+		}
+
+		log.Infof("Worker: xray scan %s completed — CRIT:%d HIGH:%d MED:%d LOW:%d UNK:%d",
+			scanID,
+			scan.CriticalCount, scan.HighCount, scan.MediumCount, scan.LowCount, scan.UnknownCount)
+		return
+	}
+
 	runtimeInfo, err := EnsureDatabasesFresh(ctx, cacheDir)
 	if err != nil {
 		setFailed(db, scan, "failed to refresh trivy databases: "+err.Error())

@@ -8,7 +8,6 @@ import (
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
-	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
 )
 
@@ -19,8 +18,8 @@ func ProviderForRegistry(registry *models.Registry) string {
 	return models.ScanProviderTrivy
 }
 
-// DispatchScan routes a scan to the appropriate provider. Trivy-backed scans
-// continue using the existing queue; external providers can plug in here later.
+// DispatchScan routes a scan to the appropriate provider. Both built-in and
+// external providers execute asynchronously via the existing worker queue.
 func DispatchScan(_ context.Context, db *bun.DB, scan *models.Scan, envVars []string, platform string) error {
 	provider := scan.ScanProvider
 	if provider == "" {
@@ -33,17 +32,15 @@ func DispatchScan(_ context.Context, db *bun.DB, scan *models.Scan, envVars []st
 		EnqueueScan(scan.ID, db, envVars, platform)
 		return nil
 	case models.ScanProviderArtifactoryXray:
-		scan.ExternalStatus = "fallback_trivy"
+		scan.ExternalStatus = "queued"
 		if scan.ID != uuid.Nil {
 			if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
 				Set("external_status = ?", scan.ExternalStatus).
 				Where("id = ?", scan.ID).
 				Exec(context.Background()); err != nil {
-				return fmt.Errorf("failed to persist fallback status for scan %s: %w", scan.ID, err)
+				return fmt.Errorf("failed to persist external status for scan %s: %w", scan.ID, err)
 			}
 		}
-
-		log.Warnf("DispatchScan: provider %q selected for scan %s, falling back to Trivy until the Xray adapter is implemented", provider, scan.ID)
 		EnqueueScan(scan.ID, db, envVars, platform)
 		return nil
 	default:

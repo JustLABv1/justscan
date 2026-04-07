@@ -144,7 +144,7 @@ function ImageChildren({
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3"><StatusBadge status={scan.status} /></td>
+                    <td className="px-4 py-3"><StatusBadge status={scan.status} externalStatus={scan.external_status} /></td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 flex-wrap">
                         {(scan.tags ?? []).map(tag => (

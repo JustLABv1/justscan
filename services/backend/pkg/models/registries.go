@@ -13,6 +13,8 @@ type Registry struct {
 	ID                uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
 	Name              string     `bun:"name,type:text,notnull" json:"name"`
 	URL               string     `bun:"url,type:text,notnull" json:"url"`
+	XrayURL           string     `bun:"xray_url,type:text,default:''" json:"xray_url"`
+	XrayArtifactoryID string     `bun:"xray_artifactory_id,type:text,notnull,default:'default'" json:"xray_artifactory_id"`
 	AuthType          string     `bun:"auth_type,type:text,notnull,default:'basic'" json:"auth_type"`
 	ScanProvider      string     `bun:"scan_provider,type:text,notnull,default:'trivy'" json:"scan_provider"`
 	Username          string     `bun:"username,type:text,default:''" json:"-"`

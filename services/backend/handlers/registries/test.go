@@ -8,14 +8,15 @@ import (
 	"justscan-backend/config"
 	"justscan-backend/pkg/crypto"
 	"justscan-backend/pkg/models"
+	"justscan-backend/scanner"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
 
-// TestRegistry performs a health check against a registry's /v2/ endpoint and
-// persists the result (health_status, health_message, last_health_check_at).
+// TestRegistry performs a health check against either the registry /v2/
+// endpoint or the configured Xray ping endpoint and persists the result.
 func TestRegistry(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		registryID, err := uuid.Parse(c.Param("id"))
@@ -27,6 +28,21 @@ func TestRegistry(db *bun.DB) gin.HandlerFunc {
 		registry := &models.Registry{}
 		if err := db.NewSelect().Model(registry).Where("id = ?", registryID).Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "registry not found"})
+			return
+		}
+
+		if registry.ScanProvider == models.ScanProviderArtifactoryXray {
+			client, clientErr := scanner.NewRegistryXrayTestClient(registry)
+			now := time.Now()
+			if clientErr != nil {
+				updateRegistryHealth(c, db, registry, registryID, "unhealthy", clientErr.Error(), now)
+				return
+			}
+			if pingErr := client.Ping(c.Request.Context()); pingErr != nil {
+				updateRegistryHealth(c, db, registry, registryID, "unhealthy", pingErr.Error(), now)
+				return
+			}
+			updateRegistryHealth(c, db, registry, registryID, "healthy", "Xray ping succeeded", now)
 			return
 		}
 
@@ -58,7 +74,7 @@ func TestRegistry(db *bun.DB) gin.HandlerFunc {
 			req.SetBasicAuth(registry.Username, decryptedPassword)
 		case models.RegistryAuthToken:
 			req.Header.Set("Authorization", "Bearer "+decryptedPassword)
-		// aws_ecr and none: no auth header
+			// aws_ecr and none: no auth header
 		}
 
 		resp, err := client.Do(req)

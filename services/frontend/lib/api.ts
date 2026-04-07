@@ -789,6 +789,8 @@ export interface Registry {
   id: string;
   name: string;
   url: string;
+  xray_url?: string;
+  xray_artifactory_id?: string;
   auth_type: 'none' | 'basic' | 'token' | 'aws_ecr';
   scan_provider: 'trivy' | 'artifactory_xray';
   username: string;

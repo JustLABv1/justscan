@@ -60,14 +60,9 @@ func buildRegistryEnv(registry *models.Registry) ([]string, error) {
 		return nil, nil
 	}
 
-	password := ""
-	if registry.Password != "" {
-		encKey := crypto.KeyFromString(config.Config.Encryption.Key)
-		decryptedPassword, err := crypto.Decrypt(encKey, registry.Password)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decrypt credentials for registry %s: %w", registry.Name, err)
-		}
-		password = decryptedPassword
+	password, err := decryptRegistrySecret(registry)
+	if err != nil {
+		return nil, err
 	}
 
 	switch registry.AuthType {
@@ -88,6 +83,20 @@ func buildRegistryEnv(registry *models.Registry) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("unsupported registry auth type %q", registry.AuthType)
 	}
+}
+
+func decryptRegistrySecret(registry *models.Registry) (string, error) {
+	if registry == nil || registry.Password == "" {
+		return "", nil
+	}
+
+	encKey := crypto.KeyFromString(config.Config.Encryption.Key)
+	decryptedPassword, err := crypto.Decrypt(encKey, registry.Password)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt credentials for registry %s: %w", registry.Name, err)
+	}
+
+	return decryptedPassword, nil
 }
 
 func normalizeRegistryHost(url string) string {

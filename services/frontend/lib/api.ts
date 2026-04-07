@@ -155,9 +155,10 @@ export const listScans = (page = 1, limit = 20, image?: string, status?: string,
   return req<{ data: Scan[]; total: number }>('GET', `/api/v1/scans/?${params}`);
 };
 
-export const listScanImages = (page = 1, limit = 30, image?: string) => {
+export const listScanImages = (page = 1, limit = 30, image?: string, status?: string) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
+  if (status) params.set('status', status);
   return req<{ data: ImageSummary[]; total: number }>('GET', `/api/v1/scans/images?${params}`);
 };
 
@@ -1157,6 +1158,7 @@ export interface ImageSummary {
   latest_scan_id: string;
   latest_tag: string;
   latest_status: string;
+  latest_external_status?: string;
   latest_scan_at: string;
   critical_count: number;
   high_count: number;

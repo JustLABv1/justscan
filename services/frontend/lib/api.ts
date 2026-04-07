@@ -53,6 +53,9 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 }
 
 // Auth
+export const getOIDCAvailability = () =>
+  req<{ oidc_enabled: boolean; local_auth_enabled: boolean }>('GET', '/api/v1/auth/oidc/available');
+
 export const login = (email: string, password: string, rememberMe = false) =>
   req<{ token: string; user: User; expires_at: number }>('POST', '/api/v1/auth/login', {
     email,

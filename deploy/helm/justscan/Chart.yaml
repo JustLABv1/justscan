@@ -1,0 +1,23 @@
+apiVersion: v2
+name: justscan
+description: JustScan — container image vulnerability scanner with SBOM, compliance, and OIDC support
+type: application
+version: 0.1.0
+appVersion: "latest"
+keywords:
+  - security
+  - vulnerability-scanner
+  - container
+  - trivy
+  - oidc
+home: https://github.com/JustLabV1/JustScan
+sources:
+  - https://github.com/JustLabV1/JustScan
+maintainers:
+  - name: JustLab
+
+dependencies:
+  - name: postgresql
+    version: "16.x.x"
+    repository: "oci://registry-1.docker.io/bitnamicharts"
+    condition: postgresql.enabled

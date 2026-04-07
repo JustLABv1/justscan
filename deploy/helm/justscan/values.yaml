@@ -1,0 +1,204 @@
+# Default values for justscan.
+# Override any value with --set or a custom values file.
+
+# ------------------------------------------------------------------
+# Backend
+# ------------------------------------------------------------------
+backend:
+  image:
+    repository: ghcr.io/justlabv1/justscan
+    tag: backend-latest
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  # Resource requests & limits
+  resources: {}
+  #   requests:
+  #     cpu: 100m
+  #     memory: 256Mi
+  #   limits:
+  #     cpu: 500m
+  #     memory: 512Mi
+
+  # Non-secret configuration. These values are rendered into a ConfigMap and
+  # mounted as /etc/justscan/config.yaml. Secrets are injected as env vars
+  # (which Viper reads via AutomaticEnv, overriding file values).
+  config:
+    logLevel: info
+    port: 8080
+
+    # CORS origins. Must include every URL users access the frontend from.
+    allowOrigins:
+      - "http://localhost:3000"
+
+    database:
+      # When postgresql.enabled=true this is auto-derived from the subchart service name.
+      # Set explicitly when using an external database (postgresql.enabled=false).
+      server: ""
+      port: 5432
+      name: justscan
+      user: postgres
+      driver: postgres
+
+    scanner:
+      trivyPath: trivy
+      timeout: 600
+      concurrency: 2
+      dbMaxAgeHours: 7
+      enableOsvJavaAugmentation: true
+
+    vulnKb:
+      cacheDays: 7
+
+    # OIDC single sign-on (Keycloak, Authentik, Okta, Azure AD, …)
+    oidc:
+      enabled: false
+      # The base issuer URL of your OIDC provider (without /.well-known/openid-configuration)
+      issuerUrl: ""
+      clientId: ""
+      # redirect_uri is auto-derived from ingress.hosts[0].host when left empty.
+      # Override here if your external URL differs from the ingress host.
+      redirectUri: ""
+      scopes:
+        - openid
+        - email
+        - profile
+      # Users in any of these groups or roles will receive the "admin" role in JustScan.
+      # Role is re-evaluated on every login.
+      adminGroups: []
+      adminRoles: []
+      # The claim names in the ID token that carry group / role memberships.
+      groupsClaim: "groups"
+      rolesClaim: "roles"
+
+    # Set to false to disable local username/password authentication.
+    # When false, only OIDC login is available.
+    localAuth:
+      enabled: true
+
+  # ------------------------------------------------------------------
+  # Secrets
+  # ------------------------------------------------------------------
+  # Sensitive values are stored in a Kubernetes Secret and injected as
+  # environment variables (BACKEND_JWT_SECRET, BACKEND_DATABASE_PASSWORD,
+  # BACKEND_ENCRYPTION_KEY, BACKEND_OIDC_CLIENT_SECRET, BACKEND_VULN_KB_NVD_API_KEY).
+  #
+  # Option A (default): provide values here — the chart creates the Secret.
+  # Option B: use a pre-existing Secret (set existingSecret to its name and
+  #           configure existingSecretKeys to map each field to the correct key).
+  secrets:
+    jwtSecret: ""
+    dbPassword: ""
+    # 64-character hex string. Generate with: openssl rand -hex 32
+    encryptionKey: ""
+    # Required only when oidc.enabled=true
+    oidcClientSecret: ""
+    # Optional — speeds up CVE enrichment
+    nvdApiKey: ""
+
+    # Set to the name of a pre-existing Secret to skip Secret creation.
+    existingSecret: ""
+    # Key names inside the existing Secret (only used when existingSecret is set).
+    existingSecretKeys:
+      jwtSecret: "jwt-secret"
+      dbPassword: "db-password"
+      encryptionKey: "encryption-key"
+      oidcClientSecret: "oidc-client-secret"
+      nvdApiKey: "nvd-api-key"
+
+  service:
+    type: ClusterIP
+    port: 8080
+
+  # Additional environment variables (plain, non-secret)
+  extraEnv: []
+  # - name: BACKEND_SOME_VAR
+  #   value: "value"
+
+# ------------------------------------------------------------------
+# Frontend
+# ------------------------------------------------------------------
+frontend:
+  image:
+    repository: ghcr.io/justlabv1/justscan
+    tag: frontend-latest
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  resources: {}
+
+  config:
+    # URL the frontend's Next.js server uses to reach the backend API.
+    # Defaults to the backend Service ClusterIP URL if left empty.
+    apiUrl: ""
+
+  service:
+    type: ClusterIP
+    port: 3000
+
+  extraEnv: []
+
+# ------------------------------------------------------------------
+# Ingress
+# ------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  #   kubernetes.io/ingress.class: nginx
+  #   cert-manager.io/cluster-issuer: letsencrypt-prod
+
+  hosts:
+    - host: justscan.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+  tls: []
+  #  - secretName: justscan-tls
+  #    hosts:
+  #      - justscan.example.com
+
+# ------------------------------------------------------------------
+# PostgreSQL (Bitnami subchart)
+# ------------------------------------------------------------------
+postgresql:
+  # Set to false to use an external database.
+  # When false, configure backend.config.database.server with the external host.
+  enabled: true
+
+  auth:
+    database: justscan
+    username: justscan
+    # This password is also written to backend.secrets.dbPassword automatically
+    # when using the bundled PostgreSQL. When using an external DB, set
+    # backend.secrets.dbPassword directly.
+    password: ""
+    # existingSecret: ""  # Use a pre-existing secret for the postgres password
+
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+      # storageClass: ""
+
+# ------------------------------------------------------------------
+# Service Account
+# ------------------------------------------------------------------
+serviceAccount:
+  create: true
+  annotations: {}
+  # name: ""  # Override to use an existing service account
+
+# ------------------------------------------------------------------
+# Pod config
+# ------------------------------------------------------------------
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

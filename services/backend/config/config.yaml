@@ -31,3 +31,19 @@ encryption:
 vuln_kb:
   nvd_api_key: ""
   cache_days: 7
+
+oidc:
+  enabled: false
+  debug: false
+  issuer_url: ""
+  client_id: ""
+  client_secret: ""
+  redirect_uri: ""
+  scopes: ["openid", "email", "profile"]
+  admin_groups: []
+  admin_roles: []
+  groups_claim: "groups"
+  roles_claim: "roles"
+
+local_auth:
+  enabled: true

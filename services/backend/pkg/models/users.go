@@ -18,6 +18,8 @@ type Users struct {
 	Role           string    `bun:"role,type:text,notnull,default:'user'" json:"role"`
 	Disabled       bool      `bun:"disabled,type:bool,default:false" json:"disabled"`
 	DisabledReason string    `bun:"disabled_reason,type:text,default:''" json:"disabled_reason"`
+	OIDCSubject    *string   `bun:"oidc_subject,type:text,unique" json:"oidc_subject,omitempty"`
+	AuthType       string    `bun:"auth_type,type:text,notnull,default:'local'" json:"auth_type"`
 	CreatedAt      time.Time `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	UpdatedAt      time.Time `bun:"updated_at,type:timestamptz" json:"updated_at"`
 }

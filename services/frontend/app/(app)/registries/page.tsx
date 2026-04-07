@@ -308,7 +308,7 @@ export default function RegistriesPage() {
                   {scanProvider === 'artifactory_xray' && (
                     <div className="rounded-xl px-3 py-2.5 text-xs"
                       style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)', color: '#d97706' }}>
-                      The provider selection is saved now. The actual Artifactory Xray execution path is the next implementation step, so scans tied to this provider will not succeed until that adapter is added.
+                      The provider selection is saved now. Until the Artifactory Xray adapter is implemented, scans tied to this provider will automatically fall back to the built-in Trivy scanner instead of failing.
                     </div>
                   )}
                   <div className="space-y-1.5">

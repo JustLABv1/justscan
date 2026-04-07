@@ -96,3 +96,39 @@ func normalizeRegistryHost(url string) string {
 	host = strings.TrimSuffix(host, "/")
 	return host
 }
+
+// NormalizeScanTarget trims user input, removes accidental leading/trailing
+// separators, and qualifies unqualified image names when a registry is chosen.
+func NormalizeScanTarget(imageName, imageTag string, registry *models.Registry) (string, string) {
+	trimmedName := strings.TrimSpace(imageName)
+	trimmedName = strings.TrimSuffix(trimmedName, ":")
+	trimmedTag := strings.TrimSpace(imageTag)
+	trimmedTag = strings.TrimPrefix(trimmedTag, ":")
+
+	if registry != nil {
+		trimmedName = QualifyImageNameForRegistry(trimmedName, registry)
+	}
+
+	return trimmedName, trimmedTag
+}
+
+// QualifyImageNameForRegistry prefixes an image with the selected registry host
+// when the image name is not already fully qualified.
+func QualifyImageNameForRegistry(imageName string, registry *models.Registry) string {
+	trimmedName := strings.TrimSpace(imageName)
+	if trimmedName == "" || registry == nil {
+		return trimmedName
+	}
+	if hasRegistryHost(trimmedName) {
+		return trimmedName
+	}
+	return normalizeRegistryHost(registry.URL) + "/" + strings.TrimPrefix(trimmedName, "/")
+}
+
+func hasRegistryHost(imageName string) bool {
+	firstSegment := imageName
+	if slash := strings.Index(firstSegment, "/"); slash != -1 {
+		firstSegment = firstSegment[:slash]
+	}
+	return firstSegment == "localhost" || strings.Contains(firstSegment, ".") || strings.Contains(firstSegment, ":")
+}

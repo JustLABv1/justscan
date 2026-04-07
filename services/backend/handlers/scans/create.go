@@ -54,10 +54,11 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(req.Image, req.Tag, registry)
 
 		scan := &models.Scan{
-			ImageName:    req.Image,
-			ImageTag:     req.Tag,
+			ImageName:    normalizedImageName,
+			ImageTag:     normalizedImageTag,
 			Platform:     req.Platform,
 			RegistryID:   requestedRegistryID,
 			ScanProvider: scanner.ProviderForRegistry(registry),
@@ -102,7 +103,7 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 		}
 
 		go audit.Write(context.Background(), db, userID.String(), "scan.create",
-			fmt.Sprintf("Scan created for %s:%s (id=%s)", req.Image, req.Tag, scan.ID))
+			fmt.Sprintf("Scan created for %s:%s (id=%s)", scan.ImageName, scan.ImageTag, scan.ID))
 
 		c.JSON(http.StatusCreated, scan)
 	}

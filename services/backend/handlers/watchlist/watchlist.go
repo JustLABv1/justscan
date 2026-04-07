@@ -170,6 +170,9 @@ func TriggerScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(item.ImageName, item.ImageTag, registry)
+		scan.ImageName = normalizedImageName
+		scan.ImageTag = normalizedImageTag
 		scan.ScanProvider = scanner.ProviderForRegistry(registry)
 		if registry != nil {
 			scan.RegistryID = &registry.ID

@@ -5,33 +5,40 @@ import { SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ImageRowSkeleton } from '@/components/ui/skeleton';
 import {
-  cancelScan,
-  createScan,
-  deleteScan,
-  ImageSummary,
-  listScanImages,
-  listScans,
-  listTags,
-  Scan,
-  Tag,
+    cancelScan,
+    createScan,
+    deleteScan,
+    ImageSummary,
+    listRegistries,
+    listScanImages,
+    listScans,
+    listTags,
+    Registry,
+    Scan,
+    Tag,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Checkbox, ListBox, Modal, Popover, Select, useOverlayState } from '@heroui/react';
 import {
-  ArrowDown01Icon,
-  ArrowRight01Icon,
-  Cancel01Icon,
-  Delete01Icon,
-  FilterIcon,
-  GitCompareIcon,
-  PlusSignIcon,
-  Shield01Icon,
+    ArrowDown01Icon,
+    ArrowRight01Icon,
+    Cancel01Icon,
+    Delete01Icon,
+    FilterIcon,
+    GitCompareIcon,
+    PlusSignIcon,
+    Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+
+const PROVIDER_LABEL: Record<string, string> = {
+  trivy: 'Trivy',
+  artifactory_xray: 'Artifactory Xray',
+};
 
 // ── Child rows (scans for one image) ─────────────────────────────────
 function ImageChildren({
@@ -240,11 +247,13 @@ export default function ScansPage() {
 
   // Available tags for bulk tagging
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [registries, setRegistries] = useState<Registry[]>([]);
 
   // New scan form
   const [imageName, setImageName] = useState('');
   const [imageTag, setImageTag] = useState('latest');
   const [platform, setPlatform] = useState('');
+  const [registryId, setRegistryId] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
 
@@ -268,6 +277,7 @@ export default function ScansPage() {
 
   useEffect(() => { load(page, imageFilter); }, [load, page]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { listTags().then(setAvailableTags).catch(() => {}); }, []);
+  useEffect(() => { listRegistries().then(setRegistries).catch(() => {}); }, []);
 
   // Auto-open new scan modal when navigated from sidebar CTA (?new=1)
   useEffect(() => {
@@ -314,9 +324,9 @@ export default function ScansPage() {
     e.preventDefault();
     setCreateError(''); setCreating(true);
     try {
-      const newScan = await createScan(imageName, imageTag, undefined, undefined, platform || undefined);
+      const newScan = await createScan(imageName, imageTag, registryId || undefined, undefined, platform || undefined);
       modal.close();
-      setImageName(''); setImageTag('latest'); setPlatform('');
+      setImageName(''); setImageTag('latest'); setPlatform(''); setRegistryId('');
       toast.success('Scan queued');
       // Expand the image row after creation
       setExpanded(prev => new Set(prev).add(newScan.image_name));
@@ -715,6 +725,30 @@ export default function ScansPage() {
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Tag</label>
                     <input className={inputCls + ' font-mono'} placeholder="latest"
                       value={imageTag} onChange={e => setImageTag(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                      Registry <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span>
+                    </label>
+                    <Select selectedKey={registryId || '__auto__'} onSelectionChange={k => setRegistryId(String(k === '__auto__' ? '' : k))}>
+                      <Select.Trigger className={inputCls}>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__auto__">Auto-match from image hostname</ListBox.Item>
+                          {registries.map(registry => (
+                            <ListBox.Item key={registry.id} id={registry.id}>
+                              {registry.name} · {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <p className="text-xs text-zinc-500">
+                      Leave this empty to let JustScan match a registry automatically from the image hostname.
+                    </p>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">

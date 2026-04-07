@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -77,6 +78,8 @@ type xraySummaryIssue struct {
 	Summary     string                 `json:"summary"`
 	Description string                 `json:"description"`
 	Severity    string                 `json:"severity"`
+	CVSS3Max    any                    `json:"cvss3_max_score"`
+	CVSS2Max    any                    `json:"cvss2_max_score"`
 	Components  []xraySummaryComponent `json:"components"`
 	CVEs        []xraySummaryCVE       `json:"cves"`
 	References  []any                  `json:"references"`
@@ -90,11 +93,15 @@ type xraySummaryComponent struct {
 }
 
 type xraySummaryCVE struct {
-	CVE          string  `json:"cve"`
-	CVSSV3Score  float64 `json:"cvss_v3_score"`
-	CVSSV3Vector string  `json:"cvss_v3_vector"`
-	CVSSScore    float64 `json:"cvss_score"`
-	CVSSVector   string  `json:"cvss_vector"`
+	CVE          string `json:"cve"`
+	CVSSV3       any    `json:"cvss_v3"`
+	CVSSV2       any    `json:"cvss_v2"`
+	CVSSV3Score  any    `json:"cvss_v3_score"`
+	CVSSV3Vector string `json:"cvss_v3_vector"`
+	CVSSV2Score  any    `json:"cvss_v2_score"`
+	CVSSV2Vector string `json:"cvss_v2_vector"`
+	CVSSScore    any    `json:"cvss_score"`
+	CVSSVector   string `json:"cvss_vector"`
 }
 
 type registryHTTPError struct {
@@ -1268,15 +1275,121 @@ func xrayPackageName(component xraySummaryComponent) string {
 }
 
 func xrayIssueScore(issue xraySummaryIssue) (float64, string) {
+	bestScore := 0.0
+	bestVector := ""
+
 	for _, cve := range issue.CVEs {
-		if cve.CVSSV3Score > 0 {
-			return cve.CVSSV3Score, cve.CVSSV3Vector
-		}
-		if cve.CVSSScore > 0 {
-			return cve.CVSSScore, cve.CVSSVector
+		if score, vector, ok := xrayCVEScore(cve); ok && score > bestScore {
+			bestScore = score
+			bestVector = vector
 		}
 	}
+
+	if bestScore > 0 {
+		return bestScore, bestVector
+	}
+
+	if score, ok := xrayNumericValue(issue.CVSS3Max); ok && score > 0 {
+		return score, ""
+	}
+	if score, ok := xrayNumericValue(issue.CVSS2Max); ok && score > 0 {
+		return score, ""
+	}
+
 	return 0, ""
+}
+
+func xrayCVEScore(cve xraySummaryCVE) (float64, string, bool) {
+	if score, vector, ok := xrayScoreVector(cve.CVSSV3Score, cve.CVSSV3Vector); ok {
+		return score, vector, true
+	}
+	if score, vector, ok := xrayCombinedScoreVector(cve.CVSSV3); ok {
+		return score, vector, true
+	}
+	if score, vector, ok := xrayScoreVector(cve.CVSSScore, cve.CVSSVector); ok {
+		return score, vector, true
+	}
+	if score, vector, ok := xrayScoreVector(cve.CVSSV2Score, cve.CVSSV2Vector); ok {
+		return score, vector, true
+	}
+	if score, vector, ok := xrayCombinedScoreVector(cve.CVSSV2); ok {
+		return score, vector, true
+	}
+	return 0, "", false
+}
+
+func xrayScoreVector(raw any, vector string) (float64, string, bool) {
+	score, ok := xrayNumericValue(raw)
+	if !ok || score <= 0 {
+		return 0, "", false
+	}
+	return score, strings.TrimSpace(vector), true
+}
+
+func xrayCombinedScoreVector(raw any) (float64, string, bool) {
+	text, ok := xrayStringValue(raw)
+	if !ok {
+		return 0, "", false
+	}
+
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return 0, "", false
+	}
+
+	scorePart, vectorPart, hasVector := strings.Cut(text, "/")
+	score, err := strconv.ParseFloat(strings.TrimSpace(scorePart), 64)
+	if err != nil || score <= 0 {
+		return 0, "", false
+	}
+
+	if !hasVector {
+		return score, "", true
+	}
+
+	return score, strings.TrimSpace(vectorPart), true
+}
+
+func xrayNumericValue(raw any) (float64, bool) {
+	switch value := raw.(type) {
+	case nil:
+		return 0, false
+	case float64:
+		return value, true
+	case float32:
+		return float64(value), true
+	case int:
+		return float64(value), true
+	case int64:
+		return float64(value), true
+	case json.Number:
+		parsed, err := value.Float64()
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
+	}
+}
+
+func xrayStringValue(raw any) (string, bool) {
+	switch value := raw.(type) {
+	case nil:
+		return "", false
+	case string:
+		return value, true
+	case json.Number:
+		return value.String(), true
+	default:
+		return "", false
+	}
 }
 
 func normalizeXraySeverity(severity string) string {

@@ -29,15 +29,19 @@ function SeverityBadge({ severity }: { severity: string }) {
 function SourceBadge({ source }: { source?: string }) {
   const normalized = (source ?? '').trim().toLowerCase();
   const isOSV = normalized === 'osv.dev';
+  const isXray = normalized === 'jfrog xray' || normalized === 'xray';
+  const label = isOSV ? 'OSV.dev' : isXray ? 'Xray' : source?.trim() || 'Trivy';
   return (
     <span
       className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0"
       style={isOSV
         ? { background: 'rgba(59,130,246,0.14)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.24)' }
-        : { background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.22)' }}
-      title={source || (isOSV ? 'OSV supplemental finding' : 'Trivy finding')}
+        : isXray
+          ? { background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.22)' }
+          : { background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.22)' }}
+      title={source || (isOSV ? 'OSV supplemental finding' : isXray ? 'JFrog Xray finding' : 'Scanner finding')}
     >
-      {isOSV ? 'OSV.dev' : 'Trivy'}
+      {label}
     </span>
   );
 }

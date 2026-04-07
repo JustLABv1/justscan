@@ -14,6 +14,9 @@ type Scan struct {
 	ImageName               string     `bun:"image_name,type:text,notnull" json:"image_name"`
 	ImageTag                string     `bun:"image_tag,type:text,notnull" json:"image_tag"`
 	ImageDigest             string     `bun:"image_digest,type:text,default:''" json:"image_digest"`
+	ScanProvider            string     `bun:"scan_provider,type:text,notnull,default:'trivy'" json:"scan_provider"`
+	ExternalScanID          string     `bun:"external_scan_id,type:text,default:''" json:"external_scan_id,omitempty"`
+	ExternalStatus          string     `bun:"external_status,type:text,default:''" json:"external_status,omitempty"`
 	Status                  string     `bun:"status,type:text,notnull,default:'pending'" json:"status"`
 	ErrorMessage            string     `bun:"error_message,type:text,default:''" json:"error_message"`
 	CriticalCount           int        `bun:"critical_count,type:int,default:0" json:"critical_count"`
@@ -28,6 +31,7 @@ type Scan struct {
 	TrivyJavaDBUpdatedAt    *time.Time `bun:"trivy_java_db_updated_at,type:timestamptz" json:"trivy_java_db_updated_at,omitempty"`
 	TrivyJavaDBDownloadedAt *time.Time `bun:"trivy_java_db_downloaded_at,type:timestamptz" json:"trivy_java_db_downloaded_at,omitempty"`
 	UserID                  *uuid.UUID `bun:"user_id,type:uuid" json:"user_id,omitempty"`
+	RegistryID              *uuid.UUID `bun:"registry_id,type:uuid" json:"registry_id,omitempty"`
 	Architecture            string     `bun:"architecture,type:text,default:''" json:"architecture"`
 	OSFamily                string     `bun:"os_family,type:text,default:''" json:"os_family"`
 	OSName                  string     `bun:"os_name,type:text,default:''" json:"os_name"`
@@ -56,4 +60,9 @@ const (
 	ScanStatusCompleted = "completed"
 	ScanStatusFailed    = "failed"
 	ScanStatusCancelled = "cancelled"
+)
+
+const (
+	ScanProviderTrivy           = "trivy"
+	ScanProviderArtifactoryXray = "artifactory_xray"
 )

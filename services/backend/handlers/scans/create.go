@@ -4,13 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
-	"justscan-backend/config"
 	"justscan-backend/functions/audit"
 	"justscan-backend/functions/auth"
-	"justscan-backend/pkg/crypto"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -21,10 +18,11 @@ import (
 )
 
 type CreateScanRequest struct {
-	Image    string   `json:"image" binding:"required"`
-	Tag      string   `json:"tag" binding:"required"`
-	Platform string   `json:"platform"`
-	TagIDs   []string `json:"tag_ids"`
+	Image      string   `json:"image" binding:"required"`
+	Tag        string   `json:"tag" binding:"required"`
+	Platform   string   `json:"platform"`
+	RegistryID string   `json:"registry_id"`
+	TagIDs     []string `json:"tag_ids"`
 }
 
 func CreateScan(db *bun.DB) gin.HandlerFunc {
@@ -41,13 +39,35 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
+		var requestedRegistryID *uuid.UUID
+		if req.RegistryID != "" {
+			parsedRegistryID, err := uuid.Parse(req.RegistryID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry_id"})
+				return
+			}
+			requestedRegistryID = &parsedRegistryID
+		}
+
+		registry, envVars, err := scanner.ResolveRegistryForScan(c.Request.Context(), db, req.Image, requestedRegistryID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(req.Image, req.Tag, registry)
+
 		scan := &models.Scan{
-			ImageName: req.Image,
-			ImageTag:  req.Tag,
-			Platform:  req.Platform,
-			Status:    models.ScanStatusPending,
-			UserID:    &userID,
-			CreatedAt: time.Now(),
+			ImageName:    normalizedImageName,
+			ImageTag:     normalizedImageTag,
+			Platform:     req.Platform,
+			RegistryID:   requestedRegistryID,
+			ScanProvider: scanner.ProviderForRegistry(registry),
+			Status:       models.ScanStatusPending,
+			UserID:       &userID,
+			CreatedAt:    time.Now(),
+		}
+		if registry != nil {
+			scan.RegistryID = &registry.ID
 		}
 		if _, err := db.NewInsert().Model(scan).Exec(c.Request.Context()); err != nil {
 			log.Errorf("CreateScan DB insert error: %v", err)
@@ -70,59 +90,21 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			}
 		}
 
-		// Resolve registry credentials and enqueue scan
-		envVars := resolveRegistryEnv(c.Request.Context(), db, req.Image)
-		scanner.EnqueueScan(scan.ID, db, envVars, req.Platform)
+		if err := scanner.DispatchScan(c.Request.Context(), db, scan, envVars, req.Platform); err != nil {
+			log.Warnf("CreateScan dispatch failed for %s: %v", scan.ID, err)
+			if markErr := scanner.MarkScanFailed(c.Request.Context(), db, scan.ID, err.Error()); markErr != nil {
+				log.Errorf("CreateScan failed to persist dispatch error for %s: %v", scan.ID, markErr)
+			} else {
+				completedAt := time.Now()
+				scan.Status = models.ScanStatusFailed
+				scan.ErrorMessage = err.Error()
+				scan.CompletedAt = &completedAt
+			}
+		}
 
 		go audit.Write(context.Background(), db, userID.String(), "scan.create",
-			fmt.Sprintf("Scan created for %s:%s (id=%s)", req.Image, req.Tag, scan.ID))
+			fmt.Sprintf("Scan created for %s:%s (id=%s)", scan.ImageName, scan.ImageTag, scan.ID))
 
 		c.JSON(http.StatusCreated, scan)
 	}
-}
-
-// resolveRegistryEnv matches the image name to a stored registry and returns
-// Trivy-compatible environment variables for authentication.
-func resolveRegistryEnv(ctx context.Context, db *bun.DB, imageName string) []string {
-	var registries []models.Registry
-	if err := db.NewSelect().Model(&registries).Scan(ctx); err != nil {
-		return nil
-	}
-
-	encKey := crypto.KeyFromString(config.Config.Encryption.Key)
-
-	for _, reg := range registries {
-		host := strings.TrimPrefix(reg.URL, "https://")
-		host = strings.TrimPrefix(host, "http://")
-		host = strings.TrimSuffix(host, "/")
-
-		if !strings.HasPrefix(imageName, host+"/") && host != "docker.io" {
-			continue
-		}
-
-		password, err := crypto.Decrypt(encKey, reg.Password)
-		if err != nil {
-			log.Warnf("resolveRegistryEnv: failed to decrypt password for registry %s: %v", reg.Name, err)
-			continue
-		}
-
-		switch reg.AuthType {
-		case models.RegistryAuthBasic:
-			return []string{
-				"TRIVY_USERNAME=" + reg.Username,
-				"TRIVY_PASSWORD=" + password,
-			}
-		case models.RegistryAuthToken:
-			return []string{
-				"TRIVY_REGISTRY_TOKEN=" + password,
-			}
-		case models.RegistryAuthAWSECR:
-			// AWS ECR: username is AWS_ACCESS_KEY_ID, password is AWS_SECRET_ACCESS_KEY
-			return []string{
-				"AWS_ACCESS_KEY_ID=" + reg.Username,
-				"AWS_SECRET_ACCESS_KEY=" + password,
-			}
-		}
-	}
-	return nil
 }

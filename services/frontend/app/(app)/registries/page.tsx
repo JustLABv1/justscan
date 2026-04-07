@@ -5,8 +5,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { createRegistry, deleteRegistry, listRegistries, RegistryWithHealth, testRegistry, updateRegistry } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
-import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
-import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, ServerStack01Icon } from 'hugeicons-react';
+import { Dropdown, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { MoreVerticalIcon, PlusSignIcon, ServerStack01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
 
 const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
@@ -19,6 +19,16 @@ const AUTH_TYPE_STYLE: Record<string, React.CSSProperties> = {
   basic:   { color: '#60a5fa', background: 'rgba(59,130,246,0.1)',   border: '1px solid rgba(59,130,246,0.2)'  },
   token:   { color: '#a78bfa', background: 'rgba(124,58,237,0.1)',   border: '1px solid rgba(124,58,237,0.2)'  },
   aws_ecr: { color: '#fb923c', background: 'rgba(249,115,22,0.1)',   border: '1px solid rgba(249,115,22,0.2)'  },
+};
+
+const PROVIDER_LABEL: Record<string, string> = {
+  trivy: 'Trivy',
+  artifactory_xray: 'Artifactory Xray',
+};
+
+const PROVIDER_STYLE: Record<string, React.CSSProperties> = {
+  trivy: { color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' },
+  artifactory_xray: { color: '#f59e0b', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' },
 };
 
 function HealthBadge({ status, message }: { status: string; message: string }) {
@@ -42,7 +52,10 @@ export default function RegistriesPage() {
   const [editing, setEditing] = useState<RegistryWithHealth | null>(null);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
+  const [xrayUrl, setXrayUrl] = useState('');
+  const [xrayArtifactoryId, setXrayArtifactoryId] = useState('default');
   const [authType, setAuthType] = useState<'none' | 'basic' | 'token' | 'aws_ecr'>('none');
+  const [scanProvider, setScanProvider] = useState<'trivy' | 'artifactory_xray'>('trivy');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -62,18 +75,28 @@ export default function RegistriesPage() {
   useEffect(() => { load(); }, [load]);
 
   function openCreate() {
-    setEditing(null); setName(''); setUrl(''); setAuthType('none'); setUsername(''); setPassword(''); setFormError('');
+    setEditing(null); setName(''); setUrl(''); setXrayUrl(''); setXrayArtifactoryId('default'); setAuthType('none'); setScanProvider('trivy'); setUsername(''); setPassword(''); setFormError('');
     modal.open();
   }
   function openEdit(r: RegistryWithHealth) {
-    setEditing(r); setName(r.name); setUrl(r.url); setAuthType(r.auth_type ?? 'none'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
+    setEditing(r); setName(r.name); setUrl(r.url); setXrayUrl(r.xray_url ?? ''); setXrayArtifactoryId(r.xray_artifactory_id ?? 'default'); setAuthType(r.auth_type ?? 'none'); setScanProvider(r.scan_provider ?? 'trivy'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
     modal.open();
   }
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setFormError(''); setSaving(true);
     try {
-      if (editing) { await updateRegistry(editing.id, { name, url, auth_type: authType, username, ...(password ? { password } : {}) }); toast.success('Registry updated'); }
-      else { await createRegistry({ name, url, auth_type: authType, username: username || undefined, password: password || undefined }); toast.success('Registry added'); }
+      const payload = {
+        name,
+        url,
+        xray_url: scanProvider === 'artifactory_xray' ? xrayUrl || undefined : undefined,
+        xray_artifactory_id: scanProvider === 'artifactory_xray' ? xrayArtifactoryId || 'default' : undefined,
+        auth_type: authType,
+        scan_provider: scanProvider,
+        username,
+        ...(password ? { password } : {}),
+      };
+      if (editing) { await updateRegistry(editing.id, payload); toast.success('Registry updated'); }
+      else { await createRegistry(payload); toast.success('Registry added'); }
       modal.close(); await load();
     } catch (err: unknown) { setFormError(err instanceof Error ? err.message : 'Failed to save'); }
     finally { setSaving(false); }
@@ -107,7 +130,7 @@ export default function RegistriesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Registries</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Configure private Docker registries</p>
+          <p className="text-sm text-zinc-500 mt-0.5">Configure private Docker registries and choose the scan provider per registry.</p>
         </div>
         <button
           onClick={openCreate}
@@ -125,6 +148,16 @@ export default function RegistriesPage() {
         </div>
       )}
 
+      <div className="rounded-2xl px-4 py-3 text-sm flex items-start gap-3"
+        style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.18)', color: 'var(--text-secondary)' }}>
+        <div className="mt-0.5 w-2 h-2 rounded-full shrink-0" style={{ background: '#60a5fa' }} />
+        <div className="space-y-1">
+          <p className="font-medium text-zinc-800 dark:text-zinc-100">Provider choice is configured here in the frontend.</p>
+          <p className="text-zinc-600 dark:text-zinc-400">You do not need to edit backend/config.yaml to assign a registry to Trivy or Artifactory Xray. Provider selection, Xray base URL, and Artifactory ID are stored with the registry record in JustScan.</p>
+          <p className="text-zinc-600 dark:text-zinc-400">Registry health is checked automatically every 15 minutes, and you can still run a manual test from the actions menu.</p>
+        </div>
+      </div>
+
       {loading ? (
         <div className="glass-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
@@ -132,14 +165,15 @@ export default function RegistriesPage() {
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">URL</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Provider</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Username</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Health</th>
-                <th className="px-4 py-3" />
+                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: 3 }).map((_, i) => <TableRowSkeleton key={i} cols={6} />)}
+              {Array.from({ length: 3 }).map((_, i) => <TableRowSkeleton key={i} cols={7} />)}
             </tbody>
           </table>
         </div>
@@ -147,7 +181,7 @@ export default function RegistriesPage() {
         <EmptyState
           icon={<ServerStack01Icon size={28} />}
           title="No registries configured"
-          description="Add a private Docker registry (Docker Hub, ECR, GCR, etc.) to scan images that require authentication."
+          description="Add a private Docker registry and choose whether JustScan should use its local Trivy scanner or the Artifactory Xray provider for that registry."
           action={{ label: '+ Add Registry', onClick: openCreate }}
         />
       ) : (
@@ -157,10 +191,11 @@ export default function RegistriesPage() {
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">URL</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Provider</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Username</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Health</th>
-                <th className="px-4 py-3" />
+                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -170,6 +205,12 @@ export default function RegistriesPage() {
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                   <td className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-200">{r.name}</td>
                   <td className="px-4 py-3 font-mono text-xs text-zinc-500">{r.url}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-md"
+                      style={PROVIDER_STYLE[r.scan_provider ?? 'trivy']}>
+                      {PROVIDER_LABEL[r.scan_provider ?? 'trivy']}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     <span className="text-xs font-medium px-2 py-0.5 rounded-md"
                       style={AUTH_TYPE_STYLE[r.auth_type ?? 'none']}>
@@ -188,27 +229,36 @@ export default function RegistriesPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => handleTest(r.id)}
-                        disabled={testing === r.id}
-                        className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all disabled:opacity-50"
-                        style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)', color: '#a78bfa' }}
-                        title="Test connection"
-                      >
-                        {testing === r.id ? (
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full border border-current border-t-transparent animate-spin" />
-                            Testing…
-                          </span>
-                        ) : 'Test'}
-                      </button>
-                      <button onClick={() => openEdit(r)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit">
-                        <PencilEdit01Icon size={15} />
-                      </button>
-                      <button onClick={() => handleDelete(r.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1.5" title="Delete">
-                        <Delete01Icon size={15} />
-                      </button>
+                    <div className="flex items-center justify-end">
+                      <Dropdown>
+                        <Dropdown.Trigger>
+                          <button
+                            type="button"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg transition-all"
+                            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
+                            aria-label={`Open actions menu for ${r.name}`}
+                          >
+                            <MoreVerticalIcon size={15} />
+                          </button>
+                        </Dropdown.Trigger>
+                        <Dropdown.Popover className="min-w-[180px]">
+                          <Dropdown.Menu onAction={(key) => {
+                            if (key === 'test') void handleTest(r.id);
+                            if (key === 'edit') openEdit(r);
+                            if (key === 'delete') void handleDelete(r.id);
+                          }}>
+                            <Dropdown.Item id="test" textValue="Test connection" isDisabled={testing === r.id}>
+                              <Label>{testing === r.id ? 'Testing…' : 'Test connection'}</Label>
+                            </Dropdown.Item>
+                            <Dropdown.Item id="edit" textValue="Edit registry">
+                              <Label>Edit</Label>
+                            </Dropdown.Item>
+                            <Dropdown.Item id="delete" textValue="Delete registry" variant="danger">
+                              <Label>Delete</Label>
+                            </Dropdown.Item>
+                          </Dropdown.Menu>
+                        </Dropdown.Popover>
+                      </Dropdown>
                     </div>
                   </td>
                 </tr>
@@ -243,6 +293,52 @@ export default function RegistriesPage() {
                     <input className={inputCls + ' font-mono'} placeholder="https://registry.example.com" value={url} onChange={(e) => setUrl(e.target.value)} required />
                   </div>
                   <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Scan Provider</label>
+                    <Select selectedKey={scanProvider} onSelectionChange={k => setScanProvider(k as 'trivy' | 'artifactory_xray')}>
+                      <Select.Trigger className={inputCls}>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="trivy">Trivy (built-in JustScan scanner)</ListBox.Item>
+                          <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      This is stored in JustScan and does not require editing backend/config.yaml.
+                    </p>
+                  </div>
+                  {scanProvider === 'artifactory_xray' && (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Xray Base URL</label>
+                        <input
+                          className={inputCls + ' font-mono'}
+                          placeholder="https://jfrog.example.com"
+                          value={xrayUrl}
+                          onChange={(e) => setXrayUrl(e.target.value)}
+                        />
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Leave empty to reuse the registry URL. Set this when your Docker registry host differs from the JFrog platform/Xray host.
+                        </p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Artifactory ID</label>
+                        <input
+                          className={inputCls}
+                          placeholder="default"
+                          value={xrayArtifactoryId}
+                          onChange={(e) => setXrayArtifactoryId(e.target.value)}
+                        />
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          This prefixes artifact summary paths in Xray. In most JFrog setups the correct value is <span className="font-mono">default</span>.
+                        </p>
+                      </div>
+                    </>
+                  )}
+                  <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Auth Type</label>
                     <Select selectedKey={authType} onSelectionChange={k => setAuthType(k as 'none' | 'basic' | 'token' | 'aws_ecr')}>
                       <Select.Trigger className={inputCls}>
@@ -259,6 +355,12 @@ export default function RegistriesPage() {
                       </Select.Popover>
                     </Select>
                   </div>
+                  {scanProvider === 'artifactory_xray' && (
+                    <div className="rounded-xl px-3 py-2.5 text-xs"
+                      style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)', color: '#d97706' }}>
+                      Xray scans require image references that map cleanly to an Artifactory repository path, for example <span className="font-mono">plain-images/debian:12-slim</span> or <span className="font-mono">registry.example.com/plain-images/debian:12-slim</span>.
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Username <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span></label>
                     <input className={inputCls} placeholder="Optional" value={username} onChange={(e) => setUsername(e.target.value)} />

@@ -18,6 +18,10 @@ func GetSBOM(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
+		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
+			return
+		}
+
 		var components []models.SBOMComponent
 		q := db.NewSelect().Model(&components).Where("scan_id = ?", scanID).OrderExpr("name, version")
 
@@ -50,6 +54,15 @@ func CompareScan(db *bun.DB) gin.HandlerFunc {
 		scanB, err := uuid.Parse(scanBStr)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan_b ID"})
+			return
+		}
+
+		scanAModel, _, _, ok := LoadAuthorizedScan(c, db, scanA)
+		if !ok {
+			return
+		}
+		scanBModel, _, _, ok := LoadAuthorizedScan(c, db, scanB)
+		if !ok {
 			return
 		}
 
@@ -97,6 +110,8 @@ func CompareScan(db *bun.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
+			"scan_a":         scanAModel,
+			"scan_b":         scanBModel,
 			"added":          added,
 			"removed":        removed,
 			"unchanged":      unchanged,
@@ -148,15 +163,13 @@ func Compare(db *bun.DB) gin.HandlerFunc {
 
 		ctx := c.Request.Context()
 
-		scanA := &models.Scan{}
-		if err := db.NewSelect().Model(scanA).Where("id = ?", scanAID).Scan(ctx); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "scan A not found"})
+		scanA, _, _, ok := LoadAuthorizedScan(c, db, scanAID)
+		if !ok {
 			return
 		}
 
-		scanB := &models.Scan{}
-		if err := db.NewSelect().Model(scanB).Where("id = ?", scanBID).Scan(ctx); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "scan B not found"})
+		scanB, _, _, ok := LoadAuthorizedScan(c, db, scanBID)
+		if !ok {
 			return
 		}
 

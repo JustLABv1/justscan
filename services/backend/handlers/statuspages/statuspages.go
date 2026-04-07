@@ -86,14 +86,14 @@ type statusPageResponse struct {
 
 func ListStatusPages(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, tokenType, ok := requireAuthContext(c)
+		userID, isAdmin, ok := requireAuthContext(c, db)
 		if !ok {
 			return
 		}
 
 		var pages []models.StatusPage
 		q := db.NewSelect().Model(&pages).OrderExpr("updated_at DESC")
-		if tokenType != "admin" {
+		if !isAdmin {
 			q = q.Where("owner_user_id = ?", userID)
 		}
 		if err := q.Scan(c.Request.Context()); err != nil {
@@ -107,7 +107,7 @@ func ListStatusPages(db *bun.DB) gin.HandlerFunc {
 
 func CreateStatusPage(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, _, ok := requireAuthContext(c)
+		userID, _, ok := requireAuthContext(c, db)
 		if !ok {
 			return
 		}
@@ -394,7 +394,7 @@ func ViewStatusPageItemVulnerabilitiesBySlug(db *bun.DB) gin.HandlerFunc {
 }
 
 func loadManagedPage(c *gin.Context, db *bun.DB) (*models.StatusPage, uuid.UUID, error) {
-	userID, tokenType, ok := requireAuthContext(c)
+	userID, isAdmin, ok := requireAuthContext(c, db)
 	if !ok {
 		return nil, uuid.Nil, fmt.Errorf("unauthorized")
 	}
@@ -407,7 +407,7 @@ func loadManagedPage(c *gin.Context, db *bun.DB) (*models.StatusPage, uuid.UUID,
 
 	page := &models.StatusPage{}
 	q := db.NewSelect().Model(page).Where("id = ?", pageID)
-	if tokenType != "admin" {
+	if !isAdmin {
 		q = q.Where("owner_user_id = ?", userID)
 	}
 	if err := q.Scan(c.Request.Context()); err != nil {
@@ -430,7 +430,7 @@ func loadViewablePageBySlug(c *gin.Context, db *bun.DB) (*models.StatusPage, boo
 		return nil, false
 	}
 
-	if !canViewStatusPage(c, page) {
+	if !canViewStatusPage(c, db, page) {
 		return nil, false
 	}
 
@@ -824,17 +824,16 @@ func statusPageItemLess(left, right StatusPageItem) bool {
 	return left.ImageName < right.ImageName
 }
 
-func requireAuthContext(c *gin.Context) (uuid.UUID, string, bool) {
-	userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
+func requireAuthContext(c *gin.Context, db *bun.DB) (uuid.UUID, bool, bool) {
+	userID, isAdmin, err := auth.ResolveUserAccess(c.GetHeader("Authorization"), db)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return uuid.Nil, "", false
+		return uuid.Nil, false, false
 	}
-	tokenType, _ := auth.GetTypeFromToken(c.GetHeader("Authorization"))
-	return userID, tokenType, true
+	return userID, isAdmin, true
 }
 
-func canViewStatusPage(c *gin.Context, page *models.StatusPage) bool {
+func canViewStatusPage(c *gin.Context, db *bun.DB, page *models.StatusPage) bool {
 	switch page.Visibility {
 	case models.StatusPageVisibilityPublic:
 		return true
@@ -845,13 +844,12 @@ func canViewStatusPage(c *gin.Context, page *models.StatusPage) bool {
 		}
 		return true
 	case models.StatusPageVisibilityPrivate:
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
+		userID, isAdmin, err := auth.ResolveUserAccess(c.GetHeader("Authorization"), db)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required to view this status page"})
 			return false
 		}
-		tokenType, _ := auth.GetTypeFromToken(c.GetHeader("Authorization"))
-		if tokenType == "admin" || userID == page.OwnerUserID {
+		if isAdmin || userID == page.OwnerUserID {
 			return true
 		}
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})

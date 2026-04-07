@@ -28,7 +28,7 @@ type ImageSummary struct {
 // ListScanImages returns one summary row per distinct image name, ordered by most-recent scan.
 func ListScanImages(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authfuncs.GetUserIDFromToken(c.GetHeader("Authorization"))
+		userID, isAdmin, err := authfuncs.ResolveUserAccess(c.GetHeader("Authorization"), db)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
@@ -45,9 +45,6 @@ func ListScanImages(db *bun.DB) gin.HandlerFunc {
 		offset := (page - 1) * limit
 
 		imageFilter := c.Query("image")
-		tokenType, _ := authfuncs.GetTypeFromToken(c.GetHeader("Authorization"))
-		isAdmin := tokenType == "admin"
-
 		// Build WHERE clause fragments based on role and filter
 		var userWhere string
 		var userArgs []interface{}

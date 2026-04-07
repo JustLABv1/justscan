@@ -31,11 +31,39 @@ type HelmImage struct {
 	SourcePath string `json:"source_path"` // e.g. "spec.template.spec.containers[0].image"
 }
 
+// ResolveHelmChartInput normalizes chart inputs into a canonical Helm pull target.
+// Known OCI registry hosts are accepted without an explicit oci:// prefix so
+// persisted reruns can recover from older non-canonical chart URLs.
+func ResolveHelmChartInput(chartURL, chartName string) (resolvedChartURL, resolvedChartName string, isOCI bool) {
+	resolvedChartURL = strings.TrimSpace(chartURL)
+	resolvedChartName = strings.TrimSpace(chartName)
+
+	if resolvedChartURL == "" {
+		return "", resolvedChartName, false
+	}
+
+	if strings.HasPrefix(resolvedChartURL, "oci://") {
+		return joinOCIChartURL(resolvedChartURL, resolvedChartName), "", true
+	}
+
+	if hasHTTPScheme(resolvedChartURL) {
+		return strings.TrimRight(resolvedChartURL, "/"), resolvedChartName, false
+	}
+
+	if looksLikeOCIChartURL(resolvedChartURL) {
+		return joinOCIChartURL("oci://"+strings.TrimLeft(resolvedChartURL, "/"), resolvedChartName), "", true
+	}
+
+	return resolvedChartURL, resolvedChartName, false
+}
+
 // ExtractHelmImages pulls a Helm chart (OCI or HTTP repo), renders all templates
 // including subcharts, and returns all unique container images found.
 // registryEnvVars are Trivy-style env vars (TRIVY_USERNAME, etc.) — we map them to
 // Helm registry credentials when the chart URL is an OCI chart.
 func ExtractHelmImages(_ context.Context, chartURL, chartName, chartVersion string, registryEnvVars []string) ([]HelmImage, string, string, error) {
+	chartURL, chartName, isOCI := ResolveHelmChartInput(chartURL, chartName)
+
 	tmpDir, err := os.MkdirTemp("", "justscan-helm-*")
 	if err != nil {
 		return nil, "", "", fmt.Errorf("create temp dir: %w", err)
@@ -66,8 +94,6 @@ func ExtractHelmImages(_ context.Context, chartURL, chartName, chartVersion stri
 	pull.Settings = settings
 	pull.Untar = true
 	pull.DestDir = tmpDir
-
-	isOCI := strings.HasPrefix(chartURL, "oci://")
 
 	var chartRef string
 	if isOCI {
@@ -456,4 +482,49 @@ func extractRegistryCreds(envVars []string) (username, password string) {
 		}
 	}
 	return
+}
+
+func hasHTTPScheme(value string) bool {
+	return strings.HasPrefix(value, "https://") || strings.HasPrefix(value, "http://")
+}
+
+func joinOCIChartURL(chartURL, chartName string) string {
+	base := strings.TrimRight(strings.TrimSpace(chartURL), "/")
+	name := strings.Trim(strings.TrimSpace(chartName), "/")
+	if name == "" {
+		return base
+	}
+	if strings.HasSuffix(base, "/"+name) {
+		return base
+	}
+	return base + "/" + name
+}
+
+func looksLikeOCIChartURL(chartURL string) bool {
+	if chartURL == "" || strings.Contains(chartURL, "://") {
+		return false
+	}
+
+	host := chartURL
+	if idx := strings.Index(host, "/"); idx != -1 {
+		host = host[:idx]
+	}
+	host = strings.ToLower(strings.TrimSpace(host))
+
+	switch host {
+	case "localhost", "ghcr.io", "quay.io", "public.ecr.aws", "registry.k8s.io", "docker.io", "index.docker.io", "registry-1.docker.io", "mcr.microsoft.com", "cgr.dev", "gcr.io", "us.gcr.io", "eu.gcr.io", "asia.gcr.io", "k8s.gcr.io":
+		return true
+	}
+
+	if strings.HasPrefix(host, "localhost:") {
+		return true
+	}
+	if strings.HasSuffix(host, ".pkg.dev") || strings.HasSuffix(host, ".azurecr.io") {
+		return true
+	}
+	if strings.Contains(host, ".dkr.ecr.") && strings.HasSuffix(host, ".amazonaws.com") {
+		return true
+	}
+
+	return false
 }

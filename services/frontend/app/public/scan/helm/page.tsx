@@ -1,6 +1,12 @@
 'use client';
 import { Logo } from '@/components/logo';
-import { createPublicHelmScans, extractPublicHelmImages, getPublicHelmScanRun, getToken, HelmExtractResponse, HelmImage, Scan } from '@/lib/api';
+import { createPublicHelmScans, extractPublicHelmImages, getPublicHelmScanRun, getToken, HelmExtractResponse, Scan } from '@/lib/api';
+import {
+    createEditableHelmImages,
+    EditableHelmImage,
+    getHelmImageSourceLabel,
+    parseHelmImageRef,
+} from '@/lib/helm-image-overrides';
 import { addToHelmPublicHistory, addToPublicHistory, getHelmPublicHistory, PublicHelmRunHistoryEntry, timeAgo, updateHelmPublicHistoryEntry } from '@/lib/publicScanHistory';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -66,13 +72,15 @@ export default function PublicHelmScanPage() {
 
   // Extracted images
   const [chartInfo, setChartInfo] = useState<{ name: string; version: string }>({ name: '', version: '' });
-  const [images, setImages] = useState<HelmImage[]>([]);
+  const [images, setImages] = useState<EditableHelmImage[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [helmHistory, setHelmHistory] = useState<PublicHelmRunHistoryEntry[]>([]);
 
   const isDark = mounted && resolvedTheme === 'dark';
   const isOCI = chartUrl.startsWith('oci://');
+  const selectedImages = images.filter((img) => selected.has(img.id));
+  const hasInvalidSelection = selectedImages.some((img) => img.edited_ref.trim() === '');
 
   useEffect(() => {
     let cancelled = false;
@@ -121,10 +129,11 @@ export default function PublicHelmScanPage() {
         isOCI ? undefined : chartName.trim() || undefined,
         chartVersion.trim() || undefined,
       );
-      const images = Array.isArray(res.images) ? res.images : [];
+      const extractedImages = Array.isArray(res.images) ? res.images : [];
+      const nextImages = createEditableHelmImages(extractedImages);
       setChartInfo({ name: res.chart_name, version: res.chart_version });
-      setImages(images);
-      setSelected(new Set(images.map(img => img.full_ref)));
+      setImages(nextImages);
+      setSelected(new Set(nextImages.map((img) => img.id)));
       setStep('review');
     } catch (err: unknown) {
       setExtractError(err instanceof Error ? err.message : 'Failed to extract images');
@@ -134,14 +143,21 @@ export default function PublicHelmScanPage() {
 
   async function handleScan() {
     setScanError('');
-    const selectedImages = images.filter(img => selected.has(img.full_ref));
+    const selectedImages = images.filter((img) => selected.has(img.id));
     if (selectedImages.length === 0) return;
+    if (hasInvalidSelection) {
+      setScanError('Each selected image needs a non-empty image reference.');
+      return;
+    }
 
     setStep('scanning');
     try {
       const res = await createPublicHelmScans(
         chartUrl.trim(),
-        selectedImages.map(img => ({ full_ref: img.full_ref, source_path: img.source_path })),
+        selectedImages.map((img) => ({
+          full_ref: img.edited_ref.trim(),
+          source_path: getHelmImageSourceLabel(img),
+        })),
         platform || undefined,
         chartInfo.name || undefined,
         chartInfo.version || undefined,
@@ -191,16 +207,22 @@ export default function PublicHelmScanPage() {
     }
   }
 
-  function toggleImage(ref: string) {
+  function toggleImage(id: string) {
     setSelected(prev => {
       const next = new Set(prev);
-      if (next.has(ref)) next.delete(ref);
-      else next.add(ref);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
 
-  function selectAll() { setSelected(new Set(images.map(i => i.full_ref))); }
+  function updateEditedRef(id: string, value: string) {
+    setImages((prev) => prev.map((image) => (
+      image.id === id ? { ...image, edited_ref: value } : image
+    )));
+  }
+
+  function selectAll() { setSelected(new Set(images.map((image) => image.id))); }
   function deselectAll() { setSelected(new Set()); }
 
   function openRun(run: PublicHelmRunHistoryEntry) {
@@ -308,6 +330,10 @@ export default function PublicHelmScanPage() {
               </div>
             </div>
             <div>
+
+              <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
+                Override any extracted image reference before scanning. Selected rows will use the edited values.
+              </p>
               <h1 className="text-3xl sm:text-4xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
                 Scan Helm chart{' '}
                 <span style={{ background: 'linear-gradient(135deg, #a78bfa, #7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
@@ -498,6 +524,10 @@ export default function PublicHelmScanPage() {
                 </button>
               </div>
 
+              <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
+                Override any extracted image reference before scanning. Selected rows will use the edited values.
+              </p>
+
               {/* Image list */}
               <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
                 <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: 'var(--row-divider)' }}>
@@ -511,29 +541,51 @@ export default function PublicHelmScanPage() {
                   </div>
                 </div>
                 <div className="divide-y" style={{ borderColor: 'var(--row-divider)' }}>
-                  {images.map(img => (
-                    <label key={img.full_ref} className="flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors"
-                      style={{ background: selected.has(img.full_ref) ? 'rgba(124,58,237,0.04)' : 'transparent' }}
-                      onMouseEnter={e => { if (!selected.has(img.full_ref)) e.currentTarget.style.background = 'var(--row-hover)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = selected.has(img.full_ref) ? 'rgba(124,58,237,0.04)' : 'transparent'; }}>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(img.full_ref)}
-                        onChange={() => toggleImage(img.full_ref)}
-                        className="mt-0.5 accent-violet-600"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-mono text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                          {img.name}:{img.tag}
-                        </p>
-                        {img.source_path && (
-                          <p className="text-xs mt-0.5 font-mono truncate" style={{ color: 'var(--text-faint)' }}>
-                            {img.source_path}
-                          </p>
-                        )}
+                  {images.map((img) => {
+                    const parsed = parseHelmImageRef(img.edited_ref);
+                    const checked = selected.has(img.id);
+
+                    return (
+                      <div
+                        key={img.id}
+                        className="flex items-start gap-3 px-4 py-3 transition-colors"
+                        style={{ background: checked ? 'rgba(124,58,237,0.04)' : 'transparent' }}
+                        onMouseEnter={e => { if (!checked) e.currentTarget.style.background = 'var(--row-hover)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = checked ? 'rgba(124,58,237,0.04)' : 'transparent'; }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleImage(img.id)}
+                          className="mt-0.5 accent-violet-600"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <input
+                            type="text"
+                            value={img.edited_ref}
+                            onChange={(event) => updateEditedRef(img.id, event.target.value)}
+                            className="w-full bg-transparent text-sm font-mono font-medium outline-none"
+                            style={{ color: 'var(--text-primary)', caretColor: '#7c3aed' }}
+                            placeholder="registry.example.com/org/image:tag"
+                          />
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <p className="text-xs font-mono truncate" style={{ color: 'var(--text-faint)' }}>
+                              {parsed.name || 'Enter an image reference'}
+                            </p>
+                            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded"
+                              style={{ background: 'rgba(124,58,237,0.08)', color: '#7c3aed' }}>
+                              {parsed.tag || '—'}
+                            </span>
+                          </div>
+                          {img.source_path && (
+                            <p className="text-xs mt-1 font-mono truncate" style={{ color: 'var(--text-faint)' }}>
+                              {getHelmImageSourceLabel(img)}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </label>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -561,7 +613,7 @@ export default function PublicHelmScanPage() {
 
                 <button
                   onClick={handleScan}
-                  disabled={selected.size === 0 || step === 'scanning'}
+                  disabled={selected.size === 0 || step === 'scanning' || hasInvalidSelection}
                   className="w-full py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90"
                   style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', boxShadow: '0 0 24px rgba(124,58,237,0.35)' }}
                 >

@@ -538,11 +538,13 @@ export const createHelmScans = (
   tagIds?: string[],
   chartName?: string,
   chartVersion?: string,
+  registryId?: string,
 ) =>
   req<{ run: HelmScanRun; scans: Scan[] }>('POST', '/api/v1/helm/scan', {
     chart_url: chartUrl,
     images,
     platform: platform || undefined,
+    registry_id: registryId || undefined,
     tag_ids: tagIds,
     chart_name: chartName,
     chart_version: chartVersion,

@@ -17,6 +17,8 @@ import (
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
+	"github.com/uptrace/bun"
 )
 
 type TrivyDatabaseInfo struct {
@@ -161,6 +163,33 @@ func RunScan(ctx context.Context, imageName, imageTag string, envVars []string, 
 	return &output, extractVersion(stderr.String()), nil
 }
 
+func RunScanWithRegistryRetry(ctx context.Context, db *bun.DB, scan *models.Scan, envVars []string, platform, cacheDir string) (*TrivyOutput, string, error) {
+	output, version, err := RunScan(ctx, scan.ImageName, scan.ImageTag, envVars, platform, cacheDir)
+	if err == nil || ctx.Err() != nil || !isRetriableTrivyRegistryError(err) {
+		return output, version, err
+	}
+
+	registry, _, resolveErr := ResolveRegistryForScan(ctx, db, scan.ImageName, scan.RegistryID)
+	if resolveErr != nil {
+		log.Warnf("Failed to resolve registry for Trivy retry on scan %s: %v", scan.ID, resolveErr)
+		return nil, "", err
+	}
+	if registry == nil {
+		return nil, "", err
+	}
+
+	if warmErr := warmRegistryImageForTrivyScan(ctx, registry, scan.ImageName, scan.ImageTag, platform); warmErr != nil {
+		return nil, "", fmt.Errorf("trivy scan hit a transient remote registry error, and registry cache warm-up failed: %w", warmErr)
+	}
+
+	log.Warnf("Retrying Trivy scan %s for %s:%s after warming registry cache", scan.ID, scan.ImageName, scan.ImageTag)
+	output, version, retryErr := RunScan(ctx, scan.ImageName, scan.ImageTag, envVars, platform, cacheDir)
+	if retryErr != nil {
+		return nil, "", fmt.Errorf("trivy retry after warming registry cache failed: %w", retryErr)
+	}
+	return output, version, nil
+}
+
 func EnsureDatabasesFresh(ctx context.Context, cacheDir string) (*TrivyRuntimeInfo, error) {
 	if cacheDir == "" {
 		cacheDir = trivyCacheRoot()
@@ -286,6 +315,55 @@ func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []stri
 		return nil, fmt.Errorf("failed to parse trivy sbom output: %w", err)
 	}
 	return &sbom, nil
+}
+
+func warmRegistryImageForTrivyScan(ctx context.Context, registry *models.Registry, imageName, imageTag, platform string) error {
+	if registry == nil {
+		return nil
+	}
+
+	client, err := newXrayClient(registry)
+	if err != nil {
+		return err
+	}
+
+	repoKey, artifactName, tag, err := xrayImageParts(imageName, imageTag, registry)
+	if err != nil {
+		return err
+	}
+
+	imageRepoPath := repoKey + "/" + artifactName
+	return client.warmImageInArtifactory(ctx, imageRepoPath, tag, platform)
+}
+
+func isRetriableTrivyRegistryError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	normalized := strings.ToLower(err.Error())
+	if !strings.Contains(normalized, "remote error:") {
+		return false
+	}
+
+	transientMarkers := []string{
+		"504 gateway timeout",
+		"503 service unavailable",
+		"502 bad gateway",
+		"429 too many requests",
+		"408 request timeout",
+		"client.timeout exceeded",
+		"context deadline exceeded",
+		"tls handshake timeout",
+		"i/o timeout",
+	}
+	for _, marker := range transientMarkers {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func buildImageRef(imageName, imageTag string) string {

@@ -20,6 +20,7 @@ export function ScannerDatabaseCard({ label, updatedAt, downloadedAt }: { label:
 export function ScanningAnimation({ status, externalStatus, startedAt }: { status: string; externalStatus?: string; startedAt: string | null }) {
   const [elapsed, setElapsed] = useState(0);
   const [phase, setPhase] = useState(0);
+  const warmingArtifactoryCache = externalStatus === 'warming_artifactory_cache';
   const waitingForXray = externalStatus === 'waiting_for_xray';
 
   const phases = [
@@ -83,14 +84,14 @@ export function ScanningAnimation({ status, externalStatus, startedAt }: { statu
 
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-2.5">
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-widest" style={{ background: waitingForXray ? 'rgba(245,158,11,0.12)' : status === 'running' ? 'rgba(59,130,246,0.12)' : 'rgba(161,161,170,0.1)', border: `1px solid ${waitingForXray ? 'rgba(245,158,11,0.25)' : status === 'running' ? 'rgba(59,130,246,0.25)' : 'rgba(161,161,170,0.2)'}`, color: waitingForXray ? '#f59e0b' : status === 'running' ? '#60a5fa' : '#a1a1aa' }}>
-              <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle animate-pulse" style={{ background: waitingForXray ? '#f59e0b' : status === 'running' ? '#60a5fa' : '#a1a1aa' }} />
-              {waitingForXray ? 'Waiting for Xray' : status === 'running' ? 'Scan in progress' : 'Queued'}
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-widest" style={{ background: waitingForXray ? 'rgba(245,158,11,0.12)' : 'rgba(59,130,246,0.12)', border: `1px solid ${waitingForXray ? 'rgba(245,158,11,0.25)' : 'rgba(59,130,246,0.25)'}`, color: waitingForXray ? '#f59e0b' : '#60a5fa' }}>
+              <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle animate-pulse" style={{ background: waitingForXray ? '#f59e0b' : '#60a5fa' }} />
+              {waitingForXray ? 'Waiting for Xray' : warmingArtifactoryCache ? 'Warming Artifactory Cache' : status === 'running' ? 'Scan in progress' : 'Queued'}
             </span>
             {elapsed > 0 && <span className="text-xs text-zinc-500 font-mono">{elapsedStr}</span>}
           </div>
           <p className="text-sm text-zinc-500" key={phase} style={{ animation: 'fadePhase 1.8s ease-in-out forwards', minHeight: 20 }}>
-            {waitingForXray ? 'Xray is still processing this image. Results will import automatically once they are ready.' : status === 'pending' ? 'Waiting for scanner…' : phases[phase]}
+            {waitingForXray ? 'Xray is still processing this image. Results will import automatically once they are ready.' : warmingArtifactoryCache ? 'JustScan is pulling the image through Artifactory so Xray can index and scan it.' : status === 'pending' ? 'Waiting for scanner…' : phases[phase]}
           </p>
           <p className="text-xs text-zinc-500/50 mt-1">Results will appear automatically when the scan finishes.</p>
         </div>

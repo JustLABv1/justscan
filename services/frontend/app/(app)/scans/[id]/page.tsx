@@ -45,6 +45,70 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
+type ScanTab = 'vulns' | 'policy' | 'sbom' | 'details';
+
+type BlockedPolicyDetails = {
+  summary: string;
+  manifest?: string;
+  artifact?: string;
+  jfrog?: string;
+  matchedIssues?: string;
+  matchedWatches?: string;
+  blockingPolicies?: string;
+  matchedPolicies?: string;
+  totalViolations?: string;
+};
+
+function parseBlockedPolicyDetails(errorMessage?: string | null): BlockedPolicyDetails | null {
+  const message = errorMessage?.trim();
+  if (!message) return null;
+
+  const lines = message
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return null;
+
+  const details: BlockedPolicyDetails = { summary: lines[0] };
+  for (const line of lines.slice(1)) {
+    if (line.startsWith('Manifest: ')) details.manifest = line.slice('Manifest: '.length);
+    else if (line.startsWith('Artifact: ')) details.artifact = line.slice('Artifact: '.length);
+    else if (line.startsWith('JFrog: ')) details.jfrog = line.slice('JFrog: '.length);
+    else if (line.startsWith('Matched issues: ')) details.matchedIssues = line.slice('Matched issues: '.length);
+    else if (line.startsWith('Matched watches: ')) details.matchedWatches = line.slice('Matched watches: '.length);
+    else if (line.startsWith('Blocking policies: ')) details.blockingPolicies = line.slice('Blocking policies: '.length);
+    else if (line.startsWith('Matched policies: ')) details.matchedPolicies = line.slice('Matched policies: '.length);
+    else if (line.startsWith('Xray violations found for this artifact: ')) details.totalViolations = line.slice('Xray violations found for this artifact: '.length);
+  }
+
+  const hasStructuredDetails = Boolean(
+    details.manifest ||
+    details.artifact ||
+    details.jfrog ||
+    details.matchedIssues ||
+    details.matchedWatches ||
+    details.blockingPolicies ||
+    details.matchedPolicies ||
+    details.totalViolations
+  );
+
+  return hasStructuredDetails ? details : null;
+}
+
+function DetailBlock({ label, value, mono = false }: { label: string; value?: string; mono?: boolean }) {
+  if (!value) return null;
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-2">{label}</p>
+      <p className={mono ? 'text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all leading-relaxed' : 'text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed'}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
   if (!firstSeenAt) {
     return (
@@ -66,7 +130,7 @@ export default function ScanDetailPage() {
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [vulnTotal, setVulnTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [activeTab, setActiveTab] = useState<'vulns' | 'sbom' | 'details'>('vulns');
+  const [activeTab, setActiveTab] = useState<ScanTab>('vulns');
   const [sbomComponents, setSbomComponents] = useState<SBOMComponent[]>([]);
   const [sbomTotal, setSbomTotal] = useState(0);
   const [sbomLoading, setSbomLoading] = useState(false);
@@ -104,6 +168,8 @@ export default function ScanDetailPage() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareVisibility, setShareVisibility] = useState<'public' | 'authenticated'>('public');
   const [shareCopied, setShareCopied] = useState(false);
+  const loadVersionRef = useRef(0);
+  const defaultTabInitializedRef = useRef(false);
 
   const [suppressStatus, setSuppressStatus] = useState<Suppression['status']>('accepted');
   const [suppressJustification, setSuppressJustification] = useState('');
@@ -113,10 +179,17 @@ export default function ScanDetailPage() {
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanStatus = scan?.status;
+  const blockedPolicyDetails = scan?.external_status === 'blocked_by_xray_policy'
+    ? parseBlockedPolicyDetails(scan.error_message)
+    : null;
+  const hasPolicyTab = Boolean(blockedPolicyDetails);
 
   const loadScan = useCallback(async () => {
+    const loadVersion = ++loadVersionRef.current;
     const nextScan = await getScan(id);
-    setScan(nextScan);
+    if (loadVersion === loadVersionRef.current) {
+      setScan(nextScan);
+    }
     return nextScan;
   }, [id]);
 
@@ -148,6 +221,17 @@ export default function ScanDetailPage() {
       if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
     };
   }, [pkgInput]);
+
+  useEffect(() => {
+    if (!scan || defaultTabInitializedRef.current) return;
+    if (scan.status === 'pending' || scan.status === 'running') return;
+
+    if (scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails) {
+      setActiveTab('policy');
+    }
+
+    defaultTabInitializedRef.current = true;
+  }, [blockedPolicyDetails, scan]);
 
   // Persist severity filter
   useEffect(() => {
@@ -294,9 +378,19 @@ export default function ScanDetailPage() {
     if (!scan) return;
     setCancelling(true);
     try {
-      await cancelScan(id);
-      setScan(s => s ? { ...s, status: 'cancelled' } : s);
-    } catch { /* ignore */ } finally {
+      const result = await cancelScan(id);
+      loadVersionRef.current += 1;
+      setScan((current) => current ? {
+        ...current,
+        status: result.status ?? 'cancelled',
+        external_status: result.external_status ?? 'cancelled',
+        completed_at: result.completed_at ?? new Date().toISOString(),
+        error_message: result.error_message ?? 'Cancelled by user',
+      } : current);
+      toast.success('Scan cancelled');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to cancel scan');
+    } finally {
       setCancelling(false);
     }
   }
@@ -619,8 +713,17 @@ export default function ScanDetailPage() {
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-red-400 mb-0.5">Scan failed</p>
-            <pre className="text-xs text-red-300/80 whitespace-pre-wrap break-all font-mono leading-relaxed">{scan.error_message}</pre>
+            <p className="text-sm font-medium text-red-400 mb-0.5">{scan.external_status === 'blocked_by_xray_policy' ? 'Blocked by Xray policy' : 'Scan failed'}</p>
+            {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
+              <div className="space-y-1.5">
+                <p className="text-xs text-red-300/80 leading-relaxed">{blockedPolicyDetails.summary}</p>
+                <p className="text-[11px] text-red-300/70 leading-relaxed">
+                  See the Policy Violations tab for the matched issues, watches, policies, and raw JFrog response.
+                </p>
+              </div>
+            ) : (
+              <pre className="text-xs text-red-300/80 whitespace-pre-wrap break-all font-mono leading-relaxed">{scan.error_message}</pre>
+            )}
           </div>
         </div>
       )}
@@ -637,10 +740,11 @@ export default function ScanDetailPage() {
         <div className="flex items-center gap-1 p-1 rounded-xl w-fit"
           style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
           {([
-            { id: 'vulns',   label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities' },
-            { id: 'sbom',    label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
+            { id: 'vulns', label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities' },
+            ...(hasPolicyTab ? [{ id: 'policy' as const, label: blockedPolicyDetails?.totalViolations ? `Policy Violations (${blockedPolicyDetails.totalViolations})` : 'Policy Violations' }] : []),
+            { id: 'sbom', label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
             { id: 'details', label: 'Details' },
-          ] as { id: 'vulns' | 'sbom' | 'details'; label: string }[]).map(({ id, label }) => (
+          ] as { id: ScanTab; label: string }[]).map(({ id, label }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
@@ -652,6 +756,30 @@ export default function ScanDetailPage() {
               {label}
             </button>
           ))}
+        </div>
+      )}
+
+      {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'policy' && blockedPolicyDetails && (
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Policy Violations</h2>
+            <p className="text-sm text-zinc-500">
+              Xray blocked this image by policy. When Xray also exposes artifact summary data, the normal Vulnerabilities tab can still be populated; this tab keeps the policy-specific context separate.
+            </p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <DetailBlock label="Summary" value={blockedPolicyDetails.summary} />
+            <DetailBlock label="Xray Violations" value={blockedPolicyDetails.totalViolations} />
+            <DetailBlock label="Manifest" value={blockedPolicyDetails.manifest} mono />
+            <DetailBlock label="Artifact" value={blockedPolicyDetails.artifact} mono />
+            <DetailBlock label="Matched Issues" value={blockedPolicyDetails.matchedIssues} />
+            <DetailBlock label="Matched Watches" value={blockedPolicyDetails.matchedWatches} />
+            <DetailBlock label="Blocking Policies" value={blockedPolicyDetails.blockingPolicies} />
+            <DetailBlock label="Matched Policies" value={blockedPolicyDetails.matchedPolicies} />
+          </div>
+
+          <DetailBlock label="JFrog Response" value={blockedPolicyDetails.jfrog} mono />
         </div>
       )}
 
@@ -853,7 +981,9 @@ export default function ScanDetailPage() {
               ) : vulns.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-zinc-500 text-sm">
-                    No vulnerabilities found.
+                    {scan.external_status === 'blocked_by_xray_policy'
+                      ? 'No imported vulnerabilities are available because Xray blocked this artifact before the normal scan summary was produced. See the Policy Violations tab for the matched issues, watches, and policies.'
+                      : 'No vulnerabilities found.'}
                   </td>
                 </tr>
               ) : vulns.map((v, i) => (

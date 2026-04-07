@@ -432,7 +432,7 @@ export const reScan = (id: string) =>
   req<Scan>('POST', `/api/v1/scans/${id}/rescan`);
 
 export const cancelScan = (id: string) =>
-  req<{ result: string }>('POST', `/api/v1/scans/${id}/cancel`);
+  req<{ result: string; status?: string; external_status?: string; completed_at?: string; error_message?: string }>('POST', `/api/v1/scans/${id}/cancel`);
 
 export const bulkDeleteScans = (ids: string[]) =>
   req<{ deleted: number }>('DELETE', '/api/v1/scans/bulk', { ids });

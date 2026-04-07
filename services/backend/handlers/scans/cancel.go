@@ -38,18 +38,33 @@ func CancelScan(db *bun.DB) gin.HandlerFunc {
 		scanner.CancelScan(scanID)
 
 		// Update the scan status to cancelled
+		ctx := context.Background()
 		now := time.Now()
 		scan.Status = models.ScanStatusCancelled
 		scan.ErrorMessage = "Cancelled by user"
 		scan.CompletedAt = &now
-		db.NewUpdate().Model(&scan). //nolint:errcheck
-						Column("status", "error_message", "completed_at").
-						Where("id = ?", scanID).
-						Exec(c.Request.Context())
+		columns := []string{"status", "error_message", "completed_at"}
+		if scan.ScanProvider == models.ScanProviderArtifactoryXray {
+			scan.ExternalStatus = models.ScanStatusCancelled
+			columns = append(columns, "external_status")
+		}
+		if _, err := db.NewUpdate().Model(scan).
+			Column(columns...).
+			Where("id = ?", scanID).
+			Exec(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to cancel scan"})
+			return
+		}
 
-		go audit.Write(context.Background(), db, userID.String(), "scan.cancel",
+		go audit.Write(ctx, db, userID.String(), "scan.cancel",
 			fmt.Sprintf("Scan cancelled: %s:%s (id=%s)", scan.ImageName, scan.ImageTag, scanID))
 
-		c.JSON(http.StatusOK, gin.H{"result": "scan cancelled"})
+		c.JSON(http.StatusOK, gin.H{
+			"result":          "scan cancelled",
+			"status":          scan.Status,
+			"external_status": scan.ExternalStatus,
+			"completed_at":    scan.CompletedAt,
+			"error_message":   scan.ErrorMessage,
+		})
 	}
 }

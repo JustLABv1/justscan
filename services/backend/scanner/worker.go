@@ -351,8 +351,15 @@ func setFailed(db *bun.DB, scan *models.Scan, msg string) {
 	scan.ErrorMessage = msg
 	completedAt := time.Now()
 	scan.CompletedAt = &completedAt
+	columns := []string{"status", "error_message", "completed_at"}
+	if scan.ScanProvider == models.ScanProviderArtifactoryXray {
+		if !preserveXrayExternalStatusOnFailure(scan.ExternalStatus) {
+			scan.ExternalStatus = models.ScanStatusFailed
+		}
+		columns = append(columns, "external_status")
+	}
 	db.NewUpdate().Model(scan).
-		Column("status", "error_message", "completed_at").
+		Column(columns...).
 		Where("id = ?", scan.ID).Exec(ctx) //nolint:errcheck
 
 	go notifications.Dispatch(db, models.NotificationEventScanFailed, notifications.Payload{
@@ -362,6 +369,15 @@ func setFailed(db *bun.DB, scan *models.Scan, msg string) {
 		Status:    models.ScanStatusFailed,
 		Details:   msg,
 	})
+}
+
+func preserveXrayExternalStatusOnFailure(status string) bool {
+	switch status {
+	case models.ScanStatusCancelled, models.ScanExternalStatusBlockedByXrayPolicy:
+		return true
+	default:
+		return false
+	}
 }
 
 // backfillKB populates vuln_kb from the existing vulnerabilities table for any

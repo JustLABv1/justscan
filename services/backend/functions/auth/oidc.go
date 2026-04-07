@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"justscan-backend/config"
@@ -28,6 +29,7 @@ type OIDCClaims struct {
 	PreferredUsername string
 	Groups            []string
 	Roles             []string
+	RawClaims         map[string]any
 }
 
 // InitOIDCProvider initialises the OIDC provider singleton. Safe to call multiple times;
@@ -94,7 +96,12 @@ func ExtractOIDCClaims(idToken *gooidc.IDToken) (*OIDCClaims, error) {
 		return nil, fmt.Errorf("oidc: failed to extract claims: %w", err)
 	}
 
-	claims := &OIDCClaims{Sub: idToken.Subject}
+	var decoded map[string]any
+	if err := idToken.Claims(&decoded); err != nil {
+		return nil, fmt.Errorf("oidc: failed to decode claims: %w", err)
+	}
+
+	claims := &OIDCClaims{Sub: idToken.Subject, RawClaims: decoded}
 
 	// Standard string claims
 	for key, dest := range map[string]*string{
@@ -110,21 +117,26 @@ func ExtractOIDCClaims(idToken *gooidc.IDToken) (*OIDCClaims, error) {
 			}
 		}
 	}
-	// preferred_username fallback: use email local-part if empty
+	// preferred_username fallback: use the full email address if the provider does not
+	// send a dedicated username claim. Some deployments intentionally use email-style usernames.
 	if claims.PreferredUsername == "" && claims.Email != "" {
-		for i, c := range claims.Email {
-			if c == '@' {
-				claims.PreferredUsername = claims.Email[:i]
-				break
-			}
-		}
+		claims.PreferredUsername = claims.Email
 	}
 
 	// Groups claim (configurable key)
-	claims.Groups = extractStringSlice(raw, cfg.OIDC.GroupsClaim)
+	claims.Groups = uniqueStrings(extractStringSlice(decoded, cfg.OIDC.GroupsClaim))
 
 	// Roles claim (configurable key)
-	claims.Roles = extractStringSlice(raw, cfg.OIDC.RolesClaim)
+	claims.Roles = uniqueStrings(extractStringSlice(decoded, cfg.OIDC.RolesClaim))
+
+	// Keycloak commonly stores realm roles in realm_access.roles and client roles in
+	// resource_access.<client_id>.roles rather than a flat top-level claim.
+	claims.Roles = uniqueStrings(append(claims.Roles,
+		extractStringSlice(decoded, "realm_access.roles")...,
+	))
+	claims.Roles = uniqueStrings(append(claims.Roles,
+		extractStringSlice(decoded, fmt.Sprintf("resource_access.%s.roles", cfg.OIDC.ClientID))...,
+	))
 
 	return claims, nil
 }
@@ -150,22 +162,47 @@ func IsAdmin(claims *OIDCClaims) bool {
 	return false
 }
 
-// extractStringSlice attempts to unmarshal a JSON value as either a []string or a space-separated string.
-func extractStringSlice(raw map[string]json.RawMessage, key string) []string {
-	v, ok := raw[key]
-	if !ok {
+// extractStringSlice reads a claim by dotted path and returns it as a slice of strings.
+// Supported shapes:
+// - ["a", "b"]
+// - "a b"
+// - nested objects via paths like "realm_access.roles" or "resource_access.justscan.roles"
+func extractStringSlice(claims map[string]any, path string) []string {
+	if path == "" {
 		return nil
 	}
-	var slice []string
-	if err := json.Unmarshal(v, &slice); err == nil {
-		return slice
+
+	var current any = claims
+	for _, part := range strings.Split(path, ".") {
+		obj, ok := current.(map[string]any)
+		if !ok {
+			return nil
+		}
+		current, ok = obj[part]
+		if !ok {
+			return nil
+		}
 	}
-	// Some providers encode as a space-separated string
-	var s string
-	if err := json.Unmarshal(v, &s); err == nil && s != "" {
-		return splitSpaces(s)
+
+	switch value := current.(type) {
+	case []string:
+		return value
+	case []any:
+		result := make([]string, 0, len(value))
+		for _, item := range value {
+			if s, ok := item.(string); ok && s != "" {
+				result = append(result, s)
+			}
+		}
+		return result
+	case string:
+		if value == "" {
+			return nil
+		}
+		return splitSpaces(value)
+	default:
+		return nil
 	}
-	return nil
 }
 
 func splitSpaces(s string) []string {
@@ -185,4 +222,23 @@ func splitSpaces(s string) []string {
 		out = append(out, s[start:])
 	}
 	return out
+}
+
+func uniqueStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }

@@ -38,6 +38,7 @@ type RestfulConf struct {
 
 type OIDCConf struct {
 	Enabled      bool     `mapstructure:"enabled"`
+	Debug        bool     `mapstructure:"debug"`
 	IssuerURL    string   `mapstructure:"issuer_url"`
 	ClientID     string   `mapstructure:"client_id"`
 	ClientSecret string   `mapstructure:"client_secret"`
@@ -124,6 +125,7 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"jwt.secret":                           "BACKEND_JWT_SECRET",
 		"runner.shared_runner_secret":          "BACKEND_RUNNER_SHARED_RUNNER_SECRET",
 		"oidc.enabled":                         "BACKEND_OIDC_ENABLED",
+		"oidc.debug":                           "BACKEND_OIDC_DEBUG",
 		"oidc.issuer_url":                      "BACKEND_OIDC_ISSUER_URL",
 		"oidc.client_id":                       "BACKEND_OIDC_CLIENT_ID",
 		"oidc.client_secret":                   "BACKEND_OIDC_CLIENT_SECRET",

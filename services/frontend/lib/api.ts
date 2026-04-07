@@ -717,6 +717,9 @@ export interface Scan {
   image_name: string;
   image_tag: string;
   image_digest: string;
+  scan_provider: 'trivy' | 'artifactory_xray';
+  external_scan_id?: string;
+  external_status?: string;
   status: string;
   error_message: string;
   critical_count: number;
@@ -733,6 +736,7 @@ export interface Scan {
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
+  registry_id?: string;
   tags?: Tag[];
   architecture?: string;
   os_family?: string;
@@ -785,7 +789,10 @@ export interface Registry {
   id: string;
   name: string;
   url: string;
+  xray_url?: string;
+  xray_artifactory_id?: string;
   auth_type: 'none' | 'basic' | 'token' | 'aws_ecr';
+  scan_provider: 'trivy' | 'artifactory_xray';
   username: string;
   password?: string;
   created_at: string;

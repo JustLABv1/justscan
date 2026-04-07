@@ -7,20 +7,24 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string;
   running:   { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.22)' },
   pending:   { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)', label: 'queued' },
   cancelled: { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.20)' },
+  waiting_for_xray: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.22)', label: 'waiting for xray' },
 };
 
-export function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
+export function StatusBadge({ status, externalStatus }: { status: string; externalStatus?: string }) {
+  const effectiveStatus = externalStatus === 'waiting_for_xray' && (status === 'pending' || status === 'running')
+    ? 'waiting_for_xray'
+    : status;
+  const s = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.pending;
   return (
     <span
       className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap"
       style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}` }}
     >
       <span
-        className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`}
+        className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${effectiveStatus === 'running' || effectiveStatus === 'waiting_for_xray' ? 'animate-pulse' : ''}`}
         aria-hidden
       />
-      {s.label ?? status}
+      {s.label ?? effectiveStatus}
     </span>
   );
 }
@@ -47,17 +51,20 @@ export function SeverityBadge({ severity }: { severity: string }) {
 export function SourceBadge({ source }: { source?: string }) {
   const normalized = (source ?? '').trim().toLowerCase();
   const isOSV = normalized === 'osv.dev';
+  const isXray = normalized === 'jfrog xray' || normalized === 'xray';
+  const label = isOSV ? 'OSV.dev' : isXray ? 'Xray' : source?.trim() || 'Trivy';
+  const style = isOSV
+    ? { background: 'rgba(59,130,246,0.14)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.24)' }
+    : isXray
+      ? { background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.22)' }
+      : { background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.22)' };
   return (
     <span
       className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0"
-      style={
-        isOSV
-          ? { background: 'rgba(59,130,246,0.14)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.24)' }
-          : { background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.22)' }
-      }
-      title={source || (isOSV ? 'OSV supplemental finding' : 'Trivy finding')}
+      style={style}
+      title={source || (isOSV ? 'OSV supplemental finding' : isXray ? 'JFrog Xray finding' : 'Scanner finding')}
     >
-      {isOSV ? 'OSV.dev' : 'Trivy'}
+      {label}
     </span>
   );
 }

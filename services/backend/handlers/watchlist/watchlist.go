@@ -93,8 +93,9 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		var body struct {
-			Schedule *string `json:"schedule"`
-			Enabled  *bool   `json:"enabled"`
+			Schedule   *string    `json:"schedule"`
+			Enabled    *bool      `json:"enabled"`
+			RegistryID *uuid.UUID `json:"registry_id"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -106,9 +107,12 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 		if body.Enabled != nil {
 			item.Enabled = *body.Enabled
 		}
+		if body.RegistryID != nil {
+			item.RegistryID = body.RegistryID
+		}
 		item.UpdatedAt = time.Now()
 		if _, err := db.NewUpdate().Model(item).
-			Column("schedule", "enabled", "updated_at").
+			Column("schedule", "enabled", "registry_id", "updated_at").
 			Where("id = ?", itemID).
 			Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update watchlist item"})
@@ -154,17 +158,37 @@ func TriggerScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		scan := &models.Scan{
-			ImageName: item.ImageName,
-			ImageTag:  item.ImageTag,
-			Status:    models.ScanStatusPending,
-			UserID:    &userID,
-			CreatedAt: time.Now(),
+			ImageName:  item.ImageName,
+			ImageTag:   item.ImageTag,
+			RegistryID: item.RegistryID,
+			Status:     models.ScanStatusPending,
+			UserID:     &userID,
+			CreatedAt:  time.Now(),
+		}
+		registry, envVars, err := scanner.ResolveRegistryForScan(c.Request.Context(), db, item.ImageName, item.RegistryID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(item.ImageName, item.ImageTag, registry)
+		scan.ImageName = normalizedImageName
+		scan.ImageTag = normalizedImageTag
+		scan.ScanProvider = scanner.ProviderForRegistry(registry)
+		if registry != nil {
+			scan.RegistryID = &registry.ID
 		}
 		if _, err := db.NewInsert().Model(scan).Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create scan"})
 			return
 		}
-		scanner.EnqueueScan(scan.ID, db, nil, "")
+		if err := scanner.DispatchScan(c.Request.Context(), db, scan, envVars, ""); err != nil {
+			if markErr := scanner.MarkScanFailed(c.Request.Context(), db, scan.ID, err.Error()); markErr == nil {
+				completedAt := time.Now()
+				scan.Status = models.ScanStatusFailed
+				scan.ErrorMessage = err.Error()
+				scan.CompletedAt = &completedAt
+			}
+		}
 		// Update last scanned
 		now := time.Now()
 		item.LastScannedAt = &now

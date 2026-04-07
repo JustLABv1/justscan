@@ -40,11 +40,33 @@ export const clearToken = () => {
 };
 
 export const getTokenType = (): 'admin' | 'user' | null => {
+  const user = getUser() as { role?: string } | null;
+  if (user?.role === 'admin') return 'admin';
   const token = getToken();
   if (!token) return null;
   const payload = parseTokenPayload(token);
   if (!payload) return null;
-  return payload.type === 'admin' ? 'admin' : 'user';
+  if (payload.role === 'admin') return 'admin';
+  return 'user';
+};
+
+export interface AuthSnapshot {
+  token_present: boolean;
+  role: 'admin' | 'user' | null;
+  expires_at: string | null;
+  expires_in_seconds: number | null;
+}
+
+export const getAuthSnapshot = (): AuthSnapshot => {
+  const token = getToken();
+  const payload = token ? parseTokenPayload(token) : null;
+  const exp = typeof payload?.exp === 'number' ? payload.exp : null;
+  return {
+    token_present: Boolean(token),
+    role: getTokenType(),
+    expires_at: exp ? new Date(exp * 1000).toISOString() : null,
+    expires_in_seconds: exp ? Math.max(0, Math.floor(exp - Date.now() / 1000)) : null,
+  };
 };
 
 export const getUser = () => {
@@ -369,7 +391,7 @@ export const getDashboardVulnTrends = (days = 30) =>
 
 // Global search
 export const search = (q: string) =>
-  req<{ images: SearchImageResult[]; vulns: SearchVulnResult[] }>('GET', `/api/v1/search/?q=${encodeURIComponent(q)}`);
+  req<{ images: SearchImageResult[]; vulns: SearchVulnResult[]; scans: SearchScanResult[] }>('GET', `/api/v1/search/?q=${encodeURIComponent(q)}`);
 
 // Org risk score
 export const getOrgRiskScore = (orgId: string) =>
@@ -996,6 +1018,15 @@ export interface SearchVulnResult {
   pkg_name: string;
   severity: string;
   scan_count: number;
+}
+
+export interface SearchScanResult {
+  id: string;
+  image_name: string;
+  image_tag: string;
+  status: string;
+  critical_count: number;
+  high_count: number;
 }
 
 export interface OrgRiskScore {

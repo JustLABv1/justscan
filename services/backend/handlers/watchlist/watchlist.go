@@ -15,15 +15,14 @@ import (
 
 func ListWatchlist(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
+		userID, isAdmin, err := auth.ResolveUserAccess(c.GetHeader("Authorization"), db)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
-		tokenType, _ := auth.GetTypeFromToken(c.GetHeader("Authorization"))
 		var items []models.WatchlistItem
 		q := db.NewSelect().Model(&items).OrderExpr("created_at DESC")
-		if tokenType != "admin" {
+		if !isAdmin {
 			q = q.Where("user_id = ?", userID)
 		}
 		if err := q.Scan(c.Request.Context()); err != nil {
@@ -36,7 +35,7 @@ func ListWatchlist(db *bun.DB) gin.HandlerFunc {
 
 func CreateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
+		userID, _, err := auth.ResolveUserAccess(c.GetHeader("Authorization"), db)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
@@ -77,7 +76,7 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid watchlist item ID"})
 			return
 		}
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
+		userID, isAdmin, err := auth.ResolveUserAccess(c.GetHeader("Authorization"), db)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
@@ -87,8 +86,7 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "watchlist item not found"})
 			return
 		}
-		tokenType, _ := auth.GetTypeFromToken(c.GetHeader("Authorization"))
-		if item.UserID != userID && tokenType != "admin" {
+		if item.UserID != userID && !isAdmin {
 			c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 			return
 		}
@@ -129,6 +127,20 @@ func DeleteWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid watchlist item ID"})
 			return
 		}
+		userID, isAdmin, err := auth.ResolveUserAccess(c.GetHeader("Authorization"), db)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		item := &models.WatchlistItem{}
+		if err := db.NewSelect().Model(item).Where("id = ?", itemID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "watchlist item not found"})
+			return
+		}
+		if item.UserID != userID && !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+			return
+		}
 		if _, err := db.NewDelete().Model((*models.WatchlistItem)(nil)).
 			Where("id = ?", itemID).
 			Exec(c.Request.Context()); err != nil {
@@ -147,7 +159,7 @@ func TriggerScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid watchlist item ID"})
 			return
 		}
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
+		userID, isAdmin, err := auth.ResolveUserAccess(c.GetHeader("Authorization"), db)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
@@ -155,6 +167,10 @@ func TriggerScan(db *bun.DB) gin.HandlerFunc {
 		item := &models.WatchlistItem{}
 		if err := db.NewSelect().Model(item).Where("id = ?", itemID).Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "watchlist item not found"})
+			return
+		}
+		if item.UserID != userID && !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 			return
 		}
 		scan := &models.Scan{

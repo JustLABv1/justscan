@@ -1,6 +1,6 @@
 'use client';
-import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
 import { ChartSkeleton, RecentScanRowSkeleton, StatCardSkeleton } from '@/components/ui/skeleton';
+import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
     Activity01Icon,
@@ -123,6 +123,36 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string; bor
   running:   { label: 'Running', color: '#60a5fa', bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.22)'  },
   pending:   { label: 'Pending', color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)' },
 };
+
+const ACTIONS = [
+  {
+    key: 'failed',
+    label: 'Failures To Review',
+    description: 'Recent scans that likely need triage or a rerun.',
+    href: '/scans',
+    getCount: (stats: DashboardStats) => stats.status_counts.failed ?? 0,
+    icon: AlertDiamondIcon,
+    tone: { color: '#f87171', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.2)' },
+  },
+  {
+    key: 'running',
+    label: 'Scans In Flight',
+    description: 'Track work still running or waiting on providers.',
+    href: '/scans',
+    getCount: (stats: DashboardStats) => (stats.status_counts.running ?? 0) + (stats.status_counts.pending ?? 0),
+    icon: Clock01Icon,
+    tone: { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.2)' },
+  },
+  {
+    key: 'watchlist',
+    label: 'Watched Images',
+    description: 'Jump into the images configured for recurring coverage.',
+    href: '/watchlist',
+    getCount: (stats: DashboardStats) => stats.watchlist_count,
+    icon: EyeIcon,
+    tone: { color: '#a78bfa', bg: 'rgba(124,58,237,0.12)', border: 'rgba(124,58,237,0.2)' },
+  },
+];
 
 function RecentScanRow({ scan }: { scan: Scan }) {
   const sc = STATUS_MAP[scan.status] ?? STATUS_MAP.pending;
@@ -673,6 +703,7 @@ export default function DashboardPage() {
 
   const totalVulns = Object.values(stats.severity_totals).reduce((a, b) => a + b, 0);
   const hasCriticals = (stats.severity_totals['critical'] ?? 0) > 0;
+  const priorityScans = (stats.recent_scans ?? []).filter((scan) => scan.status === 'failed' || scan.status === 'running' || scan.status === 'pending').slice(0, 4);
 
   return (
     <div className="relative p-6 space-y-5 max-w-7xl mx-auto">
@@ -757,6 +788,56 @@ export default function DashboardPage() {
             </div>
           );
         })}
+      </div>
+
+      <div className="relative grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] z-10">
+        <div className="rounded-2xl p-5" style={glassCard('rgba(124,58,237,0.04)')}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Action Board</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">The most immediate work across scans and coverage.</p>
+            </div>
+            <Link href="/scans" className="text-xs text-zinc-500 hover:text-violet-500 transition-colors">Open scans →</Link>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {ACTIONS.map((action) => {
+              const count = action.getCount(stats);
+              const Icon = action.icon;
+              return (
+                <Link key={action.key} href={action.href} className="rounded-2xl p-4 transition-transform hover:-translate-y-0.5" style={{ background: action.tone.bg, border: `1px solid ${action.tone.border}` }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: action.tone.color }}>{action.label}</p>
+                      <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-white">{count}</p>
+                    </div>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(10,10,15,0.18)' }}>
+                      <Icon size={16} color={action.tone.color} />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-zinc-500">{action.description}</p>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-5" style={glassCard()}>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Needs Attention</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">Recent failed, running, or queued scans.</p>
+            </div>
+          </div>
+          {priorityScans.length === 0 ? (
+            <p className="text-sm text-zinc-500 py-10 text-center">No active triage items right now.</p>
+          ) : (
+            <div className="space-y-2">
+              {priorityScans.map((scan) => (
+                <RecentScanRow key={scan.id} scan={scan} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {isAdmin && (

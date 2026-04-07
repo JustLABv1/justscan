@@ -18,7 +18,7 @@ func ListRegistries(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var registries []models.Registry
 		if err := db.NewSelect().Model(&registries).
-			Column("id", "name", "url", "auth_type", "username", "created_by_id", "created_at", "updated_at").
+			Column("id", "name", "url", "auth_type", "scan_provider", "username", "created_by_id", "created_at", "updated_at", "health_status", "health_message", "last_health_check_at").
 			OrderExpr("name ASC").
 			Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list registries"})
@@ -36,18 +36,22 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		var body struct {
-			Name     string `json:"name" binding:"required"`
-			URL      string `json:"url" binding:"required"`
-			AuthType string `json:"auth_type" binding:"omitempty,oneof=basic token aws_ecr none"`
-			Username string `json:"username"`
-			Password string `json:"password"`
+			Name         string `json:"name" binding:"required"`
+			URL          string `json:"url" binding:"required"`
+			AuthType     string `json:"auth_type" binding:"omitempty,oneof=basic token aws_ecr none"`
+			ScanProvider string `json:"scan_provider" binding:"omitempty,oneof=trivy artifactory_xray"`
+			Username     string `json:"username"`
+			Password     string `json:"password"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		if body.AuthType == "" {
-			body.AuthType = "none"
+			body.AuthType = models.RegistryAuthNone
+		}
+		if body.ScanProvider == "" {
+			body.ScanProvider = models.ScanProviderTrivy
 		}
 		encryptedPassword := ""
 		if body.Password != "" {
@@ -59,14 +63,15 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 			}
 		}
 		registry := &models.Registry{
-			Name:        body.Name,
-			URL:         body.URL,
-			AuthType:    body.AuthType,
-			Username:    body.Username,
-			Password:    encryptedPassword,
-			CreatedByID: userID,
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
+			Name:         body.Name,
+			URL:          body.URL,
+			AuthType:     body.AuthType,
+			ScanProvider: body.ScanProvider,
+			Username:     body.Username,
+			Password:     encryptedPassword,
+			CreatedByID:  userID,
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
 		}
 		if _, err := db.NewInsert().Model(registry).Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create registry"})
@@ -85,11 +90,12 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		var body struct {
-			Name     string `json:"name"`
-			URL      string `json:"url"`
-			AuthType string `json:"auth_type"`
-			Username string `json:"username"`
-			Password string `json:"password"`
+			Name         string `json:"name"`
+			URL          string `json:"url"`
+			AuthType     string `json:"auth_type"`
+			ScanProvider string `json:"scan_provider"`
+			Username     string `json:"username"`
+			Password     string `json:"password"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -109,6 +115,9 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 		if body.AuthType != "" {
 			registry.AuthType = body.AuthType
 		}
+		if body.ScanProvider != "" {
+			registry.ScanProvider = body.ScanProvider
+		}
 		if body.Username != "" {
 			registry.Username = body.Username
 		}
@@ -123,7 +132,7 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 		}
 		registry.UpdatedAt = time.Now()
 		if _, err := db.NewUpdate().Model(registry).
-			Column("name", "url", "auth_type", "username", "password", "updated_at").
+			Column("name", "url", "auth_type", "scan_provider", "username", "password", "updated_at").
 			Where("id = ?", registryID).
 			Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update registry"})

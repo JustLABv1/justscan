@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -133,7 +135,7 @@ export default function LoginPage() {
               </div>
             )}
             <a
-              href="/api/v1/auth/oidc/login"
+              href={`${API}/api/v1/auth/oidc/login`}
               className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98]"
               style={{
                 background: 'rgba(124,58,237,0.12)',

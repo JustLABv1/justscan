@@ -16,6 +16,7 @@ import (
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
 )
 
@@ -91,6 +92,19 @@ func OIDCCallback(db *bun.DB) gin.HandlerFunc {
 		if err != nil {
 			httperror.InternalServerError(c, "Failed to extract OIDC claims", err)
 			return
+		}
+
+		if cfg.OIDC.Debug {
+			log.WithFields(log.Fields{
+				"subject":            claims.Sub,
+				"email":              claims.Email,
+				"preferred_username": claims.PreferredUsername,
+				"groups_claim":       cfg.OIDC.GroupsClaim,
+				"roles_claim":        cfg.OIDC.RolesClaim,
+				"extracted_groups":   claims.Groups,
+				"extracted_roles":    claims.Roles,
+				"raw_claims":         claims.RawClaims,
+			}).Info("OIDC user details received from provider")
 		}
 
 		// --- 5. Find or provision local user ---
@@ -227,11 +241,12 @@ func deriveFrontendOrigin(cfg *config.RestfulConf) string {
 	return ""
 }
 
-// sanitiseUsername removes characters not suitable for a username.
+// sanitiseUsername removes characters not suitable for a username while preserving
+// email-style usernames such as user@example.com.
 func sanitiseUsername(s string) string {
 	var b strings.Builder
 	for _, r := range s {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' || r == '@' {
 			b.WriteRune(r)
 		}
 	}

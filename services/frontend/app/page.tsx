@@ -1,12 +1,12 @@
 'use client';
 import { Logo } from '@/components/logo';
 import {
-  Building04Icon,
-  FileExportIcon,
-  GridTableIcon,
-  Notification01Icon,
-  PackageIcon,
-  Search01Icon,
+    Building04Icon,
+    FileExportIcon,
+    GridTableIcon,
+    Notification01Icon,
+    PackageIcon,
+    Search01Icon,
 } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';

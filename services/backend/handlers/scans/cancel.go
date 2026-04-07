@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"justscan-backend/functions/audit"
-	"justscan-backend/functions/auth"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -25,9 +24,8 @@ func CancelScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		var scan models.Scan
-		if err := db.NewSelect().Model(&scan).Where("id = ?", scanID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
+		scan, userID, _, ok := LoadAuthorizedScan(c, db, scanID)
+		if !ok {
 			return
 		}
 
@@ -49,7 +47,6 @@ func CancelScan(db *bun.DB) gin.HandlerFunc {
 						Where("id = ?", scanID).
 						Exec(c.Request.Context())
 
-		userID, _ := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
 		go audit.Write(context.Background(), db, userID.String(), "scan.cancel",
 			fmt.Sprintf("Scan cancelled: %s:%s (id=%s)", scan.ImageName, scan.ImageTag, scanID))
 

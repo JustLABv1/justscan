@@ -68,3 +68,17 @@ type NotificationChannel struct {
 	CreatedAt time.Time          `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	UpdatedAt time.Time          `bun:"updated_at,type:timestamptz" json:"updated_at"`
 }
+
+type NotificationDelivery struct {
+	bun.BaseModel `bun:"table:notification_delivery_logs"`
+
+	ID          uuid.UUID `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	ChannelID   uuid.UUID `bun:"channel_id,type:uuid,notnull" json:"channel_id"`
+	Event       string    `bun:"event,type:text,notnull" json:"event"`
+	TriggeredBy string    `bun:"triggered_by,type:text,notnull,default:'dispatch'" json:"triggered_by"`
+	Status      string    `bun:"status,type:text,notnull" json:"status"`
+	Error       string    `bun:"error,type:text,default:''" json:"error"`
+	Details     string    `bun:"details,type:text,default:''" json:"details"`
+	CreatedAt   time.Time `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+	ChannelName string    `bun:"channel_name,scanonly" json:"channel_name,omitempty"`
+}

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"justscan-backend/functions/audit"
-	"justscan-backend/functions/auth"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -26,15 +25,8 @@ func ReScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		var orig models.Scan
-		if err := db.NewSelect().Model(&orig).Where("id = ?", scanID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
-			return
-		}
-
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		orig, userID, _, ok := LoadAuthorizedScan(c, db, scanID)
+		if !ok {
 			return
 		}
 

@@ -13,6 +13,7 @@ import (
 
 	"justscan-backend/pkg/models"
 
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
 )
@@ -56,19 +57,71 @@ func Dispatch(db *bun.DB, event string, p Payload) {
 			continue
 		}
 		go func(c models.NotificationChannel) {
-			var err error
-			switch c.Type {
-			case models.NotificationTypeDiscord:
-				err = sendDiscord(c.Config, p)
-			case models.NotificationTypeWebhook:
-				err = sendWebhook(c.Config, p)
-			case models.NotificationTypeEmail:
-				err = sendEmail(c.Config, p)
-			}
+			err := sendAndRecord(db, c, p, "dispatch")
 			if err != nil {
 				log.Warnf("notifications: channel %q (%s) failed: %v", c.Name, c.Type, err)
 			}
 		}(ch)
+	}
+}
+
+func SendTest(db *bun.DB, channel models.NotificationChannel, event string) error {
+	payload := Payload{
+		Event:     event,
+		Status:    "test",
+		Details:   fmt.Sprintf("Manual test notification for channel %s.", channel.Name),
+		Timestamp: time.Now(),
+		Extra: map[string]string{
+			"source": "admin-test",
+		},
+	}
+
+	return sendAndRecord(db, channel, payload, "test")
+}
+
+func sendAndRecord(db *bun.DB, channel models.NotificationChannel, payload Payload, triggeredBy string) error {
+	err := sendToChannel(channel, payload)
+	status := "delivered"
+	errorMessage := ""
+	if err != nil {
+		status = "failed"
+		errorMessage = err.Error()
+	}
+	recordDelivery(db, channel.ID, payload.Event, triggeredBy, status, errorMessage, payload.Details)
+	return err
+}
+
+func sendToChannel(channel models.NotificationChannel, payload Payload) error {
+	switch channel.Type {
+	case models.NotificationTypeDiscord:
+		return sendDiscord(channel.Config, payload)
+	case models.NotificationTypeWebhook:
+		return sendWebhook(channel.Config, payload)
+	case models.NotificationTypeEmail:
+		return sendEmail(channel.Config, payload)
+	default:
+		return fmt.Errorf("unsupported notification channel type %q", channel.Type)
+	}
+}
+
+func recordDelivery(db *bun.DB, channelID uuid.UUID, event, triggeredBy, status, errorMessage, details string) {
+	if db == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	entry := &models.NotificationDelivery{
+		ChannelID:   channelID,
+		Event:       event,
+		TriggeredBy: triggeredBy,
+		Status:      status,
+		Error:       errorMessage,
+		Details:     details,
+	}
+	if _, err := db.NewInsert().Model(entry).Exec(ctx); err != nil {
+		log.Warnf("notifications.recordDelivery: failed to persist delivery log: %v", err)
 	}
 }
 

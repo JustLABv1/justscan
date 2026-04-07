@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"net/http"
 
-	"justscan-backend/functions/auth"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -26,12 +25,6 @@ func CreateShare(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-			return
-		}
-
 		var req createShareRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
@@ -42,15 +35,7 @@ func CreateShare(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Verify scan ownership (admin can share any scan)
-		tokenType, _ := auth.GetTypeFromToken(c.GetHeader("Authorization"))
-		var scan models.Scan
-		q := db.NewSelect().Model(&scan).Where("id = ?", scanID)
-		if tokenType != "admin" {
-			q = q.Where("user_id = ?", userID)
-		}
-		if err := q.Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
+		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
 			return
 		}
 
@@ -87,20 +72,7 @@ func DeleteShare(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-			return
-		}
-
-		tokenType, _ := auth.GetTypeFromToken(c.GetHeader("Authorization"))
-		var scan models.Scan
-		q := db.NewSelect().Model(&scan).Where("id = ?", scanID)
-		if tokenType != "admin" {
-			q = q.Where("user_id = ?", userID)
-		}
-		if err := q.Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
+		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
 			return
 		}
 

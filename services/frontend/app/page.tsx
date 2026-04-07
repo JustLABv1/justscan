@@ -1,5 +1,13 @@
 'use client';
 import { Logo } from '@/components/logo';
+import {
+  Building04Icon,
+  FileExportIcon,
+  GridTableIcon,
+  Notification01Icon,
+  PackageIcon,
+  Search01Icon,
+} from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useSyncExternalStore } from 'react';
@@ -244,17 +252,17 @@ function ScannerAnimation({ isDark }: { isDark: boolean }) {
 // Data
 // ---------------------------------------------------------------------------
 const FEATURES = [
-  { emoji: '🔍', title: 'CVE Detection',      desc: 'All image layers scanned against NVD, GHSA & OSV databases' },
-  { emoji: '⚓', title: 'Helm Chart Scanning', desc: 'Extract and scan every container image inside a Helm chart' },
-  { emoji: '📋', title: 'SBOM Export',         desc: 'Full software bill of materials in CycloneDX or SPDX format' },
-  { emoji: '🔔', title: 'Watchlist',           desc: 'Schedule recurring scans and get notified on new CVEs' },
-  { emoji: '🏢', title: 'Organizations',       desc: 'Share scans and manage findings across teams' },
-  { emoji: '📜', title: 'Audit Log',           desc: 'Full history of who ran what scan and when' },
+  { Icon: Search01Icon,       title: 'CVE Detection',      desc: 'Normalize findings across Trivy-backed scans and JFrog Artifactory/Xray imports' },
+  { Icon: PackageIcon,        title: 'Helm Chart Scanning', desc: 'Extract and scan every container image inside a Helm chart' },
+  { Icon: FileExportIcon,     title: 'SBOM Export',         desc: 'Full software bill of materials in CycloneDX or SPDX format' },
+  { Icon: Notification01Icon, title: 'Watchlist',           desc: 'Schedule recurring scans and get notified on new CVEs' },
+  { Icon: Building04Icon,     title: 'Organizations',       desc: 'Share scans and manage findings across teams' },
+  { Icon: GridTableIcon,      title: 'Audit Log',           desc: 'Full history of who ran what scan and when' },
 ];
 
 const STEPS = [
   { n: '1', title: 'Enter an image or chart',  desc: 'Paste any public Docker image reference or a Helm chart URL' },
-  { n: '2', title: 'Trivy scans all layers',   desc: 'We pull the image, unpack all layers, and cross-reference vulnerability databases' },
+  { n: '2', title: 'Scan with Trivy or Xray',  desc: 'Start with Trivy-backed public scans, or sign in to route private registries through JFrog Artifactory/Xray' },
   { n: '3', title: 'Review your findings',     desc: 'Browse CVEs by severity, filter by package, and export results' },
 ];
 
@@ -358,7 +366,7 @@ export default function LandingPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium"
               style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Free · No account needed · Powered by Trivy
+              Free public scans · Trivy + Artifactory/Xray support
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-[52px] font-bold tracking-tight leading-[1.1]"
@@ -374,7 +382,7 @@ export default function LandingPage() {
 
             <p className="text-base leading-relaxed" style={{ color: 'var(--text-muted)' }}>
               Scan Docker images and Helm charts for vulnerabilities across all layers.
-              No sign-up, no Docker daemon, no configuration — just paste and scan.
+              Start instantly with Trivy-backed public scans, then sign in to scan private registries through JFrog Artifactory/Xray.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
@@ -411,17 +419,25 @@ export default function LandingPage() {
               </span>
             </h2>
             <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-              Sign in for the full experience — or start scanning for free right now.
+              Start scanning for free with Trivy, then sign in for registry workflows powered by JFrog Artifactory/Xray.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {FEATURES.map(({ emoji, title, desc }) => (
+            {FEATURES.map(({ Icon, title, desc }) => (
               <div key={title} className="rounded-2xl p-5 space-y-2 transition-all"
                 style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}
                 onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(167,139,250,0.35)')}
                 onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.borderColor = 'var(--glass-border)')}>
-                <p className="text-2xl">{emoji}</p>
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                  style={{
+                    background: isDark ? 'rgba(124,58,237,0.16)' : 'rgba(124,58,237,0.08)',
+                    border: '1px solid rgba(167,139,250,0.22)',
+                    color: isDark ? '#c4b5fd' : '#6d28d9',
+                  }}>
+                  <Icon size={30} aria-hidden />
+                </div>
                 <p className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{title}</p>
                 <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>{desc}</p>
               </div>

@@ -178,7 +178,7 @@ func processScan(job ScanJob, cacheDir string) {
 	}
 
 	// Run vulnerability scan
-	trivyOut, trivyVersion, err := RunScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
+	trivyOut, trivyVersion, err := RunScanWithRegistryRetry(ctx, db, scan, job.EnvVars, job.Platform, cacheDir)
 	if err != nil {
 		if ctx.Err() != nil {
 			// Context was cancelled — scan was interrupted by user

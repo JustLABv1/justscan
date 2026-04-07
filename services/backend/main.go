@@ -11,6 +11,7 @@ import (
 	"justscan-backend/config"
 	"justscan-backend/database"
 	"justscan-backend/functions/auth"
+	"justscan-backend/handlers/registries"
 	"justscan-backend/router"
 	"justscan-backend/scanner"
 	"justscan-backend/scheduler"
@@ -85,6 +86,7 @@ func main() {
 
 	// Start watchlist scheduler
 	scheduler.Start(db)
+	registries.StartHealthChecks(db)
 
 	// Set up signal handling for graceful shutdown
 	server := router.StartRouter(db, cfg.Port, cfg)
@@ -96,6 +98,7 @@ func main() {
 	log.Info("Shutting down server...")
 
 	scheduler.Stop()
+	registries.StopHealthChecks()
 
 	// The server has 30 seconds to finish the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

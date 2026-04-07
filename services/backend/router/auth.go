@@ -21,5 +21,10 @@ func Auth(router *gin.RouterGroup, db *bun.DB) {
 		auth.POST("/user/taken", func(c *gin.Context) {
 			auths.CheckUserTaken(c, db)
 		})
+
+		// OIDC endpoints
+		auth.GET("/oidc/available", auths.OIDCAvailable)
+		auth.GET("/oidc/login", middlewares.AuthRegisterRateLimit(), auths.OIDCLogin)
+		auth.GET("/oidc/callback", auths.OIDCCallback(db))
 	}
 }

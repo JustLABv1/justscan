@@ -1,0 +1,64 @@
+1. JustScan has been deployed!
+
+{{- if .Values.ingress.enabled }}
+Access JustScan at:
+{{- range .Values.ingress.hosts }}
+  {{- if $.Values.ingress.tls }}
+  https://{{ .host }}
+  {{- else }}
+  http://{{ .host }}
+  {{- end }}
+{{- end }}
+{{- else if eq .Values.frontend.service.type "NodePort" }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "justscan.fullname" . }}-frontend)
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else }}
+  kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "justscan.fullname" . }}-frontend 3000:3000
+  Then open: http://localhost:3000
+{{- end }}
+
+2. First-time setup:
+   - Navigate to the login page and register the first user.
+   - The first registered user is automatically granted the admin role.
+
+{{- if .Values.backend.config.oidc.enabled }}
+3. OIDC is enabled. Register the following callback URL in your OIDC provider:
+
+   {{ include "justscan.oidc.redirectUri" . }}
+
+   Provider setup tips:
+   - Keycloak: Client → Valid Redirect URIs → add the URL above
+   - Authentik: Provider → Redirect URIs → add the URL above
+   - Azure AD: App Registration → Authentication → Redirect URIs
+
+   Admin group/role mapping:
+   {{- if .Values.backend.config.oidc.adminGroups }}
+   - Admin groups: {{ join ", " .Values.backend.config.oidc.adminGroups }}
+   {{- end }}
+   {{- if .Values.backend.config.oidc.adminRoles }}
+   - Admin roles:  {{ join ", " .Values.backend.config.oidc.adminRoles }}
+   {{- end }}
+   - Role is re-evaluated on every login (removing from the group revokes admin immediately).
+   - Existing local accounts with matching email are auto-linked on first OIDC login.
+{{- end }}
+
+{{- if not .Values.backend.secrets.existingSecret }}
+{{- if or (eq .Values.backend.secrets.jwtSecret "") (eq .Values.backend.secrets.encryptionKey "") }}
+
+⚠️  WARNING: One or more required secrets are empty!
+   Set the following values before going to production:
+
+   --set backend.secrets.jwtSecret=$(openssl rand -hex 32) \
+   --set backend.secrets.encryptionKey=$(openssl rand -hex 32) \
+   {{- if not .Values.postgresql.enabled }}
+   --set backend.secrets.dbPassword=<your-db-password> \
+   {{- end }}
+   {{- if .Values.backend.config.oidc.enabled }}
+   --set backend.secrets.oidcClientSecret=<your-oidc-client-secret>
+   {{- end }}
+
+   Or use an existing Kubernetes Secret:
+   --set backend.secrets.existingSecret=<secret-name>
+{{- end }}
+{{- end }}

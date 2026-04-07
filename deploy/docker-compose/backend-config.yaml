@@ -38,4 +38,28 @@ encryption:
 vuln_kb:
   # Optional: speeds up CVE enrichment. Get a key at https://nvd.nist.gov/developers/request-an-api-key
   nvd_api_key: ""
+
+# OIDC single sign-on (optional)
+# Supported providers: Keycloak, Authentik, Okta, Azure AD, Google, etc.
+oidc:
+  enabled: false
+  # The issuer URL of your OIDC provider (the base URL, without /.well-known/openid-configuration)
+  issuer_url: ""
+  client_id: ""
+  # client_secret: set via BACKEND_OIDC_CLIENT_SECRET env var or here
+  client_secret: ""
+  # Callback URL registered in your OIDC provider (must match exactly)
+  # Example: https://your.domain.com/api/v1/auth/oidc/callback
+  redirect_uri: ""
+  scopes: ["openid", "email", "profile"]
+  # Users in these groups/roles are given the admin role in JustScan
+  admin_groups: []
+  admin_roles: []
+  # Claims in the ID token that contain group/role memberships
+  groups_claim: "groups"
+  roles_claim: "roles"
+
+# Set to false to disable local username/password authentication entirely
+local_auth:
+  enabled: true
   cache_days: 7

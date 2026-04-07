@@ -21,6 +21,16 @@ const AUTH_TYPE_STYLE: Record<string, React.CSSProperties> = {
   aws_ecr: { color: '#fb923c', background: 'rgba(249,115,22,0.1)',   border: '1px solid rgba(249,115,22,0.2)'  },
 };
 
+const PROVIDER_LABEL: Record<string, string> = {
+  trivy: 'Trivy',
+  artifactory_xray: 'Artifactory Xray',
+};
+
+const PROVIDER_STYLE: Record<string, React.CSSProperties> = {
+  trivy: { color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' },
+  artifactory_xray: { color: '#f59e0b', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' },
+};
+
 function HealthBadge({ status, message }: { status: string; message: string }) {
   const cfg = ({
     healthy:   { color: '#34d399', bg: 'rgba(16,185,129,0.1)',   border: 'rgba(16,185,129,0.2)',   label: 'Healthy'   },
@@ -43,6 +53,7 @@ export default function RegistriesPage() {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [authType, setAuthType] = useState<'none' | 'basic' | 'token' | 'aws_ecr'>('none');
+  const [scanProvider, setScanProvider] = useState<'trivy' | 'artifactory_xray'>('trivy');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -62,18 +73,18 @@ export default function RegistriesPage() {
   useEffect(() => { load(); }, [load]);
 
   function openCreate() {
-    setEditing(null); setName(''); setUrl(''); setAuthType('none'); setUsername(''); setPassword(''); setFormError('');
+    setEditing(null); setName(''); setUrl(''); setAuthType('none'); setScanProvider('trivy'); setUsername(''); setPassword(''); setFormError('');
     modal.open();
   }
   function openEdit(r: RegistryWithHealth) {
-    setEditing(r); setName(r.name); setUrl(r.url); setAuthType(r.auth_type ?? 'none'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
+    setEditing(r); setName(r.name); setUrl(r.url); setAuthType(r.auth_type ?? 'none'); setScanProvider(r.scan_provider ?? 'trivy'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
     modal.open();
   }
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setFormError(''); setSaving(true);
     try {
-      if (editing) { await updateRegistry(editing.id, { name, url, auth_type: authType, username, ...(password ? { password } : {}) }); toast.success('Registry updated'); }
-      else { await createRegistry({ name, url, auth_type: authType, username: username || undefined, password: password || undefined }); toast.success('Registry added'); }
+      if (editing) { await updateRegistry(editing.id, { name, url, auth_type: authType, scan_provider: scanProvider, username, ...(password ? { password } : {}) }); toast.success('Registry updated'); }
+      else { await createRegistry({ name, url, auth_type: authType, scan_provider: scanProvider, username: username || undefined, password: password || undefined }); toast.success('Registry added'); }
       modal.close(); await load();
     } catch (err: unknown) { setFormError(err instanceof Error ? err.message : 'Failed to save'); }
     finally { setSaving(false); }
@@ -107,7 +118,7 @@ export default function RegistriesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Registries</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Configure private Docker registries</p>
+          <p className="text-sm text-zinc-500 mt-0.5">Configure private Docker registries and choose the scan provider per registry.</p>
         </div>
         <button
           onClick={openCreate}
@@ -125,6 +136,15 @@ export default function RegistriesPage() {
         </div>
       )}
 
+      <div className="rounded-2xl px-4 py-3 text-sm flex items-start gap-3"
+        style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.18)', color: 'var(--text-secondary)' }}>
+        <div className="mt-0.5 w-2 h-2 rounded-full shrink-0" style={{ background: '#60a5fa' }} />
+        <div className="space-y-1">
+          <p className="font-medium text-zinc-800 dark:text-zinc-100">Provider choice is configured here in the frontend.</p>
+          <p className="text-zinc-600 dark:text-zinc-400">You do not need to edit backend/config.yaml to assign a registry to Trivy or Artifactory Xray. That choice is stored with the registry record in JustScan.</p>
+        </div>
+      </div>
+
       {loading ? (
         <div className="glass-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
@@ -132,6 +152,7 @@ export default function RegistriesPage() {
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">URL</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Provider</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Username</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Health</th>
@@ -139,7 +160,7 @@ export default function RegistriesPage() {
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: 3 }).map((_, i) => <TableRowSkeleton key={i} cols={6} />)}
+              {Array.from({ length: 3 }).map((_, i) => <TableRowSkeleton key={i} cols={7} />)}
             </tbody>
           </table>
         </div>
@@ -147,7 +168,7 @@ export default function RegistriesPage() {
         <EmptyState
           icon={<ServerStack01Icon size={28} />}
           title="No registries configured"
-          description="Add a private Docker registry (Docker Hub, ECR, GCR, etc.) to scan images that require authentication."
+          description="Add a private Docker registry and choose whether JustScan should use its local Trivy scanner or the Artifactory Xray provider for that registry."
           action={{ label: '+ Add Registry', onClick: openCreate }}
         />
       ) : (
@@ -157,6 +178,7 @@ export default function RegistriesPage() {
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">URL</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Provider</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Username</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Health</th>
@@ -170,6 +192,12 @@ export default function RegistriesPage() {
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                   <td className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-200">{r.name}</td>
                   <td className="px-4 py-3 font-mono text-xs text-zinc-500">{r.url}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-md"
+                      style={PROVIDER_STYLE[r.scan_provider ?? 'trivy']}>
+                      {PROVIDER_LABEL[r.scan_provider ?? 'trivy']}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     <span className="text-xs font-medium px-2 py-0.5 rounded-md"
                       style={AUTH_TYPE_STYLE[r.auth_type ?? 'none']}>
@@ -243,6 +271,24 @@ export default function RegistriesPage() {
                     <input className={inputCls + ' font-mono'} placeholder="https://registry.example.com" value={url} onChange={(e) => setUrl(e.target.value)} required />
                   </div>
                   <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Scan Provider</label>
+                    <Select selectedKey={scanProvider} onSelectionChange={k => setScanProvider(k as 'trivy' | 'artifactory_xray')}>
+                      <Select.Trigger className={inputCls}>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="trivy">Trivy (built-in JustScan scanner)</ListBox.Item>
+                          <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      This is stored in JustScan and does not require editing backend/config.yaml.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Auth Type</label>
                     <Select selectedKey={authType} onSelectionChange={k => setAuthType(k as 'none' | 'basic' | 'token' | 'aws_ecr')}>
                       <Select.Trigger className={inputCls}>
@@ -259,6 +305,12 @@ export default function RegistriesPage() {
                       </Select.Popover>
                     </Select>
                   </div>
+                  {scanProvider === 'artifactory_xray' && (
+                    <div className="rounded-xl px-3 py-2.5 text-xs"
+                      style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)', color: '#d97706' }}>
+                      The provider selection is saved now. The actual Artifactory Xray execution path is the next implementation step, so scans tied to this provider will not succeed until that adapter is added.
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Username <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span></label>
                     <input className={inputCls} placeholder="Optional" value={username} onChange={(e) => setUsername(e.target.value)} />

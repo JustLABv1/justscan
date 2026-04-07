@@ -54,18 +54,33 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 	itemCopy := item // avoid closure capture
 	_, err := cronRunner.AddFunc(item.Schedule, func() {
 		log.Infof("scheduler: triggering scan for %s:%s", itemCopy.ImageName, itemCopy.ImageTag)
+		registry, envVars, err := scanner.ResolveRegistryForScan(context.Background(), db, itemCopy.ImageName, itemCopy.RegistryID)
+		if err != nil {
+			log.Errorf("scheduler: failed to resolve registry for %s:%s: %v", itemCopy.ImageName, itemCopy.ImageTag, err)
+			return
+		}
 		scan := &models.Scan{
-			ImageName: itemCopy.ImageName,
-			ImageTag:  itemCopy.ImageTag,
-			Status:    models.ScanStatusPending,
-			UserID:    &itemCopy.UserID,
-			CreatedAt: time.Now(),
+			ImageName:    itemCopy.ImageName,
+			ImageTag:     itemCopy.ImageTag,
+			RegistryID:   itemCopy.RegistryID,
+			ScanProvider: scanner.ProviderForRegistry(registry),
+			Status:       models.ScanStatusPending,
+			UserID:       &itemCopy.UserID,
+			CreatedAt:    time.Now(),
+		}
+		if registry != nil {
+			scan.RegistryID = &registry.ID
 		}
 		if _, err := db.NewInsert().Model(scan).Exec(context.Background()); err != nil {
 			log.Errorf("scheduler: failed to create scan for %s: %v", itemCopy.ImageName, err)
 			return
 		}
-		scanner.EnqueueScan(scan.ID, db, nil, "")
+		if err := scanner.DispatchScan(context.Background(), db, scan, envVars, ""); err != nil {
+			log.Warnf("scheduler: dispatch failed for %s: %v", scan.ID, err)
+			if markErr := scanner.MarkScanFailed(context.Background(), db, scan.ID, err.Error()); markErr != nil {
+				log.Errorf("scheduler: failed to persist dispatch error for %s: %v", scan.ID, markErr)
+			}
+		}
 		now := time.Now()
 		itemCopy.LastScannedAt = &now
 		itemCopy.LastScanID = &scan.ID

@@ -5,8 +5,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { createRegistry, deleteRegistry, listRegistries, RegistryWithHealth, testRegistry, updateRegistry } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
-import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
-import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, ServerStack01Icon } from 'hugeicons-react';
+import { Dropdown, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { MoreVerticalIcon, PlusSignIcon, ServerStack01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
 
 const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
@@ -154,6 +154,7 @@ export default function RegistriesPage() {
         <div className="space-y-1">
           <p className="font-medium text-zinc-800 dark:text-zinc-100">Provider choice is configured here in the frontend.</p>
           <p className="text-zinc-600 dark:text-zinc-400">You do not need to edit backend/config.yaml to assign a registry to Trivy or Artifactory Xray. Provider selection, Xray base URL, and Artifactory ID are stored with the registry record in JustScan.</p>
+          <p className="text-zinc-600 dark:text-zinc-400">Registry health is checked automatically every 15 minutes, and you can still run a manual test from the actions menu.</p>
         </div>
       </div>
 
@@ -168,7 +169,7 @@ export default function RegistriesPage() {
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Username</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Health</th>
-                <th className="px-4 py-3" />
+                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -194,7 +195,7 @@ export default function RegistriesPage() {
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Username</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Health</th>
-                <th className="px-4 py-3" />
+                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -228,27 +229,36 @@ export default function RegistriesPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => handleTest(r.id)}
-                        disabled={testing === r.id}
-                        className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all disabled:opacity-50"
-                        style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)', color: '#a78bfa' }}
-                        title="Test connection"
-                      >
-                        {testing === r.id ? (
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full border border-current border-t-transparent animate-spin" />
-                            Testing…
-                          </span>
-                        ) : 'Test'}
-                      </button>
-                      <button onClick={() => openEdit(r)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit">
-                        <PencilEdit01Icon size={15} />
-                      </button>
-                      <button onClick={() => handleDelete(r.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1.5" title="Delete">
-                        <Delete01Icon size={15} />
-                      </button>
+                    <div className="flex items-center justify-end">
+                      <Dropdown>
+                        <Dropdown.Trigger>
+                          <button
+                            type="button"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg transition-all"
+                            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
+                            aria-label={`Open actions menu for ${r.name}`}
+                          >
+                            <MoreVerticalIcon size={15} />
+                          </button>
+                        </Dropdown.Trigger>
+                        <Dropdown.Popover className="min-w-[180px]">
+                          <Dropdown.Menu onAction={(key) => {
+                            if (key === 'test') void handleTest(r.id);
+                            if (key === 'edit') openEdit(r);
+                            if (key === 'delete') void handleDelete(r.id);
+                          }}>
+                            <Dropdown.Item id="test" textValue="Test connection" isDisabled={testing === r.id}>
+                              <Label>{testing === r.id ? 'Testing…' : 'Test connection'}</Label>
+                            </Dropdown.Item>
+                            <Dropdown.Item id="edit" textValue="Edit registry">
+                              <Label>Edit</Label>
+                            </Dropdown.Item>
+                            <Dropdown.Item id="delete" textValue="Delete registry" variant="danger">
+                              <Label>Delete</Label>
+                            </Dropdown.Item>
+                          </Dropdown.Menu>
+                        </Dropdown.Popover>
+                      </Dropdown>
                     </div>
                   </td>
                 </tr>

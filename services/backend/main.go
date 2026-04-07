@@ -10,6 +10,7 @@ import (
 
 	"justscan-backend/config"
 	"justscan-backend/database"
+	"justscan-backend/functions/auth"
 	"justscan-backend/router"
 	"justscan-backend/scanner"
 	"justscan-backend/scheduler"
@@ -65,6 +66,14 @@ func main() {
 	log.Info("Config loaded successfully")
 
 	logging(cfg.LogLevel)
+
+	// Initialise OIDC provider if enabled.
+	if cfg.OIDC.Enabled {
+		if err := auth.InitOIDCProvider(context.Background()); err != nil {
+			log.Fatal("Failed to initialise OIDC provider: ", err)
+		}
+		log.Info("OIDC provider initialised: ", cfg.OIDC.IssuerURL)
+	}
 
 	db := database.StartDatabase(cfg.Database.Driver, cfg.Database.Server, cfg.Database.Port, cfg.Database.User, cfg.Database.Password, cfg.Database.Name)
 	if db == nil {

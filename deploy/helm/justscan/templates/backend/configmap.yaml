@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "justscan.fullname" . }}-backend
+  labels:
+    {{- include "justscan.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+data:
+  config.yaml: |
+    log_level: {{ .Values.backend.config.logLevel | quote }}
+    port: {{ .Values.backend.config.port }}
+
+    database:
+      driver: {{ .Values.backend.config.database.driver | quote }}
+      server: {{ include "justscan.postgresql.host" . | quote }}
+      port: {{ .Values.backend.config.database.port }}
+      name: {{ .Values.backend.config.database.name | quote }}
+      user: {{ .Values.backend.config.database.user | quote }}
+      # password is injected via BACKEND_DATABASE_PASSWORD env var
+
+    jwt:
+      # secret is injected via BACKEND_JWT_SECRET env var
+      secret: ""
+
+    allow_origins:
+      {{- range .Values.backend.config.allowOrigins }}
+      - {{ . | quote }}
+      {{- end }}
+
+    scanner:
+      trivy_path: {{ .Values.backend.config.scanner.trivyPath | quote }}
+      timeout: {{ .Values.backend.config.scanner.timeout }}
+      concurrency: {{ .Values.backend.config.scanner.concurrency }}
+      db_max_age_hours: {{ .Values.backend.config.scanner.dbMaxAgeHours }}
+      enable_osv_java_augmentation: {{ .Values.backend.config.scanner.enableOsvJavaAugmentation }}
+
+    encryption:
+      # key is injected via BACKEND_ENCRYPTION_KEY env var
+      key: ""
+
+    vuln_kb:
+      # nvd_api_key is injected via BACKEND_VULN_KB_NVD_API_KEY env var
+      nvd_api_key: ""
+      cache_days: {{ .Values.backend.config.vulnKb.cacheDays }}
+
+    oidc:
+      enabled: {{ .Values.backend.config.oidc.enabled }}
+      issuer_url: {{ .Values.backend.config.oidc.issuerUrl | quote }}
+      client_id: {{ .Values.backend.config.oidc.clientId | quote }}
+      # client_secret is injected via BACKEND_OIDC_CLIENT_SECRET env var
+      client_secret: ""
+      redirect_uri: {{ include "justscan.oidc.redirectUri" . | quote }}
+      scopes:
+        {{- range .Values.backend.config.oidc.scopes }}
+        - {{ . | quote }}
+        {{- end }}
+      admin_groups:
+        {{- range .Values.backend.config.oidc.adminGroups }}
+        - {{ . | quote }}
+        {{- end }}
+      admin_roles:
+        {{- range .Values.backend.config.oidc.adminRoles }}
+        - {{ . | quote }}
+        {{- end }}
+      groups_claim: {{ .Values.backend.config.oidc.groupsClaim | quote }}
+      roles_claim: {{ .Values.backend.config.oidc.rolesClaim | quote }}
+
+    local_auth:
+      enabled: {{ .Values.backend.config.localAuth.enabled }}

@@ -42,6 +42,54 @@ Edit `backend-config.yaml` and replace all `change-me-in-production` placeholder
 > uncomment the `build:` block, set `NEXT_PUBLIC_API_URL` in `.env`, and
 > run `docker compose up --build -d`.
 
+### 2a. Optional: configure OIDC
+
+JustScan supports OIDC providers such as Keycloak and Authentik.
+
+Enable and configure the `oidc:` block in `backend-config.yaml`:
+
+```yaml
+allow_origins:
+  - "https://scan.example.com"
+
+oidc:
+  enabled: true
+  issuer_url: "https://auth.example.com/application/o/justscan/"
+  client_id: "justscan"
+  client_secret: "replace-me"
+  redirect_uri: "https://scan.example.com/api/v1/auth/oidc/callback"
+  scopes: ["openid", "email", "profile"]
+  admin_groups:
+    - "justscan-admins"
+  admin_roles: []
+  groups_claim: "groups"
+  roles_claim: "roles"
+
+local_auth:
+  enabled: true
+```
+
+Important details:
+
+- Register `oidc.redirect_uri` in your OIDC provider exactly as shown above.
+- Set the first `allow_origins` entry to the public frontend URL. After a successful OIDC login, JustScan redirects to that first origin plus `/auth/oidc/callback`.
+- `local_auth.enabled: true` keeps password login enabled alongside OIDC.
+- `local_auth.enabled: false` makes the deployment OIDC-only and disables local login and self-registration.
+- Existing local users are automatically linked to OIDC on first login when their OIDC email matches the local account email.
+- Admin access is assigned from `oidc.admin_groups` and `oidc.admin_roles`, and is re-evaluated on every OIDC login.
+
+By default, this Docker Compose deployment reads the OIDC client secret from `backend-config.yaml`.
+
+If you want to inject it through an environment variable instead, add an `environment:` entry to the `backend` service in `docker-compose.yml`, for example:
+
+```yaml
+backend:
+  environment:
+    BACKEND_OIDC_CLIENT_SECRET: ${BACKEND_OIDC_CLIENT_SECRET}
+```
+
+Then set it in `.env` or your shell before starting the stack.
+
 ### 3. Build and start
 
 ```bash

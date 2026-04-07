@@ -1,0 +1,129 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "justscan.fullname" . }}-backend
+  labels:
+    {{- include "justscan.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "justscan.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      annotations:
+        # Restart pods when the ConfigMap changes.
+        checksum/config: {{ include (print $.Template.BasePath "/backend/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "justscan.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      serviceAccountName: {{ include "justscan.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.backend.config.port }}
+              protocol: TCP
+
+          # ---- Secret env vars (injected from Kubernetes Secret) ----
+          env:
+            - name: BACKEND_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "justscan.backend.secretName" . }}
+                  key: {{ if .Values.backend.secrets.existingSecret }}{{ .Values.backend.secrets.existingSecretKeys.jwtSecret }}{{ else }}jwt-secret{{ end }}
+
+            - name: BACKEND_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "justscan.dbPassword.secretName" . }}
+                  key: {{ include "justscan.dbPassword.secretKey" . }}
+
+            - name: BACKEND_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "justscan.backend.secretName" . }}
+                  key: {{ if .Values.backend.secrets.existingSecret }}{{ .Values.backend.secrets.existingSecretKeys.encryptionKey }}{{ else }}encryption-key{{ end }}
+
+            {{- if .Values.backend.config.oidc.enabled }}
+            - name: BACKEND_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "justscan.backend.secretName" . }}
+                  key: {{ if .Values.backend.secrets.existingSecret }}{{ .Values.backend.secrets.existingSecretKeys.oidcClientSecret }}{{ else }}oidc-client-secret{{ end }}
+            {{- end }}
+
+            - name: BACKEND_VULN_KB_NVD_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "justscan.backend.secretName" . }}
+                  key: {{ if .Values.backend.secrets.existingSecret }}{{ .Values.backend.secrets.existingSecretKeys.nvdApiKey }}{{ else }}nvd-api-key{{ end }}
+
+            {{- with .Values.backend.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+
+          # ---- Config file (mounted from ConfigMap) ----
+          volumeMounts:
+            - name: config
+              mountPath: /etc/justscan
+              readOnly: true
+            - name: data
+              mountPath: /app/data
+
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+
+          {{- with .Values.backend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "justscan.fullname" . }}-backend
+        - name: data
+          emptyDir: {}
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

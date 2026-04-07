@@ -32,6 +32,26 @@ type RestfulConf struct {
 	Scanner      ScannerConf    `mapstructure:"scanner"`
 	Encryption   EncryptionConf `mapstructure:"encryption"`
 	VulnKB       VulnKBConf     `mapstructure:"vuln_kb"`
+	OIDC         OIDCConf       `mapstructure:"oidc"`
+	LocalAuth    LocalAuthConf  `mapstructure:"local_auth"`
+}
+
+type OIDCConf struct {
+	Enabled      bool     `mapstructure:"enabled"`
+	Debug        bool     `mapstructure:"debug"`
+	IssuerURL    string   `mapstructure:"issuer_url"`
+	ClientID     string   `mapstructure:"client_id"`
+	ClientSecret string   `mapstructure:"client_secret"`
+	RedirectURI  string   `mapstructure:"redirect_uri"`
+	Scopes       []string `mapstructure:"scopes"`
+	AdminGroups  []string `mapstructure:"admin_groups"`
+	AdminRoles   []string `mapstructure:"admin_roles"`
+	GroupsClaim  string   `mapstructure:"groups_claim"`
+	RolesClaim   string   `mapstructure:"roles_claim"`
+}
+
+type LocalAuthConf struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 type ScannerConf struct {
@@ -104,6 +124,18 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"encryption.master_secret":             "BACKEND_ENCRYPTION_MASTER_SECRET",
 		"jwt.secret":                           "BACKEND_JWT_SECRET",
 		"runner.shared_runner_secret":          "BACKEND_RUNNER_SHARED_RUNNER_SECRET",
+		"oidc.enabled":                         "BACKEND_OIDC_ENABLED",
+		"oidc.debug":                           "BACKEND_OIDC_DEBUG",
+		"oidc.issuer_url":                      "BACKEND_OIDC_ISSUER_URL",
+		"oidc.client_id":                       "BACKEND_OIDC_CLIENT_ID",
+		"oidc.client_secret":                   "BACKEND_OIDC_CLIENT_SECRET",
+		"oidc.redirect_uri":                    "BACKEND_OIDC_REDIRECT_URI",
+		"oidc.scopes":                          "BACKEND_OIDC_SCOPES",
+		"oidc.admin_groups":                    "BACKEND_OIDC_ADMIN_GROUPS",
+		"oidc.admin_roles":                     "BACKEND_OIDC_ADMIN_ROLES",
+		"oidc.groups_claim":                    "BACKEND_OIDC_GROUPS_CLAIM",
+		"oidc.roles_claim":                     "BACKEND_OIDC_ROLES_CLAIM",
+		"local_auth.enabled":                   "BACKEND_LOCAL_AUTH_ENABLED",
 	}
 
 	for configKey, envVar := range envBindings {
@@ -177,6 +209,20 @@ func (cm *ConfigurationManager) setDefaults(config *RestfulConf) {
 		config.Scanner.DBMaxAgeHours = 24
 	}
 	config.Scanner.EnableOSVJavaAugmentation = true
+	// OIDC defaults
+	if config.OIDC.GroupsClaim == "" {
+		config.OIDC.GroupsClaim = "groups"
+	}
+	if config.OIDC.RolesClaim == "" {
+		config.OIDC.RolesClaim = "roles"
+	}
+	if len(config.OIDC.Scopes) == 0 {
+		config.OIDC.Scopes = []string{"openid", "email", "profile"}
+	}
+	// Local auth is enabled by default
+	if !cm.viper.IsSet("local_auth.enabled") {
+		config.LocalAuth.Enabled = true
+	}
 }
 
 // GetConfig returns a copy of the current configuration

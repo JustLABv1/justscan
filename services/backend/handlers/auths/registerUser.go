@@ -1,8 +1,10 @@
 package auths
 
 import (
+	"errors"
 	"net/http"
 
+	"justscan-backend/config"
 	"justscan-backend/functions/httperror"
 	"justscan-backend/pkg/models"
 
@@ -13,6 +15,11 @@ import (
 )
 
 func RegisterUser(context *gin.Context, db *bun.DB) {
+	if !config.Config.LocalAuth.Enabled {
+		httperror.Unauthorized(context, "Local authentication is disabled", errors.New("local auth disabled"))
+		return
+	}
+
 	var user models.Users
 	if err := context.ShouldBindJSON(&user); err != nil {
 		httperror.StatusBadRequest(context, "Error parsing incoming data", err)

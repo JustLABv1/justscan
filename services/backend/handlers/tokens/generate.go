@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"justscan-backend/config"
 	"justscan-backend/functions/audit"
 	"justscan-backend/functions/auth"
 	"justscan-backend/functions/httperror"
@@ -22,6 +23,12 @@ type TokenRequest struct {
 }
 
 func GenerateTokenUser(db *bun.DB, context *gin.Context) {
+	if !config.Config.LocalAuth.Enabled {
+		context.JSON(http.StatusForbidden, gin.H{"error": "local authentication is disabled"})
+		context.Abort()
+		return
+	}
+
 	var request TokenRequest
 	if err := context.ShouldBindJSON(&request); err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

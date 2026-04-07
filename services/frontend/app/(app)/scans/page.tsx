@@ -38,6 +38,22 @@ const PROVIDER_LABEL: Record<string, string> = {
   artifactory_xray: 'Artifactory Xray',
 };
 
+const STATUS_FILTER_OPTIONS = [
+  { id: '', label: 'All latest states' },
+  { id: 'failed', label: 'Failed' },
+  { id: 'blocked_by_xray_policy', label: 'Blocked by Xray Policy' },
+  { id: 'pending,running,waiting_for_xray,warming_artifactory_cache,indexing,queued,importing', label: 'In Flight' },
+  { id: 'pending', label: 'Pending' },
+  { id: 'running', label: 'Running' },
+  { id: 'waiting_for_xray', label: 'Waiting for Xray' },
+  { id: 'warming_artifactory_cache', label: 'Warming Artifactory Cache' },
+  { id: 'indexing', label: 'Indexing in Xray' },
+  { id: 'queued', label: 'Queued in Xray' },
+  { id: 'importing', label: 'Importing Findings' },
+  { id: 'completed', label: 'Completed' },
+  { id: 'cancelled', label: 'Cancelled' },
+] as const;
+
 // ── Main page ─────────────────────────────────────────────────────────
 export default function ScansPage() {
   const router = useRouter();
@@ -51,6 +67,7 @@ export default function ScansPage() {
   const [error, setError] = useState('');
 
   const [imageFilter, setImageFilter] = useState(searchParams.get('image') ?? '');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? '');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Which image names are expanded
@@ -77,11 +94,11 @@ export default function ScansPage() {
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const LIMIT = 30;
 
-  const load = useCallback(async (p: number, img: string) => {
+  const load = useCallback(async (p: number, img: string, status: string) => {
     setLoading(true);
     setError('');
     try {
-      const res = await listScanImages(p, LIMIT, img || undefined);
+      const res = await listScanImages(p, LIMIT, img || undefined, status || undefined);
       setImages(res.data ?? []);
       setTotal(res.total);
     } catch (e: unknown) {
@@ -91,7 +108,7 @@ export default function ScansPage() {
     }
   }, []);
 
-  useEffect(() => { load(page, imageFilter); }, [load, page]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(page, imageFilter, statusFilter); }, [load, page]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { listTags().then(setAvailableTags).catch(() => {}); }, []);
   useEffect(() => { listRegistries().then(setRegistries).catch(() => {}); }, []);
 
@@ -104,22 +121,28 @@ export default function ScansPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useConditionalInterval(() => {
-    void load(page, imageFilter);
+    void load(page, imageFilter, statusFilter);
   }, images.some((image) => image.latest_status === 'running' || image.latest_status === 'pending'), 5000);
 
 
-  function applyFilter(img: string) {
+  function applyFilter(img: string, status: string) {
     const params = new URLSearchParams();
     if (img) params.set('image', img);
+    if (status) params.set('status', status);
     router.replace(`/scans${params.toString() ? `?${params}` : ''}`);
     setPage(1);
-    load(1, img);
+    load(1, img, status);
   }
 
   function handleImageFilterChange(value: string) {
     setImageFilter(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => applyFilter(value), 300);
+    debounceRef.current = setTimeout(() => applyFilter(value, statusFilter), 300);
+  }
+
+  function handleStatusFilterChange(value: string) {
+    setStatusFilter(value);
+    applyFilter(imageFilter, value);
   }
 
   function toggleExpand(imageName: string) {
@@ -140,7 +163,7 @@ export default function ScansPage() {
       toast.success('Scan queued');
       // Expand the image row after creation
       setExpanded(prev => new Set(prev).add(newScan.image_name));
-      await load(1, imageFilter);
+      await load(1, imageFilter, statusFilter);
       setPage(1);
     } catch (err: unknown) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create scan');
@@ -159,7 +182,7 @@ export default function ScansPage() {
       await deleteScan(scanId);
       toast.success('Scan deleted');
       setChildRefreshKey(prev => ({ ...prev, [imageName]: (prev[imageName] ?? 0) + 1 }));
-      load(page, imageFilter);
+      load(page, imageFilter, statusFilter);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete');
     }
@@ -177,7 +200,7 @@ export default function ScansPage() {
       await cancelScan(scanId);
       toast.success('Scan cancelled');
       setChildRefreshKey(prev => ({ ...prev, [imageName]: (prev[imageName] ?? 0) + 1 }));
-      load(page, imageFilter);
+      load(page, imageFilter, statusFilter);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to cancel');
     }
@@ -197,7 +220,7 @@ export default function ScansPage() {
       await bulkDeleteScans(Array.from(selectedScans));
       toast.success(`${selectedScans.size} scan${selectedScans.size !== 1 ? 's' : ''} deleted`);
       setSelectedScans(new Set());
-      load(page, imageFilter);
+      load(page, imageFilter, statusFilter);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete scans');
     }
@@ -210,7 +233,7 @@ export default function ScansPage() {
       await bulkAddTagToScans(tagId, Array.from(selectedScans));
       toast.success(`Tag added to ${selectedScans.size} scan${selectedScans.size !== 1 ? 's' : ''}`);
       setSelectedScans(new Set());
-      load(page, imageFilter);
+      load(page, imageFilter, statusFilter);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to add tag');
     }
@@ -262,14 +285,28 @@ export default function ScansPage() {
             onChange={e => handleImageFilterChange(e.target.value)}
           />
         </div>
-        {imageFilter && (
+        <Select selectedKey={statusFilter || '__all__'} onSelectionChange={key => handleStatusFilterChange(String(key === '__all__' ? '' : key))} className="min-w-[260px] max-w-[320px]">
+          <Select.Trigger className={inputCls}>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox>
+              <ListBox.Item id="__all__">All latest states</ListBox.Item>
+              {STATUS_FILTER_OPTIONS.filter((option) => option.id !== '').map((option) => (
+                <ListBox.Item key={option.id} id={option.id}>{option.label}</ListBox.Item>
+              ))}
+            </ListBox>
+          </Select.Popover>
+        </Select>
+        {(imageFilter || statusFilter) && (
           <button
-            onClick={() => { setImageFilter(''); applyFilter(''); }}
+            onClick={() => { setImageFilter(''); setStatusFilter(''); applyFilter('', ''); }}
             className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
             style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa' }}
           >
             <FilterIcon size={12} />
-            Clear
+            Clear Filters
           </button>
         )}
       </div>
@@ -433,7 +470,7 @@ export default function ScansPage() {
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="font-mono text-xs text-zinc-400">:{img.latest_tag}</span>
-                        <StatusBadge status={img.latest_status} />
+                        <StatusBadge status={img.latest_status} externalStatus={img.latest_external_status} />
                         <span className="text-xs text-zinc-500" title={fullDate(img.latest_scan_at)}>
                           {timeAgo(img.latest_scan_at)}
                         </span>

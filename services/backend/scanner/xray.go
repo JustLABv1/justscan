@@ -235,6 +235,8 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 			}
 			scan.ExternalStatus = models.ScanExternalStatusBlockedByXrayPolicy
 
+			client.bestEffortTriggerBlockedArtifactScan(ctx, componentID, targets)
+
 			if summary, blockedArtifactPath, summaryErr := client.bestEffortBlockedArtifactSummary(ctx, targets); summaryErr != nil {
 				log.Warnf("Failed to fetch Xray artifact summary for blocked scan %s: %v", scan.ID, summaryErr)
 			} else if summary != nil {
@@ -598,6 +600,28 @@ func (c *xrayClient) bestEffortBlockedArtifactSummary(ctx context.Context, targe
 			return nil, "", ctx.Err()
 		case <-time.After(xraySummaryPollInterval):
 		}
+	}
+}
+
+func (c *xrayClient) bestEffortTriggerBlockedArtifactScan(ctx context.Context, componentID string, targets []xrayViolationLookupTarget) {
+	for _, target := range targets {
+		repository := strings.TrimSpace(target.Repository)
+		path := strings.TrimSpace(target.Path)
+		if repository == "" || path == "" {
+			continue
+		}
+
+		repoPath := repository + "/" + path
+		if err := c.scanNow(ctx, repoPath); err != nil {
+			log.Warnf("Failed to trigger Xray re-index for blocked artifact %s: %v", repoPath, err)
+		}
+	}
+
+	if componentID == "" {
+		return
+	}
+	if err := c.scanArtifact(ctx, componentID); err != nil && !isRetriableXrayScanArtifactError(err) {
+		log.Warnf("Failed to trigger Xray scanArtifact for blocked component %s: %v", componentID, err)
 	}
 }
 

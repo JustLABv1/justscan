@@ -214,8 +214,7 @@ export default function HelmPage() {
 
       {step === 'input' && (
         <div
-          className="rounded-2xl p-6 space-y-5"
-          style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}
+          className="glass-panel rounded-2xl p-6 space-y-5"
         >
           <form onSubmit={handleExtract} className="space-y-4">
             <div>
@@ -307,8 +306,7 @@ export default function HelmPage() {
       {step === 'preview' && extracted && (
         <div className="space-y-4">
           <div
-            className="rounded-2xl px-5 py-4 flex items-center justify-between gap-4"
-            style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}
+            className="glass-panel rounded-2xl px-5 py-4 flex items-center justify-between gap-4"
           >
             <div>
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -332,8 +330,7 @@ export default function HelmPage() {
           </div>
 
           <div
-            className="rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4"
-            style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}
+            className="glass-panel rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4"
           >
             <div className="flex items-center gap-2 min-w-[200px]">
               <label className="text-xs text-zinc-500 whitespace-nowrap">Platform</label>
@@ -403,10 +400,10 @@ export default function HelmPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
+          <div className="glass-panel rounded-2xl overflow-hidden">
             <div
               className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide"
-              style={{ background: 'var(--table-header-bg)', borderBottom: '1px solid var(--border-subtle)' }}
+              style={{ background: 'var(--row-hover)', borderBottom: '1px solid var(--border-subtle)' }}
             >
               <button
                 type="button"
@@ -433,7 +430,7 @@ export default function HelmPage() {
                   className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
                   style={{
                     borderBottom: '1px solid var(--border-subtle)',
-                    background: checked ? 'rgba(124,58,237,0.04)' : 'var(--card-bg)',
+                    background: checked ? 'rgba(124,58,237,0.04)' : 'transparent',
                   }}
                   onClick={() => toggleRow(img.full_ref)}
                 >
@@ -511,8 +508,7 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
 
       {runs.length === 0 ? (
         <div
-          className="rounded-2xl px-5 py-8 text-center text-sm text-zinc-400"
-          style={{ border: '1px solid var(--border-subtle)', background: 'var(--card-bg)' }}
+          className="glass-panel rounded-2xl px-5 py-8 text-center text-sm text-zinc-400"
         >
           No Helm runs yet. Queue one above to start tracking chart history by run ID.
         </div>
@@ -522,8 +518,7 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
             <Link
               key={run.id}
               href={`/helm/runs/${run.id}`}
-              className="rounded-2xl p-4 transition-colors hover:bg-violet-500/5"
-              style={{ border: '1px solid var(--border-subtle)', background: 'var(--card-bg)' }}
+              className="glass-panel rounded-2xl p-4 transition-colors hover:bg-violet-500/5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -564,7 +559,7 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
 
 function RunMetric({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
-    <div className="rounded-xl px-2 py-2" style={{ background: 'var(--table-header-bg)' }}>
+    <div className="rounded-xl px-2 py-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
       <div className={`text-sm font-semibold ${value > 0 ? tone : 'text-zinc-400'}`}>{value}</div>
       <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
     </div>
@@ -586,7 +581,7 @@ function StepBar({ current }: { current: Step }) {
             <div
               className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
               style={{
-                background: index <= idx ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'var(--table-header-bg)',
+                background: index <= idx ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'var(--row-hover)',
                 color: index <= idx ? '#fff' : 'var(--text-muted)',
                 border: index <= idx ? 'none' : '1px solid var(--border-subtle)',
               }}

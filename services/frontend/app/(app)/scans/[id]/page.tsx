@@ -691,12 +691,7 @@ export default function ScanDetailPage() {
           )}
         </div>
         {sevCards.map(({ label, count, color, border }) => (
-          <div key={label} className={`rounded-xl border ${border} p-4`} style={{
-            background: 'var(--glass-bg)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            boxShadow: 'var(--glass-shadow)',
-          }}>
+          <div key={label} className={`glass-panel rounded-xl border ${border} p-4`}>
             <p className="text-xs text-zinc-500 mb-1">{label}</p>
             <p className={`text-2xl font-bold ${color}`}>{count ?? 0}</p>
           </div>

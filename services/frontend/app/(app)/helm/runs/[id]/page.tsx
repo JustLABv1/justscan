@@ -56,8 +56,7 @@ function SevCount({ count, cls }: { count: number; cls: string }) {
 function StatBox({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
     <div
-      className="flex flex-col gap-0.5 px-4 py-3 rounded-xl"
-      style={{ background: 'var(--table-header-bg)', border: '1px solid var(--border-subtle)' }}
+      className="glass-panel flex flex-col gap-0.5 px-4 py-3 rounded-xl"
     >
       <span className="text-xs text-zinc-500">{label}</span>
       <span className={`text-xl font-bold font-mono ${color ?? 'text-zinc-900 dark:text-zinc-100'}`}>{value}</span>
@@ -372,25 +371,25 @@ export default function HelmRunDetailPage() {
       )}
 
       {loading && (
-        <div className="rounded-2xl px-6 py-10 flex items-center justify-center gap-3 text-zinc-400 text-sm" style={{ border: '1px solid var(--border-subtle)' }}>
+        <div className="glass-panel rounded-2xl px-6 py-10 flex items-center justify-center gap-3 text-zinc-400 text-sm">
           <span className="w-4 h-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
           Loading Helm run…
         </div>
       )}
 
       {!loading && items.length === 0 && (
-        <div className="rounded-2xl px-6 py-10 text-center text-zinc-400 text-sm" style={{ border: '1px solid var(--border-subtle)' }}>
+        <div className="glass-panel rounded-2xl px-6 py-10 text-center text-zinc-400 text-sm">
           No scans found for this Helm run.
         </div>
       )}
 
       {!loading && items.length > 0 && (
-        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
+        <div className="glass-panel rounded-2xl overflow-hidden">
           <div
             className="grid px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide"
             style={{
               gridTemplateColumns: 'minmax(0,1fr) 120px minmax(0,1fr) 90px 70px 70px 70px 70px 120px 120px',
-              background: 'var(--table-header-bg)',
+              background: 'var(--row-hover)',
               borderBottom: '1px solid var(--border-subtle)',
             }}
           >
@@ -416,7 +415,7 @@ export default function HelmRunDetailPage() {
                 style={{
                   gridTemplateColumns: 'minmax(0,1fr) 120px minmax(0,1fr) 90px 70px 70px 70px 70px 120px 120px',
                   borderBottom: index < items.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                  background: 'var(--card-bg)',
+                  background: 'transparent',
                 }}
               >
                 <Link href={`/scans/${scan.id}`} className="text-sm font-mono text-zinc-800 dark:text-zinc-200 truncate hover:text-violet-500 transition-colors" title={scan.image_name}>
@@ -456,7 +455,7 @@ export default function HelmRunDetailPage() {
       )}
 
       {!loading && Object.keys(bySource).length > 1 && (
-        <div className="rounded-2xl px-5 py-4 space-y-3" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}>
+        <div className="glass-panel rounded-2xl px-5 py-4 space-y-3">
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Images by template file</h2>
           <div className="flex flex-col gap-1.5">
             {Object.entries(bySource)

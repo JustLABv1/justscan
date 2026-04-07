@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 
 export function ScannerDatabaseCard({ label, updatedAt, downloadedAt }: { label: string; updatedAt?: string | null; downloadedAt?: string | null }) {
   return (
-    <div className="rounded-xl border p-4" style={{ background: 'var(--glass-bg)', borderColor: 'var(--glass-border)' }}>
+    <div className="glass-panel rounded-xl p-4">
       <p className="text-xs text-zinc-500 mb-1">{label}</p>
       <p className="text-sm font-medium text-zinc-900 dark:text-white" title={updatedAt ? fullDate(updatedAt) : ''}>
         {updatedAt ? `${timeAgo(updatedAt)} (${fullDate(updatedAt)})` : 'Unknown'}

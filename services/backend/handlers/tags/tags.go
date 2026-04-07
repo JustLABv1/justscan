@@ -3,6 +3,7 @@ package tags
 import (
 	"net/http"
 
+	scanhandlers "justscan-backend/handlers/scans"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -99,6 +100,9 @@ func AddTagToScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
 			return
 		}
+		if _, _, _, ok := scanhandlers.LoadAuthorizedScan(c, db, scanID); !ok {
+			return
+		}
 		tagID, err := uuid.Parse(c.Param("tagId"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tag ID"})
@@ -118,6 +122,9 @@ func RemoveTagFromScan(db *bun.DB) gin.HandlerFunc {
 		scanID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+			return
+		}
+		if _, _, _, ok := scanhandlers.LoadAuthorizedScan(c, db, scanID); !ok {
 			return
 		}
 		tagID, err := uuid.Parse(c.Param("tagId"))

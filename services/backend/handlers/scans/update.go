@@ -26,10 +26,7 @@ func UpdateScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Verify scan exists
-		exists, err := db.NewSelect().Model((*models.Scan)(nil)).Where("id = ?", scanID).Exists(c.Request.Context())
-		if err != nil || !exists {
-			c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
+		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
 			return
 		}
 

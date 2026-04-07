@@ -15,6 +15,8 @@
   --glass-border: rgba(0,0,0,0.08);
   --glass-shadow: 0 4px 32px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.9);
   --glass-backdrop: blur(20px);
+  --card-bg: rgba(255,255,255,0.84);
+  --table-header-bg: rgba(255,255,255,0.62);
 
   /* Modal */
   --modal-bg: linear-gradient(145deg, rgba(255,255,255,0.99) 0%, rgba(250,250,252,1) 100%);
@@ -70,6 +72,8 @@
   --glass-bg-tint-end: rgba(255,255,255,0.015);
   --glass-border: rgba(255,255,255,0.07);
   --glass-shadow: 0 4px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05);
+  --card-bg: rgba(255,255,255,0.022);
+  --table-header-bg: rgba(255,255,255,0.04);
 
   /* Modal */
   --modal-bg: linear-gradient(145deg, rgba(20,20,24,0.97) 0%, rgba(15,15,18,0.99) 100%);

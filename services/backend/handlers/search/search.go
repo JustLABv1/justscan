@@ -22,6 +22,15 @@ type vulnResult struct {
 	ScanCount int    `bun:"scan_count" json:"scan_count"`
 }
 
+type scanResult struct {
+	ID            string `bun:"id" json:"id"`
+	ImageName     string `bun:"image_name" json:"image_name"`
+	ImageTag      string `bun:"image_tag" json:"image_tag"`
+	Status        string `bun:"status" json:"status"`
+	CriticalCount int    `bun:"critical_count" json:"critical_count"`
+	HighCount     int    `bun:"high_count" json:"high_count"`
+}
+
 // Search returns matching images and vulnerabilities for a query string.
 // Query param: q (required, max 200 chars)
 func Search(db *bun.DB) gin.HandlerFunc {
@@ -38,13 +47,11 @@ func Search(db *bun.DB) gin.HandlerFunc {
 		}
 		pattern := "%" + q + "%"
 
-		userID, err := authfuncs.GetUserIDFromToken(c.GetHeader("Authorization"))
+		userID, isAdmin, err := authfuncs.ResolveUserAccess(c.GetHeader("Authorization"), db)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
-		tokenType, _ := authfuncs.GetTypeFromToken(c.GetHeader("Authorization"))
-		isAdmin := tokenType == "admin"
 
 		// ── Images ───────────────────────────────────────────────────
 		var images []imageResult
@@ -54,7 +61,7 @@ func Search(db *bun.DB) gin.HandlerFunc {
 			ColumnExpr("COUNT(*) AS scan_count").
 			Where("image_name ILIKE ?", pattern).
 			GroupExpr("image_name").
-			OrderExpr("COUNT(*) DESC").
+			OrderExpr("CASE WHEN LOWER(image_name) = LOWER(?) THEN 0 WHEN image_name ILIKE ? THEN 1 ELSE 2 END, COUNT(*) DESC", q, q+"%").
 			Limit(6)
 
 		if !isAdmin {
@@ -76,7 +83,7 @@ func Search(db *bun.DB) gin.HandlerFunc {
 			ColumnExpr("COUNT(DISTINCT v.scan_id) AS scan_count").
 			Where("(v.vuln_id ILIKE ? OR v.pkg_name ILIKE ?)", pattern, pattern).
 			GroupExpr("v.vuln_id, v.pkg_name, v.severity").
-			OrderExpr("COUNT(DISTINCT v.scan_id) DESC, v.severity ASC").
+			OrderExpr("CASE WHEN LOWER(v.vuln_id) = LOWER(?) THEN 0 WHEN v.vuln_id ILIKE ? THEN 1 WHEN LOWER(v.pkg_name) = LOWER(?) THEN 2 ELSE 3 END, COUNT(DISTINCT v.scan_id) DESC, v.severity ASC", q, q+"%", q).
 			Limit(6)
 
 		if !isAdmin {
@@ -87,6 +94,21 @@ func Search(db *bun.DB) gin.HandlerFunc {
 			vulns = []vulnResult{}
 		}
 
-		c.JSON(http.StatusOK, gin.H{"images": images, "vulns": vulns})
+		var scans []scanResult
+		scanQ := db.NewSelect().
+			TableExpr("scans").
+			ColumnExpr("id::text, image_name, image_tag, status, critical_count, high_count").
+			Where("image_name ILIKE ? OR image_tag ILIKE ?", pattern, pattern).
+			OrderExpr("CASE WHEN LOWER(image_name) = LOWER(?) THEN 0 WHEN image_name ILIKE ? THEN 1 ELSE 2 END, created_at DESC", q, q+"%").
+			Limit(6)
+		if !isAdmin {
+			scanQ = scanQ.Where("user_id = ?", userID)
+		}
+		scanQ.Scan(ctx, &scans) //nolint:errcheck
+		if scans == nil {
+			scans = []scanResult{}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"images": images, "vulns": vulns, "scans": scans})
 	}
 }

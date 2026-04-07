@@ -1,7 +1,9 @@
 'use client';
+import { ScannerDatabaseCard, ScanningAnimation } from '@/components/scans/scan-runtime';
 import { useToast } from '@/components/toast';
 import { SeverityBadge, SourceBadge, StatusBadge } from '@/components/ui/badges';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
+import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import {
     addTagToScan,
     assignScanToOrg,
@@ -43,6 +45,70 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
+type ScanTab = 'vulns' | 'policy' | 'sbom' | 'details';
+
+type BlockedPolicyDetails = {
+  summary: string;
+  manifest?: string;
+  artifact?: string;
+  jfrog?: string;
+  matchedIssues?: string;
+  matchedWatches?: string;
+  blockingPolicies?: string;
+  matchedPolicies?: string;
+  totalViolations?: string;
+};
+
+function parseBlockedPolicyDetails(errorMessage?: string | null): BlockedPolicyDetails | null {
+  const message = errorMessage?.trim();
+  if (!message) return null;
+
+  const lines = message
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return null;
+
+  const details: BlockedPolicyDetails = { summary: lines[0] };
+  for (const line of lines.slice(1)) {
+    if (line.startsWith('Manifest: ')) details.manifest = line.slice('Manifest: '.length);
+    else if (line.startsWith('Artifact: ')) details.artifact = line.slice('Artifact: '.length);
+    else if (line.startsWith('JFrog: ')) details.jfrog = line.slice('JFrog: '.length);
+    else if (line.startsWith('Matched issues: ')) details.matchedIssues = line.slice('Matched issues: '.length);
+    else if (line.startsWith('Matched watches: ')) details.matchedWatches = line.slice('Matched watches: '.length);
+    else if (line.startsWith('Blocking policies: ')) details.blockingPolicies = line.slice('Blocking policies: '.length);
+    else if (line.startsWith('Matched policies: ')) details.matchedPolicies = line.slice('Matched policies: '.length);
+    else if (line.startsWith('Xray violations found for this artifact: ')) details.totalViolations = line.slice('Xray violations found for this artifact: '.length);
+  }
+
+  const hasStructuredDetails = Boolean(
+    details.manifest ||
+    details.artifact ||
+    details.jfrog ||
+    details.matchedIssues ||
+    details.matchedWatches ||
+    details.blockingPolicies ||
+    details.matchedPolicies ||
+    details.totalViolations
+  );
+
+  return hasStructuredDetails ? details : null;
+}
+
+function DetailBlock({ label, value, mono = false }: { label: string; value?: string; mono?: boolean }) {
+  if (!value) return null;
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-2">{label}</p>
+      <p className={mono ? 'text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all leading-relaxed' : 'text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed'}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
   if (!firstSeenAt) {
     return (
@@ -52,175 +118,6 @@ function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
     );
   }
   return <span className="text-xs text-zinc-500">{timeAgo(firstSeenAt)}</span>;
-}
-
-function ScannerDatabaseCard({
-  label,
-  updatedAt,
-  downloadedAt,
-}: {
-  label: string;
-  updatedAt?: string | null;
-  downloadedAt?: string | null;
-}) {
-  return (
-    <div className="rounded-xl border p-4" style={{ background: 'var(--glass-bg)', borderColor: 'var(--glass-border)' }}>
-      <p className="text-xs text-zinc-500 mb-1">{label}</p>
-      <p className="text-sm font-medium text-zinc-900 dark:text-white" title={updatedAt ? fullDate(updatedAt) : ''}>
-        {updatedAt ? `${timeAgo(updatedAt)} (${fullDate(updatedAt)})` : 'Unknown'}
-      </p>
-      <p className="text-xs text-zinc-500 mt-1" title={downloadedAt ? fullDate(downloadedAt) : ''}>
-        Downloaded {downloadedAt ? timeAgo(downloadedAt) : 'unknown'}
-      </p>
-    </div>
-  );
-}
-
-// ── Scanning animation shown while pending/running ───────────────────
-function ScanningAnimation({ status, externalStatus, startedAt }: { status: string; externalStatus?: string; startedAt: string | null }) {
-  const [elapsed, setElapsed] = useState(0);
-  const [phase, setPhase] = useState(0);
-  const waitingForXray = externalStatus === 'waiting_for_xray';
-
-  const phases = [
-    'Pulling image layers…',
-    'Analyzing OS packages…',
-    'Scanning language libraries…',
-    'Checking CVE database…',
-    'Correlating vulnerabilities…',
-    'Building report…',
-  ];
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      const start = startedAt ? new Date(startedAt).getTime() : Date.now();
-      setElapsed(Math.floor((Date.now() - start) / 1000));
-      setPhase(p => (p + 1) % phases.length);
-    }, 1800);
-    return () => clearInterval(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startedAt]);
-
-  const mins = Math.floor(elapsed / 60);
-  const secs = elapsed % 60;
-  const elapsedStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-
-  return (
-    <div
-      className="glass-panel rounded-2xl overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.06) 0%, rgba(59,130,246,0.04) 100%)' }}
-    >
-      <div
-        className="h-0.5 w-full relative overflow-hidden"
-        style={{ background: 'rgba(124,58,237,0.15)' }}
-      >
-        <div
-          className="absolute inset-y-0 left-0 w-1/3"
-          style={{
-            background: 'linear-gradient(90deg, transparent, #a78bfa, #60a5fa, transparent)',
-            animation: 'scanBar 2s ease-in-out infinite',
-          }}
-        />
-      </div>
-
-      <style>{`
-        @keyframes scanBar {
-          0%   { left: -33%; }
-          100% { left: 100%; }
-        }
-        @keyframes radarSweep {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-        @keyframes ringPulse1 {
-          0%, 100% { opacity: 0.8; }
-          50%       { opacity: 0.25; }
-        }
-        @keyframes ringPulse2 {
-          0%, 100% { opacity: 0.6; }
-          50%       { opacity: 0.15; }
-        }
-        @keyframes ringPulse3 {
-          0%, 100% { opacity: 0.5; }
-          50%       { opacity: 0.08; }
-        }
-        @keyframes fadePhase {
-          0%   { opacity: 0; transform: translateY(6px); }
-          15%  { opacity: 1; transform: translateY(0);   }
-          85%  { opacity: 1; transform: translateY(0);   }
-          100% { opacity: 0; transform: translateY(-6px);}
-        }
-      `}</style>
-
-      <div className="p-10 flex flex-col items-center gap-8">
-        <svg width="160" height="160" viewBox="0 0 160 160" style={{ overflow: 'visible' }}>
-          <circle cx="80" cy="80" r="76" fill="url(#radarGlow)" />
-          <defs>
-            <radialGradient id="radarGlow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.07" />
-              <stop offset="100%" stopColor="#7c3aed" stopOpacity="0" />
-            </radialGradient>
-          </defs>
-
-          <circle cx="80" cy="80" r="76" stroke="rgba(124,58,237,0.18)" strokeWidth="1" fill="none"
-            style={{ animation: 'ringPulse3 3s ease-in-out infinite' }} />
-          <circle cx="80" cy="80" r="56" stroke="rgba(124,58,237,0.25)" strokeWidth="1" fill="none"
-            style={{ animation: 'ringPulse2 3s ease-in-out infinite 0.4s' }} />
-          <circle cx="80" cy="80" r="36" stroke="rgba(124,58,237,0.35)" strokeWidth="1" fill="none"
-            style={{ animation: 'ringPulse1 3s ease-in-out infinite 0.8s' }} />
-
-          <line x1="4" y1="80" x2="156" y2="80" stroke="rgba(124,58,237,0.12)" strokeWidth="1" />
-          <line x1="80" y1="4" x2="80" y2="156" stroke="rgba(124,58,237,0.12)" strokeWidth="1" />
-
-          <g style={{ transformOrigin: '80px 80px', animation: 'radarSweep 3s linear infinite' }}>
-            <path d="M 80 80 L 80 4 A 76 76 0 0 1 156 80 Z" fill="rgba(124,58,237,0.13)" />
-            <line x1="80" y1="80" x2="80" y2="4"
-              stroke="rgba(167,139,250,0.85)" strokeWidth="1.5" strokeLinecap="round" />
-          </g>
-
-          <circle cx="80" cy="80" r="7" fill="rgba(167,139,250,0.2)" />
-          <circle cx="80" cy="80" r="3.5" fill="#a78bfa"
-            style={{ filter: 'drop-shadow(0 0 5px rgba(167,139,250,0.9))' }} />
-        </svg>
-
-        <div className="text-center space-y-2">
-          <div className="flex items-center justify-center gap-2.5">
-            <span
-              className="text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-widest"
-              style={{
-                background: waitingForXray ? 'rgba(245,158,11,0.12)' : status === 'running' ? 'rgba(59,130,246,0.12)' : 'rgba(161,161,170,0.1)',
-                border: `1px solid ${waitingForXray ? 'rgba(245,158,11,0.25)' : status === 'running' ? 'rgba(59,130,246,0.25)' : 'rgba(161,161,170,0.2)'}`,
-                color: waitingForXray ? '#f59e0b' : status === 'running' ? '#60a5fa' : '#a1a1aa',
-              }}
-            >
-              <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle animate-pulse"
-                style={{ background: waitingForXray ? '#f59e0b' : status === 'running' ? '#60a5fa' : '#a1a1aa' }} />
-              {waitingForXray ? 'Waiting for Xray' : status === 'running' ? 'Scan in progress' : 'Queued'}
-            </span>
-            {elapsed > 0 && (
-              <span className="text-xs text-zinc-500 font-mono">{elapsedStr}</span>
-            )}
-          </div>
-
-          <p
-            className="text-sm text-zinc-500"
-            key={phase}
-            style={{ animation: 'fadePhase 1.8s ease-in-out forwards', minHeight: 20 }}
-          >
-            {waitingForXray
-              ? 'Xray is still processing this image. Results will import automatically once they are ready.'
-              : status === 'pending'
-                ? 'Waiting for scanner…'
-                : phases[phase]}
-          </p>
-
-          <p className="text-xs text-zinc-500/50 mt-1">
-            Results will appear automatically when the scan finishes.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 const LIMIT = 25;
@@ -233,7 +130,7 @@ export default function ScanDetailPage() {
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [vulnTotal, setVulnTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [activeTab, setActiveTab] = useState<'vulns' | 'sbom' | 'details'>('vulns');
+  const [activeTab, setActiveTab] = useState<ScanTab>('vulns');
   const [sbomComponents, setSbomComponents] = useState<SBOMComponent[]>([]);
   const [sbomTotal, setSbomTotal] = useState(0);
   const [sbomLoading, setSbomLoading] = useState(false);
@@ -271,6 +168,8 @@ export default function ScanDetailPage() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareVisibility, setShareVisibility] = useState<'public' | 'authenticated'>('public');
   const [shareCopied, setShareCopied] = useState(false);
+  const loadVersionRef = useRef(0);
+  const defaultTabInitializedRef = useRef(false);
 
   const [suppressStatus, setSuppressStatus] = useState<Suppression['status']>('accepted');
   const [suppressJustification, setSuppressJustification] = useState('');
@@ -280,10 +179,17 @@ export default function ScanDetailPage() {
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanStatus = scan?.status;
+  const blockedPolicyDetails = scan?.external_status === 'blocked_by_xray_policy'
+    ? parseBlockedPolicyDetails(scan.error_message)
+    : null;
+  const hasPolicyTab = Boolean(blockedPolicyDetails);
 
   const loadScan = useCallback(async () => {
+    const loadVersion = ++loadVersionRef.current;
     const nextScan = await getScan(id);
-    setScan(nextScan);
+    if (loadVersion === loadVersionRef.current) {
+      setScan(nextScan);
+    }
     return nextScan;
   }, [id]);
 
@@ -295,22 +201,15 @@ export default function ScanDetailPage() {
     listOrgs().then(setAllOrgs).catch(() => {});
   }, [id, loadScan]);
 
-  // Poll every 3s while scan is pending or running
-  useEffect(() => {
-    if (!scanStatus) return;
-    if (scanStatus !== 'pending' && scanStatus !== 'running') return;
-    const interval = setInterval(() => {
-    loadScan()
+  useConditionalInterval(() => {
+    void loadScan()
       .then((nextScan) => {
-      if (nextScan.status === 'completed' || nextScan.status === 'failed') {
-        clearInterval(interval);
-        getScanCompliance(id).then(setCompliance).catch(() => {});
-      }
+        if (nextScan.status === 'completed' || nextScan.status === 'failed') {
+          void getScanCompliance(id).then(setCompliance).catch(() => {});
+        }
       })
       .catch(() => {});
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [scanStatus, id, loadScan]);
+  }, scanStatus === 'pending' || scanStatus === 'running', 3000);
 
   useEffect(() => {
     if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
@@ -322,6 +221,17 @@ export default function ScanDetailPage() {
       if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
     };
   }, [pkgInput]);
+
+  useEffect(() => {
+    if (!scan || defaultTabInitializedRef.current) return;
+    if (scan.status === 'pending' || scan.status === 'running') return;
+
+    if (scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails) {
+      setActiveTab('policy');
+    }
+
+    defaultTabInitializedRef.current = true;
+  }, [blockedPolicyDetails, scan]);
 
   // Persist severity filter
   useEffect(() => {
@@ -468,9 +378,19 @@ export default function ScanDetailPage() {
     if (!scan) return;
     setCancelling(true);
     try {
-      await cancelScan(id);
-      setScan(s => s ? { ...s, status: 'cancelled' } : s);
-    } catch { /* ignore */ } finally {
+      const result = await cancelScan(id);
+      loadVersionRef.current += 1;
+      setScan((current) => current ? {
+        ...current,
+        status: result.status ?? 'cancelled',
+        external_status: result.external_status ?? 'cancelled',
+        completed_at: result.completed_at ?? new Date().toISOString(),
+        error_message: result.error_message ?? 'Cancelled by user',
+      } : current);
+      toast.success('Scan cancelled');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to cancel scan');
+    } finally {
       setCancelling(false);
     }
   }
@@ -771,12 +691,7 @@ export default function ScanDetailPage() {
           )}
         </div>
         {sevCards.map(({ label, count, color, border }) => (
-          <div key={label} className={`rounded-xl border ${border} p-4`} style={{
-            background: 'var(--glass-bg)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            boxShadow: 'var(--glass-shadow)',
-          }}>
+          <div key={label} className={`glass-panel rounded-xl border ${border} p-4`}>
             <p className="text-xs text-zinc-500 mb-1">{label}</p>
             <p className={`text-2xl font-bold ${color}`}>{count ?? 0}</p>
           </div>
@@ -793,8 +708,17 @@ export default function ScanDetailPage() {
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-red-400 mb-0.5">Scan failed</p>
-            <pre className="text-xs text-red-300/80 whitespace-pre-wrap break-all font-mono leading-relaxed">{scan.error_message}</pre>
+            <p className="text-sm font-medium text-red-400 mb-0.5">{scan.external_status === 'blocked_by_xray_policy' ? 'Blocked by Xray policy' : 'Scan failed'}</p>
+            {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
+              <div className="space-y-1.5">
+                <p className="text-xs text-red-300/80 leading-relaxed">{blockedPolicyDetails.summary}</p>
+                <p className="text-[11px] text-red-300/70 leading-relaxed">
+                  See the Policy Violations tab for the matched issues, watches, policies, and raw JFrog response.
+                </p>
+              </div>
+            ) : (
+              <pre className="text-xs text-red-300/80 whitespace-pre-wrap break-all font-mono leading-relaxed">{scan.error_message}</pre>
+            )}
           </div>
         </div>
       )}
@@ -811,10 +735,11 @@ export default function ScanDetailPage() {
         <div className="flex items-center gap-1 p-1 rounded-xl w-fit"
           style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
           {([
-            { id: 'vulns',   label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities' },
-            { id: 'sbom',    label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
+            { id: 'vulns', label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities' },
+            ...(hasPolicyTab ? [{ id: 'policy' as const, label: blockedPolicyDetails?.totalViolations ? `Policy Violations (${blockedPolicyDetails.totalViolations})` : 'Policy Violations' }] : []),
+            { id: 'sbom', label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
             { id: 'details', label: 'Details' },
-          ] as { id: 'vulns' | 'sbom' | 'details'; label: string }[]).map(({ id, label }) => (
+          ] as { id: ScanTab; label: string }[]).map(({ id, label }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
@@ -826,6 +751,30 @@ export default function ScanDetailPage() {
               {label}
             </button>
           ))}
+        </div>
+      )}
+
+      {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'policy' && blockedPolicyDetails && (
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Policy Violations</h2>
+            <p className="text-sm text-zinc-500">
+              Xray blocked this image by policy. When Xray also exposes artifact summary data, the normal Vulnerabilities tab can still be populated; this tab keeps the policy-specific context separate.
+            </p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <DetailBlock label="Summary" value={blockedPolicyDetails.summary} />
+            <DetailBlock label="Xray Violations" value={blockedPolicyDetails.totalViolations} />
+            <DetailBlock label="Manifest" value={blockedPolicyDetails.manifest} mono />
+            <DetailBlock label="Artifact" value={blockedPolicyDetails.artifact} mono />
+            <DetailBlock label="Matched Issues" value={blockedPolicyDetails.matchedIssues} />
+            <DetailBlock label="Matched Watches" value={blockedPolicyDetails.matchedWatches} />
+            <DetailBlock label="Blocking Policies" value={blockedPolicyDetails.blockingPolicies} />
+            <DetailBlock label="Matched Policies" value={blockedPolicyDetails.matchedPolicies} />
+          </div>
+
+          <DetailBlock label="JFrog Response" value={blockedPolicyDetails.jfrog} mono />
         </div>
       )}
 
@@ -1027,7 +976,9 @@ export default function ScanDetailPage() {
               ) : vulns.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-zinc-500 text-sm">
-                    No vulnerabilities found.
+                    {scan.external_status === 'blocked_by_xray_policy'
+                      ? 'No imported vulnerabilities are available because Xray blocked this artifact before the normal scan summary was produced. See the Policy Violations tab for the matched issues, watches, and policies.'
+                      : 'No vulnerabilities found.'}
                   </td>
                 </tr>
               ) : vulns.map((v, i) => (

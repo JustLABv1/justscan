@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"justscan-backend/functions/audit"
@@ -41,6 +42,12 @@ func CreatePublicHelmScans(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
+		normalizedChartURL, normalizedChartName, isOCI := scanner.ResolveHelmChartInput(req.ChartURL, req.ChartName)
+		if !isOCI && !strings.HasPrefix(normalizedChartURL, "https://") && !strings.HasPrefix(normalizedChartURL, "http://") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "chart_url must use http:// or https:// for HTTP repositories, or oci:// for OCI registries"})
+			return
+		}
+
 		type normalizedScanImage struct {
 			Name       string
 			Tag        string
@@ -65,8 +72,8 @@ func CreatePublicHelmScans(db *bun.DB) gin.HandlerFunc {
 		}
 
 		run := &models.HelmScanRun{
-			ChartURL:     req.ChartURL,
-			ChartName:    req.ChartName,
+			ChartURL:     normalizedChartURL,
+			ChartName:    normalizedChartName,
 			ChartVersion: req.ChartVersion,
 			Platform:     req.Platform,
 			CreatedAt:    time.Now(),
@@ -87,8 +94,8 @@ func CreatePublicHelmScans(db *bun.DB) gin.HandlerFunc {
 					Status:           models.ScanStatusPending,
 					CreatedAt:        run.CreatedAt,
 					HelmScanRunID:    &run.ID,
-					HelmChart:        req.ChartURL,
-					HelmChartName:    req.ChartName,
+					HelmChart:        normalizedChartURL,
+					HelmChartName:    normalizedChartName,
 					HelmChartVersion: req.ChartVersion,
 					HelmSourcePath:   img.SourcePath,
 				}
@@ -102,7 +109,7 @@ func CreatePublicHelmScans(db *bun.DB) gin.HandlerFunc {
 
 			return nil
 		}); err != nil {
-			log.Errorf("CreatePublicHelmScans DB insert error for %s: %v", req.ChartURL, err)
+			log.Errorf("CreatePublicHelmScans DB insert error for %s: %v", normalizedChartURL, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create Helm scan run"})
 			return
 		}
@@ -113,7 +120,7 @@ func CreatePublicHelmScans(db *bun.DB) gin.HandlerFunc {
 
 		clientIP := c.ClientIP()
 		go audit.Write(context.Background(), db, "public", "scan.public.helm.create",
-			fmt.Sprintf("Public helm scan run %s created from %s (%d images, ip=%s)", run.ID, req.ChartURL, len(created), clientIP))
+			fmt.Sprintf("Public helm scan run %s created from %s (%d images, ip=%s)", run.ID, normalizedChartURL, len(created), clientIP))
 
 		c.JSON(http.StatusCreated, gin.H{"run": run, "scans": created})
 	}

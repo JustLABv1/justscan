@@ -1,5 +1,7 @@
 'use client';
-import { changePassword, getUserDetails, setUser, updateUserDetails, User } from '@/lib/api';
+import { changePassword, getAuthSnapshot, getUserDetails, setUser, updateUserDetails, User } from '@/lib/api';
+import { fullDate } from '@/lib/time';
+import { Clock01Icon, Key01Icon, Shield01Icon, UserAccountIcon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -34,6 +36,7 @@ function Alert({ message, type }: { message: string; type: 'success' | 'error' }
 export default function SettingsPage() {
   const router = useRouter();
   const [user, setUserState] = useState<User | null>(null);
+  const [authSnapshot, setAuthSnapshot] = useState(() => getAuthSnapshot());
 
   // Profile form
   const [username, setUsername] = useState('');
@@ -54,6 +57,7 @@ export default function SettingsPage() {
         setUserState(u);
         setUsername(u.username ?? '');
         setEmail(u.email ?? '');
+        setAuthSnapshot(getAuthSnapshot());
       })
       .catch(() => router.replace('/login'));
   }, [router]);
@@ -112,6 +116,47 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Settings</h1>
         <p className="text-sm text-zinc-500 mt-0.5">Manage your account profile and security</p>
       </div>
+
+      <Section title="Access" description="See the current session and account access state for this browser.">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-2xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+              <Shield01Icon size={16} />
+              <span className="text-sm font-medium">Account role</span>
+            </div>
+            <p className="mt-3 text-lg font-semibold text-zinc-900 dark:text-white capitalize">{user.role}</p>
+            <p className="mt-1 text-xs text-zinc-500">{user.disabled ? 'This account is currently disabled.' : 'This account is active and can sign in.'}</p>
+          </div>
+          <div className="rounded-2xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+              <Clock01Icon size={16} />
+              <span className="text-sm font-medium">Session expiry</span>
+            </div>
+            <p className="mt-3 text-lg font-semibold text-zinc-900 dark:text-white">
+              {authSnapshot.expires_at ? fullDate(authSnapshot.expires_at) : 'Unknown'}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              {authSnapshot.expires_in_seconds != null ? `${Math.floor(authSnapshot.expires_in_seconds / 60)} minutes remaining` : 'Token expiry is not available from the current session.'}
+            </p>
+          </div>
+          <div className="rounded-2xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+              <Key01Icon size={16} />
+              <span className="text-sm font-medium">Browser token</span>
+            </div>
+            <p className="mt-3 text-lg font-semibold text-zinc-900 dark:text-white">{authSnapshot.token_present ? 'Present' : 'Missing'}</p>
+            <p className="mt-1 text-xs text-zinc-500">If this is missing, protected requests from this browser will fail until you sign in again.</p>
+          </div>
+          <div className="rounded-2xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+              <UserAccountIcon size={16} />
+              <span className="text-sm font-medium">Account identity</span>
+            </div>
+            <p className="mt-3 text-sm font-mono text-zinc-900 dark:text-white break-all">{user.id}</p>
+            <p className="mt-1 text-xs text-zinc-500">Use this when matching audit logs, ownership, or support requests.</p>
+          </div>
+        </div>
+      </Section>
 
       <Section title="Profile" description="Update your display name and email address.">
         <form onSubmit={handleSaveProfile} className="space-y-4">

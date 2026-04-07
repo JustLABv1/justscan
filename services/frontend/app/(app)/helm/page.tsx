@@ -8,9 +8,17 @@ import {
     HelmExtractResponse,
     HelmScanRunSummary,
     listHelmScanRuns,
+    listRegistries,
     listTags,
+    Registry,
     Tag,
 } from '@/lib/api';
+import {
+    createEditableHelmImages,
+    EditableHelmImage,
+    getHelmImageSourceLabel,
+    parseHelmImageRef,
+} from '@/lib/helm-image-overrides';
 import { timeAgo } from '@/lib/time';
 import { ListBox, Select } from '@heroui/react';
 import {
@@ -42,6 +50,11 @@ const PLATFORMS = [
   { id: 'windows/amd64', label: 'windows/amd64' },
 ];
 
+const PROVIDER_LABEL: Record<string, string> = {
+  trivy: 'Trivy',
+  artifactory_xray: 'Artifactory Xray',
+};
+
 export default function HelmPage() {
   const router = useRouter();
   const toast = useToast();
@@ -54,9 +67,12 @@ export default function HelmPage() {
   const [extractError, setExtractError] = useState('');
 
   const [extracted, setExtracted] = useState<HelmExtractResponse | null>(null);
+  const [editableImages, setEditableImages] = useState<EditableHelmImage[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [platform, setPlatform] = useState('');
+  const [registryId, setRegistryId] = useState('');
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [registries, setRegistries] = useState<Registry[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [scanning, setScanning] = useState(false);
   const [makePublic, setMakePublic] = useState(false);
@@ -66,6 +82,8 @@ export default function HelmPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const isOCI = chartURL.trim().startsWith('oci://');
+  const selectedImages = editableImages.filter((img) => selected.has(img.id));
+  const hasInvalidSelection = selectedImages.some((img) => img.edited_ref.trim() === '');
 
   const loadTags = useCallback(async () => {
     try {
@@ -91,6 +109,7 @@ export default function HelmPage() {
     setIsAdmin(getTokenType() === 'admin');
     loadTags();
     loadHistory();
+    listRegistries().then(setRegistries).catch(() => {});
   }, [loadHistory, loadTags]);
 
   async function handleExtract(e: React.FormEvent) {
@@ -112,8 +131,10 @@ export default function HelmPage() {
         chartVersion.trim() || undefined,
       );
       const images = Array.isArray(result.images) ? result.images : [];
+      const nextImages = createEditableHelmImages(images);
       setExtracted({ ...result, images });
-      setSelected(new Set(images.map((img) => img.full_ref)));
+      setEditableImages(nextImages);
+      setSelected(new Set(nextImages.map((img) => img.id)));
       setStep('preview');
     } catch (err: unknown) {
       setExtractError(err instanceof Error ? err.message : 'Extraction failed');
@@ -124,14 +145,18 @@ export default function HelmPage() {
 
   async function handleScan() {
     if (!extracted || selected.size === 0) return;
+    if (hasInvalidSelection) {
+      toast.error('Each selected image needs a non-empty image reference');
+      return;
+    }
 
     setScanning(true);
     try {
-      const images = extracted.images
-        .filter((img) => selected.has(img.full_ref))
+      const images = editableImages
+        .filter((img) => selected.has(img.id))
         .map((img) => ({
-          full_ref: img.full_ref,
-          source_path: `${img.source_file} › ${img.source_path}`,
+          full_ref: img.edited_ref.trim(),
+          source_path: getHelmImageSourceLabel(img),
         }));
 
       const result = await createHelmScans(
@@ -141,6 +166,7 @@ export default function HelmPage() {
         selectedTagIds.size > 0 ? Array.from(selectedTagIds) : undefined,
         extracted.chart_name,
         extracted.chart_version,
+        registryId || undefined,
       );
 
       if (makePublic && (result.scans?.length ?? 0) > 0) {
@@ -160,21 +186,27 @@ export default function HelmPage() {
   }
 
   function toggleAll() {
-    if (!extracted) return;
-    if (selected.size === extracted.images.length) {
+    if (editableImages.length === 0) return;
+    if (selected.size === editableImages.length) {
       setSelected(new Set());
       return;
     }
-    setSelected(new Set(extracted.images.map((image) => image.full_ref)));
+    setSelected(new Set(editableImages.map((image) => image.id)));
   }
 
-  function toggleRow(ref: string) {
+  function toggleRow(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(ref)) next.delete(ref);
-      else next.add(ref);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
+  }
+
+  function updateEditedRef(id: string, value: string) {
+    setEditableImages((prev) => prev.map((image) => (
+      image.id === id ? { ...image, edited_ref: value } : image
+    )));
   }
 
   function toggleTag(id: string) {
@@ -214,8 +246,7 @@ export default function HelmPage() {
 
       {step === 'input' && (
         <div
-          className="rounded-2xl p-6 space-y-5"
-          style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}
+          className="glass-panel rounded-2xl p-6 space-y-5"
         >
           <form onSubmit={handleExtract} className="space-y-4">
             <div>
@@ -307,8 +338,7 @@ export default function HelmPage() {
       {step === 'preview' && extracted && (
         <div className="space-y-4">
           <div
-            className="rounded-2xl px-5 py-4 flex items-center justify-between gap-4"
-            style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}
+            className="glass-panel rounded-2xl px-5 py-4 flex items-center justify-between gap-4"
           >
             <div>
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -332,9 +362,31 @@ export default function HelmPage() {
           </div>
 
           <div
-            className="rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4"
-            style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}
+            className="glass-panel rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4"
           >
+            <div className="flex items-center gap-2 min-w-[260px]">
+              <label className="text-xs text-zinc-500 whitespace-nowrap">Registry</label>
+              <Select
+                selectedKey={registryId || '__auto__'}
+                onSelectionChange={(key) => setRegistryId(String(key === '__auto__' ? '' : key))}
+              >
+                <Select.Trigger className="flex-1 px-3 py-1.5 text-sm rounded-xl glass-input">
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item id="__auto__">Auto-match from image hostname</ListBox.Item>
+                    {registries.map((registry) => (
+                      <ListBox.Item key={registry.id} id={registry.id}>
+                        {registry.name} · {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </div>
+
             <div className="flex items-center gap-2 min-w-[200px]">
               <label className="text-xs text-zinc-500 whitespace-nowrap">Platform</label>
               <Select
@@ -403,10 +455,10 @@ export default function HelmPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
+          <div className="glass-panel rounded-2xl overflow-hidden">
             <div
               className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide"
-              style={{ background: 'var(--table-header-bg)', borderBottom: '1px solid var(--border-subtle)' }}
+              style={{ background: 'var(--row-hover)', borderBottom: '1px solid var(--border-subtle)' }}
             >
               <button
                 type="button"
@@ -425,17 +477,18 @@ export default function HelmPage() {
               <span className="w-48 hidden sm:block">Source</span>
             </div>
 
-            {extracted.images.map((img) => {
-              const checked = selected.has(img.full_ref);
+            {editableImages.map((img) => {
+              const checked = selected.has(img.id);
+              const parsed = parseHelmImageRef(img.edited_ref);
               return (
                 <div
-                  key={img.full_ref}
+                  key={img.id}
                   className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
                   style={{
                     borderBottom: '1px solid var(--border-subtle)',
-                    background: checked ? 'rgba(124,58,237,0.04)' : 'var(--card-bg)',
+                    background: checked ? 'rgba(124,58,237,0.04)' : 'transparent',
                   }}
-                  onClick={() => toggleRow(img.full_ref)}
+                  onClick={() => toggleRow(img.id)}
                 >
                   <span className="shrink-0">
                     {checked ? (
@@ -444,15 +497,31 @@ export default function HelmPage() {
                       <SquareIcon size={16} className="text-zinc-400" />
                     )}
                   </span>
-                  <span className="flex-1 text-sm font-mono text-zinc-800 dark:text-zinc-200 truncate">{img.name}</span>
-                  <span className="w-32 text-xs font-mono text-zinc-500 truncate">{img.tag || 'latest'}</span>
-                  <span className="w-48 hidden sm:block text-xs text-zinc-400 truncate" title={`${img.source_file} › ${img.source_path}`}>
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      value={img.edited_ref}
+                      onChange={(event) => updateEditedRef(img.id, event.target.value)}
+                      onClick={(event) => event.stopPropagation()}
+                      className="w-full bg-transparent text-sm font-mono text-zinc-800 dark:text-zinc-200 outline-none"
+                      placeholder="registry.example.com/org/image:tag"
+                    />
+                    <p className="mt-1 text-xs text-zinc-400 truncate">
+                      {parsed.name || 'Enter an image reference'}
+                    </p>
+                  </div>
+                  <span className="w-32 text-xs font-mono text-zinc-500 truncate">{parsed.tag || '—'}</span>
+                  <span className="w-48 hidden sm:block text-xs text-zinc-400 truncate" title={getHelmImageSourceLabel(img)}>
                     {img.source_file}
                   </span>
                 </div>
               );
             })}
           </div>
+
+          <p className="text-xs text-zinc-500">
+            Override any extracted image reference before queueing. The selected rows will use the edited values.
+          </p>
 
           <div className="flex items-center justify-between gap-4 pt-1">
             <button
@@ -467,7 +536,7 @@ export default function HelmPage() {
             <button
               type="button"
               onClick={handleScan}
-              disabled={scanning || selected.size === 0}
+              disabled={scanning || selected.size === 0 || hasInvalidSelection}
               className="px-5 py-2.5 text-sm font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
@@ -511,8 +580,7 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
 
       {runs.length === 0 ? (
         <div
-          className="rounded-2xl px-5 py-8 text-center text-sm text-zinc-400"
-          style={{ border: '1px solid var(--border-subtle)', background: 'var(--card-bg)' }}
+          className="glass-panel rounded-2xl px-5 py-8 text-center text-sm text-zinc-400"
         >
           No Helm runs yet. Queue one above to start tracking chart history by run ID.
         </div>
@@ -522,8 +590,7 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
             <Link
               key={run.id}
               href={`/helm/runs/${run.id}`}
-              className="rounded-2xl p-4 transition-colors hover:bg-violet-500/5"
-              style={{ border: '1px solid var(--border-subtle)', background: 'var(--card-bg)' }}
+              className="glass-panel rounded-2xl p-4 transition-colors hover:bg-violet-500/5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -564,7 +631,7 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
 
 function RunMetric({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
-    <div className="rounded-xl px-2 py-2" style={{ background: 'var(--table-header-bg)' }}>
+    <div className="rounded-xl px-2 py-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
       <div className={`text-sm font-semibold ${value > 0 ? tone : 'text-zinc-400'}`}>{value}</div>
       <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
     </div>
@@ -586,7 +653,7 @@ function StepBar({ current }: { current: Step }) {
             <div
               className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
               style={{
-                background: index <= idx ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'var(--table-header-bg)',
+                background: index <= idx ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'var(--row-hover)',
                 color: index <= idx ? '#fff' : 'var(--text-muted)',
                 border: index <= idx ? 'none' : '1px solid var(--border-subtle)',
               }}

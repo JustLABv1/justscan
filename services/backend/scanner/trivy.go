@@ -290,7 +290,9 @@ func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []stri
 
 func buildImageRef(imageName, imageTag string) string {
 	trimmedName := strings.TrimSpace(imageName)
+	trimmedName = strings.TrimSuffix(trimmedName, ":")
 	trimmedTag := strings.TrimSpace(imageTag)
+	trimmedTag = strings.TrimPrefix(trimmedTag, ":")
 	if trimmedName == "" {
 		return ""
 	}

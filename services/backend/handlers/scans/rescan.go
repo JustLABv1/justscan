@@ -63,6 +63,9 @@ func ReScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(orig.ImageName, orig.ImageTag, registry)
+		newScan.ImageName = normalizedImageName
+		newScan.ImageTag = normalizedImageTag
 		if registry != nil {
 			newScan.RegistryID = &registry.ID
 			newScan.ScanProvider = scanner.ProviderForRegistry(registry)

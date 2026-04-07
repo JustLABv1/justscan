@@ -59,9 +59,10 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 			log.Errorf("scheduler: failed to resolve registry for %s:%s: %v", itemCopy.ImageName, itemCopy.ImageTag, err)
 			return
 		}
+		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(itemCopy.ImageName, itemCopy.ImageTag, registry)
 		scan := &models.Scan{
-			ImageName:    itemCopy.ImageName,
-			ImageTag:     itemCopy.ImageTag,
+			ImageName:    normalizedImageName,
+			ImageTag:     normalizedImageTag,
 			RegistryID:   itemCopy.RegistryID,
 			ScanProvider: scanner.ProviderForRegistry(registry),
 			Status:       models.ScanStatusPending,

@@ -8,6 +8,7 @@ import (
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
 )
 
@@ -32,7 +33,19 @@ func DispatchScan(_ context.Context, db *bun.DB, scan *models.Scan, envVars []st
 		EnqueueScan(scan.ID, db, envVars, platform)
 		return nil
 	case models.ScanProviderArtifactoryXray:
-		return fmt.Errorf("scan provider %q is not implemented yet", provider)
+		scan.ExternalStatus = "fallback_trivy"
+		if scan.ID != uuid.Nil {
+			if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
+				Set("external_status = ?", scan.ExternalStatus).
+				Where("id = ?", scan.ID).
+				Exec(context.Background()); err != nil {
+				return fmt.Errorf("failed to persist fallback status for scan %s: %w", scan.ID, err)
+			}
+		}
+
+		log.Warnf("DispatchScan: provider %q selected for scan %s, falling back to Trivy until the Xray adapter is implemented", provider, scan.ID)
+		EnqueueScan(scan.ID, db, envVars, platform)
+		return nil
 	default:
 		return fmt.Errorf("unsupported scan provider %q", provider)
 	}

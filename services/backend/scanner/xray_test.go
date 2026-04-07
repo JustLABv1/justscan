@@ -11,9 +11,9 @@ func TestParseXrayVulnerabilitiesReadsCombinedSummaryCVSS(t *testing.T) {
 	summary := &xraySummaryResponse{
 		Artifacts: []xraySummaryArtifact{{
 			Issues: []xraySummaryIssue{{
-				IssueID:   "XRAY-123",
-				Summary:   "Summary issue",
-				Severity:  "High",
+				IssueID:  "XRAY-123",
+				Summary:  "Summary issue",
+				Severity: "High",
 				Components: []xraySummaryComponent{{
 					ComponentID:   "docker://library/nginx:1.25",
 					Name:          "nginx",
@@ -45,9 +45,9 @@ func TestParseXrayVulnerabilitiesReadsExplicitScoreFields(t *testing.T) {
 	summary := &xraySummaryResponse{
 		Artifacts: []xraySummaryArtifact{{
 			Issues: []xraySummaryIssue{{
-				IssueID:   "XRAY-456",
-				Summary:   "Explicit score issue",
-				Severity:  "Medium",
+				IssueID:  "XRAY-456",
+				Summary:  "Explicit score issue",
+				Severity: "Medium",
 				Components: []xraySummaryComponent{{
 					ComponentID: "docker://library/redis:7.2",
 					Name:        "redis",

@@ -36,6 +36,11 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 		}
 		offset := (page - 1) * limit
 
+		scan, _, _, ok := LoadAuthorizedScan(c, db, scanID)
+		if !ok {
+			return
+		}
+
 		// Sorting
 		allowedCols := map[string]string{
 			"vuln_id":           "vuln_id",
@@ -91,10 +96,6 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list vulnerabilities"})
 			return
 		}
-
-		// Get the image digest to join suppressions
-		scan := &models.Scan{}
-		db.NewSelect().Model(scan).Column("image_digest").Where("id = ?", scanID).Scan(c.Request.Context()) //nolint:errcheck
 
 		// Enrich with suppressions (per image digest + vuln_id)
 		if scan.ImageDigest != "" {

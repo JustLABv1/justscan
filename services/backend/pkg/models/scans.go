@@ -66,3 +66,7 @@ const (
 	ScanProviderTrivy           = "trivy"
 	ScanProviderArtifactoryXray = "artifactory_xray"
 )
+
+const (
+	ScanExternalStatusBlockedByXrayPolicy = "blocked_by_xray_policy"
+)

@@ -71,6 +71,12 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.PUT("/notifications/:channelID", func(c *gin.Context) {
 			admins.UpdateNotificationChannel(c, db)
 		})
+		admin.POST("/notifications/:channelID/test", func(c *gin.Context) {
+			admins.TestNotificationChannel(c, db)
+		})
+		admin.GET("/notifications/:channelID/deliveries", func(c *gin.Context) {
+			admins.ListNotificationDeliveries(c, db)
+		})
 		admin.DELETE("/notifications/:channelID", func(c *gin.Context) {
 			admins.DeleteNotificationChannel(c, db)
 		})

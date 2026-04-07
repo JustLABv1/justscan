@@ -7,10 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"justscan-backend/config"
 	"justscan-backend/functions/audit"
 	"justscan-backend/functions/auth"
-	"justscan-backend/pkg/crypto"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -31,6 +29,7 @@ type createScansRequest struct {
 	ChartVersion string             `json:"chart_version"`
 	Images       []scanImageRequest `json:"images" binding:"required,min=1"`
 	Platform     string             `json:"platform"`
+	RegistryID   string             `json:"registry_id"`
 	TagIDs       []string           `json:"tag_ids"`
 }
 
@@ -45,6 +44,12 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
+		normalizedChartURL, normalizedChartName, isOCI := scanner.ResolveHelmChartInput(req.ChartURL, req.ChartName)
+		if !isOCI && !strings.HasPrefix(normalizedChartURL, "https://") && !strings.HasPrefix(normalizedChartURL, "http://") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "chart_url must use http:// or https:// for HTTP repositories, or oci:// for OCI registries"})
+			return
+		}
+
 		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -55,6 +60,10 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 			Name       string
 			Tag        string
 			SourcePath string
+		}
+		type preparedHelmScan struct {
+			Scan    models.Scan
+			EnvVars []string
 		}
 
 		validImages := make([]normalizedScanImage, 0, len(req.Images))
@@ -74,10 +83,49 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
+		var requestedRegistryID *uuid.UUID
+		if req.RegistryID != "" {
+			parsedRegistryID, err := uuid.Parse(req.RegistryID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry_id"})
+				return
+			}
+			requestedRegistryID = &parsedRegistryID
+		}
+
+		preparedScans := make([]preparedHelmScan, 0, len(validImages))
+		for _, img := range validImages {
+			registry, envVars, err := scanner.ResolveRegistryForScan(c.Request.Context(), db, img.Name, requestedRegistryID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(img.Name, img.Tag, registry)
+			scan := models.Scan{
+				ImageName:        normalizedImageName,
+				ImageTag:         normalizedImageTag,
+				Platform:         req.Platform,
+				Status:           models.ScanStatusPending,
+				UserID:           &userID,
+				CreatedAt:        time.Now(),
+				HelmChart:        normalizedChartURL,
+				HelmChartName:    normalizedChartName,
+				HelmChartVersion: req.ChartVersion,
+				HelmSourcePath:   img.SourcePath,
+				ScanProvider:     scanner.ProviderForRegistry(registry),
+			}
+			if registry != nil {
+				scan.RegistryID = &registry.ID
+			}
+
+			preparedScans = append(preparedScans, preparedHelmScan{Scan: scan, EnvVars: envVars})
+		}
+
 		run := &models.HelmScanRun{
 			UserID:       &userID,
-			ChartURL:     req.ChartURL,
-			ChartName:    req.ChartName,
+			ChartURL:     normalizedChartURL,
+			ChartName:    normalizedChartName,
 			ChartVersion: req.ChartVersion,
 			Platform:     req.Platform,
 			CreatedAt:    time.Now(),
@@ -88,23 +136,13 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				return err
 			}
 
-			created = make([]models.Scan, 0, len(validImages))
-			for _, img := range validImages {
-				scan := &models.Scan{
-					ImageName:        img.Name,
-					ImageTag:         img.Tag,
-					Platform:         req.Platform,
-					Status:           models.ScanStatusPending,
-					UserID:           &userID,
-					CreatedAt:        run.CreatedAt,
-					HelmScanRunID:    &run.ID,
-					HelmChart:        req.ChartURL,
-					HelmChartName:    req.ChartName,
-					HelmChartVersion: req.ChartVersion,
-					HelmSourcePath:   img.SourcePath,
-				}
+			created = make([]models.Scan, 0, len(preparedScans))
+			for _, prepared := range preparedScans {
+				scan := prepared.Scan
+				scan.CreatedAt = run.CreatedAt
+				scan.HelmScanRunID = &run.ID
 
-				if _, err := tx.NewInsert().Model(scan).Exec(ctx); err != nil {
+				if _, err := tx.NewInsert().Model(&scan).Exec(ctx); err != nil {
 					return err
 				}
 
@@ -124,68 +162,35 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 					}
 				}
 
-				created = append(created, *scan)
+				preparedScans[len(created)].Scan = scan
+				created = append(created, scan)
 			}
 
 			return nil
 		}); err != nil {
-			log.Errorf("CreateHelmScans DB insert error for run %s: %v", req.ChartURL, err)
+			log.Errorf("CreateHelmScans DB insert error for run %s: %v", normalizedChartURL, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create Helm scan run"})
 			return
 		}
 
-		for _, scan := range created {
-			envVars := resolveImageRegistryEnv(c.Request.Context(), db, scan.ImageName)
-			scanner.EnqueueScan(scan.ID, db, envVars, req.Platform)
+		for i := range created {
+			scan := &created[i]
+			if err := scanner.DispatchScan(c.Request.Context(), db, scan, preparedScans[i].EnvVars, req.Platform); err != nil {
+				log.Warnf("CreateHelmScans dispatch failed for %s: %v", scan.ID, err)
+				if markErr := scanner.MarkScanFailed(c.Request.Context(), db, scan.ID, err.Error()); markErr != nil {
+					log.Errorf("CreateHelmScans failed to persist dispatch error for %s: %v", scan.ID, markErr)
+				} else {
+					completedAt := time.Now()
+					scan.Status = models.ScanStatusFailed
+					scan.ErrorMessage = err.Error()
+					scan.CompletedAt = &completedAt
+				}
+			}
 		}
 
 		go audit.Write(context.Background(), db, userID.String(), "helm.scan",
-			fmt.Sprintf("Helm scan run %s created from %s (%d images)", run.ID, req.ChartURL, len(created)))
+			fmt.Sprintf("Helm scan run %s created from %s (%d images)", run.ID, normalizedChartURL, len(created)))
 
 		c.JSON(http.StatusCreated, gin.H{"run": run, "scans": created})
 	}
-}
-
-// resolveImageRegistryEnv matches an image name against stored registries to find credentials.
-func resolveImageRegistryEnv(ctx context.Context, db *bun.DB, imageName string) []string {
-	var registries []models.Registry
-	if err := db.NewSelect().Model(&registries).Scan(ctx); err != nil {
-		return nil
-	}
-
-	encKey := crypto.KeyFromString(config.Config.Encryption.Key)
-
-	for _, reg := range registries {
-		host := strings.TrimPrefix(reg.URL, "https://")
-		host = strings.TrimPrefix(host, "http://")
-		host = strings.TrimSuffix(host, "/")
-
-		if !strings.HasPrefix(imageName, host+"/") && host != "docker.io" {
-			continue
-		}
-
-		password, err := crypto.Decrypt(encKey, reg.Password)
-		if err != nil {
-			log.Warnf("resolveImageRegistryEnv: decrypt failed for registry %s: %v", reg.Name, err)
-			continue
-		}
-
-		switch reg.AuthType {
-		case models.RegistryAuthBasic:
-			return []string{
-				"TRIVY_USERNAME=" + reg.Username,
-				"TRIVY_PASSWORD=" + password,
-			}
-		case models.RegistryAuthToken:
-			return []string{
-				"TRIVY_REGISTRY_TOKEN=" + password,
-			}
-		case models.RegistryAuthAWSECR:
-			return []string{
-				"AWS_ACCESS_KEY_ID=" + reg.Username,
-				"AWS_SECRET_ACCESS_KEY=" + password,
-			}
-		}
-	}
-	return nil
 }

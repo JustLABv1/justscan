@@ -1,27 +1,98 @@
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+const TOKEN_STORAGE_KEY = 'justscan_token';
+const USER_STORAGE_KEY = 'justscan_user';
+
+function parseTokenPayload(token: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+  } catch {
+    return null;
+  }
+}
+
+function setClientCookie(name: string, value: string, expiresAt?: number) {
+  if (typeof document === 'undefined') return;
+  const segments = [`${name}=${encodeURIComponent(value)}`, 'Path=/', 'SameSite=Lax'];
+  if (expiresAt) {
+    segments.push(`Expires=${new Date(expiresAt * 1000).toUTCString()}`);
+  }
+  document.cookie = segments.join('; ');
+}
+
+function clearClientCookie(name: string) {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
 
 export const getToken = (): string | null =>
-  typeof window !== 'undefined' ? localStorage.getItem('justscan_token') : null;
-export const setToken = (t: string) => localStorage.setItem('justscan_token', t);
-export const clearToken = () => localStorage.removeItem('justscan_token');
+  typeof window !== 'undefined' ? localStorage.getItem(TOKEN_STORAGE_KEY) : null;
+
+export const setToken = (token: string) => {
+  localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  const payload = parseTokenPayload(token);
+  const expiresAt = typeof payload?.exp === 'number' ? payload.exp : undefined;
+  setClientCookie(TOKEN_STORAGE_KEY, token, expiresAt);
+};
+
+export const clearToken = () => {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  clearClientCookie(TOKEN_STORAGE_KEY);
+};
+
 export const getTokenType = (): 'admin' | 'user' | null => {
+  const user = getUser() as { role?: string } | null;
+  if (user?.role === 'admin') return 'admin';
   const token = getToken();
   if (!token) return null;
+  const payload = parseTokenPayload(token);
+  if (!payload) return null;
+  if (payload.role === 'admin') return 'admin';
+  return 'user';
+};
+
+export interface AuthSnapshot {
+  token_present: boolean;
+  role: 'admin' | 'user' | null;
+  expires_at: string | null;
+  expires_in_seconds: number | null;
+}
+
+export const getAuthSnapshot = (): AuthSnapshot => {
+  const token = getToken();
+  const payload = token ? parseTokenPayload(token) : null;
+  const exp = typeof payload?.exp === 'number' ? payload.exp : null;
+  return {
+    token_present: Boolean(token),
+    role: getTokenType(),
+    expires_at: exp ? new Date(exp * 1000).toISOString() : null,
+    expires_in_seconds: exp ? Math.max(0, Math.floor(exp - Date.now() / 1000)) : null,
+  };
+};
+
+export const getUser = () => {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem(USER_STORAGE_KEY);
+  if (!raw) return null;
   try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return payload.type === 'admin' ? 'admin' : 'user';
+    return JSON.parse(raw);
   } catch {
     return null;
   }
 };
-export const getUser = () => {
-  if (typeof window === 'undefined') return null;
-  const raw = localStorage.getItem('justscan_user');
-  return raw ? JSON.parse(raw) : null;
+
+export const setUser = (user: object) => {
+  const serialized = JSON.stringify(user);
+  localStorage.setItem(USER_STORAGE_KEY, serialized);
+  const token = getToken();
+  const payload = token ? parseTokenPayload(token) : null;
+  const expiresAt = typeof payload?.exp === 'number' ? payload.exp : undefined;
+  setClientCookie(USER_STORAGE_KEY, serialized, expiresAt);
 };
-export const setUser = (u: object) =>
-  localStorage.setItem('justscan_user', JSON.stringify(u));
-export const clearUser = () => localStorage.removeItem('justscan_user');
+
+export const clearUser = () => {
+  localStorage.removeItem(USER_STORAGE_KEY);
+  clearClientCookie(USER_STORAGE_KEY);
+};
 
 function authHeaders(): HeadersInit {
   const t = getToken();
@@ -84,9 +155,10 @@ export const listScans = (page = 1, limit = 20, image?: string, status?: string,
   return req<{ data: Scan[]; total: number }>('GET', `/api/v1/scans/?${params}`);
 };
 
-export const listScanImages = (page = 1, limit = 30, image?: string) => {
+export const listScanImages = (page = 1, limit = 30, image?: string, status?: string) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
+  if (status) params.set('status', status);
   return req<{ data: ImageSummary[]; total: number }>('GET', `/api/v1/scans/images?${params}`);
 };
 
@@ -320,7 +392,7 @@ export const getDashboardVulnTrends = (days = 30) =>
 
 // Global search
 export const search = (q: string) =>
-  req<{ images: SearchImageResult[]; vulns: SearchVulnResult[] }>('GET', `/api/v1/search/?q=${encodeURIComponent(q)}`);
+  req<{ images: SearchImageResult[]; vulns: SearchVulnResult[]; scans: SearchScanResult[] }>('GET', `/api/v1/search/?q=${encodeURIComponent(q)}`);
 
 // Org risk score
 export const getOrgRiskScore = (orgId: string) =>
@@ -338,6 +410,16 @@ export const disableAdminUser = (id: string, disabled: boolean, disabled_reason?
 export const createAdminUser = (username: string, email: string, password: string, role: string) =>
   req<{ result: string }>('POST', '/api/v1/admin/users/', { username, email, password, role });
 
+// Admin tokens
+export const listAdminTokens = () =>
+  req<{ tokens: AdminToken[] }>('GET', '/api/v1/admin/tokens').then(r => r.tokens ?? []);
+
+export const updateAdminToken = (id: string, data: Pick<AdminToken, 'description' | 'disabled' | 'disabled_reason'>) =>
+  req<{ result: string }>('PUT', `/api/v1/admin/tokens/${id}`, data);
+
+export const deleteAdminToken = (id: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/admin/tokens/${id}`);
+
 // Suppressions
 export const listSuppressions = (digest: string) =>
   req<Suppression[]>('GET', `/api/v1/images/${digest}/suppressions`);
@@ -351,7 +433,7 @@ export const reScan = (id: string) =>
   req<Scan>('POST', `/api/v1/scans/${id}/rescan`);
 
 export const cancelScan = (id: string) =>
-  req<{ result: string }>('POST', `/api/v1/scans/${id}/cancel`);
+  req<{ result: string; status?: string; external_status?: string; completed_at?: string; error_message?: string }>('POST', `/api/v1/scans/${id}/cancel`);
 
 export const bulkDeleteScans = (ids: string[]) =>
   req<{ deleted: number }>('DELETE', '/api/v1/scans/bulk', { ids });
@@ -360,8 +442,15 @@ export const bulkAddTagToScans = (tagId: string, ids: string[]) =>
   req<{ result: string }>('POST', `/api/v1/scans/bulk/tags/${tagId}`, { ids });
 
 // Admin - audit log
-export const listAuditLogs = (page = 1, limit = 50) =>
-  req<{ data: AuditLog[]; total: number }>('GET', `/api/v1/admin/audit?page=${page}&limit=${limit}`);
+export const listAuditLogs = (page = 1, limit = 50, filters?: AuditLogFilters) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (filters?.operation) params.set('operation', filters.operation);
+  if (filters?.user) params.set('user', filters.user);
+  if (filters?.q) params.set('q', filters.q);
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  return req<{ data: AuditLog[]; total: number }>('GET', `/api/v1/admin/audit?${params}`);
+};
 
 // Admin - notifications
 export const listNotificationChannels = () =>
@@ -375,6 +464,12 @@ export const updateNotificationChannel = (id: string, data: Partial<Notification
 
 export const deleteNotificationChannel = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/admin/notifications/${id}`);
+
+export const testNotificationChannel = (id: string, event?: string) =>
+  req<{ result: string }>('POST', `/api/v1/admin/notifications/${id}/test`, event ? { event } : {});
+
+export const listNotificationDeliveries = (id: string, limit = 10) =>
+  req<{ data: NotificationDelivery[] }>('GET', `/api/v1/admin/notifications/${id}/deliveries?limit=${limit}`).then(r => r.data ?? []);
 
 // Helm chart scanning
 export interface HelmImage {
@@ -443,11 +538,13 @@ export const createHelmScans = (
   tagIds?: string[],
   chartName?: string,
   chartVersion?: string,
+  registryId?: string,
 ) =>
   req<{ run: HelmScanRun; scans: Scan[] }>('POST', '/api/v1/helm/scan', {
     chart_url: chartUrl,
     images,
     platform: platform || undefined,
+    registry_id: registryId || undefined,
     tag_ids: tagIds,
     chart_name: chartName,
     chart_version: chartVersion,
@@ -595,11 +692,12 @@ export const listStatusPageTargetOptions = async () => {
 };
 
 // Admin - all scans
-export const listAdminScans = (page = 1, limit = 50, image?: string, status?: string, helmOnly?: boolean) => {
+export const listAdminScans = (page = 1, limit = 50, image?: string, status?: string, helmOnly?: boolean, owner?: string) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
   if (status) params.set('status', status);
   if (helmOnly) params.set('helm_only', 'true');
+  if (owner) params.set('owner', owner);
   return req<{ data: AdminScan[]; total: number }>('GET', `/api/v1/admin/scans?${params}`);
 };
 
@@ -754,6 +852,8 @@ export interface Scan {
 export interface AdminScan extends Omit<Scan, 'tags'> {
   owner_email: string;
   owner_username: string;
+  share_token?: string;
+  share_visibility?: string;
   helm_chart?: string;
   helm_chart_name?: string;
   helm_chart_version?: string;
@@ -923,6 +1023,15 @@ export interface SearchVulnResult {
   scan_count: number;
 }
 
+export interface SearchScanResult {
+  id: string;
+  image_name: string;
+  image_tag: string;
+  status: string;
+  critical_count: number;
+  high_count: number;
+}
+
 export interface OrgRiskScore {
   score: number;
   grade: string;
@@ -966,6 +1075,26 @@ export interface AdminUser {
   updated_at: string;
 }
 
+export interface AdminToken {
+  id: string;
+  key: string;
+  description: string;
+  type: string;
+  disabled: boolean;
+  disabled_reason: string;
+  created_at: string;
+  expires_at: string;
+  user_id: string;
+}
+
+export interface AuditLogFilters {
+  operation?: string;
+  user?: string;
+  q?: string;
+  from?: string;
+  to?: string;
+}
+
 export interface AuditLog {
   id: string;
   user_id: string;
@@ -973,6 +1102,8 @@ export interface AuditLog {
   details: string;
   created_at: string;
   username?: string;
+  email?: string;
+  role?: string;
 }
 
 export interface NotificationConfig {
@@ -998,6 +1129,18 @@ export interface NotificationChannel {
   updated_at: string;
 }
 
+export interface NotificationDelivery {
+  id: string;
+  channel_id: string;
+  event: string;
+  triggered_by: string;
+  status: string;
+  error: string;
+  details: string;
+  created_at: string;
+  channel_name?: string;
+}
+
 export interface VulnKBEntry {
   vuln_id: string;
   description: string;
@@ -1017,6 +1160,7 @@ export interface ImageSummary {
   latest_scan_id: string;
   latest_tag: string;
   latest_status: string;
+  latest_external_status?: string;
   latest_scan_at: string;
   critical_count: number;
   high_count: number;

@@ -18,9 +18,8 @@ func GetScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		scan := &models.Scan{}
-		if err := db.NewSelect().Model(scan).Where("id = ?", scanID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
+		scan, _, _, ok := LoadAuthorizedScan(c, db, scanID)
+		if !ok {
 			return
 		}
 
@@ -43,6 +42,10 @@ func DeleteScan(db *bun.DB) gin.HandlerFunc {
 		scanID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+			return
+		}
+
+		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
 			return
 		}
 

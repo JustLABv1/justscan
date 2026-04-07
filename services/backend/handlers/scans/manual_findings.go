@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"time"
 
-	"justscan-backend/functions/auth"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +16,10 @@ func ListManualFindings(db *bun.DB) gin.HandlerFunc {
 		scanID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+			return
+		}
+
+		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
 			return
 		}
 
@@ -55,9 +58,8 @@ func CreateManualFinding(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		_, userID, _, ok := LoadAuthorizedScan(c, db, scanID)
+		if !ok {
 			return
 		}
 
@@ -93,6 +95,16 @@ func CreateManualFinding(db *bun.DB) gin.HandlerFunc {
 
 func UpdateManualFinding(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		scanID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+			return
+		}
+
+		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
+			return
+		}
+
 		findingID, err := uuid.Parse(c.Param("fid"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid finding ID"})
@@ -117,6 +129,7 @@ func UpdateManualFinding(db *bun.DB) gin.HandlerFunc {
 			Set("justification = ?", req.Justification).
 			Set("updated_at = ?", time.Now()).
 			Where("id = ?", findingID).
+			Where("scan_id = ?", scanID).
 			Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update finding"})
 			return
@@ -127,6 +140,16 @@ func UpdateManualFinding(db *bun.DB) gin.HandlerFunc {
 
 func DeleteManualFinding(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		scanID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+			return
+		}
+
+		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
+			return
+		}
+
 		findingID, err := uuid.Parse(c.Param("fid"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid finding ID"})
@@ -135,6 +158,7 @@ func DeleteManualFinding(db *bun.DB) gin.HandlerFunc {
 
 		if _, err := db.NewDelete().Model((*models.ManualFinding)(nil)).
 			Where("id = ?", findingID).
+			Where("scan_id = ?", scanID).
 			Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete finding"})
 			return

@@ -1,42 +1,103 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import {
-  AdminScan,
-  AdminUser,
-  AuditLog,
-  AutoTagRule,
-  createAdminUser,
-  createAutoTagRule,
-  createNotificationChannel,
-  deleteAdminUser,
-  deleteAutoTagRule,
-  deleteNotificationChannel,
-  disableAdminUser,
-  getAdminSettings,
-  getScannerHealth,
-  listAdminScans,
-  listAdminUsers,
-  listAuditLogs,
-  listAutoTagRules,
-  listNotificationChannels,
-  listTags,
-  NotificationChannel,
-  ScannerHealth,
-  setPublicScanEnabled,
-  Tag,
-  updateAdminUser,
-  updateAutoTagRule,
-  updateNotificationChannel,
-  updateRateLimit,
-  updateRegisterRateLimit,
+    addTagToScan,
+    AdminScan,
+    AdminToken,
+    AdminUser,
+    AuditLog,
+    AuditLogFilters,
+    AutoTagRule,
+    cancelScan,
+    createAdminUser,
+    createAutoTagRule,
+    createNotificationChannel,
+    createShare,
+    deleteAdminToken,
+    deleteAdminUser,
+    deleteAutoTagRule,
+    deleteNotificationChannel,
+    deleteShare,
+    disableAdminUser,
+    getAdminSettings,
+    getScannerHealth,
+    listAdminScans,
+    listAdminTokens,
+    listAdminUsers,
+    listAuditLogs,
+    listAutoTagRules,
+    listNotificationChannels,
+    listNotificationDeliveries,
+    listTags,
+    NotificationChannel,
+    NotificationDelivery,
+    reScan,
+    ScannerHealth,
+    setPublicScanEnabled,
+    Tag,
+    testNotificationChannel,
+    updateAdminToken,
+    updateAdminUser,
+    updateAutoTagRule,
+    updateNotificationChannel,
+    updateRateLimit,
+    updateRegisterRateLimit,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { ArrowDown01Icon, ArrowRight01Icon, Delete01Icon, Notification01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+
+type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans';
+
+const ADMIN_TABS: { value: AdminTab; label: string; href: string }[] = [
+  { value: 'overview', label: 'Overview', href: '/admin' },
+  { value: 'settings', label: 'Settings', href: '/admin/settings' },
+  { value: 'scanner', label: 'Scanner', href: '/admin/scanner' },
+  { value: 'users', label: 'Users', href: '/admin/users' },
+  { value: 'tokens', label: 'Tokens', href: '/admin/tokens' },
+  { value: 'autotags', label: 'Auto Tags', href: '/admin/autotags' },
+  { value: 'audit', label: 'Audit Log', href: '/admin/audit' },
+  { value: 'notifications', label: 'Notifications', href: '/admin/notifications' },
+  { value: 'scans', label: 'Scans', href: '/admin/scans' },
+];
+
+function resolveAdminTab(pathname: string): AdminTab {
+  const match = ADMIN_TABS.find((tab) => tab.href === '/admin' ? pathname === '/admin' : pathname.startsWith(tab.href));
+  return match?.value ?? 'overview';
+}
+
+function toIsoOrUndefined(value: string): string | undefined {
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+}
+
+function escapeCsv(value: unknown) {
+  const text = String(value ?? '');
+  if (!/[",\n]/.test(text)) return text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+async function copyToClipboard(text: string) {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+}
 
 function formatDbAge(hours?: number | null): string {
   if (hours == null || Number.isNaN(hours)) return 'Unknown';
@@ -379,6 +440,148 @@ function ScannerTab() {
   );
 }
 
+function OverviewTab() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [summary, setSummary] = useState<{
+    publicScanEnabled: boolean;
+    userCount: number;
+    tokenCount: number;
+    activeChannels: number;
+    runningScans: number;
+    pendingScans: number;
+    staleWorkers: number;
+    recentAudit: AuditLog[];
+  } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [settings, users, tokens, channels, running, pending, scannerHealth, recentAudit] = await Promise.all([
+        getAdminSettings(),
+        listAdminUsers(),
+        listAdminTokens(),
+        listNotificationChannels(),
+        listAdminScans(1, 1, undefined, 'running'),
+        listAdminScans(1, 1, undefined, 'pending'),
+        getScannerHealth().catch(() => null),
+        listAuditLogs(1, 5),
+      ]);
+
+      setSummary({
+        publicScanEnabled: settings.public_scan_enabled !== 'false',
+        userCount: users.length,
+        tokenCount: tokens.length,
+        activeChannels: channels.filter((channel) => channel.enabled).length,
+        runningScans: running.total ?? 0,
+        pendingScans: pending.total ?? 0,
+        staleWorkers: scannerHealth?.stale_workers ?? 0,
+        recentAudit: recentAudit.data ?? [],
+      });
+    } catch (loadError: unknown) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load admin overview');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {error && (
+        <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          {error}
+        </div>
+      )}
+
+      {summary && (
+        <>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: 'Public Scanning', value: summary.publicScanEnabled ? 'Enabled' : 'Disabled', href: '/admin/settings' },
+              { label: 'Users', value: String(summary.userCount), href: '/admin/users' },
+              { label: 'Tokens', value: String(summary.tokenCount), href: '/admin/tokens' },
+              { label: 'Active Channels', value: String(summary.activeChannels), href: '/admin/notifications' },
+              { label: 'Running Scans', value: String(summary.runningScans), href: '/admin/scans' },
+              { label: 'Pending Scans', value: String(summary.pendingScans), href: '/admin/scans' },
+              { label: 'Stale Workers', value: String(summary.staleWorkers), href: '/admin/scanner' },
+              { label: 'Audit Events', value: String(summary.recentAudit.length), href: '/admin/audit' },
+            ].map((card) => (
+              <Link key={card.label} href={card.href} className="glass-panel rounded-2xl p-4 transition-colors hover:bg-violet-500/5">
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">{card.label}</p>
+                <p className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{card.value}</p>
+              </Link>
+            ))}
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+            <div className="glass-panel rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Recent Audit Activity</h2>
+                  <p className="text-sm text-zinc-500 mt-0.5">Latest high-level admin and system activity.</p>
+                </div>
+                <Link href="/admin/audit" className="text-sm text-violet-500 hover:underline">View all</Link>
+              </div>
+
+              {summary.recentAudit.length === 0 ? (
+                <p className="text-sm text-zinc-500">No audit activity yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {summary.recentAudit.map((entry) => (
+                    <div key={entry.id} className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{entry.operation}</p>
+                          <p className="text-xs text-zinc-500 mt-1">{entry.username ?? entry.user_id}</p>
+                        </div>
+                        <span className="text-xs text-zinc-400 whitespace-nowrap">{timeAgo(entry.created_at)}</span>
+                      </div>
+                      <p className="text-sm text-zinc-500 mt-2 line-clamp-2">{entry.details || 'No details recorded.'}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="glass-panel rounded-2xl p-5 space-y-4">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Recommended Actions</h2>
+                <p className="text-sm text-zinc-500 mt-0.5">The most likely places an admin needs to act next.</p>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { href: '/admin/settings', label: 'Review public scanning and rate limits' },
+                  { href: '/admin/scanner', label: 'Inspect worker health and stale DBs' },
+                  { href: '/admin/notifications', label: 'Test delivery channels and review history' },
+                  { href: '/admin/scans', label: 'Manage cross-user scans and sharing' },
+                ].map((link) => (
+                  <Link key={link.href} href={link.href} className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <span className="text-zinc-700 dark:text-zinc-200">{link.label}</span>
+                    <span className="text-violet-500">Open</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Users Tab ─────────────────────────────────────────────────────────
 function UsersTab() {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -631,6 +834,223 @@ function UsersTab() {
     </div>
   );
 }
+
+function TokensTab() {
+  const [tokens, setTokens] = useState<AdminToken[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [editingToken, setEditingToken] = useState<AdminToken | null>(null);
+  const [description, setDescription] = useState('');
+  const [disabledReason, setDisabledReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const modal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setTokens(await listAdminTokens());
+    } catch (loadError: unknown) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load tokens');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function openEdit(token: AdminToken) {
+    setEditingToken(token);
+    setDescription(token.description ?? '');
+    setDisabledReason(token.disabled_reason ?? '');
+    modal.open();
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingToken) return;
+    setSaving(true);
+    try {
+      await updateAdminToken(editingToken.id, {
+        description,
+        disabled: editingToken.disabled,
+        disabled_reason: disabledReason,
+      });
+      modal.close();
+      await load();
+    } catch (saveError: unknown) {
+      setError(saveError instanceof Error ? saveError.message : 'Failed to update token');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggle(token: AdminToken) {
+    const nextDisabled = !token.disabled;
+    const confirmed = await confirm(nextDisabled
+      ? {
+          title: `Disable token "${token.description || token.id.slice(0, 8)}"?`,
+          message: 'The token will stop working immediately.',
+          confirmLabel: 'Disable',
+          variant: 'warning',
+        }
+      : {
+          title: `Re-enable token "${token.description || token.id.slice(0, 8)}"?`,
+          message: 'The token will become valid again immediately.',
+          confirmLabel: 'Enable',
+          variant: 'default',
+        });
+    if (!confirmed) return;
+
+    try {
+      await updateAdminToken(token.id, {
+        description: token.description,
+        disabled: nextDisabled,
+        disabled_reason: nextDisabled ? (token.disabled_reason || 'Disabled by admin') : '',
+      });
+      await load();
+    } catch (toggleError: unknown) {
+      setError(toggleError instanceof Error ? toggleError.message : 'Failed to update token');
+    }
+  }
+
+  async function handleDelete(token: AdminToken) {
+    const confirmed = await confirm({
+      title: `Delete token "${token.description || token.id.slice(0, 8)}"?`,
+      message: 'This cannot be undone. Any service using the token will stop authenticating.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      await deleteAdminToken(token.id);
+      await load();
+    } catch (deleteError: unknown) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete token');
+    }
+  }
+
+  if (loading) return (
+    <div className="flex justify-center py-16">
+      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          {error}
+        </div>
+      )}
+
+      <div className="glass-panel rounded-2xl p-5">
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Service Tokens</h2>
+        <p className="text-sm text-zinc-500 mt-1">Review token usage, rotate descriptions, disable compromised keys, and delete obsolete credentials.</p>
+      </div>
+
+      {tokens.length === 0 ? (
+        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+          <p className="text-sm text-zinc-500">No tokens found.</p>
+        </div>
+      ) : (
+        <div className="glass-panel rounded-2xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Description</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Type</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Key</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Expires</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {tokens.map((token, index) => (
+                <tr key={token.id}
+                  style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
+                  onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
+                  onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}>
+                  <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">{token.description || <span className="italic text-zinc-400">No description</span>}</td>
+                  <td className="px-4 py-3 text-xs uppercase tracking-[0.14em] text-zinc-500">{token.type}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-500">{token.key.slice(0, 6)}••••••••{token.key.slice(-4)}</td>
+                  <td className="px-4 py-3 text-xs text-zinc-500" title={fullDate(token.expires_at)}>{timeAgo(token.expires_at)}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full"
+                      style={token.disabled
+                        ? { color: '#f87171', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }
+                        : { color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                      {token.disabled ? 'Disabled' : 'Active'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => handleToggle(token)} className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
+                        style={token.disabled
+                          ? { color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }
+                          : { color: '#fb923c', background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)' }}>
+                        {token.disabled ? 'Enable' : 'Disable'}
+                      </button>
+                      <button onClick={() => openEdit(token)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit">
+                        <PencilEdit01Icon size={15} />
+                      </button>
+                      <button onClick={() => handleDelete(token)} className="text-zinc-400 hover:text-red-400 transition-colors p-1.5" title="Delete">
+                        <Delete01Icon size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Modal state={modal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Edit Token</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5">
+                <form id="token-form" onSubmit={handleSave} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Description</label>
+                    <input className={inputCls} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="CI token" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Disabled Reason</label>
+                    <textarea className={inputCls} value={disabledReason} onChange={(event) => setDisabledReason(event.target.value)} placeholder="Why this token was disabled" rows={3} />
+                  </div>
+                </form>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 transition-colors"
+                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  Cancel
+                </button>
+                <button type="submit" form="token-form" disabled={saving}
+                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  Save
+                </button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+      {confirmDialog}
+    </div>
+  );
+}
 function AutoTagsTab() {
   const [rules, setRules] = useState<AutoTagRule[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -843,22 +1263,80 @@ function AuditLogTab() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
+  const [filters, setFilters] = useState({ q: '', user: '', operation: '', from: '', to: '' });
   const limit = 50;
 
-  const load = useCallback(async (p: number) => {
+  const requestFilters: AuditLogFilters = {
+    q: filters.q || undefined,
+    user: filters.user || undefined,
+    operation: filters.operation || undefined,
+    from: toIsoOrUndefined(filters.from),
+    to: toIsoOrUndefined(filters.to),
+  };
+
+  const load = useCallback(async (p: number, activeFilters: AuditLogFilters) => {
     setLoading(true);
     try {
-      const r = await listAuditLogs(p, limit);
+      const r = await listAuditLogs(p, limit, activeFilters);
       setLogs(r.data ?? []);
       setTotal(r.total);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load audit logs'); }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(page); }, [load, page]);
+  useEffect(() => { load(page, requestFilters); }, [filters.from, filters.operation, filters.q, filters.to, filters.user, load, page]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  function updateFilter<K extends keyof typeof filters>(key: K, value: string) {
+    setFilters((previous) => ({ ...previous, [key]: value }));
+    setPage(1);
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    setError('');
+    try {
+      const rows: AuditLog[] = [];
+      let exportPage = 1;
+      let exportTotal = 0;
+
+      do {
+        const result = await listAuditLogs(exportPage, 200, requestFilters);
+        rows.push(...(result.data ?? []));
+        exportTotal = result.total ?? 0;
+        exportPage += 1;
+      } while (rows.length < exportTotal);
+
+      const csv = [
+        ['created_at', 'username', 'email', 'role', 'operation', 'details'].join(','),
+        ...rows.map((entry) => [
+          escapeCsv(entry.created_at),
+          escapeCsv(entry.username ?? entry.user_id),
+          escapeCsv(entry.email ?? ''),
+          escapeCsv(entry.role ?? ''),
+          escapeCsv(entry.operation),
+          escapeCsv(entry.details),
+        ].join(',')),
+      ].join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `justscan-audit-${new Date().toISOString().slice(0, 19)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (exportError: unknown) {
+      setError(exportError instanceof Error ? exportError.message : 'Failed to export audit logs');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (loading) return (
     <div className="flex justify-center py-16">
@@ -874,8 +1352,29 @@ function AuditLogTab() {
         </div>
       )}
 
+      <div className="glass-panel rounded-2xl p-4 space-y-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <input className={inputCls} placeholder="Search details or operation" value={filters.q} onChange={(event) => updateFilter('q', event.target.value)} />
+          <input className={inputCls} placeholder="User or email" value={filters.user} onChange={(event) => updateFilter('user', event.target.value)} />
+          <input className={inputCls} placeholder="Operation" value={filters.operation} onChange={(event) => updateFilter('operation', event.target.value)} />
+          <input type="datetime-local" className={inputCls} value={filters.from} onChange={(event) => updateFilter('from', event.target.value)} />
+          <input type="datetime-local" className={inputCls} value={filters.to} onChange={(event) => updateFilter('to', event.target.value)} />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-zinc-500">{total} total events</p>
+          <button
+            onClick={handleExport}
+            disabled={exporting || total === 0}
+            className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 flex items-center gap-2 transition-all hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}
+          >
+            {exporting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            Export CSV
+          </button>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-500">{total} total events</p>
         <div className="flex items-center gap-2 text-sm">
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
             className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
@@ -902,6 +1401,7 @@ function AuditLogTab() {
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Time</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">User</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Operation</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Details</th>
               </tr>
@@ -918,6 +1418,7 @@ function AuditLogTab() {
                   <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-300 font-medium">
                     {l.username ?? l.user_id.slice(0, 8)}
                   </td>
+                  <td className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-[0.14em]">{l.role ?? 'n/a'}</td>
                   <td className="px-4 py-3">
                     <span className="text-xs font-mono font-medium px-2 py-0.5 rounded-md"
                       style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
@@ -946,6 +1447,10 @@ function NotificationsTab() {
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [deliveryHistory, setDeliveryHistory] = useState<Record<string, NotificationDelivery[]>>({});
+  const [historyChannelId, setHistoryChannelId] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [editing, setEditing] = useState<NotificationChannel | null>(null);
   const [isCreate, setIsCreate] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1045,6 +1550,37 @@ function NotificationsTab() {
     await updateNotificationChannel(ch.id, { enabled: !ch.enabled }).catch(() => {}); load();
   }
 
+  async function handleTest(ch: NotificationChannel) {
+    setFeedback(null);
+    try {
+      await testNotificationChannel(ch.id, ch.events[0]);
+      setFeedback({ type: 'success', text: `Sent test notification through ${ch.name}.` });
+      const history = await listNotificationDeliveries(ch.id, 8);
+      setDeliveryHistory((previous) => ({ ...previous, [ch.id]: history }));
+      setHistoryChannelId(ch.id);
+    } catch (testError: unknown) {
+      setFeedback({ type: 'error', text: testError instanceof Error ? testError.message : 'Failed to send test notification' });
+    }
+  }
+
+  async function toggleHistory(ch: NotificationChannel) {
+    if (historyChannelId === ch.id) {
+      setHistoryChannelId(null);
+      return;
+    }
+
+    setHistoryLoading(true);
+    try {
+      const history = await listNotificationDeliveries(ch.id, 8);
+      setDeliveryHistory((previous) => ({ ...previous, [ch.id]: history }));
+      setHistoryChannelId(ch.id);
+    } catch (historyError: unknown) {
+      setFeedback({ type: 'error', text: historyError instanceof Error ? historyError.message : 'Failed to load delivery history' });
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
   function toggleEvent(ev: string) {
     setFormEvents(prev => prev.includes(ev) ? prev.filter(e => e !== ev) : [...prev, ev]);
   }
@@ -1060,6 +1596,13 @@ function NotificationsTab() {
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
           {error}
+        </div>
+      )}
+      {feedback && (
+        <div className="rounded-xl px-4 py-3 text-sm" style={feedback.type === 'success'
+          ? { background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.18)', color: '#34d399' }
+          : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          {feedback.text}
         </div>
       )}
 
@@ -1093,52 +1636,107 @@ function NotificationsTab() {
             </thead>
             <tbody>
               {channels.map((ch, i) => (
-                <tr key={ch.id}
-                  style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                  <td className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-200">{ch.name}</td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-md capitalize"
-                      style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)' }}>
-                      {ch.type}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {(ch.events ?? []).map(ev => (
-                        <span key={ev} className="text-xs px-1.5 py-0.5 rounded font-mono"
-                          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
-                          {ev}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {ch.enabled ? (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>Active</span>
-                    ) : (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ color: '#a1a1aa', background: 'rgba(161,161,170,0.1)', border: '1px solid rgba(161,161,170,0.2)' }}>Disabled</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => handleToggleEnabled(ch)}
-                        className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
-                        style={ch.enabled
-                          ? { color: '#fb923c', background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)' }
-                          : { color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
-                        {ch.enabled ? 'Disable' : 'Enable'}
-                      </button>
-                      <button onClick={() => openEdit(ch)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5">
-                        <PencilEdit01Icon size={15} />
-                      </button>
-                      <button onClick={() => handleDelete(ch)} className="text-zinc-400 hover:text-red-400 transition-colors p-1.5">
-                        <Delete01Icon size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                <>
+                  <tr key={ch.id}
+                    style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    <td className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-200">{ch.name}</td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-md capitalize"
+                        style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)' }}>
+                        {ch.type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {(ch.events ?? []).map(ev => (
+                          <span key={ev} className="text-xs px-1.5 py-0.5 rounded font-mono"
+                            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
+                            {ev}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {ch.enabled ? (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>Active</span>
+                      ) : (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ color: '#a1a1aa', background: 'rgba(161,161,170,0.1)', border: '1px solid rgba(161,161,170,0.2)' }}>Disabled</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1 flex-wrap">
+                        <button onClick={() => handleTest(ch)}
+                          className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
+                          style={{ color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                          Test
+                        </button>
+                        <button onClick={() => toggleHistory(ch)}
+                          className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
+                          style={{ color: '#a78bfa', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' }}>
+                          {historyChannelId === ch.id ? 'Hide History' : 'History'}
+                        </button>
+                        <button onClick={() => handleToggleEnabled(ch)}
+                          className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
+                          style={ch.enabled
+                            ? { color: '#fb923c', background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)' }
+                            : { color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                          {ch.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                        <button onClick={() => openEdit(ch)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5">
+                          <PencilEdit01Icon size={15} />
+                        </button>
+                        <button onClick={() => handleDelete(ch)} className="text-zinc-400 hover:text-red-400 transition-colors p-1.5">
+                          <Delete01Icon size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {historyChannelId === ch.id && (
+                    <tr key={`${ch.id}-history`}>
+                      <td colSpan={5} className="px-4 pb-4 pt-0">
+                        <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Recent Delivery Attempts</p>
+                            {historyLoading && <span className="text-xs text-zinc-500">Loading…</span>}
+                          </div>
+
+                          {historyLoading ? (
+                            <div className="flex justify-center py-4">
+                              <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                            </div>
+                          ) : (deliveryHistory[ch.id] ?? []).length === 0 ? (
+                            <p className="text-sm text-zinc-500">No deliveries recorded yet.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {(deliveryHistory[ch.id] ?? []).map((delivery) => (
+                                <div key={delivery.id} className="rounded-lg px-3 py-2.5" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>{delivery.event}</span>
+                                      <span className="text-xs font-medium px-2 py-0.5 rounded-full"
+                                        style={delivery.status === 'delivered'
+                                          ? { color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }
+                                          : { color: '#f87171', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                        {delivery.status}
+                                      </span>
+                                      <span className="text-xs text-zinc-500 uppercase tracking-[0.14em]">{delivery.triggered_by}</span>
+                                    </div>
+                                    <span className="text-xs text-zinc-400">{timeAgo(delivery.created_at)}</span>
+                                  </div>
+                                  {(delivery.error || delivery.details) && (
+                                    <p className="text-sm text-zinc-500 mt-2">{delivery.error || delivery.details}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
             </tbody>
           </table>
@@ -1289,27 +1887,39 @@ function ScansTab() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [imageFilter, setImageFilter] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [selectedTagId, setSelectedTagId] = useState('');
+  const [tagScan, setTagScan] = useState<AdminScan | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const tagModal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const limit = 50;
 
-  const load = useCallback(async (p: number, img: string, st: string) => {
+  const load = useCallback(async (p: number, img: string, st: string, owner: string) => {
     setLoading(true);
     setError('');
     try {
-      const r = await listAdminScans(p, limit, img || undefined, st || undefined);
+      const r = await listAdminScans(p, limit, img || undefined, st || undefined, undefined, owner || undefined);
       setScans(r.data ?? []);
       setTotal(r.total);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load scans'); }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(page, imageFilter, statusFilter); }, [load, page, imageFilter, statusFilter]);
+  useEffect(() => { load(page, imageFilter, statusFilter, ownerFilter); }, [imageFilter, load, ownerFilter, page, statusFilter]);
+  useEffect(() => {
+    listTags().then(setAvailableTags).catch(() => setAvailableTags([]));
+  }, []);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   function handleImageChange(v: string) { setImageFilter(v); setPage(1); }
+  function handleOwnerChange(v: string) { setOwnerFilter(v); setPage(1); }
   function handleStatusChange(v: string) { setStatusFilter(v); setPage(1); }
 
   function toggleExpand(imageName: string) {
@@ -1331,11 +1941,129 @@ function ScansTab() {
     seen.get(s.image_name)!.push(s);
   }
 
+  function openTagModal(scan: AdminScan) {
+    setTagScan(scan);
+    setSelectedTagId(availableTags[0]?.id ?? '');
+    tagModal.open();
+  }
+
+  async function refreshCurrentPage() {
+    await load(page, imageFilter, statusFilter, ownerFilter);
+  }
+
+  async function handleRescan(scan: AdminScan) {
+    setActionLoadingId(`${scan.id}:rescan`);
+    setFeedback(null);
+    try {
+      await reScan(scan.id);
+      setFeedback({ type: 'success', text: `Queued a rescan for ${scan.image_name}:${scan.image_tag}.` });
+      await refreshCurrentPage();
+    } catch (actionError: unknown) {
+      setFeedback({ type: 'error', text: actionError instanceof Error ? actionError.message : 'Failed to queue rescan' });
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleCancel(scan: AdminScan) {
+    const ok = await confirm({
+      title: `Cancel ${scan.image_name}:${scan.image_tag}?`,
+      message: 'The running or pending scan will be marked as cancelled.',
+      confirmLabel: 'Cancel Scan',
+      variant: 'warning',
+    });
+    if (!ok) return;
+
+    setActionLoadingId(`${scan.id}:cancel`);
+    setFeedback(null);
+    try {
+      await cancelScan(scan.id);
+      setFeedback({ type: 'success', text: `Cancelled ${scan.image_name}:${scan.image_tag}.` });
+      await refreshCurrentPage();
+    } catch (actionError: unknown) {
+      setFeedback({ type: 'error', text: actionError instanceof Error ? actionError.message : 'Failed to cancel scan' });
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleCreateShare(scan: AdminScan) {
+    setActionLoadingId(`${scan.id}:share`);
+    setFeedback(null);
+    try {
+      const result = await createShare(scan.id, 'public');
+      await copyToClipboard(`${window.location.origin}/shared/${result.share_token}`);
+      setFeedback({ type: 'success', text: `Public share link copied for ${scan.image_name}:${scan.image_tag}.` });
+      await refreshCurrentPage();
+    } catch (actionError: unknown) {
+      setFeedback({ type: 'error', text: actionError instanceof Error ? actionError.message : 'Failed to create share link' });
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleCopyShare(scan: AdminScan) {
+    if (!scan.share_token) return;
+    try {
+      await copyToClipboard(`${window.location.origin}/shared/${scan.share_token}`);
+      setFeedback({ type: 'success', text: `Copied share link for ${scan.image_name}:${scan.image_tag}.` });
+    } catch (copyError: unknown) {
+      setFeedback({ type: 'error', text: copyError instanceof Error ? copyError.message : 'Failed to copy share link' });
+    }
+  }
+
+  async function handleRevokeShare(scan: AdminScan) {
+    const ok = await confirm({
+      title: `Revoke share for ${scan.image_name}:${scan.image_tag}?`,
+      message: 'The existing shared link will stop working immediately.',
+      confirmLabel: 'Revoke Share',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    setActionLoadingId(`${scan.id}:revoke`);
+    setFeedback(null);
+    try {
+      await deleteShare(scan.id);
+      setFeedback({ type: 'success', text: `Revoked share access for ${scan.image_name}:${scan.image_tag}.` });
+      await refreshCurrentPage();
+    } catch (actionError: unknown) {
+      setFeedback({ type: 'error', text: actionError instanceof Error ? actionError.message : 'Failed to revoke share link' });
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleAddTag(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tagScan || !selectedTagId) return;
+
+    setActionLoadingId(`${tagScan.id}:tag`);
+    setFeedback(null);
+    try {
+      await addTagToScan(tagScan.id, selectedTagId);
+      tagModal.close();
+      setFeedback({ type: 'success', text: `Added a tag to ${tagScan.image_name}:${tagScan.image_tag}.` });
+      await refreshCurrentPage();
+    } catch (actionError: unknown) {
+      setFeedback({ type: 'error', text: actionError instanceof Error ? actionError.message : 'Failed to add tag' });
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
           {error}
+        </div>
+      )}
+      {feedback && (
+        <div className="rounded-xl px-4 py-3 text-sm" style={feedback.type === 'success'
+          ? { background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.18)', color: '#34d399' }
+          : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          {feedback.text}
         </div>
       )}
 
@@ -1345,6 +2073,12 @@ function ScansTab() {
           placeholder="Filter by image…"
           value={imageFilter}
           onChange={e => handleImageChange(e.target.value)}
+          className={`${inputCls} max-w-xs`}
+        />
+        <input
+          placeholder="Filter by owner…"
+          value={ownerFilter}
+          onChange={e => handleOwnerChange(e.target.value)}
           className={`${inputCls} max-w-xs`}
         />
         <select
@@ -1393,6 +2127,7 @@ function ScansTab() {
                 <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }}>M</th>
                 <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }}>L</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Owner</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Share</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Date</th>
               </tr>
             </thead>
@@ -1452,13 +2187,14 @@ function ScansTab() {
                       <td className="px-4 py-3.5 text-sm text-zinc-500 max-w-[160px] truncate" title={latest.owner_email || '—'}>
                         {latest.owner_email ? latest.owner_email : <span className="italic text-zinc-400">anonymous</span>}
                       </td>
+                      <td className="px-4 py-3.5 text-xs text-zinc-500">{latest.share_token ? latest.share_visibility || 'shared' : 'private'}</td>
                       <td className="px-4 py-3.5 text-xs text-zinc-400 whitespace-nowrap">{timeAgo(latest.created_at)}</td>
                     </tr>
 
                     {/* Expanded child rows */}
                     {isOpen && (
                       <tr key={`${group.imageName}-children`}>
-                        <td colSpan={9} className="p-0">
+                        <td colSpan={10} className="p-0">
                           <div
                             className="mx-4 mb-3 rounded-xl overflow-hidden"
                             style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)' }}
@@ -1473,7 +2209,9 @@ function ScansTab() {
                                   <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }}>M</th>
                                   <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }}>L</th>
                                   <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Owner</th>
+                                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Share</th>
                                   <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Date</th>
+                                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -1515,8 +2253,54 @@ function ScansTab() {
                                       <td className="px-4 py-2.5 text-xs text-zinc-500 max-w-[160px] truncate" title={s.owner_email || '—'}>
                                         {s.owner_email ? s.owner_email : <span className="italic text-zinc-400">anonymous</span>}
                                       </td>
+                                      <td className="px-4 py-2.5 text-xs text-zinc-500">{s.share_token ? s.share_visibility || 'shared' : 'private'}</td>
                                       <td className="px-4 py-2.5 text-xs text-zinc-400 whitespace-nowrap" title={fullDate(s.created_at)}>
                                         {timeAgo(s.created_at)}
+                                      </td>
+                                      <td className="px-4 py-2.5">
+                                        <div className="flex items-center gap-1 flex-wrap" onClick={(event) => event.stopPropagation()}>
+                                          <button onClick={(event) => { event.preventDefault(); void handleRescan(s); }}
+                                            disabled={actionLoadingId === `${s.id}:rescan`}
+                                            className="text-xs px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
+                                            style={{ color: '#a78bfa', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' }}>
+                                            Rescan
+                                          </button>
+                                          {(s.status === 'pending' || s.status === 'running') && (
+                                            <button onClick={(event) => { event.preventDefault(); void handleCancel(s); }}
+                                              disabled={actionLoadingId === `${s.id}:cancel`}
+                                              className="text-xs px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
+                                              style={{ color: '#fbbf24', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                                              Cancel
+                                            </button>
+                                          )}
+                                          {!s.share_token ? (
+                                            <button onClick={(event) => { event.preventDefault(); void handleCreateShare(s); }}
+                                              disabled={actionLoadingId === `${s.id}:share`}
+                                              className="text-xs px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
+                                              style={{ color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                              Share
+                                            </button>
+                                          ) : (
+                                            <>
+                                              <button onClick={(event) => { event.preventDefault(); void handleCopyShare(s); }}
+                                                className="text-xs px-2 py-1 rounded-lg font-medium transition-all"
+                                                style={{ color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                                Copy Link
+                                              </button>
+                                              <button onClick={(event) => { event.preventDefault(); void handleRevokeShare(s); }}
+                                                disabled={actionLoadingId === `${s.id}:revoke`}
+                                                className="text-xs px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
+                                                style={{ color: '#f87171', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                                Revoke
+                                              </button>
+                                            </>
+                                          )}
+                                          <button onClick={(event) => { event.preventDefault(); openTagModal(s); }}
+                                            className="text-xs px-2 py-1 rounded-lg font-medium transition-all"
+                                            style={{ color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                                            Add Tag
+                                          </button>
+                                        </div>
                                       </td>
                                     </tr>
                                   );
@@ -1534,47 +2318,88 @@ function ScansTab() {
           </table>
         </div>
       )}
+
+      <Modal state={tagModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Add Tag</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5">
+                <form id="tag-form" onSubmit={handleAddTag} className="space-y-4">
+                  <div>
+                    <p className="text-sm text-zinc-500">Assign a tag to {tagScan ? `${tagScan.image_name}:${tagScan.image_tag}` : 'this scan'}.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Tag</label>
+                    <Select selectedKey={selectedTagId} onSelectionChange={(key) => setSelectedTagId(String(key))}>
+                      <Select.Trigger className={inputCls}>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {availableTags.map((tag) => (
+                            <ListBox.Item key={tag.id} id={tag.id}>{tag.name}</ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </div>
+                </form>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={tagModal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 transition-colors"
+                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  Cancel
+                </button>
+                <button type="submit" form="tag-form" disabled={!selectedTagId || actionLoadingId === `${tagScan?.id}:tag`}
+                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 flex items-center gap-2 transition-all hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  {actionLoadingId === `${tagScan?.id}:tag` && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  Add Tag
+                </button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+      {confirmDialog}
     </div>
   );
 }
 
 // ── Page ───────────────────────────────────────────────────── ──────────────────────────────────────────────────────────────
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'settings' | 'scanner' | 'users' | 'autotags' | 'audit' | 'notifications' | 'scans'>('settings');
-
-  const tabs: { value: typeof activeTab; label: string }[] = [
-    { value: 'settings', label: 'Settings' },
-    { value: 'scanner', label: 'Scanner' },
-    { value: 'users', label: 'Users' },
-    { value: 'autotags', label: 'Auto Tags' },
-    { value: 'audit', label: 'Audit Log' },
-    { value: 'notifications', label: 'Notifications' },
-    { value: 'scans', label: 'Scans' },
-  ];
+  const pathname = usePathname();
+  const activeTab = resolveAdminTab(pathname);
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-xl font-bold text-zinc-900 dark:text-white">Admin</h1>
-        <p className="text-sm text-zinc-500 mt-1">Manage system configuration, users, and automation rules.</p>
+        <p className="text-sm text-zinc-500 mt-1">Manage system configuration, users, service credentials, notifications, and cross-user scans.</p>
       </div>
 
-      {/* Tab bar */}
       <div className="flex gap-1 p-1 rounded-xl flex-wrap" style={{background:'var(--glass-bg)', border:'1px solid var(--glass-border)'}}>
-        {tabs.map(t => (
-          <button key={t.value} onClick={() => setActiveTab(t.value)}
+        {ADMIN_TABS.map((tab) => (
+          <Link key={tab.value} href={tab.href}
             className="px-4 py-1.5 text-sm font-medium rounded-lg transition-all"
-            style={activeTab === t.value
+            style={activeTab === tab.value
               ? {background:'linear-gradient(135deg,#7c3aed,#6d28d9)', color:'white'}
               : {color:'var(--text-muted)'}}>
-            {t.label}
-          </button>
+            {tab.label}
+          </Link>
         ))}
       </div>
 
+      {activeTab === 'overview' && <OverviewTab />}
       {activeTab === 'settings' && <SettingsTab />}
       {activeTab === 'scanner' && <ScannerTab />}
       {activeTab === 'users' && <UsersTab />}
+      {activeTab === 'tokens' && <TokensTab />}
       {activeTab === 'autotags' && <AutoTagsTab />}
       {activeTab === 'audit' && <AuditLogTab />}
       {activeTab === 'notifications' && <NotificationsTab />}

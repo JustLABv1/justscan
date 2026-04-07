@@ -15,7 +15,7 @@ import (
 
 func ListScans(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authfuncs.GetUserIDFromToken(c.GetHeader("Authorization"))
+		userID, isAdmin, err := authfuncs.ResolveUserAccess(c.GetHeader("Authorization"), db)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
@@ -37,9 +37,7 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 			Limit(limit).
 			Offset(offset)
 
-		// Admin can see all scans; user sees only their own
-		tokenType, _ := authfuncs.GetTypeFromToken(c.GetHeader("Authorization"))
-		if tokenType != "admin" {
+		if !isAdmin {
 			q = q.Where("user_id = ?", userID)
 		}
 

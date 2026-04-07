@@ -1,6 +1,6 @@
 'use client';
-import { search, SearchImageResult, SearchVulnResult } from '@/lib/api';
-import { Cancel01Icon, Search01Icon, Shield01Icon, ShieldKeyIcon } from 'hugeicons-react';
+import { search, SearchImageResult, SearchScanResult, SearchVulnResult } from '@/lib/api';
+import { Cancel01Icon, Search01Icon, Shield01Icon, ShieldKeyIcon, TaskDone02Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -14,12 +14,14 @@ const SEV_COLOR: Record<string, string> = {
 
 type ResultItem =
   | { kind: 'image'; data: SearchImageResult }
+  | { kind: 'scan'; data: SearchScanResult }
   | { kind: 'vuln';  data: SearchVulnResult  };
 
 export function SearchModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [images, setImages] = useState<SearchImageResult[]>([]);
+  const [scans, setScans] = useState<SearchScanResult[]>([]);
   const [vulns,  setVulns]  = useState<SearchVulnResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
@@ -44,6 +46,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   const doSearch = useCallback(async (q: string) => {
     if (q.trim().length < 2) {
       setImages([]);
+      setScans([]);
       setVulns([]);
       return;
     }
@@ -51,9 +54,11 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     try {
       const res = await search(q.trim());
       setImages(res.images ?? []);
+      setScans(res.scans ?? []);
       setVulns(res.vulns ?? []);
     } catch {
       setImages([]);
+      setScans([]);
       setVulns([]);
     } finally {
       setLoading(false);
@@ -69,12 +74,15 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
   const allItems: ResultItem[] = [
     ...images.map(d => ({ kind: 'image' as const, data: d })),
+    ...scans.map(d => ({ kind: 'scan' as const, data: d })),
     ...vulns.map(d  => ({ kind: 'vuln'  as const, data: d })),
   ];
 
   function navigate(item: ResultItem) {
     if (item.kind === 'image') {
       router.push(`/scans?image=${encodeURIComponent(item.data.image_name)}`);
+    } else if (item.kind === 'scan') {
+      router.push(`/scans/${item.data.id}`);
     } else {
       router.push(`/vulnkb?q=${encodeURIComponent(item.data.vuln_id)}`);
     }
@@ -95,7 +103,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const hasResults = images.length > 0 || vulns.length > 0;
+  const hasResults = images.length > 0 || scans.length > 0 || vulns.length > 0;
   const showEmpty  = query.trim().length >= 2 && !loading && !hasResults;
 
   return (
@@ -211,14 +219,51 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                   </div>
                 )}
 
+                {scans.length > 0 && (
+                  <div className={images.length > 0 ? 'mt-1' : ''}>
+                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                      Scans
+                    </p>
+                    {scans.map((scan, i) => {
+                      const globalIdx = images.length + i;
+                      const isActive = activeIdx === globalIdx;
+                      return (
+                        <button
+                          key={scan.id}
+                          id={`search-item-${globalIdx}`}
+                          role="option"
+                          aria-selected={isActive}
+                          onClick={() => navigate({ kind: 'scan', data: scan })}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-100"
+                          style={{ background: isActive ? 'var(--row-hover)' : 'transparent' }}
+                          onMouseEnter={() => setActiveIdx(globalIdx)}
+                        >
+                          <div
+                            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                            style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(96,165,250,0.2)' }}
+                          >
+                            <TaskDone02Icon size={14} color="#60a5fa" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-mono text-sm text-zinc-200 truncate">{scan.image_name}:{scan.image_tag}</p>
+                            <p className="text-[11px] text-zinc-500 truncate">
+                              {scan.status} · {scan.critical_count} critical · {scan.high_count} high
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Vulns group */}
                 {vulns.length > 0 && (
-                  <div className={images.length > 0 ? 'mt-1' : ''}>
+                  <div className={images.length > 0 || scans.length > 0 ? 'mt-1' : ''}>
                     <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
                       CVEs &amp; Packages
                     </p>
                     {vulns.map((v, i) => {
-                      const globalIdx = images.length + i;
+                      const globalIdx = images.length + scans.length + i;
                       const isActive = activeIdx === globalIdx;
                       const sevColor = SEV_COLOR[v.severity] ?? SEV_COLOR.UNKNOWN;
                       return (

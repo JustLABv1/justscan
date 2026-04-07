@@ -57,7 +57,7 @@ type HelmRunDetailResponse struct {
 
 func ListRuns(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authfuncs.GetUserIDFromToken(c.GetHeader("Authorization"))
+		userID, isAdmin, err := authfuncs.ResolveUserAccess(c.GetHeader("Authorization"), db)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
@@ -73,10 +73,8 @@ func ListRuns(db *bun.DB) gin.HandlerFunc {
 		}
 		offset := (page - 1) * limit
 
-		tokenType, _ := authfuncs.GetTypeFromToken(c.GetHeader("Authorization"))
-
 		countQuery := db.NewSelect().Model((*models.HelmScanRun)(nil))
-		if tokenType != "admin" {
+		if !isAdmin {
 			countQuery = countQuery.Where("user_id = ?", userID)
 		}
 		if chartURL := c.Query("chart_url"); chartURL != "" {
@@ -91,7 +89,7 @@ func ListRuns(db *bun.DB) gin.HandlerFunc {
 
 		var runs []models.HelmScanRun
 		listQuery := db.NewSelect().Model(&runs)
-		if tokenType != "admin" {
+		if !isAdmin {
 			listQuery = listQuery.Where("user_id = ?", userID)
 		}
 		if chartURL := c.Query("chart_url"); chartURL != "" {
@@ -112,7 +110,7 @@ func ListRuns(db *bun.DB) gin.HandlerFunc {
 		seenOwnerIDs := make(map[uuid.UUID]struct{}, len(runs))
 		for _, run := range runs {
 			rows = append(rows, helmRunRow{HelmScanRun: run})
-			if tokenType == "admin" && run.UserID != nil {
+			if isAdmin && run.UserID != nil {
 				if _, exists := seenOwnerIDs[*run.UserID]; !exists {
 					seenOwnerIDs[*run.UserID] = struct{}{}
 					ownerIDs = append(ownerIDs, *run.UserID)
@@ -121,7 +119,7 @@ func ListRuns(db *bun.DB) gin.HandlerFunc {
 		}
 
 		ownerByID := make(map[uuid.UUID]userIdentityRow, len(ownerIDs))
-		if tokenType == "admin" && len(ownerIDs) > 0 {
+		if isAdmin && len(ownerIDs) > 0 {
 			var owners []userIdentityRow
 			if err := db.NewSelect().
 				Table("users").
@@ -213,7 +211,7 @@ func ListRuns(db *bun.DB) gin.HandlerFunc {
 
 func GetRun(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authfuncs.GetUserIDFromToken(c.GetHeader("Authorization"))
+		userID, isAdmin, err := authfuncs.ResolveUserAccess(c.GetHeader("Authorization"), db)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
@@ -227,8 +225,7 @@ func GetRun(db *bun.DB) gin.HandlerFunc {
 
 		var run models.HelmScanRun
 		q := db.NewSelect().Model(&run).Where("id = ?", runID)
-		tokenType, _ := authfuncs.GetTypeFromToken(c.GetHeader("Authorization"))
-		if tokenType != "admin" {
+		if !isAdmin {
 			q = q.Where("user_id = ?", userID)
 		}
 		if err := q.Scan(c.Request.Context()); err != nil {

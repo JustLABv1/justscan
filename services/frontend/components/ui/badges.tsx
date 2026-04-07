@@ -7,13 +7,17 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string;
   running:   { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.22)' },
   pending:   { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)', label: 'queued' },
   cancelled: { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.20)' },
+  warming_artifactory_cache: { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.22)', label: 'warming artifactory cache' },
+  blocked_by_xray_policy: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.22)', label: 'blocked by xray policy' },
   waiting_for_xray: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.22)', label: 'waiting for xray' },
 };
 
 export function StatusBadge({ status, externalStatus }: { status: string; externalStatus?: string }) {
-  const effectiveStatus = externalStatus === 'waiting_for_xray' && (status === 'pending' || status === 'running')
-    ? 'waiting_for_xray'
-    : status;
+  const effectiveStatus =
+    ((status === 'pending' || status === 'running') && (externalStatus === 'waiting_for_xray' || externalStatus === 'warming_artifactory_cache')) ||
+    (status === 'failed' && externalStatus === 'blocked_by_xray_policy')
+      ? externalStatus
+      : status;
   const s = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.pending;
   return (
     <span
@@ -21,7 +25,7 @@ export function StatusBadge({ status, externalStatus }: { status: string; extern
       style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}` }}
     >
       <span
-        className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${effectiveStatus === 'running' || effectiveStatus === 'waiting_for_xray' ? 'animate-pulse' : ''}`}
+        className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${effectiveStatus === 'running' || effectiveStatus === 'waiting_for_xray' || effectiveStatus === 'warming_artifactory_cache' ? 'animate-pulse' : ''}`}
         aria-hidden
       />
       {s.label ?? effectiveStatus}

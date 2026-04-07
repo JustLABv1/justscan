@@ -30,16 +30,20 @@ func ExtractPublicHelmImages(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		isOCI := strings.HasPrefix(req.ChartURL, "oci://")
-		if !isOCI && req.ChartName == "" {
+		normalizedChartURL, normalizedChartName, isOCI := scanner.ResolveHelmChartInput(req.ChartURL, req.ChartName)
+		if !isOCI && normalizedChartName == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "chart_name is required for HTTP repository URLs"})
+			return
+		}
+		if !isOCI && !strings.HasPrefix(normalizedChartURL, "https://") && !strings.HasPrefix(normalizedChartURL, "http://") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "chart_url must use http:// or https:// for HTTP repositories, or oci:// for OCI registries"})
 			return
 		}
 
 		images, resolvedName, resolvedVersion, err := scanner.ExtractHelmImages(
 			c.Request.Context(),
-			req.ChartURL,
-			req.ChartName,
+			normalizedChartURL,
+			normalizedChartName,
 			req.ChartVersion,
 			nil, // no registry credentials — public charts only
 		)

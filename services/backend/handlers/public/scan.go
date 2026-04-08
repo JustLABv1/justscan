@@ -65,11 +65,12 @@ func CreatePublicScan(db *bun.DB) gin.HandlerFunc {
 		}
 
 		scan := &models.Scan{
-			ImageName: req.Image,
-			ImageTag:  req.Tag,
-			Platform:  req.Platform,
-			Status:    models.ScanStatusPending,
-			CreatedAt: time.Now(),
+			ImageName:   req.Image,
+			ImageTag:    req.Tag,
+			Platform:    req.Platform,
+			CurrentStep: models.ScanStepQueued,
+			Status:      models.ScanStatusPending,
+			CreatedAt:   time.Now(),
 			// UserID is nil — this marks it as a public scan
 		}
 		if _, err := db.NewInsert().Model(scan).Exec(c.Request.Context()); err != nil {
@@ -78,7 +79,18 @@ func CreatePublicScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		scanner.EnqueueScan(scan.ID, db, nil, req.Platform)
+		if err := scanner.DispatchScan(c.Request.Context(), db, scan, nil, req.Platform); err != nil {
+			log.Warnf("CreatePublicScan dispatch failed for %s: %v", scan.ID, err)
+			if markErr := scanner.MarkScanFailed(c.Request.Context(), db, scan.ID, err.Error()); markErr != nil {
+				log.Errorf("CreatePublicScan failed to persist dispatch error for %s: %v", scan.ID, markErr)
+			} else {
+				completedAt := time.Now()
+				scan.Status = models.ScanStatusFailed
+				scan.CurrentStep = models.ScanStepFailed
+				scan.ErrorMessage = err.Error()
+				scan.CompletedAt = &completedAt
+			}
+		}
 
 		clientIP := c.ClientIP()
 		go audit.Write(context.Background(), db, "public", "scan.public.create",
@@ -114,6 +126,9 @@ func ReScanPublic(db *bun.DB) gin.HandlerFunc {
 			ImageName:        orig.ImageName,
 			ImageTag:         orig.ImageTag,
 			Platform:         orig.Platform,
+			RegistryID:       orig.RegistryID,
+			ScanProvider:     orig.ScanProvider,
+			CurrentStep:      models.ScanStepQueued,
 			HelmScanRunID:    orig.HelmScanRunID,
 			HelmChart:        orig.HelmChart,
 			HelmChartName:    orig.HelmChartName,
@@ -127,7 +142,18 @@ func ReScanPublic(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		scanner.EnqueueScan(newScan.ID, db, nil, orig.Platform)
+		if err := scanner.DispatchScan(c.Request.Context(), db, newScan, nil, orig.Platform); err != nil {
+			log.Warnf("ReScanPublic dispatch failed for %s: %v", newScan.ID, err)
+			if markErr := scanner.MarkScanFailed(c.Request.Context(), db, newScan.ID, err.Error()); markErr != nil {
+				log.Errorf("ReScanPublic failed to persist dispatch error for %s: %v", newScan.ID, markErr)
+			} else {
+				completedAt := time.Now()
+				newScan.Status = models.ScanStatusFailed
+				newScan.CurrentStep = models.ScanStepFailed
+				newScan.ErrorMessage = err.Error()
+				newScan.CompletedAt = &completedAt
+			}
+		}
 
 		clientIP := c.ClientIP()
 		go audit.Write(context.Background(), db, "public", "scan.public.rescan",
@@ -153,6 +179,14 @@ func GetPublicScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
 			return
 		}
+
+		var stepLogs []models.ScanStepLog
+		db.NewSelect().
+			Model(&stepLogs).
+			Where("scan_id = ?", id).
+			OrderExpr("position ASC").
+			Scan(c.Request.Context()) //nolint:errcheck
+		scan.StepLogs = stepLogs
 
 		c.JSON(http.StatusOK, scan)
 	}

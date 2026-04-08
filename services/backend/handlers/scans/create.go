@@ -69,6 +69,7 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			Platform:     req.Platform,
 			RegistryID:   requestedRegistryID,
 			ScanProvider: scanner.ProviderForRegistry(registry),
+			CurrentStep:  models.ScanStepQueued,
 			Status:       models.ScanStatusPending,
 			UserID:       &userID,
 			CreatedAt:    time.Now(),
@@ -104,6 +105,7 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			} else {
 				completedAt := time.Now()
 				scan.Status = models.ScanStatusFailed
+				scan.CurrentStep = models.ScanStepFailed
 				scan.ErrorMessage = err.Error()
 				scan.CompletedAt = &completedAt
 			}
@@ -164,6 +166,7 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				ImageTag:     normalizedImageTag,
 				Platform:     req.Platform,
 				ScanProvider: scanner.ProviderForRegistry(registry),
+				CurrentStep:  models.ScanStepQueued,
 				Status:       models.ScanStatusPending,
 				UserID:       &userID,
 				CreatedAt:    time.Now(),
@@ -223,6 +226,7 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				} else {
 					completedAt := time.Now()
 					scan.Status = models.ScanStatusFailed
+					scan.CurrentStep = models.ScanStepFailed
 					scan.ErrorMessage = err.Error()
 					scan.CompletedAt = &completedAt
 				}

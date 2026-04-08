@@ -1,38 +1,37 @@
 'use client';
-import { ScannerDatabaseCard, ScanningAnimation } from '@/components/scans/scan-runtime';
 import { useToast } from '@/components/toast';
 import { SeverityBadge, SourceBadge, StatusBadge } from '@/components/ui/badges';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import {
-    addTagToScan,
-    assignScanToOrg,
-    cancelScan,
-    ComplianceResult,
-    createComment,
-    createShare,
-    deleteComment,
-    deleteShare,
-    deleteSuppression,
-    getScan,
-    getScanCompliance,
-    getScanSBOM,
-    getUser,
-    listOrgs,
-    listScans,
-    listTags,
-    listVulnerabilities,
-    Org,
-    reEvaluateCompliance,
-    removeScanFromOrg,
-    removeTagFromScan,
-    reScan,
-    SBOMComponent,
-    Scan,
-    Suppression,
-    Tag,
-    upsertSuppression,
-    Vulnerability,
+  addTagToScan,
+  assignScanToOrg,
+  cancelScan,
+  ComplianceResult,
+  createComment,
+  createShare,
+  deleteComment,
+  deleteShare,
+  deleteSuppression,
+  getScan,
+  getScanCompliance,
+  getScanSBOM,
+  getUser,
+  listOrgs,
+  listScans,
+  listTags,
+  listVulnerabilities,
+  Org,
+  reEvaluateCompliance,
+  removeScanFromOrg,
+  removeTagFromScan,
+  reScan,
+  SBOMComponent,
+  Scan,
+  Suppression,
+  Tag,
+  upsertSuppression,
+  Vulnerability,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select } from '@heroui/react';
@@ -41,10 +40,11 @@ import { parseDate } from '@internationalized/date';
 import { ArrowLeft01Icon, Cancel01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, GitCompareIcon, MoreVerticalIcon, Refresh01Icon, Share01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ScannerDatabaseCard, ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
 
 const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
-type ScanTab = 'vulns' | 'policy' | 'sbom' | 'details';
+type ScanTab = 'vulns' | 'policy' | 'sbom' | 'details' | 'timeline';
 
 type BlockedPolicyDetails = {
   summary: string;
@@ -378,14 +378,15 @@ export default function ScanDetailPage() {
     setCancelling(true);
     try {
       const result = await cancelScan(id);
-      loadVersionRef.current += 1;
       setScan((current) => current ? {
         ...current,
         status: result.status ?? 'cancelled',
+        current_step: result.current_step ?? 'cancelled',
         external_status: result.external_status ?? 'cancelled',
         completed_at: result.completed_at ?? new Date().toISOString(),
         error_message: result.error_message ?? 'Cancelled by user',
       } : current);
+      await loadScan().catch(() => {});
       toast.success('Scan cancelled');
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to cancel scan');
@@ -690,7 +691,7 @@ export default function ScanDetailPage() {
       </div>
 
       {/* Status + severity cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className={`grid gap-3 ${scan.status === 'pending' || scan.status === 'running' ? 'grid-cols-1 sm:grid-cols-1' : 'grid-cols-2 sm:grid-cols-5'}`}>
         <div className="glass-panel rounded-xl p-4 col-span-1">
           <p className="text-xs text-zinc-500 mb-2">Status</p>
           <StatusBadge status={scan.status} externalStatus={scan.external_status} />
@@ -700,7 +701,7 @@ export default function ScanDetailPage() {
             </p>
           )}
         </div>
-        {sevCards.map(({ label, count, color, border }) => (
+        {scan.status !== 'pending' && scan.status !== 'running' && sevCards.map(({ label, count, color, border }) => (
           <div key={label} className={`glass-panel rounded-xl border ${border} p-4`}>
             <p className="text-xs text-zinc-500 mb-1">{label}</p>
             <p className={`text-2xl font-bold ${color}`}>{count ?? 0}</p>
@@ -737,7 +738,13 @@ export default function ScanDetailPage() {
 
       {/* Scanning animation */}
       {(scan.status === 'pending' || scan.status === 'running') && (
-        <ScanningAnimation status={scan.status} externalStatus={scan.external_status} startedAt={scan.started_at} />
+        <ScanningAnimation
+          status={scan.status}
+          startedAt={scan.started_at}
+          image={`${scan.image_name}:${scan.image_tag}`}
+          scanProvider={scan.scan_provider}
+          currentStep={scan.current_step}
+        />
       )}
 
       {/* Tab bar */}
@@ -748,6 +755,7 @@ export default function ScanDetailPage() {
             { id: 'vulns', label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities' },
             ...(hasPolicyTab ? [{ id: 'policy' as const, label: blockedPolicyDetails?.totalViolations ? `Policy Violations (${blockedPolicyDetails.totalViolations})` : 'Policy Violations' }] : []),
             { id: 'sbom', label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
+            { id: 'timeline', label: scan.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
             { id: 'details', label: 'Details' },
           ] as { id: ScanTab; label: string }[]).map(({ id, label }) => (
             <button
@@ -762,6 +770,14 @@ export default function ScanDetailPage() {
             </button>
           ))}
         </div>
+      )}
+
+      {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'timeline' && (
+        <ScanStepTimeline
+          stepLogs={scan.step_logs}
+          completedAt={scan.completed_at}
+          status={scan.status}
+        />
       )}
 
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'policy' && blockedPolicyDetails && (
@@ -1265,13 +1281,16 @@ export default function ScanDetailPage() {
         <div className="space-y-4">
 
           {/* Scanner info */}
-          {(scan.trivy_version || scan.trivy_vuln_db_updated_at || scan.trivy_java_db_updated_at) && (
+          {(scan.trivy_version || scan.grype_version || scan.trivy_vuln_db_updated_at || scan.trivy_java_db_updated_at) && (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Scanner</p>
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
                 <div className="glass-panel rounded-xl p-4">
                   <p className="text-xs text-zinc-500 mb-1">Scanner</p>
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">Trivy {scan.trivy_version || 'unknown'}</p>
+                  {scan.grype_version && (
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white mt-1">Grype {scan.grype_version}</p>
+                  )}
                   <p className="text-xs text-zinc-500 mt-1">
                     {scan.completed_at ? `DB snapshot captured ${timeAgo(scan.completed_at)}` : 'DB snapshot captured when this scan completed'}
                   </p>

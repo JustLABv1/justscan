@@ -436,7 +436,7 @@ export const reScan = (id: string) =>
   req<Scan>('POST', `/api/v1/scans/${id}/rescan`);
 
 export const cancelScan = (id: string) =>
-  req<{ result: string; status?: string; external_status?: string; completed_at?: string; error_message?: string }>('POST', `/api/v1/scans/${id}/cancel`);
+  req<{ result: string; status?: string; current_step?: string; external_status?: string; completed_at?: string; error_message?: string }>('POST', `/api/v1/scans/${id}/cancel`);
 
 export const bulkDeleteScans = (ids: string[]) =>
   req<{ deleted: number }>('DELETE', '/api/v1/scans/bulk', { ids });
@@ -813,6 +813,16 @@ export interface User {
   disabled: boolean;
 }
 
+export interface ScanStepLog {
+  id: string;
+  scan_id: string;
+  step: string;
+  position: number;
+  started_at: string;
+  completed_at?: string | null;
+  output: string[];
+}
+
 export interface Scan {
   id: string;
   image_name: string;
@@ -821,6 +831,7 @@ export interface Scan {
   scan_provider: 'trivy' | 'artifactory_xray';
   external_scan_id?: string;
   external_status?: string;
+  current_step: string;
   status: string;
   error_message: string;
   critical_count: number;
@@ -830,6 +841,7 @@ export interface Scan {
   unknown_count: number;
   suppressed_count: number;
   trivy_version: string;
+  grype_version: string;
   trivy_vuln_db_updated_at?: string | null;
   trivy_vuln_db_downloaded_at?: string | null;
   trivy_java_db_updated_at?: string | null;
@@ -850,6 +862,7 @@ export interface Scan {
   helm_chart_name?: string;
   helm_chart_version?: string;
   helm_source_path?: string;
+  step_logs?: ScanStepLog[];
 }
 
 export interface AdminScan extends Omit<Scan, 'tags'> {

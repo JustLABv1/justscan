@@ -8,6 +8,7 @@ import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
 
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   CRITICAL: { label: 'Critical', color: 'text-red-500 dark:text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20' },
@@ -95,60 +96,9 @@ function ThemeToggle() {
   );
 }
 
-function ScanningAnimation({ image }: { image: string }) {
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === 'dark';
-  return (
-    <div className="flex flex-col items-center justify-center py-16 space-y-6">
-      <div className="relative flex items-center justify-center w-40 h-40">
-        <span className="absolute w-40 h-40 rounded-full border border-violet-500/20 animate-ping" style={{ animationDuration: '2s' }} />
-        <span className="absolute w-32 h-32 rounded-full border border-violet-500/30 animate-ping" style={{ animationDuration: '1.6s', animationDelay: '0.3s' }} />
-        <span className="absolute w-24 h-24 rounded-full border border-violet-500/40 animate-ping" style={{ animationDuration: '1.2s', animationDelay: '0.6s' }} />
-        <span className="absolute w-28 h-28 rounded-full border-2 border-t-violet-500 border-r-violet-400/40 border-b-violet-500/10 border-l-violet-400/20 animate-spin" style={{ animationDuration: '1.2s' }} />
-        <div
-          className="relative w-16 h-16 rounded-2xl flex items-center justify-center z-10"
-          style={{
-            background: isDark
-              ? 'linear-gradient(135deg, rgba(124,58,237,0.3) 0%, rgba(109,40,217,0.15) 100%)'
-              : 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-            border: '1px solid rgba(167,139,250,0.3)',
-            boxShadow: '0 0 30px rgba(124,58,237,0.25)',
-          }}
-        >
-          <Logo size={28} className="text-[#a78bfa]" />
-        </div>
-        <div
-          className="absolute w-28 h-0.5 rounded-full"
-          style={{
-            background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.8), transparent)',
-            animation: 'scanLine 2s ease-in-out infinite',
-          }}
-        />
-        <style>{`
-          @keyframes scanLine {
-            0%   { transform: translateY(-48px); opacity: 0; }
-            20%  { opacity: 1; }
-            80%  { opacity: 1; }
-            100% { transform: translateY(48px); opacity: 0; }
-          }
-        `}</style>
-      </div>
-      <div className="text-center space-y-1.5">
-        <p className="font-semibold text-lg" style={{ color: 'var(--text-primary)' }}>Scanning image…</p>
-        <p className="font-mono text-sm" style={{ color: 'var(--text-muted)' }}>{image}</p>
-        <p className="text-xs" style={{ color: 'var(--text-faint)' }}>This may take up to a minute</p>
-      </div>
-      <div className="flex gap-1.5">
-        {[0, 1, 2].map(i => (
-          <span key={i} className="w-1.5 h-1.5 rounded-full bg-violet-500"
-            style={{ animation: 'bounce 1.2s ease-in-out infinite', animationDelay: `${i * 0.2}s` }} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const LIMIT = 25;
+
+type ResultTab = 'overview' | 'timeline';
 
 export default function PublicScanResultPage() {
   const { id } = useParams<{ id: string }>();
@@ -170,6 +120,7 @@ export default function PublicScanResultPage() {
   const [vulnLoading, setVulnLoading] = useState(false);
   const [reScanning, setReScanning] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [activeTab, setActiveTab] = useState<ResultTab>('overview');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -243,6 +194,7 @@ export default function PublicScanResultPage() {
   );
 
   const isScanning = !scan || scan.status === 'pending' || scan.status === 'running';
+  const showResultTabs = Boolean(scan && !isScanning && (scan.status === 'completed' || scan.status === 'failed'));
   const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
   const imageName = scan ? `${scan.image_name}:${scan.image_tag}` : '…';
 
@@ -354,17 +306,55 @@ export default function PublicScanResultPage() {
           )}
         </div>
 
-        {isScanning && <ScanningAnimation image={imageName} />}
+        {isScanning && (
+          <ScanningAnimation
+            image={imageName}
+            status={scan?.status ?? 'pending'}
+            startedAt={scan?.started_at ?? null}
+            scanProvider={scan?.scan_provider}
+            currentStep={scan?.current_step ?? null}
+          />
+        )}
 
-        {scan?.status === 'failed' && (
-          <div className="rounded-2xl px-6 py-5 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-            <p className="text-red-500 dark:text-red-400 font-medium">Scan failed</p>
-            {scan.error_message && <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{scan.error_message}</p>}
-            <Link href="/public/scan/image" className="inline-block mt-3 text-sm text-violet-600 dark:text-violet-400 hover:underline">Try another image →</Link>
+        {showResultTabs && (
+          <div className="flex items-center gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            {([
+              { id: 'overview', label: scan?.status === 'completed' ? 'Overview' : 'Status' },
+              { id: 'timeline', label: scan?.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
+            ] as { id: ResultTab; label: string }[]).map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className="px-4 py-1.5 text-sm font-medium rounded-lg transition-all"
+                style={activeTab === id
+                  ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', boxShadow: '0 0 12px rgba(124,58,237,0.18)' }
+                  : { color: 'var(--text-muted)' }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         )}
 
-        {scan?.status === 'completed' && (
+        {scan?.status === 'failed' && activeTab === 'overview' && (
+          <>
+            <div className="rounded-2xl px-6 py-5 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <p className="text-red-500 dark:text-red-400 font-medium">Scan failed</p>
+              {scan.error_message && <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{scan.error_message}</p>}
+              <Link href="/public/scan/image" className="inline-block mt-3 text-sm text-violet-600 dark:text-violet-400 hover:underline">Try another image →</Link>
+            </div>
+          </>
+        )}
+
+        {scan && !isScanning && activeTab === 'timeline' && (
+          <ScanStepTimeline
+            stepLogs={scan.step_logs}
+            completedAt={scan.completed_at}
+            status={scan.status}
+          />
+        )}
+
+        {scan?.status === 'completed' && activeTab === 'overview' && (
           <>
             {/* Severity cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -386,11 +376,14 @@ export default function PublicScanResultPage() {
               ))}
             </div>
 
-            {(scan.trivy_version || scan.trivy_vuln_db_updated_at || scan.trivy_java_db_updated_at) && (
+            {(scan.trivy_version || scan.grype_version || scan.trivy_vuln_db_updated_at || scan.trivy_java_db_updated_at) && (
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
                 <div className="rounded-2xl border p-4" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
                   <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Scanner</p>
                   <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Trivy {scan.trivy_version || 'unknown'}</p>
+                  {scan.grype_version && (
+                    <p className="text-sm font-medium mt-1" style={{ color: 'var(--text-primary)' }}>Grype {scan.grype_version}</p>
+                  )}
                   <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>
                     {scan.completed_at ? `DB snapshot captured ${timeAgo(scan.completed_at)}` : 'DB snapshot captured when this scan completed'}
                   </p>

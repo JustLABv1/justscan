@@ -48,6 +48,8 @@ interface Scan {
   image_name: string;
   image_tag: string;
   image_digest: string;
+  scan_provider?: 'trivy' | 'artifactory_xray';
+  external_status?: string;
   status: string;
   critical_count: number;
   high_count: number;
@@ -105,6 +107,20 @@ function SeverityBadge({ severity }: { severity: string }) {
       {severity}
     </span>
   );
+}
+
+function reportStatus(scan: Pick<Scan, 'status' | 'scan_provider' | 'external_status'>): string {
+  if (scan.scan_provider === 'artifactory_xray') {
+    const external = (scan.external_status ?? '').trim();
+    if (external !== '' && external !== 'completed' && external !== scan.status) {
+      return external;
+    }
+  }
+  return scan.status;
+}
+
+function formatStatusLabel(status: string): string {
+  return status.replace(/_/g, ' ').toUpperCase();
 }
 
 export default function PrintReportPage() {
@@ -226,6 +242,8 @@ export default function PrintReportPage() {
   for (const v of activeVulns) severityCounts[v.severity] = (severityCounts[v.severity] ?? 0) + 1;
   const totalActive = activeVulns.length;
   const imageRef = scan.image_tag ? `${scan.image_name}:${scan.image_tag}` : scan.image_name;
+  const displayStatus = reportStatus(scan);
+  const isSuccessfulReportState = displayStatus === 'completed' || displayStatus === 'blocked_by_xray_policy';
 
   return (
     <>
@@ -394,7 +412,7 @@ export default function PrintReportPage() {
                 Generated {formatDate(new Date().toISOString())}
               </p>
             </div>
-            {scan.status === 'completed' && (
+      			{isSuccessfulReportState && (
               <div style={{
                 background: totalActive === 0 ? '#dcfce7' : '#fef2f2',
                 color: totalActive === 0 ? '#166534' : '#991b1b',
@@ -418,7 +436,7 @@ export default function PrintReportPage() {
                 ['Image', imageRef],
                 ['Digest', scan.image_digest || '—'],
                 ...(opts.showScanId ? [['Scan ID', scan.id]] : []),
-                ['Status', scan.status.toUpperCase()],
+                ['Status', formatStatusLabel(displayStatus)],
                 ...(opts.showStarted ? [['Started', formatDate(scan.started_at)]] : []),
                 ...(opts.showCompleted ? [['Completed', formatDate(scan.completed_at)]] : []),
                 ...(opts.showTrivyVersion ? [['Trivy Version', scan.trivy_version || '—']] : []),

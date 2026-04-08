@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -77,6 +78,8 @@ type xraySummaryIssue struct {
 	Summary     string                 `json:"summary"`
 	Description string                 `json:"description"`
 	Severity    string                 `json:"severity"`
+	CVSS3Max    any                    `json:"cvss3_max_score"`
+	CVSS2Max    any                    `json:"cvss2_max_score"`
 	Components  []xraySummaryComponent `json:"components"`
 	CVEs        []xraySummaryCVE       `json:"cves"`
 	References  []any                  `json:"references"`
@@ -90,11 +93,15 @@ type xraySummaryComponent struct {
 }
 
 type xraySummaryCVE struct {
-	CVE          string  `json:"cve"`
-	CVSSV3Score  float64 `json:"cvss_v3_score"`
-	CVSSV3Vector string  `json:"cvss_v3_vector"`
-	CVSSScore    float64 `json:"cvss_score"`
-	CVSSVector   string  `json:"cvss_vector"`
+	CVE          string `json:"cve"`
+	CVSSV3       any    `json:"cvss_v3"`
+	CVSSV2       any    `json:"cvss_v2"`
+	CVSSV3Score  any    `json:"cvss_v3_score"`
+	CVSSV3Vector string `json:"cvss_v3_vector"`
+	CVSSV2Score  any    `json:"cvss_v2_score"`
+	CVSSV2Vector string `json:"cvss_v2_vector"`
+	CVSSScore    any    `json:"cvss_score"`
+	CVSSVector   string `json:"cvss_vector"`
 }
 
 type registryHTTPError struct {
@@ -1115,6 +1122,15 @@ func persistXraySummaryFindings(ctx context.Context, db *bun.DB, scan *models.Sc
 		}
 	}
 
+	kbEntries := ExtractXrayKBEntries(summary)
+	if len(kbEntries) > 0 {
+		if err := upsertKBEntries(context.Background(), db, kbEntries); err != nil {
+			log.Warnf("Xray KB upsert failed for scan %s (non-fatal): %v", scan.ID, err)
+		} else {
+			log.Debugf("Upserted %d Xray KB entries for scan %s", len(kbEntries), scan.ID)
+		}
+	}
+
 	severityCounts := CountSeverities(vulns)
 	scan.CriticalCount = severityCounts[models.SeverityCritical]
 	scan.HighCount = severityCounts[models.SeverityHigh]
@@ -1172,6 +1188,60 @@ func ParseXrayVulnerabilities(summary *xraySummaryResponse, scanID uuid.UUID) []
 	}
 
 	return vulns
+}
+
+func ExtractXrayKBEntries(summary *xraySummaryResponse) []models.VulnKBEntry {
+	if summary == nil {
+		return nil
+	}
+
+	seen := make(map[string]*models.VulnKBEntry)
+	for _, artifact := range summary.Artifacts {
+		for _, issue := range artifact.Issues {
+			vulnID := xrayIssueID(issue)
+			if vulnID == "" {
+				continue
+			}
+
+			refs := xrayKBReferences(issue.References)
+			score, vector := xrayIssueScore(issue)
+			severity := normalizeXraySeverity(issue.Severity)
+
+			entry, exists := seen[vulnID]
+			if !exists {
+				entry = &models.VulnKBEntry{
+					VulnID:           vulnID,
+					Description:      issue.Description,
+					Severity:         severity,
+					CVSSScore:        score,
+					CVSSVector:       vector,
+					References:       refs,
+					ExploitAvailable: kbRefsContainExploit(refs),
+				}
+				seen[vulnID] = entry
+				continue
+			}
+
+			if entry.Description == "" && issue.Description != "" {
+				entry.Description = issue.Description
+			}
+			if xraySeverityRank(severity) > xraySeverityRank(entry.Severity) {
+				entry.Severity = severity
+			}
+			if score > entry.CVSSScore {
+				entry.CVSSScore = score
+				entry.CVSSVector = vector
+			}
+			entry.References = mergeKBRefs(entry.References, refs)
+			entry.ExploitAvailable = entry.ExploitAvailable || kbRefsContainExploit(refs)
+		}
+	}
+
+	entries := make([]models.VulnKBEntry, 0, len(seen))
+	for _, entry := range seen {
+		entries = append(entries, *entry)
+	}
+	return entries
 }
 
 func isRetriableXrayScanArtifactError(err error) bool {
@@ -1268,15 +1338,121 @@ func xrayPackageName(component xraySummaryComponent) string {
 }
 
 func xrayIssueScore(issue xraySummaryIssue) (float64, string) {
+	bestScore := 0.0
+	bestVector := ""
+
 	for _, cve := range issue.CVEs {
-		if cve.CVSSV3Score > 0 {
-			return cve.CVSSV3Score, cve.CVSSV3Vector
-		}
-		if cve.CVSSScore > 0 {
-			return cve.CVSSScore, cve.CVSSVector
+		if score, vector, ok := xrayCVEScore(cve); ok && score > bestScore {
+			bestScore = score
+			bestVector = vector
 		}
 	}
+
+	if bestScore > 0 {
+		return bestScore, bestVector
+	}
+
+	if score, ok := xrayNumericValue(issue.CVSS3Max); ok && score > 0 {
+		return score, ""
+	}
+	if score, ok := xrayNumericValue(issue.CVSS2Max); ok && score > 0 {
+		return score, ""
+	}
+
 	return 0, ""
+}
+
+func xrayCVEScore(cve xraySummaryCVE) (float64, string, bool) {
+	if score, vector, ok := xrayScoreVector(cve.CVSSV3Score, cve.CVSSV3Vector); ok {
+		return score, vector, true
+	}
+	if score, vector, ok := xrayCombinedScoreVector(cve.CVSSV3); ok {
+		return score, vector, true
+	}
+	if score, vector, ok := xrayScoreVector(cve.CVSSScore, cve.CVSSVector); ok {
+		return score, vector, true
+	}
+	if score, vector, ok := xrayScoreVector(cve.CVSSV2Score, cve.CVSSV2Vector); ok {
+		return score, vector, true
+	}
+	if score, vector, ok := xrayCombinedScoreVector(cve.CVSSV2); ok {
+		return score, vector, true
+	}
+	return 0, "", false
+}
+
+func xrayScoreVector(raw any, vector string) (float64, string, bool) {
+	score, ok := xrayNumericValue(raw)
+	if !ok || score <= 0 {
+		return 0, "", false
+	}
+	return score, strings.TrimSpace(vector), true
+}
+
+func xrayCombinedScoreVector(raw any) (float64, string, bool) {
+	text, ok := xrayStringValue(raw)
+	if !ok {
+		return 0, "", false
+	}
+
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return 0, "", false
+	}
+
+	scorePart, vectorPart, hasVector := strings.Cut(text, "/")
+	score, err := strconv.ParseFloat(strings.TrimSpace(scorePart), 64)
+	if err != nil || score <= 0 {
+		return 0, "", false
+	}
+
+	if !hasVector {
+		return score, "", true
+	}
+
+	return score, strings.TrimSpace(vectorPart), true
+}
+
+func xrayNumericValue(raw any) (float64, bool) {
+	switch value := raw.(type) {
+	case nil:
+		return 0, false
+	case float64:
+		return value, true
+	case float32:
+		return float64(value), true
+	case int:
+		return float64(value), true
+	case int64:
+		return float64(value), true
+	case json.Number:
+		parsed, err := value.Float64()
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
+	}
+}
+
+func xrayStringValue(raw any) (string, bool) {
+	switch value := raw.(type) {
+	case nil:
+		return "", false
+	case string:
+		return value, true
+	case json.Number:
+		return value.String(), true
+	default:
+		return "", false
+	}
 }
 
 func normalizeXraySeverity(severity string) string {
@@ -1291,6 +1467,21 @@ func normalizeXraySeverity(severity string) string {
 		return models.SeverityLow
 	default:
 		return models.SeverityUnknown
+	}
+}
+
+func xraySeverityRank(severity string) int {
+	switch normalizeXraySeverity(severity) {
+	case models.SeverityCritical:
+		return 4
+	case models.SeverityHigh:
+		return 3
+	case models.SeverityMedium:
+		return 2
+	case models.SeverityLow:
+		return 1
+	default:
+		return 0
 	}
 }
 
@@ -1429,4 +1620,42 @@ func xrayReferences(values []any) []string {
 		}
 	}
 	return refs
+}
+
+func xrayKBReferences(values []any) []models.KBRef {
+	refs := make([]models.KBRef, 0, len(values))
+	for _, value := range values {
+		switch typed := value.(type) {
+		case string:
+			trimmed := strings.TrimSpace(typed)
+			if trimmed != "" {
+				refs = append(refs, models.KBRef{URL: trimmed, Source: xrayDataSource})
+			}
+		case map[string]any:
+			urlValue := ""
+			for _, key := range []string{"url", "reference", "href"} {
+				candidate, _ := typed[key].(string)
+				candidate = strings.TrimSpace(candidate)
+				if candidate != "" {
+					urlValue = candidate
+					break
+				}
+			}
+			if urlValue == "" {
+				continue
+			}
+
+			source := xrayDataSource
+			for _, key := range []string{"source", "name", "provider"} {
+				candidate, _ := typed[key].(string)
+				candidate = strings.TrimSpace(candidate)
+				if candidate != "" {
+					source = candidate
+					break
+				}
+			}
+			refs = append(refs, models.KBRef{URL: urlValue, Source: source})
+		}
+	}
+	return mergeKBRefs(nil, refs)
 }

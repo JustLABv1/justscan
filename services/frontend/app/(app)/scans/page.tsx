@@ -7,25 +7,25 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ImageRowSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import {
-  cancelScan,
-  createScan,
-  deleteScan,
-  ImageSummary,
-  listRegistries,
-  listScanImages,
-  listTags,
-  Registry,
-  Tag
+    cancelScan,
+    createScans,
+    deleteScan,
+    ImageSummary,
+    listRegistries,
+    listScanImages,
+    listTags,
+    Registry,
+    Tag
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Checkbox, ListBox, Modal, Popover, Select, useOverlayState } from '@heroui/react';
 import {
-  ArrowDown01Icon,
-  ArrowRight01Icon,
-  FilterIcon,
-  GitCompareIcon,
-  PlusSignIcon,
-  Shield01Icon,
+    ArrowDown01Icon,
+    ArrowRight01Icon,
+    FilterIcon,
+    GitCompareIcon,
+    PlusSignIcon,
+    Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -85,6 +85,7 @@ export default function ScansPage() {
   // New scan form
   const [imageName, setImageName] = useState('');
   const [imageTag, setImageTag] = useState('latest');
+  const [additionalImages, setAdditionalImages] = useState('');
   const [platform, setPlatform] = useState('');
   const [registryId, setRegistryId] = useState('');
   const [creating, setCreating] = useState(false);
@@ -94,17 +95,27 @@ export default function ScansPage() {
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const LIMIT = 30;
 
-  const load = useCallback(async (p: number, img: string, status: string) => {
-    setLoading(true);
-    setError('');
+  const load = useCallback(async (p: number, img: string, status: string, options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const res = await listScanImages(p, LIMIT, img || undefined, status || undefined);
       setImages(res.data ?? []);
       setTotal(res.total);
+      if (silent) {
+        setError('');
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
+      if (!silent) {
+        setError(e instanceof Error ? e.message : 'Failed to load');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -121,7 +132,7 @@ export default function ScansPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useConditionalInterval(() => {
-    void load(page, imageFilter, statusFilter);
+    void load(page, imageFilter, statusFilter, { silent: true });
   }, images.some((image) => image.latest_status === 'running' || image.latest_status === 'pending'), 5000);
 
 
@@ -157,12 +168,27 @@ export default function ScansPage() {
     e.preventDefault();
     setCreateError(''); setCreating(true);
     try {
-      const newScan = await createScan(imageName, imageTag, registryId || undefined, undefined, platform || undefined);
+      const requestedImages = [
+        imageName.trim() ? `${imageName.trim()}${imageTag.trim() ? `:${imageTag.trim()}` : ''}` : '',
+        ...additionalImages.split(/\r?\n/).map(line => line.trim()).filter(Boolean),
+      ].filter(Boolean);
+
+      if (requestedImages.length === 0) {
+        setCreateError('Provide at least one image to scan');
+        return;
+      }
+
+      const result = await createScans(requestedImages, registryId || undefined, undefined, platform || undefined);
+      const createdScans = Array.isArray(result.scans) ? result.scans : [];
+
       modal.close();
-      setImageName(''); setImageTag('latest'); setPlatform(''); setRegistryId('');
-      toast.success('Scan queued');
-      // Expand the image row after creation
-      setExpanded(prev => new Set(prev).add(newScan.image_name));
+      setImageName(''); setImageTag('latest'); setAdditionalImages(''); setPlatform(''); setRegistryId('');
+      toast.success(`${createdScans.length} image${createdScans.length === 1 ? '' : 's'} queued`);
+      setExpanded(prev => {
+        const next = new Set(prev);
+        createdScans.forEach(scan => next.add(scan.image_name));
+        return next;
+      });
       await load(1, imageFilter, statusFilter);
       setPage(1);
     } catch (err: unknown) {
@@ -566,12 +592,26 @@ export default function ScansPage() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image Name</label>
                     <input className={inputCls + ' font-mono'} placeholder="nginx"
-                      value={imageName} onChange={e => setImageName(e.target.value)} required />
+                      value={imageName} onChange={e => setImageName(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Tag</label>
                     <input className={inputCls + ' font-mono'} placeholder="latest"
                       value={imageTag} onChange={e => setImageTag(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                      Additional Images <span className="text-zinc-400 dark:text-zinc-600 font-normal">(one per line)</span>
+                    </label>
+                    <textarea
+                      className={inputCls + ' min-h-28 font-mono resize-y'}
+                      placeholder={'ghcr.io/example/api:1.2.3\nregistry.example.com/team/worker:latest\nnginx'}
+                      value={additionalImages}
+                      onChange={e => setAdditionalImages(e.target.value)}
+                    />
+                    <p className="text-xs text-zinc-500">
+                      Use the Image Name and Tag fields for a primary image, or paste multiple full image references here. Untagged refs default to <span className="font-mono">latest</span>.
+                    </p>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">

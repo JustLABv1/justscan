@@ -17,6 +17,7 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 		s.GET("/", scans.ListScans(db))
 		s.GET("/images", scans.ListScanImages(db))
 		s.POST("/", scans.CreateScan(db))
+		s.POST("/batch", scans.CreateScans(db))
 		s.DELETE("/bulk", scans.BulkDeleteScans(db))
 		s.POST("/bulk/tags/:tagId", scans.BulkAddTagToScans(db))
 		s.GET("/compare", scans.Compare(db))

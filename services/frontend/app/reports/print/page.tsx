@@ -17,6 +17,8 @@ interface Vulnerability {
 }
 interface Scan {
   id: string; image_name: string; image_tag: string; image_digest: string;
+  scan_provider?: 'trivy' | 'artifactory_xray';
+  external_status?: string;
   status: string; critical_count: number; high_count: number; medium_count: number;
   low_count: number; unknown_count: number; suppressed_count: number;
   trivy_version: string; started_at: string | null; completed_at: string | null;
@@ -97,6 +99,30 @@ function worstSeverity(scan: Scan): string {
   if (scan.medium_count > 0) return 'MEDIUM';
   if (scan.low_count > 0) return 'LOW';
   return 'NONE';
+}
+
+function reportStatus(scan: Pick<Scan, 'status' | 'scan_provider' | 'external_status'>): string {
+  if (scan.scan_provider === 'artifactory_xray') {
+    const external = (scan.external_status ?? '').trim();
+    if (external !== '' && external !== 'completed' && external !== scan.status) {
+      return external;
+    }
+  }
+  return scan.status;
+}
+
+function statusChipColors(status: string): { background: string; color: string; border?: string } {
+  if (status === 'completed') {
+    return { background: '#dcfce7', color: '#15803d', border: '#86efac' };
+  }
+  if (status === 'blocked_by_xray_policy') {
+    return { background: '#fff7ed', color: '#c2410c', border: '#fdba74' };
+  }
+  return { background: '#fef2f2', color: '#dc2626', border: '#fca5a5' };
+}
+
+function formatStatusLabel(status: string): string {
+  return status.replace(/_/g, ' ').toUpperCase();
 }
 
 function filterVulns(vulns: Vulnerability[], f: Filters): Vulnerability[] {
@@ -254,6 +280,8 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
   const ws = worstSeverity(scan);
   const accentColor = SEV_COLORS[ws]?.bg ?? '#7c3aed';
   const imageRef = `${scan.image_name}:${scan.image_tag}`;
+  const displayStatus = reportStatus(scan);
+  const statusColors = statusChipColors(displayStatus);
 
   const [imageLocation, setImageLocation] = useState(scan.image_location ?? '');
   const [savingLocation, setSavingLocation] = useState(false);
@@ -320,8 +348,8 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, marginLeft: 16, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 999, background: scan.status === 'completed' ? '#dcfce7' : '#fef2f2', color: scan.status === 'completed' ? '#15803d' : '#dc2626', border: `1px solid ${scan.status === 'completed' ? '#86efac' : '#fca5a5'}` }}>
-            {scan.status.toUpperCase()}
+          <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 999, background: statusColors.background, color: statusColors.color, border: `1px solid ${statusColors.border ?? statusColors.background}` }}>
+            {formatStatusLabel(displayStatus)}
           </span>
           {scan.architecture && <span style={{ fontSize: 10, color: '#6b7280' }}>{scan.architecture} · {scan.os_family}</span>}
         </div>
@@ -743,7 +771,15 @@ function PrintReport() {
                       <a href={`#scan-${scan.id}`} style={{ color: '#7c3aed', textDecoration: 'none', wordBreak: 'break-all', overflowWrap: 'anywhere' }}>{scan.image_name}:{scan.image_tag}</a>
                     </td>
                     <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', textAlign: 'center' }}>
-                      <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: scan.status === 'completed' ? '#dcfce7' : '#fef2f2', color: scan.status === 'completed' ? '#15803d' : '#dc2626' }}>{scan.status}</span>
+                      {(() => {
+                        const displayStatus = reportStatus(scan);
+                        const statusColors = statusChipColors(displayStatus);
+                        return (
+                          <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: statusColors.background, color: statusColors.color }}>
+                            {formatStatusLabel(displayStatus)}
+                          </span>
+                        );
+                      })()}
                     </td>
                     {[scan.critical_count, scan.high_count, scan.medium_count, scan.low_count].map((n, i) => {
                       const colors = ['#dc2626', '#ea580c', '#d97706', '#2563eb'];

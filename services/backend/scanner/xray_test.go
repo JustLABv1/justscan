@@ -89,3 +89,59 @@ func TestXrayIssueScoreFallsBackToIssueMaxScore(t *testing.T) {
 		t.Fatalf("expected empty vector, got %q", vector)
 	}
 }
+
+func TestExtractXrayKBEntriesDeduplicatesAndKeepsBestScore(t *testing.T) {
+	summary := &xraySummaryResponse{
+		Artifacts: []xraySummaryArtifact{{
+			Issues: []xraySummaryIssue{
+				{
+					IssueID:      "XRAY-9000",
+					Description:  "First description",
+					Severity:     "Medium",
+					CVSS3Max:     "7.1",
+					References:   []any{"https://research.example/advisory"},
+					Components:   []xraySummaryComponent{{ComponentID: "docker://library/a:1", Name: "a", Version: "1"}},
+					CVEs:         []xraySummaryCVE{{CVE: "CVE-2024-1111"}},
+				},
+				{
+					IssueID:     "XRAY-9000",
+					Description: "Updated description",
+					Severity:    "High",
+					References: []any{
+						map[string]any{"url": "https://exploit-db.com/exploits/12345", "source": "Exploit DB"},
+					},
+					Components: []xraySummaryComponent{{ComponentID: "docker://library/b:2", Name: "b", Version: "2"}},
+					CVEs: []xraySummaryCVE{{
+						CVE:          "CVE-2024-1111",
+						CVSSV3Score:  "9.4",
+						CVSSV3Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+					}},
+				},
+			},
+		}},
+	}
+
+	entries := ExtractXrayKBEntries(summary)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 KB entry, got %d", len(entries))
+	}
+	entry := entries[0]
+	if entry.VulnID != "CVE-2024-1111" {
+		t.Fatalf("unexpected vuln id %q", entry.VulnID)
+	}
+	if entry.CVSSScore != 9.4 {
+		t.Fatalf("expected CVSS score 9.4, got %v", entry.CVSSScore)
+	}
+	if entry.CVSSVector != "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" {
+		t.Fatalf("unexpected vector %q", entry.CVSSVector)
+	}
+	if entry.Severity != "HIGH" {
+		t.Fatalf("expected highest severity to be retained, got %q", entry.Severity)
+	}
+	if len(entry.References) != 2 {
+		t.Fatalf("expected merged references, got %d", len(entry.References))
+	}
+	if !entry.ExploitAvailable {
+		t.Fatal("expected exploit_available to be true")
+	}
+}

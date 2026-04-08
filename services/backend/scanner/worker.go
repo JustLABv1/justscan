@@ -209,16 +209,7 @@ func processScan(job ScanJob, cacheDir string) {
 		if len(kbEntries) == 0 {
 			return
 		}
-		if _, err := db.NewInsert().Model(&kbEntries).
-			On("CONFLICT (vuln_id) DO UPDATE").
-			Set("description = CASE WHEN EXCLUDED.description != '' THEN EXCLUDED.description ELSE vuln_kb.description END").
-			Set("severity = CASE WHEN EXCLUDED.severity != '' THEN EXCLUDED.severity ELSE vuln_kb.severity END").
-			Set("cvss_score = CASE WHEN EXCLUDED.cvss_score > vuln_kb.cvss_score THEN EXCLUDED.cvss_score ELSE vuln_kb.cvss_score END").
-			Set("cvss_vector = CASE WHEN EXCLUDED.cvss_score > vuln_kb.cvss_score THEN EXCLUDED.cvss_vector ELSE vuln_kb.cvss_vector END").
-			Set(`"references" = EXCLUDED."references"`).
-			Set("exploit_available = EXCLUDED.exploit_available OR vuln_kb.exploit_available").
-			Set("fetched_at = now()").
-			Exec(context.Background()); err != nil {
+		if err := upsertKBEntries(context.Background(), db, kbEntries); err != nil {
 			log.Warnf("Worker: KB upsert failed for scan %s (non-fatal): %v", scanID, err)
 		} else {
 			log.Debugf("Worker: upserted %d KB entries for scan %s", len(kbEntries), scanID)

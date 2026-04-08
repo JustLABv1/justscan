@@ -1122,6 +1122,15 @@ func persistXraySummaryFindings(ctx context.Context, db *bun.DB, scan *models.Sc
 		}
 	}
 
+	kbEntries := ExtractXrayKBEntries(summary)
+	if len(kbEntries) > 0 {
+		if err := upsertKBEntries(context.Background(), db, kbEntries); err != nil {
+			log.Warnf("Xray KB upsert failed for scan %s (non-fatal): %v", scan.ID, err)
+		} else {
+			log.Debugf("Upserted %d Xray KB entries for scan %s", len(kbEntries), scan.ID)
+		}
+	}
+
 	severityCounts := CountSeverities(vulns)
 	scan.CriticalCount = severityCounts[models.SeverityCritical]
 	scan.HighCount = severityCounts[models.SeverityHigh]
@@ -1179,6 +1188,60 @@ func ParseXrayVulnerabilities(summary *xraySummaryResponse, scanID uuid.UUID) []
 	}
 
 	return vulns
+}
+
+func ExtractXrayKBEntries(summary *xraySummaryResponse) []models.VulnKBEntry {
+	if summary == nil {
+		return nil
+	}
+
+	seen := make(map[string]*models.VulnKBEntry)
+	for _, artifact := range summary.Artifacts {
+		for _, issue := range artifact.Issues {
+			vulnID := xrayIssueID(issue)
+			if vulnID == "" {
+				continue
+			}
+
+			refs := xrayKBReferences(issue.References)
+			score, vector := xrayIssueScore(issue)
+			severity := normalizeXraySeverity(issue.Severity)
+
+			entry, exists := seen[vulnID]
+			if !exists {
+				entry = &models.VulnKBEntry{
+					VulnID:           vulnID,
+					Description:      issue.Description,
+					Severity:         severity,
+					CVSSScore:        score,
+					CVSSVector:       vector,
+					References:       refs,
+					ExploitAvailable: kbRefsContainExploit(refs),
+				}
+				seen[vulnID] = entry
+				continue
+			}
+
+			if entry.Description == "" && issue.Description != "" {
+				entry.Description = issue.Description
+			}
+			if xraySeverityRank(severity) > xraySeverityRank(entry.Severity) {
+				entry.Severity = severity
+			}
+			if score > entry.CVSSScore {
+				entry.CVSSScore = score
+				entry.CVSSVector = vector
+			}
+			entry.References = mergeKBRefs(entry.References, refs)
+			entry.ExploitAvailable = entry.ExploitAvailable || kbRefsContainExploit(refs)
+		}
+	}
+
+	entries := make([]models.VulnKBEntry, 0, len(seen))
+	for _, entry := range seen {
+		entries = append(entries, *entry)
+	}
+	return entries
 }
 
 func isRetriableXrayScanArtifactError(err error) bool {
@@ -1407,6 +1470,21 @@ func normalizeXraySeverity(severity string) string {
 	}
 }
 
+func xraySeverityRank(severity string) int {
+	switch normalizeXraySeverity(severity) {
+	case models.SeverityCritical:
+		return 4
+	case models.SeverityHigh:
+		return 3
+	case models.SeverityMedium:
+		return 2
+	case models.SeverityLow:
+		return 1
+	default:
+		return 0
+	}
+}
+
 func hasMissingXraySummaryError(summary *xraySummaryResponse) bool {
 	if summary == nil {
 		return false
@@ -1542,4 +1620,42 @@ func xrayReferences(values []any) []string {
 		}
 	}
 	return refs
+}
+
+func xrayKBReferences(values []any) []models.KBRef {
+	refs := make([]models.KBRef, 0, len(values))
+	for _, value := range values {
+		switch typed := value.(type) {
+		case string:
+			trimmed := strings.TrimSpace(typed)
+			if trimmed != "" {
+				refs = append(refs, models.KBRef{URL: trimmed, Source: xrayDataSource})
+			}
+		case map[string]any:
+			urlValue := ""
+			for _, key := range []string{"url", "reference", "href"} {
+				candidate, _ := typed[key].(string)
+				candidate = strings.TrimSpace(candidate)
+				if candidate != "" {
+					urlValue = candidate
+					break
+				}
+			}
+			if urlValue == "" {
+				continue
+			}
+
+			source := xrayDataSource
+			for _, key := range []string{"source", "name", "provider"} {
+				candidate, _ := typed[key].(string)
+				candidate = strings.TrimSpace(candidate)
+				if candidate != "" {
+					source = candidate
+					break
+				}
+			}
+			refs = append(refs, models.KBRef{URL: urlValue, Source: source})
+		}
+	}
+	return mergeKBRefs(nil, refs)
 }

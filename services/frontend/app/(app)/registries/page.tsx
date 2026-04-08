@@ -358,7 +358,7 @@ export default function RegistriesPage() {
                   {scanProvider === 'artifactory_xray' && (
                     <div className="rounded-xl px-3 py-2.5 text-xs"
                       style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)', color: '#d97706' }}>
-                      Xray scans require image references that map cleanly to an Artifactory repository path, for example <span className="font-mono">plain-images/debian:12-slim</span> or <span className="font-mono">registry.example.com/plain-images/debian:12-slim</span>.
+                      Xray scans require image references that map cleanly to an Artifactory repository path, for example <span className="font-mono">test-images/debian:12-slim</span> or <span className="font-mono">registry.example.com/test-images/debian:12-slim</span>.
                     </div>
                   )}
                   <div className="space-y-1.5">

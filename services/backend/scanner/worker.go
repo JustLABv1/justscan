@@ -62,6 +62,11 @@ func InitWorker(db *bun.DB) {
 		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 			log.Warnf("Scanner worker %d cache init failed: %v", i, err)
 		}
+		if config.Config.Scanner.EnableGrype {
+			if err := os.MkdirAll(workerGrypeCacheDir(cacheDir), 0o755); err != nil {
+				log.Warnf("Scanner worker %d grype cache init failed: %v", i, err)
+			}
+		}
 		go func(workerID int, dir string) {
 			info, err := EnsureDatabasesFresh(context.Background(), dir)
 			if err != nil {
@@ -104,8 +109,13 @@ func InitWorker(db *bun.DB) {
 }
 
 // EnqueueScan queues a scan job. The scan row must already exist in the DB with status=pending.
-func EnqueueScan(scanID uuid.UUID, db *bun.DB, envVars []string, platform string) {
+func EnqueueScan(scanID uuid.UUID, db *bun.DB, envVars []string, platform string) error {
+	if err := setScanStepByID(context.Background(), db, scanID, models.ScanStepQueued); err != nil {
+		return err
+	}
+	recordScanStepOutput(context.Background(), db, scanID, "Scan accepted and queued for execution.")
 	jobQueue <- ScanJob{ScanID: scanID, DB: db, EnvVars: envVars, Platform: platform}
+	return nil
 }
 
 func workerLoop(id int) {
@@ -157,6 +167,7 @@ func processScan(job ScanJob, cacheDir string) {
 	log.Infof("Worker: starting scan %s for %s:%s", scanID, scan.ImageName, scan.ImageTag)
 
 	if scan.ScanProvider == models.ScanProviderArtifactoryXray {
+		recordScanStepOutput(ctx, db, scanID, "Worker started and handed off to the Xray provider flow.")
 		if err := processXrayScan(ctx, db, scan); err != nil {
 			if ctx.Err() != nil {
 				return
@@ -171,11 +182,23 @@ func processScan(job ScanJob, cacheDir string) {
 		return
 	}
 
+	if err := setScanStep(ctx, db, scan, models.ScanStepPreparingImage); err != nil {
+		setFailed(db, scan, err.Error())
+		return
+	}
+	recordScanStepOutput(ctx, db, scanID, "Worker started and is preparing the local scan environment.")
+
 	runtimeInfo, err := EnsureDatabasesFresh(ctx, cacheDir)
 	if err != nil {
 		setFailed(db, scan, "failed to refresh trivy databases: "+err.Error())
 		return
 	}
+	recordScanStepOutput(ctx, db, scanID, "Scanner databases are ready for this run.")
+	if err := setScanStep(ctx, db, scan, models.ScanStepScanningImage); err != nil {
+		setFailed(db, scan, err.Error())
+		return
+	}
+	recordScanStepOutput(ctx, db, scanID, "Starting the image analysis with Trivy.")
 
 	// Run vulnerability scan
 	trivyOut, trivyVersion, err := RunScanWithRegistryRetry(ctx, db, scan, job.EnvVars, job.Platform, cacheDir)
@@ -189,9 +212,36 @@ func processScan(job ScanJob, cacheDir string) {
 		setFailed(db, scan, err.Error())
 		return
 	}
+	if err := setScanStep(ctx, db, scan, models.ScanStepProcessingResults); err != nil {
+		setFailed(db, scan, err.Error())
+		return
+	}
+	recordScanStepOutput(ctx, db, scanID, "Trivy scan finished. Processing and normalizing findings.")
 
 	// Parse and insert vulnerabilities
 	vulns := ParseVulnerabilities(trivyOut, scanID)
+	grypeVersion := ""
+	kbEntries := ExtractKBEntries(trivyOut)
+	if config.Config.Scanner.EnableGrype {
+		grypeOut, version, grypeErr := RunGrypeScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
+		if grypeErr != nil {
+			if ctx.Err() == nil {
+				log.Warnf("Worker: Grype scan failed for %s (non-fatal): %v", scanID, grypeErr)
+			}
+		} else if grypeOut != nil {
+			grypeVersion = version
+			beforeCount := len(vulns)
+			vulns = MergeLocalScannerFindings(vulns, ParseGrypeVulnerabilities(grypeOut, scanID))
+			addedCount := len(vulns) - beforeCount
+			if addedCount > 0 {
+				log.Infof("Worker: Grype added %d unique findings for scan %s", addedCount, scanID)
+				recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Grype contributed %d additional unique findings.", addedCount))
+			} else {
+				recordScanStepOutput(ctx, db, scanID, "Grype completed without adding unique findings beyond Trivy.")
+			}
+			kbEntries = MergeKBEntries(kbEntries, ExtractGrypeKBEntries(grypeOut))
+		}
+	}
 
 	if len(vulns) > 0 {
 		for i := range vulns {
@@ -201,22 +251,29 @@ func processScan(job ScanJob, cacheDir string) {
 			setFailed(db, scan, "failed to store vulnerabilities: "+err.Error())
 			return
 		}
+		recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Stored %d vulnerability findings.", len(vulns)))
+	} else {
+		recordScanStepOutput(ctx, db, scanID, "No vulnerability findings were produced by the local scanners.")
 	}
 
 	// Upsert KB entries from scan data (best-effort, non-fatal)
-	go func() {
-		kbEntries := ExtractKBEntries(trivyOut)
-		if len(kbEntries) == 0 {
+	go func(entries []models.VulnKBEntry) {
+		if len(entries) == 0 {
 			return
 		}
-		if err := upsertKBEntries(context.Background(), db, kbEntries); err != nil {
+		if err := upsertKBEntries(context.Background(), db, entries); err != nil {
 			log.Warnf("Worker: KB upsert failed for scan %s (non-fatal): %v", scanID, err)
 		} else {
-			log.Debugf("Worker: upserted %d KB entries for scan %s", len(kbEntries), scanID)
+			log.Debugf("Worker: upserted %d KB entries for scan %s", len(entries), scanID)
 		}
-	}()
+	}(kbEntries)
 
 	var osvVulns []models.Vulnerability
+	if err := setScanStep(ctx, db, scan, models.ScanStepFinalizingReport); err != nil {
+		setFailed(db, scan, err.Error())
+		return
+	}
+	recordScanStepOutput(ctx, db, scanID, "Finalizing the report and running post-processing steps.")
 
 	// Run SBOM scan (best-effort, don't fail the whole scan if it errors)
 	sbomOut, sbomErr := RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
@@ -233,6 +290,7 @@ func processScan(job ScanJob, cacheDir string) {
 			if _, err := db.NewInsert().Model(&components).Exec(context.Background()); err != nil {
 				log.Warnf("Worker: failed to store SBOM components for %s: %v", scanID, err)
 			}
+			recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Stored %d SBOM components.", len(components)))
 			osvVulns = AugmentJavaVulnerabilitiesFromOSV(ctx, db, scanID, components, vulns)
 			if len(osvVulns) > 0 {
 				if _, err := db.NewInsert().Model(&osvVulns).Exec(context.Background()); err != nil {
@@ -240,8 +298,11 @@ func processScan(job ScanJob, cacheDir string) {
 					osvVulns = nil
 				} else {
 					log.Infof("Worker: added %d OSV Java findings for scan %s", len(osvVulns), scanID)
+					recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("OSV added %d supplemental Java findings.", len(osvVulns)))
 				}
 			}
+		} else {
+			recordScanStepOutput(ctx, db, scanID, "SBOM scan completed without component records.")
 		}
 	}
 
@@ -256,11 +317,13 @@ func processScan(job ScanJob, cacheDir string) {
 	completedAt := time.Now()
 	scan.Status = models.ScanStatusCompleted
 	scan.CompletedAt = &completedAt
+	scan.CurrentStep = models.ScanStepCompleted
 	if runtimeInfo != nil && runtimeInfo.Version != "" {
 		scan.TrivyVersion = runtimeInfo.Version
 	} else {
 		scan.TrivyVersion = trivyVersion
 	}
+	scan.GrypeVersion = grypeVersion
 	if runtimeInfo != nil {
 		scan.TrivyVulnDBUpdatedAt = runtimeInfo.VulnerabilityDB.UpdatedAt
 		scan.TrivyVulnDBDownloadedAt = runtimeInfo.VulnerabilityDB.DownloadedAt
@@ -282,7 +345,7 @@ func processScan(job ScanJob, cacheDir string) {
 	scan.UnknownCount = severityCounts[models.SeverityUnknown]
 
 	if _, err := db.NewUpdate().Model(scan).
-		Column("status", "completed_at", "trivy_version", "image_digest",
+		Column("status", "completed_at", "trivy_version", "grype_version", "image_digest",
 			"trivy_vuln_db_updated_at", "trivy_vuln_db_downloaded_at",
 			"trivy_java_db_updated_at", "trivy_java_db_downloaded_at",
 			"critical_count", "high_count", "medium_count", "low_count", "unknown_count",
@@ -291,6 +354,11 @@ func processScan(job ScanJob, cacheDir string) {
 		log.Errorf("Worker: failed to mark scan %s as completed: %v", scanID, err)
 		return
 	}
+	if err := setScanStep(context.Background(), db, scan, models.ScanStepCompleted); err != nil {
+		log.Errorf("Worker: failed to record completed step for scan %s: %v", scanID, err)
+		return
+	}
+	recordScanStepOutput(context.Background(), db, scanID, fmt.Sprintf("Scan completed with %d total findings.", len(vulns)+len(osvVulns)))
 
 	log.Infof("Worker: scan %s completed — CRIT:%d HIGH:%d MED:%d LOW:%d UNK:%d",
 		scanID,
@@ -339,6 +407,7 @@ func setFailed(db *bun.DB, scan *models.Scan, msg string) {
 	ctx := context.Background()
 	log.Errorf("Worker: scan %s failed: %s", scan.ID, msg)
 	scan.Status = models.ScanStatusFailed
+	scan.CurrentStep = models.ScanStepFailed
 	scan.ErrorMessage = msg
 	completedAt := time.Now()
 	scan.CompletedAt = &completedAt
@@ -352,6 +421,10 @@ func setFailed(db *bun.DB, scan *models.Scan, msg string) {
 	db.NewUpdate().Model(scan).
 		Column(columns...).
 		Where("id = ?", scan.ID).Exec(ctx) //nolint:errcheck
+	if err := setScanStep(ctx, db, scan, models.ScanStepFailed); err != nil {
+		log.Warnf("Worker: failed to persist failed step for scan %s: %v", scan.ID, err)
+	}
+	recordScanStepOutput(ctx, db, scan.ID, msg)
 
 	go notifications.Dispatch(db, models.NotificationEventScanFailed, notifications.Payload{
 		ScanID:    scan.ID.String(),

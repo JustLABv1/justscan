@@ -20,6 +20,8 @@ allow_origins:
 
 scanner:
   trivy_path: trivy
+  grype_path: grype
+  enable_grype: false
   timeout: 600
   concurrency: 2
   db_max_age_hours: 24

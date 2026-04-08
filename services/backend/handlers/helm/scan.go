@@ -106,6 +106,7 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				ImageName:        normalizedImageName,
 				ImageTag:         normalizedImageTag,
 				Platform:         req.Platform,
+				CurrentStep:      models.ScanStepQueued,
 				Status:           models.ScanStatusPending,
 				UserID:           &userID,
 				CreatedAt:        time.Now(),
@@ -182,6 +183,7 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				} else {
 					completedAt := time.Now()
 					scan.Status = models.ScanStatusFailed
+					scan.CurrentStep = models.ScanStepFailed
 					scan.ErrorMessage = err.Error()
 					scan.CompletedAt = &completedAt
 				}

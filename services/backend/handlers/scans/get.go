@@ -33,6 +33,14 @@ func GetScan(db *bun.DB) gin.HandlerFunc {
 			Scan(c.Request.Context(), &tags) //nolint:errcheck
 		scan.Tags = tags
 
+		var stepLogs []models.ScanStepLog
+		db.NewSelect().
+			Model(&stepLogs).
+			Where("scan_id = ?", scanID).
+			OrderExpr("position ASC").
+			Scan(c.Request.Context()) //nolint:errcheck
+		scan.StepLogs = stepLogs
+
 		c.JSON(http.StatusOK, scan)
 	}
 }

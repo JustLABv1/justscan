@@ -36,6 +36,7 @@ func ReScan(db *bun.DB) gin.HandlerFunc {
 			Platform:         orig.Platform,
 			RegistryID:       orig.RegistryID,
 			ScanProvider:     orig.ScanProvider,
+			CurrentStep:      models.ScanStepQueued,
 			HelmScanRunID:    orig.HelmScanRunID,
 			HelmChart:        orig.HelmChart,
 			HelmChartName:    orig.HelmChartName,
@@ -69,6 +70,7 @@ func ReScan(db *bun.DB) gin.HandlerFunc {
 			} else {
 				completedAt := time.Now()
 				newScan.Status = models.ScanStatusFailed
+				newScan.CurrentStep = models.ScanStepFailed
 				newScan.ErrorMessage = err.Error()
 				newScan.CompletedAt = &completedAt
 			}

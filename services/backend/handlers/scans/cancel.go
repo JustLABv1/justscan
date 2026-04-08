@@ -41,6 +41,7 @@ func CancelScan(db *bun.DB) gin.HandlerFunc {
 		ctx := context.Background()
 		now := time.Now()
 		scan.Status = models.ScanStatusCancelled
+		scan.CurrentStep = models.ScanStepCancelled
 		scan.ErrorMessage = "Cancelled by user"
 		scan.CompletedAt = &now
 		columns := []string{"status", "error_message", "completed_at"}
@@ -55,6 +56,10 @@ func CancelScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to cancel scan"})
 			return
 		}
+		if err := scanner.MarkScanCancelled(ctx, db, scanID, scan.ErrorMessage); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record cancelled scan step"})
+			return
+		}
 
 		go audit.Write(ctx, db, userID.String(), "scan.cancel",
 			fmt.Sprintf("Scan cancelled: %s:%s (id=%s)", scan.ImageName, scan.ImageTag, scanID))
@@ -62,6 +67,7 @@ func CancelScan(db *bun.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"result":          "scan cancelled",
 			"status":          scan.Status,
+			"current_step":    scan.CurrentStep,
 			"external_status": scan.ExternalStatus,
 			"completed_at":    scan.CompletedAt,
 			"error_message":   scan.ErrorMessage,

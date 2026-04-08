@@ -7,25 +7,25 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ImageRowSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import {
-  cancelScan,
-  createScans,
-  deleteScan,
-  ImageSummary,
-  listRegistries,
-  listScanImages,
-  listTags,
-  Registry,
-  Tag
+    cancelScan,
+    createScans,
+    deleteScan,
+    ImageSummary,
+    listRegistries,
+    listScanImages,
+    listTags,
+    Registry,
+    Tag
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Checkbox, ListBox, Modal, Popover, Select, useOverlayState } from '@heroui/react';
 import {
-  ArrowDown01Icon,
-  ArrowRight01Icon,
-  FilterIcon,
-  GitCompareIcon,
-  PlusSignIcon,
-  Shield01Icon,
+    ArrowDown01Icon,
+    ArrowRight01Icon,
+    FilterIcon,
+    GitCompareIcon,
+    PlusSignIcon,
+    Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';

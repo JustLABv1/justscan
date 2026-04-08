@@ -95,13 +95,13 @@ func TestExtractXrayKBEntriesDeduplicatesAndKeepsBestScore(t *testing.T) {
 		Artifacts: []xraySummaryArtifact{{
 			Issues: []xraySummaryIssue{
 				{
-					IssueID:      "XRAY-9000",
-					Description:  "First description",
-					Severity:     "Medium",
-					CVSS3Max:     "7.1",
-					References:   []any{"https://research.example/advisory"},
-					Components:   []xraySummaryComponent{{ComponentID: "docker://library/a:1", Name: "a", Version: "1"}},
-					CVEs:         []xraySummaryCVE{{CVE: "CVE-2024-1111"}},
+					IssueID:     "XRAY-9000",
+					Description: "First description",
+					Severity:    "Medium",
+					CVSS3Max:    "7.1",
+					References:  []any{"https://research.example/advisory"},
+					Components:  []xraySummaryComponent{{ComponentID: "docker://library/a:1", Name: "a", Version: "1"}},
+					CVEs:        []xraySummaryCVE{{CVE: "CVE-2024-1111"}},
 				},
 				{
 					IssueID:     "XRAY-9000",

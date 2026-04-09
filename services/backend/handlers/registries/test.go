@@ -1,8 +1,10 @@
 package registries
 
 import (
-	"justscan-backend/pkg/models"
 	"net/http"
+
+	"justscan-backend/pkg/models"
+	"justscan-backend/scanner"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,6 +24,10 @@ func TestRegistry(db *bun.DB) gin.HandlerFunc {
 		registry := &models.Registry{}
 		if err := db.NewSelect().Model(registry).Where("id = ?", registryID).Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "registry not found"})
+			return
+		}
+		if err := scanner.ValidateProviderSelection(registry.ScanProvider); err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
 		if err := CheckAndPersistRegistryHealth(c.Request.Context(), db, registry); err != nil {

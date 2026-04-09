@@ -1,47 +1,47 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import {
-    addTagToScan,
-    AdminScan,
-    AdminToken,
-    AdminUser,
-    AuditLog,
-    AuditLogFilters,
-    AutoTagRule,
-    cancelScan,
-    createAdminUser,
-    createAutoTagRule,
-    createNotificationChannel,
-    createShare,
-    deleteAdminToken,
-    deleteAdminUser,
-    deleteAutoTagRule,
-    deleteNotificationChannel,
-    deleteShare,
-    disableAdminUser,
-    getAdminSettings,
-    getScannerHealth,
-    listAdminScans,
-    listAdminTokens,
-    listAdminUsers,
-    listAuditLogs,
-    listAutoTagRules,
-    listNotificationChannels,
-    listNotificationDeliveries,
-    listTags,
-    NotificationChannel,
-    NotificationDelivery,
-    reScan,
-    ScannerHealth,
-    setPublicScanEnabled,
-    Tag,
-    testNotificationChannel,
-    updateAdminToken,
-    updateAdminUser,
-    updateAutoTagRule,
-    updateNotificationChannel,
-    updateRateLimit,
-    updateRegisterRateLimit,
+  addTagToScan,
+  AdminScan,
+  AdminToken,
+  AdminUser,
+  AuditLog,
+  AuditLogFilters,
+  AutoTagRule,
+  cancelScan,
+  createAdminUser,
+  createAutoTagRule,
+  createNotificationChannel,
+  createShare,
+  deleteAdminToken,
+  deleteAdminUser,
+  deleteAutoTagRule,
+  deleteNotificationChannel,
+  deleteShare,
+  disableAdminUser,
+  getAdminSettings,
+  getScannerHealth,
+  listAdminScans,
+  listAdminTokens,
+  listAdminUsers,
+  listAuditLogs,
+  listAutoTagRules,
+  listNotificationChannels,
+  listNotificationDeliveries,
+  listTags,
+  NotificationChannel,
+  NotificationDelivery,
+  reScan,
+  ScannerHealth,
+  setPublicScanEnabled,
+  Tag,
+  testNotificationChannel,
+  updateAdminToken,
+  updateAdminUser,
+  updateAutoTagRule,
+  updateNotificationChannel,
+  updateRateLimit,
+  updateRegisterRateLimit,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
@@ -162,60 +162,70 @@ function ScannerHealthPanel() {
 
       {health && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              { label: 'Healthy Workers', value: health.healthy_workers, color: '#34d399', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.18)' },
-              { label: 'Stale Workers', value: health.stale_workers, color: '#fbbf24', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.18)' },
-              { label: 'Oldest Vuln DB Snapshot', value: formatDbAge(health.oldest_vuln_db_age_hours), color: '#60a5fa', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.18)' },
-              { label: 'Oldest Java DB Snapshot', value: formatDbAge(health.oldest_java_db_age_hours), color: '#a78bfa', bg: 'rgba(124,58,237,0.1)', border: 'rgba(124,58,237,0.18)' },
-            ].map((item) => (
-              <div key={item.label} className="rounded-xl p-4" style={{ background: item.bg, border: `1px solid ${item.border}` }}>
-                <p className="text-xs text-zinc-500 mb-1">{item.label}</p>
-                <p className="text-lg font-bold" style={{ color: item.color }}>{item.value}</p>
+          {!health.local_scanner_enabled ? (
+            <div className="rounded-xl px-4 py-4 text-sm" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)' }}>
+              <p className="font-medium text-zinc-800 dark:text-zinc-100">Local scanner is disabled.</p>
+              <p className="mt-1 text-zinc-600 dark:text-zinc-400">{health.message || 'This backend instance is running without the built-in local scanner.'}</p>
+              <p className="mt-2 text-xs text-zinc-500">Grype augmentation: {health.grype_enabled ? 'enabled' : 'disabled'}</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {[
+                  { label: 'Healthy Workers', value: health.healthy_workers, color: '#34d399', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.18)' },
+                  { label: 'Stale Workers', value: health.stale_workers, color: '#fbbf24', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.18)' },
+                  { label: 'Oldest Vuln DB Snapshot', value: formatDbAge(health.oldest_vuln_db_age_hours), color: '#60a5fa', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.18)' },
+                  { label: 'Oldest Java DB Snapshot', value: formatDbAge(health.oldest_java_db_age_hours), color: '#a78bfa', bg: 'rgba(124,58,237,0.1)', border: 'rgba(124,58,237,0.18)' },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-xl p-4" style={{ background: item.bg, border: `1px solid ${item.border}` }}>
+                    <p className="text-xs text-zinc-500 mb-1">{item.label}</p>
+                    <p className="text-lg font-bold" style={{ color: item.color }}>{item.value}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className="rounded-xl px-4 py-3 text-xs text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-            Status is based on when each worker last downloaded its local DB copy. A worker is healthy if it downloaded within the last {health.max_allowed_age_hours}h.
-          </div>
+              <div className="rounded-xl px-4 py-3 text-xs text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                Status is based on when each worker last downloaded its local DB copy. A worker is healthy if it downloaded within the last {health.max_allowed_age_hours}h.
+              </div>
 
-          <div className="space-y-2">
-            {health.workers.map((worker) => {
-              const tone = scannerTone(worker.status);
-              return (
-                <div key={worker.worker_id} className="rounded-xl p-4 space-y-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
-                        Worker {worker.worker_id}
-                      </span>
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md capitalize" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
-                        {worker.status}
-                      </span>
-                      <span className="text-xs text-zinc-500">Trivy {worker.trivy_version || 'unknown'}</span>
+              <div className="space-y-2">
+                {health.workers.map((worker) => {
+                  const tone = scannerTone(worker.status);
+                  return (
+                    <div key={worker.worker_id} className="rounded-xl p-4 space-y-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-md" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
+                            Worker {worker.worker_id}
+                          </span>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-md capitalize" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
+                            {worker.status}
+                          </span>
+                          <span className="text-xs text-zinc-500">Trivy {worker.trivy_version || 'unknown'}</span>
+                        </div>
+                        <span className="text-xs text-zinc-500" title={worker.cache_dir}>{worker.cache_dir}</span>
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-3 text-xs">
+                        <div className="rounded-lg px-3 py-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                          <p className="text-zinc-500 mb-1">Vulnerability DB</p>
+                          <p className="text-zinc-700 dark:text-zinc-200">Snapshot age: {formatDbAge(worker.vuln_db_age_hours)}</p>
+                          <p className="text-zinc-500 mt-1">Updated: {worker.vuln_db_updated_at ? fullDate(worker.vuln_db_updated_at) : 'Unknown'}</p>
+                          <p className="text-zinc-500">Downloaded: {worker.vuln_db_downloaded_at ? fullDate(worker.vuln_db_downloaded_at) : 'Unknown'}</p>
+                        </div>
+                        <div className="rounded-lg px-3 py-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                          <p className="text-zinc-500 mb-1">Java DB</p>
+                          <p className="text-zinc-700 dark:text-zinc-200">Snapshot age: {formatDbAge(worker.java_db_age_hours)}</p>
+                          <p className="text-zinc-500 mt-1">Updated: {worker.java_db_updated_at ? fullDate(worker.java_db_updated_at) : 'Unknown'}</p>
+                          <p className="text-zinc-500">Downloaded: {worker.java_db_downloaded_at ? fullDate(worker.java_db_downloaded_at) : 'Unknown'}</p>
+                        </div>
+                      </div>
+                      {worker.error && <p className="text-xs" style={{ color: '#f87171' }}>{worker.error}</p>}
                     </div>
-                    <span className="text-xs text-zinc-500" title={worker.cache_dir}>{worker.cache_dir}</span>
-                  </div>
-                  <div className="grid md:grid-cols-2 gap-3 text-xs">
-                    <div className="rounded-lg px-3 py-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-                      <p className="text-zinc-500 mb-1">Vulnerability DB</p>
-                      <p className="text-zinc-700 dark:text-zinc-200">Snapshot age: {formatDbAge(worker.vuln_db_age_hours)}</p>
-                      <p className="text-zinc-500 mt-1">Updated: {worker.vuln_db_updated_at ? fullDate(worker.vuln_db_updated_at) : 'Unknown'}</p>
-                      <p className="text-zinc-500">Downloaded: {worker.vuln_db_downloaded_at ? fullDate(worker.vuln_db_downloaded_at) : 'Unknown'}</p>
-                    </div>
-                    <div className="rounded-lg px-3 py-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-                      <p className="text-zinc-500 mb-1">Java DB</p>
-                      <p className="text-zinc-700 dark:text-zinc-200">Snapshot age: {formatDbAge(worker.java_db_age_hours)}</p>
-                      <p className="text-zinc-500 mt-1">Updated: {worker.java_db_updated_at ? fullDate(worker.java_db_updated_at) : 'Unknown'}</p>
-                      <p className="text-zinc-500">Downloaded: {worker.java_db_downloaded_at ? fullDate(worker.java_db_downloaded_at) : 'Unknown'}</p>
-                    </div>
-                  </div>
-                  {worker.error && <p className="text-xs" style={{ color: '#f87171' }}>{worker.error}</p>}
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

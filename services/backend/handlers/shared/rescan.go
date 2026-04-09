@@ -60,6 +60,30 @@ func RescanShared(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusForbidden, gin.H{"error": "public scanning is currently disabled"})
 				return
 			}
+			if !scanner.TrivyEnabled() {
+				c.JSON(http.StatusForbidden, gin.H{"error": "anonymous rescans are unavailable because local Trivy scanning is disabled"})
+				return
+			}
+		}
+
+		var envVars []string
+		if isAuthenticated {
+			registry, resolvedEnvVars, err := scanner.ResolveRegistryForScan(c.Request.Context(), db, orig.ImageName, orig.RegistryID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			provider, err := scanner.ProviderForRegistry(registry)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			newScan.ImageName, newScan.ImageTag = scanner.NormalizeScanTarget(orig.ImageName, orig.ImageTag, registry)
+			newScan.ScanProvider = provider
+			if registry != nil {
+				newScan.RegistryID = &registry.ID
+			}
+			envVars = resolvedEnvVars
 		}
 
 		if _, err := db.NewInsert().Model(newScan).Exec(c.Request.Context()); err != nil {
@@ -67,7 +91,7 @@ func RescanShared(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if err := scanner.DispatchScan(c.Request.Context(), db, newScan, nil, orig.Platform); err != nil {
+		if err := scanner.DispatchScan(c.Request.Context(), db, newScan, envVars, orig.Platform); err != nil {
 			log.Warnf("RescanShared dispatch failed for %s: %v", newScan.ID, err)
 			if markErr := scanner.MarkScanFailed(c.Request.Context(), db, newScan.ID, err.Error()); markErr != nil {
 				log.Errorf("RescanShared failed to persist dispatch error for %s: %v", newScan.ID, markErr)

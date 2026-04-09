@@ -22,6 +22,9 @@ type WorkerHealth struct {
 }
 
 type HealthReport struct {
+	LocalScannerEnabled bool           `json:"local_scanner_enabled"`
+	GrypeEnabled        bool           `json:"grype_enabled"`
+	Message             string         `json:"message,omitempty"`
 	GeneratedAt          time.Time      `json:"generated_at"`
 	CacheRoot            string         `json:"cache_root"`
 	MaxAllowedAgeHours   int            `json:"max_allowed_age_hours"`
@@ -41,6 +44,8 @@ func GetHealthReport(ctx context.Context) HealthReport {
 	}
 
 	report := HealthReport{
+		LocalScannerEnabled: TrivyEnabled(),
+		GrypeEnabled:        GrypeEnabled(),
 		GeneratedAt:        time.Now().UTC(),
 		CacheRoot:          trivyCacheRoot(),
 		MaxAllowedAgeHours: config.Config.Scanner.DBMaxAgeHours,
@@ -49,6 +54,12 @@ func GetHealthReport(ctx context.Context) HealthReport {
 	}
 	if report.MaxAllowedAgeHours <= 0 {
 		report.MaxAllowedAgeHours = 24
+	}
+	if !report.LocalScannerEnabled {
+		report.CacheRoot = ""
+		report.TotalWorkers = 0
+		report.Message = trivyDisabledMessage
+		return report
 	}
 
 	now := time.Now()

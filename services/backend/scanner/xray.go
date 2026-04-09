@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -102,6 +103,19 @@ type xraySummaryCVE struct {
 	CVSSV2Vector string `json:"cvss_v2_vector"`
 	CVSSScore    any    `json:"cvss_score"`
 	CVSSVector   string `json:"cvss_vector"`
+}
+
+type xrayComponentExportRequest struct {
+	PackageType       string `json:"package_type"`
+	ComponentName     string `json:"component_name"`
+	Path              string `json:"path,omitempty"`
+	CycloneDX         bool   `json:"cyclonedx,omitempty"`
+	CycloneDXFormat   string `json:"cyclonedx_format,omitempty"`
+	License           bool   `json:"license,omitempty"`
+	LicenseResolution bool   `json:"license_resolution,omitempty"`
+	Vulnerabilities   bool   `json:"vulnerabilities,omitempty"`
+	Violations        bool   `json:"violations,omitempty"`
+	OperationalRisk   bool   `json:"operational_risk,omitempty"`
 }
 
 type registryHTTPError struct {
@@ -225,6 +239,28 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	artifactRepoPath := artifactName + "/" + imageTag + "/manifest.json"
 	repoPath := imageRepoPath + "/" + imageTag + "/manifest.json"
 	artifactPath := client.artifactoryID + "/" + repoPath
+	if imageConfig, configErr := client.imageConfigMetadata(ctx, imageRepoPath, imageTag, scan.Platform); configErr != nil {
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to load image config metadata from Artifactory: %v", configErr))
+	} else if len(imageConfig) > 0 {
+		scan.ImageConfig = imageConfig
+		architecture, osFamily, osName := xrayImageMetadataFields(imageConfig)
+		if architecture != "" {
+			scan.Architecture = architecture
+		}
+		if osFamily != "" {
+			scan.OSFamily = osFamily
+		}
+		if osName != "" {
+			scan.OSName = osName
+		}
+		if _, err := db.NewUpdate().Model(scan).
+			Column("image_config", "architecture", "os_family", "os_name").
+			Where("id = ?", scan.ID).
+			Exec(ctx); err != nil {
+			return fmt.Errorf("failed to persist xray image metadata: %w", err)
+		}
+		recordScanStepOutput(ctx, db, scan.ID, "Loaded image config metadata from Artifactory for richer scan details.")
+	}
 	if resolvedDigest, resolveErr := client.resolveImageDigest(ctx, imageRepoPath, imageTag, scan.Platform); resolveErr != nil {
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to resolve image digest before starting the Xray flow: %v", resolveErr))
 	} else if resolvedDigest != "" {
@@ -251,7 +287,12 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	if err := client.warmImageInArtifactory(ctx, imageRepoPath, imageTag, scan.Platform); err != nil {
 		if normalizedMessage, ok := normalizeXrayDownloadBlockedError(err); ok {
 			targets := blockedViolationLookupTargets(err, repoKey, artifactRepoPath)
-			normalizedMessage = client.enrichBlockedScanMessage(ctx, targets, normalizedMessage)
+			violations, violationsErr := client.getViolations(ctx, targets)
+			if violationsErr != nil {
+				log.Warnf("Failed to fetch Xray violations for blocked scan %s: %v", scan.ID, violationsErr)
+			} else if enrichment := formatBlockedViolationsSummary(violations); enrichment != "" {
+				normalizedMessage += "\n" + enrichment
+			}
 			recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Artifactory reported a blocking policy while warming %s.", artifactPath))
 			if err := updateXrayMetadata(ctx, db, scan.ID, componentID, models.ScanExternalStatusBlockedByXrayPolicy, models.ScanStepFailed); err != nil {
 				return err
@@ -271,6 +312,28 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 				} else {
 					log.Infof("Imported Xray vulnerabilities for blocked scan %s from %s", scan.ID, blockedArtifactPath)
 				}
+			}
+
+			if scan.CriticalCount+scan.HighCount+scan.MediumCount+scan.LowCount+scan.UnknownCount == 0 {
+				if recoveredCount, exportErr := persistXrayCycloneDXFallback(ctx, db, scan, client, artifactPath, repoPath); exportErr != nil {
+					log.Warnf("Failed to persist Xray CycloneDX fallback findings for blocked scan %s: %v", scan.ID, exportErr)
+				} else if recoveredCount > 0 {
+					recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Recovered %d vulnerabilities from the Xray CycloneDX export.", recoveredCount))
+				}
+			}
+
+			if scan.CriticalCount+scan.HighCount+scan.MediumCount+scan.LowCount+scan.UnknownCount == 0 && violations != nil && len(violations.Violations) > 0 {
+				if err := persistXrayViolationFindings(ctx, db, scan, violations); err != nil {
+					log.Warnf("Failed to persist Xray violation fallback findings for blocked scan %s: %v", scan.ID, err)
+				} else {
+					recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Recovered %d fallback findings from Xray policy violations.", len(violations.Violations)))
+				}
+			}
+
+			if scan.CriticalCount+scan.HighCount+scan.MediumCount+scan.LowCount+scan.UnknownCount > 0 {
+				// CycloneDX fallback already persisted SBOM data when it succeeded.
+			} else if err := persistXraySBOMComponents(ctx, db, scan, client, artifactPath, repoPath); err != nil {
+				log.Warnf("Failed to persist Xray SBOM components for blocked scan %s: %v", scan.ID, err)
 			}
 
 			return errors.New(normalizedMessage)
@@ -329,6 +392,10 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	if err := persistXraySummaryFindings(ctx, db, scan, summary); err != nil {
 		return err
 	}
+	if err := persistXraySBOMComponents(ctx, db, scan, client, artifactPath, repoPath); err != nil {
+		log.Warnf("Failed to persist Xray SBOM components for scan %s (non-fatal): %v", scan.ID, err)
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray SBOM import did not complete: %v", err))
+	}
 
 	completedAt := time.Now()
 	scan.Status = models.ScanStatusCompleted
@@ -337,7 +404,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	scan.CurrentStep = models.ScanStepCompleted
 
 	if _, err := db.NewUpdate().Model(scan).
-		Column("status", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "external_scan_id", "external_status").
+		Column("status", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "external_scan_id", "external_status", "image_config", "architecture", "os_family", "os_name").
 		Where("id = ?", scan.ID).
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to mark xray scan as completed: %w", err)
@@ -416,33 +483,11 @@ func (c *xrayClient) resolveImageDigest(ctx context.Context, imageRepoPath, refe
 	if strings.TrimSpace(reference) == "" {
 		return "", fmt.Errorf("missing manifest reference for %s", imageRepoPath)
 	}
-
-	manifest, mediaType, contentDigest, err := c.fetchRegistryManifest(ctx, imageRepoPath, reference)
+	_, digest, err := c.resolveImageManifest(ctx, imageRepoPath, reference, platform)
 	if err != nil {
 		return "", err
 	}
-
-	if isRegistryManifestIndex(mediaType, manifest) {
-		targets := selectManifestDescriptors(manifest.Manifests, platform)
-		if len(targets) == 0 {
-			return "", fmt.Errorf("registry manifest list for %s did not contain a usable image manifest", reference)
-		}
-		for _, target := range targets {
-			if digest := strings.TrimSpace(target.Digest); digest != "" {
-				return digest, nil
-			}
-		}
-		return "", fmt.Errorf("registry manifest list for %s did not expose a child digest", reference)
-	}
-
-	if digest := strings.TrimSpace(contentDigest); digest != "" {
-		return digest, nil
-	}
-	if strings.HasPrefix(reference, "sha256:") {
-		return reference, nil
-	}
-
-	return "", fmt.Errorf("registry manifest for %s did not expose a Docker-Content-Digest header", reference)
+	return digest, nil
 }
 
 func newXrayClient(registry *models.Registry) (*xrayClient, error) {
@@ -516,6 +561,53 @@ func (c *xrayClient) artifactSummary(ctx context.Context, artifactPath string) (
 		return nil, err
 	}
 	return &response, nil
+}
+
+func (c *xrayClient) exportComponentCycloneDX(ctx context.Context, componentName string, candidatePaths ...string) (*TrivySBOMOutput, string, error) {
+	trimmedPaths := make([]string, 0, len(candidatePaths)+1)
+	seen := make(map[string]bool)
+	for _, candidate := range append(candidatePaths, "") {
+		path := strings.TrimSpace(candidate)
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+		trimmedPaths = append(trimmedPaths, path)
+	}
+
+	var lastErr error
+	for _, candidatePath := range trimmedPaths {
+		body := xrayComponentExportRequest{
+			PackageType:       "docker",
+			ComponentName:     componentName,
+			Path:              candidatePath,
+			CycloneDX:         true,
+			CycloneDXFormat:   "json",
+			License:           true,
+			LicenseResolution: true,
+			Vulnerabilities:   true,
+			Violations:        true,
+			OperationalRisk:   true,
+		}
+
+		payload, err := c.doRawJSON(ctx, http.MethodPost, "/xray/api/v2/component/exportDetails", body, "application/zip", http.StatusOK)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		sbom, err := parseXrayCycloneDXExport(payload)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		return sbom, candidatePath, nil
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("xray component export did not return a CycloneDX SBOM")
+	}
+	return nil, "", lastErr
 }
 
 func (c *xrayClient) warmImageInArtifactory(ctx context.Context, imageRepoPath, tag, platform string) error {
@@ -618,6 +710,70 @@ func (c *xrayClient) fetchRegistryManifest(ctx context.Context, imageRepoPath, r
 	}
 
 	return &manifest, manifest.MediaType, strings.TrimSpace(response.Header.Get("Docker-Content-Digest")), nil
+}
+
+func (c *xrayClient) resolveImageManifest(ctx context.Context, imageRepoPath, reference, platform string) (*registryManifest, string, error) {
+	manifest, mediaType, contentDigest, err := c.fetchRegistryManifest(ctx, imageRepoPath, reference)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if isRegistryManifestIndex(mediaType, manifest) {
+		targets := selectManifestDescriptors(manifest.Manifests, platform)
+		if len(targets) == 0 {
+			return nil, "", fmt.Errorf("registry manifest list for %s did not contain a usable image manifest", reference)
+		}
+		for _, target := range targets {
+			if digest := strings.TrimSpace(target.Digest); digest != "" {
+				return c.resolveImageManifest(ctx, imageRepoPath, digest, "")
+			}
+		}
+		return nil, "", fmt.Errorf("registry manifest list for %s did not expose a child digest", reference)
+	}
+
+	if digest := strings.TrimSpace(contentDigest); digest != "" {
+		return manifest, digest, nil
+	}
+	if strings.HasPrefix(reference, "sha256:") {
+		return manifest, reference, nil
+	}
+
+	return nil, "", fmt.Errorf("registry manifest for %s did not expose a Docker-Content-Digest header", reference)
+}
+
+func (c *xrayClient) fetchRegistryBlob(ctx context.Context, imageRepoPath, digest string) ([]byte, error) {
+	response, err := c.doRegistryRequest(ctx, http.MethodGet, registryBlobPath(imageRepoPath, digest), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read registry blob %s: %w", digest, err)
+	}
+	return body, nil
+}
+
+func (c *xrayClient) imageConfigMetadata(ctx context.Context, imageRepoPath, reference, platform string) (models.JSONObject, error) {
+	manifest, _, err := c.resolveImageManifest(ctx, imageRepoPath, reference, platform)
+	if err != nil {
+		return nil, err
+	}
+	if manifest == nil || strings.TrimSpace(manifest.Config.Digest) == "" {
+		return nil, fmt.Errorf("registry manifest did not expose an image config digest")
+	}
+
+	body, err := c.fetchRegistryBlob(ctx, imageRepoPath, strings.TrimSpace(manifest.Config.Digest))
+	if err != nil {
+		return nil, err
+	}
+
+	var payload models.JSONObject
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("failed to decode image config metadata: %w", err)
+	}
+	return payload, nil
 }
 
 func (c *xrayClient) warmBlob(ctx context.Context, imageRepoPath, digest string, seenBlobs map[string]bool) error {
@@ -739,7 +895,11 @@ func (c *xrayClient) bestEffortTriggerBlockedArtifactScan(ctx context.Context, c
 
 		repoPath := repository + "/" + path
 		if err := c.scanNow(ctx, repoPath); err != nil {
-			log.Warnf("Failed to trigger Xray re-index for blocked artifact %s: %v", repoPath, err)
+			if shouldWarnBlockedReindexError(err) {
+				log.Warnf("Failed to trigger Xray re-index for blocked artifact %s: %v", repoPath, err)
+			} else {
+				log.Debugf("Skipping blocked-artifact re-index warning for %s: %v", repoPath, err)
+			}
 		}
 	}
 
@@ -752,6 +912,19 @@ func (c *xrayClient) bestEffortTriggerBlockedArtifactScan(ctx context.Context, c
 }
 
 func (c *xrayClient) doJSON(ctx context.Context, method, path string, body any, out any, allowedStatus ...int) ([]byte, error) {
+	payload, err := c.doRawJSON(ctx, method, path, body, "application/json", allowedStatus...)
+	if err != nil {
+		return nil, err
+	}
+	if out != nil && len(payload) > 0 {
+		if err := json.Unmarshal(payload, out); err != nil {
+			return nil, fmt.Errorf("failed to decode xray response: %w", err)
+		}
+	}
+	return payload, nil
+}
+
+func (c *xrayClient) doRawJSON(ctx context.Context, method, path string, body any, accept string, allowedStatus ...int) ([]byte, error) {
 	var requestBody io.Reader
 	if body != nil {
 		payload, err := json.Marshal(body)
@@ -765,7 +938,10 @@ func (c *xrayClient) doJSON(ctx context.Context, method, path string, body any, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to build xray request: %w", err)
 	}
-	req.Header.Set("Accept", "application/json")
+	if strings.TrimSpace(accept) == "" {
+		accept = "application/json"
+	}
+	req.Header.Set("Accept", accept)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -784,11 +960,6 @@ func (c *xrayClient) doJSON(ctx context.Context, method, path string, body any, 
 
 	for _, allowed := range allowedStatus {
 		if resp.StatusCode == allowed {
-			if out != nil && len(responseBody) > 0 {
-				if err := json.Unmarshal(responseBody, out); err != nil {
-					return nil, fmt.Errorf("failed to decode xray response: %w", err)
-				}
-			}
 			return responseBody, nil
 		}
 	}
@@ -862,6 +1033,25 @@ func (c *xrayClient) getViolations(ctx context.Context, targets []xrayViolationL
 		return nil, err
 	}
 	return &response, nil
+}
+
+func (c *xrayClient) contextualAnalysis(ctx context.Context, vulnerabilityID, componentID, sourceComponentID, artifactPath string) (models.JSONObject, error) {
+	params := url.Values{}
+	params.Set("vulnerability_id", vulnerabilityID)
+	params.Set("component_id", componentID)
+	if strings.TrimSpace(sourceComponentID) != "" {
+		params.Set("source_comp_id", sourceComponentID)
+	}
+	if strings.TrimSpace(artifactPath) != "" {
+		params.Set("path", artifactPath)
+	}
+
+	endpoint := "/xray/api/v2/cve_applicability?" + params.Encode()
+	var response models.JSONObject
+	if _, err := c.doJSON(ctx, http.MethodGet, endpoint, nil, &response, http.StatusOK); err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 func (c *xrayClient) enrichBlockedScanMessage(ctx context.Context, targets []xrayViolationLookupTarget, baseMessage string) string {
@@ -1296,6 +1486,116 @@ func persistXraySummaryFindings(ctx context.Context, db *bun.DB, scan *models.Sc
 	return nil
 }
 
+func persistXrayViolationFindings(ctx context.Context, db *bun.DB, scan *models.Scan, response *xrayViolationsResponse) error {
+	vulns := ParseXrayViolationVulnerabilities(response, scan.ID, scan.ImageName, scan.ImageTag)
+	if len(vulns) > 0 {
+		if _, err := db.NewInsert().Model(&vulns).Exec(ctx); err != nil {
+			return fmt.Errorf("failed to store xray fallback vulnerabilities: %w", err)
+		}
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Stored %d fallback Xray vulnerabilities from policy violations.", len(vulns)))
+	} else {
+		recordScanStepOutput(ctx, db, scan.ID, "Xray policy violations did not expose fallback vulnerability details.")
+	}
+
+	kbEntries := ExtractXrayViolationKBEntries(response)
+	if len(kbEntries) > 0 {
+		if err := upsertKBEntries(context.Background(), db, kbEntries); err != nil {
+			log.Warnf("Xray violation fallback KB upsert failed for scan %s (non-fatal): %v", scan.ID, err)
+		}
+	}
+
+	severityCounts := CountSeverities(vulns)
+	scan.CriticalCount = severityCounts[models.SeverityCritical]
+	scan.HighCount = severityCounts[models.SeverityHigh]
+	scan.MediumCount = severityCounts[models.SeverityMedium]
+	scan.LowCount = severityCounts[models.SeverityLow]
+	scan.UnknownCount = severityCounts[models.SeverityUnknown]
+
+	if _, err := db.NewUpdate().Model(scan).
+		Column("critical_count", "high_count", "medium_count", "low_count", "unknown_count").
+		Where("id = ?", scan.ID).
+		Exec(ctx); err != nil {
+		return fmt.Errorf("failed to persist xray fallback severity counts: %w", err)
+	}
+
+	return nil
+}
+
+func persistXrayCycloneDXFallback(ctx context.Context, db *bun.DB, scan *models.Scan, client *xrayClient, artifactPath, repoPath string) (int, error) {
+	if scan == nil || client == nil {
+		return 0, nil
+	}
+
+	sbom, exportPath, err := client.exportComponentCycloneDX(ctx, buildImageRef(scan.ImageName, scan.ImageTag), artifactPath, repoPath)
+	if err != nil {
+		return 0, err
+	}
+
+	components := dedupeSBOMComponents(ParseSBOMComponents(sbom, scan.ID))
+	if len(components) > 0 {
+		if _, err := db.NewDelete().Model((*models.SBOMComponent)(nil)).Where("scan_id = ?", scan.ID).Exec(ctx); err != nil {
+			return 0, fmt.Errorf("failed to clear existing Xray SBOM components: %w", err)
+		}
+		if _, err := db.NewInsert().Model(&components).Exec(ctx); err != nil {
+			return 0, fmt.Errorf("failed to store Xray SBOM components from fallback export: %w", err)
+		}
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Stored %d Xray SBOM components from %s.", len(components), exportPath))
+	}
+
+	vulns := ParseCycloneDXVulnerabilities(sbom, scan.ID)
+	if len(vulns) == 0 {
+		return 0, nil
+	}
+
+	if _, err := db.NewInsert().Model(&vulns).Exec(ctx); err != nil {
+		return 0, fmt.Errorf("failed to store Xray vulnerabilities from fallback export: %w", err)
+	}
+
+	severityCounts := CountSeverities(vulns)
+	scan.CriticalCount = severityCounts[models.SeverityCritical]
+	scan.HighCount = severityCounts[models.SeverityHigh]
+	scan.MediumCount = severityCounts[models.SeverityMedium]
+	scan.LowCount = severityCounts[models.SeverityLow]
+	scan.UnknownCount = severityCounts[models.SeverityUnknown]
+
+	if _, err := db.NewUpdate().Model(scan).
+		Column("critical_count", "high_count", "medium_count", "low_count", "unknown_count").
+		Where("id = ?", scan.ID).
+		Exec(ctx); err != nil {
+		return 0, fmt.Errorf("failed to persist xray CycloneDX fallback severity counts: %w", err)
+	}
+
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Stored %d Xray vulnerabilities from %s.", len(vulns), exportPath))
+	return len(vulns), nil
+}
+
+func persistXraySBOMComponents(ctx context.Context, db *bun.DB, scan *models.Scan, client *xrayClient, artifactPath, repoPath string) error {
+	if scan == nil || client == nil {
+		return nil
+	}
+
+	sbom, exportPath, err := client.exportComponentCycloneDX(ctx, buildImageRef(scan.ImageName, scan.ImageTag), artifactPath, repoPath)
+	if err != nil {
+		return err
+	}
+
+	components := dedupeSBOMComponents(ParseSBOMComponents(sbom, scan.ID))
+	if len(components) == 0 {
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray component export for %s did not return SBOM components.", exportPath))
+		return nil
+	}
+
+	if _, err := db.NewDelete().Model((*models.SBOMComponent)(nil)).Where("scan_id = ?", scan.ID).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to clear existing Xray SBOM components: %w", err)
+	}
+	if _, err := db.NewInsert().Model(&components).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to store Xray SBOM components: %w", err)
+	}
+
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Stored %d Xray SBOM components from %s.", len(components), exportPath))
+	return nil
+}
+
 func ParseXrayVulnerabilities(summary *xraySummaryResponse, scanID uuid.UUID) []models.Vulnerability {
 	seen := make(map[string]bool)
 	vulns := make([]models.Vulnerability, 0)
@@ -1318,24 +1618,169 @@ func ParseXrayVulnerabilities(summary *xraySummaryResponse, scanID uuid.UUID) []
 
 				score, vector := xrayIssueScore(issue)
 				vulns = append(vulns, models.Vulnerability{
-					ScanID:           scanID,
-					VulnID:           vulnID,
-					PkgName:          pkgName,
-					InstalledVersion: component.Version,
-					FixedVersion:     strings.Join(component.FixedVersions, ", "),
-					Severity:         normalizeXraySeverity(issue.Severity),
-					Title:            issue.Summary,
-					Description:      issue.Description,
-					References:       xrayReferences(issue.References),
-					DataSource:       xrayDataSource,
-					CVSSScore:        score,
-					CVSSVector:       vector,
+					ScanID:              scanID,
+					VulnID:              vulnID,
+					PkgName:             pkgName,
+					InstalledVersion:    component.Version,
+					FixedVersion:        strings.Join(component.FixedVersions, ", "),
+					Severity:            normalizeXraySeverity(issue.Severity),
+					Title:               issue.Summary,
+					Description:         issue.Description,
+					References:          xrayReferences(issue.References),
+					DataSource:          xrayDataSource,
+					ExternalComponentID: strings.TrimSpace(component.ComponentID),
+					CVSSScore:           score,
+					CVSSVector:          vector,
 				})
 			}
 		}
 	}
 
 	return vulns
+}
+
+func ParseXrayViolationVulnerabilities(response *xrayViolationsResponse, scanID uuid.UUID, fallbackPackage, fallbackVersion string) []models.Vulnerability {
+	if response == nil {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	vulns := make([]models.Vulnerability, 0, len(response.Violations))
+	for _, violation := range response.Violations {
+		vulnID := strings.TrimSpace(violation.IssueID)
+		if vulnID == "" {
+			vulnID = strings.TrimSpace(violation.ID)
+		}
+		if vulnID == "" {
+			vulnID = "XRAY-BLOCKED-UNKNOWN"
+		}
+
+		pkgName := strings.TrimSpace(fallbackPackage)
+		if pkgName == "" {
+			pkgName = "blocked-artifact"
+		}
+
+		key := vulnID + "|" + pkgName + "|" + strings.TrimSpace(fallbackVersion)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		vulns = append(vulns, models.Vulnerability{
+			ScanID:           scanID,
+			VulnID:           vulnID,
+			PkgName:          pkgName,
+			InstalledVersion: strings.TrimSpace(fallbackVersion),
+			Severity:         normalizeXraySeverity(violation.Severity),
+			Title:            strings.TrimSpace(violation.Summary),
+			Description:      strings.TrimSpace(violation.Description),
+			References:       nil,
+			DataSource:       xrayDataSource,
+		})
+	}
+
+	return vulns
+}
+
+func ParseCycloneDXVulnerabilities(sbom *TrivySBOMOutput, scanID uuid.UUID) []models.Vulnerability {
+	if sbom == nil || len(sbom.Vulnerabilities) == 0 {
+		return nil
+	}
+
+	componentByRef := make(map[string]TrivySBOMComp, len(sbom.Components))
+	for _, component := range sbom.Components {
+		if ref := strings.TrimSpace(component.BOMRef); ref != "" {
+			componentByRef[ref] = component
+		}
+	}
+
+	seen := make(map[string]bool)
+	vulns := make([]models.Vulnerability, 0, len(sbom.Vulnerabilities))
+	for _, vulnerability := range sbom.Vulnerabilities {
+		vulnID := strings.TrimSpace(vulnerability.ID)
+		if vulnID == "" && vulnerability.Source != nil {
+			vulnID = strings.TrimSpace(vulnerability.Source.Name)
+		}
+		if vulnID == "" {
+			vulnID = "XRAY-CYCLONEDX-UNKNOWN"
+		}
+
+		severity, score, vector := cycloneDXVulnerabilityScore(vulnerability)
+		references := cycloneDXVulnerabilityReferences(vulnerability)
+		affects := vulnerability.Affects
+		if len(affects) == 0 {
+			affects = []TrivySBOMVulnerabilityAffect{{}}
+		}
+
+		for _, affect := range affects {
+			component := componentByRef[strings.TrimSpace(affect.Ref)]
+			pkgName := strings.TrimSpace(component.Name)
+			if pkgName == "" {
+				pkgName = "unknown"
+			}
+			version := strings.TrimSpace(component.Version)
+			key := vulnID + "|" + pkgName + "|" + version
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+
+			vulns = append(vulns, models.Vulnerability{
+				ScanID:           scanID,
+				VulnID:           vulnID,
+				PkgName:          pkgName,
+				InstalledVersion: version,
+				Severity:         severity,
+				Title:            strings.TrimSpace(vulnerability.Recommendation),
+				Description:      strings.TrimSpace(vulnerability.Description),
+				References:       references,
+				DataSource:       xrayDataSource,
+				CVSSScore:        score,
+				CVSSVector:       vector,
+			})
+		}
+	}
+
+	return vulns
+}
+
+func cycloneDXVulnerabilityScore(vulnerability TrivySBOMVulnerability) (string, float64, string) {
+	severity := models.SeverityUnknown
+	bestScore := 0.0
+	bestVector := ""
+
+	for _, rating := range vulnerability.Ratings {
+		normalizedSeverity := normalizeXraySeverity(rating.Severity)
+		if xraySeverityRank(normalizedSeverity) > xraySeverityRank(severity) {
+			severity = normalizedSeverity
+		}
+		if score, ok := xrayNumericValue(rating.Score); ok && score > bestScore {
+			bestScore = score
+			bestVector = strings.TrimSpace(rating.Vector)
+		}
+	}
+
+	return severity, bestScore, bestVector
+}
+
+func cycloneDXVulnerabilityReferences(vulnerability TrivySBOMVulnerability) []string {
+	seen := make(map[string]bool)
+	references := make([]string, 0, len(vulnerability.Advisories)+1)
+	for _, advisory := range vulnerability.Advisories {
+		url := strings.TrimSpace(advisory.URL)
+		if url == "" || seen[url] {
+			continue
+		}
+		seen[url] = true
+		references = append(references, url)
+	}
+	if vulnerability.Source != nil {
+		url := strings.TrimSpace(vulnerability.Source.URL)
+		if url != "" && !seen[url] {
+			references = append(references, url)
+		}
+	}
+	return references
 }
 
 func ExtractXrayKBEntries(summary *xraySummaryResponse) []models.VulnKBEntry {
@@ -1392,6 +1837,48 @@ func ExtractXrayKBEntries(summary *xraySummaryResponse) []models.VulnKBEntry {
 	return entries
 }
 
+func ExtractXrayViolationKBEntries(response *xrayViolationsResponse) []models.VulnKBEntry {
+	if response == nil {
+		return nil
+	}
+
+	seen := make(map[string]*models.VulnKBEntry)
+	for _, violation := range response.Violations {
+		vulnID := strings.TrimSpace(violation.IssueID)
+		if vulnID == "" {
+			vulnID = strings.TrimSpace(violation.ID)
+		}
+		if vulnID == "" {
+			continue
+		}
+
+		severity := normalizeXraySeverity(violation.Severity)
+		entry, exists := seen[vulnID]
+		if !exists {
+			entry = &models.VulnKBEntry{
+				VulnID:      vulnID,
+				Description: strings.TrimSpace(violation.Description),
+				Severity:    severity,
+			}
+			seen[vulnID] = entry
+			continue
+		}
+
+		if entry.Description == "" && strings.TrimSpace(violation.Description) != "" {
+			entry.Description = strings.TrimSpace(violation.Description)
+		}
+		if xraySeverityRank(severity) > xraySeverityRank(entry.Severity) {
+			entry.Severity = severity
+		}
+	}
+
+	entries := make([]models.VulnKBEntry, 0, len(seen))
+	for _, entry := range seen {
+		entries = append(entries, *entry)
+	}
+	return entries
+}
+
 func isRetriableXrayScanArtifactError(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
@@ -1422,6 +1909,20 @@ func isRetriableXrayScanArtifactError(err error) bool {
 	}
 
 	return false
+}
+
+func shouldWarnBlockedReindexError(err error) bool {
+	var httpErr *xrayHTTPError
+	if !errors.As(err, &httpErr) {
+		return true
+	}
+
+	switch httpErr.StatusCode {
+	case http.StatusForbidden, http.StatusUnauthorized, http.StatusConflict:
+		return false
+	default:
+		return true
+	}
 }
 
 func isRetriableRegistryWarmupError(err error) bool {
@@ -1806,4 +2307,79 @@ func xrayKBReferences(values []any) []models.KBRef {
 		}
 	}
 	return mergeKBRefs(nil, refs)
+}
+
+func xrayImageMetadataFields(config models.JSONObject) (string, string, string) {
+	architecture := xrayJSONObjectString(config, "architecture")
+	osValue := xrayJSONObjectString(config, "os")
+	if osValue == "" {
+		return architecture, "", ""
+	}
+	return architecture, osValue, osValue
+}
+
+func xrayJSONObjectString(value models.JSONObject, key string) string {
+	if value == nil {
+		return ""
+	}
+	raw, ok := value[key]
+	if !ok || raw == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(raw))
+}
+
+func parseXrayCycloneDXExport(payload []byte) (*TrivySBOMOutput, error) {
+	reader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open Xray export ZIP: %w", err)
+	}
+
+	for _, file := range reader.File {
+		if !strings.HasSuffix(strings.ToLower(file.Name), ".json") {
+			continue
+		}
+		handle, err := file.Open()
+		if err != nil {
+			return nil, fmt.Errorf("failed to open %s in Xray export ZIP: %w", file.Name, err)
+		}
+		body, readErr := io.ReadAll(handle)
+		handle.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read %s in Xray export ZIP: %w", file.Name, readErr)
+		}
+
+		var sbom TrivySBOMOutput
+		if err := json.Unmarshal(body, &sbom); err != nil {
+			continue
+		}
+		if strings.TrimSpace(sbom.BOMFormat) == "" && len(sbom.Components) == 0 {
+			continue
+		}
+		return &sbom, nil
+	}
+
+	return nil, fmt.Errorf("no CycloneDX JSON document found in Xray export ZIP")
+}
+
+func dedupeSBOMComponents(components []models.SBOMComponent) []models.SBOMComponent {
+	if len(components) == 0 {
+		return nil
+	}
+
+	unique := make([]models.SBOMComponent, 0, len(components))
+	seen := make(map[string]bool, len(components))
+	for _, component := range components {
+		key := strings.TrimSpace(component.PackageURL)
+		if key == "" {
+			key = component.Name + "|" + component.Version + "|" + component.Type
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		unique = append(unique, component)
+	}
+
+	return unique
 }

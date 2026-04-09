@@ -1,4 +1,5 @@
 'use client';
+import { StatusBadge } from '@/components/ui/badges';
 import { ChartSkeleton, RecentScanRowSkeleton, StatCardSkeleton } from '@/components/ui/skeleton';
 import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -26,7 +27,26 @@ const SEV = [
 // ── stat card config ─────────────────────────────────────────────────
 type TrendKey = 'total' | 'completed' | 'failed';
 
-const STATS = [
+type StatSub = {
+  text: string;
+  pulse?: boolean;
+} | null;
+
+type StatCardConfig = {
+  key: string;
+  trendKey: TrendKey | null;
+  invertTrend: boolean;
+  label: string;
+  Icon: typeof Shield01Icon;
+  tint: string;
+  iconColor: string;
+  iconBg: string;
+  glow: string;
+  getValue: (s: DashboardStats) => number;
+  getSub: (s: DashboardStats) => StatSub;
+};
+
+const STATS: StatCardConfig[] = [
   {
     key: 'total',
     trendKey: 'total' as TrendKey | null,
@@ -67,7 +87,10 @@ const STATS = [
     iconBg: 'rgba(239,68,68,0.2)',
     glow: 'rgba(239,68,68,0.35)',
     getValue: (s: DashboardStats) => s.status_counts['failed'] ?? 0,
-    getSub:   () => null,
+	getSub:   (s: DashboardStats) => {
+	  const blocked = s.operations?.blocked_policy_count ?? s.status_counts['blocked_by_xray_policy'] ?? 0;
+	  return blocked > 0 ? { text: `${blocked} blocked by policy` } : null;
+	},
   },
   {
     key: 'watchlist',
@@ -97,6 +120,49 @@ function glassCard(tint?: string): React.CSSProperties {
   };
 }
 
+function insetCard(): React.CSSProperties {
+  return {
+    background: 'var(--card-bg)',
+  };
+}
+
+const XRAY_STEP_LABELS: Record<string, string> = {
+  queued: 'Queued',
+  warming_cache: 'Warming Cache',
+  indexing_artifact: 'Indexing Artifact',
+  queued_in_xray: 'Queued in Xray',
+  waiting_for_xray: 'Waiting for Xray',
+  importing_results: 'Importing Results',
+  failed: 'Failed',
+  completed: 'Completed',
+};
+
+const XRAY_PIPELINE_STEPS = [
+  'warming_cache',
+  'indexing_artifact',
+  'queued_in_xray',
+  'waiting_for_xray',
+  'importing_results',
+] as const;
+
+function formatStepLabel(step?: string): string {
+  if (!step) return XRAY_STEP_LABELS.queued;
+  return XRAY_STEP_LABELS[step] ?? step.replace(/_/g, ' ');
+}
+
+function scanContextLabel(scan: Scan): string {
+  if (scan.scan_provider === 'artifactory_xray') {
+    if (scan.status === 'failed' && scan.external_status === 'blocked_by_xray_policy') {
+      return 'Artifactory Xray · blocked by policy';
+    }
+    if (scan.status === 'running' || scan.status === 'pending') {
+      return `Artifactory Xray · ${formatStepLabel(scan.current_step)}`;
+    }
+    return 'Artifactory Xray';
+  }
+  return 'Local Trivy worker';
+}
+
 function formatDbAge(hours?: number | null): string {
   if (hours == null || Number.isNaN(hours)) return 'Unknown';
   if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m`;
@@ -117,45 +183,8 @@ function calcTrend(data: number[]): { pct: number; dir: 'up' | 'down' | 'flat' }
   return { pct: absPct, dir: absPct < 3 ? 'flat' : rawPct > 0 ? 'up' : 'down' };
 }
 
-const STATUS_MAP: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  completed: { label: 'Done',    color: '#34d399', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.22)'  },
-  failed:    { label: 'Failed',  color: '#f87171', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.22)'   },
-  running:   { label: 'Running', color: '#60a5fa', bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.22)'  },
-  pending:   { label: 'Pending', color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)' },
-};
-
-const ACTIONS = [
-  {
-    key: 'failed',
-    label: 'Failures To Review',
-    description: 'Recent scans that likely need triage or a rerun.',
-    href: '/scans?status=failed',
-    getCount: (stats: DashboardStats) => stats.status_counts.failed ?? 0,
-    icon: AlertDiamondIcon,
-    tone: { color: '#f87171', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.2)' },
-  },
-  {
-    key: 'running',
-    label: 'Scans In Flight',
-    description: 'Track work still running or waiting on providers.',
-    href: '/scans?status=pending,running,waiting_for_xray,warming_artifactory_cache,indexing,queued,importing',
-    getCount: (stats: DashboardStats) => (stats.status_counts.running ?? 0) + (stats.status_counts.pending ?? 0),
-    icon: Clock01Icon,
-    tone: { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.2)' },
-  },
-  {
-    key: 'watchlist',
-    label: 'Watched Images',
-    description: 'Jump into the images configured for recurring coverage.',
-    href: '/watchlist',
-    getCount: (stats: DashboardStats) => stats.watchlist_count,
-    icon: EyeIcon,
-    tone: { color: '#a78bfa', bg: 'rgba(124,58,237,0.12)', border: 'rgba(124,58,237,0.2)' },
-  },
-];
-
 function RecentScanRow({ scan }: { scan: Scan }) {
-  const sc = STATUS_MAP[scan.status] ?? STATUS_MAP.pending;
+	const eventTime = scan.started_at ?? scan.created_at;
   return (
     <Link
       href={`/scans/${scan.id}`}
@@ -164,17 +193,17 @@ function RecentScanRow({ scan }: { scan: Scan }) {
       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
     >
       <div className="flex items-center gap-2.5 min-w-0">
-        <span
-          className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md shrink-0 tracking-wide"
-          style={{ color: sc.color, background: sc.bg, border: `1px solid ${sc.border}` }}
-        >
-          {sc.label}
-        </span>
+    <div className="shrink-0 pt-0.5">
+      <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+    </div>
         <div className="min-w-0">
           <p className="text-xs font-mono text-zinc-700 dark:text-zinc-300 truncate group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
             {scan.image_name}:{scan.image_tag}
           </p>
-          <p className="text-[11px] text-zinc-500 mt-0.5" title={fullDate(scan.created_at)}>{timeAgo(scan.created_at)}</p>
+      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+        <p className="text-[11px] text-zinc-500">{scanContextLabel(scan)}</p>
+        <span className="text-[11px] text-zinc-400" title={fullDate(eventTime)}>{timeAgo(eventTime)}</span>
+      </div>
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0 ml-2">
@@ -197,6 +226,32 @@ function RecentScanRow({ scan }: { scan: Scan }) {
           </span>
         )}
       </div>
+    </Link>
+  );
+}
+
+function OperationTile({
+  href,
+  label,
+  value,
+  description,
+  color,
+  background,
+  border,
+}: {
+  href: string;
+  label: string;
+  value: number;
+  description: string;
+  color: string;
+  background: string;
+  border: string;
+}) {
+  return (
+    <Link href={href} className="rounded-2xl p-4 transition-transform hover:-translate-y-0.5" style={{ background, border: `1px solid ${border}` }}>
+    <p className="text-xs font-semibold uppercase tracking-widest" style={{ color }}>{label}</p>
+    <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-white">{value}</p>
+    <p className="mt-3 text-xs text-zinc-500">{description}</p>
     </Link>
   );
 }
@@ -704,6 +759,12 @@ export default function DashboardPage() {
   const totalVulns = Object.values(stats.severity_totals).reduce((a, b) => a + b, 0);
   const hasCriticals = (stats.severity_totals['critical'] ?? 0) > 0;
   const priorityScans = (stats.recent_scans ?? []).filter((scan) => scan.status === 'failed' || scan.status === 'running' || scan.status === 'pending').slice(0, 4);
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const startedTodayCount = [...trends].reverse().find((point) => point.date === todayKey)?.total ?? 0;
+  const blockedPolicyCount = stats.operations?.blocked_policy_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
+  const activeXrayCount = stats.operations?.active_xray_count ?? 0;
+  const activeXrayScans = stats.operations?.active_xray_scans ?? [];
+  const activeXraySteps = stats.operations?.active_xray_step_counts ?? {};
 
   return (
     <div className="relative p-6 space-y-5 max-w-7xl mx-auto">
@@ -794,38 +855,93 @@ export default function DashboardPage() {
         <div className="rounded-2xl p-5" style={glassCard('rgba(124,58,237,0.04)')}>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Action Board</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">The most immediate work across scans and coverage.</p>
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Operations Board</h2>
+        <p className="text-xs text-zinc-500 mt-0.5">Started-today activity, live Xray work, and policy blocks.</p>
             </div>
             <Link href="/scans" className="text-xs text-zinc-500 hover:text-violet-500 transition-colors">Open scans →</Link>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            {ACTIONS.map((action) => {
-              const count = action.getCount(stats);
-              const Icon = action.icon;
-              return (
-                <Link key={action.key} href={action.href} className="rounded-2xl p-4 transition-transform hover:-translate-y-0.5" style={{ background: action.tone.bg, border: `1px solid ${action.tone.border}` }}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: action.tone.color }}>{action.label}</p>
-                      <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-white">{count}</p>
-                    </div>
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(10,10,15,0.18)' }}>
-                      <Icon size={16} color={action.tone.color} />
-                    </div>
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500">{action.description}</p>
-                </Link>
-              );
-            })}
+      <OperationTile
+        href="/scans"
+        label="Started Today"
+        value={startedTodayCount}
+        description="New scan requests created since 00:00 UTC."
+        color="#60a5fa"
+        background="rgba(59,130,246,0.12)"
+        border="rgba(59,130,246,0.2)"
+      />
+      <OperationTile
+        href="/scans?status=running"
+        label="Xray In Flight"
+        value={activeXrayCount}
+        description="Pending or running scans still moving through the Xray pipeline."
+        color="#a78bfa"
+        background="rgba(124,58,237,0.12)"
+        border="rgba(124,58,237,0.2)"
+      />
+      <OperationTile
+        href="/scans?status=failed"
+        label="Policy Blocked"
+        value={blockedPolicyCount}
+        description="Scans blocked by Xray policy, surfaced separately from generic failures."
+        color="#f59e0b"
+        background="rgba(245,158,11,0.12)"
+        border="rgba(245,158,11,0.2)"
+      />
           </div>
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.9fr)]">
+      <div className="rounded-2xl p-4" style={insetCard()}>
+        <div className="flex items-center justify-between mb-3 gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Active Xray Pipeline</h3>
+          <p className="text-xs text-zinc-500 mt-0.5">Current provider step for scans still in-flight.</p>
+        </div>
+        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md" style={{ color: '#a78bfa', background: 'rgba(124,58,237,0.16)', border: '1px solid rgba(124,58,237,0.24)' }}>
+          {activeXrayCount} live
+        </span>
+        </div>
+        {activeXrayScans.length === 0 ? (
+        <p className="text-sm text-zinc-500 py-10 text-center">No active Xray scans right now.</p>
+        ) : (
+        <div className="space-y-1.5">
+          {activeXrayScans.map((scan) => (
+          <RecentScanRow key={scan.id} scan={scan} />
+          ))}
+        </div>
+        )}
+      </div>
+      <div className="rounded-2xl p-4" style={insetCard()}>
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Current Steps</h3>
+        <p className="text-xs text-zinc-500 mt-0.5 mb-3">Live counts for each Xray pipeline stage.</p>
+        <div className="space-y-2.5">
+        {XRAY_PIPELINE_STEPS.map((step) => {
+          const count = activeXraySteps[step] ?? 0;
+          const pct = activeXrayCount > 0 ? (count / activeXrayCount) * 100 : 0;
+          return (
+          <div key={step}>
+            <div className="flex items-center justify-between gap-3 mb-1">
+            <span className="text-xs text-zinc-600 dark:text-zinc-300">{formatStepLabel(step)}</span>
+            <span className="text-[11px] font-mono text-zinc-500">{count}</span>
+            </div>
+            <div className="h-1.5 rounded-full" style={{ background: 'var(--row-divider)' }}>
+            <div className="h-1.5 rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, rgba(124,58,237,0.85), rgba(96,165,250,0.85))' }} />
+            </div>
+          </div>
+          );
+        })}
+        </div>
+        <p className="text-[11px] text-zinc-500 mt-4 leading-5">
+        Findings averages below only count completed scans. Started-today activity stays here so the dashboard can show same-day work without pretending in-flight findings are final.
+        </p>
+      </div>
+      </div>
         </div>
 
         <div className="rounded-2xl p-5" style={glassCard()}>
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Needs Attention</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">Recent failed, running, or queued scans.</p>
+        <p className="text-xs text-zinc-500 mt-0.5">Recent failed, blocked, running, or queued scans.</p>
             </div>
           </div>
           {priorityScans.length === 0 ? (

@@ -14,6 +14,7 @@ type Scan struct {
 	ImageName               string     `bun:"image_name,type:text,notnull" json:"image_name"`
 	ImageTag                string     `bun:"image_tag,type:text,notnull" json:"image_tag"`
 	ImageDigest             string     `bun:"image_digest,type:text,default:''" json:"image_digest"`
+	ImageConfig             JSONObject `bun:"image_config,type:jsonb,notnull,default:'{}'" json:"image_config,omitempty"`
 	ScanProvider            string     `bun:"scan_provider,type:text,notnull,default:'trivy'" json:"scan_provider"`
 	ExternalScanID          string     `bun:"external_scan_id,type:text,default:''" json:"external_scan_id,omitempty"`
 	ExternalStatus          string     `bun:"external_status,type:text,default:''" json:"external_status,omitempty"`

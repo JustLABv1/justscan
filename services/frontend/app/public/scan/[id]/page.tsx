@@ -1,7 +1,8 @@
 'use client';
 import { Logo } from '@/components/logo';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
-import { getPublicScan, getToken, listPublicVulnerabilities, reScanPublic, Scan, Vulnerability } from '@/lib/api';
+import type { Scan, Vulnerability } from '@/lib/api';
+import { getPublicScan, getPublicVulnerabilityContextAnalysis, getToken, listPublicVulnerabilities, reScanPublic } from '@/lib/api';
 import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
 import { ListBox, Select, useOverlayState } from '@heroui/react';
@@ -604,6 +605,7 @@ export default function PublicScanResultPage() {
           vulnerability={selectedVulnerability}
           state={vulnerabilityDetailsModal}
           onClose={closeVulnerabilityDetails}
+          loadContextAnalysis={(vulnerability) => getPublicVulnerabilityContextAnalysis(id, vulnerability.id)}
         />
       </main>
     </div>

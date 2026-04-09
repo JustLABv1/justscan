@@ -16,6 +16,7 @@ func PublicScan(router *gin.RouterGroup, db *bun.DB) {
 		p.GET("/scans/:id", public.GetPublicScan(db))
 		p.POST("/scans/:id/rescan", middlewares.PublicScanRateLimit(), public.ReScanPublic(db))
 		p.GET("/scans/:id/vulnerabilities", public.ListPublicVulnerabilities(db))
+		p.GET("/scans/:id/vulnerabilities/:vulnerabilityId/analysis", public.GetPublicVulnerabilityContextAnalysis(db))
 		p.POST("/helm/extract", middlewares.PublicScanRateLimit(), public.ExtractPublicHelmImages(db))
 		p.POST("/helm/scan", middlewares.PublicScanRateLimit(), public.CreatePublicHelmScans(db))
 		p.GET("/helm/runs/:id", public.GetPublicHelmRun(db))

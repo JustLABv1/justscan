@@ -196,6 +196,9 @@ export const listVulnerabilities = (
 };
 
 // Tags
+
+export const getVulnerabilityContextAnalysis = (scanId: string, vulnerabilityId: string) =>
+  req<VulnerabilityContextAnalysis>('GET', `/api/v1/scans/${scanId}/vulnerabilities/${vulnerabilityId}/analysis`);
 export const listTags = () =>
   req<{ data: Tag[] }>('GET', '/api/v1/tags/').then((r) => r.data ?? []);
 export const createTag = (name: string, color: string) =>
@@ -322,6 +325,9 @@ export const listPublicVulnerabilities = (
     `/api/v1/public/scans/${scanId}/vulnerabilities?${params}`,
   );
 };
+
+export const getPublicVulnerabilityContextAnalysis = (scanId: string, vulnerabilityId: string) =>
+  publicReq<VulnerabilityContextAnalysis>('GET', `/api/v1/public/scans/${scanId}/vulnerabilities/${vulnerabilityId}/analysis`);
 
 export const extractPublicHelmImages = (
   chartUrl: string,
@@ -670,6 +676,12 @@ export const listStatusPageItemVulnerabilities = (
   );
 };
 
+export const getStatusPageItemVulnerabilityContextAnalysis = (slug: string, scanId: string, vulnerabilityId: string) =>
+  sharedReq<VulnerabilityContextAnalysis>(
+    'GET',
+    `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/items/${encodeURIComponent(scanId)}/vulnerabilities/${encodeURIComponent(vulnerabilityId)}/analysis`,
+  );
+
 export const listStatusPageTargetOptions = async () => {
   const limit = 100;
   let page = 1;
@@ -758,6 +770,9 @@ export const listSharedVulnerabilities = (
 
 export const rescanShared = (token: string) =>
   sharedReq<{ scan_id: string; type: 'public' | 'authenticated' }>('POST', `/api/v1/shared/${token}/rescan`);
+
+export const getSharedVulnerabilityContextAnalysis = (token: string, vulnerabilityId: string) =>
+  sharedReq<VulnerabilityContextAnalysis>('GET', `/api/v1/shared/${token}/vulnerabilities/${vulnerabilityId}/analysis`);
 
 // Types
 export interface PolicyRule {
@@ -861,6 +876,7 @@ export interface Scan {
   architecture?: string;
   os_family?: string;
   os_name?: string;
+  image_config?: Record<string, unknown>;
   platform?: string;
   share_token?: string;
   share_visibility?: string;
@@ -895,10 +911,27 @@ export interface Vulnerability {
   description: string;
   cvss_score: number;
   data_source?: string;
+  external_component_id?: string;
   references: string[];
   suppression?: Suppression | null;
   comments?: Comment[];
   first_seen_at?: string | null;
+}
+
+export interface VulnerabilityContextAnalysis {
+  provider: string;
+  supported: boolean;
+  available: boolean;
+  message?: string;
+  vulnerability_id: string;
+  component_id?: string;
+  source_component_id?: string;
+  artifact_path?: string;
+  applicable?: boolean | null;
+  summary?: string;
+  evidence?: string[];
+  dependency_paths?: string[];
+  raw?: Record<string, unknown>;
 }
 
 export interface Tag {

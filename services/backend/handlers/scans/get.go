@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"justscan-backend/pkg/models"
+	"justscan-backend/scanner"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -21,6 +22,9 @@ func GetScan(db *bun.DB) gin.HandlerFunc {
 		scan, _, _, ok := LoadAuthorizedScan(c, db, scanID)
 		if !ok {
 			return
+		}
+		if _, err := scanner.EnsureScanImageDigest(c.Request.Context(), db, scan); err != nil {
+			// Older Xray scans may need a best-effort digest backfill so suppression keys work.
 		}
 
 		// Load tags

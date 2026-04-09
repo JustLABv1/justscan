@@ -1,9 +1,10 @@
 'use client';
 import { Logo } from '@/components/logo';
+import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { getPublicScan, getToken, listPublicVulnerabilities, reScanPublic, Scan, Vulnerability } from '@/lib/api';
 import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
-import { ListBox, Select } from '@heroui/react';
+import { ListBox, Select, useOverlayState } from '@heroui/react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -121,6 +122,8 @@ export default function PublicScanResultPage() {
   const [reScanning, setReScanning] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeTab, setActiveTab] = useState<ResultTab>('overview');
+  const vulnerabilityDetailsModal = useOverlayState();
+  const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -183,6 +186,16 @@ export default function PublicScanResultPage() {
   }
 
   const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl';
+
+  function openVulnerabilityDetails(vulnerability: Vulnerability) {
+    setSelectedVulnerability(vulnerability);
+    vulnerabilityDetailsModal.open();
+  }
+
+  function closeVulnerabilityDetails() {
+    vulnerabilityDetailsModal.close();
+    setSelectedVulnerability(null);
+  }
 
   if (error) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
@@ -524,10 +537,10 @@ export default function PublicScanResultPage() {
                         <td className="px-4 py-3">
                           {v.vuln_id ? (
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <a href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`} target="_blank" rel="noreferrer"
+                              <button type="button" onClick={() => openVulnerabilityDetails(v)}
                                 className="font-mono text-xs text-violet-600 dark:text-violet-400 hover:underline transition-colors">
                                 {v.vuln_id}
-                              </a>
+                              </button>
                               <SourceBadge source={v.data_source} />
                             </div>
                           ) : <span style={{ color: 'var(--text-faint)' }}>—</span>}
@@ -586,6 +599,12 @@ export default function PublicScanResultPage() {
             </div>
           </>
         )}
+
+        <VulnerabilityDetailsModal
+          vulnerability={selectedVulnerability}
+          state={vulnerabilityDetailsModal}
+          onClose={closeVulnerabilityDetails}
+        />
       </main>
     </div>
   );

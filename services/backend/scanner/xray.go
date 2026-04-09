@@ -225,6 +225,18 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	artifactRepoPath := artifactName + "/" + imageTag + "/manifest.json"
 	repoPath := imageRepoPath + "/" + imageTag + "/manifest.json"
 	artifactPath := client.artifactoryID + "/" + repoPath
+	if resolvedDigest, resolveErr := client.resolveImageDigest(ctx, imageRepoPath, imageTag, scan.Platform); resolveErr != nil {
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to resolve image digest before starting the Xray flow: %v", resolveErr))
+	} else if resolvedDigest != "" {
+		scan.ImageDigest = resolvedDigest
+		if _, err := db.NewUpdate().Model(scan).
+			Column("image_digest").
+			Where("id = ?", scan.ID).
+			Exec(ctx); err != nil {
+			return fmt.Errorf("failed to persist xray image digest: %w", err)
+		}
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Resolved image digest %s for suppression and reporting.", resolvedDigest))
+	}
 
 	componentID := "docker://" + buildImageRef(scan.ImageName, scan.ImageTag)
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "warming_artifactory_cache", models.ScanStepWarmingCache); err != nil {
@@ -349,6 +361,90 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	return nil
 }
 
+func EnsureScanImageDigest(ctx context.Context, db *bun.DB, scan *models.Scan) (string, error) {
+	if scan == nil {
+		return "", fmt.Errorf("scan is required")
+	}
+
+	if digest := strings.TrimSpace(scan.ImageDigest); digest != "" {
+		return digest, nil
+	}
+
+	if scan.ScanProvider != models.ScanProviderArtifactoryXray {
+		return "", nil
+	}
+
+	if scan.RegistryID == nil {
+		return "", fmt.Errorf("xray scan %s is missing a registry selection", scan.ID)
+	}
+
+	registry := &models.Registry{}
+	if err := db.NewSelect().Model(registry).Where("id = ?", *scan.RegistryID).Scan(ctx); err != nil {
+		return "", fmt.Errorf("failed to load registry for xray digest resolution: %w", err)
+	}
+
+	client, err := newXrayClient(registry)
+	if err != nil {
+		return "", err
+	}
+
+	repoKey, artifactName, imageTag, err := xrayImageParts(scan.ImageName, scan.ImageTag, registry)
+	if err != nil {
+		return "", err
+	}
+
+	resolvedDigest, err := client.resolveImageDigest(ctx, repoKey+"/"+artifactName, imageTag, scan.Platform)
+	if err != nil {
+		return "", err
+	}
+	if resolvedDigest == "" {
+		return "", nil
+	}
+
+	scan.ImageDigest = resolvedDigest
+	if _, err := db.NewUpdate().Model(scan).
+		Column("image_digest").
+		Where("id = ?", scan.ID).
+		Exec(ctx); err != nil {
+		return "", fmt.Errorf("failed to persist image digest for scan %s: %w", scan.ID, err)
+	}
+
+	return resolvedDigest, nil
+}
+
+func (c *xrayClient) resolveImageDigest(ctx context.Context, imageRepoPath, reference, platform string) (string, error) {
+	if strings.TrimSpace(reference) == "" {
+		return "", fmt.Errorf("missing manifest reference for %s", imageRepoPath)
+	}
+
+	manifest, mediaType, contentDigest, err := c.fetchRegistryManifest(ctx, imageRepoPath, reference)
+	if err != nil {
+		return "", err
+	}
+
+	if isRegistryManifestIndex(mediaType, manifest) {
+		targets := selectManifestDescriptors(manifest.Manifests, platform)
+		if len(targets) == 0 {
+			return "", fmt.Errorf("registry manifest list for %s did not contain a usable image manifest", reference)
+		}
+		for _, target := range targets {
+			if digest := strings.TrimSpace(target.Digest); digest != "" {
+				return digest, nil
+			}
+		}
+		return "", fmt.Errorf("registry manifest list for %s did not expose a child digest", reference)
+	}
+
+	if digest := strings.TrimSpace(contentDigest); digest != "" {
+		return digest, nil
+	}
+	if strings.HasPrefix(reference, "sha256:") {
+		return reference, nil
+	}
+
+	return "", fmt.Errorf("registry manifest for %s did not expose a Docker-Content-Digest header", reference)
+}
+
 func newXrayClient(registry *models.Registry) (*xrayClient, error) {
 	secret, err := decryptRegistrySecret(registry)
 	if err != nil {
@@ -461,7 +557,7 @@ func (c *xrayClient) warmManifestReference(ctx context.Context, imageRepoPath, r
 	}
 	seenManifests[reference] = true
 
-	manifest, mediaType, err := c.fetchRegistryManifest(ctx, imageRepoPath, reference)
+	manifest, mediaType, _, err := c.fetchRegistryManifest(ctx, imageRepoPath, reference)
 	if err != nil {
 		return err
 	}
@@ -494,7 +590,7 @@ func (c *xrayClient) warmManifestReference(ctx context.Context, imageRepoPath, r
 	return nil
 }
 
-func (c *xrayClient) fetchRegistryManifest(ctx context.Context, imageRepoPath, reference string) (*registryManifest, string, error) {
+func (c *xrayClient) fetchRegistryManifest(ctx context.Context, imageRepoPath, reference string) (*registryManifest, string, string, error) {
 	response, err := c.doRegistryRequest(ctx, http.MethodGet, registryManifestPath(imageRepoPath, reference), []string{
 		"application/vnd.oci.image.index.v1+json",
 		"application/vnd.docker.distribution.manifest.list.v2+json",
@@ -502,18 +598,18 @@ func (c *xrayClient) fetchRegistryManifest(ctx context.Context, imageRepoPath, r
 		"application/vnd.docker.distribution.manifest.v2+json",
 	})
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to read registry manifest response: %w", err)
+		return nil, "", "", fmt.Errorf("failed to read registry manifest response: %w", err)
 	}
 
 	var manifest registryManifest
 	if err := json.Unmarshal(body, &manifest); err != nil {
-		return nil, "", fmt.Errorf("failed to decode registry manifest: %w", err)
+		return nil, "", "", fmt.Errorf("failed to decode registry manifest: %w", err)
 	}
 
 	contentType := normalizeRegistryContentType(response.Header.Get("Content-Type"))
@@ -521,7 +617,7 @@ func (c *xrayClient) fetchRegistryManifest(ctx context.Context, imageRepoPath, r
 		manifest.MediaType = contentType
 	}
 
-	return &manifest, manifest.MediaType, nil
+	return &manifest, manifest.MediaType, strings.TrimSpace(response.Header.Get("Docker-Content-Digest")), nil
 }
 
 func (c *xrayClient) warmBlob(ctx context.Context, imageRepoPath, digest string, seenBlobs map[string]bool) error {

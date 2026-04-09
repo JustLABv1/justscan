@@ -2,6 +2,7 @@
 import { useToast } from '@/components/toast';
 import { SeverityBadge, SourceBadge, StatusBadge } from '@/components/ui/badges';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
+import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import {
   addTagToScan,
@@ -34,12 +35,12 @@ import {
   Vulnerability,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select } from '@heroui/react';
+import { Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select, useOverlayState } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
 import { ArrowLeft01Icon, Cancel01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, GitCompareIcon, MoreVerticalIcon, Refresh01Icon, Share01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { ScannerDatabaseCard, ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
 
 const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
@@ -175,6 +176,8 @@ export default function ScanDetailPage() {
   const [suppressExpiry, setSuppressExpiry] = useState<DateValue | null>(null);
   const [suppressSaving, setSuppressSaving] = useState(false);
   const [suppressError, setSuppressError] = useState('');
+  const vulnerabilityDetailsModal = useOverlayState();
+  const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanStatus = scan?.status;
@@ -231,6 +234,12 @@ export default function ScanDetailPage() {
 
     defaultTabInitializedRef.current = true;
   }, [blockedPolicyDetails, scan]);
+
+  useEffect(() => {
+    if (!vulnerabilityDetailsModal.isOpen) {
+      setSelectedVulnerability(null);
+    }
+  }, [vulnerabilityDetailsModal.isOpen]);
 
   // Persist severity filter
   useEffect(() => {
@@ -460,6 +469,11 @@ export default function ScanDetailPage() {
     } finally {
       setSuppressSaving(false);
     }
+  }
+
+  function openVulnerabilityDetails(vulnerability: Vulnerability) {
+    setSelectedVulnerability(vulnerability);
+    vulnerabilityDetailsModal.open();
   }
 
   if (loading) return <ScanDetailSkeleton />;
@@ -1032,9 +1046,8 @@ export default function ScanDetailPage() {
                   </td>
                 </tr>
               ) : vulns.map((v, i) => (
-                <>
+                <Fragment key={v.id}>
                   <tr
-                    key={v.id}
                     style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -1042,14 +1055,13 @@ export default function ScanDetailPage() {
                     <td className="px-4 py-3">
                       {v.vuln_id ? (
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <a
-                            href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => openVulnerabilityDetails(v)}
                             className="font-mono text-xs text-violet-500 dark:text-violet-400 hover:text-violet-400 dark:hover:text-violet-300 hover:underline transition-colors"
                           >
                             {v.vuln_id}
-                          </a>
+                          </button>
                           <SourceBadge source={v.data_source} />
                           {v.suppression && (
                             <span
@@ -1096,7 +1108,7 @@ export default function ScanDetailPage() {
                     </td>
                   </tr>
                   {expandedVuln === v.id && (
-                    <tr key={`${v.id}-comments`}>
+                    <tr>
                       <td colSpan={8} className="px-4 py-4" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--row-hover)' }}>
                         <div className="space-y-4 max-w-3xl">
 
@@ -1268,7 +1280,7 @@ export default function ScanDetailPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -1455,6 +1467,12 @@ export default function ScanDetailPage() {
           )}
         </div>
       )}
+
+      <VulnerabilityDetailsModal
+        vulnerability={selectedVulnerability}
+        state={vulnerabilityDetailsModal}
+        onClose={() => vulnerabilityDetailsModal.close()}
+      />
     </div>
   );
 }

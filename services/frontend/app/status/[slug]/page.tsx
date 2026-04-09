@@ -1,6 +1,7 @@
 'use client';
 
 import { Logo } from '@/components/logo';
+import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { StatusBadge } from '@/components/ui/badges';
 import { ApiError, getStatusPageBySlug, getStatusPageTrackedScan, getToken, listStatusPageItemVulnerabilities, listStatusPageScanHistory, StatusPageItem, StatusPageResponse, StatusPageScanSummary, Vulnerability } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
@@ -553,6 +554,8 @@ function StatusItemVulnerabilityModal({
   const [loading, setLoading] = useState(true);
   const [historyError, setHistoryError] = useState('');
   const [error, setError] = useState('');
+  const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
+  const vulnerabilityDetailsModal = useOverlayState();
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -706,6 +709,16 @@ function StatusItemVulnerabilityModal({
   }, [effectiveScanStatus, item?.error_message, selectedScan?.error_message]);
 
   const totalPages = Math.max(1, Math.ceil(vulnTotal / VULN_PAGE_SIZE));
+
+  function openVulnerabilityDetails(vulnerability: Vulnerability) {
+    setSelectedVulnerability(vulnerability);
+    vulnerabilityDetailsModal.open();
+  }
+
+  function closeVulnerabilityDetails() {
+    vulnerabilityDetailsModal.close();
+    setSelectedVulnerability(null);
+  }
 
   return (
     <Modal state={state}>
@@ -971,14 +984,13 @@ function StatusItemVulnerabilityModal({
                               {vuln.vuln_id ? (
                                 <div className="flex flex-col gap-1.5">
                                   <div className="flex flex-wrap items-center gap-1.5">
-                                    <a
-                                      href={`https://nvd.nist.gov/vuln/detail/${vuln.vuln_id}`}
-                                      target="_blank"
-                                      rel="noreferrer"
+                                    <button
+                                      type="button"
+                                      onClick={() => openVulnerabilityDetails(vuln)}
                                       className="font-mono text-xs text-violet-600 transition-colors hover:underline dark:text-violet-400"
                                     >
                                       {vuln.vuln_id}
-                                    </a>
+                                    </button>
                                     <SourceBadge source={vuln.data_source} />
                                   </div>
                                   {vuln.title && (
@@ -1028,6 +1040,12 @@ function StatusItemVulnerabilityModal({
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>
+
+      <VulnerabilityDetailsModal
+        vulnerability={selectedVulnerability}
+        state={vulnerabilityDetailsModal}
+        onClose={closeVulnerabilityDetails}
+      />
     </Modal>
   );
 }

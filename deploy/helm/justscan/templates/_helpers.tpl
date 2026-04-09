@@ -60,6 +60,30 @@ Service account name.
 {{- end }}
 
 {{/*
+Resolved backend image tag.
+Defaults to backend-<Chart.appVersion> when not overridden.
+*/}}
+{{- define "justscan.backend.imageTag" -}}
+{{- if .Values.backend.image.tag }}
+{{- .Values.backend.image.tag }}
+{{- else }}
+{{- printf "backend-%s" .Chart.AppVersion }}
+{{- end }}
+{{- end }}
+
+{{/*
+Resolved frontend image tag.
+Defaults to frontend-<Chart.appVersion> when not overridden.
+*/}}
+{{- define "justscan.frontend.imageTag" -}}
+{{- if .Values.frontend.image.tag }}
+{{- .Values.frontend.image.tag }}
+{{- else }}
+{{- printf "frontend-%s" .Chart.AppVersion }}
+{{- end }}
+{{- end }}
+
+{{/*
 Name of the Secret that holds JustScan backend secrets.
 Returns the existingSecret name when set, otherwise the generated name.
 */}}
@@ -68,6 +92,17 @@ Returns the existingSecret name when set, otherwise the generated name.
 {{- .Values.backend.secrets.existingSecret }}
 {{- else }}
 {{- printf "%s-secrets" (include "justscan.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
+PersistentVolumeClaim name for backend cache/data.
+*/}}
+{{- define "justscan.backend.persistence.claimName" -}}
+{{- if .Values.backend.persistence.existingClaim }}
+{{- .Values.backend.persistence.existingClaim }}
+{{- else }}
+{{- printf "%s-backend-data" (include "justscan.fullname" .) }}
 {{- end }}
 {{- end }}
 

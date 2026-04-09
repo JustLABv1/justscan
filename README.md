@@ -276,6 +276,119 @@ JustScan can also augment Java findings for Maven packages using the free OSV AP
 
 ---
 
+## Helm
+
+The Kubernetes chart lives at `deploy/helm/justscan` for local development and is released as an OCI Helm chart in GHCR on every Git tag release.
+
+### Prerequisites
+
+- Kubernetes 1.24+
+- Helm 3.8+
+- Access to `ghcr.io/justlabv1/charts/justscan` and `ghcr.io/justlabv1/justscan` if the repository or packages are private
+
+If GHCR access is private, log in first:
+
+```bash
+helm registry login ghcr.io -u YOUR_GITHUB_USER
+```
+
+### Install from the released chart
+
+Create a values file such as `justscan-values.yaml`:
+
+```yaml
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: scan.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: justscan-tls
+      hosts:
+        - scan.example.com
+
+backend:
+  secrets:
+    jwtSecret: "replace-with-a-long-random-secret"
+    encryptionKey: "replace-with-32-random-characters"
+  config:
+    allowOrigins:
+      - "https://scan.example.com"
+    oidc:
+      enabled: false
+
+  persistence:
+    enabled: true
+    size: 10Gi
+
+postgresql:
+  enabled: true
+  auth:
+    password: "replace-with-a-db-password"
+```
+
+Install a released chart version:
+
+```bash
+helm install justscan oci://ghcr.io/justlabv1/charts/justscan \
+  --version 1.2.3 \
+  --namespace justscan \
+  --create-namespace \
+  -f justscan-values.yaml
+```
+
+Upgrade an existing release:
+
+```bash
+helm upgrade justscan oci://ghcr.io/justlabv1/charts/justscan \
+  --version 1.2.3 \
+  --namespace justscan \
+  -f justscan-values.yaml
+```
+
+### Install from the chart in this repository
+
+```bash
+helm dependency build deploy/helm/justscan
+helm install justscan deploy/helm/justscan \
+  --namespace justscan \
+  --create-namespace \
+  -f justscan-values.yaml
+```
+
+### Helm chart behavior and required values
+
+- Released chart packages automatically default `backend.image.tag` to `backend-<chart appVersion>` and `frontend.image.tag` to `frontend-<chart appVersion>`. Override either tag only if you need to pin a different image.
+- `backend.secrets.jwtSecret` is required for all non-trivial deployments.
+- `backend.secrets.encryptionKey` should be a random 32-character string. It is used to encrypt registry credentials at rest.
+- `postgresql.auth.password` is required when `postgresql.enabled=true`.
+- `backend.secrets.dbPassword` is required when `postgresql.enabled=false` and you connect to an external PostgreSQL instance.
+- `backend.config.allowOrigins` must include the URL users open in their browser.
+- If `backend.config.oidc.enabled=true`, also set `backend.secrets.oidcClientSecret`, `backend.config.oidc.issuerUrl`, `backend.config.oidc.clientId`, and either `backend.config.oidc.redirectUri` or `ingress.enabled=true` with a valid host.
+- `backend.persistence.enabled=true` is recommended for production so Trivy DB and cache data survive pod restarts.
+
+### Supported chart configuration
+
+Important values exposed by the chart include:
+
+- `imagePullSecrets` for private image or chart pulls from GHCR
+- `nameOverride`, `fullnameOverride`, and `serviceAccount.name` for release naming and service account control
+- `backend.config.scanner.trivyPath`, `backend.config.scanner.grypePath`, `backend.config.scanner.enableGrype`, `backend.config.scanner.timeout`, `backend.config.scanner.concurrency`, `backend.config.scanner.dbMaxAgeHours`, and `backend.config.scanner.enableOsvJavaAugmentation`
+- `backend.config.oidc.debug`, `backend.config.oidc.adminGroups`, `backend.config.oidc.adminRoles`, `backend.config.oidc.groupsClaim`, and `backend.config.oidc.rolesClaim`
+- `backend.persistence.existingClaim`, `backend.persistence.size`, and `backend.persistence.storageClass`
+- `frontend.config.apiUrl` if the frontend must call a different backend URL than the in-cluster service
+
+Show the full values schema:
+
+```bash
+helm show values oci://ghcr.io/justlabv1/charts/justscan --version 1.2.3
+```
+
+---
+
 ## Common issues
 
 ### 401 Unauthorized on all protected endpoints

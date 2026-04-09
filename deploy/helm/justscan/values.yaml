@@ -44,7 +44,11 @@ backend:
       # Set explicitly when using an external database (postgresql.enabled=false).
       server: ""
       port: 5432
+      # When postgresql.enabled=true this is auto-derived from postgresql.auth.database.
+      # Set explicitly when using an external database (postgresql.enabled=false).
       name: justscan
+      # When postgresql.enabled=true this is auto-derived from postgresql.auth.username.
+      # Set explicitly when using an external database (postgresql.enabled=false).
       user: postgres
       driver: postgres
 

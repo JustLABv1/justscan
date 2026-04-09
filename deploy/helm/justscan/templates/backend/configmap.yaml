@@ -14,8 +14,8 @@ data:
       driver: {{ .Values.backend.config.database.driver | quote }}
       server: {{ include "justscan.postgresql.host" . | quote }}
       port: {{ .Values.backend.config.database.port }}
-      name: {{ .Values.backend.config.database.name | quote }}
-      user: {{ .Values.backend.config.database.user | quote }}
+      name: {{ include "justscan.postgresql.database" . | quote }}
+      user: {{ include "justscan.postgresql.user" . | quote }}
       # password is injected via BACKEND_DATABASE_PASSWORD env var
 
     jwt:

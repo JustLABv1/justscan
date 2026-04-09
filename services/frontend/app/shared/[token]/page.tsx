@@ -2,12 +2,12 @@
 import { Logo } from '@/components/logo';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { ApiError, getSharedScan, getToken, listScans, listSharedVulnerabilities, rescanShared, Scan, Vulnerability } from '@/lib/api';
+import { useOverlayState } from '@heroui/react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ScanningAnimation, ScanStepTimeline } from '../../../components/scans/scan-runtime';
-import { useOverlayState } from '@heroui/react';
 
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   CRITICAL: { label: 'Critical', color: 'text-red-500 dark:text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20' },

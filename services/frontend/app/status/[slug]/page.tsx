@@ -1,8 +1,8 @@
 'use client';
 
 import { Logo } from '@/components/logo';
-import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { StatusBadge } from '@/components/ui/badges';
+import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { ApiError, getStatusPageBySlug, getStatusPageTrackedScan, getToken, listStatusPageItemVulnerabilities, listStatusPageScanHistory, StatusPageItem, StatusPageResponse, StatusPageScanSummary, Vulnerability } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { Button, ListBox, Modal, Select, useOverlayState } from '@heroui/react';

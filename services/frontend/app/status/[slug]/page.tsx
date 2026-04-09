@@ -3,7 +3,8 @@
 import { Logo } from '@/components/logo';
 import { StatusBadge } from '@/components/ui/badges';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
-import { ApiError, getStatusPageBySlug, getStatusPageTrackedScan, getToken, listStatusPageItemVulnerabilities, listStatusPageScanHistory, StatusPageItem, StatusPageResponse, StatusPageScanSummary, Vulnerability } from '@/lib/api';
+import type { StatusPageItem, StatusPageResponse, StatusPageScanSummary, Vulnerability } from '@/lib/api';
+import { ApiError, getStatusPageBySlug, getStatusPageItemVulnerabilityContextAnalysis, getStatusPageTrackedScan, getToken, listStatusPageItemVulnerabilities, listStatusPageScanHistory } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { Button, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import Link from 'next/link';
@@ -1045,6 +1046,9 @@ function StatusItemVulnerabilityModal({
         vulnerability={selectedVulnerability}
         state={vulnerabilityDetailsModal}
         onClose={closeVulnerabilityDetails}
+        loadContextAnalysis={selectedScanId
+          ? (vulnerability) => getStatusPageItemVulnerabilityContextAnalysis(slug, selectedScanId, vulnerability.id)
+          : undefined}
       />
     </Modal>
   );

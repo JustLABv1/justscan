@@ -4,11 +4,11 @@ import { SeverityBadge, SourceBadge, StatusBadge } from '@/components/ui/badges'
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
+import type { ComplianceResult, Org, SBOMComponent, Scan, Suppression, Tag, Vulnerability } from '@/lib/api';
 import {
   addTagToScan,
   assignScanToOrg,
   cancelScan,
-  ComplianceResult,
   createComment,
   createShare,
   deleteComment,
@@ -18,21 +18,16 @@ import {
   getScanCompliance,
   getScanSBOM,
   getUser,
+  getVulnerabilityContextAnalysis,
   listOrgs,
   listScans,
   listTags,
   listVulnerabilities,
-  Org,
   reEvaluateCompliance,
   removeScanFromOrg,
   removeTagFromScan,
   reScan,
-  SBOMComponent,
-  Scan,
-  Suppression,
-  Tag,
   upsertSuppression,
-  Vulnerability,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select, useOverlayState } from '@heroui/react';
@@ -107,6 +102,35 @@ function DetailBlock({ label, value, mono = false }: { label: string; value?: st
       </p>
     </div>
   );
+}
+
+function imageConfigObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function imageConfigString(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim();
+}
+
+function imageConfigStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((entry) => String(entry).trim()).filter(Boolean);
+}
+
+function imageConfigEntries(value: unknown): Array<[string, string]> {
+  const record = imageConfigObject(value);
+  if (!record) {
+    return [];
+  }
+  return Object.entries(record).map(([key, entry]) => [key, String(entry ?? '').trim()] as [string, string]);
 }
 
 function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
@@ -491,6 +515,19 @@ export default function ScanDetailPage() {
 
   const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
   const currentUser = getUser();
+  const fullImageConfig = scan.image_config;
+  const runtimeImageConfig = imageConfigObject(fullImageConfig?.['config']);
+  const imageCreated = imageConfigString(fullImageConfig?.['created']);
+  const imageAuthor = imageConfigString(fullImageConfig?.['author']);
+  const imageDockerVersion = imageConfigString(fullImageConfig?.['docker_version']);
+  const imageUser = imageConfigString(runtimeImageConfig?.['User']);
+  const imageWorkingDir = imageConfigString(runtimeImageConfig?.['WorkingDir']);
+  const imageEntrypoint = imageConfigStringArray(runtimeImageConfig?.['Entrypoint']);
+  const imageCommand = imageConfigStringArray(runtimeImageConfig?.['Cmd']);
+  const imageEnv = imageConfigStringArray(runtimeImageConfig?.['Env']);
+  const imageLabelEntries = imageConfigEntries(runtimeImageConfig?.['Labels']);
+  const imageExposedPorts = imageConfigEntries(runtimeImageConfig?.['ExposedPorts']).map(([port]) => port);
+  const imageVolumes = imageConfigEntries(runtimeImageConfig?.['Volumes']).map(([volume]) => volume);
 
   const sevCards = [
     { count: scan.critical_count, label: 'Critical', color: 'text-red-400',    border: 'border-red-500/20'    },
@@ -1345,6 +1382,71 @@ export default function ScanDetailPage() {
             </div>
           )}
 
+          {fullImageConfig && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Image metadata</p>
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                <DetailBlock label="Created" value={imageCreated} />
+                <DetailBlock label="Author" value={imageAuthor} />
+                <DetailBlock label="Docker version" value={imageDockerVersion} />
+                <DetailBlock label="User" value={imageUser} mono />
+                <DetailBlock label="Working directory" value={imageWorkingDir} mono />
+                <DetailBlock label="Entrypoint" value={imageEntrypoint.join(' ')} mono />
+              </div>
+
+              {imageCommand.length > 0 && (
+                <DetailBlock label="Command" value={imageCommand.join(' ')} mono />
+              )}
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                <DetailBlock label="Environment variables" value={imageEnv.length > 0 ? `${imageEnv.length} captured` : '0 captured'} />
+                <DetailBlock label="Labels" value={imageLabelEntries.length > 0 ? `${imageLabelEntries.length} captured` : '0 captured'} />
+                <DetailBlock label="Exposed ports" value={imageExposedPorts.length > 0 ? imageExposedPorts.join(', ') : 'None declared'} mono={imageExposedPorts.length > 0} />
+              </div>
+
+              {imageVolumes.length > 0 && (
+                <DetailBlock label="Declared volumes" value={imageVolumes.join(', ')} mono />
+              )}
+
+              {imageEnv.length > 0 && (
+                <details className="glass-panel rounded-xl px-4 py-4">
+                  <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                    Environment
+                  </summary>
+                  <pre className="mt-3 overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    {imageEnv.join('\n')}
+                  </pre>
+                </details>
+              )}
+
+              {imageLabelEntries.length > 0 && (
+                <details className="glass-panel rounded-xl px-4 py-4">
+                  <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                    Labels
+                  </summary>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {imageLabelEntries.map(([key, value]) => (
+                      <div key={key} className="rounded-xl p-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{key}</p>
+                        <p className="mt-2 break-all font-mono text-xs text-zinc-700 dark:text-zinc-300">{value || '—'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+
+              <details className="glass-panel rounded-xl px-4 py-4">
+                <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  Raw image config
+                </summary>
+                <pre className="mt-3 overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  {JSON.stringify(fullImageConfig, null, 2)}
+                </pre>
+              </details>
+            </div>
+          )}
+
           {/* Tags */}
           {allTags.length > 0 && (
             <div className="glass-panel rounded-xl px-4 py-4">
@@ -1472,6 +1574,7 @@ export default function ScanDetailPage() {
         vulnerability={selectedVulnerability}
         state={vulnerabilityDetailsModal}
         onClose={() => vulnerabilityDetailsModal.close()}
+        loadContextAnalysis={(vulnerability) => getVulnerabilityContextAnalysis(id, vulnerability.id)}
       />
     </div>
   );

@@ -28,6 +28,7 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 		s.POST("/:id/cancel", scans.CancelScan(db))
 		s.POST("/:id/rescan", scans.ReScan(db))
 		s.GET("/:id/vulnerabilities", scans.ListVulnerabilities(db))
+		s.GET("/:id/vulnerabilities/:vulnerabilityId/analysis", scans.GetVulnerabilityContextAnalysis(db))
 		s.GET("/:id/sbom", scans.GetSBOM(db))
 		s.GET("/:id/export", scans.ExportScan(db))
 		s.POST("/:id/tags/:tagId", tags.AddTagToScan(db))

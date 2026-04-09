@@ -97,11 +97,13 @@ type TrivyDataSource struct {
 
 // TrivySBOMOutput holds the CycloneDX SBOM output
 type TrivySBOMOutput struct {
-	BOMFormat  string          `json:"bomFormat"`
-	Components []TrivySBOMComp `json:"components"`
+	BOMFormat       string                   `json:"bomFormat"`
+	Components      []TrivySBOMComp          `json:"components"`
+	Vulnerabilities []TrivySBOMVulnerability `json:"vulnerabilities,omitempty"`
 }
 
 type TrivySBOMComp struct {
+	BOMRef   string         `json:"bom-ref,omitempty"`
 	Type     string         `json:"type"`
 	Name     string         `json:"name"`
 	Version  string         `json:"version,omitempty"`
@@ -121,6 +123,36 @@ type TrivySBOMLicItem struct {
 
 type TrivySBOMOrg struct {
 	Name string `json:"name,omitempty"`
+}
+
+type TrivySBOMVulnerability struct {
+	ID             string                         `json:"id,omitempty"`
+	Source         *TrivySBOMVulnSource           `json:"source,omitempty"`
+	Ratings        []TrivySBOMVulnRating          `json:"ratings,omitempty"`
+	Description    string                         `json:"description,omitempty"`
+	Recommendation string                         `json:"recommendation,omitempty"`
+	Advisories     []TrivySBOMVulnAdvisory        `json:"advisories,omitempty"`
+	Affects        []TrivySBOMVulnerabilityAffect `json:"affects,omitempty"`
+}
+
+type TrivySBOMVulnSource struct {
+	Name string `json:"name,omitempty"`
+	URL  string `json:"url,omitempty"`
+}
+
+type TrivySBOMVulnRating struct {
+	Severity string `json:"severity,omitempty"`
+	Method   string `json:"method,omitempty"`
+	Vector   string `json:"vector,omitempty"`
+	Score    any    `json:"score,omitempty"`
+}
+
+type TrivySBOMVulnAdvisory struct {
+	URL string `json:"url,omitempty"`
+}
+
+type TrivySBOMVulnerabilityAffect struct {
+	Ref string `json:"ref,omitempty"`
 }
 
 // RunScan executes trivy against an image and returns parsed output.

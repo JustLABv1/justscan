@@ -11,12 +11,20 @@ import (
 )
 
 type statsResult struct {
-	TotalScans     int            `json:"total_scans"`
-	StatusCounts   map[string]int `json:"status_counts"`
-	SeverityTotals map[string]int `json:"severity_totals"`
-	RecentScans    []models.Scan  `json:"recent_scans"`
-	TopImages      []topImage     `json:"top_images"`
-	WatchlistCount int            `json:"watchlist_count"`
+	TotalScans     int              `json:"total_scans"`
+	StatusCounts   map[string]int   `json:"status_counts"`
+	SeverityTotals map[string]int   `json:"severity_totals"`
+	RecentScans    []models.Scan    `json:"recent_scans"`
+	TopImages      []topImage       `json:"top_images"`
+	WatchlistCount int              `json:"watchlist_count"`
+	Operations     operationsResult `json:"operations"`
+}
+
+type operationsResult struct {
+	BlockedPolicyCount int            `json:"blocked_policy_count"`
+	ActiveXrayCount    int            `json:"active_xray_count"`
+	ActiveXraySteps    map[string]int `json:"active_xray_step_counts"`
+	ActiveXrayScans    []models.Scan  `json:"active_xray_scans"`
 }
 
 type topImage struct {
@@ -30,6 +38,10 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		result := statsResult{
 			StatusCounts:   make(map[string]int),
 			SeverityTotals: make(map[string]int),
+			Operations: operationsResult{
+				ActiveXraySteps: make(map[string]int),
+				ActiveXrayScans: []models.Scan{},
+			},
 		}
 
 		// Total scans
@@ -38,17 +50,22 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 
 		// Status counts
 		type statusRow struct {
-			Status string `bun:"status"`
-			Count  int    `bun:"count"`
+			Status         string `bun:"status"`
+			ExternalStatus string `bun:"external_status"`
+			Count          int    `bun:"count"`
 		}
 		var statusRows []statusRow
 		db.NewSelect().
 			TableExpr("scans").
-			ColumnExpr("status, COUNT(*) AS count").
-			GroupExpr("status").
+			ColumnExpr("status, external_status, COUNT(*) AS count").
+			GroupExpr("status, external_status").
 			Scan(ctx, &statusRows) //nolint:errcheck
 		for _, r := range statusRows {
-			result.StatusCounts[r.Status] = r.Count
+			result.StatusCounts[r.Status] += r.Count
+			if isBlockedByXrayPolicyStatus(r.Status, r.ExternalStatus) {
+				result.StatusCounts[models.ScanExternalStatusBlockedByXrayPolicy] += r.Count
+				result.Operations.BlockedPolicyCount += r.Count
+			}
 		}
 
 		// Severity totals across completed scans
@@ -76,6 +93,23 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 			OrderExpr("created_at DESC").
 			Limit(5).
 			Scan(ctx) //nolint:errcheck
+		if result.RecentScans == nil {
+			result.RecentScans = []models.Scan{}
+		}
+
+		// Active Xray scans and current-step counts.
+		var activeXrayScans []models.Scan
+		db.NewSelect().Model(&activeXrayScans).
+			Where("scan_provider = ?", models.ScanProviderArtifactoryXray).
+			Where("status IN (?)", bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
+			OrderExpr("created_at DESC").
+			Scan(ctx) //nolint:errcheck
+		result.Operations.ActiveXrayCount, result.Operations.ActiveXraySteps = summarizeActiveXrayScans(activeXrayScans)
+		if len(activeXrayScans) > 5 {
+			result.Operations.ActiveXrayScans = append([]models.Scan{}, activeXrayScans[:5]...)
+		} else if activeXrayScans != nil {
+			result.Operations.ActiveXrayScans = append([]models.Scan{}, activeXrayScans...)
+		}
 
 		// Top images by scan count
 		result.TopImages = topImages(ctx, db)
@@ -88,6 +122,22 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, result)
 	}
+}
+
+func isBlockedByXrayPolicyStatus(status, externalStatus string) bool {
+	return status == models.ScanStatusFailed && externalStatus == models.ScanExternalStatusBlockedByXrayPolicy
+}
+
+func summarizeActiveXrayScans(scans []models.Scan) (int, map[string]int) {
+	stepCounts := make(map[string]int)
+	for _, scan := range scans {
+		step := scan.CurrentStep
+		if step == "" {
+			step = models.ScanStepQueued
+		}
+		stepCounts[step]++
+	}
+	return len(scans), stepCounts
 }
 
 func topImages(ctx context.Context, db *bun.DB) []topImage {

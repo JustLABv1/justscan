@@ -1,6 +1,6 @@
 'use client';
 
-import { ApiError, getStatusPageBySlug, listStatusPageItemVulnerabilities, StatusPageItem, Vulnerability } from '@/lib/api';
+import { ApiError, getStatusPageBySlug, getStatusPageTrackedScan, listStatusPageItemVulnerabilities, StatusPageItem, StatusPageScanSummary, Vulnerability } from '@/lib/api';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 
@@ -95,6 +95,7 @@ function StatusReportContent() {
 
   const [pageName, setPageName] = useState('Status Report');
   const [item, setItem] = useState<StatusPageItem | null>(null);
+  const [scan, setScan] = useState<StatusPageScanSummary | null>(null);
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [error, setError] = useState('');
 
@@ -107,16 +108,17 @@ function StatusReportContent() {
 
     async function load() {
       try {
-        const page = await getStatusPageBySlug(slug);
+        const [page, trackedScan] = await Promise.all([
+          getStatusPageBySlug(slug),
+          getStatusPageTrackedScan(slug, scanId),
+        ]);
         if (cancelled) return;
 
         setPageName(page.page.name);
-        const matched = (page.items ?? []).find(candidate => candidate.latest_scan_id === scanId);
-        if (!matched) {
-          setError('Status page item not found.');
-          return;
-        }
-
+        setScan(trackedScan);
+        const matched = (page.items ?? []).find(candidate => (
+          candidate.image_name === trackedScan.image_name && candidate.image_tag === trackedScan.image_tag
+        )) ?? null;
         setItem(matched);
         const findings = await fetchAllVulnerabilities(slug, scanId, severity, pkg, hasFix, minCvss, sortBy, sortDir);
         if (cancelled) return;
@@ -160,7 +162,7 @@ function StatusReportContent() {
     return <div style={{ padding: '40px', color: '#dc2626', fontFamily: 'sans-serif' }}><strong>Error:</strong> {error}</div>;
   }
 
-  if (!item) {
+  if (!scan) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#6b7280', gap: 12 }}>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -210,7 +212,7 @@ function StatusReportContent() {
             <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>JustScan Status Report</h1>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6b7280' }}>{pageName}</p>
             <p style={{ margin: '8px 0 0', fontFamily: 'monospace', fontSize: 11, color: '#6b7280', wordBreak: 'break-all' }}>
-              {item.image_name}:{item.image_tag}
+              {scan.image_name}:{scan.image_tag}
             </p>
           </div>
 
@@ -229,15 +231,20 @@ function StatusReportContent() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, border: '1px solid #e5e7eb' }}>
             <tbody>
               {([
-                ['Observed', formatDate(item.observed_at)],
-                ['Status', item.status],
-                ['Scan state', item.scan_status],
-                ['Freshness', `${item.freshness_hours}h`],
-                ['Latest scan ID', item.latest_scan_id],
+                ['Observed', formatDate(scan.observed_at)],
+                ['Status', item?.status ?? scan.scan_status],
+                ['Scan state', scan.scan_status],
+                ['External state', scan.external_status || '—'],
+                ['Provider', scan.scan_provider || '—'],
+                ['Current step', scan.current_step || '—'],
+                ['Started', formatDate(scan.started_at)],
+                ['Completed', formatDate(scan.completed_at)],
+                ['Freshness', item ? `${item.freshness_hours}h` : '—'],
+                ['Scan ID', scan.scan_id],
               ] as [string, string][]).map(([label, value]) => (
                 <tr key={label}>
                   <td style={{ width: 140, padding: '6px 10px', fontWeight: 600, color: '#374151', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>{label}</td>
-                  <td style={{ padding: '6px 10px', color: '#111827', borderBottom: '1px solid #e5e7eb', fontFamily: label === 'Latest scan ID' ? 'monospace' : 'inherit', fontSize: label === 'Latest scan ID' ? 11 : 12, wordBreak: 'break-all' }}>{value}</td>
+                  <td style={{ padding: '6px 10px', color: '#111827', borderBottom: '1px solid #e5e7eb', fontFamily: label === 'Scan ID' ? 'monospace' : 'inherit', fontSize: label === 'Scan ID' ? 11 : 12, wordBreak: 'break-all' }}>{value}</td>
                 </tr>
               ))}
             </tbody>

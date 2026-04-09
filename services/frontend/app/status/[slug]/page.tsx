@@ -1,7 +1,8 @@
 'use client';
 
 import { Logo } from '@/components/logo';
-import { ApiError, getStatusPageBySlug, getToken, listStatusPageItemVulnerabilities, StatusPageItem, StatusPageResponse, Vulnerability } from '@/lib/api';
+import { StatusBadge } from '@/components/ui/badges';
+import { ApiError, getStatusPageBySlug, getStatusPageTrackedScan, getToken, listStatusPageItemVulnerabilities, listStatusPageScanHistory, StatusPageItem, StatusPageResponse, StatusPageScanSummary, Vulnerability } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { Button, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import Link from 'next/link';
@@ -10,20 +11,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const AUTO_REFRESH_MS = 30000;
 const VULN_PAGE_SIZE = 25;
+const STATUS_LAYOUT_STORAGE_KEY = 'justscan_status_page_layout';
+const STATUS_FILTER_STORAGE_KEY = 'justscan_status_page_filter';
+const STATUS_SORT_STORAGE_KEY = 'justscan_status_page_sort';
 const STATUS_SELECT_TRIGGER_CLS = 'glass-input min-h-11 rounded-full px-3 text-sm';
 const STATUS_INPUT_CLS = 'glass-input min-h-11 rounded-xl px-3 text-sm outline-none';
 const STATUS_PRIORITY: Record<string, number> = {
   failed: 0,
-  degraded: 1,
-  stale: 2,
-  running: 3,
-  pending: 4,
-  healthy: 5,
-  cancelled: 6,
+  blocked_by_xray_policy: 1,
+  degraded: 2,
+  stale: 3,
+  running: 4,
+  pending: 5,
+  healthy: 6,
+  cancelled: 7,
 };
 const FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'failed', label: 'Failed' },
+  { key: 'blocked_by_xray_policy', label: 'Blocked' },
+  { key: 'running', label: 'Running' },
   { key: 'degraded', label: 'Degraded' },
   { key: 'stale', label: 'Stale' },
   { key: 'healthy', label: 'Healthy' },
@@ -33,6 +40,12 @@ const SORT_OPTIONS = [
   { key: 'worst', label: 'Worst first' },
   { key: 'stale', label: 'Stalest first' },
   { key: 'latest', label: 'Newest scan' },
+] as const;
+const LAYOUT_OPTIONS = [
+  { key: 'detailed', label: 'Detailed' },
+  { key: 'compact', label: 'Compact' },
+  { key: 'grid', label: 'Grid' },
+  { key: 'table', label: 'Table' },
 ] as const;
 const VULN_SEVERITY_OPTIONS = [
   { key: '__all__', label: 'All severities' },
@@ -54,9 +67,14 @@ const STATUS_COLOR: Record<string, string> = {
   degraded: '#f97316',
   stale: '#eab308',
   failed: '#ef4444',
+  blocked_by_xray_policy: '#f59e0b',
   pending: '#a78bfa',
   running: '#60a5fa',
   cancelled: '#52525b',
+  waiting_for_xray: '#f59e0b',
+  warming_cache: '#fb923c',
+  indexing_artifact: '#f97316',
+  queued_in_xray: '#f59e0b',
 };
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   CRITICAL: { label: 'Critical', color: 'text-red-500 dark:text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' },
@@ -68,6 +86,7 @@ const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; bor
 
 type FilterKey = (typeof FILTERS)[number]['key'];
 type SortKey = (typeof SORT_OPTIONS)[number]['key'];
+type LayoutKey = (typeof LAYOUT_OPTIONS)[number]['key'];
 type VulnerabilitySortKey = 'vuln_id' | 'pkg_name' | 'installed_version' | 'fixed_version' | 'severity' | 'cvss_score';
 
 function SeverityBadge({ severity }: { severity: string }) {
@@ -103,52 +122,258 @@ function getStatusRank(status: string) {
   return STATUS_PRIORITY[status] ?? 99;
 }
 
+function getEffectiveScanStatus(status: string, externalStatus?: string) {
+  if ((status === 'pending' || status === 'running') && externalStatus && externalStatus !== status) {
+    return externalStatus;
+  }
+  if (status === 'failed' && externalStatus === 'blocked_by_xray_policy') {
+    return externalStatus;
+  }
+  return status;
+}
+
 function formatStatusLabel(status: string) {
-  return status.replace(/_/g, ' ');
+  const labels: Record<string, string> = {
+    blocked_by_xray_policy: 'blocked by xray policy',
+    waiting_for_xray: 'waiting for xray',
+    warming_cache: 'warming cache',
+    indexing_artifact: 'indexing artifact',
+    queued_in_xray: 'queued in xray',
+  };
+  return labels[status] ?? status.replace(/_/g, ' ');
 }
 
 function getFindingTotal(item: StatusPageItem) {
   return item.critical_count + item.high_count + item.medium_count + item.low_count;
 }
 
+type BlockedPolicyDetails = {
+  summary: string;
+  manifest?: string;
+  artifact?: string;
+  jfrog?: string;
+  matchedIssues?: string;
+  matchedWatches?: string;
+  blockingPolicies?: string;
+  matchedPolicies?: string;
+  totalViolations?: string;
+};
+
+function parseBlockedPolicyDetails(errorMessage?: string | null): BlockedPolicyDetails | null {
+  const message = errorMessage?.trim();
+  if (!message) return null;
+
+  const lines = message
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return null;
+
+  const details: BlockedPolicyDetails = { summary: lines[0] };
+  for (const line of lines.slice(1)) {
+    if (line.startsWith('Manifest: ')) details.manifest = line.slice('Manifest: '.length);
+    else if (line.startsWith('Artifact: ')) details.artifact = line.slice('Artifact: '.length);
+    else if (line.startsWith('JFrog: ')) details.jfrog = line.slice('JFrog: '.length);
+    else if (line.startsWith('Matched issues: ')) details.matchedIssues = line.slice('Matched issues: '.length);
+    else if (line.startsWith('Matched watches: ')) details.matchedWatches = line.slice('Matched watches: '.length);
+    else if (line.startsWith('Blocking policies: ')) details.blockingPolicies = line.slice('Blocking policies: '.length);
+    else if (line.startsWith('Matched policies: ')) details.matchedPolicies = line.slice('Matched policies: '.length);
+    else if (line.startsWith('Xray violations found for this artifact: ')) details.totalViolations = line.slice('Xray violations found for this artifact: '.length);
+  }
+
+  const hasStructuredDetails = Boolean(
+    details.manifest ||
+    details.artifact ||
+    details.jfrog ||
+    details.matchedIssues ||
+    details.matchedWatches ||
+    details.blockingPolicies ||
+    details.matchedPolicies ||
+    details.totalViolations,
+  );
+
+  return hasStructuredDetails ? details : null;
+}
+
+function countDelimitedValues(value?: string) {
+  if (!value) return 0;
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .length;
+}
+
+function compactDelimitedValues(value?: string, maxItems = 2) {
+  if (!value) return '';
+  const items = value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (items.length <= maxItems) return items.join(', ');
+  return `${items.slice(0, maxItems).join(', ')} +${items.length - maxItems} more`;
+}
+
+function TagBadge({ tag, accent }: { tag: string; accent?: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold"
+      style={{
+        background: accent ? `color-mix(in srgb, ${accent} 10%, var(--status-pill-bg))` : 'var(--status-pill-bg)',
+        border: accent ? `1px solid color-mix(in srgb, ${accent} 24%, var(--status-pill-border))` : '1px solid var(--status-pill-border)',
+        color: 'var(--text-primary)',
+      }}
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>
+        Tag
+      </span>
+      <span className="font-mono text-[12px] leading-none">{tag}</span>
+    </span>
+  );
+}
+
+function compactErrorSummary(message?: string) {
+  const firstLine = message?.split('\n').map((line) => line.trim()).find(Boolean);
+  if (!firstLine) return '';
+  return firstLine.length > 180 ? `${firstLine.slice(0, 177)}...` : firstLine;
+}
+
+function buildItemNote(item: StatusPageItem, blockedPolicyDetails: BlockedPolicyDetails | null) {
+  if (blockedPolicyDetails) {
+    const details: string[] = [];
+    if (blockedPolicyDetails.totalViolations) {
+      details.push(`${blockedPolicyDetails.totalViolations} violations`);
+    }
+    if (blockedPolicyDetails.blockingPolicies) {
+      details.push(`${countDelimitedValues(blockedPolicyDetails.blockingPolicies)} blocking policies`);
+    }
+    return details.length > 0 ? details.join(' · ') : blockedPolicyDetails.summary;
+  }
+
+  if (item.error_message) {
+    return compactErrorSummary(item.error_message);
+  }
+
+  const parts: string[] = [];
+  if (item.critical_count > 0) parts.push(`${item.critical_count} critical`);
+  if (item.high_count > 0) parts.push(`${item.high_count} high`);
+  if (item.medium_count > 0) parts.push(`${item.medium_count} medium`);
+  if (item.low_count > 0) parts.push(`${item.low_count} low`);
+  return parts.length > 0 ? parts.join(' · ') : 'No active findings';
+}
+
 function DonutChart({ data }: { data: { label: string; value: number; color: string }[] }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   if (total === 0) return null;
 
-  const r = 42;
-  const cx = 52;
-  const cy = 52;
-  const circumference = 2 * Math.PI * r;
-
-  const slices = data.map((d, i) => {
-    const pct = d.value / total;
-    const dashArray = `${pct * circumference} ${circumference}`;
-    const prevOffset = data.slice(0, i).reduce((s, x) => s + x.value / total, 0);
-    const dashOffset = circumference - prevOffset * circumference;
-    return { ...d, dashArray, dashOffset };
-  });
+  let offset = 0;
+  const gradient = data.map((segment) => {
+    const start = offset;
+    offset += (segment.value / total) * 100;
+    return `${segment.color} ${start}% ${offset}%`;
+  }).join(', ');
 
   return (
-    <svg width={104} height={104} viewBox="0 0 104 104" className="shrink-0">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--status-donut-track)" strokeWidth={11} />
-      {slices.map(s => (
-        <circle
-          key={s.label}
-          cx={cx}
-          cy={cy}
-          r={r}
-          fill="none"
-          stroke={s.color}
-          strokeWidth={11}
-          strokeDasharray={s.dashArray}
-          strokeDashoffset={s.dashOffset}
-          strokeLinecap="butt"
-          style={{ transform: 'rotate(-90deg)', transformOrigin: `${cx}px ${cy}px`, transition: 'stroke-dasharray 600ms ease' }}
-        />
-      ))}
-      <text x={cx} y={cy - 2} textAnchor="middle" fontSize={26} fontWeight={650} fill="var(--text-primary)">{total}</text>
-      <text x={cx} y={cy + 18} textAnchor="middle" fontSize={11} letterSpacing="0.12em" fill="var(--text-muted)">TAGS</text>
-    </svg>
+    <div className="relative isolate flex h-[104px] w-[104px] shrink-0 items-center justify-center rounded-full">
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{
+          background: `conic-gradient(from -90deg, ${gradient})`,
+          boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)',
+        }}
+      />
+      <div
+        className="absolute inset-[12px] rounded-full"
+        style={{
+          background: 'color-mix(in srgb, var(--status-card-bg) 92%, transparent)',
+          border: '1px solid var(--status-card-border)',
+          boxShadow: '0 12px 24px rgba(15, 23, 42, 0.08)',
+        }}
+      />
+      <div className="relative flex flex-col items-center justify-center text-center">
+        <span className="text-[26px] font-semibold leading-none tabular-nums" style={{ color: 'var(--text-primary)' }}>{total}</span>
+        <span className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>Tags</span>
+      </div>
+    </div>
+  );
+}
+
+function RunningScanVisualization({
+  provider,
+  currentStep,
+  status,
+  externalStatus,
+  startedAt,
+  compact = false,
+}: {
+  provider?: string;
+  currentStep?: string;
+  status: string;
+  externalStatus?: string;
+  startedAt?: string;
+  compact?: boolean;
+}) {
+  const providerKey = (provider ?? '').toLowerCase();
+  const isXray = providerKey === 'xray';
+  const accent = isXray ? '#f59e0b' : '#60a5fa';
+  const accentSoft = isXray ? 'rgba(245,158,11,0.14)' : 'rgba(96,165,250,0.16)';
+  const resolvedStatus = getEffectiveScanStatus(status, externalStatus);
+  const detail = currentStep ? formatStatusLabel(currentStep) : formatStatusLabel(resolvedStatus);
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-[24px] border px-4 ${compact ? 'py-3' : 'py-4'}`}
+      style={{
+        background: `linear-gradient(135deg, ${accentSoft}, color-mix(in srgb, var(--status-card-bg) 88%, transparent))`,
+        borderColor: `color-mix(in srgb, ${accent} 22%, var(--status-card-border))`,
+      }}
+    >
+      <div
+        className="absolute inset-y-0 left-0 w-20 opacity-70"
+        style={{ background: `radial-gradient(circle at left center, ${accentSoft}, transparent 72%)` }}
+      />
+      <div className="relative flex items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>
+            {isXray ? 'Xray pipeline active' : 'Scan pipeline active'}
+          </p>
+          <p className={`font-semibold ${compact ? 'text-sm' : 'text-base'}`} style={{ color: 'var(--text-primary)' }}>
+            {detail}
+          </p>
+          <p className="text-[12px] leading-5" style={{ color: 'var(--text-secondary)' }}>
+            {startedAt ? `Started ${timeAgo(startedAt)}` : 'Live scan data is still arriving for this tag.'}
+          </p>
+        </div>
+
+        <div className={`relative shrink-0 ${compact ? 'h-14 w-28' : 'h-16 w-32'}`} aria-hidden="true">
+          {[0, 1, 2].map((lane) => (
+            <span
+              key={`lane-${lane}`}
+              className="absolute left-0 right-7 h-px"
+              style={{
+                top: `${18 + lane * 12}px`,
+                background: `linear-gradient(90deg, transparent, ${accent}, transparent)`,
+                opacity: 0.5,
+              }}
+            />
+          ))}
+          {[0, 1, 2].map((dot) => (
+            <span key={`dot-${dot}`} className="absolute" style={{ left: `${12 + dot * 18}px`, top: `${13 + dot * 12}px` }}>
+              <span
+                className="absolute inline-flex h-3 w-3 animate-ping rounded-full"
+                style={{ background: accent, opacity: 0.45, animationDelay: `${dot * 220}ms`, animationDuration: '1.8s' }}
+              />
+              <span className="relative inline-flex h-3 w-3 rounded-full border border-white/50" style={{ background: accent }} />
+            </span>
+          ))}
+          <span
+            className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full border-2 animate-pulse"
+            style={{ borderColor: accent, boxShadow: `0 0 0 4px ${accentSoft}` }}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -294,6 +519,11 @@ function FilterChip({
   );
 }
 
+function formatScanHistoryOptionLabel(scan: StatusPageScanSummary) {
+  const effectiveStatus = getEffectiveScanStatus(scan.scan_status, scan.external_status);
+  return `${scan.is_latest ? 'Latest' : 'Previous'} · ${formatStatusLabel(effectiveStatus)} · ${timeAgo(scan.observed_at)}`;
+}
+
 function StatusItemVulnerabilityModal({
   slug,
   item,
@@ -305,6 +535,9 @@ function StatusItemVulnerabilityModal({
   state: ReturnType<typeof useOverlayState>;
   onClose: () => void;
 }) {
+  const [history, setHistory] = useState<StatusPageScanSummary[]>([]);
+  const [selectedScanId, setSelectedScanId] = useState('');
+  const [selectedScan, setSelectedScan] = useState<StatusPageScanSummary | null>(null);
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [vulnTotal, setVulnTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -316,14 +549,35 @@ function StatusItemVulnerabilityModal({
   const [hasFix, setHasFix] = useState(false);
   const [sortBy, setSortBy] = useState<VulnerabilitySortKey>('severity');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [historyError, setHistoryError] = useState('');
   const [error, setError] = useState('');
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    setHistory([]);
+    setSelectedScan(null);
+    setSelectedScanId(item?.latest_scan_id ?? '');
+    setVulns([]);
+    setVulnTotal(0);
+    setPage(1);
+    setSeverityFilter('');
+    setPkgInput('');
+    setPkgFilter('');
+    setMinCvss(0);
+    setMinCvssInput('');
+    setHasFix(false);
+    setSortBy('severity');
+    setSortDir('asc');
+    setHistoryError('');
+    setError('');
+  }, [item?.latest_scan_id]);
+
   const reportHref = (() => {
-    if (!item?.latest_scan_id) return '';
+    if (!selectedScanId) return '';
     const params = new URLSearchParams({
-      scanId: item.latest_scan_id,
+      scanId: selectedScanId,
       sortBy,
       sortDir,
     });
@@ -348,10 +602,78 @@ function StatusItemVulnerabilityModal({
 
   useEffect(() => {
     if (!item?.latest_scan_id) return;
+    let cancelled = false;
 
+    setHistoryLoading(true);
+    Promise.all([
+      listStatusPageScanHistory(slug, item.latest_scan_id),
+      getStatusPageTrackedScan(slug, item.latest_scan_id).catch(() => null),
+    ])
+      .then(([historyResponse, trackedScan]) => {
+        if (cancelled) return;
+
+        const scans = historyResponse.length > 0
+          ? historyResponse
+          : trackedScan
+            ? [trackedScan]
+            : [];
+
+        setHistory(scans);
+        setSelectedScanId((current) => (
+          scans.find((scan) => scan.scan_id === current)?.scan_id
+          ?? scans.find((scan) => scan.is_latest)?.scan_id
+          ?? trackedScan?.scan_id
+          ?? item.latest_scan_id
+        ));
+        setHistoryError('');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setHistory([]);
+        setHistoryError(err instanceof Error ? err.message : 'Failed to load scan history');
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, item?.latest_scan_id]);
+
+  useEffect(() => {
+    if (!selectedScanId) return;
+
+    const historyMatch = history.find((scan) => scan.scan_id === selectedScanId);
+    if (historyMatch) {
+      setSelectedScan(historyMatch);
+      return;
+    }
+
+    let cancelled = false;
+    getStatusPageTrackedScan(slug, selectedScanId)
+      .then((scan) => {
+        if (!cancelled) setSelectedScan(scan);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setSelectedScan(null);
+          setHistoryError(err instanceof Error ? err.message : 'Failed to load scan details');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, history, selectedScanId]);
+
+  useEffect(() => {
+    if (!selectedScanId) return;
+
+    setLoading(true);
     listStatusPageItemVulnerabilities(
       slug,
-      item.latest_scan_id,
+      selectedScanId,
       page,
       VULN_PAGE_SIZE,
       severityFilter || undefined,
@@ -370,7 +692,18 @@ function StatusItemVulnerabilityModal({
         setError(err instanceof Error ? err.message : 'Failed to load vulnerabilities');
       })
       .finally(() => setLoading(false));
-  }, [slug, item?.latest_scan_id, page, severityFilter, pkgFilter, hasFix, minCvss, sortBy, sortDir]);
+  }, [slug, selectedScanId, page, severityFilter, pkgFilter, hasFix, minCvss, sortBy, sortDir]);
+
+  const effectiveScanStatus = selectedScan
+    ? getEffectiveScanStatus(selectedScan.scan_status, selectedScan.external_status)
+    : item
+      ? getEffectiveScanStatus(item.scan_status, item.external_status)
+      : 'pending';
+  const displayedScan = selectedScan ?? item;
+  const blockedPolicyDetails = useMemo(() => {
+    if (effectiveScanStatus !== 'blocked_by_xray_policy') return null;
+    return parseBlockedPolicyDetails(selectedScan?.error_message ?? item?.error_message ?? null);
+  }, [effectiveScanStatus, item?.error_message, selectedScan?.error_message]);
 
   const totalPages = Math.max(1, Math.ceil(vulnTotal / VULN_PAGE_SIZE));
 
@@ -386,21 +719,134 @@ function StatusItemVulnerabilityModal({
                     <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Vulnerability drill-down</p>
                     <div>
                       <h3 className="font-mono text-base font-semibold sm:text-lg" style={{ color: 'var(--text-primary)' }}>
-                        {item ? `${item.image_name}:${item.image_tag}` : 'Loading item'}
+                        {item ? item.image_name : 'Loading item'}
                       </h3>
                       {item && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <TagBadge tag={item.image_tag} accent={effectiveScanStatus === 'blocked_by_xray_policy' ? STATUS_COLOR.blocked_by_xray_policy : undefined} />
+                          {selectedScan?.is_latest === false && (
+                            <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                              style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                              Historical snapshot
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {displayedScan && (
                         <p className="mt-1 text-[13px] leading-6 text-zinc-500">
-                          Latest snapshot {timeAgo(item.observed_at)}. {vulnTotal.toLocaleString()} matching finding{vulnTotal === 1 ? '' : 's'}.
+                          Snapshot {timeAgo(displayedScan.observed_at)}. {vulnTotal.toLocaleString()} matching finding{vulnTotal === 1 ? '' : 's'}.
                         </p>
                       )}
                     </div>
                   </div>
-                  {item && <StatusDot status={item.status} />}
+                  {selectedScan ? (
+                    <StatusBadge status={selectedScan.scan_status} externalStatus={selectedScan.external_status} />
+                  ) : item ? (
+                    <StatusDot status={item.status} />
+                  ) : null}
                 </div>
               </div>
 
               <div className="space-y-4 px-6 py-5">
+                {effectiveScanStatus === 'running' || effectiveScanStatus === 'pending' || selectedScan?.scan_status === 'running' || selectedScan?.scan_status === 'pending' ? (
+                  <RunningScanVisualization
+                    provider={selectedScan?.scan_provider ?? item?.scan_provider}
+                    currentStep={selectedScan?.current_step ?? item?.current_step}
+                    status={selectedScan?.scan_status ?? item?.scan_status ?? 'pending'}
+                    externalStatus={selectedScan?.external_status ?? item?.external_status}
+                    startedAt={selectedScan?.started_at ?? item?.started_at}
+                  />
+                ) : null}
+
+                {blockedPolicyDetails && (
+                  <div className="rounded-3xl border px-4 py-4" style={{ borderColor: 'rgba(245,158,11,0.24)', background: 'rgba(245,158,11,0.08)' }}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: '#b45309' }}>Xray policy violation</p>
+                      <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'rgba(245,158,11,0.24)', color: '#b45309' }}>
+                        Findings may still be available below
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-primary)' }}>{blockedPolicyDetails.summary}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {blockedPolicyDetails.totalViolations && (
+                        <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'rgba(245,158,11,0.2)', color: '#b45309', background: 'rgba(255,255,255,0.5)' }}>
+                          {blockedPolicyDetails.totalViolations} violations
+                        </span>
+                      )}
+                      {blockedPolicyDetails.blockingPolicies && (
+                        <span className="rounded-full border px-2.5 py-1 text-[11px]" style={{ borderColor: 'rgba(245,158,11,0.2)', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.5)' }}>
+                          {countDelimitedValues(blockedPolicyDetails.blockingPolicies)} blocking policies
+                        </span>
+                      )}
+                      {blockedPolicyDetails.matchedWatches && (
+                        <span className="rounded-full border px-2.5 py-1 text-[11px]" style={{ borderColor: 'rgba(245,158,11,0.2)', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.5)' }}>
+                          {countDelimitedValues(blockedPolicyDetails.matchedWatches)} watches
+                        </span>
+                      )}
+                      {blockedPolicyDetails.matchedIssues && (
+                        <span className="rounded-full border px-2.5 py-1 text-[11px]" style={{ borderColor: 'rgba(245,158,11,0.2)', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.5)' }}>
+                          {countDelimitedValues(blockedPolicyDetails.matchedIssues)} matched issues
+                        </span>
+                      )}
+                    </div>
+                    <details className="mt-3 group">
+                      <summary className="cursor-pointer list-none text-[12px] font-semibold" style={{ color: '#b45309' }}>
+                        Show Xray details
+                      </summary>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {blockedPolicyDetails.blockingPolicies && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Blocking policies:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactDelimitedValues(blockedPolicyDetails.blockingPolicies, 3)}</span></div>}
+                        {blockedPolicyDetails.matchedPolicies && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Matched policies:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactDelimitedValues(blockedPolicyDetails.matchedPolicies, 3)}</span></div>}
+                        {blockedPolicyDetails.matchedWatches && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Matched watches:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactDelimitedValues(blockedPolicyDetails.matchedWatches, 3)}</span></div>}
+                        {blockedPolicyDetails.matchedIssues && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Matched issues:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactDelimitedValues(blockedPolicyDetails.matchedIssues, 3)}</span></div>}
+                        {blockedPolicyDetails.artifact && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Artifact:</span> <span className="break-all" style={{ color: 'var(--text-secondary)' }}>{blockedPolicyDetails.artifact}</span></div>}
+                        {blockedPolicyDetails.manifest && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Manifest:</span> <span className="break-all" style={{ color: 'var(--text-secondary)' }}>{blockedPolicyDetails.manifest}</span></div>}
+                        {blockedPolicyDetails.jfrog && <div className="text-[12px] leading-5 sm:col-span-2"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>JFrog:</span> <span className="break-all" style={{ color: 'var(--text-secondary)' }}>{blockedPolicyDetails.jfrog}</span></div>}
+                      </div>
+                    </details>
+                    <div className="mt-3 border-t pt-3 text-[12px]" style={{ borderColor: 'rgba(245,158,11,0.16)', color: 'var(--text-secondary)' }}>
+                      Select a previous scan if you want to compare how the policy block and findings changed across snapshots.
+                    </div>
+                  </div>
+                )}
+
+                {historyError && (
+                  <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-500 dark:text-red-400">
+                    {historyError}
+                  </div>
+                )}
+
                 <div className="flex flex-wrap items-center gap-2">
+                  <Select
+                    selectedKey={selectedScanId || undefined}
+                    onSelectionChange={(key) => {
+                      const value = String(key ?? '');
+                      setSelectedScanId(value);
+                      setPage(1);
+                      setLoading(true);
+                    }}
+                    className="w-full min-w-[220px] sm:w-auto"
+                    aria-label="Select scan snapshot"
+                    isDisabled={historyLoading || history.length === 0}
+                  >
+                    <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {history.map((scan) => (
+                          <ListBox.Item id={scan.scan_id} key={scan.scan_id} textValue={formatScanHistoryOptionLabel(scan)}>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{scan.is_latest ? 'Latest scan' : 'Previous scan'}</span>
+                              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatScanHistoryOptionLabel(scan)}</span>
+                            </div>
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+
                   <Select selectedKey={severityFilter || '__all__'} onSelectionChange={key => { setLoading(true); setSeverityFilter(String(key === '__all__' ? '' : key)); setPage(1); }} className="w-full min-w-[180px] sm:w-auto" aria-label="Filter vulnerabilities by severity">
                     <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
                       <Select.Value />
@@ -507,7 +953,11 @@ function StatusItemVulnerabilityModal({
                         ) : vulns.length === 0 ? (
                           <tr>
                             <td colSpan={6} className="py-12 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
-                              {vulnTotal === 0 ? 'No vulnerabilities found for this image tag.' : 'No results match your filters.'}
+                              {vulnTotal === 0
+                                ? blockedPolicyDetails
+                                  ? 'Xray blocked this snapshot with policy violations, but no vulnerability records were returned for this scan.'
+                                  : 'No vulnerabilities found for this image tag.'
+                                : 'No results match your filters.'}
                             </td>
                           </tr>
                         ) : vulns.map((vuln, index) => (
@@ -582,9 +1032,27 @@ function StatusItemVulnerabilityModal({
   );
 }
 
-function ItemCard({ item, index, onOpen }: { item: StatusPageItem; index: number; onOpen: (item: StatusPageItem) => void }) {
-  const color = STATUS_COLOR[item.status] ?? STATUS_COLOR.pending;
+function ItemCard({
+  item,
+  index,
+  layout,
+  onOpen,
+}: {
+  item: StatusPageItem;
+  index: number;
+  layout: LayoutKey;
+  onOpen: (item: StatusPageItem) => void;
+}) {
+  const effectiveScanStatus = getEffectiveScanStatus(item.scan_status, item.external_status);
+  const cardStatus = item.status === 'running' || item.status === 'pending' ? effectiveScanStatus : item.status;
+  const color = STATUS_COLOR[cardStatus] ?? STATUS_COLOR.pending;
   const totalFindings = getFindingTotal(item);
+  const blockedPolicyDetails = cardStatus === 'blocked_by_xray_policy' ? parseBlockedPolicyDetails(item.error_message) : null;
+  const itemNote = buildItemNote(item, blockedPolicyDetails);
+  const isRunning = item.scan_status === 'running' || item.scan_status === 'pending';
+  const isCompact = layout === 'compact';
+  const isDense = layout === 'compact' || layout === 'grid';
+  const isGrid = layout === 'grid';
   const severityStats = [
     { label: 'Critical', value: item.critical_count, delta: item.delta_critical_count, color: SEV.critical },
     { label: 'High', value: item.high_count, delta: item.delta_high_count, color: SEV.high },
@@ -595,7 +1063,7 @@ function ItemCard({ item, index, onOpen }: { item: StatusPageItem; index: number
 
   return (
     <div
-      className="status-item-enter status-card relative overflow-hidden rounded-3xl"
+      className={`status-item-enter status-card relative overflow-hidden ${isDense ? 'rounded-2xl' : 'rounded-3xl'}`}
       style={{
         background: 'var(--status-card-bg)',
         border: '1px solid var(--status-card-border)',
@@ -617,15 +1085,11 @@ function ItemCard({ item, index, onOpen }: { item: StatusPageItem; index: number
     >
       <div className="absolute inset-y-0 left-0 w-1 rounded-full" style={{ background: color }} />
 
-      <div className="px-5 py-5 md:px-6 md:py-6 space-y-4">
+      <div className={`${isDense ? 'px-4 py-4 md:px-5 md:py-5 space-y-3' : 'px-5 py-5 md:px-6 md:py-6 space-y-4'}`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <StatusDot status={item.status} />
-              <span className="rounded-full px-2.5 py-1 text-[12px] font-medium"
-                style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                {item.image_tag}
-              </span>
+              <StatusDot status={cardStatus} />
               <span className="rounded-full px-2.5 py-1 text-[12px] font-medium"
                 style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
                 Freshness {item.freshness_hours}h
@@ -639,13 +1103,22 @@ function ItemCard({ item, index, onOpen }: { item: StatusPageItem; index: number
                 {totalFindings > 0 ? `${totalFindings.toLocaleString()} findings` : 'No active findings'}
               </span>
             </div>
-            <p className="font-mono text-[15px] font-medium break-all leading-relaxed sm:text-base" style={{ color: 'var(--text-primary)' }}>
+            <p className={`font-mono font-medium break-all leading-relaxed ${isDense ? 'text-[14px]' : 'text-[15px] sm:text-base'}`} style={{ color: 'var(--text-primary)' }}>
               {item.image_name}
             </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <TagBadge tag={item.image_tag} accent={color} />
+              {item.previous_scan_id && (
+                <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                  style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                  {item.previous_scan_at ? 'Has previous snapshot' : 'Snapshot tracked'}
+                </span>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-zinc-500">
               <span>Observed {timeAgo(item.observed_at)}</span>
               <span>·</span>
-              <span className="capitalize">Scan {item.scan_status}</span>
+              <span className="capitalize">Scan {formatStatusLabel(effectiveScanStatus)}</span>
               {item.previous_scan_at && (
                 <>
                   <span>·</span>
@@ -656,37 +1129,120 @@ function ItemCard({ item, index, onOpen }: { item: StatusPageItem; index: number
           </div>
         </div>
 
-        <SeverityBar item={item} />
+        {isRunning && !isCompact && (
+          <RunningScanVisualization
+            provider={item.scan_provider}
+            currentStep={item.current_step}
+            status={item.scan_status}
+            externalStatus={item.external_status}
+            startedAt={item.started_at}
+            compact
+          />
+        )}
 
-        <div className="flex flex-wrap gap-2.5">
-          {severityStats.length > 0 ? severityStats.map(metric => (
-            <SeverityStat
-              key={metric.label}
-              label={metric.label}
-              value={metric.value}
-              delta={metric.delta}
-              color={metric.color}
-            />
-          )) : (
-            <div className="rounded-2xl px-4 py-3 text-[13px] leading-6"
-              style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)', color: 'var(--text-secondary)' }}>
-              No active findings. This tag is currently clear in the latest completed scan.
-            </div>
-          )}
-        </div>
+        {!isCompact && <SeverityBar item={item} />}
 
-        {item.error_message && (
-          <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-red-500 dark:text-red-400">Scan Error</p>
-            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-red-700/80 dark:text-red-300/80">
-              {item.error_message}
-            </pre>
+        {isCompact ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {severityStats.length > 0 ? severityStats.map(metric => (
+              <span
+                key={metric.label}
+                className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                style={{
+                  color: metric.color,
+                  background: 'var(--status-pill-bg)',
+                  border: '1px solid var(--status-pill-border)',
+                }}
+              >
+                {metric.label} {metric.value}
+              </span>
+            )) : (
+              <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                No active findings
+              </span>
+            )}
+          </div>
+        ) : isDense ? (
+          <div className="flex flex-wrap gap-2">
+            {severityStats.length > 0 ? severityStats.map(metric => (
+              <span
+                key={metric.label}
+                className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                style={{
+                  color: metric.color,
+                  background: 'var(--status-pill-bg)',
+                  border: '1px solid var(--status-pill-border)',
+                }}
+              >
+                {metric.label} {metric.value}
+                {metric.delta ? ` (${metric.delta > 0 ? `+${metric.delta}` : metric.delta})` : ''}
+              </span>
+            )) : (
+              <div className="rounded-2xl px-3 py-2 text-[12px] leading-5"
+                style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)', color: 'var(--text-secondary)' }}>
+                No active findings in the latest completed scan.
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2.5">
+            {severityStats.length > 0 ? severityStats.map(metric => (
+              <SeverityStat
+                key={metric.label}
+                label={metric.label}
+                value={metric.value}
+                delta={metric.delta}
+                color={metric.color}
+              />
+            )) : (
+              <div className="rounded-2xl px-4 py-3 text-[13px] leading-6"
+                style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)', color: 'var(--text-secondary)' }}>
+                No active findings. This tag is currently clear in the latest completed scan.
+              </div>
+            )}
           </div>
         )}
 
+        {isCompact ? (
+          <div className="rounded-xl border px-3 py-2.5" style={{ borderColor: blockedPolicyDetails ? 'rgba(245,158,11,0.22)' : item.error_message ? 'rgba(239,68,68,0.2)' : 'var(--status-card-border)', background: blockedPolicyDetails ? 'rgba(245,158,11,0.08)' : item.error_message ? 'rgba(239,68,68,0.05)' : 'var(--status-card-bg)' }}>
+            <p className="text-[12px] leading-5" style={{ color: blockedPolicyDetails ? 'var(--text-primary)' : item.error_message ? 'var(--text-secondary)' : 'var(--text-secondary)' }}>
+              {itemNote}
+            </p>
+          </div>
+        ) : blockedPolicyDetails ? (
+          <div className={`rounded-xl border ${isDense ? 'px-3 py-2.5' : 'px-4 py-3'}`} style={{ borderColor: 'rgba(245,158,11,0.22)', background: 'rgba(245,158,11,0.08)' }}>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: '#b45309' }}>Xray policy violation</p>
+            <p className={`leading-6 ${isDense ? 'text-[12px]' : 'text-[13px]'}`} style={{ color: 'var(--text-primary)' }}>{blockedPolicyDetails.summary}</p>
+            {blockedPolicyDetails.blockingPolicies && !isGrid && (
+              <p className="mt-2 text-[12px] leading-5" style={{ color: 'var(--text-secondary)' }}>
+                Blocking policies: {isDense ? compactDelimitedValues(blockedPolicyDetails.blockingPolicies, 2) : blockedPolicyDetails.blockingPolicies}
+              </p>
+            )}
+            {blockedPolicyDetails.totalViolations && isDense && (
+              <p className="mt-2 text-[11px] font-semibold" style={{ color: '#b45309' }}>
+                {blockedPolicyDetails.totalViolations} violations detected
+              </p>
+            )}
+          </div>
+        ) : item.error_message ? (
+          <div className={`rounded-xl border border-red-500/20 bg-red-500/5 ${isDense ? 'px-3 py-2.5' : 'px-4 py-3'}`}>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-red-500 dark:text-red-400">Scan Error</p>
+            {isDense ? (
+              <p className="line-clamp-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-red-700/80 dark:text-red-300/80">
+                {item.error_message}
+              </p>
+            ) : (
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-red-700/80 dark:text-red-300/80">
+                {item.error_message}
+              </pre>
+            )}
+          </div>
+        ) : null}
+
         {canOpen && (
-          <div className="flex items-center justify-between border-t pt-3 text-[12px]" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
-            <span>Open image details to inspect individual CVEs, sort columns, and apply CVSS filters.</span>
+          <div className={`flex items-center justify-between border-t text-[12px] ${isDense ? 'pt-2' : 'pt-3'}`} style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
+            <span>{isCompact ? 'Open scan details.' : isDense ? 'Open details and previous scans.' : 'Open image details to inspect CVEs, Xray policy violations, and previous scans.'}</span>
             <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Open</span>
           </div>
         )}
@@ -706,6 +1262,90 @@ function RefreshBar({ progress }: { progress: number }) {
   );
 }
 
+function StatusTable({ items, onOpen }: { items: StatusPageItem[]; onOpen: (item: StatusPageItem) => void }) {
+  return (
+    <div className="overflow-hidden rounded-[28px]" style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[980px] text-sm">
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+              {['Image', 'Tag', 'Status', 'Findings', 'Snapshot', 'Details', ''].map((label) => (
+                <th
+                  key={label || 'open'}
+                  className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.14em]"
+                  style={{ color: 'var(--text-faint)' }}
+                >
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, index) => {
+              const effectiveScanStatus = getEffectiveScanStatus(item.scan_status, item.external_status);
+              const cardStatus = item.status === 'running' || item.status === 'pending' ? effectiveScanStatus : item.status;
+              const blockedPolicyDetails = cardStatus === 'blocked_by_xray_policy' ? parseBlockedPolicyDetails(item.error_message) : null;
+              const totalFindings = getFindingTotal(item);
+              return (
+                <tr
+                  key={`${item.image_name}:${item.image_tag}`}
+                  style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
+                  className="cursor-pointer"
+                  onClick={() => onOpen(item)}
+                  onMouseEnter={event => (event.currentTarget.style.background = 'var(--row-hover)')}
+                  onMouseLeave={event => (event.currentTarget.style.background = 'transparent')}
+                >
+                  <td className="px-4 py-3 align-top">
+                    <div className="max-w-[360px] space-y-1">
+                      <p className="font-mono text-[13px] leading-5 break-all" style={{ color: 'var(--text-primary)' }}>{item.image_name}</p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <TagBadge tag={item.image_tag} accent={STATUS_COLOR[cardStatus]} />
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <StatusDot status={cardStatus} />
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <div className="space-y-1">
+                      <p className="text-[13px] font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>{totalFindings.toLocaleString()}</p>
+                      <p className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>{buildItemNote(item, blockedPolicyDetails)}</p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <div className="space-y-1 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                      <p>Observed {timeAgo(item.observed_at)}</p>
+                      <p>Freshness {item.freshness_hours}h</p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <div className="max-w-[260px] text-[12px] leading-5" style={{ color: 'var(--text-secondary)' }}>
+                      {blockedPolicyDetails ? blockedPolicyDetails.summary : item.error_message ? compactErrorSummary(item.error_message) : 'View scan history, findings, and Xray details.'}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 align-top text-right">
+                    <button
+                      type="button"
+                      className="rounded-full px-3 py-1.5 text-[12px] font-semibold"
+                      style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpen(item);
+                      }}
+                    >
+                      Open
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function PublicStatusPage() {
   const { slug } = useParams<{ slug: string }>();
   const [data, setData] = useState<StatusPageResponse | null>(null);
@@ -717,6 +1357,8 @@ export default function PublicStatusPage() {
   const [now, setNow] = useState(Date.now());
   const [filter, setFilter] = useState<FilterKey>('all');
   const [sortBy, setSortBy] = useState<SortKey>('display');
+  const [layout, setLayout] = useState<LayoutKey>('grid');
+  const [preferencesReady, setPreferencesReady] = useState(false);
   const [activeItem, setActiveItem] = useState<StatusPageItem | null>(null);
   const mountedRef = useRef(true);
   const vulnerabilityModal = useOverlayState();
@@ -772,6 +1414,30 @@ export default function PublicStatusPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = window.localStorage.getItem(STATUS_LAYOUT_STORAGE_KEY);
+    const storedFilter = window.localStorage.getItem(STATUS_FILTER_STORAGE_KEY);
+    const storedSort = window.localStorage.getItem(STATUS_SORT_STORAGE_KEY);
+    if (stored === 'detailed' || stored === 'compact' || stored === 'grid' || stored === 'table') {
+      setLayout(stored);
+    }
+    if (storedFilter === 'all' || storedFilter === 'failed' || storedFilter === 'blocked_by_xray_policy' || storedFilter === 'running' || storedFilter === 'degraded' || storedFilter === 'stale' || storedFilter === 'healthy') {
+      setFilter(storedFilter);
+    }
+    if (storedSort === 'display' || storedSort === 'worst' || storedSort === 'stale' || storedSort === 'latest') {
+      setSortBy(storedSort);
+    }
+    setPreferencesReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !preferencesReady) return;
+    window.localStorage.setItem(STATUS_LAYOUT_STORAGE_KEY, layout);
+    window.localStorage.setItem(STATUS_FILTER_STORAGE_KEY, filter);
+    window.localStorage.setItem(STATUS_SORT_STORAGE_KEY, sortBy);
+  }, [filter, layout, preferencesReady, sortBy]);
+
+  useEffect(() => {
     void load(true);
     const interval = setInterval(() => {
       void load(false);
@@ -779,6 +1445,14 @@ export default function PublicStatusPage() {
 
     return () => clearInterval(interval);
   }, [load]);
+
+  useEffect(() => {
+    if (!activeItem || !data) return;
+    const refreshedItem = data.items.find((candidate) => (
+      candidate.image_name === activeItem.image_name && candidate.image_tag === activeItem.image_tag
+    ));
+    if (refreshedItem) setActiveItem(refreshedItem);
+  }, [activeItem, data]);
 
   const summary = useMemo(() => {
     const items = data?.items ?? [];
@@ -828,6 +1502,11 @@ export default function PublicStatusPage() {
     () => ({
       all: data?.items.length ?? 0,
       failed: data?.items.filter(item => item.status === 'failed').length ?? 0,
+      blocked_by_xray_policy: data?.items.filter(item => item.status === 'blocked_by_xray_policy').length ?? 0,
+      running: data?.items.filter(item => {
+        const effectiveStatus = getEffectiveScanStatus(item.scan_status, item.external_status);
+        return item.status === 'running' || item.status === 'pending' || effectiveStatus === 'running' || effectiveStatus === 'pending' || effectiveStatus === 'waiting_for_xray' || effectiveStatus === 'warming_cache' || effectiveStatus === 'indexing_artifact' || effectiveStatus === 'queued_in_xray';
+      }).length ?? 0,
       degraded: data?.items.filter(item => item.status === 'degraded').length ?? 0,
       stale: data?.items.filter(item => item.status === 'stale').length ?? 0,
       healthy: data?.items.filter(item => item.status === 'healthy').length ?? 0,
@@ -841,6 +1520,13 @@ export default function PublicStatusPage() {
         title: 'Failures detected',
         description: `${summary.statuses.failed} image tag${summary.statuses.failed === 1 ? '' : 's'} currently need immediate attention.`,
         color: SEV.critical,
+      };
+    }
+    if (summary.statuses.blocked_by_xray_policy) {
+      return {
+        title: 'Blocked by Xray policy',
+        description: `${summary.statuses.blocked_by_xray_policy} tag${summary.statuses.blocked_by_xray_policy === 1 ? '' : 's'} were stopped by policy enforcement and should be reviewed.`,
+        color: STATUS_COLOR.blocked_by_xray_policy,
       };
     }
     if (summary.statuses.degraded) {
@@ -875,7 +1561,24 @@ export default function PublicStatusPage() {
     const items = [...(data?.items ?? [])];
     const filtered = filter === 'all'
       ? items
-      : items.filter(item => item.status === filter);
+      : items.filter(item => {
+        const effectiveStatus = item.status === 'running' || item.status === 'pending'
+          ? getEffectiveScanStatus(item.scan_status, item.external_status)
+          : item.status;
+
+        if (filter === 'running') {
+          return item.status === 'running'
+            || item.status === 'pending'
+            || effectiveStatus === 'running'
+            || effectiveStatus === 'pending'
+            || effectiveStatus === 'waiting_for_xray'
+            || effectiveStatus === 'warming_cache'
+            || effectiveStatus === 'indexing_artifact'
+            || effectiveStatus === 'queued_in_xray';
+        }
+
+        return effectiveStatus === filter || item.status === filter;
+      });
 
     filtered.sort((left, right) => {
       if (sortBy === 'worst') {
@@ -936,12 +1639,14 @@ export default function PublicStatusPage() {
             <Logo size={18} className="text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Status Page Unavailable</h1>
+            <h1 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {needsAuth ? 'Authentication Required' : 'Status Page Unavailable'}
+            </h1>
             <p className="text-sm text-zinc-500 mt-1.5">{error}</p>
           </div>
-          {needsAuth && !getToken() && (
+          {needsAuth && (
             <Link href={`/login?returnUrl=/status/${slug}`} className="inline-flex px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
-              Sign in to continue
+              {getToken() ? 'Sign in again to continue' : 'Sign in to continue'}
             </Link>
           )}
         </div>
@@ -1104,6 +1809,23 @@ export default function PublicStatusPage() {
               </div>
 
               <div className="flex items-center gap-3 xl:min-w-[280px] xl:justify-end">
+                <span className="text-sm text-zinc-500">Layout</span>
+                <Select selectedKey={layout} onSelectionChange={key => setLayout(String(key) as LayoutKey)} className="w-full max-w-[180px]" aria-label="Change status page layout">
+                  <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {LAYOUT_OPTIONS.map(option => (
+                        <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
+                          {option.label}
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
                 <span className="text-sm text-zinc-500">Sort</span>
                 <Select selectedKey={sortBy} onSelectionChange={key => setSortBy(String(key) as SortKey)} className="w-full max-w-[240px]" aria-label="Sort image tags">
                   <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
@@ -1126,11 +1848,15 @@ export default function PublicStatusPage() {
           </div>
 
           {visibleItems.length > 0 ? (
-            <div className="space-y-3">
-              {visibleItems.map((item, index) => (
-                <ItemCard key={`${item.image_name}:${item.image_tag}`} item={item} index={index} onOpen={openItemDetails} />
-              ))}
-            </div>
+            layout === 'table' ? (
+              <StatusTable items={visibleItems} onOpen={openItemDetails} />
+            ) : (
+              <div className={layout === 'grid' ? 'grid gap-3 md:grid-cols-2 2xl:grid-cols-3' : layout === 'compact' ? 'space-y-2' : 'space-y-3'}>
+                {visibleItems.map((item, index) => (
+                  <ItemCard key={`${item.image_name}:${item.image_tag}`} item={item} index={index} layout={layout} onOpen={openItemDetails} />
+                ))}
+              </div>
+            )
           ) : (
             <div className="rounded-[28px] px-6 py-12 text-center"
               style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>

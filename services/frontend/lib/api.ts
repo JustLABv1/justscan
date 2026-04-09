@@ -638,6 +638,13 @@ export const deleteStatusPage = (id: string) =>
 export const getStatusPageBySlug = (slug: string) =>
   sharedReq<StatusPageResponse>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}`);
 
+export const getStatusPageTrackedScan = (slug: string, scanId: string) =>
+  sharedReq<StatusPageScanSummary>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/scans/${encodeURIComponent(scanId)}`);
+
+export const listStatusPageScanHistory = (slug: string, scanId: string) =>
+  sharedReq<{ data: StatusPageScanSummary[] }>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/scans/${encodeURIComponent(scanId)}/history`)
+    .then(r => r.data ?? []);
+
 export const listStatusPageItemVulnerabilities = (
   slug: string,
   scanId: string,
@@ -1239,12 +1246,17 @@ export interface StatusPageItem {
   image_tag: string;
   latest_scan_id: string;
   scan_status: string;
+  external_status?: string;
+  scan_provider?: string;
+  current_step?: string;
+  started_at?: string;
   status: string;
   error_message?: string;
   critical_count: number;
   high_count: number;
   medium_count: number;
   low_count: number;
+  previous_scan_id?: string;
   previous_critical_count?: number;
   previous_high_count?: number;
   previous_medium_count?: number;
@@ -1257,6 +1269,26 @@ export interface StatusPageItem {
   observed_at: string;
   previous_scan_at?: string;
   display_order: number;
+}
+
+export interface StatusPageScanSummary {
+  scan_id: string;
+  image_name: string;
+  image_tag: string;
+  scan_status: string;
+  external_status?: string;
+  scan_provider?: string;
+  current_step?: string;
+  error_message?: string;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
+  observed_at: string;
+  is_latest: boolean;
 }
 
 export interface StatusPageResponse {

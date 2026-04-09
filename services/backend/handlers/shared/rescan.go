@@ -13,6 +13,7 @@ import (
 	"justscan-backend/scanner"
 
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
 )
 
@@ -29,6 +30,9 @@ func RescanShared(db *bun.DB) gin.HandlerFunc {
 			ImageName:        orig.ImageName,
 			ImageTag:         orig.ImageTag,
 			Platform:         orig.Platform,
+			RegistryID:       orig.RegistryID,
+			ScanProvider:     orig.ScanProvider,
+			CurrentStep:      models.ScanStepQueued,
 			HelmScanRunID:    orig.HelmScanRunID,
 			HelmChart:        orig.HelmChart,
 			HelmChartName:    orig.HelmChartName,
@@ -63,7 +67,18 @@ func RescanShared(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		scanner.EnqueueScan(newScan.ID, db, nil, orig.Platform)
+		if err := scanner.DispatchScan(c.Request.Context(), db, newScan, nil, orig.Platform); err != nil {
+			log.Warnf("RescanShared dispatch failed for %s: %v", newScan.ID, err)
+			if markErr := scanner.MarkScanFailed(c.Request.Context(), db, newScan.ID, err.Error()); markErr != nil {
+				log.Errorf("RescanShared failed to persist dispatch error for %s: %v", newScan.ID, markErr)
+			} else {
+				completedAt := time.Now()
+				newScan.Status = models.ScanStatusFailed
+				newScan.CurrentStep = models.ScanStepFailed
+				newScan.ErrorMessage = err.Error()
+				newScan.CompletedAt = &completedAt
+			}
+		}
 
 		actorID := "public"
 		if newScan.UserID != nil {

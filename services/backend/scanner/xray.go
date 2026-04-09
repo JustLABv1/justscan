@@ -225,28 +225,47 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	artifactRepoPath := artifactName + "/" + imageTag + "/manifest.json"
 	repoPath := imageRepoPath + "/" + imageTag + "/manifest.json"
 	artifactPath := client.artifactoryID + "/" + repoPath
+	if resolvedDigest, resolveErr := client.resolveImageDigest(ctx, imageRepoPath, imageTag, scan.Platform); resolveErr != nil {
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to resolve image digest before starting the Xray flow: %v", resolveErr))
+	} else if resolvedDigest != "" {
+		scan.ImageDigest = resolvedDigest
+		if _, err := db.NewUpdate().Model(scan).
+			Column("image_digest").
+			Where("id = ?", scan.ID).
+			Exec(ctx); err != nil {
+			return fmt.Errorf("failed to persist xray image digest: %w", err)
+		}
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Resolved image digest %s for suppression and reporting.", resolvedDigest))
+	}
 
 	componentID := "docker://" + buildImageRef(scan.ImageName, scan.ImageTag)
-	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "warming_artifactory_cache"); err != nil {
+	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "warming_artifactory_cache", models.ScanStepWarmingCache); err != nil {
 		return err
 	}
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Resolved Artifactory artifact path %s.", artifactPath))
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Using Xray component identifier %s.", componentID))
 	scan.ExternalScanID = componentID
 	scan.ExternalStatus = "warming_artifactory_cache"
+	scan.CurrentStep = models.ScanStepWarmingCache
 
 	if err := client.warmImageInArtifactory(ctx, imageRepoPath, imageTag, scan.Platform); err != nil {
 		if normalizedMessage, ok := normalizeXrayDownloadBlockedError(err); ok {
 			targets := blockedViolationLookupTargets(err, repoKey, artifactRepoPath)
 			normalizedMessage = client.enrichBlockedScanMessage(ctx, targets, normalizedMessage)
-			if err := updateXrayMetadata(ctx, db, scan.ID, componentID, models.ScanExternalStatusBlockedByXrayPolicy); err != nil {
+			recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Artifactory reported a blocking policy while warming %s.", artifactPath))
+			if err := updateXrayMetadata(ctx, db, scan.ID, componentID, models.ScanExternalStatusBlockedByXrayPolicy, models.ScanStepFailed); err != nil {
 				return err
 			}
 			scan.ExternalStatus = models.ScanExternalStatusBlockedByXrayPolicy
+			scan.CurrentStep = models.ScanStepFailed
 
 			client.bestEffortTriggerBlockedArtifactScan(ctx, componentID, targets)
+			recordScanStepOutput(ctx, db, scan.ID, "Triggered best-effort blocked-artifact indexing so any available findings can still be imported.")
 
 			if summary, blockedArtifactPath, summaryErr := client.bestEffortBlockedArtifactSummary(ctx, targets); summaryErr != nil {
 				log.Warnf("Failed to fetch Xray artifact summary for blocked scan %s: %v", scan.ID, summaryErr)
 			} else if summary != nil {
+				recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Fetched a blocked-artifact summary from %s.", blockedArtifactPath))
 				if err := persistXraySummaryFindings(ctx, db, scan, summary); err != nil {
 					log.Warnf("Failed to persist Xray findings for blocked scan %s: %v", scan.ID, err)
 				} else {
@@ -258,43 +277,54 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		}
 		return fmt.Errorf("failed to warm image into artifactory cache: %w", err)
 	}
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Artifactory cache warm-up completed for %s.", artifactPath))
 
-	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "indexing"); err != nil {
+	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "indexing", models.ScanStepIndexingArtifact); err != nil {
 		return err
 	}
 	scan.ExternalStatus = "indexing"
+	scan.CurrentStep = models.ScanStepIndexingArtifact
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Requested Xray indexing for %s.", repoPath))
 
 	if err := client.scanNow(ctx, repoPath); err != nil {
 		// Scan Artifact can still succeed for already-indexed images.
 		// Keep going so Xray-backed scans remain usable across setups.
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray index request returned a non-fatal response for %s: %v", repoPath, err))
 	}
 
-	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "queued"); err != nil {
+	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "queued", models.ScanStepQueuedInXray); err != nil {
 		return err
 	}
 	scan.ExternalStatus = "queued"
+	scan.CurrentStep = models.ScanStepQueuedInXray
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Submitted the artifact scan request for component %s.", componentID))
 
 	if err := client.scanArtifact(ctx, componentID); err != nil {
 		if !isRetriableXrayScanArtifactError(err) {
 			return err
 		}
 		log.Warnf("Xray scanArtifact returned a non-fatal error for scan %s (%s); continuing to poll artifact summary: %v", scan.ID, componentID, err)
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray scanArtifact returned a non-fatal response; continuing to poll the artifact summary anyway: %v", err))
 	}
 
-	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "waiting_for_xray"); err != nil {
+	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "waiting_for_xray", models.ScanStepWaitingForXray); err != nil {
 		return err
 	}
 	scan.ExternalStatus = "waiting_for_xray"
+	scan.CurrentStep = models.ScanStepWaitingForXray
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Polling Xray for the artifact summary at %s.", artifactPath))
 
 	summary, err := client.pollArtifactSummary(ctx, artifactPath)
 	if err != nil {
 		return err
 	}
 
-	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "importing"); err != nil {
+	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "importing", models.ScanStepImportingResults); err != nil {
 		return err
 	}
 	scan.ExternalStatus = "importing"
+	scan.CurrentStep = models.ScanStepImportingResults
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray returned %d artifact summaries. Importing findings now.", len(summary.Artifacts)))
 
 	if err := persistXraySummaryFindings(ctx, db, scan, summary); err != nil {
 		return err
@@ -304,6 +334,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	scan.Status = models.ScanStatusCompleted
 	scan.CompletedAt = &completedAt
 	scan.ExternalStatus = "completed"
+	scan.CurrentStep = models.ScanStepCompleted
 
 	if _, err := db.NewUpdate().Model(scan).
 		Column("status", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "external_scan_id", "external_status").
@@ -311,6 +342,10 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to mark xray scan as completed: %w", err)
 	}
+	if err := setScanStep(ctx, db, scan, models.ScanStepCompleted); err != nil {
+		return err
+	}
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray scan completed with %d total findings.", scan.CriticalCount+scan.HighCount+scan.MediumCount+scan.LowCount+scan.UnknownCount))
 
 	go compliance.AutoAssignOrgs(db, scan.ImageName, scan.ImageTag, scan.ID)
 	go applyAutoTags(db, scan)
@@ -324,6 +359,90 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	})
 
 	return nil
+}
+
+func EnsureScanImageDigest(ctx context.Context, db *bun.DB, scan *models.Scan) (string, error) {
+	if scan == nil {
+		return "", fmt.Errorf("scan is required")
+	}
+
+	if digest := strings.TrimSpace(scan.ImageDigest); digest != "" {
+		return digest, nil
+	}
+
+	if scan.ScanProvider != models.ScanProviderArtifactoryXray {
+		return "", nil
+	}
+
+	if scan.RegistryID == nil {
+		return "", fmt.Errorf("xray scan %s is missing a registry selection", scan.ID)
+	}
+
+	registry := &models.Registry{}
+	if err := db.NewSelect().Model(registry).Where("id = ?", *scan.RegistryID).Scan(ctx); err != nil {
+		return "", fmt.Errorf("failed to load registry for xray digest resolution: %w", err)
+	}
+
+	client, err := newXrayClient(registry)
+	if err != nil {
+		return "", err
+	}
+
+	repoKey, artifactName, imageTag, err := xrayImageParts(scan.ImageName, scan.ImageTag, registry)
+	if err != nil {
+		return "", err
+	}
+
+	resolvedDigest, err := client.resolveImageDigest(ctx, repoKey+"/"+artifactName, imageTag, scan.Platform)
+	if err != nil {
+		return "", err
+	}
+	if resolvedDigest == "" {
+		return "", nil
+	}
+
+	scan.ImageDigest = resolvedDigest
+	if _, err := db.NewUpdate().Model(scan).
+		Column("image_digest").
+		Where("id = ?", scan.ID).
+		Exec(ctx); err != nil {
+		return "", fmt.Errorf("failed to persist image digest for scan %s: %w", scan.ID, err)
+	}
+
+	return resolvedDigest, nil
+}
+
+func (c *xrayClient) resolveImageDigest(ctx context.Context, imageRepoPath, reference, platform string) (string, error) {
+	if strings.TrimSpace(reference) == "" {
+		return "", fmt.Errorf("missing manifest reference for %s", imageRepoPath)
+	}
+
+	manifest, mediaType, contentDigest, err := c.fetchRegistryManifest(ctx, imageRepoPath, reference)
+	if err != nil {
+		return "", err
+	}
+
+	if isRegistryManifestIndex(mediaType, manifest) {
+		targets := selectManifestDescriptors(manifest.Manifests, platform)
+		if len(targets) == 0 {
+			return "", fmt.Errorf("registry manifest list for %s did not contain a usable image manifest", reference)
+		}
+		for _, target := range targets {
+			if digest := strings.TrimSpace(target.Digest); digest != "" {
+				return digest, nil
+			}
+		}
+		return "", fmt.Errorf("registry manifest list for %s did not expose a child digest", reference)
+	}
+
+	if digest := strings.TrimSpace(contentDigest); digest != "" {
+		return digest, nil
+	}
+	if strings.HasPrefix(reference, "sha256:") {
+		return reference, nil
+	}
+
+	return "", fmt.Errorf("registry manifest for %s did not expose a Docker-Content-Digest header", reference)
 }
 
 func newXrayClient(registry *models.Registry) (*xrayClient, error) {
@@ -438,7 +557,7 @@ func (c *xrayClient) warmManifestReference(ctx context.Context, imageRepoPath, r
 	}
 	seenManifests[reference] = true
 
-	manifest, mediaType, err := c.fetchRegistryManifest(ctx, imageRepoPath, reference)
+	manifest, mediaType, _, err := c.fetchRegistryManifest(ctx, imageRepoPath, reference)
 	if err != nil {
 		return err
 	}
@@ -471,7 +590,7 @@ func (c *xrayClient) warmManifestReference(ctx context.Context, imageRepoPath, r
 	return nil
 }
 
-func (c *xrayClient) fetchRegistryManifest(ctx context.Context, imageRepoPath, reference string) (*registryManifest, string, error) {
+func (c *xrayClient) fetchRegistryManifest(ctx context.Context, imageRepoPath, reference string) (*registryManifest, string, string, error) {
 	response, err := c.doRegistryRequest(ctx, http.MethodGet, registryManifestPath(imageRepoPath, reference), []string{
 		"application/vnd.oci.image.index.v1+json",
 		"application/vnd.docker.distribution.manifest.list.v2+json",
@@ -479,18 +598,18 @@ func (c *xrayClient) fetchRegistryManifest(ctx context.Context, imageRepoPath, r
 		"application/vnd.docker.distribution.manifest.v2+json",
 	})
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to read registry manifest response: %w", err)
+		return nil, "", "", fmt.Errorf("failed to read registry manifest response: %w", err)
 	}
 
 	var manifest registryManifest
 	if err := json.Unmarshal(body, &manifest); err != nil {
-		return nil, "", fmt.Errorf("failed to decode registry manifest: %w", err)
+		return nil, "", "", fmt.Errorf("failed to decode registry manifest: %w", err)
 	}
 
 	contentType := normalizeRegistryContentType(response.Header.Get("Content-Type"))
@@ -498,7 +617,7 @@ func (c *xrayClient) fetchRegistryManifest(ctx context.Context, imageRepoPath, r
 		manifest.MediaType = contentType
 	}
 
-	return &manifest, manifest.MediaType, nil
+	return &manifest, manifest.MediaType, strings.TrimSpace(response.Header.Get("Docker-Content-Digest")), nil
 }
 
 func (c *xrayClient) warmBlob(ctx context.Context, imageRepoPath, digest string, seenBlobs map[string]bool) error {
@@ -1102,7 +1221,7 @@ func xrayArtifactPaths(imageName, imageTag string, registry *models.Registry, ar
 	return repoPath, artifactPath, nil
 }
 
-func updateXrayMetadata(ctx context.Context, db *bun.DB, scanID uuid.UUID, externalScanID, externalStatus string) error {
+func updateXrayMetadata(ctx context.Context, db *bun.DB, scanID uuid.UUID, externalScanID, externalStatus, currentStep string) error {
 	_, err := db.NewUpdate().Model((*models.Scan)(nil)).
 		Set("external_scan_id = ?", externalScanID).
 		Set("external_status = ?", externalStatus).
@@ -1111,7 +1230,32 @@ func updateXrayMetadata(ctx context.Context, db *bun.DB, scanID uuid.UUID, exter
 	if err != nil {
 		return fmt.Errorf("failed to update xray metadata for scan %s: %w", scanID, err)
 	}
+	if err := setScanStepByID(ctx, db, scanID, currentStep); err != nil {
+		return err
+	}
+	if message := xrayStepOutputMessage(externalStatus); message != "" {
+		recordScanStepOutput(ctx, db, scanID, message)
+	}
 	return nil
+}
+
+func xrayStepOutputMessage(externalStatus string) string {
+	switch externalStatus {
+	case "warming_artifactory_cache":
+		return "Warming the image through Artifactory so Xray can analyze it."
+	case "indexing":
+		return "Xray is indexing the artifact manifest and layers."
+	case "queued":
+		return "Artifact submitted to Xray and waiting in the provider queue."
+	case "waiting_for_xray":
+		return "Waiting for Xray to publish the final artifact summary."
+	case "importing":
+		return "Importing Xray findings into the JustScan report."
+	case models.ScanExternalStatusBlockedByXrayPolicy:
+		return "Xray blocked this artifact before the standard summary completed."
+	default:
+		return ""
+	}
 }
 
 func persistXraySummaryFindings(ctx context.Context, db *bun.DB, scan *models.Scan, summary *xraySummaryResponse) error {
@@ -1120,6 +1264,9 @@ func persistXraySummaryFindings(ctx context.Context, db *bun.DB, scan *models.Sc
 		if _, err := db.NewInsert().Model(&vulns).Exec(ctx); err != nil {
 			return fmt.Errorf("failed to store xray vulnerabilities: %w", err)
 		}
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Stored %d Xray vulnerabilities.", len(vulns)))
+	} else {
+		recordScanStepOutput(ctx, db, scan.ID, "Xray returned no vulnerabilities for this artifact.")
 	}
 
 	kbEntries := ExtractXrayKBEntries(summary)
@@ -1144,6 +1291,7 @@ func persistXraySummaryFindings(ctx context.Context, db *bun.DB, scan *models.Sc
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to persist xray severity counts: %w", err)
 	}
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Severity counts updated: %d critical, %d high, %d medium, %d low, %d unknown.", scan.CriticalCount, scan.HighCount, scan.MediumCount, scan.LowCount, scan.UnknownCount))
 
 	return nil
 }

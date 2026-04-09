@@ -436,7 +436,7 @@ export const reScan = (id: string) =>
   req<Scan>('POST', `/api/v1/scans/${id}/rescan`);
 
 export const cancelScan = (id: string) =>
-  req<{ result: string; status?: string; external_status?: string; completed_at?: string; error_message?: string }>('POST', `/api/v1/scans/${id}/cancel`);
+  req<{ result: string; status?: string; current_step?: string; external_status?: string; completed_at?: string; error_message?: string }>('POST', `/api/v1/scans/${id}/cancel`);
 
 export const bulkDeleteScans = (ids: string[]) =>
   req<{ deleted: number }>('DELETE', '/api/v1/scans/bulk', { ids });
@@ -638,6 +638,13 @@ export const deleteStatusPage = (id: string) =>
 export const getStatusPageBySlug = (slug: string) =>
   sharedReq<StatusPageResponse>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}`);
 
+export const getStatusPageTrackedScan = (slug: string, scanId: string) =>
+  sharedReq<StatusPageScanSummary>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/scans/${encodeURIComponent(scanId)}`);
+
+export const listStatusPageScanHistory = (slug: string, scanId: string) =>
+  sharedReq<{ data: StatusPageScanSummary[] }>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/scans/${encodeURIComponent(scanId)}/history`)
+    .then(r => r.data ?? []);
+
 export const listStatusPageItemVulnerabilities = (
   slug: string,
   scanId: string,
@@ -813,6 +820,16 @@ export interface User {
   disabled: boolean;
 }
 
+export interface ScanStepLog {
+  id: string;
+  scan_id: string;
+  step: string;
+  position: number;
+  started_at: string;
+  completed_at?: string | null;
+  output: string[];
+}
+
 export interface Scan {
   id: string;
   image_name: string;
@@ -821,6 +838,7 @@ export interface Scan {
   scan_provider: 'trivy' | 'artifactory_xray';
   external_scan_id?: string;
   external_status?: string;
+  current_step: string;
   status: string;
   error_message: string;
   critical_count: number;
@@ -830,6 +848,7 @@ export interface Scan {
   unknown_count: number;
   suppressed_count: number;
   trivy_version: string;
+  grype_version: string;
   trivy_vuln_db_updated_at?: string | null;
   trivy_vuln_db_downloaded_at?: string | null;
   trivy_java_db_updated_at?: string | null;
@@ -850,6 +869,7 @@ export interface Scan {
   helm_chart_name?: string;
   helm_chart_version?: string;
   helm_source_path?: string;
+  step_logs?: ScanStepLog[];
 }
 
 export interface AdminScan extends Omit<Scan, 'tags'> {
@@ -1226,12 +1246,17 @@ export interface StatusPageItem {
   image_tag: string;
   latest_scan_id: string;
   scan_status: string;
+  external_status?: string;
+  scan_provider?: string;
+  current_step?: string;
+  started_at?: string;
   status: string;
   error_message?: string;
   critical_count: number;
   high_count: number;
   medium_count: number;
   low_count: number;
+  previous_scan_id?: string;
   previous_critical_count?: number;
   previous_high_count?: number;
   previous_medium_count?: number;
@@ -1244,6 +1269,26 @@ export interface StatusPageItem {
   observed_at: string;
   previous_scan_at?: string;
   display_order: number;
+}
+
+export interface StatusPageScanSummary {
+  scan_id: string;
+  image_name: string;
+  image_tag: string;
+  scan_status: string;
+  external_status?: string;
+  scan_provider?: string;
+  current_step?: string;
+  error_message?: string;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
+  observed_at: string;
+  is_latest: boolean;
 }
 
 export interface StatusPageResponse {

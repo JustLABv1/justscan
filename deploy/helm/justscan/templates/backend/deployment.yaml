@@ -75,6 +75,19 @@ spec:
                   name: {{ include "justscan.backend.secretName" . }}
                   key: {{ if .Values.backend.secrets.existingSecret }}{{ .Values.backend.secrets.existingSecretKeys.nvdApiKey }}{{ else }}nvd-api-key{{ end }}
 
+            - name: JUSTSCAN_CUSTOM_CA_BUNDLE_PATH
+              value: {{ .Values.backend.customCAs.bundlePath | quote }}
+
+            {{- if .Values.backend.customCAs.configMapName }}
+            - name: JUSTSCAN_CUSTOM_CA_CONFIGMAP_DIR
+              value: "/etc/justscan/custom-cas/configmap"
+            {{- end }}
+
+            {{- if .Values.backend.customCAs.secretName }}
+            - name: JUSTSCAN_CUSTOM_CA_SECRET_DIR
+              value: "/etc/justscan/custom-cas/secret"
+            {{- end }}
+
             {{- with .Values.backend.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -86,6 +99,16 @@ spec:
               readOnly: true
             - name: data
               mountPath: /app/data
+            {{- if .Values.backend.customCAs.configMapName }}
+            - name: custom-ca-configmap
+              mountPath: /etc/justscan/custom-cas/configmap
+              readOnly: true
+            {{- end }}
+            {{- if .Values.backend.customCAs.secretName }}
+            - name: custom-ca-secret
+              mountPath: /etc/justscan/custom-cas/secret
+              readOnly: true
+            {{- end }}
 
           livenessProbe:
             httpGet:
@@ -123,6 +146,18 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+        {{- if .Values.backend.customCAs.configMapName }}
+        - name: custom-ca-configmap
+          configMap:
+            name: {{ .Values.backend.customCAs.configMapName }}
+            optional: {{ .Values.backend.customCAs.configMapOptional }}
+        {{- end }}
+        {{- if .Values.backend.customCAs.secretName }}
+        - name: custom-ca-secret
+          secret:
+            secretName: {{ .Values.backend.customCAs.secretName }}
+            optional: {{ .Values.backend.customCAs.secretOptional }}
+        {{- end }}
 
       {{- with .Values.nodeSelector }}
       nodeSelector:

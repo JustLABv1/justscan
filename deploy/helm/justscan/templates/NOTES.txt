@@ -41,6 +41,9 @@ Access JustScan at:
    {{- end }}
    - Role is re-evaluated on every login (removing from the group revokes admin immediately).
    - Existing local accounts with matching email are auto-linked on first OIDC login.
+  {{- if or .Values.backend.customCAs.configMapName .Values.backend.customCAs.secretName }}
+  - Custom CA bundle is enabled for outbound TLS requests. Restart the backend pod after changing the referenced ConfigMap or Secret.
+  {{- end }}
 {{- end }}
 
 {{- if not .Values.backend.persistence.enabled }}

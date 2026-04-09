@@ -187,6 +187,9 @@ func processScan(job ScanJob, cacheDir string) {
 		return
 	}
 	recordScanStepOutput(ctx, db, scanID, "Worker started and is preparing the local scan environment.")
+	if job.Platform != "" {
+		recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Requested platform override: %s.", job.Platform))
+	}
 
 	runtimeInfo, err := EnsureDatabasesFresh(ctx, cacheDir)
 	if err != nil {
@@ -194,6 +197,17 @@ func processScan(job ScanJob, cacheDir string) {
 		return
 	}
 	recordScanStepOutput(ctx, db, scanID, "Scanner databases are ready for this run.")
+	if runtimeInfo != nil {
+		if runtimeInfo.Version != "" {
+			recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Using Trivy %s for this scan.", runtimeInfo.Version))
+		}
+		if runtimeInfo.VulnerabilityDB.UpdatedAt != nil {
+			recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Vulnerability DB updated %s.", runtimeInfo.VulnerabilityDB.UpdatedAt.UTC().Format(time.RFC3339)))
+		}
+		if runtimeInfo.JavaDB.UpdatedAt != nil {
+			recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Java DB updated %s.", runtimeInfo.JavaDB.UpdatedAt.UTC().Format(time.RFC3339)))
+		}
+	}
 	if err := setScanStep(ctx, db, scan, models.ScanStepScanningImage); err != nil {
 		setFailed(db, scan, err.Error())
 		return
@@ -217,6 +231,7 @@ func processScan(job ScanJob, cacheDir string) {
 		return
 	}
 	recordScanStepOutput(ctx, db, scanID, "Trivy scan finished. Processing and normalizing findings.")
+	recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Trivy returned %d result targets using version %s.", len(trivyOut.Results), trivyVersion))
 
 	// Parse and insert vulnerabilities
 	vulns := ParseVulnerabilities(trivyOut, scanID)
@@ -274,6 +289,7 @@ func processScan(job ScanJob, cacheDir string) {
 		return
 	}
 	recordScanStepOutput(ctx, db, scanID, "Finalizing the report and running post-processing steps.")
+	recordScanStepOutput(ctx, db, scanID, "Collecting SBOM components and applying Java OSV enrichment where applicable.")
 
 	// Run SBOM scan (best-effort, don't fail the whole scan if it errors)
 	sbomOut, sbomErr := RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)

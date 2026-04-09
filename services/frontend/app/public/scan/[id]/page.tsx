@@ -161,13 +161,13 @@ export default function PublicScanResultPage() {
   }, [pkgInput]);
 
   useEffect(() => {
-    if (!scan || scan.status !== 'completed') return;
+    if (!scan || (scan.status !== 'completed' && scan.external_status !== 'blocked_by_xray_policy')) return;
     setVulnLoading(true);
     listPublicVulnerabilities(id, page, LIMIT, severityFilter || undefined, pkgFilter || undefined, hasFix || undefined, minCvss || undefined, sortBy, sortDir)
       .then(res => { setVulns(res.data ?? []); setVulnTotal(res.total); })
       .catch(() => {})
       .finally(() => setVulnLoading(false));
-  }, [id, scan?.status, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, scan?.status, scan?.external_status, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleRescan() {
     setReScanning(true);
@@ -194,7 +194,9 @@ export default function PublicScanResultPage() {
   );
 
   const isScanning = !scan || scan.status === 'pending' || scan.status === 'running';
+  const isBlockedByXrayPolicy = scan?.external_status === 'blocked_by_xray_policy';
   const showResultTabs = Boolean(scan && !isScanning && (scan.status === 'completed' || scan.status === 'failed'));
+  const showRecoveredOverview = Boolean(scan && (scan.status === 'completed' || isBlockedByXrayPolicy));
   const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
   const imageName = scan ? `${scan.image_name}:${scan.image_tag}` : '…';
 
@@ -222,7 +224,7 @@ export default function PublicScanResultPage() {
               Helm run →
             </Link>
           )}
-          {scan?.status === 'completed' && (
+          {(scan?.status === 'completed' || isBlockedByXrayPolicy) && (
             <Link
               href={`/reports/print?scans=${id}`}
               target="_blank"
@@ -268,7 +270,7 @@ export default function PublicScanResultPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <main className="max-w-[1500px] mx-auto px-4 py-8 space-y-6">
         {actionError && (
           <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
             {actionError}
@@ -313,13 +315,14 @@ export default function PublicScanResultPage() {
             startedAt={scan?.started_at ?? null}
             scanProvider={scan?.scan_provider}
             currentStep={scan?.current_step ?? null}
+            stepLogs={scan?.step_logs ?? null}
           />
         )}
 
         {showResultTabs && (
           <div className="flex items-center gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
             {([
-              { id: 'overview', label: scan?.status === 'completed' ? 'Overview' : 'Status' },
+              { id: 'overview', label: showRecoveredOverview ? 'Overview' : 'Status' },
               { id: 'timeline', label: scan?.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
             ] as { id: ResultTab; label: string }[]).map(({ id, label }) => (
               <button
@@ -336,7 +339,7 @@ export default function PublicScanResultPage() {
           </div>
         )}
 
-        {scan?.status === 'failed' && activeTab === 'overview' && (
+        {scan?.status === 'failed' && activeTab === 'overview' && !isBlockedByXrayPolicy && (
           <>
             <div className="rounded-2xl px-6 py-5 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
               <p className="text-red-500 dark:text-red-400 font-medium">Scan failed</p>
@@ -346,15 +349,27 @@ export default function PublicScanResultPage() {
           </>
         )}
 
+        {isBlockedByXrayPolicy && activeTab === 'overview' && (
+          <div className="rounded-2xl px-6 py-5" style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.22)' }}>
+            <p className="font-medium" style={{ color: '#f59e0b' }}>Blocked by Xray policy</p>
+            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+              Xray blocked the normal scan path, but JustScan recovered any findings the provider still exposed. The results below reflect that recovered data.
+            </p>
+            {scan?.error_message && <p className="text-sm mt-3 whitespace-pre-wrap break-all" style={{ color: 'var(--text-faint)' }}>{scan.error_message}</p>}
+          </div>
+        )}
+
         {scan && !isScanning && activeTab === 'timeline' && (
           <ScanStepTimeline
             stepLogs={scan.step_logs}
             completedAt={scan.completed_at}
             status={scan.status}
+            externalStatus={scan.external_status}
+            scanProvider={scan.scan_provider}
           />
         )}
 
-        {scan?.status === 'completed' && activeTab === 'overview' && (
+        {scan && showRecoveredOverview && activeTab === 'overview' && (
           <>
             {/* Severity cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

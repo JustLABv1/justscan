@@ -486,7 +486,7 @@ export default function ScanDetailPage() {
   ];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
+    <div className="p-6 max-w-[1500px] mx-auto space-y-5">
       {/* Header */}
       <div>
         <button
@@ -691,44 +691,65 @@ export default function ScanDetailPage() {
       </div>
 
       {/* Status + severity cards */}
-      <div className={`grid gap-3 ${scan.status === 'pending' || scan.status === 'running' ? 'grid-cols-1 sm:grid-cols-1' : 'grid-cols-2 sm:grid-cols-5'}`}>
-        <div className="glass-panel rounded-xl p-4 col-span-1">
-          <p className="text-xs text-zinc-500 mb-2">Status</p>
-          <StatusBadge status={scan.status} externalStatus={scan.external_status} />
-          {scan.external_status && scan.scan_provider === 'artifactory_xray' && (
-            <p className="text-[11px] text-zinc-500 mt-2">
-              External state: {scan.external_status.replace(/_/g, ' ')}
-            </p>
-          )}
-        </div>
-        {scan.status !== 'pending' && scan.status !== 'running' && sevCards.map(({ label, count, color, border }) => (
+      {scan.status !== 'pending' && scan.status !== 'running' && (
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
+          <div className="glass-panel rounded-xl p-4 col-span-1">
+            <p className="text-xs text-zinc-500 mb-2">Status</p>
+            <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+            {scan.external_status && scan.scan_provider === 'artifactory_xray' && (
+              <p className="text-[11px] text-zinc-500 mt-2">
+                External state: {scan.external_status.replace(/_/g, ' ')}
+              </p>
+            )}
+          </div>
+          {sevCards.map(({ label, count, color, border }) => (
           <div key={label} className={`glass-panel rounded-xl border ${border} p-4`}>
             <p className="text-xs text-zinc-500 mb-1">{label}</p>
             <p className={`text-2xl font-bold ${color}`}>{count ?? 0}</p>
           </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
     {/* Scanner info moved to Details tab */}
 
       {/* Error banner — shown when scan failed */}
       {scan.status === 'failed' && scan.error_message && (
-        <div className="rounded-xl px-4 py-3 flex items-start gap-3"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)' }}>
-          <svg className="shrink-0 mt-0.5" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div
+          className="rounded-xl px-4 py-3 flex items-start gap-3"
+          style={scan.external_status === 'blocked_by_xray_policy'
+            ? { background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.22)' }
+            : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)' }}
+        >
+          <svg
+            className="shrink-0 mt-0.5"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={scan.external_status === 'blocked_by_xray_policy' ? '#f59e0b' : '#f87171'}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-red-400 mb-0.5">{scan.external_status === 'blocked_by_xray_policy' ? 'Blocked by Xray policy' : 'Scan failed'}</p>
+            <p
+              className="text-sm font-medium mb-0.5"
+              style={{ color: scan.external_status === 'blocked_by_xray_policy' ? '#d97706' : '#dc2626' }}
+            >
+              {scan.external_status === 'blocked_by_xray_policy' ? 'Blocked by Xray policy' : 'Scan failed'}
+            </p>
             {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
               <div className="space-y-1.5">
-                <p className="text-xs text-red-300/80 leading-relaxed">{blockedPolicyDetails.summary}</p>
-                <p className="text-[11px] text-red-300/70 leading-relaxed">
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{blockedPolicyDetails.summary}</p>
+                <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                   See the Policy Violations tab for the matched issues, watches, policies, and raw JFrog response.
                 </p>
               </div>
             ) : (
-              <pre className="text-xs text-red-300/80 whitespace-pre-wrap break-all font-mono leading-relaxed">{scan.error_message}</pre>
+              <pre className="text-xs whitespace-pre-wrap break-all font-mono leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{scan.error_message}</pre>
             )}
           </div>
         </div>
@@ -744,6 +765,7 @@ export default function ScanDetailPage() {
           image={`${scan.image_name}:${scan.image_tag}`}
           scanProvider={scan.scan_provider}
           currentStep={scan.current_step}
+          stepLogs={scan.step_logs}
         />
       )}
 
@@ -777,6 +799,8 @@ export default function ScanDetailPage() {
           stepLogs={scan.step_logs}
           completedAt={scan.completed_at}
           status={scan.status}
+          externalStatus={scan.external_status}
+          scanProvider={scan.scan_provider}
         />
       )}
 

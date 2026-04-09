@@ -230,6 +230,8 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "warming_artifactory_cache", models.ScanStepWarmingCache); err != nil {
 		return err
 	}
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Resolved Artifactory artifact path %s.", artifactPath))
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Using Xray component identifier %s.", componentID))
 	scan.ExternalScanID = componentID
 	scan.ExternalStatus = "warming_artifactory_cache"
 	scan.CurrentStep = models.ScanStepWarmingCache
@@ -238,6 +240,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		if normalizedMessage, ok := normalizeXrayDownloadBlockedError(err); ok {
 			targets := blockedViolationLookupTargets(err, repoKey, artifactRepoPath)
 			normalizedMessage = client.enrichBlockedScanMessage(ctx, targets, normalizedMessage)
+			recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Artifactory reported a blocking policy while warming %s.", artifactPath))
 			if err := updateXrayMetadata(ctx, db, scan.ID, componentID, models.ScanExternalStatusBlockedByXrayPolicy, models.ScanStepFailed); err != nil {
 				return err
 			}
@@ -245,10 +248,12 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 			scan.CurrentStep = models.ScanStepFailed
 
 			client.bestEffortTriggerBlockedArtifactScan(ctx, componentID, targets)
+			recordScanStepOutput(ctx, db, scan.ID, "Triggered best-effort blocked-artifact indexing so any available findings can still be imported.")
 
 			if summary, blockedArtifactPath, summaryErr := client.bestEffortBlockedArtifactSummary(ctx, targets); summaryErr != nil {
 				log.Warnf("Failed to fetch Xray artifact summary for blocked scan %s: %v", scan.ID, summaryErr)
 			} else if summary != nil {
+				recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Fetched a blocked-artifact summary from %s.", blockedArtifactPath))
 				if err := persistXraySummaryFindings(ctx, db, scan, summary); err != nil {
 					log.Warnf("Failed to persist Xray findings for blocked scan %s: %v", scan.ID, err)
 				} else {
@@ -260,16 +265,19 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		}
 		return fmt.Errorf("failed to warm image into artifactory cache: %w", err)
 	}
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Artifactory cache warm-up completed for %s.", artifactPath))
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "indexing", models.ScanStepIndexingArtifact); err != nil {
 		return err
 	}
 	scan.ExternalStatus = "indexing"
 	scan.CurrentStep = models.ScanStepIndexingArtifact
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Requested Xray indexing for %s.", repoPath))
 
 	if err := client.scanNow(ctx, repoPath); err != nil {
 		// Scan Artifact can still succeed for already-indexed images.
 		// Keep going so Xray-backed scans remain usable across setups.
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray index request returned a non-fatal response for %s: %v", repoPath, err))
 	}
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "queued", models.ScanStepQueuedInXray); err != nil {
@@ -277,12 +285,14 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 	scan.ExternalStatus = "queued"
 	scan.CurrentStep = models.ScanStepQueuedInXray
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Submitted the artifact scan request for component %s.", componentID))
 
 	if err := client.scanArtifact(ctx, componentID); err != nil {
 		if !isRetriableXrayScanArtifactError(err) {
 			return err
 		}
 		log.Warnf("Xray scanArtifact returned a non-fatal error for scan %s (%s); continuing to poll artifact summary: %v", scan.ID, componentID, err)
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray scanArtifact returned a non-fatal response; continuing to poll the artifact summary anyway: %v", err))
 	}
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "waiting_for_xray", models.ScanStepWaitingForXray); err != nil {
@@ -290,6 +300,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 	scan.ExternalStatus = "waiting_for_xray"
 	scan.CurrentStep = models.ScanStepWaitingForXray
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Polling Xray for the artifact summary at %s.", artifactPath))
 
 	summary, err := client.pollArtifactSummary(ctx, artifactPath)
 	if err != nil {
@@ -301,6 +312,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 	scan.ExternalStatus = "importing"
 	scan.CurrentStep = models.ScanStepImportingResults
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray returned %d artifact summaries. Importing findings now.", len(summary.Artifacts)))
 
 	if err := persistXraySummaryFindings(ctx, db, scan, summary); err != nil {
 		return err

@@ -349,6 +349,17 @@ helm upgrade justscan oci://ghcr.io/justlabv1/charts/justscan \
   -f justscan-values.yaml
 ```
 
+### Publish a chart-only release
+
+If you need to publish a new Helm chart version without building or releasing a new app version, run the `Release` workflow manually from GitHub Actions.
+
+- Set `chart_version` to the new Helm chart version you want to publish.
+- Set `app_version` to the existing app release whose image tags the chart should keep using.
+
+Example: publish chart version `1.2.4` while still deploying app image tags from `1.2.3`.
+
+The workflow will package and push `oci://ghcr.io/justlabv1/charts/justscan:1.2.4` with `appVersion=1.2.3`, so the chart still defaults to `backend-1.2.3` and `frontend-1.2.3` unless you override the image tags explicitly.
+
 ### Install from the chart in this repository
 
 ```bash
@@ -365,6 +376,7 @@ helm install justscan deploy/helm/justscan \
 - `backend.secrets.jwtSecret` is required for all non-trivial deployments.
 - `backend.secrets.encryptionKey` should be a random 32-character string. It is used to encrypt registry credentials at rest.
 - `postgresql.auth.password` is required when `postgresql.enabled=true`.
+- When `postgresql.enabled=true`, the backend automatically uses `postgresql.auth.database`, `postgresql.auth.username`, and the Bitnami PostgreSQL password secret. You only need `backend.config.database.*` for external databases.
 - `backend.secrets.dbPassword` is required when `postgresql.enabled=false` and you connect to an external PostgreSQL instance.
 - `backend.config.allowOrigins` must include the URL users open in their browser.
 - If `backend.config.oidc.enabled=true`, also set `backend.secrets.oidcClientSecret`, `backend.config.oidc.issuerUrl`, `backend.config.oidc.clientId`, and either `backend.config.oidc.redirectUri` or `ingress.enabled=true` with a valid host.

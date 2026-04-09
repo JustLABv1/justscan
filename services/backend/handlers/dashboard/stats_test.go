@@ -15,6 +15,21 @@ func TestIsBlockedByXrayPolicyStatus(t *testing.T) {
 	}
 }
 
+func TestCountsTowardDashboardFindings(t *testing.T) {
+	if !countsTowardDashboardFindings(models.ScanStatusCompleted, "") {
+		t.Fatal("expected completed scans to count toward dashboard findings")
+	}
+	if !countsTowardDashboardFindings(models.ScanStatusFailed, models.ScanExternalStatusBlockedByXrayPolicy) {
+		t.Fatal("expected blocked-policy scans to count toward dashboard findings")
+	}
+	if countsTowardDashboardFindings(models.ScanStatusFailed, models.ScanStatusFailed) {
+		t.Fatal("did not expect generic failures to count toward dashboard findings")
+	}
+	if countsTowardDashboardFindings(models.ScanStatusRunning, models.ScanExternalStatusBlockedByXrayPolicy) {
+		t.Fatal("did not expect running scans to count toward dashboard findings")
+	}
+}
+
 func TestSummarizeActiveXrayScansUsesQueuedFallback(t *testing.T) {
 	count, steps := summarizeActiveXrayScans([]models.Scan{
 		{CurrentStep: models.ScanStepWaitingForXray},

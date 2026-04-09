@@ -21,7 +21,7 @@ interface Scan {
   external_status?: string;
   status: string; critical_count: number; high_count: number; medium_count: number;
   low_count: number; unknown_count: number; suppressed_count: number;
-  trivy_version: string; started_at: string | null; completed_at: string | null;
+  trivy_version: string; grype_version: string; started_at: string | null; completed_at: string | null;
   created_at: string; architecture?: string; os_family?: string; os_name?: string;
   image_location?: string; helm_chart?: string; helm_source_path?: string;
   tags?: Tag[];
@@ -362,7 +362,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
             ...(filters.showScanId ? [['Scan ID', scan.id, true] as [string, string, boolean]] : []),
             ...(filters.showStarted ? [['Started', fmt(scan.started_at), false] as [string, string, boolean]] : []),
             ...(filters.showCompleted ? [['Completed', fmt(scan.completed_at), false] as [string, string, boolean]] : []),
-            ...(filters.showTrivyVersion ? [['Trivy Version', scan.trivy_version || '—', false] as [string, string, boolean]] : []),
+            ...(filters.showTrivyVersion ? [['Trivy Version', [scan.trivy_version ? `Trivy ${scan.trivy_version}` : '', scan.grype_version ? `Grype ${scan.grype_version}` : ''].filter(Boolean).join(' · ') || '—', false] as [string, string, boolean]] : []),
             ...(scan.helm_chart ? [['Helm Chart', scan.helm_chart, true] as [string, string, boolean]] : []),
             ...(scan.helm_source_path ? [['Helm Source', scan.helm_source_path, false] as [string, string, boolean]] : []),
             ...(scan.os_family ? [['OS', `${scan.os_family} ${scan.os_name}`.trim(), false] as [string, string, boolean]] : []),

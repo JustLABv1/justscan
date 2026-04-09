@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/google/uuid"
@@ -143,5 +144,116 @@ func TestExtractXrayKBEntriesDeduplicatesAndKeepsBestScore(t *testing.T) {
 	}
 	if !entry.ExploitAvailable {
 		t.Fatal("expected exploit_available to be true")
+	}
+}
+
+func TestParseXrayViolationVulnerabilitiesBuildsFallbackFindings(t *testing.T) {
+	scanID := uuid.New()
+	response := &xrayViolationsResponse{
+		Violations: []xrayViolationRecord{
+			{
+				IssueID:     "CVE-2026-0001",
+				Summary:     "Blocked issue",
+				Description: "Xray reported this issue while a blocking policy rejected the image.",
+				Severity:    "High",
+			},
+			{
+				IssueID:     "CVE-2026-0001",
+				Summary:     "Duplicate blocked issue",
+				Description: "Duplicate record should be deduplicated.",
+				Severity:    "High",
+			},
+		},
+	}
+
+	vulns := ParseXrayViolationVulnerabilities(response, scanID, "n8nio/n8n", "2.16.0")
+	if len(vulns) != 1 {
+		t.Fatalf("expected 1 fallback vulnerability, got %d", len(vulns))
+	}
+	if vulns[0].VulnID != "CVE-2026-0001" {
+		t.Fatalf("unexpected vuln id %q", vulns[0].VulnID)
+	}
+	if vulns[0].PkgName != "n8nio/n8n" {
+		t.Fatalf("unexpected package name %q", vulns[0].PkgName)
+	}
+	if vulns[0].InstalledVersion != "2.16.0" {
+		t.Fatalf("unexpected installed version %q", vulns[0].InstalledVersion)
+	}
+	if vulns[0].Severity != "HIGH" {
+		t.Fatalf("unexpected severity %q", vulns[0].Severity)
+	}
+	if vulns[0].Title != "Blocked issue" {
+		t.Fatalf("unexpected title %q", vulns[0].Title)
+	}
+	if vulns[0].DataSource != xrayDataSource {
+		t.Fatalf("unexpected data source %q", vulns[0].DataSource)
+	}
+}
+
+func TestShouldWarnBlockedReindexErrorSuppressesExpectedStatuses(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "forbidden", err: &xrayHTTPError{StatusCode: http.StatusForbidden}, want: false},
+		{name: "unauthorized", err: &xrayHTTPError{StatusCode: http.StatusUnauthorized}, want: false},
+		{name: "conflict", err: &xrayHTTPError{StatusCode: http.StatusConflict}, want: false},
+		{name: "bad gateway", err: &xrayHTTPError{StatusCode: http.StatusBadGateway}, want: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := shouldWarnBlockedReindexError(test.err); got != test.want {
+				t.Fatalf("shouldWarnBlockedReindexError() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestParseCycloneDXVulnerabilitiesBuildsAffectedComponentFindings(t *testing.T) {
+	scanID := uuid.New()
+	sbom := &TrivySBOMOutput{
+		BOMFormat: "CycloneDX",
+		Components: []TrivySBOMComp{
+			{BOMRef: "pkg:apk/alpine/openssl@3.2.1", Name: "openssl", Version: "3.2.1", PURL: "pkg:apk/alpine/openssl@3.2.1"},
+			{BOMRef: "pkg:apk/alpine/busybox@1.36.1", Name: "busybox", Version: "1.36.1", PURL: "pkg:apk/alpine/busybox@1.36.1"},
+		},
+		Vulnerabilities: []TrivySBOMVulnerability{
+			{
+				ID:          "CVE-2026-1111",
+				Description: "openssl issue",
+				Ratings:     []TrivySBOMVulnRating{{Severity: "critical", Score: 9.8, Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}},
+				Advisories:  []TrivySBOMVulnAdvisory{{URL: "https://example.test/CVE-2026-1111"}},
+				Affects:     []TrivySBOMVulnerabilityAffect{{Ref: "pkg:apk/alpine/openssl@3.2.1"}},
+			},
+			{
+				ID:             "CVE-2026-2222",
+				Description:    "busybox issue",
+				Recommendation: "Upgrade to 1.36.2-r0",
+				Ratings:        []TrivySBOMVulnRating{{Severity: "medium", Score: "5.6"}},
+				Affects:        []TrivySBOMVulnerabilityAffect{{Ref: "pkg:apk/alpine/busybox@1.36.1"}},
+			},
+		},
+	}
+
+	vulns := ParseCycloneDXVulnerabilities(sbom, scanID)
+	if len(vulns) != 2 {
+		t.Fatalf("expected 2 vulnerabilities, got %d", len(vulns))
+	}
+	if vulns[0].PkgName != "openssl" || vulns[1].PkgName != "busybox" {
+		t.Fatalf("unexpected package names %#v", []string{vulns[0].PkgName, vulns[1].PkgName})
+	}
+	if vulns[0].Severity != "CRITICAL" {
+		t.Fatalf("unexpected severity %q", vulns[0].Severity)
+	}
+	if vulns[0].CVSSScore != 9.8 {
+		t.Fatalf("unexpected score %v", vulns[0].CVSSScore)
+	}
+	if len(vulns[0].References) != 1 {
+		t.Fatalf("expected advisory reference, got %d", len(vulns[0].References))
+	}
+	if vulns[1].InstalledVersion != "1.36.1" {
+		t.Fatalf("unexpected installed version %q", vulns[1].InstalledVersion)
 	}
 }

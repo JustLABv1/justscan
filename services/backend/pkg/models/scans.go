@@ -14,9 +14,11 @@ type Scan struct {
 	ImageName               string     `bun:"image_name,type:text,notnull" json:"image_name"`
 	ImageTag                string     `bun:"image_tag,type:text,notnull" json:"image_tag"`
 	ImageDigest             string     `bun:"image_digest,type:text,default:''" json:"image_digest"`
+	ImageConfig             JSONObject `bun:"image_config,type:jsonb,notnull,default:'{}'" json:"image_config,omitempty"`
 	ScanProvider            string     `bun:"scan_provider,type:text,notnull,default:'trivy'" json:"scan_provider"`
 	ExternalScanID          string     `bun:"external_scan_id,type:text,default:''" json:"external_scan_id,omitempty"`
 	ExternalStatus          string     `bun:"external_status,type:text,default:''" json:"external_status,omitempty"`
+	CurrentStep             string     `bun:"current_step,type:text,default:'queued'" json:"current_step"`
 	Status                  string     `bun:"status,type:text,notnull,default:'pending'" json:"status"`
 	ErrorMessage            string     `bun:"error_message,type:text,default:''" json:"error_message"`
 	CriticalCount           int        `bun:"critical_count,type:int,default:0" json:"critical_count"`
@@ -26,6 +28,7 @@ type Scan struct {
 	UnknownCount            int        `bun:"unknown_count,type:int,default:0" json:"unknown_count"`
 	SuppressedCount         int        `bun:"suppressed_count,type:int,default:0" json:"suppressed_count"`
 	TrivyVersion            string     `bun:"trivy_version,type:text,default:''" json:"trivy_version"`
+	GrypeVersion            string     `bun:"grype_version,type:text,default:''" json:"grype_version"`
 	TrivyVulnDBUpdatedAt    *time.Time `bun:"trivy_vuln_db_updated_at,type:timestamptz" json:"trivy_vuln_db_updated_at,omitempty"`
 	TrivyVulnDBDownloadedAt *time.Time `bun:"trivy_vuln_db_downloaded_at,type:timestamptz" json:"trivy_vuln_db_downloaded_at,omitempty"`
 	TrivyJavaDBUpdatedAt    *time.Time `bun:"trivy_java_db_updated_at,type:timestamptz" json:"trivy_java_db_updated_at,omitempty"`
@@ -51,6 +54,7 @@ type Scan struct {
 	// Relations (not stored in DB, populated on join)
 	Tags            []Tag           `bun:"m2m:scan_tags,join:Scan=Tag" json:"tags,omitempty"`
 	Vulnerabilities []Vulnerability `bun:"rel:has-many,join:id=scan_id" json:"vulnerabilities,omitempty"`
+	StepLogs        []ScanStepLog   `bun:"rel:has-many,join:id=scan_id" json:"step_logs,omitempty"`
 }
 
 // ScanStatus constants
@@ -69,4 +73,20 @@ const (
 
 const (
 	ScanExternalStatusBlockedByXrayPolicy = "blocked_by_xray_policy"
+)
+
+const (
+	ScanStepQueued            = "queued"
+	ScanStepPreparingImage    = "preparing_image"
+	ScanStepScanningImage     = "scanning_image"
+	ScanStepProcessingResults = "processing_results"
+	ScanStepFinalizingReport  = "finalizing_report"
+	ScanStepWarmingCache      = "warming_cache"
+	ScanStepIndexingArtifact  = "indexing_artifact"
+	ScanStepQueuedInXray      = "queued_in_xray"
+	ScanStepWaitingForXray    = "waiting_for_xray"
+	ScanStepImportingResults  = "importing_results"
+	ScanStepCompleted         = "completed"
+	ScanStepFailed            = "failed"
+	ScanStepCancelled         = "cancelled"
 )

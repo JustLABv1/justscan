@@ -60,3 +60,21 @@ func TestMatchesStatusPagePatternsChecksReferenceNameAndTag(t *testing.T) {
 		t.Fatal("did not expect unrelated image to match")
 	}
 }
+
+func TestDeriveStatusTreatsBlockedXrayPolicySeparately(t *testing.T) {
+	status := deriveStatus(72, StatusPageItem{
+		ScanStatus:     models.ScanStatusFailed,
+		ExternalStatus: models.ScanExternalStatusBlockedByXrayPolicy,
+	})
+
+	if status != models.ScanExternalStatusBlockedByXrayPolicy {
+		t.Fatalf("expected blocked xray policy status, got %q", status)
+	}
+}
+
+func TestDeriveStatusKeepsRunningState(t *testing.T) {
+	status := deriveStatus(72, StatusPageItem{ScanStatus: models.ScanStatusRunning})
+	if status != models.ScanStatusRunning {
+		t.Fatalf("expected running status, got %q", status)
+	}
+}

@@ -29,20 +29,21 @@ func DispatchScan(_ context.Context, db *bun.DB, scan *models.Scan, envVars []st
 
 	switch provider {
 	case models.ScanProviderTrivy:
-		EnqueueScan(scan.ID, db, envVars, platform)
-		return nil
+		scan.CurrentStep = models.ScanStepQueued
+		return EnqueueScan(scan.ID, db, envVars, platform)
 	case models.ScanProviderArtifactoryXray:
 		scan.ExternalStatus = "queued"
+		scan.CurrentStep = models.ScanStepQueued
 		if scan.ID != uuid.Nil {
 			if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
 				Set("external_status = ?", scan.ExternalStatus).
+				Set("current_step = ?", scan.CurrentStep).
 				Where("id = ?", scan.ID).
 				Exec(context.Background()); err != nil {
 				return fmt.Errorf("failed to persist external status for scan %s: %w", scan.ID, err)
 			}
 		}
-		EnqueueScan(scan.ID, db, envVars, platform)
-		return nil
+		return EnqueueScan(scan.ID, db, envVars, platform)
 	default:
 		return fmt.Errorf("unsupported scan provider %q", provider)
 	}
@@ -57,5 +58,20 @@ func MarkScanFailed(ctx context.Context, db *bun.DB, scanID uuid.UUID, message s
 		Set("completed_at = ?", completedAt).
 		Where("id = ?", scanID).
 		Exec(ctx)
-	return err
+	if err != nil {
+		return err
+	}
+	if err := setScanStepByID(ctx, db, scanID, models.ScanStepFailed); err != nil {
+		return err
+	}
+	recordScanStepOutput(ctx, db, scanID, message)
+	return nil
+}
+
+func MarkScanCancelled(ctx context.Context, db *bun.DB, scanID uuid.UUID, message string) error {
+	if err := setScanStepByID(ctx, db, scanID, models.ScanStepCancelled); err != nil {
+		return err
+	}
+	recordScanStepOutput(ctx, db, scanID, message)
+	return nil
 }

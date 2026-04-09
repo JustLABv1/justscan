@@ -91,6 +91,7 @@ func CreatePublicHelmScans(db *bun.DB) gin.HandlerFunc {
 					ImageName:        img.Name,
 					ImageTag:         img.Tag,
 					Platform:         req.Platform,
+					CurrentStep:      models.ScanStepQueued,
 					Status:           models.ScanStatusPending,
 					CreatedAt:        run.CreatedAt,
 					HelmScanRunID:    &run.ID,
@@ -114,8 +115,20 @@ func CreatePublicHelmScans(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		for _, scan := range created {
-			scanner.EnqueueScan(scan.ID, db, nil, req.Platform)
+		for i := range created {
+			scan := &created[i]
+			if err := scanner.DispatchScan(c.Request.Context(), db, scan, nil, req.Platform); err != nil {
+				log.Warnf("CreatePublicHelmScans dispatch failed for %s: %v", scan.ID, err)
+				if markErr := scanner.MarkScanFailed(c.Request.Context(), db, scan.ID, err.Error()); markErr != nil {
+					log.Errorf("CreatePublicHelmScans failed to persist dispatch error for %s: %v", scan.ID, markErr)
+				} else {
+					completedAt := time.Now()
+					scan.Status = models.ScanStatusFailed
+					scan.CurrentStep = models.ScanStepFailed
+					scan.ErrorMessage = err.Error()
+					scan.CompletedAt = &completedAt
+				}
+			}
 		}
 
 		clientIP := c.ClientIP()

@@ -196,6 +196,9 @@ export const listVulnerabilities = (
 };
 
 // Tags
+
+export const getVulnerabilityContextAnalysis = (scanId: string, vulnerabilityId: string) =>
+  req<VulnerabilityContextAnalysis>('GET', `/api/v1/scans/${scanId}/vulnerabilities/${vulnerabilityId}/analysis`);
 export const listTags = () =>
   req<{ data: Tag[] }>('GET', '/api/v1/tags/').then((r) => r.data ?? []);
 export const createTag = (name: string, color: string) =>
@@ -323,6 +326,9 @@ export const listPublicVulnerabilities = (
   );
 };
 
+export const getPublicVulnerabilityContextAnalysis = (scanId: string, vulnerabilityId: string) =>
+  publicReq<VulnerabilityContextAnalysis>('GET', `/api/v1/public/scans/${scanId}/vulnerabilities/${vulnerabilityId}/analysis`);
+
 export const extractPublicHelmImages = (
   chartUrl: string,
   chartName?: string,
@@ -436,7 +442,7 @@ export const reScan = (id: string) =>
   req<Scan>('POST', `/api/v1/scans/${id}/rescan`);
 
 export const cancelScan = (id: string) =>
-  req<{ result: string; status?: string; external_status?: string; completed_at?: string; error_message?: string }>('POST', `/api/v1/scans/${id}/cancel`);
+  req<{ result: string; status?: string; current_step?: string; external_status?: string; completed_at?: string; error_message?: string }>('POST', `/api/v1/scans/${id}/cancel`);
 
 export const bulkDeleteScans = (ids: string[]) =>
   req<{ deleted: number }>('DELETE', '/api/v1/scans/bulk', { ids });
@@ -638,6 +644,13 @@ export const deleteStatusPage = (id: string) =>
 export const getStatusPageBySlug = (slug: string) =>
   sharedReq<StatusPageResponse>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}`);
 
+export const getStatusPageTrackedScan = (slug: string, scanId: string) =>
+  sharedReq<StatusPageScanSummary>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/scans/${encodeURIComponent(scanId)}`);
+
+export const listStatusPageScanHistory = (slug: string, scanId: string) =>
+  sharedReq<{ data: StatusPageScanSummary[] }>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/scans/${encodeURIComponent(scanId)}/history`)
+    .then(r => r.data ?? []);
+
 export const listStatusPageItemVulnerabilities = (
   slug: string,
   scanId: string,
@@ -662,6 +675,12 @@ export const listStatusPageItemVulnerabilities = (
     `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/items/${encodeURIComponent(scanId)}/vulnerabilities?${params}`,
   );
 };
+
+export const getStatusPageItemVulnerabilityContextAnalysis = (slug: string, scanId: string, vulnerabilityId: string) =>
+  sharedReq<VulnerabilityContextAnalysis>(
+    'GET',
+    `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/items/${encodeURIComponent(scanId)}/vulnerabilities/${encodeURIComponent(vulnerabilityId)}/analysis`,
+  );
 
 export const listStatusPageTargetOptions = async () => {
   const limit = 100;
@@ -752,6 +771,9 @@ export const listSharedVulnerabilities = (
 export const rescanShared = (token: string) =>
   sharedReq<{ scan_id: string; type: 'public' | 'authenticated' }>('POST', `/api/v1/shared/${token}/rescan`);
 
+export const getSharedVulnerabilityContextAnalysis = (token: string, vulnerabilityId: string) =>
+  sharedReq<VulnerabilityContextAnalysis>('GET', `/api/v1/shared/${token}/vulnerabilities/${vulnerabilityId}/analysis`);
+
 // Types
 export interface PolicyRule {
   type: 'max_cvss' | 'max_count' | 'max_total' | 'require_fix' | 'blocked_cve';
@@ -813,6 +835,16 @@ export interface User {
   disabled: boolean;
 }
 
+export interface ScanStepLog {
+  id: string;
+  scan_id: string;
+  step: string;
+  position: number;
+  started_at: string;
+  completed_at?: string | null;
+  output: string[];
+}
+
 export interface Scan {
   id: string;
   image_name: string;
@@ -821,6 +853,7 @@ export interface Scan {
   scan_provider: 'trivy' | 'artifactory_xray';
   external_scan_id?: string;
   external_status?: string;
+  current_step: string;
   status: string;
   error_message: string;
   critical_count: number;
@@ -830,6 +863,7 @@ export interface Scan {
   unknown_count: number;
   suppressed_count: number;
   trivy_version: string;
+  grype_version: string;
   trivy_vuln_db_updated_at?: string | null;
   trivy_vuln_db_downloaded_at?: string | null;
   trivy_java_db_updated_at?: string | null;
@@ -842,6 +876,7 @@ export interface Scan {
   architecture?: string;
   os_family?: string;
   os_name?: string;
+  image_config?: Record<string, unknown>;
   platform?: string;
   share_token?: string;
   share_visibility?: string;
@@ -850,6 +885,7 @@ export interface Scan {
   helm_chart_name?: string;
   helm_chart_version?: string;
   helm_source_path?: string;
+  step_logs?: ScanStepLog[];
 }
 
 export interface AdminScan extends Omit<Scan, 'tags'> {
@@ -875,10 +911,27 @@ export interface Vulnerability {
   description: string;
   cvss_score: number;
   data_source?: string;
+  external_component_id?: string;
   references: string[];
   suppression?: Suppression | null;
   comments?: Comment[];
   first_seen_at?: string | null;
+}
+
+export interface VulnerabilityContextAnalysis {
+  provider: string;
+  supported: boolean;
+  available: boolean;
+  message?: string;
+  vulnerability_id: string;
+  component_id?: string;
+  source_component_id?: string;
+  artifact_path?: string;
+  applicable?: boolean | null;
+  summary?: string;
+  evidence?: string[];
+  dependency_paths?: string[];
+  raw?: Record<string, unknown>;
 }
 
 export interface Tag {
@@ -944,6 +997,14 @@ export interface DashboardStats {
   recent_scans: Scan[] | null;
   top_images: { image_name: string; count: number }[] | null;
   watchlist_count: number;
+  operations: DashboardOperations;
+}
+
+export interface DashboardOperations {
+  blocked_policy_count: number;
+  active_xray_count: number;
+  active_xray_step_counts: Record<string, number>;
+  active_xray_scans: Scan[] | null;
 }
 
 export interface ScannerHealthWorker {
@@ -1226,12 +1287,17 @@ export interface StatusPageItem {
   image_tag: string;
   latest_scan_id: string;
   scan_status: string;
+  external_status?: string;
+  scan_provider?: string;
+  current_step?: string;
+  started_at?: string;
   status: string;
   error_message?: string;
   critical_count: number;
   high_count: number;
   medium_count: number;
   low_count: number;
+  previous_scan_id?: string;
   previous_critical_count?: number;
   previous_high_count?: number;
   previous_medium_count?: number;
@@ -1244,6 +1310,26 @@ export interface StatusPageItem {
   observed_at: string;
   previous_scan_at?: string;
   display_order: number;
+}
+
+export interface StatusPageScanSummary {
+  scan_id: string;
+  image_name: string;
+  image_tag: string;
+  scan_status: string;
+  external_status?: string;
+  scan_provider?: string;
+  current_step?: string;
+  error_message?: string;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
+  observed_at: string;
+  is_latest: boolean;
 }
 
 export interface StatusPageResponse {

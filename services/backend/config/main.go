@@ -56,6 +56,8 @@ type LocalAuthConf struct {
 
 type ScannerConf struct {
 	TrivyPath                 string `mapstructure:"trivy_path"`
+	GrypePath                 string `mapstructure:"grype_path"`
+	EnableGrype               bool   `mapstructure:"enable_grype"`
 	Timeout                   int    `mapstructure:"timeout"`
 	Concurrency               int    `mapstructure:"concurrency"`
 	DBMaxAgeHours             int    `mapstructure:"db_max_age_hours"`
@@ -115,6 +117,8 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"database.user":                        "BACKEND_DATABASE_USER",
 		"database.password":                    "BACKEND_DATABASE_PASSWORD",
 		"scanner.trivy_path":                   "BACKEND_SCANNER_TRIVY_PATH",
+		"scanner.grype_path":                   "BACKEND_SCANNER_GRYPE_PATH",
+		"scanner.enable_grype":                 "BACKEND_SCANNER_ENABLE_GRYPE",
 		"scanner.timeout":                      "BACKEND_SCANNER_TIMEOUT",
 		"scanner.concurrency":                  "BACKEND_SCANNER_CONCURRENCY",
 		"scanner.db_max_age_hours":             "BACKEND_SCANNER_DB_MAX_AGE_HOURS",

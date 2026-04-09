@@ -1,4 +1,5 @@
 FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
+FROM anchore/grype:latest AS grype-bin
 
 FROM golang:1.25-alpine AS builder
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
@@ -20,6 +21,7 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates
 
 COPY --from=trivy-bin /usr/local/bin/trivy /usr/local/bin/trivy
+COPY --from=grype-bin /grype /usr/local/bin/grype
 COPY --from=builder /app/backend/justscan-backend /app/
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 

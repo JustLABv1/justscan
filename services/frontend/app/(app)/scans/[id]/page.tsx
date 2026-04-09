@@ -1,50 +1,46 @@
 'use client';
-import { ScannerDatabaseCard, ScanningAnimation } from '@/components/scans/scan-runtime';
 import { useToast } from '@/components/toast';
 import { SeverityBadge, SourceBadge, StatusBadge } from '@/components/ui/badges';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
+import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
+import type { ComplianceResult, Org, SBOMComponent, Scan, Suppression, Tag, Vulnerability } from '@/lib/api';
 import {
-    addTagToScan,
-    assignScanToOrg,
-    cancelScan,
-    ComplianceResult,
-    createComment,
-    createShare,
-    deleteComment,
-    deleteShare,
-    deleteSuppression,
-    getScan,
-    getScanCompliance,
-    getScanSBOM,
-    getUser,
-    listOrgs,
-    listScans,
-    listTags,
-    listVulnerabilities,
-    Org,
-    reEvaluateCompliance,
-    removeScanFromOrg,
-    removeTagFromScan,
-    reScan,
-    SBOMComponent,
-    Scan,
-    Suppression,
-    Tag,
-    upsertSuppression,
-    Vulnerability,
+  addTagToScan,
+  assignScanToOrg,
+  cancelScan,
+  createComment,
+  createShare,
+  deleteComment,
+  deleteShare,
+  deleteSuppression,
+  getScan,
+  getScanCompliance,
+  getScanSBOM,
+  getUser,
+  getVulnerabilityContextAnalysis,
+  listOrgs,
+  listScans,
+  listTags,
+  listVulnerabilities,
+  reEvaluateCompliance,
+  removeScanFromOrg,
+  removeTagFromScan,
+  reScan,
+  upsertSuppression,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select } from '@heroui/react';
+import { Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select, useOverlayState } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
 import { ArrowLeft01Icon, Cancel01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, GitCompareIcon, MoreVerticalIcon, Refresh01Icon, Share01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { ScannerDatabaseCard, ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
 
 const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
-type ScanTab = 'vulns' | 'policy' | 'sbom' | 'details';
+type ScanTab = 'vulns' | 'policy' | 'sbom' | 'details' | 'timeline';
 
 type BlockedPolicyDetails = {
   summary: string;
@@ -106,6 +102,35 @@ function DetailBlock({ label, value, mono = false }: { label: string; value?: st
       </p>
     </div>
   );
+}
+
+function imageConfigObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function imageConfigString(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim();
+}
+
+function imageConfigStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((entry) => String(entry).trim()).filter(Boolean);
+}
+
+function imageConfigEntries(value: unknown): Array<[string, string]> {
+  const record = imageConfigObject(value);
+  if (!record) {
+    return [];
+  }
+  return Object.entries(record).map(([key, entry]) => [key, String(entry ?? '').trim()] as [string, string]);
 }
 
 function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
@@ -175,6 +200,8 @@ export default function ScanDetailPage() {
   const [suppressExpiry, setSuppressExpiry] = useState<DateValue | null>(null);
   const [suppressSaving, setSuppressSaving] = useState(false);
   const [suppressError, setSuppressError] = useState('');
+  const vulnerabilityDetailsModal = useOverlayState();
+  const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanStatus = scan?.status;
@@ -231,6 +258,12 @@ export default function ScanDetailPage() {
 
     defaultTabInitializedRef.current = true;
   }, [blockedPolicyDetails, scan]);
+
+  useEffect(() => {
+    if (!vulnerabilityDetailsModal.isOpen) {
+      setSelectedVulnerability(null);
+    }
+  }, [vulnerabilityDetailsModal.isOpen]);
 
   // Persist severity filter
   useEffect(() => {
@@ -378,14 +411,15 @@ export default function ScanDetailPage() {
     setCancelling(true);
     try {
       const result = await cancelScan(id);
-      loadVersionRef.current += 1;
       setScan((current) => current ? {
         ...current,
         status: result.status ?? 'cancelled',
+        current_step: result.current_step ?? 'cancelled',
         external_status: result.external_status ?? 'cancelled',
         completed_at: result.completed_at ?? new Date().toISOString(),
         error_message: result.error_message ?? 'Cancelled by user',
       } : current);
+      await loadScan().catch(() => {});
       toast.success('Scan cancelled');
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to cancel scan');
@@ -461,6 +495,11 @@ export default function ScanDetailPage() {
     }
   }
 
+  function openVulnerabilityDetails(vulnerability: Vulnerability) {
+    setSelectedVulnerability(vulnerability);
+    vulnerabilityDetailsModal.open();
+  }
+
   if (loading) return <ScanDetailSkeleton />;
 
   if (error) return (
@@ -476,6 +515,19 @@ export default function ScanDetailPage() {
 
   const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
   const currentUser = getUser();
+  const fullImageConfig = scan.image_config;
+  const runtimeImageConfig = imageConfigObject(fullImageConfig?.['config']);
+  const imageCreated = imageConfigString(fullImageConfig?.['created']);
+  const imageAuthor = imageConfigString(fullImageConfig?.['author']);
+  const imageDockerVersion = imageConfigString(fullImageConfig?.['docker_version']);
+  const imageUser = imageConfigString(runtimeImageConfig?.['User']);
+  const imageWorkingDir = imageConfigString(runtimeImageConfig?.['WorkingDir']);
+  const imageEntrypoint = imageConfigStringArray(runtimeImageConfig?.['Entrypoint']);
+  const imageCommand = imageConfigStringArray(runtimeImageConfig?.['Cmd']);
+  const imageEnv = imageConfigStringArray(runtimeImageConfig?.['Env']);
+  const imageLabelEntries = imageConfigEntries(runtimeImageConfig?.['Labels']);
+  const imageExposedPorts = imageConfigEntries(runtimeImageConfig?.['ExposedPorts']).map(([port]) => port);
+  const imageVolumes = imageConfigEntries(runtimeImageConfig?.['Volumes']).map(([volume]) => volume);
 
   const sevCards = [
     { count: scan.critical_count, label: 'Critical', color: 'text-red-400',    border: 'border-red-500/20'    },
@@ -485,7 +537,7 @@ export default function ScanDetailPage() {
   ];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
+    <div className="p-6 max-w-[1500px] mx-auto space-y-5">
       {/* Header */}
       <div>
         <button
@@ -690,44 +742,65 @@ export default function ScanDetailPage() {
       </div>
 
       {/* Status + severity cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className="glass-panel rounded-xl p-4 col-span-1">
-          <p className="text-xs text-zinc-500 mb-2">Status</p>
-          <StatusBadge status={scan.status} externalStatus={scan.external_status} />
-          {scan.external_status && scan.scan_provider === 'artifactory_xray' && (
-            <p className="text-[11px] text-zinc-500 mt-2">
-              External state: {scan.external_status.replace(/_/g, ' ')}
-            </p>
-          )}
-        </div>
-        {sevCards.map(({ label, count, color, border }) => (
+      {scan.status !== 'pending' && scan.status !== 'running' && (
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
+          <div className="glass-panel rounded-xl p-4 col-span-1">
+            <p className="text-xs text-zinc-500 mb-2">Status</p>
+            <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+            {scan.external_status && scan.scan_provider === 'artifactory_xray' && (
+              <p className="text-[11px] text-zinc-500 mt-2">
+                External state: {scan.external_status.replace(/_/g, ' ')}
+              </p>
+            )}
+          </div>
+          {sevCards.map(({ label, count, color, border }) => (
           <div key={label} className={`glass-panel rounded-xl border ${border} p-4`}>
             <p className="text-xs text-zinc-500 mb-1">{label}</p>
             <p className={`text-2xl font-bold ${color}`}>{count ?? 0}</p>
           </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
     {/* Scanner info moved to Details tab */}
 
       {/* Error banner — shown when scan failed */}
       {scan.status === 'failed' && scan.error_message && (
-        <div className="rounded-xl px-4 py-3 flex items-start gap-3"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)' }}>
-          <svg className="shrink-0 mt-0.5" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div
+          className="rounded-xl px-4 py-3 flex items-start gap-3"
+          style={scan.external_status === 'blocked_by_xray_policy'
+            ? { background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.22)' }
+            : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)' }}
+        >
+          <svg
+            className="shrink-0 mt-0.5"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={scan.external_status === 'blocked_by_xray_policy' ? '#f59e0b' : '#f87171'}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-red-400 mb-0.5">{scan.external_status === 'blocked_by_xray_policy' ? 'Blocked by Xray policy' : 'Scan failed'}</p>
+            <p
+              className="text-sm font-medium mb-0.5"
+              style={{ color: scan.external_status === 'blocked_by_xray_policy' ? '#d97706' : '#dc2626' }}
+            >
+              {scan.external_status === 'blocked_by_xray_policy' ? 'Blocked by Xray policy' : 'Scan failed'}
+            </p>
             {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
               <div className="space-y-1.5">
-                <p className="text-xs text-red-300/80 leading-relaxed">{blockedPolicyDetails.summary}</p>
-                <p className="text-[11px] text-red-300/70 leading-relaxed">
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{blockedPolicyDetails.summary}</p>
+                <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                   See the Policy Violations tab for the matched issues, watches, policies, and raw JFrog response.
                 </p>
               </div>
             ) : (
-              <pre className="text-xs text-red-300/80 whitespace-pre-wrap break-all font-mono leading-relaxed">{scan.error_message}</pre>
+              <pre className="text-xs whitespace-pre-wrap break-all font-mono leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{scan.error_message}</pre>
             )}
           </div>
         </div>
@@ -737,7 +810,14 @@ export default function ScanDetailPage() {
 
       {/* Scanning animation */}
       {(scan.status === 'pending' || scan.status === 'running') && (
-        <ScanningAnimation status={scan.status} externalStatus={scan.external_status} startedAt={scan.started_at} />
+        <ScanningAnimation
+          status={scan.status}
+          startedAt={scan.started_at}
+          image={`${scan.image_name}:${scan.image_tag}`}
+          scanProvider={scan.scan_provider}
+          currentStep={scan.current_step}
+          stepLogs={scan.step_logs}
+        />
       )}
 
       {/* Tab bar */}
@@ -748,6 +828,7 @@ export default function ScanDetailPage() {
             { id: 'vulns', label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities' },
             ...(hasPolicyTab ? [{ id: 'policy' as const, label: blockedPolicyDetails?.totalViolations ? `Policy Violations (${blockedPolicyDetails.totalViolations})` : 'Policy Violations' }] : []),
             { id: 'sbom', label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
+            { id: 'timeline', label: scan.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
             { id: 'details', label: 'Details' },
           ] as { id: ScanTab; label: string }[]).map(({ id, label }) => (
             <button
@@ -762,6 +843,16 @@ export default function ScanDetailPage() {
             </button>
           ))}
         </div>
+      )}
+
+      {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'timeline' && (
+        <ScanStepTimeline
+          stepLogs={scan.step_logs}
+          completedAt={scan.completed_at}
+          status={scan.status}
+          externalStatus={scan.external_status}
+          scanProvider={scan.scan_provider}
+        />
       )}
 
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'policy' && blockedPolicyDetails && (
@@ -992,9 +1083,8 @@ export default function ScanDetailPage() {
                   </td>
                 </tr>
               ) : vulns.map((v, i) => (
-                <>
+                <Fragment key={v.id}>
                   <tr
-                    key={v.id}
                     style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -1002,14 +1092,13 @@ export default function ScanDetailPage() {
                     <td className="px-4 py-3">
                       {v.vuln_id ? (
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <a
-                            href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => openVulnerabilityDetails(v)}
                             className="font-mono text-xs text-violet-500 dark:text-violet-400 hover:text-violet-400 dark:hover:text-violet-300 hover:underline transition-colors"
                           >
                             {v.vuln_id}
-                          </a>
+                          </button>
                           <SourceBadge source={v.data_source} />
                           {v.suppression && (
                             <span
@@ -1056,7 +1145,7 @@ export default function ScanDetailPage() {
                     </td>
                   </tr>
                   {expandedVuln === v.id && (
-                    <tr key={`${v.id}-comments`}>
+                    <tr>
                       <td colSpan={8} className="px-4 py-4" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--row-hover)' }}>
                         <div className="space-y-4 max-w-3xl">
 
@@ -1228,7 +1317,7 @@ export default function ScanDetailPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -1265,13 +1354,16 @@ export default function ScanDetailPage() {
         <div className="space-y-4">
 
           {/* Scanner info */}
-          {(scan.trivy_version || scan.trivy_vuln_db_updated_at || scan.trivy_java_db_updated_at) && (
+          {(scan.trivy_version || scan.grype_version || scan.trivy_vuln_db_updated_at || scan.trivy_java_db_updated_at) && (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Scanner</p>
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
                 <div className="glass-panel rounded-xl p-4">
                   <p className="text-xs text-zinc-500 mb-1">Scanner</p>
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">Trivy {scan.trivy_version || 'unknown'}</p>
+                  {scan.grype_version && (
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white mt-1">Grype {scan.grype_version}</p>
+                  )}
                   <p className="text-xs text-zinc-500 mt-1">
                     {scan.completed_at ? `DB snapshot captured ${timeAgo(scan.completed_at)}` : 'DB snapshot captured when this scan completed'}
                   </p>
@@ -1287,6 +1379,71 @@ export default function ScanDetailPage() {
                   downloadedAt={scan.trivy_java_db_downloaded_at}
                 />
               </div>
+            </div>
+          )}
+
+          {fullImageConfig && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Image metadata</p>
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                <DetailBlock label="Created" value={imageCreated} />
+                <DetailBlock label="Author" value={imageAuthor} />
+                <DetailBlock label="Docker version" value={imageDockerVersion} />
+                <DetailBlock label="User" value={imageUser} mono />
+                <DetailBlock label="Working directory" value={imageWorkingDir} mono />
+                <DetailBlock label="Entrypoint" value={imageEntrypoint.join(' ')} mono />
+              </div>
+
+              {imageCommand.length > 0 && (
+                <DetailBlock label="Command" value={imageCommand.join(' ')} mono />
+              )}
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                <DetailBlock label="Environment variables" value={imageEnv.length > 0 ? `${imageEnv.length} captured` : '0 captured'} />
+                <DetailBlock label="Labels" value={imageLabelEntries.length > 0 ? `${imageLabelEntries.length} captured` : '0 captured'} />
+                <DetailBlock label="Exposed ports" value={imageExposedPorts.length > 0 ? imageExposedPorts.join(', ') : 'None declared'} mono={imageExposedPorts.length > 0} />
+              </div>
+
+              {imageVolumes.length > 0 && (
+                <DetailBlock label="Declared volumes" value={imageVolumes.join(', ')} mono />
+              )}
+
+              {imageEnv.length > 0 && (
+                <details className="glass-panel rounded-xl px-4 py-4">
+                  <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                    Environment
+                  </summary>
+                  <pre className="mt-3 overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    {imageEnv.join('\n')}
+                  </pre>
+                </details>
+              )}
+
+              {imageLabelEntries.length > 0 && (
+                <details className="glass-panel rounded-xl px-4 py-4">
+                  <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                    Labels
+                  </summary>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {imageLabelEntries.map(([key, value]) => (
+                      <div key={key} className="rounded-xl p-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{key}</p>
+                        <p className="mt-2 break-all font-mono text-xs text-zinc-700 dark:text-zinc-300">{value || '—'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+
+              <details className="glass-panel rounded-xl px-4 py-4">
+                <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  Raw image config
+                </summary>
+                <pre className="mt-3 overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  {JSON.stringify(fullImageConfig, null, 2)}
+                </pre>
+              </details>
             </div>
           )}
 
@@ -1412,6 +1569,13 @@ export default function ScanDetailPage() {
           )}
         </div>
       )}
+
+      <VulnerabilityDetailsModal
+        vulnerability={selectedVulnerability}
+        state={vulnerabilityDetailsModal}
+        onClose={() => vulnerabilityDetailsModal.close()}
+        loadContextAnalysis={(vulnerability) => getVulnerabilityContextAnalysis(id, vulnerability.id)}
+      />
     </div>
   );
 }

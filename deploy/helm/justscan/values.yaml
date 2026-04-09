@@ -1,13 +1,20 @@
 # Default values for justscan.
 # Override any value with --set or a custom values file.
 
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+# - name: ghcr-creds
+
 # ------------------------------------------------------------------
 # Backend
 # ------------------------------------------------------------------
 backend:
   image:
     repository: ghcr.io/justlabv1/justscan
-    tag: backend-latest
+    # When empty, the chart defaults to backend-<Chart.appVersion>.
+    tag: ""
     pullPolicy: IfNotPresent
 
   replicaCount: 1
@@ -43,6 +50,8 @@ backend:
 
     scanner:
       trivyPath: trivy
+      grypePath: grype
+      enableGrype: false
       timeout: 600
       concurrency: 2
       dbMaxAgeHours: 7
@@ -54,6 +63,7 @@ backend:
     # OIDC single sign-on (Keycloak, Authentik, Okta, Azure AD, …)
     oidc:
       enabled: false
+      debug: false
       # The base issuer URL of your OIDC provider (without /.well-known/openid-configuration)
       issuerUrl: ""
       clientId: ""
@@ -90,7 +100,7 @@ backend:
   secrets:
     jwtSecret: ""
     dbPassword: ""
-    # 64-character hex string. Generate with: openssl rand -hex 32
+    # Random 32-character string used to encrypt registry credentials.
     encryptionKey: ""
     # Required only when oidc.enabled=true
     oidcClientSecret: ""
@@ -111,6 +121,14 @@ backend:
     type: ClusterIP
     port: 8080
 
+  persistence:
+    enabled: false
+    existingClaim: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+    storageClass: ""
+
   # Additional environment variables (plain, non-secret)
   extraEnv: []
   # - name: BACKEND_SOME_VAR
@@ -122,7 +140,8 @@ backend:
 frontend:
   image:
     repository: ghcr.io/justlabv1/justscan
-    tag: frontend-latest
+    # When empty, the chart defaults to frontend-<Chart.appVersion>.
+    tag: ""
     pullPolicy: IfNotPresent
 
   replicaCount: 1
@@ -172,9 +191,9 @@ postgresql:
   auth:
     database: justscan
     username: justscan
-    # This password is also written to backend.secrets.dbPassword automatically
-    # when using the bundled PostgreSQL. When using an external DB, set
-    # backend.secrets.dbPassword directly.
+    # When postgresql.enabled=true the backend reads this password from the
+    # Bitnami subchart secret. When using an external DB, set
+    # backend.secrets.dbPassword directly instead.
     password: ""
     # existingSecret: ""  # Use a pre-existing secret for the postgres password
 
@@ -189,8 +208,8 @@ postgresql:
 # ------------------------------------------------------------------
 serviceAccount:
   create: true
+  name: ""
   annotations: {}
-  # name: ""  # Override to use an existing service account
 
 # ------------------------------------------------------------------
 # Pod config

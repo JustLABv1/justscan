@@ -468,7 +468,7 @@ function VulnTrendChart({ data, period, onPeriod }: {
           </div>
           <div>
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Avg. Findings per Scan</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Average vulnerabilities per completed scan, by day</p>
+            <p className="text-xs text-zinc-500 mt-0.5">Average vulnerabilities per finalized scan, by day</p>
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -502,7 +502,7 @@ function VulnTrendChart({ data, period, onPeriod }: {
       <div ref={containerRef} className="w-full">
       {!hasData ? (
         <div className="flex items-center justify-center text-sm text-zinc-500 py-10">
-          No completed scans in this period
+          No finalized scans in this period
         </div>
       ) : (
         <svg
@@ -931,7 +931,7 @@ export default function DashboardPage() {
         })}
         </div>
         <p className="text-[11px] text-zinc-500 mt-4 leading-5">
-        Findings averages below only count completed scans. Started-today activity stays here so the dashboard can show same-day work without pretending in-flight findings are final.
+        Findings widgets below count finalized results from completed scans and Xray policy-blocked scans that still imported findings. Started-today activity stays here so the dashboard can show same-day work without pretending in-flight findings are final.
         </p>
       </div>
       </div>
@@ -1007,7 +1007,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Vulnerability Landscape</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">Across all completed scans</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Across all finalized scan results</p>
             </div>
           </div>
           <div className="text-right">

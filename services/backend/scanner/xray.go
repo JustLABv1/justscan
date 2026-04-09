@@ -1460,12 +1460,8 @@ func persistXraySummaryFindings(ctx context.Context, db *bun.DB, scan *models.Sc
 	}
 
 	kbEntries := ExtractXrayKBEntries(summary)
-	if len(kbEntries) > 0 {
-		if err := upsertKBEntries(context.Background(), db, kbEntries); err != nil {
-			log.Warnf("Xray KB upsert failed for scan %s (non-fatal): %v", scan.ID, err)
-		} else {
-			log.Debugf("Upserted %d Xray KB entries for scan %s", len(kbEntries), scan.ID)
-		}
+	if err := upsertXrayKBEntries(ctx, db, scan, kbEntries, "Xray"); err != nil {
+		return err
 	}
 
 	severityCounts := CountSeverities(vulns)
@@ -1498,10 +1494,8 @@ func persistXrayViolationFindings(ctx context.Context, db *bun.DB, scan *models.
 	}
 
 	kbEntries := ExtractXrayViolationKBEntries(response)
-	if len(kbEntries) > 0 {
-		if err := upsertKBEntries(context.Background(), db, kbEntries); err != nil {
-			log.Warnf("Xray violation fallback KB upsert failed for scan %s (non-fatal): %v", scan.ID, err)
-		}
+	if err := upsertXrayKBEntries(ctx, db, scan, kbEntries, "Xray violation fallback"); err != nil {
+		return err
 	}
 
 	severityCounts := CountSeverities(vulns)
@@ -1551,6 +1545,11 @@ func persistXrayCycloneDXFallback(ctx context.Context, db *bun.DB, scan *models.
 		return 0, fmt.Errorf("failed to store Xray vulnerabilities from fallback export: %w", err)
 	}
 
+	kbEntries := ExtractCycloneDXKBEntries(sbom)
+	if err := upsertXrayKBEntries(ctx, db, scan, kbEntries, "Xray CycloneDX fallback"); err != nil {
+		return 0, err
+	}
+
 	severityCounts := CountSeverities(vulns)
 	scan.CriticalCount = severityCounts[models.SeverityCritical]
 	scan.HighCount = severityCounts[models.SeverityHigh]
@@ -1567,6 +1566,18 @@ func persistXrayCycloneDXFallback(ctx context.Context, db *bun.DB, scan *models.
 
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Stored %d Xray vulnerabilities from %s.", len(vulns), exportPath))
 	return len(vulns), nil
+}
+
+func upsertXrayKBEntries(ctx context.Context, db *bun.DB, scan *models.Scan, entries []models.VulnKBEntry, source string) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	if err := upsertKBEntries(ctx, db, entries); err != nil {
+		log.Warnf("%s KB upsert failed for scan %s (non-fatal): %v", source, scan.ID, err)
+		return nil
+	}
+	log.Debugf("Upserted %d %s KB entries for scan %s", len(entries), source, scan.ID)
+	return nil
 }
 
 func persistXraySBOMComponents(ctx context.Context, db *bun.DB, scan *models.Scan, client *xrayClient, artifactPath, repoPath string) error {
@@ -1877,6 +1888,81 @@ func ExtractXrayViolationKBEntries(response *xrayViolationsResponse) []models.Vu
 		entries = append(entries, *entry)
 	}
 	return entries
+}
+
+func ExtractCycloneDXKBEntries(sbom *TrivySBOMOutput) []models.VulnKBEntry {
+	if sbom == nil || len(sbom.Vulnerabilities) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]*models.VulnKBEntry)
+	for _, vulnerability := range sbom.Vulnerabilities {
+		vulnID := strings.TrimSpace(vulnerability.ID)
+		if vulnID == "" && vulnerability.Source != nil {
+			vulnID = strings.TrimSpace(vulnerability.Source.Name)
+		}
+		if vulnID == "" {
+			continue
+		}
+
+		severity, score, vector := cycloneDXVulnerabilityScore(vulnerability)
+		refs := cycloneDXKBReferences(vulnerability)
+
+		entry, exists := seen[vulnID]
+		if !exists {
+			seen[vulnID] = &models.VulnKBEntry{
+				VulnID:           vulnID,
+				Description:      strings.TrimSpace(vulnerability.Description),
+				Severity:         severity,
+				CVSSScore:        score,
+				CVSSVector:       vector,
+				References:       refs,
+				ExploitAvailable: kbRefsContainExploit(refs),
+			}
+			continue
+		}
+
+		if entry.Description == "" && strings.TrimSpace(vulnerability.Description) != "" {
+			entry.Description = strings.TrimSpace(vulnerability.Description)
+		}
+		if xraySeverityRank(severity) > xraySeverityRank(entry.Severity) {
+			entry.Severity = severity
+		}
+		if score > entry.CVSSScore {
+			entry.CVSSScore = score
+			entry.CVSSVector = vector
+		}
+		entry.References = mergeKBRefs(entry.References, refs)
+		entry.ExploitAvailable = entry.ExploitAvailable || kbRefsContainExploit(refs)
+	}
+
+	entries := make([]models.VulnKBEntry, 0, len(seen))
+	for _, entry := range seen {
+		entries = append(entries, *entry)
+	}
+	return entries
+}
+
+func cycloneDXKBReferences(vulnerability TrivySBOMVulnerability) []models.KBRef {
+	seen := make(map[string]bool)
+	refs := make([]models.KBRef, 0, len(vulnerability.Advisories)+1)
+	appendRef := func(url, source string) {
+		url = strings.TrimSpace(url)
+		source = strings.TrimSpace(source)
+		if url == "" || seen[url+"|"+source] {
+			return
+		}
+		seen[url+"|"+source] = true
+		refs = append(refs, models.KBRef{URL: url, Source: source})
+	}
+
+	for _, advisory := range vulnerability.Advisories {
+		appendRef(advisory.URL, "CycloneDX Advisory")
+	}
+	if vulnerability.Source != nil {
+		appendRef(vulnerability.Source.URL, strings.TrimSpace(vulnerability.Source.Name))
+	}
+	return refs
 }
 
 func isRetriableXrayScanArtifactError(err error) bool {

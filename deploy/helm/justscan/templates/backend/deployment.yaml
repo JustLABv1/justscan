@@ -24,13 +24,17 @@ spec:
         app.kubernetes.io/component: backend
     spec:
       serviceAccountName: {{ include "justscan.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
         - name: backend
-          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          image: {{ printf "%s:%s" .Values.backend.image.repository (include "justscan.backend.imageTag" .) | quote }}
           imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
           ports:
             - name: http
@@ -113,7 +117,12 @@ spec:
           configMap:
             name: {{ include "justscan.fullname" . }}-backend
         - name: data
+          {{- if .Values.backend.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "justscan.backend.persistence.claimName" . }}
+          {{- else }}
           emptyDir: {}
+          {{- end }}
 
       {{- with .Values.nodeSelector }}
       nodeSelector:

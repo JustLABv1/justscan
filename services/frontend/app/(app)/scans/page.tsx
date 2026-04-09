@@ -7,25 +7,27 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ImageRowSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import {
-    cancelScan,
-    createScans,
-    deleteScan,
-    ImageSummary,
-    listRegistries,
-    listScanImages,
-    listTags,
-    Registry,
-    Tag
+  cancelScan,
+  createScans,
+  deleteScan,
+  getDefaultScannerCapabilities,
+  ImageSummary,
+  listRegistriesWithCapabilities,
+  listScanImages,
+  listTags,
+  RegistryWithHealth,
+  ScannerCapabilities,
+  Tag
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Checkbox, ListBox, Modal, Popover, Select, useOverlayState } from '@heroui/react';
 import {
-    ArrowDown01Icon,
-    ArrowRight01Icon,
-    FilterIcon,
-    GitCompareIcon,
-    PlusSignIcon,
-    Shield01Icon,
+  ArrowDown01Icon,
+  ArrowRight01Icon,
+  FilterIcon,
+  GitCompareIcon,
+  PlusSignIcon,
+  Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -80,7 +82,8 @@ export default function ScansPage() {
 
   // Available tags for bulk tagging
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
-  const [registries, setRegistries] = useState<Registry[]>([]);
+  const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
 
   // New scan form
   const [imageName, setImageName] = useState('');
@@ -121,7 +124,17 @@ export default function ScansPage() {
 
   useEffect(() => { load(page, imageFilter, statusFilter); }, [load, page]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { listTags().then(setAvailableTags).catch(() => {}); }, []);
-  useEffect(() => { listRegistries().then(setRegistries).catch(() => {}); }, []);
+  useEffect(() => {
+    listRegistriesWithCapabilities()
+      .then((response) => {
+        setRegistries(response.data);
+        setCapabilities(response.capabilities);
+      })
+      .catch(() => {});
+  }, []);
+
+  const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
+  const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
 
   // Auto-open new scan modal when navigated from sidebar CTA (?new=1)
   useEffect(() => {
@@ -168,6 +181,11 @@ export default function ScansPage() {
     e.preventDefault();
     setCreateError(''); setCreating(true);
     try {
+      if (xrayOnlyWithoutRegistries) {
+        setCreateError('Local Trivy scanning is disabled and no Artifactory Xray registry is configured yet. Add an Xray registry before starting scans.');
+        return;
+      }
+
       const requestedImages = [
         imageName.trim() ? `${imageName.trim()}${imageTag.trim() ? `:${imageTag.trim()}` : ''}` : '',
         ...additionalImages.split(/\r?\n/).map(line => line.trim()).filter(Boolean),
@@ -624,8 +642,8 @@ export default function ScansPage() {
                       </Select.Trigger>
                       <Select.Popover>
                         <ListBox>
-                          <ListBox.Item id="__auto__">Auto-match from image hostname</ListBox.Item>
-                          {registries.map(registry => (
+                          <ListBox.Item id="__auto__">{capabilities.enable_trivy ? 'Auto-match from image hostname' : 'Auto-match from configured Xray registries'}</ListBox.Item>
+                          {selectableRegistries.map(registry => (
                             <ListBox.Item key={registry.id} id={registry.id}>
                               {registry.name} · {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
                             </ListBox.Item>
@@ -634,8 +652,16 @@ export default function ScansPage() {
                       </Select.Popover>
                     </Select>
                     <p className="text-xs text-zinc-500">
-                      Leave this empty to let JustScan match a registry automatically from the image hostname.
+                      {capabilities.enable_trivy
+                        ? 'Leave this empty to let JustScan match a registry automatically from the image hostname.'
+                        : 'Local Trivy scanning is disabled. Auto-match only considers registries configured for Artifactory Xray.'}
                     </p>
+                    {!capabilities.enable_trivy && capabilities.local_scan_message && (
+                      <p className="text-xs" style={{ color: '#f59e0b' }}>{capabilities.local_scan_message}</p>
+                    )}
+                    {xrayOnlyWithoutRegistries && (
+                      <p className="text-xs" style={{ color: '#f87171' }}>No Xray-backed registry is available for this deployment yet.</p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
@@ -673,7 +699,7 @@ export default function ScansPage() {
                   Cancel
                 </button>
                 <button
-                  type="submit" form="create-scan-form" disabled={creating}
+                  type="submit" form="create-scan-form" disabled={creating || xrayOnlyWithoutRegistries}
                   className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
                   style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}
                 >

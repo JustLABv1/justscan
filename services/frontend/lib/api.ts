@@ -222,7 +222,12 @@ export const deleteComment = (commentId: string) =>
 
 // Registries
 export const listRegistries = () =>
-  req<{ data: RegistryWithHealth[] }>('GET', '/api/v1/registries/').then((r) => r.data ?? []);
+  req<RegistryListResponse>('GET', '/api/v1/registries/').then((r) => r.data ?? []);
+export const listRegistriesWithCapabilities = () =>
+  req<RegistryListResponse>('GET', '/api/v1/registries/').then((r) => ({
+    data: r.data ?? [],
+    capabilities: r.capabilities ?? getDefaultScannerCapabilities(),
+  }));
 export const createRegistry = (data: Partial<Registry>) =>
   req<Registry>('POST', '/api/v1/registries/', data);
 export const updateRegistry = (id: string, data: Partial<Registry>) =>
@@ -291,7 +296,7 @@ async function publicReq<T>(method: string, path: string, body?: unknown): Promi
 }
 
 export const getPublicSettings = () =>
-  publicReq<{ enabled: boolean; rate_limit_per_hour: number }>('GET', '/api/v1/public/settings');
+  publicReq<PublicSettings>('GET', '/api/v1/public/settings');
 
 export const createPublicScan = (image: string, tag: string, platform?: string) =>
   publicReq<Scan>('POST', '/api/v1/public/scans', { image, tag, platform });
@@ -850,7 +855,7 @@ export interface Scan {
   image_name: string;
   image_tag: string;
   image_digest: string;
-  scan_provider: 'trivy' | 'artifactory_xray';
+  scan_provider: ScanProvider;
   external_scan_id?: string;
   external_status?: string;
   current_step: string;
@@ -948,10 +953,60 @@ export interface Registry {
   xray_url?: string;
   xray_artifactory_id?: string;
   auth_type: 'none' | 'basic' | 'token' | 'aws_ecr';
-  scan_provider: 'trivy' | 'artifactory_xray';
+  scan_provider: ScanProvider;
   username: string;
   password?: string;
   created_at: string;
+}
+
+export type ScanProvider = 'trivy' | 'artifactory_xray';
+
+export interface ProviderCapability {
+  id: ScanProvider;
+  label: string;
+  enabled: boolean;
+  reason?: string;
+}
+
+export interface ScannerCapabilities {
+  enable_trivy: boolean;
+  enable_grype: boolean;
+  local_scan_message?: string;
+  providers: ProviderCapability[];
+}
+
+export interface RegistryListResponse {
+  data: RegistryWithHealth[];
+  capabilities?: ScannerCapabilities;
+}
+
+export interface PublicSettings {
+  enabled: boolean;
+  rate_limit_per_hour: number;
+  local_scan_available?: boolean;
+  disabled_reason?: string;
+}
+
+export function getDefaultScannerCapabilities(): ScannerCapabilities {
+  return {
+    enable_trivy: true,
+    enable_grype: true,
+    providers: [
+      { id: 'trivy', label: 'Trivy', enabled: true },
+      { id: 'artifactory_xray', label: 'Artifactory Xray', enabled: true },
+    ],
+  };
+}
+
+export function isProviderAvailable(
+  provider: ScanProvider | string | undefined | null,
+  capabilities?: ScannerCapabilities | null,
+): boolean {
+  const normalized = (provider ?? 'trivy') as ScanProvider;
+  if (normalized === 'artifactory_xray') {
+    return true;
+  }
+  return capabilities?.enable_trivy ?? true;
 }
 
 export interface WatchlistItem {
@@ -1022,6 +1077,9 @@ export interface ScannerHealthWorker {
 }
 
 export interface ScannerHealth {
+  local_scanner_enabled: boolean;
+  grype_enabled: boolean;
+  message?: string;
   generated_at: string;
   cache_root: string;
   max_allowed_age_hours: number;

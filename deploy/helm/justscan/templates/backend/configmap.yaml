@@ -28,6 +28,7 @@ data:
       {{- end }}
 
     scanner:
+      enable_trivy: {{ .Values.backend.config.scanner.enableTrivy }}
       trivy_path: {{ .Values.backend.config.scanner.trivyPath | quote }}
       grype_path: {{ .Values.backend.config.scanner.grypePath | quote }}
       enable_grype: {{ .Values.backend.config.scanner.enableGrype }}

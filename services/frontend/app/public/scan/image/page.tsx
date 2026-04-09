@@ -1,13 +1,13 @@
 'use client';
 import { Logo } from '@/components/logo';
-import { createPublicScan, getPublicScan, getPublicSettings, getToken, Scan } from '@/lib/api';
+import { createPublicScan, getPublicScan, getPublicSettings, getToken, PublicSettings, Scan } from '@/lib/api';
 import {
-    addToPublicHistory,
-    clearPublicHistory,
-    getPublicHistory,
-    PublicScanRecord,
-    timeAgo,
-    updatePublicHistoryEntry,
+  addToPublicHistory,
+  clearPublicHistory,
+  getPublicHistory,
+  PublicScanRecord,
+  timeAgo,
+  updatePublicHistoryEntry,
 } from '@/lib/publicScanHistory';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -126,7 +126,7 @@ export default function PublicImageScanPage() {
   const [platform, setPlatform] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [settings, setSettings] = useState<{ enabled: boolean; rate_limit_per_hour: number } | null>(null);
+  const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [history, setHistory] = useState<PublicScanRecord[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -137,7 +137,7 @@ export default function PublicImageScanPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     setIsLoggedIn(!!getToken());
-    getPublicSettings().then(setSettings).catch(() => setSettings({ enabled: true, rate_limit_per_hour: 5 }));
+    getPublicSettings().then(setSettings).catch(() => setSettings({ enabled: true, rate_limit_per_hour: 5, local_scan_available: true }));
     setHistory(getPublicHistory());
     inputRef.current?.focus();
   }, []);
@@ -203,7 +203,8 @@ export default function PublicImageScanPage() {
     setHistory([]);
   }
 
-  const isDisabled = settings !== null && !settings.enabled;
+  const isDisabled = settings !== null && (!settings.enabled || settings.local_scan_available === false);
+  const disabledMessage = settings?.disabled_reason || 'The administrator has disabled this feature. Please check back later.';
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--app-bg)', color: 'var(--text-primary)' }}>
@@ -312,7 +313,7 @@ export default function PublicImageScanPage() {
                 </span>
               </h1>
               <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                No account needed · {settings?.rate_limit_per_hour ?? 5} free scans per hour · Powered by Trivy
+                No account needed · {settings?.rate_limit_per_hour ?? 5} free scans per hour
               </p>
             </div>
           </div>
@@ -321,7 +322,7 @@ export default function PublicImageScanPage() {
           {isDisabled ? (
             <div className="rounded-2xl px-6 py-5 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
               <p className="text-red-500 dark:text-red-400 font-medium">Public scanning is temporarily disabled</p>
-              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>The administrator has disabled this feature. Please check back later.</p>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{disabledMessage}</p>
             </div>
           ) : (
             <form onSubmit={handleScan} className="space-y-2">

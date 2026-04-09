@@ -1,7 +1,8 @@
 'use client';
 import { Logo } from '@/components/logo';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
-import { ApiError, getSharedScan, getToken, listScans, listSharedVulnerabilities, rescanShared, Scan, Vulnerability } from '@/lib/api';
+import type { Scan, Vulnerability } from '@/lib/api';
+import { ApiError, getSharedScan, getSharedVulnerabilityContextAnalysis, getToken, listScans, listSharedVulnerabilities, rescanShared } from '@/lib/api';
 import { useOverlayState } from '@heroui/react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -555,6 +556,7 @@ export default function SharedScanPage() {
           vulnerability={selectedVulnerability}
           state={vulnerabilityDetailsModal}
           onClose={closeVulnerabilityDetails}
+          loadContextAnalysis={(vulnerability) => getSharedVulnerabilityContextAnalysis(token, vulnerability.id)}
         />
       </main>
     </div>

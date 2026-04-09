@@ -43,6 +43,12 @@ Access JustScan at:
    - Existing local accounts with matching email are auto-linked on first OIDC login.
 {{- end }}
 
+{{- if not .Values.backend.persistence.enabled }}
+
+4. Backend persistence is disabled.
+  Trivy cache data will be rebuilt after pod restarts unless you enable backend.persistence.
+{{- end }}
+
 {{- if not .Values.backend.secrets.existingSecret }}
 {{- if or (eq .Values.backend.secrets.jwtSecret "") (eq .Values.backend.secrets.encryptionKey "") }}
 
@@ -50,7 +56,7 @@ Access JustScan at:
    Set the following values before going to production:
 
    --set backend.secrets.jwtSecret=$(openssl rand -hex 32) \
-   --set backend.secrets.encryptionKey=$(openssl rand -hex 32) \
+  --set backend.secrets.encryptionKey=$(openssl rand -hex 16) \
    {{- if not .Values.postgresql.enabled }}
    --set backend.secrets.dbPassword=<your-db-password> \
    {{- end }}

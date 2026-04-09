@@ -368,6 +368,7 @@ helm install justscan deploy/helm/justscan \
 - `backend.secrets.dbPassword` is required when `postgresql.enabled=false` and you connect to an external PostgreSQL instance.
 - `backend.config.allowOrigins` must include the URL users open in their browser.
 - If `backend.config.oidc.enabled=true`, also set `backend.secrets.oidcClientSecret`, `backend.config.oidc.issuerUrl`, `backend.config.oidc.clientId`, and either `backend.config.oidc.redirectUri` or `ingress.enabled=true` with a valid host.
+- If your OIDC provider or another outbound HTTPS dependency uses a private or self-signed CA, set `backend.customCAs.configMapName` and/or `backend.customCAs.secretName` to mount PEM CA files into the backend container.
 - `backend.persistence.enabled=true` is recommended for production so Trivy DB and cache data survive pod restarts.
 
 ### Supported chart configuration
@@ -378,8 +379,43 @@ Important values exposed by the chart include:
 - `nameOverride`, `fullnameOverride`, and `serviceAccount.name` for release naming and service account control
 - `backend.config.scanner.trivyPath`, `backend.config.scanner.grypePath`, `backend.config.scanner.enableGrype`, `backend.config.scanner.timeout`, `backend.config.scanner.concurrency`, `backend.config.scanner.dbMaxAgeHours`, and `backend.config.scanner.enableOsvJavaAugmentation`
 - `backend.config.oidc.debug`, `backend.config.oidc.adminGroups`, `backend.config.oidc.adminRoles`, `backend.config.oidc.groupsClaim`, and `backend.config.oidc.rolesClaim`
+- `backend.customCAs.configMapName`, `backend.customCAs.secretName`, and `backend.customCAs.bundlePath` for custom trust anchors used by OIDC and other outbound TLS calls
 - `backend.persistence.existingClaim`, `backend.persistence.size`, and `backend.persistence.storageClass`
 - `frontend.config.apiUrl` if the frontend must call a different backend URL than the in-cluster service
+
+### Custom CA example
+
+If your OIDC provider uses a self-signed or private CA, create a ConfigMap or Secret with the PEM certificate and reference it from the chart.
+
+Example with a ConfigMap:
+
+```bash
+kubectl create configmap justscan-oidc-ca \
+  --from-file=oidc-ca.crt=./oidc-ca.crt \
+  --namespace justscan
+```
+
+```yaml
+backend:
+  customCAs:
+    configMapName: justscan-oidc-ca
+```
+
+Example with a Secret:
+
+```bash
+kubectl create secret generic justscan-oidc-ca \
+  --from-file=oidc-ca.crt=./oidc-ca.crt \
+  --namespace justscan
+```
+
+```yaml
+backend:
+  customCAs:
+    secretName: justscan-oidc-ca
+```
+
+The backend entrypoint builds a combined CA bundle from the system trust store plus the mounted files and exports it through `SSL_CERT_FILE` before JustScan starts. Restart the backend pod after updating the referenced ConfigMap or Secret.
 
 Show the full values schema:
 

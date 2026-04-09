@@ -121,6 +121,15 @@ backend:
     type: ClusterIP
     port: 8080
 
+  customCAs:
+    # Reference an existing ConfigMap and/or Secret containing PEM-encoded CA files.
+    # All keys are mounted as files and appended to a runtime CA bundle used via SSL_CERT_FILE.
+    configMapName: ""
+    configMapOptional: false
+    secretName: ""
+    secretOptional: false
+    bundlePath: /app/data/ca-certificates/custom-ca-bundle.crt
+
   persistence:
     enabled: false
     existingClaim: ""

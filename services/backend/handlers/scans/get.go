@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"justscan-backend/pkg/models"
+	"justscan-backend/scanner"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,6 +23,9 @@ func GetScan(db *bun.DB) gin.HandlerFunc {
 		if !ok {
 			return
 		}
+		if _, err := scanner.EnsureScanImageDigest(c.Request.Context(), db, scan); err != nil {
+			// Older Xray scans may need a best-effort digest backfill so suppression keys work.
+		}
 
 		// Load tags
 		var tags []models.Tag
@@ -32,6 +36,14 @@ func GetScan(db *bun.DB) gin.HandlerFunc {
 			Where("st.scan_id = ?", scanID).
 			Scan(c.Request.Context(), &tags) //nolint:errcheck
 		scan.Tags = tags
+
+		var stepLogs []models.ScanStepLog
+		db.NewSelect().
+			Model(&stepLogs).
+			Where("scan_id = ?", scanID).
+			OrderExpr("position ASC").
+			Scan(c.Request.Context()) //nolint:errcheck
+		scan.StepLogs = stepLogs
 
 		c.JSON(http.StatusOK, scan)
 	}

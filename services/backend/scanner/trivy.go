@@ -168,25 +168,32 @@ func RunScanWithRegistryRetry(ctx context.Context, db *bun.DB, scan *models.Scan
 	if err == nil || ctx.Err() != nil || !isRetriableTrivyRegistryError(err) {
 		return output, version, err
 	}
+	recordScanStepOutput(ctx, db, scan.ID, "Trivy hit a transient registry error. Warming the registry cache before retrying.")
 
 	registry, _, resolveErr := ResolveRegistryForScan(ctx, db, scan.ImageName, scan.RegistryID)
 	if resolveErr != nil {
 		log.Warnf("Failed to resolve registry for Trivy retry on scan %s: %v", scan.ID, resolveErr)
+		recordScanStepOutput(ctx, db, scan.ID, "Trivy retry could not resolve the registry context, so the original registry error is being returned.")
 		return nil, "", err
 	}
 	if registry == nil {
+		recordScanStepOutput(ctx, db, scan.ID, "Trivy retry could not find a registry configuration to warm, so the original registry error is being returned.")
 		return nil, "", err
 	}
 
 	if warmErr := warmRegistryImageForTrivyScan(ctx, registry, scan.ImageName, scan.ImageTag, platform); warmErr != nil {
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Registry cache warm-up failed before the Trivy retry: %v", warmErr))
 		return nil, "", fmt.Errorf("trivy scan hit a transient remote registry error, and registry cache warm-up failed: %w", warmErr)
 	}
 
 	log.Warnf("Retrying Trivy scan %s for %s:%s after warming registry cache", scan.ID, scan.ImageName, scan.ImageTag)
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Retrying the Trivy scan after warming the registry cache for %s:%s.", scan.ImageName, scan.ImageTag))
 	output, version, retryErr := RunScan(ctx, scan.ImageName, scan.ImageTag, envVars, platform, cacheDir)
 	if retryErr != nil {
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Trivy retry after registry warm-up failed: %v", retryErr))
 		return nil, "", fmt.Errorf("trivy retry after warming registry cache failed: %w", retryErr)
 	}
+	recordScanStepOutput(ctx, db, scan.ID, "Trivy retry succeeded after the registry cache warm-up.")
 	return output, version, nil
 }
 

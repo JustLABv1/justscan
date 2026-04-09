@@ -52,12 +52,17 @@ type StatusPageItem struct {
 	ImageTag              string     `json:"image_tag"`
 	LatestScanID          string     `json:"latest_scan_id"`
 	ScanStatus            string     `json:"scan_status"`
+	ExternalStatus        string     `json:"external_status,omitempty"`
+	ScanProvider          string     `json:"scan_provider,omitempty"`
+	CurrentStep           string     `json:"current_step,omitempty"`
+	StartedAt             *time.Time `json:"started_at,omitempty"`
 	Status                string     `json:"status"`
 	ErrorMessage          string     `json:"error_message,omitempty"`
 	CriticalCount         int        `json:"critical_count"`
 	HighCount             int        `json:"high_count"`
 	MediumCount           int        `json:"medium_count"`
 	LowCount              int        `json:"low_count"`
+	PreviousScanID        *string    `json:"previous_scan_id,omitempty"`
 	PreviousCriticalCount *int       `json:"previous_critical_count,omitempty"`
 	PreviousHighCount     *int       `json:"previous_high_count,omitempty"`
 	PreviousMediumCount   *int       `json:"previous_medium_count,omitempty"`
@@ -70,6 +75,26 @@ type StatusPageItem struct {
 	DeltaHighCount        *int       `json:"delta_high_count,omitempty"`
 	DeltaMediumCount      *int       `json:"delta_medium_count,omitempty"`
 	DeltaLowCount         *int       `json:"delta_low_count,omitempty"`
+}
+
+type statusPageScanSummary struct {
+	ScanID         string     `json:"scan_id"`
+	ImageName      string     `json:"image_name"`
+	ImageTag       string     `json:"image_tag"`
+	ScanStatus     string     `json:"scan_status"`
+	ExternalStatus string     `json:"external_status,omitempty"`
+	ScanProvider   string     `json:"scan_provider,omitempty"`
+	CurrentStep    string     `json:"current_step,omitempty"`
+	ErrorMessage   string     `json:"error_message,omitempty"`
+	CriticalCount  int        `json:"critical_count"`
+	HighCount      int        `json:"high_count"`
+	MediumCount    int        `json:"medium_count"`
+	LowCount       int        `json:"low_count"`
+	StartedAt      *time.Time `json:"started_at,omitempty"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	ObservedAt     time.Time  `json:"observed_at"`
+	IsLatest       bool       `json:"is_latest"`
 }
 
 type statusPageResponse struct {
@@ -270,6 +295,73 @@ func ViewStatusPageBySlug(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
+func ViewStatusPageScanBySlug(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		page, ok := loadViewablePageBySlug(c, db)
+		if !ok {
+			return
+		}
+
+		scan, err := loadTrackedScanForPage(c, db, page, c.Param("scanId"))
+		if err != nil {
+			status := http.StatusInternalServerError
+			switch err.Error() {
+			case "invalid scan ID":
+				status = http.StatusBadRequest
+			case "scan not found", "status page item not found":
+				status = http.StatusNotFound
+			}
+			c.JSON(status, gin.H{"error": err.Error()})
+			return
+		}
+
+		latestScanID, _ := latestTrackedScanID(c.Request.Context(), db, page.OwnerUserID, scan.ImageName, scan.ImageTag)
+		c.JSON(http.StatusOK, buildStatusPageScanSummary(scan, latestScanID))
+	}
+}
+
+func ViewStatusPageScanHistoryBySlug(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		page, ok := loadViewablePageBySlug(c, db)
+		if !ok {
+			return
+		}
+
+		scan, err := loadTrackedScanForPage(c, db, page, c.Param("scanId"))
+		if err != nil {
+			status := http.StatusInternalServerError
+			switch err.Error() {
+			case "invalid scan ID":
+				status = http.StatusBadRequest
+			case "scan not found", "status page item not found":
+				status = http.StatusNotFound
+			}
+			c.JSON(status, gin.H{"error": err.Error()})
+			return
+		}
+
+		var scans []models.Scan
+		if err := db.NewSelect().
+			Model(&scans).
+			Where("user_id = ?", page.OwnerUserID).
+			Where("image_name = ?", scan.ImageName).
+			Where("image_tag = ?", scan.ImageTag).
+			OrderExpr("created_at DESC").
+			Limit(10).
+			Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan history"})
+			return
+		}
+
+		items := make([]statusPageScanSummary, 0, len(scans))
+		for i := range scans {
+			items = append(items, buildStatusPageScanSummary(&scans[i], scans[0].ID))
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": items})
+	}
+}
+
 func ViewStatusPageItemVulnerabilitiesBySlug(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		page, ok := loadViewablePageBySlug(c, db)
@@ -277,28 +369,16 @@ func ViewStatusPageItemVulnerabilitiesBySlug(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		items, err := loadStatusPageItems(c, db, page)
+		scan, err := loadTrackedScanForPage(c, db, page, c.Param("scanId"))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load status page items"})
-			return
-		}
-
-		scanIDParam := c.Param("scanId")
-		var matched *StatusPageItem
-		for i := range items {
-			if items[i].LatestScanID == scanIDParam {
-				matched = &items[i]
-				break
+			status := http.StatusInternalServerError
+			switch err.Error() {
+			case "invalid scan ID":
+				status = http.StatusBadRequest
+			case "scan not found", "status page item not found":
+				status = http.StatusNotFound
 			}
-		}
-		if matched == nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "status page item not found"})
-			return
-		}
-
-		scanID, err := uuid.Parse(scanIDParam)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+			c.JSON(status, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -337,7 +417,7 @@ func ViewStatusPageItemVulnerabilitiesBySlug(db *bun.DB) gin.HandlerFunc {
 
 		var vulns []models.Vulnerability
 		q := db.NewSelect().Model(&vulns).
-			Where("scan_id = ?", scanID).
+			Where("scan_id = ?", scan.ID).
 			OrderExpr(orderExpr).
 			Limit(limit).
 			Offset(offset)
@@ -480,10 +560,15 @@ func loadStatusPageItems(c *gin.Context, db *bun.DB, page *models.StatusPage) ([
 	query := `
 WITH ranked AS (
     SELECT
+		s.id::text AS scan_id,
         s.id::text AS latest_scan_id,
         s.image_name,
         s.image_tag,
         s.status AS scan_status,
+		s.external_status,
+		s.scan_provider,
+		s.current_step,
+		s.started_at,
         s.error_message,
         s.critical_count,
         s.high_count,
@@ -500,6 +585,7 @@ latest AS (
 ),
 previous AS (
     SELECT
+		scan_id AS previous_scan_id,
         image_name,
         image_tag,
         critical_count AS previous_critical_count,
@@ -515,12 +601,17 @@ SELECT
     l.image_tag,
     l.latest_scan_id,
     l.scan_status,
+		l.external_status,
+		l.scan_provider,
+		l.current_step,
+		l.started_at,
     l.error_message,
     l.critical_count,
     l.high_count,
     l.medium_count,
     l.low_count,
     COALESCE(l.completed_at, l.created_at) AS observed_at,
+		p.previous_scan_id,
     p.previous_critical_count,
     p.previous_high_count,
     p.previous_medium_count,
@@ -542,22 +633,32 @@ ORDER BY l.image_name ASC, l.image_tag ASC`
 	patternItems := make([]StatusPageItem, 0)
 	for rows.Next() {
 		var item StatusPageItem
+		var externalStatus sql.NullString
+		var scanProvider sql.NullString
+		var currentStep sql.NullString
+		var errorMessage sql.NullString
 		var prevCritical sql.NullInt64
 		var prevHigh sql.NullInt64
 		var prevMedium sql.NullInt64
 		var prevLow sql.NullInt64
+		var previousScanID sql.NullString
 		var previousScanAt sql.NullTime
 		if err := rows.Scan(
 			&item.ImageName,
 			&item.ImageTag,
 			&item.LatestScanID,
 			&item.ScanStatus,
-			&item.ErrorMessage,
+			&externalStatus,
+			&scanProvider,
+			&currentStep,
+			&item.StartedAt,
+			&errorMessage,
 			&item.CriticalCount,
 			&item.HighCount,
 			&item.MediumCount,
 			&item.LowCount,
 			&item.ObservedAt,
+			&previousScanID,
 			&prevCritical,
 			&prevHigh,
 			&prevMedium,
@@ -565,6 +666,19 @@ ORDER BY l.image_name ASC, l.image_tag ASC`
 			&previousScanAt,
 		); err != nil {
 			return nil, err
+		}
+
+		if externalStatus.Valid {
+			item.ExternalStatus = externalStatus.String
+		}
+		if scanProvider.Valid {
+			item.ScanProvider = scanProvider.String
+		}
+		if currentStep.Valid {
+			item.CurrentStep = currentStep.String
+		}
+		if errorMessage.Valid {
+			item.ErrorMessage = errorMessage.String
 		}
 
 		item.FreshnessHours = int64(now.Sub(item.ObservedAt).Hours())
@@ -596,6 +710,10 @@ ORDER BY l.image_name ASC, l.image_tag ASC`
 		if previousScanAt.Valid {
 			value := previousScanAt.Time
 			item.PreviousScanAt = &value
+		}
+		if previousScanID.Valid {
+			value := previousScanID.String
+			item.PreviousScanID = &value
 		}
 
 		if page.IncludeAllTags {
@@ -646,6 +764,9 @@ ORDER BY l.image_name ASC, l.image_tag ASC`
 }
 
 func deriveStatus(staleAfterHours int, item StatusPageItem) string {
+	if item.ScanStatus == models.ScanStatusFailed && item.ExternalStatus == models.ScanExternalStatusBlockedByXrayPolicy {
+		return models.ScanExternalStatusBlockedByXrayPolicy
+	}
 	if item.ScanStatus == models.ScanStatusFailed {
 		return "failed"
 	}
@@ -659,6 +780,101 @@ func deriveStatus(staleAfterHours int, item StatusPageItem) string {
 		return "degraded"
 	}
 	return "healthy"
+}
+
+func loadTrackedScanForPage(c *gin.Context, db *bun.DB, page *models.StatusPage, scanIDParam string) (*models.Scan, error) {
+	if err := hydratePageRelations(c, db, page, true); err != nil {
+		return nil, err
+	}
+
+	scanID, err := uuid.Parse(scanIDParam)
+	if err != nil {
+		return nil, fmt.Errorf("invalid scan ID")
+	}
+
+	scan := &models.Scan{}
+	if err := db.NewSelect().
+		Model(scan).
+		Where("id = ?", scanID).
+		Where("user_id = ?", page.OwnerUserID).
+		Scan(c.Request.Context()); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("scan not found")
+		}
+		return nil, err
+	}
+
+	tracked, err := statusPageIncludesImage(page, scan.ImageName, scan.ImageTag)
+	if err != nil {
+		return nil, err
+	}
+	if !tracked {
+		return nil, fmt.Errorf("status page item not found")
+	}
+
+	return scan, nil
+}
+
+func statusPageIncludesImage(page *models.StatusPage, imageName, imageTag string) (bool, error) {
+	if page.IncludeAllTags {
+		return true, nil
+	}
+
+	for _, target := range page.Targets {
+		if target.ImageName == imageName && target.ImageTag == imageTag {
+			return true, nil
+		}
+	}
+
+	compiledPatterns, err := compileStatusPagePatterns(page.ImagePatterns)
+	if err != nil {
+		return false, err
+	}
+
+	return matchesStatusPagePatterns(compiledPatterns, imageName, imageTag), nil
+}
+
+func latestTrackedScanID(ctx context.Context, db *bun.DB, ownerUserID uuid.UUID, imageName, imageTag string) (uuid.UUID, error) {
+	var latestID uuid.UUID
+	if err := db.NewSelect().
+		Model((*models.Scan)(nil)).
+		Column("id").
+		Where("user_id = ?", ownerUserID).
+		Where("image_name = ?", imageName).
+		Where("image_tag = ?", imageTag).
+		OrderExpr("created_at DESC").
+		Limit(1).
+		Scan(ctx, &latestID); err != nil {
+		return uuid.Nil, err
+	}
+	return latestID, nil
+}
+
+func buildStatusPageScanSummary(scan *models.Scan, latestScanID uuid.UUID) statusPageScanSummary {
+	observedAt := scan.CreatedAt
+	if scan.CompletedAt != nil {
+		observedAt = *scan.CompletedAt
+	}
+
+	return statusPageScanSummary{
+		ScanID:         scan.ID.String(),
+		ImageName:      scan.ImageName,
+		ImageTag:       scan.ImageTag,
+		ScanStatus:     scan.Status,
+		ExternalStatus: scan.ExternalStatus,
+		ScanProvider:   scan.ScanProvider,
+		CurrentStep:    scan.CurrentStep,
+		ErrorMessage:   scan.ErrorMessage,
+		CriticalCount:  scan.CriticalCount,
+		HighCount:      scan.HighCount,
+		MediumCount:    scan.MediumCount,
+		LowCount:       scan.LowCount,
+		StartedAt:      scan.StartedAt,
+		CompletedAt:    scan.CompletedAt,
+		CreatedAt:      scan.CreatedAt,
+		ObservedAt:     observedAt,
+		IsLatest:       latestScanID != uuid.Nil && scan.ID == latestScanID,
+	}
 }
 
 func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.StatusPage, []models.StatusPageTarget, []models.StatusPageUpdate, error) {

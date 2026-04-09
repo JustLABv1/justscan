@@ -48,6 +48,13 @@ func GetSharedScan(db *bun.DB) gin.HandlerFunc {
 		if scan == nil {
 			return
 		}
+		var stepLogs []models.ScanStepLog
+		db.NewSelect().
+			Model(&stepLogs).
+			Where("scan_id = ?", scan.ID).
+			OrderExpr("position ASC").
+			Scan(c.Request.Context()) //nolint:errcheck
+		scan.StepLogs = stepLogs
 		c.JSON(http.StatusOK, scan)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"justscan-backend/pkg/models"
+	"justscan-backend/scanner"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -39,6 +40,9 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 		scan, _, _, ok := LoadAuthorizedScan(c, db, scanID)
 		if !ok {
 			return
+		}
+		if _, err := scanner.EnsureScanImageDigest(c.Request.Context(), db, scan); err != nil {
+			// Leave the response usable even if digest backfill is unavailable.
 		}
 
 		// Sorting

@@ -58,6 +58,7 @@ interface Scan {
   unknown_count: number;
   suppressed_count: number;
   trivy_version: string;
+  grype_version: string;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
@@ -439,7 +440,7 @@ export default function PrintReportPage() {
                 ['Status', formatStatusLabel(displayStatus)],
                 ...(opts.showStarted ? [['Started', formatDate(scan.started_at)]] : []),
                 ...(opts.showCompleted ? [['Completed', formatDate(scan.completed_at)]] : []),
-                ...(opts.showTrivyVersion ? [['Trivy Version', scan.trivy_version || '—']] : []),
+                ...(opts.showTrivyVersion ? [['Trivy Version', [scan.trivy_version ? `Trivy ${scan.trivy_version}` : '', scan.grype_version ? `Grype ${scan.grype_version}` : ''].filter(Boolean).join(' · ') || '—']] : []),
                 ...(imageLocation ? [['Registry / Location', imageLocation]] : []),
                 ...(scan.tags && scan.tags.length > 0 ? [['Tags', scan.tags.map((t) => t.name).join(', ')]] : []),
                 ...customFields.map(f => [f.label, f.value]),

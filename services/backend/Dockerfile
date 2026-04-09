@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
 FROM anchore/grype:latest AS grype-bin
 
@@ -18,10 +19,15 @@ FROM alpine:3.22 AS runner
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 WORKDIR /app
 
+ARG INCLUDE_TRIVY=true
+ARG INCLUDE_GRYPE=true
+
 RUN apk add --no-cache ca-certificates
 
-COPY --from=trivy-bin /usr/local/bin/trivy /usr/local/bin/trivy
-COPY --from=grype-bin /grype /usr/local/bin/grype
+RUN --mount=type=bind,from=trivy-bin,source=/usr/local/bin/trivy,target=/tmp/trivy,ro \
+    --mount=type=bind,from=grype-bin,source=/grype,target=/tmp/grype,ro \
+    if [ "$INCLUDE_TRIVY" = "true" ]; then install -m 0755 /tmp/trivy /usr/local/bin/trivy; fi \
+    && if [ "$INCLUDE_TRIVY" = "true" ] && [ "$INCLUDE_GRYPE" = "true" ]; then install -m 0755 /tmp/grype /usr/local/bin/grype; fi
 COPY --from=builder /app/backend/justscan-backend /app/
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 

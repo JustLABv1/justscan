@@ -59,7 +59,7 @@ type StatusTone = {
 };
 
 const PROVIDER_LABELS: Record<string, string> = {
-	trivy: 'Local Trivy worker',
+	trivy: 'Built-in scanner',
 	artifactory_xray: 'Artifactory Xray',
 };
 
@@ -301,7 +301,7 @@ function providerSummary(scanProvider?: string | null): string {
 	if (scanProvider === 'artifactory_xray') {
 		return 'JustScan is following the external Artifactory/Xray pipeline and will import findings as soon as the provider publishes the artifact summary.';
 	}
-	return 'JustScan is executing the local Trivy worker flow and will publish the report after normalization, enrichment, and persistence finish.';
+	return 'JustScan is executing its built-in local scanner flow and will publish the report after normalization, enrichment, and persistence finish.';
 }
 
 type ProviderHeroModel = {

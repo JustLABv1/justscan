@@ -55,6 +55,7 @@ type LocalAuthConf struct {
 }
 
 type ScannerConf struct {
+	EnableTrivy               bool   `mapstructure:"enable_trivy"`
 	TrivyPath                 string `mapstructure:"trivy_path"`
 	GrypePath                 string `mapstructure:"grype_path"`
 	EnableGrype               bool   `mapstructure:"enable_grype"`
@@ -116,6 +117,7 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"database.name":                        "BACKEND_DATABASE_NAME",
 		"database.user":                        "BACKEND_DATABASE_USER",
 		"database.password":                    "BACKEND_DATABASE_PASSWORD",
+		"scanner.enable_trivy":                 "BACKEND_SCANNER_ENABLE_TRIVY",
 		"scanner.trivy_path":                   "BACKEND_SCANNER_TRIVY_PATH",
 		"scanner.grype_path":                   "BACKEND_SCANNER_GRYPE_PATH",
 		"scanner.enable_grype":                 "BACKEND_SCANNER_ENABLE_GRYPE",
@@ -163,6 +165,9 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 	if err := cm.viper.Unmarshal(&config); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
+	if err := cm.validate(&config); err != nil {
+		return err
+	}
 
 	// Store the config
 	cm.config = &config
@@ -203,6 +208,7 @@ func (cm *ConfigurationManager) setDefaults(config *RestfulConf) {
 	if config.Database.Password == "" {
 		config.Database.Password = "postgres"
 	}
+	config.Scanner.EnableTrivy = true
 	if config.Scanner.Timeout == 0 {
 		config.Scanner.Timeout = 600
 	}
@@ -227,6 +233,13 @@ func (cm *ConfigurationManager) setDefaults(config *RestfulConf) {
 	if !cm.viper.IsSet("local_auth.enabled") {
 		config.LocalAuth.Enabled = true
 	}
+}
+
+func (cm *ConfigurationManager) validate(config *RestfulConf) error {
+	if !config.Scanner.EnableTrivy && config.Scanner.EnableGrype {
+		return fmt.Errorf("invalid scanner configuration: enable_grype requires enable_trivy=true")
+	}
+	return nil
 }
 
 // GetConfig returns a copy of the current configuration

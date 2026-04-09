@@ -1,33 +1,35 @@
 'use client';
 import { useToast } from '@/components/toast';
 import {
-    createHelmScans,
-    createShare,
-    extractHelmImages,
-    getTokenType,
-    HelmExtractResponse,
-    HelmScanRunSummary,
-    listHelmScanRuns,
-    listRegistries,
-    listTags,
-    Registry,
-    Tag,
+  createHelmScans,
+  createShare,
+  extractHelmImages,
+  getDefaultScannerCapabilities,
+  getTokenType,
+  HelmExtractResponse,
+  HelmScanRunSummary,
+  listHelmScanRuns,
+  listRegistriesWithCapabilities,
+  listTags,
+  RegistryWithHealth,
+  ScannerCapabilities,
+  Tag,
 } from '@/lib/api';
 import {
-    createEditableHelmImages,
-    EditableHelmImage,
-    getHelmImageSourceLabel,
-    parseHelmImageRef,
+  createEditableHelmImages,
+  EditableHelmImage,
+  getHelmImageSourceLabel,
+  parseHelmImageRef,
 } from '@/lib/helm-image-overrides';
 import { timeAgo } from '@/lib/time';
 import { ListBox, Select } from '@heroui/react';
 import {
-    ArrowLeft01Icon,
-    CheckmarkSquare02Icon,
-    Globe02Icon,
-    PackageIcon,
-    Refresh01Icon,
-    SquareIcon,
+  ArrowLeft01Icon,
+  CheckmarkSquare02Icon,
+  Globe02Icon,
+  PackageIcon,
+  Refresh01Icon,
+  SquareIcon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -72,7 +74,8 @@ export default function HelmPage() {
   const [platform, setPlatform] = useState('');
   const [registryId, setRegistryId] = useState('');
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
-  const [registries, setRegistries] = useState<Registry[]>([]);
+  const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [scanning, setScanning] = useState(false);
   const [makePublic, setMakePublic] = useState(false);
@@ -84,6 +87,8 @@ export default function HelmPage() {
   const isOCI = chartURL.trim().startsWith('oci://');
   const selectedImages = editableImages.filter((img) => selected.has(img.id));
   const hasInvalidSelection = selectedImages.some((img) => img.edited_ref.trim() === '');
+  const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
+  const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
 
   const loadTags = useCallback(async () => {
     try {
@@ -109,7 +114,12 @@ export default function HelmPage() {
     setIsAdmin(getTokenType() === 'admin');
     loadTags();
     loadHistory();
-    listRegistries().then(setRegistries).catch(() => {});
+    listRegistriesWithCapabilities()
+      .then((response) => {
+        setRegistries(response.data);
+        setCapabilities(response.capabilities);
+      })
+      .catch(() => {});
   }, [loadHistory, loadTags]);
 
   async function handleExtract(e: React.FormEvent) {
@@ -147,6 +157,10 @@ export default function HelmPage() {
     if (!extracted || selected.size === 0) return;
     if (hasInvalidSelection) {
       toast.error('Each selected image needs a non-empty image reference');
+      return;
+    }
+    if (xrayOnlyWithoutRegistries) {
+      toast.error('Local Trivy scanning is disabled and no Artifactory Xray registry is configured yet.');
       return;
     }
 
@@ -248,6 +262,14 @@ export default function HelmPage() {
         <div
           className="glass-panel rounded-2xl p-6 space-y-5"
         >
+          {!capabilities.enable_trivy && (
+            <div className="rounded-xl px-4 py-3 text-sm"
+              style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)', color: 'var(--text-secondary)' }}>
+              <p className="font-medium text-zinc-800 dark:text-zinc-100">Local Trivy scanning is disabled.</p>
+              <p className="mt-1 text-zinc-600 dark:text-zinc-400">Helm runs can still be queued through Artifactory Xray-backed registries.</p>
+              {capabilities.local_scan_message && <p className="mt-1 text-zinc-600 dark:text-zinc-400">{capabilities.local_scan_message}</p>}
+            </div>
+          )}
           <form onSubmit={handleExtract} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
@@ -376,8 +398,8 @@ export default function HelmPage() {
                 </Select.Trigger>
                 <Select.Popover>
                   <ListBox>
-                    <ListBox.Item id="__auto__">Auto-match from image hostname</ListBox.Item>
-                    {registries.map((registry) => (
+                    <ListBox.Item id="__auto__">{capabilities.enable_trivy ? 'Auto-match from image hostname' : 'Auto-match from configured Xray registries'}</ListBox.Item>
+                    {selectableRegistries.map((registry) => (
                       <ListBox.Item key={registry.id} id={registry.id}>
                         {registry.name} · {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
                       </ListBox.Item>
@@ -386,6 +408,14 @@ export default function HelmPage() {
                 </Select.Popover>
               </Select>
             </div>
+
+            {!capabilities.enable_trivy && (
+              <p className="text-xs" style={{ color: '#f59e0b' }}>
+                {xrayOnlyWithoutRegistries
+                  ? 'No Artifactory Xray registry is configured yet, so this Helm run cannot be queued until one is added.'
+                  : 'Only Artifactory Xray-backed registries are available for this deployment.'}
+              </p>
+            )}
 
             <div className="flex items-center gap-2 min-w-[200px]">
               <label className="text-xs text-zinc-500 whitespace-nowrap">Platform</label>
@@ -536,7 +566,7 @@ export default function HelmPage() {
             <button
               type="button"
               onClick={handleScan}
-              disabled={scanning || selected.size === 0 || hasInvalidSelection}
+              disabled={scanning || selected.size === 0 || hasInvalidSelection || xrayOnlyWithoutRegistries}
               className="px-5 py-2.5 text-sm font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',

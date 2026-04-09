@@ -997,6 +997,14 @@ export interface DashboardStats {
   recent_scans: Scan[] | null;
   top_images: { image_name: string; count: number }[] | null;
   watchlist_count: number;
+  operations: DashboardOperations;
+}
+
+export interface DashboardOperations {
+  blocked_policy_count: number;
+  active_xray_count: number;
+  active_xray_step_counts: Record<string, number>;
+  active_xray_scans: Scan[] | null;
 }
 
 export interface ScannerHealthWorker {

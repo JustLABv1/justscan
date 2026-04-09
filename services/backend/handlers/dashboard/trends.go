@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -18,6 +19,8 @@ type scanTrendRow struct {
 func GetTrends(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
+		now := time.Now().UTC()
+		cutoff := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -29)
 
 		var rows []scanTrendRow
 		db.NewSelect().
@@ -26,7 +29,7 @@ func GetTrends(db *bun.DB) gin.HandlerFunc {
 			ColumnExpr("COUNT(*) AS total").
 			ColumnExpr("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed").
 			ColumnExpr("SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed").
-			Where("created_at >= NOW() - INTERVAL '30 days'").
+			Where("created_at >= ?", cutoff).
 			GroupExpr("date").
 			OrderExpr("date ASC").
 			Scan(ctx, &rows) //nolint:errcheck

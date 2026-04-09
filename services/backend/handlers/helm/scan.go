@@ -100,6 +100,11 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
+			provider, err := scanner.ProviderForRegistry(registry)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 
 			normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(img.Name, img.Tag, registry)
 			scan := models.Scan{
@@ -114,7 +119,7 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				HelmChartName:    normalizedChartName,
 				HelmChartVersion: req.ChartVersion,
 				HelmSourcePath:   img.SourcePath,
-				ScanProvider:     scanner.ProviderForRegistry(registry),
+				ScanProvider:     provider,
 			}
 			if registry != nil {
 				scan.RegistryID = &registry.ID

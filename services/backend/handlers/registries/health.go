@@ -114,6 +114,9 @@ func CheckRegistryHealth(ctx context.Context, registry *models.Registry) (string
 		}
 		return "healthy", "Xray ping succeeded", now
 	}
+	if err := scanner.ValidateProviderSelection(registry.ScanProvider); err != nil {
+		return "unknown", err.Error(), now
+	}
 
 	decryptedPassword := ""
 	if registry.Password != "" {

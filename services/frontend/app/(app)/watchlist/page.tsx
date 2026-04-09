@@ -4,8 +4,8 @@ import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import {
-    createWatchlistItem, deleteWatchlistItem, listRegistries, listWatchlist,
-    Registry, triggerWatchlistScan, updateWatchlistItem, WatchlistItem,
+  createWatchlistItem, deleteWatchlistItem, getDefaultScannerCapabilities, listRegistriesWithCapabilities, listWatchlist,
+  RegistryWithHealth, ScannerCapabilities, triggerWatchlistScan, updateWatchlistItem, WatchlistItem,
 } from '@/lib/api';
 import { cronToHuman } from '@/lib/cron';
 import { timeAgo } from '@/lib/time';
@@ -18,7 +18,8 @@ const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:rin
 
 export default function WatchlistPage() {
   const [items, setItems] = useState<WatchlistItem[]>([]);
-  const [registries, setRegistries] = useState<Registry[]>([]);
+  const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<WatchlistItem | null>(null);
@@ -41,7 +42,19 @@ export default function WatchlistPage() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); listRegistries().then(setRegistries).catch(() => {}); }, [load]);
+  useEffect(() => {
+    load();
+    listRegistriesWithCapabilities()
+      .then((response) => {
+        setRegistries(response.data);
+        setCapabilities(response.capabilities);
+      })
+      .catch(() => {});
+  }, [load]);
+
+  const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
+  const registryOptions = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy || registry.id === registryId);
+  const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
 
   function openCreate() {
     setEditing(null); setImageName(''); setImageTag('latest'); setSchedule('0 2 * * *');
@@ -55,6 +68,10 @@ export default function WatchlistPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setFormError(''); setSaving(true);
     try {
+      if (xrayOnlyWithoutRegistries) {
+        setFormError('Local Trivy scanning is disabled and no Artifactory Xray registry is configured yet.');
+        return;
+      }
       const data = { image_name: imageName, image_tag: imageTag, schedule, enabled, ...(registryId ? { registry_id: registryId } : {}) };
       if (editing) { await updateWatchlistItem(editing.id, data); toast.success('Watchlist item updated'); }
       else { await createWatchlistItem(data); toast.success('Added to watchlist'); }
@@ -99,6 +116,15 @@ export default function WatchlistPage() {
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm"
           style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>{error}</div>
+      )}
+
+      {!capabilities.enable_trivy && (
+        <div className="rounded-xl px-4 py-3 text-sm"
+          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)', color: 'var(--text-secondary)' }}>
+          <p className="font-medium text-zinc-800 dark:text-zinc-100">Local Trivy scanning is disabled.</p>
+          <p className="mt-1 text-zinc-600 dark:text-zinc-400">Scheduled scans must target Artifactory Xray-backed registries.</p>
+          {capabilities.local_scan_message && <p className="mt-1 text-zinc-600 dark:text-zinc-400">{capabilities.local_scan_message}</p>}
+        </div>
       )}
 
       {loading ? (
@@ -229,7 +255,7 @@ export default function WatchlistPage() {
                       value={schedule} onChange={(e) => setSchedule(e.target.value)} required />
                     <p className="text-xs text-zinc-500">e.g. <code className="text-zinc-400 dark:text-zinc-500">0 2 * * *</code> = daily at 2 am</p>
                   </div>
-                  {registries.length > 0 && (
+                  {registryOptions.length > 0 && (
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Registry <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span></label>
                       <Select selectedKey={registryId} onSelectionChange={k => setRegistryId(String(k === '__none__' ? '' : k))}>
@@ -240,10 +266,17 @@ export default function WatchlistPage() {
                         <Select.Popover>
                           <ListBox>
                             <ListBox.Item id="__none__">Public / Docker Hub</ListBox.Item>
-                            {registries.map((r) => <ListBox.Item key={r.id} id={r.id}>{r.name}</ListBox.Item>)}
+                            {registryOptions.map((r) => <ListBox.Item key={r.id} id={r.id} isDisabled={!capabilities.enable_trivy && r.scan_provider !== 'artifactory_xray' && r.id !== registryId}>{r.name}</ListBox.Item>)}
                           </ListBox>
                         </Select.Popover>
                       </Select>
+                      {!capabilities.enable_trivy && (
+                        <p className="text-xs" style={{ color: '#f59e0b' }}>
+                          {xrayOnlyWithoutRegistries
+                            ? 'No Artifactory Xray registry is configured yet.'
+                            : 'Only Artifactory Xray-backed registries are available for scheduling.'}
+                        </p>
+                      )}
                     </div>
                   )}
                   <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -262,7 +295,7 @@ export default function WatchlistPage() {
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
                   style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>Cancel</button>
-                <button type="submit" form="watchlist-form" disabled={saving}
+                <button type="submit" form="watchlist-form" disabled={saving || xrayOnlyWithoutRegistries}
                   className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
                   style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}

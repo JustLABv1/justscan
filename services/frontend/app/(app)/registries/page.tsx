@@ -3,7 +3,7 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
-import { createRegistry, deleteRegistry, listRegistries, RegistryWithHealth, testRegistry, updateRegistry } from '@/lib/api';
+import { createRegistry, deleteRegistry, getDefaultScannerCapabilities, listRegistriesWithCapabilities, RegistryWithHealth, ScannerCapabilities, testRegistry, updateRegistry } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { Dropdown, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { MoreVerticalIcon, PlusSignIcon, ServerStack01Icon } from 'hugeicons-react';
@@ -47,6 +47,7 @@ function HealthBadge({ status, message }: { status: string; message: string }) {
 
 export default function RegistriesPage() {
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<RegistryWithHealth | null>(null);
@@ -67,15 +68,21 @@ export default function RegistriesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setRegistries(await listRegistries()); }
+    try {
+      const response = await listRegistriesWithCapabilities();
+      setRegistries(response.data);
+      setCapabilities(response.capabilities);
+    }
     catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
+  const trivyCapability = capabilities.providers.find((provider) => provider.id === 'trivy');
+
   function openCreate() {
-    setEditing(null); setName(''); setUrl(''); setXrayUrl(''); setXrayArtifactoryId('default'); setAuthType('none'); setScanProvider('trivy'); setUsername(''); setPassword(''); setFormError('');
+    setEditing(null); setName(''); setUrl(''); setXrayUrl(''); setXrayArtifactoryId('default'); setAuthType('none'); setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray'); setUsername(''); setPassword(''); setFormError('');
     modal.open();
   }
   function openEdit(r: RegistryWithHealth) {
@@ -145,6 +152,18 @@ export default function RegistriesPage() {
         <div className="rounded-xl px-4 py-3 text-sm"
           style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
           {error}
+        </div>
+      )}
+
+      {!capabilities.enable_trivy && (
+        <div className="rounded-2xl px-4 py-3 text-sm flex items-start gap-3"
+          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)', color: 'var(--text-secondary)' }}>
+          <div className="mt-0.5 w-2 h-2 rounded-full shrink-0" style={{ background: '#f59e0b' }} />
+          <div className="space-y-1">
+            <p className="font-medium text-zinc-800 dark:text-zinc-100">Local Trivy scanning is disabled.</p>
+            <p className="text-zinc-600 dark:text-zinc-400">New registries must use Artifactory Xray until local scanning is re-enabled.</p>
+            {capabilities.local_scan_message && <p className="text-zinc-600 dark:text-zinc-400">{capabilities.local_scan_message}</p>}
+          </div>
         </div>
       )}
 
@@ -301,7 +320,7 @@ export default function RegistriesPage() {
                       </Select.Trigger>
                       <Select.Popover>
                         <ListBox>
-                          <ListBox.Item id="trivy">Trivy (built-in JustScan scanner)</ListBox.Item>
+                          <ListBox.Item id="trivy" isDisabled={!capabilities.enable_trivy}>Trivy (built-in JustScan scanner)</ListBox.Item>
                           <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
                         </ListBox>
                       </Select.Popover>
@@ -309,6 +328,16 @@ export default function RegistriesPage() {
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       This is stored in JustScan and does not require editing backend/config.yaml.
                     </p>
+                    {!capabilities.enable_trivy && (
+                      <p className="text-xs" style={{ color: '#f59e0b' }}>
+                        {trivyCapability?.reason ?? 'Trivy is currently unavailable on this deployment.'}
+                      </p>
+                    )}
+                    {!capabilities.enable_trivy && scanProvider === 'trivy' && editing && (
+                      <p className="text-xs" style={{ color: '#f59e0b' }}>
+                        This registry still points at Trivy. Switch it to Artifactory Xray before saving changes.
+                      </p>
+                    )}
                   </div>
                   {scanProvider === 'artifactory_xray' && (
                     <>

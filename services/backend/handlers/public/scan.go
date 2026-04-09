@@ -40,8 +40,15 @@ func GetPublicSettings(db *bun.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"enabled":             enabled,
-			"rate_limit_per_hour": limit,
+			"enabled":              enabled,
+			"rate_limit_per_hour":  limit,
+			"local_scan_available": scanner.TrivyEnabled(),
+			"disabled_reason": func() string {
+				if scanner.TrivyEnabled() {
+					return ""
+				}
+				return "Public scanning is unavailable because local Trivy scanning is disabled."
+			}(),
 		})
 	}
 }
@@ -51,6 +58,10 @@ func CreatePublicScan(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !isPublicScanEnabled(c.Request.Context(), db) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "public scanning is currently disabled by the administrator"})
+			return
+		}
+		if !scanner.TrivyEnabled() {
+			c.JSON(http.StatusForbidden, gin.H{"error": "public scanning is unavailable because local Trivy scanning is disabled"})
 			return
 		}
 
@@ -105,6 +116,10 @@ func ReScanPublic(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !isPublicScanEnabled(c.Request.Context(), db) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "public scanning is currently disabled by the administrator"})
+			return
+		}
+		if !scanner.TrivyEnabled() {
+			c.JSON(http.StatusForbidden, gin.H{"error": "public scanning is unavailable because local Trivy scanning is disabled"})
 			return
 		}
 

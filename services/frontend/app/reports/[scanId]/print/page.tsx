@@ -274,7 +274,7 @@ export default function PrintReportPage() {
 
         <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
         <p style={{ fontSize: '11px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>Scan Details</p>
-        {([['showScanId', 'Scan ID'], ['showStarted', 'Started'], ['showCompleted', 'Completed'], ['showTrivyVersion', 'Trivy Version']] as [keyof ReportOpts, string][]).map(([k, label]) => (
+        {([['showScanId', 'Scan ID'], ['showStarted', 'Started'], ['showCompleted', 'Completed'], ['showTrivyVersion', 'Scanner Versions']] as [keyof ReportOpts, string][]).map(([k, label]) => (
           <label key={k} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#374151', cursor: 'pointer' }}>
             <input type="checkbox" checked={opts[k] as boolean} onChange={e => setOpts(o => ({ ...o, [k]: e.target.checked }))} />
             {label}
@@ -440,7 +440,7 @@ export default function PrintReportPage() {
                 ['Status', formatStatusLabel(displayStatus)],
                 ...(opts.showStarted ? [['Started', formatDate(scan.started_at)]] : []),
                 ...(opts.showCompleted ? [['Completed', formatDate(scan.completed_at)]] : []),
-                ...(opts.showTrivyVersion ? [['Trivy Version', [scan.trivy_version ? `Trivy ${scan.trivy_version}` : '', scan.grype_version ? `Grype ${scan.grype_version}` : ''].filter(Boolean).join(' · ') || '—']] : []),
+                ...(opts.showTrivyVersion ? [['Scanner Versions', [scan.trivy_version ? `Trivy ${scan.trivy_version}` : '', scan.grype_version ? `Grype ${scan.grype_version}` : ''].filter(Boolean).join(' · ') || '—']] : []),
                 ...(imageLocation ? [['Registry / Location', imageLocation]] : []),
                 ...(scan.tags && scan.tags.length > 0 ? [['Tags', scan.tags.map((t) => t.name).join(', ')]] : []),
                 ...customFields.map(f => [f.label, f.value]),

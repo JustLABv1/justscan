@@ -4,13 +4,13 @@ import { ChartSkeleton, RecentScanRowSkeleton, StatCardSkeleton } from '@/compon
 import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
-    Activity01Icon,
-    Add01Icon,
-    AlertDiamondIcon,
-    CheckmarkBadge01Icon,
-    Clock01Icon,
-    EyeIcon,
-    Shield01Icon,
+  Activity01Icon,
+  Add01Icon,
+  AlertDiamondIcon,
+  CheckmarkBadge01Icon,
+  Clock01Icon,
+  EyeIcon,
+  Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
@@ -160,7 +160,7 @@ function scanContextLabel(scan: Scan): string {
     }
     return 'Artifactory Xray';
   }
-  return 'Local Trivy worker';
+  return 'Built-in scanner';
 }
 
 function formatDbAge(hours?: number | null): string {
@@ -962,27 +962,31 @@ export default function DashboardPage() {
           {scannerHealthError ? (
             <span className="text-xs" style={{ color: '#f87171' }}>{scannerHealthError}</span>
           ) : scannerHealth ? (
-            <>
-              <div className="flex items-center gap-3">
-                <span className="flex items-center gap-1.5 text-xs text-zinc-500">
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#34d399', boxShadow: '0 0 5px #34d399' }} />
-                  {scannerHealth.healthy_workers} healthy
-                </span>
-                {scannerHealth.stale_workers > 0 && (
+            scannerHealth.local_scanner_enabled ? (
+              <>
+                <div className="flex items-center gap-3">
                   <span className="flex items-center gap-1.5 text-xs text-zinc-500">
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#fbbf24', boxShadow: '0 0 5px #fbbf24' }} />
-                    {scannerHealth.stale_workers} stale
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#34d399', boxShadow: '0 0 5px #34d399' }} />
+                    {scannerHealth.healthy_workers} healthy
                   </span>
-                )}
-              </div>
-              <div className="flex items-center gap-4 text-xs text-zinc-500 ml-auto">
-                <span>Vuln DB <span className="font-semibold text-zinc-700 dark:text-zinc-300">{formatDbAge(scannerHealth.oldest_vuln_db_age_hours)}</span></span>
-                <span>Java DB <span className="font-semibold text-zinc-700 dark:text-zinc-300">{formatDbAge(scannerHealth.oldest_java_db_age_hours)}</span></span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.18)' }}>
-                  Max {scannerHealth.max_allowed_age_hours}h
-                </span>
-              </div>
-            </>
+                  {scannerHealth.stale_workers > 0 && (
+                    <span className="flex items-center gap-1.5 text-xs text-zinc-500">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#fbbf24', boxShadow: '0 0 5px #fbbf24' }} />
+                      {scannerHealth.stale_workers} stale
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-4 text-xs text-zinc-500 ml-auto">
+                  <span>Vuln DB <span className="font-semibold text-zinc-700 dark:text-zinc-300">{formatDbAge(scannerHealth.oldest_vuln_db_age_hours)}</span></span>
+                  <span>Java DB <span className="font-semibold text-zinc-700 dark:text-zinc-300">{formatDbAge(scannerHealth.oldest_java_db_age_hours)}</span></span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.18)' }}>
+                    Max {scannerHealth.max_allowed_age_hours}h
+                  </span>
+                </div>
+              </>
+            ) : (
+              <span className="text-xs text-zinc-500">{scannerHealth.message || 'Local scanner disabled for this deployment.'}</span>
+            )
           ) : (
             <span className="text-xs text-zinc-500">No data available</span>
           )}

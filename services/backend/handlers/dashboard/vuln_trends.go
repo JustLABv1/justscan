@@ -23,13 +23,14 @@ type vulnTrendRow struct {
 }
 
 type vulnTrendSample struct {
-	Status      string     `bun:"status"`
-	CompletedAt *time.Time `bun:"completed_at"`
-	Critical    int        `bun:"critical_count"`
-	High        int        `bun:"high_count"`
-	Medium      int        `bun:"medium_count"`
-	Low         int        `bun:"low_count"`
-	Unknown     int        `bun:"unknown_count"`
+	Status         string     `bun:"status"`
+	ExternalStatus string     `bun:"external_status"`
+	CompletedAt    *time.Time `bun:"completed_at"`
+	Critical       int        `bun:"critical_count"`
+	High           int        `bun:"high_count"`
+	Medium         int        `bun:"medium_count"`
+	Low            int        `bun:"low_count"`
+	Unknown        int        `bun:"unknown_count"`
 }
 
 type vulnTrendAccumulator struct {
@@ -41,7 +42,7 @@ type vulnTrendAccumulator struct {
 	unknown  int
 }
 
-// GetVulnTrends returns daily vulnerability counts (by severity) from completed scans.
+// GetVulnTrends returns daily vulnerability counts (by severity) from scans with finalized findings.
 // Query param: days (1–365, default 30)
 func GetVulnTrends(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -59,8 +60,8 @@ func GetVulnTrends(db *bun.DB) gin.HandlerFunc {
 		var samples []vulnTrendSample
 		db.NewSelect().
 			TableExpr("scans").
-			Column("status", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count").
-			Where("status = ?", models.ScanStatusCompleted).
+			Column("status", "external_status", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count").
+			Where("(status = ? OR (status = ? AND external_status = ?))", models.ScanStatusCompleted, models.ScanStatusFailed, models.ScanExternalStatusBlockedByXrayPolicy).
 			Where("completed_at IS NOT NULL").
 			Where("completed_at >= ?", cutoff).
 			OrderExpr("completed_at ASC").
@@ -79,7 +80,7 @@ func aggregateVulnTrendRows(samples []vulnTrendSample) []vulnTrendRow {
 
 	buckets := make(map[string]*vulnTrendAccumulator)
 	for _, sample := range samples {
-		if sample.Status != models.ScanStatusCompleted || sample.CompletedAt == nil {
+		if !countsTowardDashboardFindings(sample.Status, sample.ExternalStatus) || sample.CompletedAt == nil {
 			continue
 		}
 		key := sample.CompletedAt.UTC().Format("2006-01-02")

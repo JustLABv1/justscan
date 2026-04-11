@@ -2,6 +2,9 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FormAlert } from '@/components/ui/form-alert';
+import { FormField } from '@/components/ui/form-field';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createTag, deleteTag, listTags, Tag, updateTag } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
@@ -75,10 +78,7 @@ export default function TagsPage() {
         </button>
       </div>
 
-      {error && (
-        <div className="rounded-xl px-4 py-3 text-sm"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>{error}</div>
-      )}
+      {error ? <FormAlert description={error} title="Tag loading failed" /> : null}
 
       {loading ? (
         <div className="glass-panel rounded-2xl overflow-hidden">
@@ -123,12 +123,13 @@ export default function TagsPage() {
               </span>
               <span className="flex-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">{tag.name}</span>
               <span className="font-mono text-xs text-zinc-500">{tag.color}</span>
-              <button onClick={() => openEdit(tag)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1" title="Edit">
-                <PencilEdit01Icon size={15} />
-              </button>
-              <button onClick={() => handleDelete(tag.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1" title="Delete">
-                <Delete01Icon size={15} />
-              </button>
+              <RowActionsMenu
+                label={`Open actions menu for tag ${tag.name}`}
+                items={[
+                  { id: 'edit', label: 'Edit tag', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(tag) },
+                  { id: 'delete', label: 'Delete tag', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(tag.id); } },
+                ]}
+              />
             </div>
           ))}
         </div>
@@ -144,17 +145,8 @@ export default function TagsPage() {
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
                 <form id="tag-form" onSubmit={handleSubmit} className="space-y-4">
-                  {formError && (
-                    <div className="rounded-xl px-3 py-2.5 text-sm"
-                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
-                      {formError}
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Name</label>
-                    <input className={inputCls} placeholder="production"
-                      value={name} onChange={(e) => setName(e.target.value)} required />
-                  </div>
+                  {formError ? <FormAlert description={formError} title="Tag save failed" /> : null}
+                  <FormField label="Name" onChange={(e) => setName(e.target.value)} placeholder="production" required value={name} />
                   <div className="space-y-2.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Color</label>
                     <div className="flex flex-wrap gap-2">

@@ -14,6 +14,7 @@ type WatchlistItem struct {
 	ImageName     string     `bun:"image_name,type:text,notnull" json:"image_name"`
 	ImageTag      string     `bun:"image_tag,type:text,notnull" json:"image_tag"`
 	Schedule      string     `bun:"schedule,type:text,notnull,default:'0 2 * * *'" json:"schedule"`
+	Timezone      string     `bun:"timezone,type:text,notnull,default:'UTC'" json:"timezone"`
 	Enabled       bool       `bun:"enabled,type:bool,default:true" json:"enabled"`
 	LastScanID    *uuid.UUID `bun:"last_scan_id,type:uuid" json:"last_scan_id"`
 	LastScannedAt *time.Time `bun:"last_scanned_at,type:timestamptz" json:"last_scanned_at"`

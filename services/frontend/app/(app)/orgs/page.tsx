@@ -1,5 +1,8 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { FormAlert } from '@/components/ui/form-alert';
+import { FormField } from '@/components/ui/form-field';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { createOrg, deleteOrg, listOrgs, Org } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
 import { ArrowRight01Icon, Building04Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
@@ -66,10 +69,7 @@ export default function OrgsPage() {
         </button>
       </div>
 
-      {error && (
-        <div className="rounded-xl px-4 py-3 text-sm"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>{error}</div>
-      )}
+      {error ? <FormAlert description={error} title="Organization loading failed" /> : null}
 
       {loading ? (
         <div className="flex justify-center items-center h-48">
@@ -114,14 +114,16 @@ export default function OrgsPage() {
 
               <div className="flex items-center justify-between pt-1"
                 style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={() => handleDelete(org.id, org.name)}
-                  className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1" title="Delete organization">
-                  <Delete01Icon size={15} />
-                </button>
                 <Link href={`/orgs/${org.id}`}
                   className="flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors">
                   View details <ArrowRight01Icon size={13} />
                 </Link>
+                <RowActionsMenu
+                  label={`Open actions menu for ${org.name}`}
+                  items={[
+                    { id: 'delete', label: 'Delete organization', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(org.id, org.name); } },
+                  ]}
+                />
               </div>
             </div>
           ))}
@@ -138,22 +140,9 @@ export default function OrgsPage() {
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
                 <form id="create-org-form" onSubmit={handleCreate} className="space-y-4">
-                  {createError && (
-                    <div className="rounded-xl px-3 py-2.5 text-sm"
-                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
-                      {createError}
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Name <span className="text-red-400">*</span></label>
-                    <input className={inputCls} placeholder="e.g. Production"
-                      value={name} onChange={(e) => setName(e.target.value)} required />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Description</label>
-                    <input className={inputCls} placeholder="Optional description"
-                      value={description} onChange={(e) => setDescription(e.target.value)} />
-                  </div>
+                  {createError ? <FormAlert description={createError} title="Organization creation failed" /> : null}
+                  <FormField label="Name" onChange={(e) => setName(e.target.value)} placeholder="e.g. Production" required value={name} />
+                  <FormField label="Description" onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" value={description} />
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>

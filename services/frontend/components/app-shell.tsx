@@ -1,6 +1,7 @@
 'use client';
 
 import { clearToken, clearUser, getUser } from '@/lib/api';
+import { Button, Drawer, useOverlayState } from '@heroui/react';
 import {
     AiContentGenerator01Icon,
     ArrowLeft01Icon,
@@ -11,6 +12,7 @@ import {
     FileExportIcon,
     GridTableIcon,
     Logout02Icon,
+    Menu01Icon,
     Moon02Icon,
     PackageIcon,
     PlusSignIcon,
@@ -69,6 +71,10 @@ interface AppShellProps {
   initialUser: { username?: string; email?: string; role?: string } | null;
 }
 
+function isActiveRoute(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(href + '/');
+}
+
 export function AppShell({ children, initialUser }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -76,10 +82,15 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const [user, setUser] = useState(initialUser);
   const [collapsed, setCollapsed] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const mobileNav = useOverlayState();
 
   useEffect(() => {
     setUser(getUser() ?? initialUser);
   }, [initialUser, pathname]);
+
+  useEffect(() => {
+    mobileNav.close();
+  }, [mobileNav, pathname]);
 
   useEffect(() => {
     if (localStorage.getItem('sidebar_collapsed') === 'true') {
@@ -114,13 +125,19 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
   const initials = (user?.username ?? user?.email ?? 'U')[0]?.toUpperCase() ?? 'U';
   const isDark = resolvedTheme === 'dark';
+  const navigationGroups = [
+    ...navGroups,
+    ...(user?.role === 'admin'
+      ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
+      : []),
+  ];
 
   return (
     <ToastProvider>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
       <div className="flex h-screen app-bg overflow-hidden">
         <aside
-          className={`relative flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out sidebar-glass ${
+          className={`relative hidden md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out sidebar-glass ${
             collapsed ? 'w-[68px]' : 'w-60'
           }`}
         >
@@ -193,12 +210,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
           </div>
 
           <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2">
-            {[
-              ...navGroups,
-              ...(user?.role === 'admin'
-                ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
-                : []),
-            ].map(({ label, items }) => (
+            {navigationGroups.map(({ label, items }) => (
               <div key={label} className="mb-1">
                 <div
                   className="nav-section-label transition-all duration-300 overflow-hidden"
@@ -208,7 +220,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 </div>
                 <div className="space-y-0.5">
                   {items.map(({ href, label: itemLabel, Icon }) => {
-                    const active = pathname === href || pathname.startsWith(href + '/');
+                    const active = isActiveRoute(pathname, href);
                     return (
                       <Link
                         key={href}
@@ -324,7 +336,180 @@ export function AppShell({ children, initialUser }: AppShellProps) {
           </div>
         </aside>
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div
+            className="sticky top-0 z-20 flex items-center gap-2 px-4 py-3 md:hidden"
+            style={{
+              background: isDark ? 'rgba(9,9,11,0.82)' : 'rgba(244,244,245,0.88)',
+              backdropFilter: 'blur(18px)',
+              WebkitBackdropFilter: 'blur(18px)',
+              borderBottom: '1px solid var(--border-subtle)',
+            }}
+          >
+            <Drawer state={mobileNav}>
+              <Button aria-label="Open navigation menu" className="rounded-xl" isIconOnly variant="secondary">
+                <Menu01Icon size={18} />
+              </Button>
+              <Drawer.Backdrop className="md:hidden" variant="blur">
+                <Drawer.Content className="md:hidden" placement="left">
+                  <Drawer.Dialog className="flex h-full w-[min(88vw,320px)] flex-col sidebar-glass">
+                    <Drawer.Header
+                      className="flex items-center justify-between px-4 py-4"
+                      style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                          style={{
+                            background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                            boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
+                          }}
+                        >
+                          <Logo size={18} className="text-white" />
+                        </div>
+                        <div>
+                          <Drawer.Heading className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                            JustScan
+                          </Drawer.Heading>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            Scan, watch, and manage
+                          </p>
+                        </div>
+                      </div>
+                      <Drawer.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                    </Drawer.Header>
+                    <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
+                      <div className="space-y-4">
+                        {navigationGroups.map(({ label, items }) => (
+                          <div key={label} className="space-y-1.5">
+                            <p className="px-2 text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>
+                              {label}
+                            </p>
+                            <div className="space-y-1">
+                              {items.map(({ href, label: itemLabel, Icon }) => {
+                                const active = isActiveRoute(pathname, href);
+                                return (
+                                  <Link
+                                    key={href}
+                                    href={href}
+                                    className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all ${
+                                      active ? 'text-violet-600 dark:text-violet-200' : 'text-zinc-700 dark:text-zinc-300'
+                                    }`}
+                                    onClick={() => mobileNav.close()}
+                                    style={active
+                                      ? {
+                                          background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.2), 0 2px 8px rgba(124,58,237,0.08)',
+                                        }
+                                      : { background: 'var(--row-hover)' }}
+                                  >
+                                    <Icon size={18} className="shrink-0" />
+                                    <span>{itemLabel}</span>
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Drawer.Body>
+                    <Drawer.Footer
+                      className="flex flex-col gap-2 px-3 py-3"
+                      style={{ borderTop: '1px solid var(--border-subtle)' }}
+                    >
+                      <div className="flex items-center gap-3 rounded-xl px-3 py-2" style={{ background: 'var(--row-hover)' }}>
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
+                          style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
+                        >
+                          {initials}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{user?.username ?? user?.email ?? 'User'}</p>
+                          <p className="truncate text-[11px] text-zinc-500">{user?.role ?? 'user'}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors"
+                          onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                          style={{ background: 'var(--row-hover)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}
+                          type="button"
+                        >
+                          {isDark ? <Sun01Icon size={14} /> : <Moon02Icon size={14} />}
+                          Theme
+                        </button>
+                        <Link
+                          className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors"
+                          href="/settings"
+                          onClick={() => mobileNav.close()}
+                          style={{ background: 'var(--row-hover)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}
+                        >
+                          <Settings01Icon size={14} />
+                          Settings
+                        </Link>
+                      </div>
+                      <Link
+                        className="flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-colors"
+                        href="/swagger/index.html"
+                        onClick={() => mobileNav.close()}
+                        rel="noreferrer"
+                        style={{ background: 'var(--row-hover)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}
+                        target="_blank"
+                      >
+                        <span className="flex items-center gap-2">
+                          <FileExportIcon size={14} />
+                          API Docs
+                        </span>
+                        <span className="text-[10px] uppercase tracking-[0.18em] text-zinc-400">Swagger</span>
+                      </Link>
+                      <button
+                        className="flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-colors"
+                        onClick={handleLogout}
+                        style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171', border: '1px solid rgba(239,68,68,0.14)' }}
+                        type="button"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Logout02Icon size={14} />
+                          Sign Out
+                        </span>
+                      </button>
+                    </Drawer.Footer>
+                  </Drawer.Dialog>
+                </Drawer.Content>
+              </Drawer.Backdrop>
+            </Drawer>
+
+            <Link className="flex items-center gap-2 min-w-0" href="/dashboard">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{
+                  background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                  boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
+                }}
+              >
+                <Logo size={18} className="text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>JustScan</p>
+                <p className="truncate text-[11px]" style={{ color: 'var(--text-faint)' }}>Security workflow hub</p>
+              </div>
+            </Link>
+
+            <div className="ml-auto flex items-center gap-2">
+              <Button className="rounded-xl" onPress={() => setSearchOpen(true)} variant="secondary">
+                <Search01Icon size={15} />
+                Search
+              </Button>
+              <Link className="btn-primary-sm h-10 px-3" href="/scans?new=1">
+                <PlusSignIcon size={14} className="shrink-0" />
+                <span>New</span>
+              </Link>
+            </div>
+          </div>
+
+          <main className="flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
+        </div>
       </div>
     </ToastProvider>
   );

@@ -1015,6 +1015,7 @@ export interface WatchlistItem {
   image_tag: string;
   registry_id?: string;
   schedule: string;
+  timezone: string;
   enabled: boolean;
   last_scan_id?: string;
   last_scanned_at?: string;
@@ -1238,15 +1239,20 @@ export interface NotificationConfig {
   smtp_from?: string;
   to_addresses?: string[];
   smtp_tls?: boolean;
+  telegram_bot_token?: string;
+  telegram_chat_id?: string;
 }
 
 export interface NotificationChannel {
   id: string;
   name: string;
-  type: 'discord' | 'email' | 'webhook';
+  type: 'discord' | 'email' | 'webhook' | 'slack' | 'teams' | 'telegram';
   config: NotificationConfig;
   enabled: boolean;
   events: string[];
+  org_ids: string[];
+  image_patterns: string[];
+  min_severity: '' | 'UNKNOWN' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   created_at: string;
   updated_at: string;
 }

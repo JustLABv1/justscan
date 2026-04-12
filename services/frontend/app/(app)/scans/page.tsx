@@ -6,7 +6,7 @@ import { SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { heroSelectTriggerClassName, joinClassNames, nativeFieldClassName } from '@/components/ui/form-styles';
 import { ImageRowSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import {
@@ -27,6 +27,7 @@ import { Checkbox, ListBox, Modal, Popover, Select, useOverlayState } from '@her
 import {
     ArrowDown01Icon,
     ArrowRight01Icon,
+    Cancel01Icon,
     FilterIcon,
     GitCompareIcon,
     PlusSignIcon,
@@ -59,6 +60,27 @@ const STATUS_FILTER_OPTIONS = [
   { id: 'completed', label: 'Completed' },
   { id: 'cancelled', label: 'Cancelled' },
 ] as const;
+
+function parseImageReferences(value: string) {
+  return value
+    .split(/[\n,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function mergeUniqueStringLists(...groups: string[][]) {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+
+  groups.flat().forEach((value) => {
+    if (!seen.has(value)) {
+      seen.add(value);
+      merged.push(value);
+    }
+  });
+
+  return merged;
+}
 
 function MobileSevStat({ label, count, tone }: { label: string; count: number; tone: string }) {
   return (
@@ -101,7 +123,8 @@ export default function ScansPage() {
   // New scan form
   const [imageName, setImageName] = useState('');
   const [imageTag, setImageTag] = useState('latest');
-  const [additionalImages, setAdditionalImages] = useState('');
+  const [additionalImageDraft, setAdditionalImageDraft] = useState('');
+  const [additionalImageEntries, setAdditionalImageEntries] = useState<string[]>([]);
   const [platform, setPlatform] = useState('');
   const [registryId, setRegistryId] = useState('');
   const [creating, setCreating] = useState(false);
@@ -148,6 +171,7 @@ export default function ScansPage() {
 
   const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
   const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
+  const pendingAdditionalImages = parseImageReferences(additionalImageDraft);
 
   // Auto-open new scan modal when navigated from sidebar CTA (?new=1)
   useEffect(() => {
@@ -190,6 +214,18 @@ export default function ScansPage() {
     });
   }
 
+  function addAdditionalImagesFromDraft() {
+    const parsedImages = parseImageReferences(additionalImageDraft);
+    if (parsedImages.length === 0) return;
+
+    setAdditionalImageEntries((previous) => mergeUniqueStringLists(previous, parsedImages));
+    setAdditionalImageDraft('');
+  }
+
+  function removeAdditionalImageEntry(image: string) {
+    setAdditionalImageEntries((previous) => previous.filter((entry) => entry !== image));
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setCreateError(''); setCreating(true);
@@ -199,10 +235,12 @@ export default function ScansPage() {
         return;
       }
 
-      const requestedImages = [
-        imageName.trim() ? `${imageName.trim()}${imageTag.trim() ? `:${imageTag.trim()}` : ''}` : '',
-        ...additionalImages.split(/\r?\n/).map(line => line.trim()).filter(Boolean),
-      ].filter(Boolean);
+      const primaryImage = imageName.trim() ? `${imageName.trim()}${imageTag.trim() ? `:${imageTag.trim()}` : ''}` : '';
+      const requestedImages = mergeUniqueStringLists(
+        primaryImage ? [primaryImage] : [],
+        additionalImageEntries,
+        pendingAdditionalImages,
+      );
 
       if (requestedImages.length === 0) {
         setCreateError('Provide at least one image to scan');
@@ -213,7 +251,7 @@ export default function ScansPage() {
       const createdScans = Array.isArray(result.scans) ? result.scans : [];
 
       modal.close();
-      setImageName(''); setImageTag('latest'); setAdditionalImages(''); setPlatform(''); setRegistryId('');
+      setImageName(''); setImageTag('latest'); setAdditionalImageDraft(''); setAdditionalImageEntries([]); setPlatform(''); setRegistryId('');
       toast.success(`${createdScans.length} image${createdScans.length === 1 ? '' : 's'} queued`);
       setExpanded(prev => {
         const next = new Set(prev);
@@ -332,47 +370,45 @@ export default function ScansPage() {
 
       {/* Search bar */}
       <div className="glass-panel rounded-2xl p-4">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px_auto] lg:items-end">
-          <div className="space-y-1.5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_280px_auto] xl:items-end">
+          <div className="space-y-1.5 md:col-span-2 xl:col-span-1">
             <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image</label>
-            <div className="relative">
-          <input
-            className={inputCls}
-            placeholder="Filter by image name…"
-            value={imageFilter}
-            onChange={e => handleImageFilterChange(e.target.value)}
-          />
-            </div>
+            <input
+              className={inputCls}
+              placeholder="Filter by image name…"
+              value={imageFilter}
+              onChange={e => handleImageFilterChange(e.target.value)}
+            />
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Latest State</label>
-        </div>
-        <Select selectedKey={statusFilter || '__all__'} onSelectionChange={key => handleStatusFilterChange(String(key === '__all__' ? '' : key))} className="min-w-0">
-          <Select.Trigger className={selectTriggerCls}>
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              <ListBox.Item id="__all__">All latest states</ListBox.Item>
-              {STATUS_FILTER_OPTIONS.filter((option) => option.id !== '').map((option) => (
-                <ListBox.Item key={option.id} id={option.id}>{option.label}</ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
-          <div className="flex items-end lg:justify-end">
+            <Select selectedKey={statusFilter || '__all__'} onSelectionChange={key => handleStatusFilterChange(String(key === '__all__' ? '' : key))} className="min-w-0">
+              <Select.Trigger className={selectTriggerCls}>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="__all__">All latest states</ListBox.Item>
+                  {STATUS_FILTER_OPTIONS.filter((option) => option.id !== '').map((option) => (
+                    <ListBox.Item key={option.id} id={option.id}>{option.label}</ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+          <div className="flex items-end md:col-span-2 xl:col-span-1 xl:justify-end">
             {(imageFilter || statusFilter) ? (
               <button
                 onClick={() => { setImageFilter(''); setStatusFilter(''); applyFilter('', ''); }}
-                className="btn-secondary flex w-full items-center justify-center gap-1.5 lg:w-auto"
+                className="btn-secondary flex w-full items-center justify-center gap-1.5 md:w-auto"
                 type="button"
               >
                 <FilterIcon size={12} />
                 Clear Filters
               </button>
             ) : (
-              <p className="text-sm text-zinc-500 lg:text-right">{total} image{total !== 1 ? 's' : ''}</p>
+              <p className="text-sm text-zinc-500 md:text-right">{total} image{total !== 1 ? 's' : ''}</p>
             )}
           </div>
         </div>
@@ -745,16 +781,53 @@ export default function ScansPage() {
                   <FormField className="font-mono" label="Tag" onChange={e => setImageTag(e.target.value)} placeholder="latest" required value={imageTag} />
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                      Additional Images <span className="text-zinc-400 dark:text-zinc-600 font-normal">(one per line)</span>
+                      Additional Images <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span>
                     </label>
                     <textarea
-                      className={inputCls + ' min-h-28 font-mono resize-y'}
-                      placeholder={'ghcr.io/example/api:1.2.3\nregistry.example.com/team/worker:latest\nnginx'}
-                      value={additionalImages}
-                      onChange={e => setAdditionalImages(e.target.value)}
+                      className={joinClassNames(inputCls, 'min-h-24 font-mono resize-y')}
+                      placeholder={'Paste one or more full image references here\nExample: ghcr.io/example/api:1.2.3, registry.example.com/team/worker:latest'}
+                      value={additionalImageDraft}
+                      onChange={e => setAdditionalImageDraft(e.target.value)}
                     />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-zinc-500">
+                        Paste one or many full image references, separated by commas or new lines. Anything still in this box is included when you start the scan.
+                      </p>
+                      <button
+                        className="btn-secondary-sm shrink-0"
+                        onClick={addAdditionalImagesFromDraft}
+                        type="button"
+                      >
+                        Add {pendingAdditionalImages.length > 1 ? `${pendingAdditionalImages.length} refs` : 'to list'}
+                      </button>
+                    </div>
+                    {additionalImageEntries.length > 0 ? (
+                      <div className="rounded-2xl p-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">Queued additional images</p>
+                          <span className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-500" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}>
+                            {additionalImageEntries.length}
+                          </span>
+                        </div>
+                        <div className="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
+                          {additionalImageEntries.map((image) => (
+                            <div key={image} className="flex items-start justify-between gap-3 rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)' }}>
+                              <span className="min-w-0 break-all font-mono text-xs text-zinc-600 dark:text-zinc-300">{image}</span>
+                              <button
+                                aria-label={`Remove ${image}`}
+                                className="btn-icon-subtle h-8 w-8 shrink-0 rounded-lg"
+                                onClick={() => removeAdditionalImageEntry(image)}
+                                type="button"
+                              >
+                                <Cancel01Icon aria-hidden size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     <p className="text-xs text-zinc-500">
-                      Use the Image Name and Tag fields for a primary image, or paste multiple full image references here. Untagged refs default to <span className="font-mono">latest</span>.
+                      Use Image Name and Tag for the primary image. Untagged full references default to <span className="font-mono">latest</span>.
                     </p>
                   </div>
                   <div className="space-y-1.5">

@@ -135,7 +135,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   return (
     <ToastProvider>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
-      <div className="flex h-screen app-bg overflow-hidden">
+      <div className="flex min-h-dvh app-bg overflow-hidden">
         <aside
           className={`relative hidden md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out sidebar-glass ${
             collapsed ? 'w-[68px]' : 'w-60'
@@ -336,7 +336,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
           </div>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div
             className="sticky top-0 z-20 flex items-center gap-2 px-4 py-3 md:hidden"
             style={{
@@ -508,7 +508,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             </div>
           </div>
 
-          <main className="flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
         </div>
       </div>
     </ToastProvider>

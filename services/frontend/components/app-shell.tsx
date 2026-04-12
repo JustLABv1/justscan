@@ -135,7 +135,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   return (
     <ToastProvider>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
-      <div className="flex min-h-dvh app-bg overflow-hidden">
+      <div className="flex h-dvh app-bg overflow-hidden">
         <aside
           className={`relative hidden md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out sidebar-glass ${
             collapsed ? 'w-[68px]' : 'w-60'

@@ -47,6 +47,7 @@ import {
     updateRateLimit,
     updateRegisterRateLimit,
 } from '@/lib/api';
+import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Input, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { ArrowDown01Icon, ArrowRight01Icon, Delete01Icon, Notification01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon, Tag01Icon } from 'hugeicons-react';
@@ -56,6 +57,20 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
+
+const USER_AUTH_LABEL: Record<string, string> = {
+  local: 'Local',
+  oidc: 'OIDC',
+};
+
+const USER_AUTH_STYLE: Record<string, React.CSSProperties> = {
+  local: { color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' },
+  oidc: { color: '#a78bfa', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' },
+};
+
+function userAuthLabel(authType?: string) {
+  return USER_AUTH_LABEL[authType ?? 'local'] ?? (authType ? authType.toUpperCase() : 'Unknown');
+}
 
 type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans';
 
@@ -625,23 +640,46 @@ function OverviewTab() {
               )}
             </div>
 
-            <div className="glass-panel rounded-2xl p-5 space-y-4">
-              <div>
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Control Surfaces</h2>
-                <p className="text-sm text-zinc-500 mt-0.5">Shortcuts into the areas that influence system behavior most.</p>
+            <div className="space-y-4">
+              <div className="glass-panel rounded-2xl p-5 space-y-4">
+                <div>
+                  <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Control Surfaces</h2>
+                  <p className="text-sm text-zinc-500 mt-0.5">Shortcuts into the areas that influence system behavior most.</p>
+                </div>
+                <div className="space-y-2">
+                  {[
+                    { href: '/admin/settings', label: 'Review public scanning and rate limits' },
+                    { href: '/admin/scanner', label: 'Inspect worker health and stale DBs' },
+                    { href: '/admin/notifications', label: 'Test delivery channels and review history' },
+                    { href: '/admin/scans', label: 'Manage cross-user scans and sharing' },
+                  ].map((link) => (
+                    <Link key={link.href} href={link.href} className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <span className="text-zinc-700 dark:text-zinc-200">{link.label}</span>
+                      <span className="text-violet-500">Open</span>
+                    </Link>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-2">
-                {[
-                  { href: '/admin/settings', label: 'Review public scanning and rate limits' },
-                  { href: '/admin/scanner', label: 'Inspect worker health and stale DBs' },
-                  { href: '/admin/notifications', label: 'Test delivery channels and review history' },
-                  { href: '/admin/scans', label: 'Manage cross-user scans and sharing' },
-                ].map((link) => (
-                  <Link key={link.href} href={link.href} className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                    <span className="text-zinc-700 dark:text-zinc-200">{link.label}</span>
-                    <span className="text-violet-500">Open</span>
-                  </Link>
-                ))}
+
+              <div className="glass-panel rounded-2xl p-5 space-y-4">
+                <div>
+                  <h2 className="text-base font-semibold text-zinc-900 dark:text-white">System & Legal</h2>
+                  <p className="text-sm text-zinc-500 mt-0.5">Admin-only product metadata for this running frontend build.</p>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <p className="text-xs text-zinc-500">Frontend version</p>
+                    <p className="mt-1 font-semibold text-zinc-900 dark:text-white">v{APP_FRONTEND_VERSION}</p>
+                  </div>
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <p className="text-xs text-zinc-500">Copyright</p>
+                    <p className="mt-1 text-zinc-700 dark:text-zinc-200">{APP_COPYRIGHT}</p>
+                  </div>
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <p className="text-xs text-zinc-500">Distribution</p>
+                    <p className="mt-1 text-zinc-700 dark:text-zinc-200">JustScan self-hosted admin surface</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -698,7 +736,7 @@ function UsersTab() {
           username: formUsername,
           email: formEmail,
           role: formRole,
-          ...(formPassword ? { password: formPassword } : {}),
+          ...(editingUser.auth_type !== 'oidc' && formPassword ? { password: formPassword } : {}),
         });
       }
       modal.close(); await load();
@@ -770,6 +808,8 @@ function UsersTab() {
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Username</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Email</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Last Sign-in</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Created</th>
@@ -784,6 +824,21 @@ function UsersTab() {
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                   <td className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-200">{u.username}</td>
                   <td className="px-4 py-3 text-sm text-zinc-500">{u.email}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-md" style={USER_AUTH_STYLE[u.auth_type ?? 'local']}>
+                      {userAuthLabel(u.auth_type)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-zinc-500">
+                    {u.last_login_at ? (
+                      <div className="space-y-0.5">
+                        <p title={fullDate(u.last_login_at)}>{timeAgo(u.last_login_at)}</p>
+                        <p className="text-[11px] text-zinc-400">via {userAuthLabel(u.last_login_method || u.auth_type).toLowerCase()}</p>
+                      </div>
+                    ) : (
+                      <span className="text-zinc-400 dark:text-zinc-600">Never</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="text-xs font-medium px-2 py-0.5 rounded-md"
                       style={u.role === 'admin'
@@ -847,6 +902,24 @@ function UsersTab() {
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Email</label>
                     <input type="email" className={inputCls} placeholder="user@example.com" value={formEmail} onChange={e => setFormEmail(e.target.value)} required />
                   </div>
+                  {!isCreate && editingUser ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Authentication</label>
+                        <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-md" style={USER_AUTH_STYLE[editingUser.auth_type ?? 'local']}>
+                            {userAuthLabel(editingUser.auth_type)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Last Sign-in</label>
+                        <div className="rounded-xl px-3 py-2.5 text-sm text-zinc-700 dark:text-zinc-200" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          {editingUser.last_login_at ? fullDate(editingUser.last_login_at) : 'No successful sign-in recorded yet'}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
                     <Select selectedKey={formRole} onSelectionChange={k => setFormRole(String(k))}>
@@ -868,13 +941,15 @@ function UsersTab() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                       Password{' '}
-                      {!isCreate && <span className="text-zinc-400 dark:text-zinc-600 font-normal">(leave blank to keep unchanged)</span>}
+                      {!isCreate && editingUser?.auth_type !== 'oidc' ? <span className="text-zinc-400 dark:text-zinc-600 font-normal">(leave blank to keep unchanged)</span> : null}
                     </label>
                     <input type="password" className={inputCls}
-                      placeholder={isCreate ? 'Password' : '••••••••'}
+                      placeholder={isCreate ? 'Password' : editingUser?.auth_type === 'oidc' ? 'Managed by OIDC' : '••••••••'}
                       value={formPassword}
                       onChange={e => setFormPassword(e.target.value)}
+                      disabled={Boolean(editingUser?.auth_type === 'oidc')}
                       required={isCreate} />
+                    {editingUser?.auth_type === 'oidc' ? <p className="text-xs text-zinc-500">Password changes are disabled for users currently authenticated through OIDC.</p> : null}
                   </div>
                 </form>
               </Modal.Body>

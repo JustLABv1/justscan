@@ -838,6 +838,10 @@ export interface User {
   username: string;
   role: string;
   disabled: boolean;
+  disabled_reason?: string;
+  auth_type: 'local' | 'oidc';
+  last_login_at?: string | null;
+  last_login_method: 'local' | 'oidc' | '';
 }
 
 export interface ScanStepLog {
@@ -1194,6 +1198,9 @@ export interface AdminUser {
   role: string;
   disabled: boolean;
   disabled_reason: string;
+  auth_type: 'local' | 'oidc';
+  last_login_at?: string | null;
+  last_login_method: 'local' | 'oidc' | '';
   created_at: string;
   updated_at: string;
 }

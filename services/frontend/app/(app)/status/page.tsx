@@ -2,17 +2,18 @@
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { fieldLabelClassName, heroFieldClassName, heroSelectTriggerClassName, heroTextAreaClassName } from '@/components/ui/form-styles';
 import {
-  createStatusPage,
-  deleteStatusPage,
-  getStatusPage,
-  listStatusPages,
-  listStatusPageTargetOptions,
-  StatusPage,
-  StatusPagePayload,
-  StatusPageTarget,
-  StatusPageTargetOption,
-  updateStatusPage,
+    createStatusPage,
+    deleteStatusPage,
+    getStatusPage,
+    listStatusPages,
+    listStatusPageTargetOptions,
+    StatusPage,
+    StatusPagePayload,
+    StatusPageTarget,
+    StatusPageTargetOption,
+    updateStatusPage,
 } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { Button, Card, Input, Label, ListBox, Select, Switch, TextArea, useOverlayState } from '@heroui/react';
@@ -20,10 +21,10 @@ import { Delete01Icon, EyeIcon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-const fieldCls = 'glass-input w-full min-h-11 rounded-xl px-3 text-sm';
-const textareaCls = 'glass-input w-full min-h-28 rounded-xl px-3 py-2.5 text-sm resize-y';
-const selectTriggerCls = 'glass-input w-full min-h-11 rounded-xl px-3 text-sm';
-const fieldLabelCls = 'block text-sm font-medium text-zinc-600 dark:text-zinc-300';
+const fieldCls = heroFieldClassName;
+const textareaCls = heroTextAreaClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
+const fieldLabelCls = fieldLabelClassName;
 
 const visibilityOptions: Array<StatusPage['visibility']> = ['private', 'authenticated', 'public'];
 const updateLevelOptions = ['info', 'maintenance', 'incident'] as const;
@@ -338,8 +339,7 @@ export default function StatusPagesPage() {
         </div>
         <Button
           onPress={openCreate}
-          className="rounded-xl text-sm font-semibold"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+          className="btn-primary"
         >
           <PlusSignIcon size={15} /> New Status Page
         </Button>
@@ -804,10 +804,9 @@ export default function StatusPagesPage() {
             </div>
 
             <div className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <Button onPress={modal.close} className="rounded-xl" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>Cancel</Button>
+                <Button className="btn-secondary" onPress={modal.close}>Cancel</Button>
                 <Button type="submit" form="status-page-form" isDisabled={saving || invalidImagePatterns.length > 0 || !scopeIsValid}
-                  className="rounded-xl text-white"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Create'}
                 </Button>

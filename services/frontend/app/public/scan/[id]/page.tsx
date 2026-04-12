@@ -1,5 +1,6 @@
 'use client';
 import { Logo } from '@/components/logo';
+import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type { Scan, Vulnerability } from '@/lib/api';
 import { getPublicScan, getPublicVulnerabilityContextAnalysis, getToken, listPublicVulnerabilities, reScanPublic } from '@/lib/api';
@@ -186,7 +187,8 @@ export default function PublicScanResultPage() {
     }
   }
 
-  const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl';
+  const inputCls = nativeFieldClassName;
+  const selectTriggerCls = heroSelectTriggerClassName;
 
   function openVulnerabilityDetails(vulnerability: Vulnerability) {
     setSelectedVulnerability(vulnerability);
@@ -232,8 +234,7 @@ export default function PublicScanResultPage() {
           {scan?.helm_scan_run_id && (
             <Link
               href={`/public/scan/helm/runs/${scan.helm_scan_run_id}`}
-              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+              className="btn-secondary"
             >
               Helm run →
             </Link>
@@ -242,8 +243,7 @@ export default function PublicScanResultPage() {
             <Link
               href={`/reports/print?scans=${id}`}
               target="_blank"
-              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+              className="btn-secondary inline-flex items-center gap-1.5"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -255,8 +255,7 @@ export default function PublicScanResultPage() {
             <button
               onClick={handleRescan}
               disabled={reScanning}
-              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
-              style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#c4b5fd' }}
+              className="btn-primary inline-flex items-center gap-1.5"
             >
               {reScanning
                 ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
@@ -271,13 +270,11 @@ export default function PublicScanResultPage() {
           <ThemeToggle />
           {isLoggedIn ? (
             <Link href="/scans"
-              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+              className="btn-secondary">
               Dashboard →
             </Link>
           ) : (
-            <Link href="/login" className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+            <Link href="/login" className="btn-secondary">
               Sign in
             </Link>
           )}
@@ -334,7 +331,7 @@ export default function PublicScanResultPage() {
         )}
 
         {showResultTabs && (
-          <div className="flex items-center gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+          <div className="segmented-control w-fit">
             {([
               { id: 'overview', label: showRecoveredOverview ? 'Overview' : 'Status' },
               { id: 'timeline', label: scan?.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
@@ -342,10 +339,9 @@ export default function PublicScanResultPage() {
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
-                className="px-4 py-1.5 text-sm font-medium rounded-lg transition-all"
-                style={activeTab === id
-                  ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', boxShadow: '0 0 12px rgba(124,58,237,0.18)' }
-                  : { color: 'var(--text-muted)' }}
+                className="segmented-control-item"
+                data-active={activeTab === id ? 'true' : 'false'}
+                type="button"
               >
                 {label}
               </button>
@@ -439,7 +435,7 @@ export default function PublicScanResultPage() {
                 </h2>
                 <div className="flex flex-wrap gap-2 items-center">
                   <Select selectedKey={severityFilter || '__all__'} onSelectionChange={k => { setSeverityFilter(String(k === '__all__' ? '' : k)); setPage(1); }}>
-                    <Select.Trigger className={inputCls} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}>
+                    <Select.Trigger className={selectTriggerCls}>
                       <Select.Value />
                       <Select.Indicator />
                     </Select.Trigger>
@@ -459,7 +455,6 @@ export default function PublicScanResultPage() {
                     onChange={e => setPkgInput(e.target.value)}
                     placeholder="Package…"
                     className={inputCls}
-                    style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
                   />
                   <input
                     type="number"
@@ -475,14 +470,11 @@ export default function PublicScanResultPage() {
                     }}
                     placeholder="Min CVSS"
                     className={inputCls}
-                    style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', width: 100 }}
+                    style={{ width: 100 }}
                   />
                   <button
                     onClick={() => { setHasFix(!hasFix); setPage(1); }}
-                    className="px-3 py-2 text-sm rounded-xl transition-colors"
-                    style={hasFix
-                      ? { background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(167,139,250,0.3)', color: '#7c3aed' }
-                      : { background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
+                    className={hasFix ? 'btn-primary' : 'btn-secondary'}
                   >
                     Has Fix
                   </button>
@@ -567,14 +559,12 @@ export default function PublicScanResultPage() {
                   <div className="flex items-center gap-2">
                     <button
                       disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                      className="px-3 py-1.5 text-sm rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                      style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+                      className="btn-secondary"
                     >← Prev</button>
                     <span className="text-sm px-2" style={{ color: 'var(--text-muted)' }}>{page} / {totalPages}</span>
                     <button
                       disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-                      className="px-3 py-1.5 text-sm rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                      style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+                      className="btn-secondary"
                     >Next →</button>
                   </div>
                 </div>
@@ -592,8 +582,7 @@ export default function PublicScanResultPage() {
               </div>
               <Link
                 href="/login"
-                className="shrink-0 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.25)' }}
+                className="btn-primary"
               >
                 Sign in →
               </Link>

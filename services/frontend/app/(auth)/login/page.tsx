@@ -89,12 +89,9 @@ export default function LoginPage() {
             value={password}
           />
           <Button
-            className="w-full rounded-xl text-sm font-semibold text-white"
+            className="btn-primary w-full"
+            fullWidth
             isPending={loading}
-            style={{
-              background: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
-              boxShadow: '0 0 24px rgba(124,58,237,0.45),inset 0 1px 0 rgba(255,255,255,0.15)',
-            }}
             type="submit"
           >
             {({ isPending }) => (isPending ? 'Signing In…' : 'Sign In')}

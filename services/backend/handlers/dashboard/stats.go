@@ -68,7 +68,7 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 			}
 		}
 
-		// Severity totals across completed scans
+		// Severity totals across scans with finalized findings.
 		type severityRow struct {
 			Critical int `bun:"critical"`
 			High     int `bun:"high"`
@@ -80,7 +80,7 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		db.NewSelect().
 			TableExpr("scans").
 			ColumnExpr("COALESCE(SUM(critical_count),0) AS critical, COALESCE(SUM(high_count),0) AS high, COALESCE(SUM(medium_count),0) AS medium, COALESCE(SUM(low_count),0) AS low, COALESCE(SUM(unknown_count),0) AS unknown").
-			Where("status = ?", models.ScanStatusCompleted).
+			Where("(status = ? OR (status = ? AND external_status = ?))", models.ScanStatusCompleted, models.ScanStatusFailed, models.ScanExternalStatusBlockedByXrayPolicy).
 			Scan(ctx, &sev) //nolint:errcheck
 		result.SeverityTotals["critical"] = sev.Critical
 		result.SeverityTotals["high"] = sev.High
@@ -126,6 +126,10 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 
 func isBlockedByXrayPolicyStatus(status, externalStatus string) bool {
 	return status == models.ScanStatusFailed && externalStatus == models.ScanExternalStatusBlockedByXrayPolicy
+}
+
+func countsTowardDashboardFindings(status, externalStatus string) bool {
+	return status == models.ScanStatusCompleted || isBlockedByXrayPolicyStatus(status, externalStatus)
 }
 
 func summarizeActiveXrayScans(scans []models.Scan) (int, map[string]int) {

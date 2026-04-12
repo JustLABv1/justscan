@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"justscan-backend/notifications"
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
@@ -91,6 +92,12 @@ func RunForScan(db *bun.DB, scanID uuid.UUID) {
 		return
 	}
 
+	scan := &models.Scan{}
+	if err := db.NewSelect().Model(scan).Where("id = ?", scanID).Scan(ctx); err != nil {
+		log.Warnf("compliance: failed to load scan %s for notification enrichment: %v", scanID, err)
+		scan = &models.Scan{}
+	}
+
 	// Load all org_scans for this scan
 	var orgScans []models.OrgScan
 	if err := db.NewSelect().Model(&orgScans).Where("scan_id = ?", scanID).Scan(ctx); err != nil {
@@ -130,6 +137,20 @@ func RunForScan(db *bun.DB, scanID uuid.UUID) {
 				EvaluatedAt: time.Now(),
 			}
 			db.NewInsert().Model(history).Exec(ctx) //nolint:errcheck
+			if status == "fail" {
+				go notifications.Dispatch(db, models.NotificationEventComplianceFailed, notifications.Payload{
+					ScanID:    scanID.String(),
+					ImageName: scan.ImageName,
+					ImageTag:  scan.ImageTag,
+					Status:    status,
+					Details:   fmt.Sprintf("Policy %s failed for org %s with %d violation(s).", policy.Name, os.OrgID.String(), len(violations)),
+					Extra: map[string]string{
+						"org_id":      os.OrgID.String(),
+						"policy_id":   policy.ID.String(),
+						"policy_name": policy.Name,
+					},
+				})
+			}
 		}
 	}
 }

@@ -1,12 +1,13 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { FormAlert } from '@/components/ui/form-alert';
+import { FormField } from '@/components/ui/form-field';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { createOrg, deleteOrg, listOrgs, Org } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
 import { ArrowRight01Icon, Building04Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-
-const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
 interface OrgWithCount extends Org { policy_count: number }
 
@@ -59,17 +60,13 @@ export default function OrgsPage() {
         </div>
         <button
           onClick={modal.open}
-          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+          className="btn-primary inline-flex items-center gap-2"
         >
           <PlusSignIcon size={15} /> New Organization
         </button>
       </div>
 
-      {error && (
-        <div className="rounded-xl px-4 py-3 text-sm"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>{error}</div>
-      )}
+      {error ? <FormAlert description={error} title="Organization loading failed" /> : null}
 
       {loading ? (
         <div className="flex justify-center items-center h-48">
@@ -84,7 +81,7 @@ export default function OrgsPage() {
           <p className="text-sm text-zinc-500 text-center max-w-xs">
             No organizations yet. Create one to start managing compliance policies.
           </p>
-          <button onClick={modal.open} className="mt-1 text-sm font-medium text-violet-500 hover:text-violet-400 dark:text-violet-400 dark:hover:text-violet-300 transition-colors">
+          <button onClick={modal.open} className="btn-secondary mt-1" type="button">
             Create organization →
           </button>
         </div>
@@ -114,14 +111,16 @@ export default function OrgsPage() {
 
               <div className="flex items-center justify-between pt-1"
                 style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={() => handleDelete(org.id, org.name)}
-                  className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1" title="Delete organization">
-                  <Delete01Icon size={15} />
-                </button>
                 <Link href={`/orgs/${org.id}`}
                   className="flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors">
                   View details <ArrowRight01Icon size={13} />
                 </Link>
+                <RowActionsMenu
+                  label={`Open actions menu for ${org.name}`}
+                  items={[
+                    { id: 'delete', label: 'Delete organization', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(org.id, org.name); } },
+                  ]}
+                />
               </div>
             </div>
           ))}
@@ -138,30 +137,15 @@ export default function OrgsPage() {
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
                 <form id="create-org-form" onSubmit={handleCreate} className="space-y-4">
-                  {createError && (
-                    <div className="rounded-xl px-3 py-2.5 text-sm"
-                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
-                      {createError}
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Name <span className="text-red-400">*</span></label>
-                    <input className={inputCls} placeholder="e.g. Production"
-                      value={name} onChange={(e) => setName(e.target.value)} required />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Description</label>
-                    <input className={inputCls} placeholder="Optional description"
-                      value={description} onChange={(e) => setDescription(e.target.value)} />
-                  </div>
+                  {createError ? <FormAlert description={createError} title="Organization creation failed" /> : null}
+                  <FormField label="Name" onChange={(e) => setName(e.target.value)} placeholder="e.g. Production" required value={name} />
+                  <FormField label="Description" onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" value={description} />
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>Cancel</button>
+                <button onClick={modal.close} className="btn-secondary" type="button">Cancel</button>
                 <button type="submit" form="create-org-form" disabled={creating}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary inline-flex items-center gap-2">
                   {creating && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   Create
                 </button>

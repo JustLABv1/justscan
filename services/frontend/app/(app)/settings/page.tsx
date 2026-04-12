@@ -1,11 +1,12 @@
 'use client';
+import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { changePassword, getAuthSnapshot, getUserDetails, setUser, updateUserDetails, User } from '@/lib/api';
 import { fullDate } from '@/lib/time';
 import { Clock01Icon, Key01Icon, Shield01Icon, UserAccountIcon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+const inputCls = nativeFieldClassName;
 
 function Section({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
@@ -110,6 +111,8 @@ export default function SettingsPage() {
     </div>
   );
 
+  const isOIDCUser = user.auth_type === 'oidc';
+
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
       <div>
@@ -146,6 +149,18 @@ export default function SettingsPage() {
             </div>
             <p className="mt-3 text-lg font-semibold text-zinc-900 dark:text-white">{authSnapshot.token_present ? 'Present' : 'Missing'}</p>
             <p className="mt-1 text-xs text-zinc-500">If this is missing, protected requests from this browser will fail until you sign in again.</p>
+          </div>
+          <div className="rounded-2xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+              <Shield01Icon size={16} />
+              <span className="text-sm font-medium">Sign-in method</span>
+            </div>
+            <p className="mt-3 text-lg font-semibold text-zinc-900 dark:text-white">{isOIDCUser ? 'OIDC / SSO' : 'Local password'}</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              {user.last_login_at
+                ? `Last ${user.last_login_method === 'oidc' ? 'OIDC' : 'local'} sign-in: ${fullDate(user.last_login_at)}`
+                : 'No successful sign-in timestamp has been recorded for this account yet.'}
+            </p>
           </div>
           <div className="rounded-2xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
             <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
@@ -194,8 +209,7 @@ export default function SettingsPage() {
             <button
               type="submit"
               disabled={profileSaving}
-              className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90 active:scale-95"
-              style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+              className="btn-primary inline-flex items-center gap-2"
             >
               {profileSaving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
               Save Changes
@@ -204,58 +218,68 @@ export default function SettingsPage() {
         </form>
       </Section>
 
-      <Section title="Security" description="Change your password. You'll need your current password to confirm.">
-        <form onSubmit={handleChangePassword} className="space-y-4">
-          {pwMsg && <Alert message={pwMsg.text} type={pwMsg.type} />}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Current Password</label>
-            <input
-              type="password"
-              className={inputCls}
-              value={currentPw}
-              onChange={e => setCurrentPw(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
+      <Section
+        title="Security"
+        description={isOIDCUser ? 'Password changes are disabled for accounts signed in through your identity provider.' : "Change your password. You'll need your current password to confirm."}
+      >
+        {isOIDCUser ? (
+          <div className="rounded-2xl px-4 py-4 space-y-2" style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.18)' }}>
+            <p className="text-sm font-medium text-zinc-900 dark:text-white">Password managed by your OIDC provider</p>
+            <p className="text-sm text-zinc-500">This account was authenticated through single sign-on. Change your password in the connected identity provider instead of JustScan.</p>
+            {user.last_login_at ? <p className="text-xs text-zinc-500">Last OIDC sign-in recorded at {fullDate(user.last_login_at)}.</p> : null}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+        ) : (
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            {pwMsg && <Alert message={pwMsg.text} type={pwMsg.type} />}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">New Password</label>
+              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Current Password</label>
               <input
                 type="password"
                 className={inputCls}
-                value={newPw}
-                onChange={e => setNewPw(e.target.value)}
+                value={currentPw}
+                onChange={e => setCurrentPw(e.target.value)}
                 required
-                minLength={8}
-                autoComplete="new-password"
+                autoComplete="current-password"
               />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Confirm New Password</label>
-              <input
-                type="password"
-                className={inputCls}
-                value={confirmPw}
-                onChange={e => setConfirmPw(e.target.value)}
-                required
-                minLength={8}
-                autoComplete="new-password"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">New Password</label>
+                <input
+                  type="password"
+                  className={inputCls}
+                  value={newPw}
+                  onChange={e => setNewPw(e.target.value)}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Confirm New Password</label>
+                <input
+                  type="password"
+                  className={inputCls}
+                  value={confirmPw}
+                  onChange={e => setConfirmPw(e.target.value)}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                />
+              </div>
             </div>
-          </div>
-          <div className="flex justify-end pt-1">
-            <button
-              type="submit"
-              disabled={pwSaving}
-              className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90 active:scale-95"
-              style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}
-            >
-              {pwSaving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-              Change Password
-            </button>
-          </div>
-        </form>
+            <div className="flex justify-end pt-1">
+              <button
+                type="submit"
+                disabled={pwSaving}
+                className="btn-primary inline-flex items-center gap-2"
+              >
+                {pwSaving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                Change Password
+              </button>
+            </div>
+          </form>
+        )}
       </Section>
     </div>
   );

@@ -27,6 +27,7 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
       {action && (
         <button
           onClick={action.onClick}
+          type="button"
           className="btn-primary mt-1"
         >
           {action.label}

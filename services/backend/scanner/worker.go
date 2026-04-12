@@ -59,24 +59,28 @@ func InitWorker(db *bun.DB) {
 
 	for i := 0; i < concurrency; i++ {
 		cacheDir := workerCacheDir(i)
-		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
-			log.Warnf("Scanner worker %d cache init failed: %v", i, err)
+		if TrivyEnabled() {
+			if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+				log.Warnf("Scanner worker %d cache init failed: %v", i, err)
+			}
 		}
-		if config.Config.Scanner.EnableGrype {
+		if GrypeEnabled() {
 			if err := os.MkdirAll(workerGrypeCacheDir(cacheDir), 0o755); err != nil {
 				log.Warnf("Scanner worker %d grype cache init failed: %v", i, err)
 			}
 		}
-		go func(workerID int, dir string) {
-			info, err := EnsureDatabasesFresh(context.Background(), dir)
-			if err != nil {
-				log.Warnf("Scanner worker %d trivy DB warmup failed: %v", workerID, err)
-				return
-			}
-			if info != nil && info.VulnerabilityDB.UpdatedAt != nil {
-				log.Infof("Scanner worker %d trivy DB ready (vuln updated %s)", workerID, info.VulnerabilityDB.UpdatedAt.Format(time.RFC3339))
-			}
-		}(i, cacheDir)
+		if TrivyEnabled() {
+			go func(workerID int, dir string) {
+				info, err := EnsureDatabasesFresh(context.Background(), dir)
+				if err != nil {
+					log.Warnf("Scanner worker %d trivy DB warmup failed: %v", workerID, err)
+					return
+				}
+				if info != nil && info.VulnerabilityDB.UpdatedAt != nil {
+					log.Infof("Scanner worker %d trivy DB ready (vuln updated %s)", workerID, info.VulnerabilityDB.UpdatedAt.Format(time.RFC3339))
+				}
+			}(i, cacheDir)
+		}
 		go workerLoop(i)
 	}
 
@@ -85,24 +89,26 @@ func InitWorker(db *bun.DB) {
 	// Periodically refresh trivy databases for all workers so they stay current
 	// even when no scans are running (e.g. after a startup where the initial
 	// warmup failed due to the network not being ready yet).
-	go func() {
-		refreshInterval := time.Duration(config.Config.Scanner.DBMaxAgeHours) * time.Hour
-		if refreshInterval <= 0 {
-			refreshInterval = 12 * time.Hour
-		}
-		ticker := time.NewTicker(refreshInterval)
-		defer ticker.Stop()
-		for range ticker.C {
-			for i := 0; i < concurrency; i++ {
-				dir := workerCacheDir(i)
-				if _, err := EnsureDatabasesFresh(context.Background(), dir); err != nil {
-					log.Warnf("Periodic DB refresh for worker %d failed: %v", i, err)
-				} else {
-					log.Infof("Periodic DB refresh for worker %d completed", i)
+	if TrivyEnabled() {
+		go func() {
+			refreshInterval := time.Duration(config.Config.Scanner.DBMaxAgeHours) * time.Hour
+			if refreshInterval <= 0 {
+				refreshInterval = 12 * time.Hour
+			}
+			ticker := time.NewTicker(refreshInterval)
+			defer ticker.Stop()
+			for range ticker.C {
+				for i := 0; i < concurrency; i++ {
+					dir := workerCacheDir(i)
+					if _, err := EnsureDatabasesFresh(context.Background(), dir); err != nil {
+						log.Warnf("Periodic DB refresh for worker %d failed: %v", i, err)
+					} else {
+						log.Infof("Periodic DB refresh for worker %d completed", i)
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 
 	// Backfill vuln_kb from existing vulnerabilities (best-effort, runs once in background)
 	go backfillKB(db)
@@ -237,7 +243,7 @@ func processScan(job ScanJob, cacheDir string) {
 	vulns := ParseVulnerabilities(trivyOut, scanID)
 	grypeVersion := ""
 	kbEntries := ExtractKBEntries(trivyOut)
-	if config.Config.Scanner.EnableGrype {
+	if GrypeEnabled() {
 		grypeOut, version, grypeErr := RunGrypeScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
 		if grypeErr != nil {
 			if ctx.Err() == nil {

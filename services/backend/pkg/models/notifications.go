@@ -11,9 +11,12 @@ import (
 )
 
 const (
-	NotificationTypeDiscord = "discord"
-	NotificationTypeEmail   = "email"
-	NotificationTypeWebhook = "webhook"
+	NotificationTypeDiscord  = "discord"
+	NotificationTypeEmail    = "email"
+	NotificationTypeWebhook  = "webhook"
+	NotificationTypeSlack    = "slack"
+	NotificationTypeTeams    = "teams"
+	NotificationTypeTelegram = "telegram"
 
 	NotificationEventScanComplete     = "scan_complete"
 	NotificationEventScanFailed       = "scan_failed"
@@ -36,6 +39,10 @@ type NotificationConfig struct {
 	SMTPFrom     string   `json:"smtp_from,omitempty"`
 	ToAddresses  []string `json:"to_addresses,omitempty"`
 	SMTPTLS      bool     `json:"smtp_tls,omitempty"`
+
+	// Telegram
+	TelegramBotToken string `json:"telegram_bot_token,omitempty"`
+	TelegramChatID   string `json:"telegram_chat_id,omitempty"`
 }
 
 func (n NotificationConfig) Value() (driver.Value, error) {
@@ -59,14 +66,17 @@ func (n *NotificationConfig) Scan(v interface{}) error {
 type NotificationChannel struct {
 	bun.BaseModel `bun:"table:notification_channels"`
 
-	ID        uuid.UUID          `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
-	Name      string             `bun:"name,type:text,notnull" json:"name"`
-	Type      string             `bun:"type,type:text,notnull" json:"type"`
-	Config    NotificationConfig `bun:"config,type:jsonb,default:'{}'" json:"config"`
-	Enabled   bool               `bun:"enabled,type:bool,default:true" json:"enabled"`
-	Events    StringList         `bun:"events,type:jsonb,default:'[]'" json:"events"`
-	CreatedAt time.Time          `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
-	UpdatedAt time.Time          `bun:"updated_at,type:timestamptz" json:"updated_at"`
+	ID            uuid.UUID          `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	Name          string             `bun:"name,type:text,notnull" json:"name"`
+	Type          string             `bun:"type,type:text,notnull" json:"type"`
+	Config        NotificationConfig `bun:"config,type:jsonb,default:'{}'" json:"config"`
+	Enabled       bool               `bun:"enabled,type:bool,default:true" json:"enabled"`
+	Events        StringList         `bun:"events,type:jsonb,default:'[]'" json:"events"`
+	OrgIDs        StringList         `bun:"org_ids,type:jsonb,default:'[]'" json:"org_ids"`
+	ImagePatterns StringList         `bun:"image_patterns,type:jsonb,default:'[]'" json:"image_patterns"`
+	MinSeverity   string             `bun:"min_severity,type:text,default:''" json:"min_severity"`
+	CreatedAt     time.Time          `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+	UpdatedAt     time.Time          `bun:"updated_at,type:timestamptz" json:"updated_at"`
 }
 
 type NotificationDelivery struct {

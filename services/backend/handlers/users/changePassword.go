@@ -51,6 +51,11 @@ func ChangeUserPassword(context *gin.Context, db *bun.DB) {
 		return
 	}
 
+	if user.AuthType == "oidc" {
+		httperror.StatusBadRequest(context, "Password changes are disabled for OIDC users", errors.New("password managed by oidc provider"))
+		return
+	}
+
 	// check if current password is correct
 	credentialError := user.CheckPassword(changePasswordRequest.CurrentPassword)
 	if credentialError != nil {

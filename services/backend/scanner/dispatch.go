@@ -11,20 +11,20 @@ import (
 	"github.com/uptrace/bun"
 )
 
-func ProviderForRegistry(registry *models.Registry) string {
-	if registry != nil && registry.ScanProvider != "" {
-		return registry.ScanProvider
-	}
-	return models.ScanProviderTrivy
-}
-
 // DispatchScan routes a scan to the appropriate provider. Both built-in and
 // external providers execute asynchronously via the existing worker queue.
 func DispatchScan(_ context.Context, db *bun.DB, scan *models.Scan, envVars []string, platform string) error {
 	provider := scan.ScanProvider
 	if provider == "" {
-		provider = models.ScanProviderTrivy
+		resolvedProvider, err := DefaultScanProvider()
+		if err != nil {
+			return err
+		}
+		provider = resolvedProvider
 		scan.ScanProvider = provider
+	}
+	if err := ValidateProviderSelection(provider); err != nil {
+		return err
 	}
 
 	switch provider {

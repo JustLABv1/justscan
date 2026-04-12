@@ -52,12 +52,19 @@ func TestAggregateVulnTrendRowsIgnoresIncompleteSamples(t *testing.T) {
 			Critical: 99,
 			High:     99,
 		},
+		{
+			Status:         models.ScanStatusFailed,
+			ExternalStatus: models.ScanExternalStatusBlockedByXrayPolicy,
+			CompletedAt:    &today,
+			Critical:       7,
+			High:           3,
+		},
 	})
 
 	if len(rows) != 1 {
-		t.Fatalf("expected only completed samples to be aggregated, got %d rows", len(rows))
+		t.Fatalf("expected only finalized findings samples to be aggregated, got %d rows", len(rows))
 	}
-	if rows[0].Critical != 5 || rows[0].High != 1 {
-		t.Fatalf("expected incomplete samples to be ignored, got critical=%d high=%d", rows[0].Critical, rows[0].High)
+	if rows[0].Critical != 6 || rows[0].High != 2 {
+		t.Fatalf("expected running samples to be ignored and blocked-policy samples to be included, got critical=%d high=%d", rows[0].Critical, rows[0].High)
 	}
 }

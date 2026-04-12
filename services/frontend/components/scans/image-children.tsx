@@ -11,13 +11,14 @@ import { useCallback, useEffect, useState } from 'react';
 
 interface ImageChildrenProps {
   imageName: string;
+  mode?: 'table' | 'stacked';
   onDelete: (id: string, imageName: string) => Promise<void> | void;
   onCancel: (id: string, imageName: string) => Promise<void> | void;
   selectedScans: Set<string>;
   onSelectScan: (scanId: string, selected: boolean) => void;
 }
 
-export function ImageChildren({ imageName, onDelete, onCancel, selectedScans, onSelectScan }: ImageChildrenProps) {
+export function ImageChildren({ imageName, mode = 'table', onDelete, onCancel, selectedScans, onSelectScan }: ImageChildrenProps) {
   const router = useRouter();
   const [scans, setScans] = useState<Scan[]>([]);
   const [total, setTotal] = useState(0);
@@ -45,6 +46,103 @@ export function ImageChildren({ imageName, onDelete, onCancel, selectedScans, on
   }, scans.some((scan) => scan.status === 'running' || scan.status === 'pending'), 5000);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  if (mode === 'stacked') {
+    return (
+      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)' }}>
+        {loading ? (
+          <div className="flex justify-center py-6">
+            <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+          </div>
+        ) : scans.length === 0 ? (
+          <div className="py-5 text-center text-xs text-zinc-500">No scans yet.</div>
+        ) : (
+          <div className="space-y-3 p-3">
+            {scans.map((scan) => (
+              <div key={scan.id} className="rounded-xl p-3.5 space-y-3" style={{ background: 'rgba(124,58,237,0.05)', border: '1px solid var(--glass-border)' }}>
+                <div className="flex items-start gap-3">
+                  <div className="pt-0.5" onClick={(event) => event.stopPropagation()}>
+                    <Checkbox isSelected={selectedScans.has(scan.id)} onChange={(checked: boolean) => onSelectScan(scan.id, checked)}>
+                      <Checkbox.Control className="border border-zinc-500/50 data-[selected=true]:border-violet-500 data-[selected=true]:bg-violet-600">
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                    </Checkbox>
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-mono text-sm font-medium text-zinc-700 dark:text-zinc-200">:{scan.image_tag}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+                          <span className="text-xs text-zinc-500" title={fullDate(scan.created_at)}>{timeAgo(scan.created_at)}</span>
+                        </div>
+                      </div>
+                      <button
+                        className="text-xs font-medium text-violet-500 hover:text-violet-400 transition-colors"
+                        onClick={() => router.push(`/scans/${scan.id}`)}
+                        type="button"
+                      >
+                        Open
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {(scan.tags ?? []).map((tag) => (
+                        <span key={tag.id} className="text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap" style={{ background: `${tag.color}22`, color: tag.color, border: `1px solid ${tag.color}44` }}>
+                          {tag.name}
+                        </span>
+                      ))}
+                      {(scan.tags ?? []).length === 0 ? <span className="text-xs text-zinc-500">No tags</span> : null}
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2">
+                      <div className="rounded-lg px-2.5 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-red-400/80">C</p>
+                        <SevCount count={scan.critical_count} level="critical" />
+                      </div>
+                      <div className="rounded-lg px-2.5 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-orange-400/80">H</p>
+                        <SevCount count={scan.high_count} level="high" />
+                      </div>
+                      <div className="rounded-lg px-2.5 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-yellow-400/80">M</p>
+                        <SevCount count={scan.medium_count} level="medium" />
+                      </div>
+                      <div className="rounded-lg px-2.5 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-blue-400/80">L</p>
+                        <SevCount count={scan.low_count} level="low" />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3">
+                      {(scan.status === 'pending' || scan.status === 'running') && (
+                        <button onClick={(event) => { event.stopPropagation(); void onCancel(scan.id, imageName); }} className="text-zinc-400 hover:text-amber-400 transition-colors" title="Cancel scan" type="button">
+                          <Cancel01Icon aria-hidden size={15} />
+                        </button>
+                      )}
+                      <button onClick={(event) => { event.stopPropagation(); void onDelete(scan.id, imageName); }} className="text-zinc-400 hover:text-red-400 transition-colors" title="Delete scan" type="button">
+                        <Delete01Icon aria-hidden size={15} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-2" style={{ borderTop: '1px solid var(--row-divider)' }}>
+            <span className="text-xs text-zinc-500">{total} scans</span>
+            <div className="flex items-center gap-1.5">
+              <button className="px-2.5 py-1 text-xs rounded-lg text-zinc-500 disabled:opacity-30 transition-all" disabled={page <= 1} onClick={() => setPage((previous) => previous - 1)} style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }} type="button">← Prev</button>
+              <span className="text-xs text-zinc-500 px-1">{page} / {totalPages}</span>
+              <button className="px-2.5 py-1 text-xs rounded-lg text-zinc-500 disabled:opacity-30 transition-all" disabled={page >= totalPages} onClick={() => setPage((previous) => previous + 1)} style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }} type="button">Next →</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <tr>

@@ -56,6 +56,11 @@ func GenerateTokenUser(db *bun.DB, context *gin.Context) {
 		return
 	}
 
+	if err := auth.RecordSuccessfulLogin(context.Request.Context(), db, &user, "local"); err != nil {
+		httperror.InternalServerError(context, "Error updating login metadata", err)
+		return
+	}
+
 	// generate token
 	tokenString, ExpiresAt, err := auth.GenerateJWT(user.ID, request.RememberMe)
 	if err != nil {
@@ -79,20 +84,26 @@ func GenerateTokenUser(db *bun.DB, context *gin.Context) {
 	}
 
 	type UserResponse struct {
-		ID             uuid.UUID `json:"id"`
-		Email          string    `json:"email"`
-		Username       string    `json:"username"`
-		Disabled       bool      `json:"disabled"`
-		DisabledReason string    `json:"disabled_reason"`
-		Role           string    `json:"role"`
+		ID              uuid.UUID  `json:"id"`
+		Email           string     `json:"email"`
+		Username        string     `json:"username"`
+		Disabled        bool       `json:"disabled"`
+		DisabledReason  string     `json:"disabled_reason"`
+		Role            string     `json:"role"`
+		AuthType        string     `json:"auth_type"`
+		LastLoginAt     *time.Time `json:"last_login_at,omitempty"`
+		LastLoginMethod string     `json:"last_login_method"`
 	}
 	userResponse := UserResponse{
-		ID:             user.ID,
-		Email:          user.Email,
-		Username:       user.Username,
-		Disabled:       user.Disabled,
-		DisabledReason: user.DisabledReason,
-		Role:           user.Role,
+		ID:              user.ID,
+		Email:           user.Email,
+		Username:        user.Username,
+		Disabled:        user.Disabled,
+		DisabledReason:  user.DisabledReason,
+		Role:            user.Role,
+		AuthType:        user.AuthType,
+		LastLoginAt:     user.LastLoginAt,
+		LastLoginMethod: user.LastLoginMethod,
 	}
 
 	context.JSON(http.StatusOK, gin.H{"token": tokenString, "user": userResponse, "expires_at": ExpiresAt})

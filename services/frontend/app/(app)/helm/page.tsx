@@ -1,16 +1,19 @@
 'use client';
 import { useToast } from '@/components/toast';
+import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import {
     createHelmScans,
     createShare,
     extractHelmImages,
+    getDefaultScannerCapabilities,
     getTokenType,
     HelmExtractResponse,
     HelmScanRunSummary,
     listHelmScanRuns,
-    listRegistries,
+    listRegistriesWithCapabilities,
     listTags,
-    Registry,
+    RegistryWithHealth,
+    ScannerCapabilities,
     Tag,
 } from '@/lib/api';
 import {
@@ -33,8 +36,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-const inputCls =
-  'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+const inputCls = nativeFieldClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
 
 type Step = 'input' | 'preview';
 
@@ -72,7 +75,8 @@ export default function HelmPage() {
   const [platform, setPlatform] = useState('');
   const [registryId, setRegistryId] = useState('');
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
-  const [registries, setRegistries] = useState<Registry[]>([]);
+  const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [scanning, setScanning] = useState(false);
   const [makePublic, setMakePublic] = useState(false);
@@ -84,6 +88,8 @@ export default function HelmPage() {
   const isOCI = chartURL.trim().startsWith('oci://');
   const selectedImages = editableImages.filter((img) => selected.has(img.id));
   const hasInvalidSelection = selectedImages.some((img) => img.edited_ref.trim() === '');
+  const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
+  const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
 
   const loadTags = useCallback(async () => {
     try {
@@ -109,7 +115,12 @@ export default function HelmPage() {
     setIsAdmin(getTokenType() === 'admin');
     loadTags();
     loadHistory();
-    listRegistries().then(setRegistries).catch(() => {});
+    listRegistriesWithCapabilities()
+      .then((response) => {
+        setRegistries(response.data);
+        setCapabilities(response.capabilities);
+      })
+      .catch(() => {});
   }, [loadHistory, loadTags]);
 
   async function handleExtract(e: React.FormEvent) {
@@ -147,6 +158,10 @@ export default function HelmPage() {
     if (!extracted || selected.size === 0) return;
     if (hasInvalidSelection) {
       toast.error('Each selected image needs a non-empty image reference');
+      return;
+    }
+    if (xrayOnlyWithoutRegistries) {
+      toast.error('No Artifactory Xray registry is configured yet.');
       return;
     }
 
@@ -234,8 +249,7 @@ export default function HelmPage() {
           type="button"
           onClick={loadHistory}
           disabled={historyLoading}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl transition-colors text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 disabled:opacity-50"
-          style={{ border: '1px solid var(--border-subtle)' }}
+          className="btn-secondary inline-flex items-center gap-1.5"
         >
           <Refresh01Icon size={14} className={historyLoading ? 'animate-spin' : ''} />
           Refresh history
@@ -317,12 +331,7 @@ export default function HelmPage() {
               <button
                 type="submit"
                 disabled={extracting || !chartURL.trim()}
-                className="px-5 py-2.5 text-sm font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{
-                  background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                  color: '#fff',
-                  boxShadow: '0 2px 8px rgba(124,58,237,0.3)',
-                }}
+                className="btn-primary"
               >
                 {extracting ? 'Extracting images…' : 'Extract Images'}
               </button>
@@ -354,7 +363,7 @@ export default function HelmPage() {
             </div>
             <button
               onClick={() => setStep('input')}
-              className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              className="btn-secondary inline-flex items-center gap-1.5"
             >
               <ArrowLeft01Icon size={14} />
               Change chart
@@ -370,14 +379,14 @@ export default function HelmPage() {
                 selectedKey={registryId || '__auto__'}
                 onSelectionChange={(key) => setRegistryId(String(key === '__auto__' ? '' : key))}
               >
-                <Select.Trigger className="flex-1 px-3 py-1.5 text-sm rounded-xl glass-input">
+                <Select.Trigger className={selectTriggerCls}>
                   <Select.Value />
                   <Select.Indicator />
                 </Select.Trigger>
                 <Select.Popover>
                   <ListBox>
-                    <ListBox.Item id="__auto__">Auto-match from image hostname</ListBox.Item>
-                    {registries.map((registry) => (
+                    <ListBox.Item id="__auto__">{capabilities.enable_trivy ? 'Auto-match from image hostname' : 'Auto-match from configured Xray registries'}</ListBox.Item>
+                    {selectableRegistries.map((registry) => (
                       <ListBox.Item key={registry.id} id={registry.id}>
                         {registry.name} · {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
                       </ListBox.Item>
@@ -387,13 +396,19 @@ export default function HelmPage() {
               </Select>
             </div>
 
+            {xrayOnlyWithoutRegistries && (
+              <p className="text-xs" style={{ color: '#f59e0b' }}>
+                No Artifactory Xray registry is configured yet, so this Helm run cannot be queued until one is added.
+              </p>
+            )}
+
             <div className="flex items-center gap-2 min-w-[200px]">
               <label className="text-xs text-zinc-500 whitespace-nowrap">Platform</label>
               <Select
                 selectedKey={platform || '__auto__'}
                 onSelectionChange={(key) => setPlatform(String(key === '__auto__' ? '' : key))}
               >
-                <Select.Trigger className="flex-1 px-3 py-1.5 text-sm rounded-xl glass-input">
+                <Select.Trigger className={selectTriggerCls}>
                   <Select.Value />
                   <Select.Indicator />
                 </Select.Trigger>
@@ -527,8 +542,7 @@ export default function HelmPage() {
             <button
               type="button"
               onClick={() => setStep('input')}
-              className="flex items-center gap-1.5 px-4 py-2.5 text-sm rounded-xl transition-all text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-              style={{ border: '1px solid var(--border-subtle)' }}
+              className="btn-secondary inline-flex items-center gap-1.5"
             >
               <ArrowLeft01Icon size={14} />
               Back
@@ -536,13 +550,8 @@ export default function HelmPage() {
             <button
               type="button"
               onClick={handleScan}
-              disabled={scanning || selected.size === 0 || hasInvalidSelection}
-              className="px-5 py-2.5 text-sm font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                color: '#fff',
-                boxShadow: '0 2px 8px rgba(124,58,237,0.3)',
-              }}
+              disabled={scanning || selected.size === 0 || hasInvalidSelection || xrayOnlyWithoutRegistries}
+              className="btn-primary"
             >
               {scanning ? 'Queuing Helm run…' : `Queue ${selected.size} selected image${selected.size !== 1 ? '' : 's'}`}
             </button>

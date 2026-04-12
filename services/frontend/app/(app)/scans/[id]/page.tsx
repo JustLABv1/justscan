@@ -1,33 +1,34 @@
 'use client';
 import { useToast } from '@/components/toast';
 import { SeverityBadge, SourceBadge, StatusBadge } from '@/components/ui/badges';
+import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import type { ComplianceResult, Org, SBOMComponent, Scan, Suppression, Tag, Vulnerability } from '@/lib/api';
 import {
-  addTagToScan,
-  assignScanToOrg,
-  cancelScan,
-  createComment,
-  createShare,
-  deleteComment,
-  deleteShare,
-  deleteSuppression,
-  getScan,
-  getScanCompliance,
-  getScanSBOM,
-  getUser,
-  getVulnerabilityContextAnalysis,
-  listOrgs,
-  listScans,
-  listTags,
-  listVulnerabilities,
-  reEvaluateCompliance,
-  removeScanFromOrg,
-  removeTagFromScan,
-  reScan,
-  upsertSuppression,
+    addTagToScan,
+    assignScanToOrg,
+    cancelScan,
+    createComment,
+    createShare,
+    deleteComment,
+    deleteShare,
+    deleteSuppression,
+    getScan,
+    getScanCompliance,
+    getScanSBOM,
+    getUser,
+    getVulnerabilityContextAnalysis,
+    listOrgs,
+    listScans,
+    listTags,
+    listVulnerabilities,
+    reEvaluateCompliance,
+    removeScanFromOrg,
+    removeTagFromScan,
+    reScan,
+    upsertSuppression,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select, useOverlayState } from '@heroui/react';
@@ -38,7 +39,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { ScannerDatabaseCard, ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
 
-const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+const inputCls = nativeFieldClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
 
 type ScanTab = 'vulns' | 'policy' | 'sbom' | 'details' | 'timeline';
 
@@ -542,7 +544,8 @@ export default function ScanDetailPage() {
       <div>
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors mb-3"
+          className="btn-secondary inline-flex items-center gap-1.5 mb-3"
+          type="button"
         >
           <ArrowLeft01Icon size={15} />
           Back to scans
@@ -576,9 +579,9 @@ export default function ScanDetailPage() {
               <button
                 onClick={handleCancel}
                 disabled={cancelling}
-                className="flex items-center gap-2 px-3 py-2 text-sm rounded-xl font-medium disabled:opacity-50 transition-all hover:opacity-90"
-                style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', color: '#fbbf24' }}
+                className="btn-warning inline-flex items-center gap-2"
                 title="Stop this scan"
+                type="button"
               >
                 {cancelling
                   ? <span className="w-3.5 h-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
@@ -589,9 +592,9 @@ export default function ScanDetailPage() {
             <button
               onClick={handleReScan}
               disabled={reScanning || scan.status === 'running' || scan.status === 'pending'}
-              className="flex items-center gap-2 px-3 py-2 text-sm rounded-xl font-medium disabled:opacity-50 transition-all hover:opacity-90"
-              style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#c4b5fd' }}
+              className="btn-primary inline-flex items-center gap-2"
               title="Start a new scan with the same image and tag"
+              type="button"
             >
               {reScanning
                 ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
@@ -602,8 +605,8 @@ export default function ScanDetailPage() {
               <Dropdown.Trigger>
                 <button
                   type="button"
-                  className="flex h-10 w-10 items-center justify-center rounded-xl transition-all"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: shareOpen ? '#a78bfa' : 'var(--text-secondary)' }}
+                  className="btn-icon-subtle h-10 w-10"
+                  style={shareOpen ? { color: '#a78bfa', borderColor: 'rgba(167,139,250,0.25)' } : undefined}
                   aria-label="Open scan actions"
                   title="More actions"
                 >
@@ -651,7 +654,7 @@ export default function ScanDetailPage() {
                   style={{ background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-zinc-800 dark:text-white">Share scan</p>
-                    <button onClick={() => setShareOpen(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-lg leading-none">✕</button>
+                    <button className="btn-icon-subtle text-lg leading-none" onClick={() => setShareOpen(false)} type="button">✕</button>
                   </div>
                   {scan.share_token ? (
                     <>
@@ -672,8 +675,8 @@ export default function ScanDetailPage() {
                               setShareCopied(true);
                               setTimeout(() => setShareCopied(false), 1500);
                             }}
-                            className="shrink-0 px-2.5 py-1.5 text-xs rounded-lg transition-colors"
-                            style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}
+                            className="btn-secondary shrink-0"
+                            type="button"
                           >
                             {shareCopied ? '✓ Copied' : 'Copy'}
                           </button>
@@ -681,28 +684,24 @@ export default function ScanDetailPage() {
                       </div>
                       <div className="space-y-1.5">
                         <p className="text-xs text-zinc-500">Change visibility</p>
-                        <div className="flex gap-2">
+                        <div className="segmented-control w-full">
                           {(['public', 'authenticated'] as const).map(v => (
                             <button key={v} onClick={() => setShareVisibility(v)}
-                              className="flex-1 py-1.5 text-xs rounded-lg font-medium transition-all"
-                              style={shareVisibility === v
-                                ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white' }
-                                : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
-                              {v === 'public' ? '🌐 Public' : '🔐 Signed in'}
+                              className="segmented-control-item flex-1"
+                              data-active={shareVisibility === v ? 'true' : 'false'}
+                              data-size="sm"
+                              type="button">
+                              {v === 'public' ? 'Public' : 'Signed in'}
                             </button>
                           ))}
                         </div>
                         {shareVisibility !== scan.share_visibility && (
-                          <button onClick={handleEnableShare} disabled={shareLoading}
-                            className="w-full py-1.5 text-xs rounded-lg font-medium transition-all disabled:opacity-50"
-                            style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
+                          <button className="btn-primary w-full" disabled={shareLoading} onClick={handleEnableShare} type="button">
                             {shareLoading ? 'Updating…' : 'Update visibility'}
                           </button>
                         )}
                       </div>
-                      <button onClick={handleDisableShare} disabled={shareLoading}
-                        className="w-full py-2 text-xs rounded-lg transition-all disabled:opacity-50"
-                        style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171', border: '1px solid rgba(239,68,68,0.18)' }}>
+                      <button className="btn-danger w-full" disabled={shareLoading} onClick={handleDisableShare} type="button">
                         {shareLoading ? 'Processing…' : 'Disable sharing'}
                       </button>
                     </>
@@ -710,14 +709,14 @@ export default function ScanDetailPage() {
                     <>
                       <div className="space-y-1.5">
                         <p className="text-xs text-zinc-500">Visibility</p>
-                        <div className="flex gap-2">
+                        <div className="segmented-control w-full">
                           {(['public', 'authenticated'] as const).map(v => (
                             <button key={v} onClick={() => setShareVisibility(v)}
-                              className="flex-1 py-1.5 text-xs rounded-lg font-medium transition-all"
-                              style={shareVisibility === v
-                                ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white' }
-                                : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
-                              {v === 'public' ? '🌐 Public' : '🔐 Signed in'}
+                              className="segmented-control-item flex-1"
+                              data-active={shareVisibility === v ? 'true' : 'false'}
+                              data-size="sm"
+                              type="button">
+                              {v === 'public' ? 'Public' : 'Signed in'}
                             </button>
                           ))}
                         </div>
@@ -727,9 +726,7 @@ export default function ScanDetailPage() {
                             : 'Only signed-in users can view this scan.'}
                         </p>
                       </div>
-                      <button onClick={handleEnableShare} disabled={shareLoading}
-                        className="w-full py-2 text-sm rounded-lg font-medium transition-all disabled:opacity-50"
-                        style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white' }}>
+                      <button className="btn-primary w-full" disabled={shareLoading} onClick={handleEnableShare} type="button">
                         {shareLoading ? 'Creating link…' : 'Create share link'}
                       </button>
                     </>
@@ -822,8 +819,7 @@ export default function ScanDetailPage() {
 
       {/* Tab bar */}
       {scan.status !== 'pending' && scan.status !== 'running' && (
-        <div className="flex items-center gap-1 p-1 rounded-xl w-fit"
-          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+        <div className="segmented-control w-fit">
           {([
             { id: 'vulns', label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities' },
             ...(hasPolicyTab ? [{ id: 'policy' as const, label: blockedPolicyDetails?.totalViolations ? `Policy Violations (${blockedPolicyDetails.totalViolations})` : 'Policy Violations' }] : []),
@@ -834,10 +830,9 @@ export default function ScanDetailPage() {
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className="px-4 py-1.5 text-sm font-medium rounded-lg transition-all"
-              style={activeTab === id
-                ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', boxShadow: '0 0 12px rgba(124,58,237,0.3)' }
-                : { color: 'var(--text-muted)' }}
+              className="segmented-control-item"
+              data-active={activeTab === id ? 'true' : 'false'}
+              type="button"
             >
               {label}
             </button>
@@ -891,7 +886,7 @@ export default function ScanDetailPage() {
               className={inputCls}
             />
             <Select selectedKey={sbomTypeFilter || '__all__'} onSelectionChange={k => { setSbomTypeFilter(String(k === '__all__' ? '' : k)); setSbomLoaded(false); }} className="flex-1">
-              <Select.Trigger className={inputCls}>
+              <Select.Trigger className={selectTriggerCls}>
                 <Select.Value />
                 <Select.Indicator />
               </Select.Trigger>
@@ -959,7 +954,7 @@ export default function ScanDetailPage() {
           </h2>
           {/* Severity pills + secondary filters in one row */}
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="segmented-control flex-wrap">
             {([
               { id: '',         label: 'All',      count: (scan.critical_count ?? 0) + (scan.high_count ?? 0) + (scan.medium_count ?? 0) + (scan.low_count ?? 0) },
               { id: 'CRITICAL', label: 'Critical', count: scan.critical_count ?? 0, color: 'rgba(239,68,68,0.15)',   activeColor: '#f87171', border: 'rgba(239,68,68,0.3)'   },
@@ -972,10 +967,13 @@ export default function ScanDetailPage() {
                 <button
                   key={id}
                   onClick={() => { setSeverityFilter(id); setPage(1); }}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl font-medium border transition-all"
+                  className="segmented-control-item"
+                  data-active={active ? 'true' : 'false'}
+                  data-size="sm"
+                  type="button"
                   style={active
                     ? { background: color ?? 'rgba(124,58,237,0.15)', color: activeColor ?? '#a78bfa', borderColor: border ?? 'rgba(167,139,250,0.3)' }
-                    : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }
+                    : undefined
                   }
                 >
                   {label}
@@ -1012,11 +1010,8 @@ export default function ScanDetailPage() {
               </div>
               <button
                 onClick={() => { setHasFix(!hasFix); setPage(1); }}
-                className="px-3 py-2 text-sm rounded-xl transition-colors"
-                style={hasFix
-                  ? { background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(167,139,250,0.3)', color: '#c4b5fd' }
-                  : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }
-                }
+                className={hasFix ? 'btn-primary' : 'btn-secondary'}
+                type="button"
               >
                 Has Fix
               </button>
@@ -1176,7 +1171,7 @@ export default function ScanDetailPage() {
                               )}
                               <div className="flex gap-2 items-center flex-wrap">
                                 <Select selectedKey={suppressStatus} onSelectionChange={k => setSuppressStatus(k as Suppression['status'])}>
-                                  <Select.Trigger className={inputCls}>
+                                  <Select.Trigger className={selectTriggerCls}>
                                     <Select.Value />
                                     <Select.Indicator />
                                   </Select.Trigger>
@@ -1236,8 +1231,8 @@ export default function ScanDetailPage() {
                                 <button
                                   onClick={() => handleSuppress(v)}
                                   disabled={suppressSaving || !suppressJustification.trim()}
-                                  className="px-3 py-2 text-sm rounded-xl font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90 shrink-0 flex items-center gap-1.5"
-                                  style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171' }}
+                                  className="btn-warning inline-flex shrink-0 items-center gap-1.5"
+                                  type="button"
                                 >
                                   {suppressSaving && <span className="w-3 h-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />}
                                   {v.suppression ? 'Update' : 'Suppress'}
@@ -1246,8 +1241,8 @@ export default function ScanDetailPage() {
                                   <button
                                     onClick={() => handleLiftSuppression(v)}
                                     disabled={suppressSaving}
-                                    className="px-3 py-2 text-sm rounded-xl disabled:opacity-40 transition-colors shrink-0"
-                                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
+                                    className="btn-secondary shrink-0"
+                                    type="button"
                                   >
                                     Lift
                                   </button>
@@ -1305,8 +1300,8 @@ export default function ScanDetailPage() {
                               <button
                                 onClick={() => handleAddComment(v.id)}
                                 disabled={commentSaving || !commentText.trim()}
-                                className="px-3 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90 shrink-0"
-                                style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+                                className="btn-primary shrink-0"
+                                type="button"
                               >
                                 Add Note
                               </button>
@@ -1330,8 +1325,8 @@ export default function ScanDetailPage() {
               <button
                 disabled={page <= 1}
                 onClick={() => setPage(p => p - 1)}
-                className="px-3 py-1.5 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                className="btn-secondary"
+                type="button"
               >
                 ← Prev
               </button>
@@ -1339,8 +1334,8 @@ export default function ScanDetailPage() {
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage(p => p + 1)}
-                className="px-3 py-1.5 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                className="btn-secondary"
+                type="button"
               >
                 Next →
               </button>

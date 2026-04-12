@@ -1,5 +1,7 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
     addTagToScan,
     AdminScan,
@@ -28,9 +30,11 @@ import {
     listAutoTagRules,
     listNotificationChannels,
     listNotificationDeliveries,
+    listOrgs,
     listTags,
     NotificationChannel,
     NotificationDelivery,
+    Org,
     reScan,
     ScannerHealth,
     setPublicScanEnabled,
@@ -43,14 +47,30 @@ import {
     updateRateLimit,
     updateRegisterRateLimit,
 } from '@/lib/api';
+import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import { fullDate, timeAgo } from '@/lib/time';
-import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
-import { ArrowDown01Icon, ArrowRight01Icon, Delete01Icon, Notification01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
+import { Input, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { ArrowDown01Icon, ArrowRight01Icon, Delete01Icon, Notification01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon, Tag01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+const inputCls = nativeFieldClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
+
+const USER_AUTH_LABEL: Record<string, string> = {
+  local: 'Local',
+  oidc: 'OIDC',
+};
+
+const USER_AUTH_STYLE: Record<string, React.CSSProperties> = {
+  local: { color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' },
+  oidc: { color: '#a78bfa', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' },
+};
+
+function userAuthLabel(authType?: string) {
+  return USER_AUTH_LABEL[authType ?? 'local'] ?? (authType ? authType.toUpperCase() : 'Unknown');
+}
 
 type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans';
 
@@ -147,8 +167,7 @@ function ScannerHealthPanel() {
         <button
           onClick={load}
           disabled={loading}
-          className="px-3 py-1.5 text-sm rounded-xl transition-all disabled:opacity-40"
-          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+          className="btn-secondary"
         >
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
@@ -162,60 +181,70 @@ function ScannerHealthPanel() {
 
       {health && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              { label: 'Healthy Workers', value: health.healthy_workers, color: '#34d399', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.18)' },
-              { label: 'Stale Workers', value: health.stale_workers, color: '#fbbf24', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.18)' },
-              { label: 'Oldest Vuln DB Snapshot', value: formatDbAge(health.oldest_vuln_db_age_hours), color: '#60a5fa', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.18)' },
-              { label: 'Oldest Java DB Snapshot', value: formatDbAge(health.oldest_java_db_age_hours), color: '#a78bfa', bg: 'rgba(124,58,237,0.1)', border: 'rgba(124,58,237,0.18)' },
-            ].map((item) => (
-              <div key={item.label} className="rounded-xl p-4" style={{ background: item.bg, border: `1px solid ${item.border}` }}>
-                <p className="text-xs text-zinc-500 mb-1">{item.label}</p>
-                <p className="text-lg font-bold" style={{ color: item.color }}>{item.value}</p>
+          {!health.local_scanner_enabled ? (
+            <div className="rounded-xl px-4 py-4 text-sm" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)' }}>
+              <p className="font-medium text-zinc-800 dark:text-zinc-100">Local scanner is disabled.</p>
+              <p className="mt-1 text-zinc-600 dark:text-zinc-400">{health.message || 'This backend instance is running without the built-in local scanner.'}</p>
+              <p className="mt-2 text-xs text-zinc-500">Grype augmentation: {health.grype_enabled ? 'enabled' : 'disabled'}</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {[
+                  { label: 'Healthy Workers', value: health.healthy_workers, color: '#34d399', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.18)' },
+                  { label: 'Stale Workers', value: health.stale_workers, color: '#fbbf24', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.18)' },
+                  { label: 'Oldest Vuln DB Snapshot', value: formatDbAge(health.oldest_vuln_db_age_hours), color: '#60a5fa', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.18)' },
+                  { label: 'Oldest Java DB Snapshot', value: formatDbAge(health.oldest_java_db_age_hours), color: '#a78bfa', bg: 'rgba(124,58,237,0.1)', border: 'rgba(124,58,237,0.18)' },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-xl p-4" style={{ background: item.bg, border: `1px solid ${item.border}` }}>
+                    <p className="text-xs text-zinc-500 mb-1">{item.label}</p>
+                    <p className="text-lg font-bold" style={{ color: item.color }}>{item.value}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className="rounded-xl px-4 py-3 text-xs text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-            Status is based on when each worker last downloaded its local DB copy. A worker is healthy if it downloaded within the last {health.max_allowed_age_hours}h.
-          </div>
+              <div className="rounded-xl px-4 py-3 text-xs text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                Status is based on when each worker last downloaded its local DB copy. A worker is healthy if it downloaded within the last {health.max_allowed_age_hours}h.
+              </div>
 
-          <div className="space-y-2">
-            {health.workers.map((worker) => {
-              const tone = scannerTone(worker.status);
-              return (
-                <div key={worker.worker_id} className="rounded-xl p-4 space-y-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
-                        Worker {worker.worker_id}
-                      </span>
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md capitalize" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
-                        {worker.status}
-                      </span>
-                      <span className="text-xs text-zinc-500">Trivy {worker.trivy_version || 'unknown'}</span>
+              <div className="space-y-2">
+                {health.workers.map((worker) => {
+                  const tone = scannerTone(worker.status);
+                  return (
+                    <div key={worker.worker_id} className="rounded-xl p-4 space-y-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-md" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
+                            Worker {worker.worker_id}
+                          </span>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-md capitalize" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
+                            {worker.status}
+                          </span>
+                          <span className="text-xs text-zinc-500">Trivy {worker.trivy_version || 'unknown'}</span>
+                        </div>
+                        <span className="text-xs text-zinc-500" title={worker.cache_dir}>{worker.cache_dir}</span>
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-3 text-xs">
+                        <div className="rounded-lg px-3 py-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                          <p className="text-zinc-500 mb-1">Vulnerability DB</p>
+                          <p className="text-zinc-700 dark:text-zinc-200">Snapshot age: {formatDbAge(worker.vuln_db_age_hours)}</p>
+                          <p className="text-zinc-500 mt-1">Updated: {worker.vuln_db_updated_at ? fullDate(worker.vuln_db_updated_at) : 'Unknown'}</p>
+                          <p className="text-zinc-500">Downloaded: {worker.vuln_db_downloaded_at ? fullDate(worker.vuln_db_downloaded_at) : 'Unknown'}</p>
+                        </div>
+                        <div className="rounded-lg px-3 py-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                          <p className="text-zinc-500 mb-1">Java DB</p>
+                          <p className="text-zinc-700 dark:text-zinc-200">Snapshot age: {formatDbAge(worker.java_db_age_hours)}</p>
+                          <p className="text-zinc-500 mt-1">Updated: {worker.java_db_updated_at ? fullDate(worker.java_db_updated_at) : 'Unknown'}</p>
+                          <p className="text-zinc-500">Downloaded: {worker.java_db_downloaded_at ? fullDate(worker.java_db_downloaded_at) : 'Unknown'}</p>
+                        </div>
+                      </div>
+                      {worker.error && <p className="text-xs" style={{ color: '#f87171' }}>{worker.error}</p>}
                     </div>
-                    <span className="text-xs text-zinc-500" title={worker.cache_dir}>{worker.cache_dir}</span>
-                  </div>
-                  <div className="grid md:grid-cols-2 gap-3 text-xs">
-                    <div className="rounded-lg px-3 py-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-                      <p className="text-zinc-500 mb-1">Vulnerability DB</p>
-                      <p className="text-zinc-700 dark:text-zinc-200">Snapshot age: {formatDbAge(worker.vuln_db_age_hours)}</p>
-                      <p className="text-zinc-500 mt-1">Updated: {worker.vuln_db_updated_at ? fullDate(worker.vuln_db_updated_at) : 'Unknown'}</p>
-                      <p className="text-zinc-500">Downloaded: {worker.vuln_db_downloaded_at ? fullDate(worker.vuln_db_downloaded_at) : 'Unknown'}</p>
-                    </div>
-                    <div className="rounded-lg px-3 py-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-                      <p className="text-zinc-500 mb-1">Java DB</p>
-                      <p className="text-zinc-700 dark:text-zinc-200">Snapshot age: {formatDbAge(worker.java_db_age_hours)}</p>
-                      <p className="text-zinc-500 mt-1">Updated: {worker.java_db_updated_at ? fullDate(worker.java_db_updated_at) : 'Unknown'}</p>
-                      <p className="text-zinc-500">Downloaded: {worker.java_db_downloaded_at ? fullDate(worker.java_db_downloaded_at) : 'Unknown'}</p>
-                    </div>
-                  </div>
-                  {worker.error && <p className="text-xs" style={{ color: '#f87171' }}>{worker.error}</p>}
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
@@ -393,8 +422,7 @@ function SettingsTab() {
           <button
             onClick={handleSaveRateLimit}
             disabled={savingRl || rateLimitInput === String(rateLimit)}
-            className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 flex items-center gap-2 transition-all hover:opacity-90"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}
+            className="btn-primary inline-flex items-center gap-2"
           >
             {savingRl && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Save
@@ -419,8 +447,7 @@ function SettingsTab() {
           <button
             onClick={handleSaveRegisterRateLimit}
             disabled={savingRegisterRl || registerRateLimitInput === String(registerRateLimit)}
-            className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 flex items-center gap-2 transition-all hover:opacity-90"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}
+            className="btn-primary inline-flex items-center gap-2"
           >
             {savingRegisterRl && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Save
@@ -508,22 +535,79 @@ function OverviewTab() {
 
       {summary && (
         <>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {[
-              { label: 'Public Scanning', value: summary.publicScanEnabled ? 'Enabled' : 'Disabled', href: '/admin/settings' },
-              { label: 'Users', value: String(summary.userCount), href: '/admin/users' },
-              { label: 'Tokens', value: String(summary.tokenCount), href: '/admin/tokens' },
-              { label: 'Active Channels', value: String(summary.activeChannels), href: '/admin/notifications' },
-              { label: 'Running Scans', value: String(summary.runningScans), href: '/admin/scans' },
-              { label: 'Pending Scans', value: String(summary.pendingScans), href: '/admin/scans' },
-              { label: 'Stale Workers', value: String(summary.staleWorkers), href: '/admin/scanner' },
-              { label: 'Audit Events', value: String(summary.recentAudit.length), href: '/admin/audit' },
-            ].map((card) => (
-              <Link key={card.label} href={card.href} className="glass-panel rounded-2xl p-4 transition-colors hover:bg-violet-500/5">
-                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">{card.label}</p>
-                <p className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{card.value}</p>
-              </Link>
-            ))}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
+            <div className="glass-panel rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Operations Snapshot</h2>
+                  <p className="text-sm text-zinc-500 mt-0.5">Compact view of the current system posture.</p>
+                </div>
+                <Link href="/admin/scans" className="text-sm text-violet-500 hover:underline">Open scans</Link>
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-2">
+                {[
+                  { label: 'Public scanning', value: summary.publicScanEnabled ? 'Enabled' : 'Disabled', tone: summary.publicScanEnabled ? '#a78bfa' : '#f87171', href: '/admin/settings' },
+                  { label: 'Users', value: String(summary.userCount), tone: '#60a5fa', href: '/admin/users' },
+                  { label: 'Service tokens', value: String(summary.tokenCount), tone: '#34d399', href: '/admin/tokens' },
+                  { label: 'Active channels', value: String(summary.activeChannels), tone: '#f59e0b', href: '/admin/notifications' },
+                  { label: 'Running scans', value: String(summary.runningScans), tone: '#facc15', href: '/admin/scans' },
+                  { label: 'Pending scans', value: String(summary.pendingScans), tone: '#94a3b8', href: '/admin/scans' },
+                ].map((item) => (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className="rounded-xl px-4 py-3 transition-colors hover:bg-violet-500/5"
+                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-zinc-500">{item.label}</span>
+                      <span className="text-lg font-semibold" style={{ color: item.tone }}>{item.value}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <div className="glass-panel rounded-2xl p-5 space-y-4">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Attention Queue</h2>
+                <p className="text-sm text-zinc-500 mt-0.5">The admin flows that most likely need action.</p>
+              </div>
+
+              <div className="space-y-2">
+                {[
+                  {
+                    href: '/admin/scanner',
+                    label: 'Inspect worker health',
+                    meta: `${summary.staleWorkers} stale worker${summary.staleWorkers === 1 ? '' : 's'}`,
+                  },
+                  {
+                    href: '/admin/notifications',
+                    label: 'Review channel routing',
+                    meta: `${summary.activeChannels} active delivery channel${summary.activeChannels === 1 ? '' : 's'}`,
+                  },
+                  {
+                    href: '/admin/settings',
+                    label: 'Check public-scan exposure',
+                    meta: summary.publicScanEnabled ? 'Public scanning enabled' : 'Public scanning disabled',
+                  },
+                  {
+                    href: '/admin/audit',
+                    label: 'Review recent admin activity',
+                    meta: `${summary.recentAudit.length} recent audit event${summary.recentAudit.length === 1 ? '' : 's'}`,
+                  },
+                ].map((link) => (
+                  <Link key={link.href} href={link.href} className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <div>
+                      <p className="text-zinc-700 dark:text-zinc-200">{link.label}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">{link.meta}</p>
+                    </div>
+                    <span className="text-violet-500">Open</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
@@ -556,23 +640,46 @@ function OverviewTab() {
               )}
             </div>
 
-            <div className="glass-panel rounded-2xl p-5 space-y-4">
-              <div>
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Recommended Actions</h2>
-                <p className="text-sm text-zinc-500 mt-0.5">The most likely places an admin needs to act next.</p>
+            <div className="space-y-4">
+              <div className="glass-panel rounded-2xl p-5 space-y-4">
+                <div>
+                  <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Control Surfaces</h2>
+                  <p className="text-sm text-zinc-500 mt-0.5">Shortcuts into the areas that influence system behavior most.</p>
+                </div>
+                <div className="space-y-2">
+                  {[
+                    { href: '/admin/settings', label: 'Review public scanning and rate limits' },
+                    { href: '/admin/scanner', label: 'Inspect worker health and stale DBs' },
+                    { href: '/admin/notifications', label: 'Test delivery channels and review history' },
+                    { href: '/admin/scans', label: 'Manage cross-user scans and sharing' },
+                  ].map((link) => (
+                    <Link key={link.href} href={link.href} className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <span className="text-zinc-700 dark:text-zinc-200">{link.label}</span>
+                      <span className="text-violet-500">Open</span>
+                    </Link>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-2">
-                {[
-                  { href: '/admin/settings', label: 'Review public scanning and rate limits' },
-                  { href: '/admin/scanner', label: 'Inspect worker health and stale DBs' },
-                  { href: '/admin/notifications', label: 'Test delivery channels and review history' },
-                  { href: '/admin/scans', label: 'Manage cross-user scans and sharing' },
-                ].map((link) => (
-                  <Link key={link.href} href={link.href} className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                    <span className="text-zinc-700 dark:text-zinc-200">{link.label}</span>
-                    <span className="text-violet-500">Open</span>
-                  </Link>
-                ))}
+
+              <div className="glass-panel rounded-2xl p-5 space-y-4">
+                <div>
+                  <h2 className="text-base font-semibold text-zinc-900 dark:text-white">System & Legal</h2>
+                  <p className="text-sm text-zinc-500 mt-0.5">Admin-only product metadata for this running frontend build.</p>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <p className="text-xs text-zinc-500">Frontend version</p>
+                    <p className="mt-1 font-semibold text-zinc-900 dark:text-white">v{APP_FRONTEND_VERSION}</p>
+                  </div>
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <p className="text-xs text-zinc-500">Copyright</p>
+                    <p className="mt-1 text-zinc-700 dark:text-zinc-200">{APP_COPYRIGHT}</p>
+                  </div>
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <p className="text-xs text-zinc-500">Distribution</p>
+                    <p className="mt-1 text-zinc-700 dark:text-zinc-200">JustScan self-hosted admin surface</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -629,7 +736,7 @@ function UsersTab() {
           username: formUsername,
           email: formEmail,
           role: formRole,
-          ...(formPassword ? { password: formPassword } : {}),
+          ...(editingUser.auth_type !== 'oidc' && formPassword ? { password: formPassword } : {}),
         });
       }
       modal.close(); await load();
@@ -683,8 +790,8 @@ function UsersTab() {
       <div className="flex justify-end">
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+          className="btn-primary inline-flex items-center gap-2"
+          type="button"
         >
           <PlusSignIcon size={15} /> Add User
         </button>
@@ -701,6 +808,8 @@ function UsersTab() {
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Username</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Email</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Last Sign-in</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Created</th>
@@ -715,6 +824,21 @@ function UsersTab() {
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                   <td className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-200">{u.username}</td>
                   <td className="px-4 py-3 text-sm text-zinc-500">{u.email}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-md" style={USER_AUTH_STYLE[u.auth_type ?? 'local']}>
+                      {userAuthLabel(u.auth_type)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-zinc-500">
+                    {u.last_login_at ? (
+                      <div className="space-y-0.5">
+                        <p title={fullDate(u.last_login_at)}>{timeAgo(u.last_login_at)}</p>
+                        <p className="text-[11px] text-zinc-400">via {userAuthLabel(u.last_login_method || u.auth_type).toLowerCase()}</p>
+                      </div>
+                    ) : (
+                      <span className="text-zinc-400 dark:text-zinc-600">Never</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="text-xs font-medium px-2 py-0.5 rounded-md"
                       style={u.role === 'admin'
@@ -736,23 +860,15 @@ function UsersTab() {
                   </td>
                   <td className="px-4 py-3 text-xs text-zinc-500" title={fullDate(u.created_at)}>{timeAgo(u.created_at)}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => handleToggleDisable(u)}
-                        className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
-                        style={u.disabled
-                          ? { color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }
-                          : { color: '#fb923c', background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)' }}
-                        title={u.disabled ? 'Enable user' : 'Disable user'}
-                      >
-                        {u.disabled ? 'Enable' : 'Disable'}
-                      </button>
-                      <button onClick={() => openEdit(u)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit">
-                        <PencilEdit01Icon size={15} />
-                      </button>
-                      <button onClick={() => handleDelete(u)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1.5" title="Delete">
-                        <Delete01Icon size={15} />
-                      </button>
+                    <div className="flex justify-end">
+                      <RowActionsMenu
+                        label={`Open actions for ${u.username}`}
+                        items={[
+                          { id: 'toggle', label: u.disabled ? 'Enable user' : 'Disable user', onAction: () => { void handleToggleDisable(u); } },
+                          { id: 'edit', label: 'Edit user', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(u) },
+                          { id: 'delete', label: 'Delete user', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(u); } },
+                        ]}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -786,11 +902,32 @@ function UsersTab() {
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Email</label>
                     <input type="email" className={inputCls} placeholder="user@example.com" value={formEmail} onChange={e => setFormEmail(e.target.value)} required />
                   </div>
+                  {!isCreate && editingUser ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Authentication</label>
+                        <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-md" style={USER_AUTH_STYLE[editingUser.auth_type ?? 'local']}>
+                            {userAuthLabel(editingUser.auth_type)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Last Sign-in</label>
+                        <div className="rounded-xl px-3 py-2.5 text-sm text-zinc-700 dark:text-zinc-200" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          {editingUser.last_login_at ? fullDate(editingUser.last_login_at) : 'No successful sign-in recorded yet'}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
                     <Select selectedKey={formRole} onSelectionChange={k => setFormRole(String(k))}>
-                      <Select.Trigger className={inputCls}>
-                        <Select.Value />
+                      <Select.Trigger className={selectTriggerCls}>
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>
+                          <Select.Value />
+                        </div>
                         <Select.Indicator />
                       </Select.Trigger>
                       <Select.Popover>
@@ -804,24 +941,24 @@ function UsersTab() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                       Password{' '}
-                      {!isCreate && <span className="text-zinc-400 dark:text-zinc-600 font-normal">(leave blank to keep unchanged)</span>}
+                      {!isCreate && editingUser?.auth_type !== 'oidc' ? <span className="text-zinc-400 dark:text-zinc-600 font-normal">(leave blank to keep unchanged)</span> : null}
                     </label>
                     <input type="password" className={inputCls}
-                      placeholder={isCreate ? 'Password' : '••••••••'}
+                      placeholder={isCreate ? 'Password' : editingUser?.auth_type === 'oidc' ? 'Managed by OIDC' : '••••••••'}
                       value={formPassword}
                       onChange={e => setFormPassword(e.target.value)}
+                      disabled={Boolean(editingUser?.auth_type === 'oidc')}
                       required={isCreate} />
+                    {editingUser?.auth_type === 'oidc' ? <p className="text-xs text-zinc-500">Password changes are disabled for users currently authenticated through OIDC.</p> : null}
                   </div>
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <button className="btn-secondary" onClick={modal.close} type="button">
                   Cancel
                 </button>
                 <button type="submit" form="user-form" disabled={saving}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary inline-flex items-center gap-2">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isCreate ? 'Create' : 'Save'}
                 </button>
@@ -989,19 +1126,15 @@ function TokensTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => handleToggle(token)} className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
-                        style={token.disabled
-                          ? { color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }
-                          : { color: '#fb923c', background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)' }}>
-                        {token.disabled ? 'Enable' : 'Disable'}
-                      </button>
-                      <button onClick={() => openEdit(token)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit">
-                        <PencilEdit01Icon size={15} />
-                      </button>
-                      <button onClick={() => handleDelete(token)} className="text-zinc-400 hover:text-red-400 transition-colors p-1.5" title="Delete">
-                        <Delete01Icon size={15} />
-                      </button>
+                    <div className="flex justify-end">
+                      <RowActionsMenu
+                        label={`Open actions for token ${token.description || token.id.slice(0, 8)}`}
+                        items={[
+                          { id: 'toggle', label: token.disabled ? 'Enable token' : 'Disable token', onAction: () => { void handleToggle(token); } },
+                          { id: 'edit', label: 'Edit token', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(token) },
+                          { id: 'delete', label: 'Delete token', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(token); } },
+                        ]}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -1032,13 +1165,11 @@ function TokensTab() {
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <button className="btn-secondary" onClick={modal.close} type="button">
                   Cancel
                 </button>
                 <button type="submit" form="token-form" disabled={saving}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary inline-flex items-center gap-2">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   Save
                 </button>
@@ -1126,8 +1257,8 @@ function AutoTagsTab() {
         <p className="text-sm text-zinc-500">Automatically apply tags to scans based on image name patterns.</p>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+          className="btn-primary inline-flex items-center gap-2"
+          type="button"
         >
           <PlusSignIcon size={15} /> Add Rule
         </button>
@@ -1170,13 +1301,14 @@ function AutoTagsTab() {
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-500" title={fullDate(r.created_at)}>{timeAgo(r.created_at)}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openEdit(r)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit">
-                          <PencilEdit01Icon size={15} />
-                        </button>
-                        <button onClick={() => handleDelete(r.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1.5" title="Delete">
-                          <Delete01Icon size={15} />
-                        </button>
+                      <div className="flex justify-end">
+                        <RowActionsMenu
+                          label={`Open actions for pattern ${r.pattern}`}
+                          items={[
+                            { id: 'edit', label: 'Edit rule', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(r) },
+                            { id: 'delete', label: 'Delete rule', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(r.id); } },
+                          ]}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -1219,8 +1351,11 @@ function AutoTagsTab() {
                       <p className="text-sm text-zinc-500">No tags available. Create tags first.</p>
                     ) : (
                       <Select selectedKey={formTagId} onSelectionChange={k => setFormTagId(String(k))} isRequired>
-                        <Select.Trigger className={inputCls}>
-                          <Select.Value />
+                        <Select.Trigger className={selectTriggerCls}>
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="text-zinc-400 shrink-0"><Tag01Icon size={15} /></span>
+                            <Select.Value />
+                          </div>
                           <Select.Indicator />
                         </Select.Trigger>
                         <Select.Popover>
@@ -1237,13 +1372,11 @@ function AutoTagsTab() {
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <button className="btn-secondary" onClick={modal.close} type="button">
                   Cancel
                 </button>
                 <button type="submit" form="autotag-form" disabled={saving || tags.length === 0}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary inline-flex items-center gap-2">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isCreate ? 'Create' : 'Save'}
                 </button>
@@ -1268,13 +1401,13 @@ function AuditLogTab() {
   const [filters, setFilters] = useState({ q: '', user: '', operation: '', from: '', to: '' });
   const limit = 50;
 
-  const requestFilters: AuditLogFilters = {
+  const requestFilters: AuditLogFilters = useMemo(() => ({
     q: filters.q || undefined,
     user: filters.user || undefined,
     operation: filters.operation || undefined,
     from: toIsoOrUndefined(filters.from),
     to: toIsoOrUndefined(filters.to),
-  };
+  }), [filters.from, filters.operation, filters.q, filters.to, filters.user]);
 
   const load = useCallback(async (p: number, activeFilters: AuditLogFilters) => {
     setLoading(true);
@@ -1286,7 +1419,7 @@ function AuditLogTab() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(page, requestFilters); }, [filters.from, filters.operation, filters.q, filters.to, filters.user, load, page]);
+  useEffect(() => { load(page, requestFilters); }, [load, page, requestFilters]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -1365,8 +1498,8 @@ function AuditLogTab() {
           <button
             onClick={handleExport}
             disabled={exporting || total === 0}
-            className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 flex items-center gap-2 transition-all hover:opacity-90"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}
+            className="btn-primary inline-flex items-center gap-2"
+            type="button"
           >
             {exporting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Export CSV
@@ -1377,14 +1510,14 @@ function AuditLogTab() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm">
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-            className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
-            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            className="btn-secondary"
+            type="button">
             ←
           </button>
           <span className="text-zinc-500">{page} / {totalPages}</span>
           <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-            className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
-            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            className="btn-secondary"
+            type="button">
             →
           </button>
         </div>
@@ -1443,8 +1576,26 @@ const EVENT_OPTIONS = [
   { value: 'compliance_failed', label: 'Compliance Failed' },
 ];
 
+const NOTIFICATION_TYPE_OPTIONS: Array<{ value: NotificationChannel['type']; label: string }> = [
+  { value: 'discord', label: 'Discord' },
+  { value: 'slack', label: 'Slack' },
+  { value: 'teams', label: 'Microsoft Teams' },
+  { value: 'email', label: 'Email (SMTP)' },
+  { value: 'telegram', label: 'Telegram' },
+  { value: 'webhook', label: 'Generic Webhook' },
+];
+
+const SEVERITY_OPTIONS: Array<{ value: NotificationChannel['min_severity']; label: string }> = [
+  { value: '', label: 'Any severity' },
+  { value: 'LOW', label: 'Low or higher' },
+  { value: 'MEDIUM', label: 'Medium or higher' },
+  { value: 'HIGH', label: 'High or higher' },
+  { value: 'CRITICAL', label: 'Critical only' },
+];
+
 function NotificationsTab() {
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
+  const [orgs, setOrgs] = useState<Org[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -1458,9 +1609,12 @@ function NotificationsTab() {
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [formName, setFormName] = useState('');
-  const [formType, setFormType] = useState<'discord' | 'email' | 'webhook'>('discord');
+  const [formType, setFormType] = useState<NotificationChannel['type']>('discord');
   const [formEnabled, setFormEnabled] = useState(true);
-  const [formEvents, setFormEvents] = useState<string[]>(['scan_complete', 'scan_failed']);
+  const [formEvents, setFormEvents] = useState<string[]>(['scan_complete', 'scan_failed', 'compliance_failed']);
+  const [formOrgIds, setFormOrgIds] = useState<string[]>([]);
+  const [formImagePatterns, setFormImagePatterns] = useState('');
+  const [formMinSeverity, setFormMinSeverity] = useState<NotificationChannel['min_severity']>('');
   const [formWebhookURL, setFormWebhookURL] = useState('');
   const [formSMTPHost, setFormSMTPHost] = useState('');
   const [formSMTPPort, setFormSMTPPort] = useState('587');
@@ -1469,10 +1623,16 @@ function NotificationsTab() {
   const [formSMTPFrom, setFormSMTPFrom] = useState('');
   const [formSMTPTo, setFormSMTPTo] = useState('');
   const [formSMTPTLS, setFormSMTPTLS] = useState(false);
+  const [formTelegramBotToken, setFormTelegramBotToken] = useState('');
+  const [formTelegramChatId, setFormTelegramChatId] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setChannels(await listNotificationChannels()); }
+    try {
+      const [nextChannels, nextOrgs] = await Promise.all([listNotificationChannels(), listOrgs()]);
+      setChannels(nextChannels);
+      setOrgs(nextOrgs);
+    }
     catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setLoading(false); }
   }, []);
@@ -1483,7 +1643,10 @@ function NotificationsTab() {
     setFormName(ch?.name ?? '');
     setFormType(ch?.type ?? 'discord');
     setFormEnabled(ch?.enabled ?? true);
-    setFormEvents(ch?.events ?? ['scan_complete', 'scan_failed']);
+    setFormEvents(ch?.events ?? ['scan_complete', 'scan_failed', 'compliance_failed']);
+    setFormOrgIds(ch?.org_ids ?? []);
+    setFormImagePatterns((ch?.image_patterns ?? []).join(', '));
+    setFormMinSeverity(ch?.min_severity ?? '');
     setFormWebhookURL(ch?.config?.webhook_url ?? '');
     setFormSMTPHost(ch?.config?.smtp_host ?? '');
     setFormSMTPPort(String(ch?.config?.smtp_port ?? 587));
@@ -1492,6 +1655,8 @@ function NotificationsTab() {
     setFormSMTPFrom(ch?.config?.smtp_from ?? '');
     setFormSMTPTo((ch?.config?.to_addresses ?? []).join(', '));
     setFormSMTPTLS(ch?.config?.smtp_tls ?? false);
+    setFormTelegramBotToken('');
+    setFormTelegramChatId(ch?.config?.telegram_chat_id ?? '');
     setFormError('');
   }
 
@@ -1504,7 +1669,7 @@ function NotificationsTab() {
 
   function buildPayload(): Partial<NotificationChannel> {
     const config: NotificationChannel['config'] = {};
-    if (formType === 'discord' || formType === 'webhook') {
+    if (formType === 'discord' || formType === 'webhook' || formType === 'slack' || formType === 'teams') {
       config.webhook_url = formWebhookURL;
     }
     if (formType === 'email') {
@@ -1516,7 +1681,21 @@ function NotificationsTab() {
       config.to_addresses = formSMTPTo.split(',').map(s => s.trim()).filter(Boolean);
       config.smtp_tls = formSMTPTLS;
     }
-    return { name: formName, type: formType, enabled: formEnabled, events: formEvents, config };
+    if (formType === 'telegram') {
+      if (formTelegramBotToken) config.telegram_bot_token = formTelegramBotToken;
+      config.telegram_chat_id = formTelegramChatId;
+    }
+
+    return {
+      name: formName,
+      type: formType,
+      enabled: formEnabled,
+      events: formEvents,
+      org_ids: formOrgIds,
+      image_patterns: formImagePatterns.split(',').map((entry) => entry.trim()).filter(Boolean),
+      min_severity: formMinSeverity,
+      config,
+    };
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -1585,6 +1764,10 @@ function NotificationsTab() {
     setFormEvents(prev => prev.includes(ev) ? prev.filter(e => e !== ev) : [...prev, ev]);
   }
 
+  function toggleOrg(orgId: string) {
+    setFormOrgIds((previous) => previous.includes(orgId) ? previous.filter((current) => current !== orgId) : [...previous, orgId]);
+  }
+
   if (loading) return (
     <div className="flex justify-center py-16">
       <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
@@ -1607,11 +1790,11 @@ function NotificationsTab() {
       )}
 
       <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-500">Send alerts to Discord, email, or webhooks when scan events occur.</p>
+        <p className="text-sm text-zinc-500">Route scan and compliance events to Discord, Slack, Teams, email, Telegram, or a generic webhook with org, image, and severity filters.</p>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+          className="btn-primary inline-flex items-center gap-2"
+          type="button"
         >
           <PlusSignIcon size={15} /> Add Channel
         </button>
@@ -1630,6 +1813,7 @@ function NotificationsTab() {
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Type</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Events</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Filters</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -1658,6 +1842,13 @@ function NotificationsTab() {
                         ))}
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-xs text-zinc-500">
+                      <div className="space-y-1">
+                        <p>{(ch.org_ids ?? []).length > 0 ? `${ch.org_ids.length} org filter${ch.org_ids.length === 1 ? '' : 's'}` : 'All orgs'}</p>
+                        <p>{(ch.image_patterns ?? []).length > 0 ? `${ch.image_patterns.length} image pattern${ch.image_patterns.length === 1 ? '' : 's'}` : 'All images'}</p>
+                        <p>{ch.min_severity ? `${ch.min_severity}+ only` : 'Any severity'}</p>
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       {ch.enabled ? (
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>Active</span>
@@ -1666,36 +1857,23 @@ function NotificationsTab() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1 flex-wrap">
-                        <button onClick={() => handleTest(ch)}
-                          className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
-                          style={{ color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
-                          Test
-                        </button>
-                        <button onClick={() => toggleHistory(ch)}
-                          className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
-                          style={{ color: '#a78bfa', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' }}>
-                          {historyChannelId === ch.id ? 'Hide History' : 'History'}
-                        </button>
-                        <button onClick={() => handleToggleEnabled(ch)}
-                          className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
-                          style={ch.enabled
-                            ? { color: '#fb923c', background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)' }
-                            : { color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
-                          {ch.enabled ? 'Disable' : 'Enable'}
-                        </button>
-                        <button onClick={() => openEdit(ch)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5">
-                          <PencilEdit01Icon size={15} />
-                        </button>
-                        <button onClick={() => handleDelete(ch)} className="text-zinc-400 hover:text-red-400 transition-colors p-1.5">
-                          <Delete01Icon size={15} />
-                        </button>
+                      <div className="flex justify-end">
+                        <RowActionsMenu
+                          label={`Open actions for notification channel ${ch.name}`}
+                          items={[
+                            { id: 'test', label: 'Send test', icon: <Notification01Icon size={15} />, onAction: () => { void handleTest(ch); } },
+                            { id: 'history', label: historyChannelId === ch.id ? 'Hide history' : 'Show history', onAction: () => { void toggleHistory(ch); } },
+                            { id: 'toggle', label: ch.enabled ? 'Disable channel' : 'Enable channel', onAction: () => { void handleToggleEnabled(ch); } },
+                            { id: 'edit', label: 'Edit channel', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(ch) },
+                            { id: 'delete', label: 'Delete channel', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(ch); } },
+                          ]}
+                        />
                       </div>
                     </td>
                   </tr>
                   {historyChannelId === ch.id && (
                     <tr key={`${ch.id}-history`}>
-                      <td colSpan={5} className="px-4 pb-4 pt-0">
+                      <td colSpan={6} className="px-4 pb-4 pt-0">
                         <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Recent Delivery Attempts</p>
@@ -1768,27 +1946,30 @@ function NotificationsTab() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Type</label>
                     <Select selectedKey={formType} onSelectionChange={k => setFormType(k as typeof formType)}>
-                      <Select.Trigger className={inputCls}>
-                        <Select.Value />
+                      <Select.Trigger className={selectTriggerCls}>
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-zinc-400 shrink-0"><Notification01Icon size={15} /></span>
+                          <Select.Value />
+                        </div>
                         <Select.Indicator />
                       </Select.Trigger>
                       <Select.Popover>
                         <ListBox>
-                          <ListBox.Item id="discord">Discord</ListBox.Item>
-                          <ListBox.Item id="email">Email (SMTP)</ListBox.Item>
-                          <ListBox.Item id="webhook">Generic Webhook</ListBox.Item>
+                          {NOTIFICATION_TYPE_OPTIONS.map((option) => (
+                            <ListBox.Item key={option.value} id={option.value}>{option.label}</ListBox.Item>
+                          ))}
                         </ListBox>
                       </Select.Popover>
                     </Select>
                   </div>
 
                   {/* Type-specific fields */}
-                  {(formType === 'discord' || formType === 'webhook') && (
+                  {(formType === 'discord' || formType === 'webhook' || formType === 'slack' || formType === 'teams') && (
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                        {formType === 'discord' ? 'Discord Webhook URL' : 'Webhook URL'}
+                        {formType === 'discord' ? 'Discord Webhook URL' : formType === 'slack' ? 'Slack Webhook URL' : formType === 'teams' ? 'Teams Webhook URL' : 'Webhook URL'}
                       </label>
-                      <input className={inputCls} placeholder="https://discord.com/api/webhooks/..." value={formWebhookURL} onChange={e => setFormWebhookURL(e.target.value)} required />
+                      <input className={inputCls} placeholder="https://hooks.example.com/..." value={formWebhookURL} onChange={e => setFormWebhookURL(e.target.value)} required />
                     </div>
                   )}
 
@@ -1831,6 +2012,21 @@ function NotificationsTab() {
                     </>
                   )}
 
+                  {formType === 'telegram' && (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Bot Token</label>
+                          <input type="password" className={inputCls} placeholder={editing ? '(unchanged)' : 'Telegram bot token'} value={formTelegramBotToken} onChange={e => setFormTelegramBotToken(e.target.value)} required={!editing} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Chat ID</label>
+                          <input className={inputCls} placeholder="-1001234567890" value={formTelegramChatId} onChange={e => setFormTelegramChatId(e.target.value)} required />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
                   {/* Events */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Trigger on Events</label>
@@ -1845,6 +2041,48 @@ function NotificationsTab() {
                     </div>
                   </div>
 
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Filter by Organizations</label>
+                    {orgs.length === 0 ? (
+                      <p className="text-sm text-zinc-500">No org filters configured. This channel will match all orgs.</p>
+                    ) : (
+                      <div className="grid gap-2 rounded-xl p-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        {orgs.map((org) => (
+                          <label key={org.id} className="flex items-center gap-2.5 cursor-pointer">
+                            <input type="checkbox" checked={formOrgIds.includes(org.id)} onChange={() => toggleOrg(org.id)} className="w-4 h-4 rounded accent-violet-500" />
+                            <span className="text-sm text-zinc-600 dark:text-zinc-300">{org.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image Patterns</label>
+                    <textarea className={inputCls} placeholder="nginx/*, ghcr.io/my-org/*" value={formImagePatterns} onChange={e => setFormImagePatterns(e.target.value)} rows={3} />
+                    <p className="text-xs text-zinc-400">Comma-separated glob patterns. Leave empty to match all images.</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Minimum Severity</label>
+                    <Select selectedKey={formMinSeverity || '__any__'} onSelectionChange={(key) => setFormMinSeverity(key === '__any__' ? '' : key as NotificationChannel['min_severity'])}>
+                      <Select.Trigger className={selectTriggerCls}>
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>
+                          <Select.Value />
+                        </div>
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {SEVERITY_OPTIONS.map((option) => (
+                            <ListBox.Item key={option.value || '__any__'} id={option.value || '__any__'}>{option.label}</ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </div>
+
                   <label className="flex items-center gap-2.5 cursor-pointer">
                     <input type="checkbox" checked={formEnabled} onChange={e => setFormEnabled(e.target.checked)}
                       className="w-4 h-4 rounded accent-violet-500" />
@@ -1853,13 +2091,11 @@ function NotificationsTab() {
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <button className="btn-secondary" onClick={modal.close} type="button">
                   Cancel
                 </button>
                 <button type="submit" form="notif-form" disabled={saving}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary inline-flex items-center gap-2">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isCreate ? 'Create' : 'Save'}
                 </button>
@@ -2068,42 +2304,75 @@ function ScansTab() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <input
-          placeholder="Filter by image…"
-          value={imageFilter}
-          onChange={e => handleImageChange(e.target.value)}
-          className={`${inputCls} max-w-xs`}
-        />
-        <input
-          placeholder="Filter by owner…"
-          value={ownerFilter}
-          onChange={e => handleOwnerChange(e.target.value)}
-          className={`${inputCls} max-w-xs`}
-        />
-        <select
-          value={statusFilter}
-          onChange={e => handleStatusChange(e.target.value)}
-          className={`${inputCls} w-36`}
-        >
-          <option value="">All statuses</option>
-          <option value="completed">Completed</option>
-          <option value="running">Running</option>
-          <option value="pending">Pending</option>
-          <option value="failed">Failed</option>
-        </select>
-        <p className="ml-auto text-sm text-zinc-500">{total} total</p>
+      <div className="glass-panel rounded-2xl p-4">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_220px_auto] items-end">
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image</Label>
+            <Input
+              className={inputCls}
+              placeholder="Filter by image…"
+              value={imageFilter}
+              onChange={e => handleImageChange(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Owner</Label>
+            <Input
+              className={inputCls}
+              placeholder="Filter by owner…"
+              value={ownerFilter}
+              onChange={e => handleOwnerChange(e.target.value)}
+            />
+          </div>
+          <Select selectedKey={statusFilter || '__all__'} onSelectionChange={key => handleStatusChange(key === '__all__' ? '' : String(key))} className="w-full" placeholder="Filter by status">
+            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Status</Label>
+            <Select.Trigger className={selectTriggerCls}>
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>
+                <Select.Value />
+              </div>
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="__all__" textValue="All statuses">
+                  All statuses
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="completed" textValue="Completed">
+                  Completed
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="running" textValue="Running">
+                  Running
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="pending" textValue="Pending">
+                  Pending
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="failed" textValue="Failed">
+                  Failed
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+          <div className="flex justify-end">
+            <p className="text-sm text-zinc-500 whitespace-nowrap">{total} total</p>
+          </div>
+        </div>
       </div>
 
       {/* Pagination */}
       <div className="flex items-center justify-end gap-2 text-sm">
         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-          className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
-          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>←</button>
+          className="btn-secondary"
+          type="button">←</button>
         <span className="text-zinc-500">{page} / {totalPages}</span>
         <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-          className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
-          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>→</button>
+          className="btn-secondary"
+          type="button">→</button>
       </div>
 
       {loading ? (
@@ -2261,43 +2530,43 @@ function ScansTab() {
                                         <div className="flex items-center gap-1 flex-wrap" onClick={(event) => event.stopPropagation()}>
                                           <button onClick={(event) => { event.preventDefault(); void handleRescan(s); }}
                                             disabled={actionLoadingId === `${s.id}:rescan`}
-                                            className="text-xs px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
-                                            style={{ color: '#a78bfa', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' }}>
+                                            className="btn-primary-sm"
+                                            type="button">
                                             Rescan
                                           </button>
                                           {(s.status === 'pending' || s.status === 'running') && (
                                             <button onClick={(event) => { event.preventDefault(); void handleCancel(s); }}
                                               disabled={actionLoadingId === `${s.id}:cancel`}
-                                              className="text-xs px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
-                                              style={{ color: '#fbbf24', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                                              className="btn-warning-sm"
+                                              type="button">
                                               Cancel
                                             </button>
                                           )}
                                           {!s.share_token ? (
                                             <button onClick={(event) => { event.preventDefault(); void handleCreateShare(s); }}
                                               disabled={actionLoadingId === `${s.id}:share`}
-                                              className="text-xs px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
-                                              style={{ color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                              className="btn-secondary-sm"
+                                              type="button">
                                               Share
                                             </button>
                                           ) : (
                                             <>
                                               <button onClick={(event) => { event.preventDefault(); void handleCopyShare(s); }}
-                                                className="text-xs px-2 py-1 rounded-lg font-medium transition-all"
-                                                style={{ color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                                className="btn-secondary-sm"
+                                                type="button">
                                                 Copy Link
                                               </button>
                                               <button onClick={(event) => { event.preventDefault(); void handleRevokeShare(s); }}
                                                 disabled={actionLoadingId === `${s.id}:revoke`}
-                                                className="text-xs px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
-                                                style={{ color: '#f87171', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                                className="btn-danger-sm"
+                                                type="button">
                                                 Revoke
                                               </button>
                                             </>
                                           )}
                                           <button onClick={(event) => { event.preventDefault(); openTagModal(s); }}
-                                            className="text-xs px-2 py-1 rounded-lg font-medium transition-all"
-                                            style={{ color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                                            className="btn-secondary-sm"
+                                            type="button">
                                             Add Tag
                                           </button>
                                         </div>
@@ -2335,8 +2604,11 @@ function ScansTab() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Tag</label>
                     <Select selectedKey={selectedTagId} onSelectionChange={(key) => setSelectedTagId(String(key))}>
-                      <Select.Trigger className={inputCls}>
-                        <Select.Value />
+                      <Select.Trigger className={selectTriggerCls}>
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-zinc-400 shrink-0"><Tag01Icon size={15} /></span>
+                          <Select.Value />
+                        </div>
                         <Select.Indicator />
                       </Select.Trigger>
                       <Select.Popover>
@@ -2351,13 +2623,11 @@ function ScansTab() {
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={tagModal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <button className="btn-secondary" onClick={tagModal.close} type="button">
                   Cancel
                 </button>
                 <button type="submit" form="tag-form" disabled={!selectedTagId || actionLoadingId === `${tagScan?.id}:tag`}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary inline-flex items-center gap-2">
                   {actionLoadingId === `${tagScan?.id}:tag` && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   Add Tag
                 </button>
@@ -2383,13 +2653,11 @@ export default function AdminPage() {
         <p className="text-sm text-zinc-500 mt-1">Manage system configuration, users, service credentials, notifications, and cross-user scans.</p>
       </div>
 
-      <div className="flex gap-1 p-1 rounded-xl flex-wrap" style={{background:'var(--glass-bg)', border:'1px solid var(--glass-border)'}}>
+      <div className="segmented-control flex-wrap">
         {ADMIN_TABS.map((tab) => (
           <Link key={tab.value} href={tab.href}
-            className="px-4 py-1.5 text-sm font-medium rounded-lg transition-all"
-            style={activeTab === tab.value
-              ? {background:'linear-gradient(135deg,#7c3aed,#6d28d9)', color:'white'}
-              : {color:'var(--text-muted)'}}>
+            className="segmented-control-item"
+            data-active={activeTab === tab.value ? 'true' : 'false'}>
             {tab.label}
           </Link>
         ))}

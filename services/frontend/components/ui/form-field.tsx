@@ -1,5 +1,6 @@
 'use client';
 
+import { heroFieldClassName, joinClassNames } from '@/components/ui/form-styles';
 import { Input, Label } from '@heroui/react';
 import type { ComponentProps } from 'react';
 import { useId } from 'react';
@@ -11,10 +12,6 @@ type FormFieldProps = {
   containerClassName?: string;
   className?: string;
 } & Omit<ComponentProps<typeof Input>, 'className'>;
-
-function joinClasses(...values: Array<string | undefined>) {
-  return values.filter(Boolean).join(' ');
-}
 
 export function FormField({
   label,
@@ -33,7 +30,7 @@ export function FormField({
   const describedBy = [descriptionId, errorId].filter(Boolean).join(' ') || undefined;
 
   return (
-    <div className={joinClasses('space-y-1.5', containerClassName)}>
+    <div className={joinClassNames('space-y-1.5', containerClassName)}>
       <Label className="text-sm font-medium" htmlFor={fieldId} style={{ color: 'var(--text-secondary)' }}>
         {label}
         {required ? <span className="ml-1" style={{ color: '#f87171' }}>*</span> : null}
@@ -42,8 +39,8 @@ export function FormField({
         {...props}
         aria-describedby={describedBy}
         aria-invalid={error ? true : undefined}
-        className={joinClasses(
-          'w-full px-3.5 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/50 transition-all rounded-xl glass-input',
+        className={joinClassNames(
+          heroFieldClassName,
           className,
         )}
         id={fieldId}

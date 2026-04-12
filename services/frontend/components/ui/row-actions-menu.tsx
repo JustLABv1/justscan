@@ -1,6 +1,6 @@
 'use client';
 
-import { Dropdown, Label } from '@heroui/react';
+import { Button, Dropdown, Label } from '@heroui/react';
 import { MoreVerticalIcon } from 'hugeicons-react';
 import type { ReactNode } from 'react';
 
@@ -17,14 +17,9 @@ export function RowActionsMenu({ label, items }: { label: string; items: RowActi
   return (
     <Dropdown>
       <Dropdown.Trigger>
-        <button
-          aria-label={label}
-          className="flex h-8 w-8 items-center justify-center rounded-lg transition-all"
-          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
-          type="button"
-        >
+        <Button aria-label={label} className="btn-icon-subtle" isIconOnly variant="secondary">
           <MoreVerticalIcon size={15} />
-        </button>
+        </Button>
       </Dropdown.Trigger>
       <Dropdown.Popover className="min-w-[190px]">
         <Dropdown.Menu

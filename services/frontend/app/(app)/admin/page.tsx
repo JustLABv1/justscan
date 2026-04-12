@@ -1,5 +1,7 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
     addTagToScan,
     AdminScan,
@@ -46,13 +48,14 @@ import {
     updateRegisterRateLimit,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Dropdown, Input, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
-import { ArrowDown01Icon, ArrowRight01Icon, Delete01Icon, MoreVerticalIcon, Notification01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon, Tag01Icon } from 'hugeicons-react';
+import { Input, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { ArrowDown01Icon, ArrowRight01Icon, Delete01Icon, Notification01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon, Tag01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+const inputCls = nativeFieldClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
 
 type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans';
 
@@ -118,47 +121,6 @@ function scannerTone(status: 'healthy' | 'stale' | 'error') {
   return { color: '#f87171', bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.2)' };
 }
 
-type RowActionItem = {
-  id: string;
-  label: string;
-  icon?: ReactNode;
-  variant?: 'default' | 'danger';
-  disabled?: boolean;
-  onAction: () => void;
-};
-
-function RowActionsMenu({ label, items }: { label: string; items: RowActionItem[] }) {
-  return (
-    <Dropdown>
-      <Dropdown.Trigger>
-        <button
-          type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-lg transition-all"
-          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
-          aria-label={label}
-        >
-          <MoreVerticalIcon size={15} />
-        </button>
-      </Dropdown.Trigger>
-      <Dropdown.Popover className="min-w-[190px]">
-        <Dropdown.Menu onAction={(key) => {
-          const item = items.find((entry) => entry.id === key);
-          if (item && !item.disabled) item.onAction();
-        }}>
-          {items.map((item) => (
-            <Dropdown.Item key={item.id} id={item.id} textValue={item.label} variant={item.variant} isDisabled={item.disabled}>
-              <div className="flex items-center gap-2">
-                {item.icon ? <span className="shrink-0">{item.icon}</span> : null}
-                <Label>{item.label}</Label>
-              </div>
-            </Dropdown.Item>
-          ))}
-        </Dropdown.Menu>
-      </Dropdown.Popover>
-    </Dropdown>
-  );
-}
-
 function ScannerHealthPanel() {
   const [health, setHealth] = useState<ScannerHealth | null>(null);
   const [loading, setLoading] = useState(true);
@@ -190,8 +152,7 @@ function ScannerHealthPanel() {
         <button
           onClick={load}
           disabled={loading}
-          className="px-3 py-1.5 text-sm rounded-xl transition-all disabled:opacity-40"
-          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+          className="btn-secondary"
         >
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
@@ -446,8 +407,7 @@ function SettingsTab() {
           <button
             onClick={handleSaveRateLimit}
             disabled={savingRl || rateLimitInput === String(rateLimit)}
-            className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 flex items-center gap-2 transition-all hover:opacity-90"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}
+            className="btn-primary inline-flex items-center gap-2"
           >
             {savingRl && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Save
@@ -472,8 +432,7 @@ function SettingsTab() {
           <button
             onClick={handleSaveRegisterRateLimit}
             disabled={savingRegisterRl || registerRateLimitInput === String(registerRateLimit)}
-            className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 flex items-center gap-2 transition-all hover:opacity-90"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}
+            className="btn-primary inline-flex items-center gap-2"
           >
             {savingRegisterRl && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Save
@@ -793,8 +752,8 @@ function UsersTab() {
       <div className="flex justify-end">
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+          className="btn-primary inline-flex items-center gap-2"
+          type="button"
         >
           <PlusSignIcon size={15} /> Add User
         </button>
@@ -891,7 +850,7 @@ function UsersTab() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
                     <Select selectedKey={formRole} onSelectionChange={k => setFormRole(String(k))}>
-                      <Select.Trigger className={inputCls}>
+                      <Select.Trigger className={selectTriggerCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>
                           <Select.Value />
@@ -920,13 +879,11 @@ function UsersTab() {
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <button className="btn-secondary" onClick={modal.close} type="button">
                   Cancel
                 </button>
                 <button type="submit" form="user-form" disabled={saving}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary inline-flex items-center gap-2">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isCreate ? 'Create' : 'Save'}
                 </button>
@@ -1133,13 +1090,11 @@ function TokensTab() {
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <button className="btn-secondary" onClick={modal.close} type="button">
                   Cancel
                 </button>
                 <button type="submit" form="token-form" disabled={saving}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary inline-flex items-center gap-2">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   Save
                 </button>
@@ -1227,8 +1182,8 @@ function AutoTagsTab() {
         <p className="text-sm text-zinc-500">Automatically apply tags to scans based on image name patterns.</p>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+          className="btn-primary inline-flex items-center gap-2"
+          type="button"
         >
           <PlusSignIcon size={15} /> Add Rule
         </button>
@@ -1321,7 +1276,7 @@ function AutoTagsTab() {
                       <p className="text-sm text-zinc-500">No tags available. Create tags first.</p>
                     ) : (
                       <Select selectedKey={formTagId} onSelectionChange={k => setFormTagId(String(k))} isRequired>
-                        <Select.Trigger className={inputCls}>
+                        <Select.Trigger className={selectTriggerCls}>
                           <div className="flex items-center gap-2 min-w-0 flex-1">
                             <span className="text-zinc-400 shrink-0"><Tag01Icon size={15} /></span>
                             <Select.Value />
@@ -1342,13 +1297,11 @@ function AutoTagsTab() {
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <button className="btn-secondary" onClick={modal.close} type="button">
                   Cancel
                 </button>
                 <button type="submit" form="autotag-form" disabled={saving || tags.length === 0}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary inline-flex items-center gap-2">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isCreate ? 'Create' : 'Save'}
                 </button>
@@ -1470,8 +1423,8 @@ function AuditLogTab() {
           <button
             onClick={handleExport}
             disabled={exporting || total === 0}
-            className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 flex items-center gap-2 transition-all hover:opacity-90"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}
+            className="btn-primary inline-flex items-center gap-2"
+            type="button"
           >
             {exporting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Export CSV
@@ -1482,14 +1435,14 @@ function AuditLogTab() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm">
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-            className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
-            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            className="btn-secondary"
+            type="button">
             ←
           </button>
           <span className="text-zinc-500">{page} / {totalPages}</span>
           <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-            className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
-            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            className="btn-secondary"
+            type="button">
             →
           </button>
         </div>
@@ -1765,8 +1718,8 @@ function NotificationsTab() {
         <p className="text-sm text-zinc-500">Route scan and compliance events to Discord, Slack, Teams, email, Telegram, or a generic webhook with org, image, and severity filters.</p>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+          className="btn-primary inline-flex items-center gap-2"
+          type="button"
         >
           <PlusSignIcon size={15} /> Add Channel
         </button>
@@ -1918,7 +1871,7 @@ function NotificationsTab() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Type</label>
                     <Select selectedKey={formType} onSelectionChange={k => setFormType(k as typeof formType)}>
-                      <Select.Trigger className={inputCls}>
+                      <Select.Trigger className={selectTriggerCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><Notification01Icon size={15} /></span>
                           <Select.Value />
@@ -2038,7 +1991,7 @@ function NotificationsTab() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Minimum Severity</label>
                     <Select selectedKey={formMinSeverity || '__any__'} onSelectionChange={(key) => setFormMinSeverity(key === '__any__' ? '' : key as NotificationChannel['min_severity'])}>
-                      <Select.Trigger className={inputCls}>
+                      <Select.Trigger className={selectTriggerCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>
                           <Select.Value />
@@ -2063,13 +2016,11 @@ function NotificationsTab() {
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <button className="btn-secondary" onClick={modal.close} type="button">
                   Cancel
                 </button>
                 <button type="submit" form="notif-form" disabled={saving}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary inline-flex items-center gap-2">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isCreate ? 'Create' : 'Save'}
                 </button>
@@ -2300,7 +2251,7 @@ function ScansTab() {
           </div>
           <Select selectedKey={statusFilter || '__all__'} onSelectionChange={key => handleStatusChange(key === '__all__' ? '' : String(key))} className="w-full" placeholder="Filter by status">
             <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Status</Label>
-            <Select.Trigger className={inputCls}>
+            <Select.Trigger className={selectTriggerCls}>
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>
                 <Select.Value />
@@ -2341,12 +2292,12 @@ function ScansTab() {
       {/* Pagination */}
       <div className="flex items-center justify-end gap-2 text-sm">
         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-          className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
-          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>←</button>
+          className="btn-secondary"
+          type="button">←</button>
         <span className="text-zinc-500">{page} / {totalPages}</span>
         <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-          className="px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
-          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>→</button>
+          className="btn-secondary"
+          type="button">→</button>
       </div>
 
       {loading ? (
@@ -2504,43 +2455,43 @@ function ScansTab() {
                                         <div className="flex items-center gap-1 flex-wrap" onClick={(event) => event.stopPropagation()}>
                                           <button onClick={(event) => { event.preventDefault(); void handleRescan(s); }}
                                             disabled={actionLoadingId === `${s.id}:rescan`}
-                                            className="text-xs px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
-                                            style={{ color: '#a78bfa', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' }}>
+                                            className="btn-primary-sm"
+                                            type="button">
                                             Rescan
                                           </button>
                                           {(s.status === 'pending' || s.status === 'running') && (
                                             <button onClick={(event) => { event.preventDefault(); void handleCancel(s); }}
                                               disabled={actionLoadingId === `${s.id}:cancel`}
-                                              className="text-xs px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
-                                              style={{ color: '#fbbf24', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                                              className="btn-warning-sm"
+                                              type="button">
                                               Cancel
                                             </button>
                                           )}
                                           {!s.share_token ? (
                                             <button onClick={(event) => { event.preventDefault(); void handleCreateShare(s); }}
                                               disabled={actionLoadingId === `${s.id}:share`}
-                                              className="text-xs px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
-                                              style={{ color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                              className="btn-secondary-sm"
+                                              type="button">
                                               Share
                                             </button>
                                           ) : (
                                             <>
                                               <button onClick={(event) => { event.preventDefault(); void handleCopyShare(s); }}
-                                                className="text-xs px-2 py-1 rounded-lg font-medium transition-all"
-                                                style={{ color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                                className="btn-secondary-sm"
+                                                type="button">
                                                 Copy Link
                                               </button>
                                               <button onClick={(event) => { event.preventDefault(); void handleRevokeShare(s); }}
                                                 disabled={actionLoadingId === `${s.id}:revoke`}
-                                                className="text-xs px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
-                                                style={{ color: '#f87171', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                                className="btn-danger-sm"
+                                                type="button">
                                                 Revoke
                                               </button>
                                             </>
                                           )}
                                           <button onClick={(event) => { event.preventDefault(); openTagModal(s); }}
-                                            className="text-xs px-2 py-1 rounded-lg font-medium transition-all"
-                                            style={{ color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                                            className="btn-secondary-sm"
+                                            type="button">
                                             Add Tag
                                           </button>
                                         </div>
@@ -2578,7 +2529,7 @@ function ScansTab() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Tag</label>
                     <Select selectedKey={selectedTagId} onSelectionChange={(key) => setSelectedTagId(String(key))}>
-                      <Select.Trigger className={inputCls}>
+                      <Select.Trigger className={selectTriggerCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><Tag01Icon size={15} /></span>
                           <Select.Value />
@@ -2597,13 +2548,11 @@ function ScansTab() {
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={tagModal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <button className="btn-secondary" onClick={tagModal.close} type="button">
                   Cancel
                 </button>
                 <button type="submit" form="tag-form" disabled={!selectedTagId || actionLoadingId === `${tagScan?.id}:tag`}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-40 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary inline-flex items-center gap-2">
                   {actionLoadingId === `${tagScan?.id}:tag` && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   Add Tag
                 </button>
@@ -2629,13 +2578,11 @@ export default function AdminPage() {
         <p className="text-sm text-zinc-500 mt-1">Manage system configuration, users, service credentials, notifications, and cross-user scans.</p>
       </div>
 
-      <div className="flex gap-1 p-1 rounded-xl flex-wrap" style={{background:'var(--glass-bg)', border:'1px solid var(--glass-border)'}}>
+      <div className="segmented-control flex-wrap">
         {ADMIN_TABS.map((tab) => (
           <Link key={tab.value} href={tab.href}
-            className="px-4 py-1.5 text-sm font-medium rounded-lg transition-all"
-            style={activeTab === tab.value
-              ? {background:'linear-gradient(135deg,#7c3aed,#6d28d9)', color:'white'}
-              : {color:'var(--text-muted)'}}>
+            className="segmented-control-item"
+            data-active={activeTab === tab.value ? 'true' : 'false'}>
             {tab.label}
           </Link>
         ))}

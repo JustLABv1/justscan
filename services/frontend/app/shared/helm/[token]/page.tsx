@@ -197,16 +197,14 @@ function HelmGroupContent() {
           {isLoggedIn ? (
             <Link
               href="/scans"
-              className="px-3 py-1.5 text-xs font-medium rounded-xl transition-all"
-              style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', boxShadow: '0 2px 8px rgba(124,58,237,0.3)' }}
+              className="btn-primary-sm"
             >
               Dashboard →
             </Link>
           ) : (
             <Link
               href="/login"
-              className="px-3 py-1.5 text-xs font-medium rounded-xl transition-all"
-              style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', boxShadow: '0 2px 8px rgba(124,58,237,0.3)' }}
+              className="btn-primary-sm"
             >
               Sign in →
             </Link>

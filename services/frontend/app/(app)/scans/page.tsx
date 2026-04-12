@@ -6,6 +6,7 @@ import { SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
+import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { ImageRowSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import {
@@ -35,7 +36,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 
-const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+const inputCls = nativeFieldClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
 
 const PROVIDER_LABEL: Record<string, string> = {
   trivy: 'Trivy',
@@ -313,16 +315,14 @@ export default function ScansPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/scans/compare"
-            className="flex flex-1 min-w-[130px] items-center justify-center gap-2 text-sm font-medium px-3 py-2 rounded-xl transition-all duration-150 sm:flex-none"
-            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+            className="btn-secondary flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
           >
             <GitCompareIcon size={15} />
             Compare
           </Link>
           <button
             onClick={modal.open}
-            className="flex flex-1 min-w-[130px] items-center justify-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95 sm:flex-none"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+            className="btn-primary flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
           >
             <PlusSignIcon size={15} />
             New Scan
@@ -348,7 +348,7 @@ export default function ScansPage() {
             <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Latest State</label>
         </div>
         <Select selectedKey={statusFilter || '__all__'} onSelectionChange={key => handleStatusFilterChange(String(key === '__all__' ? '' : key))} className="min-w-0">
-          <Select.Trigger className={inputCls}>
+          <Select.Trigger className={selectTriggerCls}>
             <Select.Value />
             <Select.Indicator />
           </Select.Trigger>
@@ -365,8 +365,8 @@ export default function ScansPage() {
             {(imageFilter || statusFilter) ? (
               <button
                 onClick={() => { setImageFilter(''); setStatusFilter(''); applyFilter('', ''); }}
-                className="flex w-full items-center justify-center gap-1.5 text-xs font-medium px-2.5 py-2.5 rounded-xl transition-colors lg:w-auto"
-                style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa' }}
+                className="btn-secondary flex w-full items-center justify-center gap-1.5 lg:w-auto"
+                type="button"
               >
                 <FilterIcon size={12} />
                 Clear Filters
@@ -389,16 +389,15 @@ export default function ScansPage() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleGenerateReport}
-              className="flex flex-1 min-w-[110px] items-center justify-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all sm:flex-none"
-              style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa' }}
+              className="btn-secondary flex flex-1 min-w-[110px] items-center justify-center gap-1.5 sm:flex-none"
+              type="button"
               title="Generate report for selected scans"
             >
               Report
             </button>
             <Popover>
               <Popover.Trigger
-                className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-                style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+                className="btn-secondary"
               >
                 Add Tag
               </Popover.Trigger>
@@ -428,14 +427,15 @@ export default function ScansPage() {
             </Popover>
             <button
               onClick={() => setSelectedScans(new Set())}
-              className="flex-1 min-w-[90px] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors sm:flex-none"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+              className="btn-secondary flex-1 min-w-[90px] sm:flex-none"
+              type="button"
             >
               Clear
             </button>
             <button
               onClick={handleBulkDelete}
-              className="flex-1 min-w-[90px] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-red-400 hover:text-red-300 sm:flex-none"
+              className="btn-danger flex-1 min-w-[90px] sm:flex-none"
+              type="button"
             >
               Delete
             </button>
@@ -717,15 +717,13 @@ export default function ScansPage() {
             <button
               disabled={page <= 1}
               onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+              className="btn-secondary"
             >← Prev</button>
             <span className="text-sm text-zinc-500 px-2">{page} / {totalPages}</span>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+              className="btn-secondary"
             >Next →</button>
           </div>
         </div>
@@ -764,7 +762,7 @@ export default function ScansPage() {
                       Registry <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span>
                     </label>
                     <Select selectedKey={registryId || '__auto__'} onSelectionChange={k => setRegistryId(String(k === '__auto__' ? '' : k))}>
-                      <Select.Trigger className={inputCls}>
+                      <Select.Trigger className={selectTriggerCls}>
                         <Select.Value />
                         <Select.Indicator />
                       </Select.Trigger>
@@ -793,7 +791,7 @@ export default function ScansPage() {
                       Platform <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span>
                     </label>
                     <Select selectedKey={platform || '__auto__'} onSelectionChange={k => setPlatform(String(k === '__auto__' ? '' : k))}>
-                      <Select.Trigger className={inputCls}>
+                      <Select.Trigger className={selectTriggerCls}>
                         <Select.Value />
                         <Select.Indicator />
                       </Select.Trigger>
@@ -818,15 +816,14 @@ export default function ScansPage() {
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <button
                   onClick={modal.close}
-                  className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                  className="btn-secondary"
+                  type="button"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit" form="create-scan-form" disabled={creating || xrayOnlyWithoutRegistries}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+                  className="btn-primary inline-flex items-center gap-2"
                 >
                   {creating && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   Start Scan

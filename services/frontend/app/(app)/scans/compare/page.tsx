@@ -1,4 +1,5 @@
 'use client';
+import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { compareScans, listScans, Scan, ScanComparison, Vulnerability } from '@/lib/api';
 import { ListBox, Select } from '@heroui/react';
 import { ArrowLeft01Icon } from 'hugeicons-react';
@@ -6,7 +7,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 
-const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+const selectTriggerCls = heroSelectTriggerClassName;
 
 function SevBadge({ sev }: { sev: string }) {
   const cfg: Record<string, { color: string; bg: string }> = {
@@ -83,7 +84,7 @@ function ScanSelector({
     <div className="space-y-1.5 flex-1">
       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">{label}</label>
       <Select selectedKey={value || '__none__'} onSelectionChange={k => onChange(String(k === '__none__' ? '' : k))}>
-        <Select.Trigger className={inputCls}>
+        <Select.Trigger className={selectTriggerCls}>
           <Select.Value />
           <Select.Indicator />
         </Select.Trigger>
@@ -153,7 +154,7 @@ function ComparePageInner() {
       <div>
         <Link
           href="/scans"
-          className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors mb-3"
+          className="btn-secondary inline-flex items-center gap-1.5 mb-3"
         >
           <ArrowLeft01Icon size={15} />
           Back to scans
@@ -179,8 +180,8 @@ function ComparePageInner() {
           <button
             onClick={handleCompare}
             disabled={loading || !scanA || !scanB}
-            className="shrink-0 flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white rounded-xl transition-all hover:opacity-90 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+            className="btn-primary shrink-0 inline-flex items-center gap-2"
+            type="button"
           >
             {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Compare

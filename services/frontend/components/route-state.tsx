@@ -8,7 +8,7 @@ export function RouteLoadingState({
   message?: string;
 }) {
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div aria-label={title} className="p-6 max-w-5xl mx-auto">
       <div className="glass-panel rounded-3xl p-8 space-y-5">
         <div className="space-y-2">
           <div className="skeleton h-8 w-48 rounded-xl" />
@@ -57,12 +57,11 @@ export function RouteErrorState({
           <button
             type="button"
             onClick={onRetry}
-            className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
-            style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)' }}
+            className="btn-primary"
           >
             Retry
           </button>
-          <Link href="/dashboard" className="px-4 py-2 rounded-xl text-sm font-medium text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+          <Link href="/dashboard" className="btn-secondary">
             Back to dashboard
           </Link>
         </div>

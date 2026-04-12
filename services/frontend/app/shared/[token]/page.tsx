@@ -1,5 +1,6 @@
 'use client';
 import { Logo } from '@/components/logo';
+import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type { Scan, Vulnerability } from '@/lib/api';
 import { ApiError, getSharedScan, getSharedVulnerabilityContextAnalysis, getToken, listScans, listSharedVulnerabilities, rescanShared } from '@/lib/api';
@@ -180,7 +181,7 @@ export default function SharedScanPage() {
     }
   }
 
-  const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl';
+  const inputCls = nativeFieldClassName;
 
   function openVulnerabilityDetails(vulnerability: Vulnerability) {
     setSelectedVulnerability(vulnerability);
@@ -227,8 +228,7 @@ export default function SharedScanPage() {
             <Link
               href={`/reports/print?scans=${scan.id}`}
               target="_blank"
-              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+              className="btn-secondary inline-flex items-center gap-1.5"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -240,8 +240,7 @@ export default function SharedScanPage() {
             <button
               onClick={handleRescan}
               disabled={reScanning}
-              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
-              style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#c4b5fd' }}
+              className="btn-primary inline-flex items-center gap-1.5"
             >
               {reScanning
                 ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
@@ -257,8 +256,7 @@ export default function SharedScanPage() {
             <button
               onClick={handleComparePrev}
               disabled={comparingPrev}
-              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+              className="btn-secondary inline-flex items-center gap-1.5"
             >
               {comparingPrev
                 ? <span className="w-3.5 h-3.5 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin" />
@@ -273,14 +271,12 @@ export default function SharedScanPage() {
           <ThemeToggle />
           {isLoggedIn ? (
             <Link href="/scans"
-              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+              className="btn-secondary">
               Dashboard →
             </Link>
           ) : (
             <Link href={`/login?returnUrl=/shared/${token}`}
-              className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+              className="btn-secondary">
               Sign in
             </Link>
           )}
@@ -332,7 +328,7 @@ export default function SharedScanPage() {
         )}
 
         {showResultTabs && (
-          <div className="flex items-center gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+          <div className="segmented-control w-fit">
             {([
               { id: 'overview', label: showRecoveredOverview ? 'Overview' : 'Status' },
               { id: 'timeline', label: scan?.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
@@ -340,10 +336,9 @@ export default function SharedScanPage() {
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
-                className="px-4 py-1.5 text-sm font-medium rounded-lg transition-all"
-                style={activeTab === id
-                  ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', boxShadow: '0 0 12px rgba(124,58,237,0.18)' }
-                  : { color: 'var(--text-muted)' }}
+                className="segmented-control-item"
+                data-active={activeTab === id ? 'true' : 'false'}
+                type="button"
               >
                 {label}
               </button>
@@ -411,13 +406,13 @@ export default function SharedScanPage() {
                 </h2>
                 <div className="flex flex-wrap gap-2 items-center">
                   {/* Severity pills */}
-                  <div className="flex gap-1">
+                  <div className="segmented-control">
                     {['', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map(sev => (
                       <button key={sev || '__all__'} onClick={() => { setSeverityFilter(sev); setPage(1); }}
-                        className="px-3 py-1.5 text-xs rounded-lg font-medium transition-all"
-                        style={severityFilter === sev
-                          ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: 'white' }
-                          : { background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
+                        className="segmented-control-item"
+                        data-active={severityFilter === sev ? 'true' : 'false'}
+                        data-size="sm"
+                        type="button">
                         {sev || 'All'}
                       </button>
                     ))}
@@ -428,7 +423,6 @@ export default function SharedScanPage() {
                     onChange={e => setPkgInput(e.target.value)}
                     placeholder="Package…"
                     className={inputCls}
-                    style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
                   />
                   <input
                     type="number"
@@ -444,14 +438,11 @@ export default function SharedScanPage() {
                     }}
                     placeholder="Min CVSS"
                     className={inputCls}
-                    style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', width: 100 }}
+                    style={{ width: 100 }}
                   />
                   <button
                     onClick={() => { setHasFix(!hasFix); setPage(1); }}
-                    className="px-3 py-2 text-sm rounded-xl transition-colors"
-                    style={hasFix
-                      ? { background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(167,139,250,0.3)', color: '#7c3aed' }
-                      : { background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
+                    className={hasFix ? 'btn-primary' : 'btn-secondary'}
                   >
                     Has Fix
                   </button>
@@ -536,14 +527,12 @@ export default function SharedScanPage() {
                   <div className="flex items-center gap-2">
                     <button
                       disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                      className="px-3 py-1.5 text-sm rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                      style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+                      className="btn-secondary"
                     >← Prev</button>
                     <span className="text-sm px-2" style={{ color: 'var(--text-muted)' }}>{page} / {totalPages}</span>
                     <button
                       disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-                      className="px-3 py-1.5 text-sm rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                      style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+                      className="btn-secondary"
                     >Next →</button>
                   </div>
                 </div>

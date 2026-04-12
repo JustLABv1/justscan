@@ -21,6 +21,9 @@ services:
     # build:
     #   context: ../../services/backend
     #   dockerfile: Dockerfile
+    #   args:
+    #     INCLUDE_TRIVY: "false"
+    #     INCLUDE_GRYPE: "false"
     restart: unless-stopped
     depends_on:
       postgres:

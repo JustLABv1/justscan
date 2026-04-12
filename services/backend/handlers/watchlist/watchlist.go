@@ -2,11 +2,13 @@ package watchlist
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"justscan-backend/functions/auth"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
+	"justscan-backend/scheduler"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -44,6 +46,7 @@ func CreateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			ImageName  string     `json:"image_name" binding:"required"`
 			ImageTag   string     `json:"image_tag" binding:"required"`
 			Schedule   string     `json:"schedule" binding:"required"`
+			Timezone   string     `json:"timezone"`
 			Enabled    bool       `json:"enabled"`
 			RegistryID *uuid.UUID `json:"registry_id"`
 		}
@@ -51,10 +54,19 @@ func CreateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		timezone := strings.TrimSpace(body.Timezone)
+		if timezone == "" {
+			timezone = "UTC"
+		}
+		if err := scheduler.ValidateSchedule(body.Schedule, timezone); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		item := &models.WatchlistItem{
 			ImageName:  body.ImageName,
 			ImageTag:   body.ImageTag,
 			Schedule:   body.Schedule,
+			Timezone:   timezone,
 			Enabled:    body.Enabled,
 			RegistryID: body.RegistryID,
 			UserID:     userID,
@@ -65,6 +77,7 @@ func CreateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create watchlist item"})
 			return
 		}
+		scheduler.SyncWatchlistItem(db, *item)
 		c.JSON(http.StatusCreated, item)
 	}
 }
@@ -92,6 +105,7 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 		}
 		var body struct {
 			Schedule   *string    `json:"schedule"`
+			Timezone   *string    `json:"timezone"`
 			Enabled    *bool      `json:"enabled"`
 			RegistryID *uuid.UUID `json:"registry_id"`
 		}
@@ -102,20 +116,31 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 		if body.Schedule != nil {
 			item.Schedule = *body.Schedule
 		}
+		if body.Timezone != nil {
+			item.Timezone = strings.TrimSpace(*body.Timezone)
+		}
+		if item.Timezone == "" {
+			item.Timezone = "UTC"
+		}
 		if body.Enabled != nil {
 			item.Enabled = *body.Enabled
 		}
 		if body.RegistryID != nil {
 			item.RegistryID = body.RegistryID
 		}
+		if err := scheduler.ValidateSchedule(item.Schedule, item.Timezone); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		item.UpdatedAt = time.Now()
 		if _, err := db.NewUpdate().Model(item).
-			Column("schedule", "enabled", "registry_id", "updated_at").
+			Column("schedule", "timezone", "enabled", "registry_id", "updated_at").
 			Where("id = ?", itemID).
 			Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update watchlist item"})
 			return
 		}
+		scheduler.SyncWatchlistItem(db, *item)
 		c.JSON(http.StatusOK, item)
 	}
 }
@@ -147,6 +172,7 @@ func DeleteWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete watchlist item"})
 			return
 		}
+		scheduler.UnscheduleWatchlistItem(itemID.String())
 		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
 	}
 }
@@ -186,10 +212,15 @@ func TriggerScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		provider, err := scanner.ProviderForRegistry(registry)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(item.ImageName, item.ImageTag, registry)
 		scan.ImageName = normalizedImageName
 		scan.ImageTag = normalizedImageTag
-		scan.ScanProvider = scanner.ProviderForRegistry(registry)
+		scan.ScanProvider = provider
 		if registry != nil {
 			scan.RegistryID = &registry.ID
 		}

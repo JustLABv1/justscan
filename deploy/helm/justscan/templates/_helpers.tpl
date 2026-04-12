@@ -120,6 +120,32 @@ Otherwise return the value configured in backend.config.database.server.
 {{- end }}
 
 {{/*
+PostgreSQL database name.
+When the bundled postgresql subchart is enabled, return postgresql.auth.database.
+Otherwise return the value configured in backend.config.database.name.
+*/}}
+{{- define "justscan.postgresql.database" -}}
+{{- if .Values.postgresql.enabled }}
+{{- .Values.postgresql.auth.database }}
+{{- else }}
+{{- .Values.backend.config.database.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+PostgreSQL username.
+When the bundled postgresql subchart is enabled, return postgresql.auth.username.
+Otherwise return the value configured in backend.config.database.user.
+*/}}
+{{- define "justscan.postgresql.user" -}}
+{{- if .Values.postgresql.enabled }}
+{{- .Values.postgresql.auth.username }}
+{{- else }}
+{{- .Values.backend.config.database.user }}
+{{- end }}
+{{- end }}
+
+{{/*
 PostgreSQL password secret name.
 When postgresql.enabled=true we read from the Bitnami subchart secret.
 When existingSecret is set for the backend we read from there.

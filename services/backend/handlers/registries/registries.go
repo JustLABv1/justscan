@@ -8,6 +8,7 @@ import (
 	"justscan-backend/functions/auth"
 	"justscan-backend/pkg/crypto"
 	"justscan-backend/pkg/models"
+	"justscan-backend/scanner"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -24,7 +25,7 @@ func ListRegistries(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list registries"})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"data": registries})
+		c.JSON(http.StatusOK, gin.H{"data": registries, "capabilities": scanner.ScannerCapabilities()})
 	}
 }
 
@@ -54,6 +55,10 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 		}
 		if body.ScanProvider == "" {
 			body.ScanProvider = models.ScanProviderTrivy
+		}
+		if err := scanner.ValidateRegistryProviderSelection(body.ScanProvider); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 		if body.XrayArtifactoryID == "" {
 			body.XrayArtifactoryID = "default"
@@ -132,6 +137,10 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 		}
 		if body.ScanProvider != "" {
 			registry.ScanProvider = body.ScanProvider
+		}
+		if err := scanner.ValidateRegistryProviderSelection(registry.ScanProvider); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 		if body.Username != "" {
 			registry.Username = body.Username

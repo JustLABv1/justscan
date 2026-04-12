@@ -133,6 +133,11 @@ func OIDCCallback(db *bun.DB) gin.HandlerFunc {
 			}
 		}
 
+		if err := auth.RecordSuccessfulLogin(c.Request.Context(), db, user, "oidc"); err != nil {
+			httperror.InternalServerError(c, "Failed to update login metadata", err)
+			return
+		}
+
 		// --- 7. Issue JWT ---
 		tokenString, expiresAt, err := auth.GenerateJWT(user.ID, false)
 		if err != nil {

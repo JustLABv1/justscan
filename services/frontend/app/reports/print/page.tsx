@@ -258,7 +258,7 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
 
       <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
       <p style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Scan Details</p>
-      {([['showScanId', 'Scan ID'], ['showStarted', 'Started'], ['showCompleted', 'Completed'], ['showTrivyVersion', 'Trivy Version']] as [keyof Filters, string][]).map(([k, label]) => (
+      {([['showScanId', 'Scan ID'], ['showStarted', 'Started'], ['showCompleted', 'Completed'], ['showTrivyVersion', 'Scanner Versions']] as [keyof Filters, string][]).map(([k, label]) => (
         <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer' }}>
           <input type="checkbox" checked={f[k] as boolean} onChange={e => onChange({ ...f, [k]: e.target.checked })} />
           {label}
@@ -362,7 +362,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
             ...(filters.showScanId ? [['Scan ID', scan.id, true] as [string, string, boolean]] : []),
             ...(filters.showStarted ? [['Started', fmt(scan.started_at), false] as [string, string, boolean]] : []),
             ...(filters.showCompleted ? [['Completed', fmt(scan.completed_at), false] as [string, string, boolean]] : []),
-            ...(filters.showTrivyVersion ? [['Trivy Version', [scan.trivy_version ? `Trivy ${scan.trivy_version}` : '', scan.grype_version ? `Grype ${scan.grype_version}` : ''].filter(Boolean).join(' · ') || '—', false] as [string, string, boolean]] : []),
+            ...(filters.showTrivyVersion ? [['Scanner Versions', [scan.trivy_version ? `Trivy ${scan.trivy_version}` : '', scan.grype_version ? `Grype ${scan.grype_version}` : ''].filter(Boolean).join(' · ') || '—', false] as [string, string, boolean]] : []),
             ...(scan.helm_chart ? [['Helm Chart', scan.helm_chart, true] as [string, string, boolean]] : []),
             ...(scan.helm_source_path ? [['Helm Source', scan.helm_source_path, false] as [string, string, boolean]] : []),
             ...(scan.os_family ? [['OS', `${scan.os_family} ${scan.os_name}`.trim(), false] as [string, string, boolean]] : []),

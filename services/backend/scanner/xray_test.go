@@ -257,3 +257,48 @@ func TestParseCycloneDXVulnerabilitiesBuildsAffectedComponentFindings(t *testing
 		t.Fatalf("unexpected installed version %q", vulns[1].InstalledVersion)
 	}
 }
+
+func TestExtractCycloneDXKBEntriesDeduplicatesAndKeepsBestSeverity(t *testing.T) {
+	sbom := &TrivySBOMOutput{
+		BOMFormat: "CycloneDX",
+		Vulnerabilities: []TrivySBOMVulnerability{
+			{
+				ID:          "CVE-2026-3333",
+				Description: "First description",
+				Ratings:     []TrivySBOMVulnRating{{Severity: "medium", Score: 5.4, Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"}},
+				Advisories:  []TrivySBOMVulnAdvisory{{URL: "https://example.test/CVE-2026-3333"}},
+				Source:      &TrivySBOMVulnSource{Name: "NVD", URL: "https://nvd.nist.gov/vuln/detail/CVE-2026-3333"},
+			},
+			{
+				ID:          "CVE-2026-3333",
+				Description: "Updated description",
+				Ratings:     []TrivySBOMVulnRating{{Severity: "critical", Score: 9.8, Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}},
+				Advisories:  []TrivySBOMVulnAdvisory{{URL: "https://exploit-db.com/exploits/54321"}},
+			},
+		},
+	}
+
+	entries := ExtractCycloneDXKBEntries(sbom)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 KB entry, got %d", len(entries))
+	}
+	entry := entries[0]
+	if entry.VulnID != "CVE-2026-3333" {
+		t.Fatalf("unexpected vuln id %q", entry.VulnID)
+	}
+	if entry.Description != "First description" {
+		t.Fatalf("expected first non-empty description to be retained, got %q", entry.Description)
+	}
+	if entry.Severity != "CRITICAL" {
+		t.Fatalf("expected highest severity to be retained, got %q", entry.Severity)
+	}
+	if entry.CVSSScore != 9.8 {
+		t.Fatalf("expected highest score to be retained, got %v", entry.CVSSScore)
+	}
+	if len(entry.References) != 3 {
+		t.Fatalf("expected merged references, got %d", len(entry.References))
+	}
+	if !entry.ExploitAvailable {
+		t.Fatal("expected exploit_available to be true")
+	}
+}

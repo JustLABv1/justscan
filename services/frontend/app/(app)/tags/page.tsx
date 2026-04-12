@@ -2,6 +2,9 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FormAlert } from '@/components/ui/form-alert';
+import { FormField } from '@/components/ui/form-field';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createTag, deleteTag, listTags, Tag, updateTag } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
@@ -9,7 +12,6 @@ import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Tag01Icon } from 'hugeico
 import { useCallback, useEffect, useState } from 'react';
 
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#14b8a6'];
-const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
 
 export default function TagsPage() {
   const [tags, setTags] = useState<Tag[]>([]);
@@ -68,17 +70,13 @@ export default function TagsPage() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+          className="btn-primary inline-flex items-center gap-2"
         >
           <PlusSignIcon size={15} /> New Tag
         </button>
       </div>
 
-      {error && (
-        <div className="rounded-xl px-4 py-3 text-sm"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>{error}</div>
-      )}
+      {error ? <FormAlert description={error} title="Tag loading failed" /> : null}
 
       {loading ? (
         <div className="glass-panel rounded-2xl overflow-hidden">
@@ -123,12 +121,13 @@ export default function TagsPage() {
               </span>
               <span className="flex-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">{tag.name}</span>
               <span className="font-mono text-xs text-zinc-500">{tag.color}</span>
-              <button onClick={() => openEdit(tag)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1" title="Edit">
-                <PencilEdit01Icon size={15} />
-              </button>
-              <button onClick={() => handleDelete(tag.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1" title="Delete">
-                <Delete01Icon size={15} />
-              </button>
+              <RowActionsMenu
+                label={`Open actions menu for tag ${tag.name}`}
+                items={[
+                  { id: 'edit', label: 'Edit tag', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(tag) },
+                  { id: 'delete', label: 'Delete tag', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(tag.id); } },
+                ]}
+              />
             </div>
           ))}
         </div>
@@ -144,17 +143,8 @@ export default function TagsPage() {
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
                 <form id="tag-form" onSubmit={handleSubmit} className="space-y-4">
-                  {formError && (
-                    <div className="rounded-xl px-3 py-2.5 text-sm"
-                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
-                      {formError}
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Name</label>
-                    <input className={inputCls} placeholder="production"
-                      value={name} onChange={(e) => setName(e.target.value)} required />
-                  </div>
+                  {formError ? <FormAlert description={formError} title="Tag save failed" /> : null}
+                  <FormField label="Name" onChange={(e) => setName(e.target.value)} placeholder="production" required value={name} />
                   <div className="space-y-2.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Color</label>
                     <div className="flex flex-wrap gap-2">
@@ -184,11 +174,9 @@ export default function TagsPage() {
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>Cancel</button>
+                <button onClick={modal.close} className="btn-secondary" type="button">Cancel</button>
                 <button type="submit" form="tag-form" disabled={saving}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                  className="btn-primary inline-flex items-center gap-2">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Create'}
                 </button>

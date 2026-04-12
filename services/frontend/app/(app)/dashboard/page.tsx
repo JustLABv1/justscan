@@ -4,13 +4,13 @@ import { ChartSkeleton, RecentScanRowSkeleton, StatCardSkeleton } from '@/compon
 import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
-    Activity01Icon,
-    Add01Icon,
-    AlertDiamondIcon,
-    CheckmarkBadge01Icon,
-    Clock01Icon,
-    EyeIcon,
-    Shield01Icon,
+  Activity01Icon,
+  Add01Icon,
+  AlertDiamondIcon,
+  CheckmarkBadge01Icon,
+  Clock01Icon,
+  EyeIcon,
+  Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
@@ -160,7 +160,7 @@ function scanContextLabel(scan: Scan): string {
     }
     return 'Artifactory Xray';
   }
-  return 'Local Trivy worker';
+  return 'Built-in scanner';
 }
 
 function formatDbAge(hours?: number | null): string {
@@ -168,6 +168,14 @@ function formatDbAge(hours?: number | null): string {
   if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m`;
   if (hours < 24) return `${hours >= 10 ? hours.toFixed(0) : hours.toFixed(1)}h`;
   return `${(hours / 24).toFixed(1)}d`;
+}
+
+function buildScansHref(filters?: { status?: string; image?: string }): string {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.image) params.set('image', filters.image);
+  const query = params.toString();
+  return query ? `/scans?${query}` : '/scans';
 }
 
 
@@ -468,7 +476,7 @@ function VulnTrendChart({ data, period, onPeriod }: {
           </div>
           <div>
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Avg. Findings per Scan</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Average vulnerabilities per completed scan, by day</p>
+            <p className="text-xs text-zinc-500 mt-0.5">Average vulnerabilities per finalized scan, by day</p>
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -502,7 +510,7 @@ function VulnTrendChart({ data, period, onPeriod }: {
       <div ref={containerRef} className="w-full">
       {!hasData ? (
         <div className="flex items-center justify-center text-sm text-zinc-500 py-10">
-          No completed scans in this period
+          No finalized scans in this period
         </div>
       ) : (
         <svg
@@ -758,9 +766,13 @@ export default function DashboardPage() {
 
   const totalVulns = Object.values(stats.severity_totals).reduce((a, b) => a + b, 0);
   const hasCriticals = (stats.severity_totals['critical'] ?? 0) > 0;
-  const priorityScans = (stats.recent_scans ?? []).filter((scan) => scan.status === 'failed' || scan.status === 'running' || scan.status === 'pending').slice(0, 4);
+  const priorityScans = (stats.recent_scans ?? [])
+    .filter((scan) => scan.status === 'failed' || scan.status === 'running' || scan.status === 'pending' || scan.external_status === 'blocked_by_xray_policy')
+    .slice(0, 5);
   const todayKey = new Date().toISOString().slice(0, 10);
   const startedTodayCount = [...trends].reverse().find((point) => point.date === todayKey)?.total ?? 0;
+  const failedCount = stats.status_counts['failed'] ?? 0;
+  const activeQueueCount = (stats.status_counts['running'] ?? 0) + (stats.status_counts['pending'] ?? 0);
   const blockedPolicyCount = stats.operations?.blocked_policy_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
   const activeXrayCount = stats.operations?.active_xray_count ?? 0;
   const activeXrayScans = stats.operations?.active_xray_scans ?? [];
@@ -851,12 +863,75 @@ export default function DashboardPage() {
         })}
       </div>
 
-      <div className="relative grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] z-10">
+      <div className="relative grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.95fr)] z-10">
+        <div className="rounded-2xl p-5" style={glassCard('rgba(239,68,68,0.04)')}>
+          <div className="flex items-center justify-between mb-4 gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Action Center</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">The scans most likely to need intervention right now.</p>
+            </div>
+            <Link href={buildScansHref({ status: 'failed' })} className="text-xs text-zinc-500 hover:text-violet-500 transition-colors">Open triage →</Link>
+          </div>
+          {priorityScans.length === 0 ? (
+            <p className="text-sm text-zinc-500 py-10 text-center">No active triage items right now.</p>
+          ) : (
+            <div className="space-y-2">
+              {priorityScans.map((scan) => (
+                <RecentScanRow key={scan.id} scan={scan} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl p-5" style={glassCard('rgba(59,130,246,0.04)')}>
+          <div className="flex items-center justify-between mb-4 gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Quick Queues</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">Direct links into the most common follow-up paths.</p>
+            </div>
+            <Link href="/scans" className="text-xs text-zinc-500 hover:text-violet-500 transition-colors">All scans →</Link>
+          </div>
+          <div className="space-y-2.5">
+            <Link href={buildScansHref({ status: 'failed' })} className="flex items-center justify-between rounded-xl px-4 py-3 transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div>
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Failed scans</p>
+                <p className="text-xs text-zinc-500 mt-0.5">General scan failures that likely need investigation.</p>
+              </div>
+              <span className="text-lg font-semibold" style={{ color: failedCount > 0 ? '#f87171' : 'var(--text-primary)' }}>{failedCount}</span>
+            </Link>
+            <Link href={buildScansHref({ status: 'failed' })} className="flex items-center justify-between rounded-xl px-4 py-3 transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div>
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Blocked by policy</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Xray policy blocks surfaced separately from generic failures.</p>
+              </div>
+              <span className="text-lg font-semibold" style={{ color: blockedPolicyCount > 0 ? '#f59e0b' : 'var(--text-primary)' }}>{blockedPolicyCount}</span>
+            </Link>
+            <Link href={buildScansHref({ status: 'running' })} className="flex items-center justify-between rounded-xl px-4 py-3 transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div>
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">In-flight queue</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Running and pending scans that are still moving through the system.</p>
+              </div>
+              <span className="text-lg font-semibold" style={{ color: activeQueueCount > 0 ? '#60a5fa' : 'var(--text-primary)' }}>{activeQueueCount}</span>
+            </Link>
+            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Started today</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">New scan requests created since 00:00 UTC.</p>
+                </div>
+                <span className="text-lg font-semibold" style={{ color: '#a78bfa' }}>{startedTodayCount}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative z-10">
         <div className="rounded-2xl p-5" style={glassCard('rgba(124,58,237,0.04)')}>
           <div className="flex items-center justify-between mb-4">
             <div>
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Operations Board</h2>
-        <p className="text-xs text-zinc-500 mt-0.5">Started-today activity, live Xray work, and policy blocks.</p>
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Live Operations</h2>
+        <p className="text-xs text-zinc-500 mt-0.5">Provider-specific work that is still in motion, kept separate from triage.</p>
             </div>
             <Link href="/scans" className="text-xs text-zinc-500 hover:text-violet-500 transition-colors">Open scans →</Link>
           </div>
@@ -889,7 +964,6 @@ export default function DashboardPage() {
         border="rgba(245,158,11,0.2)"
       />
           </div>
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.9fr)]">
       <div className="rounded-2xl p-4" style={insetCard()}>
         <div className="flex items-center justify-between mb-3 gap-3">
         <div>
@@ -909,50 +983,36 @@ export default function DashboardPage() {
           ))}
         </div>
         )}
-      </div>
-      <div className="rounded-2xl p-4" style={insetCard()}>
-        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Current Steps</h3>
-        <p className="text-xs text-zinc-500 mt-0.5 mb-3">Live counts for each Xray pipeline stage.</p>
-        <div className="space-y-2.5">
-        {XRAY_PIPELINE_STEPS.map((step) => {
-          const count = activeXraySteps[step] ?? 0;
-          const pct = activeXrayCount > 0 ? (count / activeXrayCount) * 100 : 0;
-          return (
-          <div key={step}>
-            <div className="flex items-center justify-between gap-3 mb-1">
-            <span className="text-xs text-zinc-600 dark:text-zinc-300">{formatStepLabel(step)}</span>
-            <span className="text-[11px] font-mono text-zinc-500">{count}</span>
-            </div>
-            <div className="h-1.5 rounded-full" style={{ background: 'var(--row-divider)' }}>
-            <div className="h-1.5 rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, rgba(124,58,237,0.85), rgba(96,165,250,0.85))' }} />
-            </div>
-          </div>
-          );
-        })}
-        </div>
-        <p className="text-[11px] text-zinc-500 mt-4 leading-5">
-        Findings averages below only count completed scans. Started-today activity stays here so the dashboard can show same-day work without pretending in-flight findings are final.
-        </p>
-      </div>
-      </div>
-        </div>
-
-        <div className="rounded-2xl p-5" style={glassCard()}>
-          <div className="flex items-center justify-between mb-3">
+        <details className="mt-4 group rounded-2xl p-4" style={insetCard()}>
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Needs Attention</h2>
-        <p className="text-xs text-zinc-500 mt-0.5">Recent failed, blocked, running, or queued scans.</p>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Live Step Breakdown</h3>
+              <p className="text-xs text-zinc-500 mt-0.5">Expand only when you need provider-specific pipeline detail.</p>
             </div>
+            <span className="text-xs font-medium text-zinc-500 group-open:text-violet-500">{activeXrayCount} live</span>
+          </summary>
+          <div className="mt-4 space-y-2.5">
+          {XRAY_PIPELINE_STEPS.map((step) => {
+            const count = activeXraySteps[step] ?? 0;
+            const pct = activeXrayCount > 0 ? (count / activeXrayCount) * 100 : 0;
+            return (
+            <div key={step}>
+              <div className="flex items-center justify-between gap-3 mb-1">
+              <span className="text-xs text-zinc-600 dark:text-zinc-300">{formatStepLabel(step)}</span>
+              <span className="text-[11px] font-mono text-zinc-500">{count}</span>
+              </div>
+              <div className="h-1.5 rounded-full" style={{ background: 'var(--row-divider)' }}>
+              <div className="h-1.5 rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, rgba(124,58,237,0.85), rgba(96,165,250,0.85))' }} />
+              </div>
+            </div>
+            );
+          })}
           </div>
-          {priorityScans.length === 0 ? (
-            <p className="text-sm text-zinc-500 py-10 text-center">No active triage items right now.</p>
-          ) : (
-            <div className="space-y-2">
-              {priorityScans.map((scan) => (
-                <RecentScanRow key={scan.id} scan={scan} />
-              ))}
-            </div>
-          )}
+          <p className="text-[11px] text-zinc-500 mt-4 leading-5">
+          Findings widgets below count finalized results from completed scans and Xray policy-blocked scans that still imported findings. In-flight work is intentionally separated here so the top of the dashboard stays focused on decisions, not pipeline internals.
+          </p>
+        </details>
+        </div>
         </div>
       </div>
 
@@ -962,32 +1022,44 @@ export default function DashboardPage() {
           {scannerHealthError ? (
             <span className="text-xs" style={{ color: '#f87171' }}>{scannerHealthError}</span>
           ) : scannerHealth ? (
-            <>
-              <div className="flex items-center gap-3">
-                <span className="flex items-center gap-1.5 text-xs text-zinc-500">
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#34d399', boxShadow: '0 0 5px #34d399' }} />
-                  {scannerHealth.healthy_workers} healthy
-                </span>
-                {scannerHealth.stale_workers > 0 && (
+            scannerHealth.local_scanner_enabled ? (
+              <>
+                <div className="flex items-center gap-3">
                   <span className="flex items-center gap-1.5 text-xs text-zinc-500">
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#fbbf24', boxShadow: '0 0 5px #fbbf24' }} />
-                    {scannerHealth.stale_workers} stale
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#34d399', boxShadow: '0 0 5px #34d399' }} />
+                    {scannerHealth.healthy_workers} healthy
                   </span>
-                )}
-              </div>
-              <div className="flex items-center gap-4 text-xs text-zinc-500 ml-auto">
-                <span>Vuln DB <span className="font-semibold text-zinc-700 dark:text-zinc-300">{formatDbAge(scannerHealth.oldest_vuln_db_age_hours)}</span></span>
-                <span>Java DB <span className="font-semibold text-zinc-700 dark:text-zinc-300">{formatDbAge(scannerHealth.oldest_java_db_age_hours)}</span></span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.18)' }}>
-                  Max {scannerHealth.max_allowed_age_hours}h
-                </span>
-              </div>
-            </>
+                  {scannerHealth.stale_workers > 0 && (
+                    <span className="flex items-center gap-1.5 text-xs text-zinc-500">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#fbbf24', boxShadow: '0 0 5px #fbbf24' }} />
+                      {scannerHealth.stale_workers} stale
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-4 text-xs text-zinc-500 ml-auto">
+                  <span>Vuln DB <span className="font-semibold text-zinc-700 dark:text-zinc-300">{formatDbAge(scannerHealth.oldest_vuln_db_age_hours)}</span></span>
+                  <span>Java DB <span className="font-semibold text-zinc-700 dark:text-zinc-300">{formatDbAge(scannerHealth.oldest_java_db_age_hours)}</span></span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.18)' }}>
+                    Max {scannerHealth.max_allowed_age_hours}h
+                  </span>
+                </div>
+              </>
+            ) : (
+              <span className="text-xs text-zinc-500">{scannerHealth.message || 'Local scanner disabled for this deployment.'}</span>
+            )
           ) : (
             <span className="text-xs text-zinc-500">No data available</span>
           )}
         </div>
       )}
+
+      <div className="relative z-10 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Security Landscape</p>
+          <p className="text-sm text-zinc-500 mt-1">Longer-horizon distribution and trend data lives below the action-oriented sections.</p>
+        </div>
+        <Link href="/scans" className="text-xs text-zinc-500 hover:text-violet-500 transition-colors">Open scans →</Link>
+      </div>
 
       {/* ── Vulnerability landscape ── */}
       <div className="relative rounded-2xl p-5 z-10" style={glassCard()}>
@@ -1003,7 +1075,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Vulnerability Landscape</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">Across all completed scans</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Across all finalized scan results</p>
             </div>
           </div>
           <div className="text-right">
@@ -1051,6 +1123,13 @@ export default function DashboardPage() {
       {/* ── Vulnerability Trend Chart ── */}
       <VulnTrendChart data={vulnTrends} period={vulnTrendPeriod} onPeriod={handleVulnPeriodChange} />
 
+      <div className="relative z-10 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Recent Activity</p>
+          <p className="text-sm text-zinc-500 mt-1">Keep the most recent work visible, and collapse the lower-value frequency view by default.</p>
+        </div>
+      </div>
+
       {/* ── Bottom row ── */}
       <div className="relative grid md:grid-cols-2 gap-4 z-10">
         {/* Recent scans */}
@@ -1082,43 +1161,51 @@ export default function DashboardPage() {
         <div className="relative rounded-2xl p-5" style={glassCard()}>
           <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
             style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.15), transparent)' }} />
-          <div className="flex items-center gap-2.5 mb-3">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-              <Shield01Icon size={14} color="#71717a" />
-            </div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Top Scanned Images</h2>
-          </div>
-          {(stats.top_images ?? []).length === 0 ? (
-            <p className="text-sm text-zinc-500 py-8 text-center">No data yet</p>
-          ) : (
-            <div className="space-y-1.5 pt-1">
-              {(stats.top_images ?? []).map((img, i) => (
-                <div
-                  key={img.image_name}
-                  className="flex items-center gap-3 px-2.5 py-2 rounded-xl"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--row-divider)' }}
-                >
-                  <span
-                    className="text-xs font-bold w-5 h-5 rounded-md flex items-center justify-center shrink-0"
-                    style={i === 0
-                      ? { background: 'rgba(124,58,237,0.25)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.2)' }
-                      : { background: 'var(--row-divider)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }
-                    }
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="flex-1 font-mono text-xs text-zinc-700 dark:text-zinc-300 truncate">{img.image_name}</span>
-                  <span
-                    className="text-xs font-mono shrink-0 px-2 py-0.5 rounded-lg"
-                    style={{ color: 'var(--text-muted)', background: 'var(--row-divider)', border: '1px solid var(--glass-border)' }}
-                  >
-                    {img.count}×
-                  </span>
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <Shield01Icon size={14} color="#71717a" />
                 </div>
-              ))}
-            </div>
-          )}
+                <div>
+                  <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Top Scanned Images</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">Frequency view for repeated scan activity.</p>
+                </div>
+              </div>
+              <span className="text-xs font-medium text-zinc-500 group-open:text-violet-500">Expand</span>
+            </summary>
+            {(stats.top_images ?? []).length === 0 ? (
+              <p className="text-sm text-zinc-500 py-8 text-center">No data yet</p>
+            ) : (
+              <div className="space-y-1.5 pt-4">
+                {(stats.top_images ?? []).map((img, i) => (
+                  <div
+                    key={img.image_name}
+                    className="flex items-center gap-3 px-2.5 py-2 rounded-xl"
+                    style={{ background: 'var(--row-hover)', border: '1px solid var(--row-divider)' }}
+                  >
+                    <span
+                      className="text-xs font-bold w-5 h-5 rounded-md flex items-center justify-center shrink-0"
+                      style={i === 0
+                        ? { background: 'rgba(124,58,237,0.25)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.2)' }
+                        : { background: 'var(--row-divider)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }
+                      }
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="flex-1 font-mono text-xs text-zinc-700 dark:text-zinc-300 truncate">{img.image_name}</span>
+                    <span
+                      className="text-xs font-mono shrink-0 px-2 py-0.5 rounded-lg"
+                      style={{ color: 'var(--text-muted)', background: 'var(--row-divider)', border: '1px solid var(--glass-border)' }}
+                    >
+                      {img.count}×
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </details>
         </div>
       </div>
     </div>

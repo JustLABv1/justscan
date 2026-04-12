@@ -2,14 +2,18 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FormAlert } from '@/components/ui/form-alert';
+import { FormField } from '@/components/ui/form-field';
+import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
-import { createRegistry, deleteRegistry, listRegistries, RegistryWithHealth, testRegistry, updateRegistry } from '@/lib/api';
+import { createRegistry, deleteRegistry, getDefaultScannerCapabilities, listRegistriesWithCapabilities, RegistryWithHealth, ScannerCapabilities, testRegistry, updateRegistry } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
-import { Dropdown, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
-import { MoreVerticalIcon, PlusSignIcon, ServerStack01Icon } from 'hugeicons-react';
+import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, ServerStack01Icon, Shield01Icon, TestTube01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
 
-const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+const inputCls = nativeFieldClassName;
 
 const AUTH_TYPE_LABEL: Record<string, string> = {
   none: 'Public', basic: 'Basic auth', token: 'Token', aws_ecr: 'AWS ECR',
@@ -47,6 +51,7 @@ function HealthBadge({ status, message }: { status: string; message: string }) {
 
 export default function RegistriesPage() {
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<RegistryWithHealth | null>(null);
@@ -67,7 +72,11 @@ export default function RegistriesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setRegistries(await listRegistries()); }
+    try {
+      const response = await listRegistriesWithCapabilities();
+      setRegistries(response.data);
+      setCapabilities(response.capabilities);
+    }
     catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setLoading(false); }
   }, []);
@@ -75,7 +84,7 @@ export default function RegistriesPage() {
   useEffect(() => { load(); }, [load]);
 
   function openCreate() {
-    setEditing(null); setName(''); setUrl(''); setXrayUrl(''); setXrayArtifactoryId('default'); setAuthType('none'); setScanProvider('trivy'); setUsername(''); setPassword(''); setFormError('');
+    setEditing(null); setName(''); setUrl(''); setXrayUrl(''); setXrayArtifactoryId('default'); setAuthType('none'); setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray'); setUsername(''); setPassword(''); setFormError('');
     modal.open();
   }
   function openEdit(r: RegistryWithHealth) {
@@ -134,19 +143,14 @@ export default function RegistriesPage() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+          className="btn-primary inline-flex items-center gap-2"
+          type="button"
         >
           <PlusSignIcon size={15} /> Add Registry
         </button>
       </div>
 
-      {error && (
-        <div className="rounded-xl px-4 py-3 text-sm"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
-          {error}
-        </div>
-      )}
+      {error ? <FormAlert description={error} title="Registry loading failed" /> : null}
 
       <div className="rounded-2xl px-4 py-3 text-sm flex items-start gap-3"
         style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.18)', color: 'var(--text-secondary)' }}>
@@ -230,35 +234,14 @@ export default function RegistriesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end">
-                      <Dropdown>
-                        <Dropdown.Trigger>
-                          <button
-                            type="button"
-                            className="flex h-8 w-8 items-center justify-center rounded-lg transition-all"
-                            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
-                            aria-label={`Open actions menu for ${r.name}`}
-                          >
-                            <MoreVerticalIcon size={15} />
-                          </button>
-                        </Dropdown.Trigger>
-                        <Dropdown.Popover className="min-w-[180px]">
-                          <Dropdown.Menu onAction={(key) => {
-                            if (key === 'test') void handleTest(r.id);
-                            if (key === 'edit') openEdit(r);
-                            if (key === 'delete') void handleDelete(r.id);
-                          }}>
-                            <Dropdown.Item id="test" textValue="Test connection" isDisabled={testing === r.id}>
-                              <Label>{testing === r.id ? 'Testing…' : 'Test connection'}</Label>
-                            </Dropdown.Item>
-                            <Dropdown.Item id="edit" textValue="Edit registry">
-                              <Label>Edit</Label>
-                            </Dropdown.Item>
-                            <Dropdown.Item id="delete" textValue="Delete registry" variant="danger">
-                              <Label>Delete</Label>
-                            </Dropdown.Item>
-                          </Dropdown.Menu>
-                        </Dropdown.Popover>
-                      </Dropdown>
+                      <RowActionsMenu
+                        label={`Open actions menu for ${r.name}`}
+                        items={[
+                          { id: 'test', label: testing === r.id ? 'Testing…' : 'Test connection', icon: <TestTube01Icon size={15} />, disabled: testing === r.id, onAction: () => { void handleTest(r.id); } },
+                          { id: 'edit', label: 'Edit registry', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(r) },
+                          { id: 'delete', label: 'Delete registry', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(r.id); } },
+                        ]}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -278,30 +261,22 @@ export default function RegistriesPage() {
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
                 <form id="registry-form" onSubmit={handleSubmit} className="space-y-4">
-                  {formError && (
-                    <div className="rounded-xl px-3 py-2.5 text-sm"
-                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
-                      {formError}
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Name</label>
-                    <input className={inputCls} placeholder="My Registry" value={name} onChange={(e) => setName(e.target.value)} required />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">URL</label>
-                    <input className={inputCls + ' font-mono'} placeholder="https://registry.example.com" value={url} onChange={(e) => setUrl(e.target.value)} required />
-                  </div>
+                  {formError ? <FormAlert description={formError} title="Registry save failed" /> : null}
+                  <FormField label="Name" onChange={(e) => setName(e.target.value)} placeholder="My Registry" required value={name} />
+                  <FormField className="font-mono" label="URL" onChange={(e) => setUrl(e.target.value)} placeholder="https://registry.example.com" required value={url} />
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Scan Provider</label>
                     <Select selectedKey={scanProvider} onSelectionChange={k => setScanProvider(k as 'trivy' | 'artifactory_xray')}>
                       <Select.Trigger className={inputCls}>
-                        <Select.Value />
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-zinc-400 shrink-0"><ServerStack01Icon size={15} /></span>
+                          <Select.Value />
+                        </div>
                         <Select.Indicator />
                       </Select.Trigger>
                       <Select.Popover>
                         <ListBox>
-                          <ListBox.Item id="trivy">Trivy (built-in JustScan scanner)</ListBox.Item>
+                          <ListBox.Item id="trivy" isDisabled={!capabilities.enable_trivy}>Trivy (built-in JustScan scanner)</ListBox.Item>
                           <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
                         </ListBox>
                       </Select.Popover>
@@ -309,40 +284,39 @@ export default function RegistriesPage() {
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       This is stored in JustScan and does not require editing backend/config.yaml.
                     </p>
+                    {!capabilities.enable_trivy && scanProvider === 'trivy' && editing && (
+                      <p className="text-xs" style={{ color: '#f59e0b' }}>
+                        This registry must be switched to Artifactory Xray before saving changes.
+                      </p>
+                    )}
                   </div>
                   {scanProvider === 'artifactory_xray' && (
                     <>
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Xray Base URL</label>
-                        <input
-                          className={inputCls + ' font-mono'}
-                          placeholder="https://jfrog.example.com"
-                          value={xrayUrl}
-                          onChange={(e) => setXrayUrl(e.target.value)}
-                        />
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          Leave empty to reuse the registry URL. Set this when your Docker registry host differs from the JFrog platform/Xray host.
-                        </p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Artifactory ID</label>
-                        <input
-                          className={inputCls}
-                          placeholder="default"
-                          value={xrayArtifactoryId}
-                          onChange={(e) => setXrayArtifactoryId(e.target.value)}
-                        />
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          This prefixes artifact summary paths in Xray. In most JFrog setups the correct value is <span className="font-mono">default</span>.
-                        </p>
-                      </div>
+                      <FormField
+                        className="font-mono"
+                        description="Leave empty to reuse the registry URL. Set this when your Docker registry host differs from the JFrog platform/Xray host."
+                        label="Xray Base URL"
+                        onChange={(e) => setXrayUrl(e.target.value)}
+                        placeholder="https://jfrog.example.com"
+                        value={xrayUrl}
+                      />
+                      <FormField
+                        description="This prefixes artifact summary paths in Xray. In most JFrog setups the correct value is default."
+                        label="Artifactory ID"
+                        onChange={(e) => setXrayArtifactoryId(e.target.value)}
+                        placeholder="default"
+                        value={xrayArtifactoryId}
+                      />
                     </>
                   )}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Auth Type</label>
                     <Select selectedKey={authType} onSelectionChange={k => setAuthType(k as 'none' | 'basic' | 'token' | 'aws_ecr')}>
                       <Select.Trigger className={inputCls}>
-                        <Select.Value />
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>
+                          <Select.Value />
+                        </div>
                         <Select.Indicator />
                       </Select.Trigger>
                       <Select.Popover>
@@ -361,28 +335,22 @@ export default function RegistriesPage() {
                       Xray scans require image references that map cleanly to an Artifactory repository path, for example <span className="font-mono">test-images/debian:12-slim</span> or <span className="font-mono">registry.example.com/test-images/debian:12-slim</span>.
                     </div>
                   )}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Username <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span></label>
-                    <input className={inputCls} placeholder="Optional" value={username} onChange={(e) => setUsername(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                      Password{' '}
-                      <span className="text-zinc-400 dark:text-zinc-600 font-normal">{editing ? '(leave blank to keep unchanged)' : '(optional)'}</span>
-                    </label>
-                    <input type="password" className={inputCls}
-                      placeholder={editing ? '••••••••' : 'Optional'} value={password} onChange={(e) => setPassword(e.target.value)} />
-                  </div>
+                  <FormField label="Username" onChange={(e) => setUsername(e.target.value)} placeholder="Optional" value={username} />
+                  <FormField
+                    description={editing ? 'Leave blank to keep the stored password unchanged.' : 'Optional unless your registry provider requires credentials.'}
+                    label="Password"
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={editing ? '••••••••' : 'Optional'}
+                    type="password"
+                    value={password}
+                  />
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <button onClick={modal.close} className="btn-secondary" type="button">
                   Cancel
                 </button>
-                <button type="submit" form="registry-form" disabled={saving}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}>
+                <button type="submit" form="registry-form" disabled={saving} className="btn-primary disabled:opacity-60">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Add'}
                 </button>

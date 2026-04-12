@@ -4,17 +4,22 @@ import { ImageChildren } from '@/components/scans/image-children';
 import { useToast } from '@/components/toast';
 import { SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FormAlert } from '@/components/ui/form-alert';
+import { FormField } from '@/components/ui/form-field';
+import { heroSelectTriggerClassName, joinClassNames, nativeFieldClassName } from '@/components/ui/form-styles';
 import { ImageRowSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import {
     cancelScan,
     createScans,
     deleteScan,
+    getDefaultScannerCapabilities,
     ImageSummary,
-    listRegistries,
+    listRegistriesWithCapabilities,
     listScanImages,
     listTags,
-    Registry,
+    RegistryWithHealth,
+    ScannerCapabilities,
     Tag
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -22,6 +27,7 @@ import { Checkbox, ListBox, Modal, Popover, Select, useOverlayState } from '@her
 import {
     ArrowDown01Icon,
     ArrowRight01Icon,
+    Cancel01Icon,
     FilterIcon,
     GitCompareIcon,
     PlusSignIcon,
@@ -29,9 +35,10 @@ import {
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 
-const inputCls = 'w-full px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+const inputCls = nativeFieldClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
 
 const PROVIDER_LABEL: Record<string, string> = {
   trivy: 'Trivy',
@@ -53,6 +60,36 @@ const STATUS_FILTER_OPTIONS = [
   { id: 'completed', label: 'Completed' },
   { id: 'cancelled', label: 'Cancelled' },
 ] as const;
+
+function parseImageReferences(value: string) {
+  return value
+    .split(/[\n,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function mergeUniqueStringLists(...groups: string[][]) {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+
+  groups.flat().forEach((value) => {
+    if (!seen.has(value)) {
+      seen.add(value);
+      merged.push(value);
+    }
+  });
+
+  return merged;
+}
+
+function MobileSevStat({ label, count, tone }: { label: string; count: number; tone: string }) {
+  return (
+    <div className="rounded-xl px-3 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+      <p className="text-[10px] uppercase tracking-[0.18em]" style={{ color: tone }}>{label}</p>
+      <p className="mt-1 font-mono text-sm font-semibold text-zinc-700 dark:text-zinc-200">{count || '—'}</p>
+    </div>
+  );
+}
 
 // ── Main page ─────────────────────────────────────────────────────────
 export default function ScansPage() {
@@ -80,12 +117,14 @@ export default function ScansPage() {
 
   // Available tags for bulk tagging
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
-  const [registries, setRegistries] = useState<Registry[]>([]);
+  const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
 
   // New scan form
   const [imageName, setImageName] = useState('');
   const [imageTag, setImageTag] = useState('latest');
-  const [additionalImages, setAdditionalImages] = useState('');
+  const [additionalImageDraft, setAdditionalImageDraft] = useState('');
+  const [additionalImageEntries, setAdditionalImageEntries] = useState<string[]>([]);
   const [platform, setPlatform] = useState('');
   const [registryId, setRegistryId] = useState('');
   const [creating, setCreating] = useState(false);
@@ -121,7 +160,18 @@ export default function ScansPage() {
 
   useEffect(() => { load(page, imageFilter, statusFilter); }, [load, page]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { listTags().then(setAvailableTags).catch(() => {}); }, []);
-  useEffect(() => { listRegistries().then(setRegistries).catch(() => {}); }, []);
+  useEffect(() => {
+    listRegistriesWithCapabilities()
+      .then((response) => {
+        setRegistries(response.data);
+        setCapabilities(response.capabilities);
+      })
+      .catch(() => {});
+  }, []);
+
+  const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
+  const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
+  const pendingAdditionalImages = parseImageReferences(additionalImageDraft);
 
   // Auto-open new scan modal when navigated from sidebar CTA (?new=1)
   useEffect(() => {
@@ -164,14 +214,33 @@ export default function ScansPage() {
     });
   }
 
+  function addAdditionalImagesFromDraft() {
+    const parsedImages = parseImageReferences(additionalImageDraft);
+    if (parsedImages.length === 0) return;
+
+    setAdditionalImageEntries((previous) => mergeUniqueStringLists(previous, parsedImages));
+    setAdditionalImageDraft('');
+  }
+
+  function removeAdditionalImageEntry(image: string) {
+    setAdditionalImageEntries((previous) => previous.filter((entry) => entry !== image));
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setCreateError(''); setCreating(true);
     try {
-      const requestedImages = [
-        imageName.trim() ? `${imageName.trim()}${imageTag.trim() ? `:${imageTag.trim()}` : ''}` : '',
-        ...additionalImages.split(/\r?\n/).map(line => line.trim()).filter(Boolean),
-      ].filter(Boolean);
+      if (xrayOnlyWithoutRegistries) {
+        setCreateError('No Artifactory Xray registry is configured yet. Add one before starting scans.');
+        return;
+      }
+
+      const primaryImage = imageName.trim() ? `${imageName.trim()}${imageTag.trim() ? `:${imageTag.trim()}` : ''}` : '';
+      const requestedImages = mergeUniqueStringLists(
+        primaryImage ? [primaryImage] : [],
+        additionalImageEntries,
+        pendingAdditionalImages,
+      );
 
       if (requestedImages.length === 0) {
         setCreateError('Provide at least one image to scan');
@@ -182,7 +251,7 @@ export default function ScansPage() {
       const createdScans = Array.isArray(result.scans) ? result.scans : [];
 
       modal.close();
-      setImageName(''); setImageTag('latest'); setAdditionalImages(''); setPlatform(''); setRegistryId('');
+      setImageName(''); setImageTag('latest'); setAdditionalImageDraft(''); setAdditionalImageEntries([]); setPlatform(''); setRegistryId('');
       toast.success(`${createdScans.length} image${createdScans.length === 1 ? '' : 's'} queued`);
       setExpanded(prev => {
         const next = new Set(prev);
@@ -276,24 +345,22 @@ export default function ScansPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Scans</h1>
           {total > 0 && <p className="text-sm text-zinc-500 mt-0.5">{total} image{total !== 1 ? 's' : ''}</p>}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/scans/compare"
-            className="flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-xl transition-all duration-150"
-            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+            className="btn-secondary flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
           >
             <GitCompareIcon size={15} />
             Compare
           </Link>
           <button
             onClick={modal.open}
-            className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-xl transition-all hover:opacity-90 active:scale-95"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+            className="btn-primary flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
           >
             <PlusSignIcon size={15} />
             New Scan
@@ -302,67 +369,71 @@ export default function ScansPage() {
       </div>
 
       {/* Search bar */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 min-w-[180px] max-w-sm">
-          <input
-            className={inputCls}
-            placeholder="Filter by image name…"
-            value={imageFilter}
-            onChange={e => handleImageFilterChange(e.target.value)}
-          />
+      <div className="glass-panel rounded-2xl p-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_280px_auto] xl:items-end">
+          <div className="space-y-1.5 md:col-span-2 xl:col-span-1">
+            <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image</label>
+            <input
+              className={inputCls}
+              placeholder="Filter by image name…"
+              value={imageFilter}
+              onChange={e => handleImageFilterChange(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Latest State</label>
+            <Select selectedKey={statusFilter || '__all__'} onSelectionChange={key => handleStatusFilterChange(String(key === '__all__' ? '' : key))} className="min-w-0">
+              <Select.Trigger className={selectTriggerCls}>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="__all__">All latest states</ListBox.Item>
+                  {STATUS_FILTER_OPTIONS.filter((option) => option.id !== '').map((option) => (
+                    <ListBox.Item key={option.id} id={option.id}>{option.label}</ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+          <div className="flex items-end md:col-span-2 xl:col-span-1 xl:justify-end">
+            {(imageFilter || statusFilter) ? (
+              <button
+                onClick={() => { setImageFilter(''); setStatusFilter(''); applyFilter('', ''); }}
+                className="btn-secondary flex w-full items-center justify-center gap-1.5 md:w-auto"
+                type="button"
+              >
+                <FilterIcon size={12} />
+                Clear Filters
+              </button>
+            ) : (
+              <p className="text-sm text-zinc-500 md:text-right">{total} image{total !== 1 ? 's' : ''}</p>
+            )}
+          </div>
         </div>
-        <Select selectedKey={statusFilter || '__all__'} onSelectionChange={key => handleStatusFilterChange(String(key === '__all__' ? '' : key))} className="min-w-[260px] max-w-[320px]">
-          <Select.Trigger className={inputCls}>
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              <ListBox.Item id="__all__">All latest states</ListBox.Item>
-              {STATUS_FILTER_OPTIONS.filter((option) => option.id !== '').map((option) => (
-                <ListBox.Item key={option.id} id={option.id}>{option.label}</ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
-        {(imageFilter || statusFilter) && (
-          <button
-            onClick={() => { setImageFilter(''); setStatusFilter(''); applyFilter('', ''); }}
-            className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
-            style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa' }}
-          >
-            <FilterIcon size={12} />
-            Clear Filters
-          </button>
-        )}
       </div>
 
-      {error && (
-        <div className="rounded-xl px-4 py-3 text-sm"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
-          {error}
-        </div>
-      )}
+      {error ? <FormAlert description={error} title="Scan list failed to load" /> : null}
 
       {/* Bulk action toolbar */}
       {selectedScans.size > 0 && (
-        <div className="glass-panel rounded-2xl px-4 py-3 flex items-center justify-between" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+        <div className="glass-panel rounded-2xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
           <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             {selectedScans.size} scan{selectedScans.size !== 1 ? 's' : ''} selected
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleGenerateReport}
-              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all"
-              style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa' }}
+              className="btn-secondary flex flex-1 min-w-[110px] items-center justify-center gap-1.5 sm:flex-none"
+              type="button"
               title="Generate report for selected scans"
             >
               Report
             </button>
             <Popover>
               <Popover.Trigger
-                className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-                style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+                className="btn-secondary"
               >
                 Add Tag
               </Popover.Trigger>
@@ -392,14 +463,15 @@ export default function ScansPage() {
             </Popover>
             <button
               onClick={() => setSelectedScans(new Set())}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+              className="btn-secondary flex-1 min-w-[90px] sm:flex-none"
+              type="button"
             >
               Clear
             </button>
             <button
               onClick={handleBulkDelete}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-red-400 hover:text-red-300"
+              className="btn-danger flex-1 min-w-[90px] sm:flex-none"
+              type="button"
             >
               Delete
             </button>
@@ -407,8 +479,131 @@ export default function ScansPage() {
         </div>
       )}
 
+      {/* Mobile list */}
+      <div className="space-y-3 md:hidden">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="glass-panel rounded-2xl p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="w-4 h-4 rounded border border-zinc-400/50 mt-1" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-40 rounded skeleton" />
+                  <div className="h-3 w-28 rounded skeleton" />
+                </div>
+                <div className="h-8 w-8 rounded-lg skeleton" />
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {Array.from({ length: 4 }).map((__, sevIndex) => <div key={sevIndex} className="h-14 rounded-xl skeleton" />)}
+              </div>
+            </div>
+          ))
+        ) : images.length === 0 ? (
+          <EmptyState
+            icon={<Shield01Icon size={28} />}
+            title={imageFilter ? 'No images match your filter' : 'No scans yet'}
+            description={imageFilter ? 'Try a different search term or clear the filter.' : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.'}
+            action={imageFilter ? undefined : { label: '+ New Scan', onClick: modal.open }}
+          />
+        ) : (
+          images.map((img) => {
+            const isOpen = expanded.has(img.image_name);
+            return (
+              <div key={img.image_name} className="glass-panel rounded-2xl overflow-hidden">
+                <div className="p-4 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="pt-1" onClick={(event) => event.stopPropagation()}>
+                      <Checkbox
+                        isSelected={selectedScans.has(img.latest_scan_id)}
+                        onChange={(checked: boolean) => {
+                          if (checked) {
+                            setSelectedScans((previous) => new Set(previous).add(img.latest_scan_id));
+                          } else {
+                            setSelectedScans((previous) => {
+                              const next = new Set(previous);
+                              next.delete(img.latest_scan_id);
+                              return next;
+                            });
+                          }
+                        }}
+                      >
+                        <Checkbox.Control className="border border-zinc-500/50 data-[selected=true]:border-violet-500 data-[selected=true]:bg-violet-600">
+                          <Checkbox.Indicator />
+                        </Checkbox.Control>
+                      </Checkbox>
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-mono text-sm font-medium text-zinc-800 dark:text-zinc-200">{img.image_name}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-xs text-zinc-400">:{img.latest_tag}</span>
+                            <StatusBadge status={img.latest_status} externalStatus={img.latest_external_status} />
+                          </div>
+                        </div>
+                        <span
+                          className="shrink-0 text-xs px-1.5 py-0.5 rounded-md font-medium"
+                          style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.2)' }}
+                        >
+                          {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-xs text-zinc-500">
+                        <span title={fullDate(img.latest_scan_at)}>{timeAgo(img.latest_scan_at)}</span>
+                        <Link className="font-mono text-violet-500 hover:text-violet-400" href={`/scans/${img.latest_scan_id}`}>
+                          {img.latest_scan_id.slice(0, 8)}…
+                        </Link>
+                      </div>
+                    </div>
+                    <button
+                      aria-label={isOpen ? `Collapse ${img.image_name}` : `Expand ${img.image_name}`}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all"
+                      onClick={() => toggleExpand(img.image_name)}
+                      style={{ background: isOpen ? 'rgba(124,58,237,0.12)' : 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
+                      type="button"
+                    >
+                      {isOpen ? <ArrowDown01Icon size={15} className="text-violet-400" /> : <ArrowRight01Icon size={15} />}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2">
+                    <MobileSevStat count={img.critical_count} label="Critical" tone="rgba(239,68,68,0.78)" />
+                    <MobileSevStat count={img.high_count} label="High" tone="rgba(249,115,22,0.78)" />
+                    <MobileSevStat count={img.medium_count} label="Medium" tone="rgba(234,179,8,0.82)" />
+                    <MobileSevStat count={img.low_count} label="Low" tone="rgba(59,130,246,0.82)" />
+                  </div>
+                </div>
+
+                {isOpen ? (
+                  <div className="px-4 pb-4">
+                    <ImageChildren
+                      imageName={img.image_name}
+                      key={`${img.image_name}-${childRefreshKey[img.image_name] ?? 0}-stacked`}
+                      mode="stacked"
+                      onCancel={(scanId) => handleCancel(scanId, img.image_name)}
+                      onDelete={(scanId) => handleDelete(scanId, img.image_name)}
+                      onSelectScan={(scanId, selected) => {
+                        if (selected) {
+                          setSelectedScans((previous) => new Set(previous).add(scanId));
+                        } else {
+                          setSelectedScans((previous) => {
+                            const next = new Set(previous);
+                            next.delete(scanId);
+                            return next;
+                          });
+                        }
+                      }}
+                      selectedScans={selectedScans}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            );
+          })
+        )}
+      </div>
+
       {/* Tree table */}
-      <div className="glass-panel rounded-2xl overflow-hidden">
+      <div className="hidden md:block glass-panel rounded-2xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -439,10 +634,9 @@ export default function ScansPage() {
             ) : images.map((img, i) => {
               const isOpen = expanded.has(img.image_name);
               return (
-                <>
+                <Fragment key={img.image_name}>
                   {/* Image summary row */}
                   <tr
-                    key={img.image_name}
                     className="cursor-pointer transition-colors"
                     style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
                     onClick={() => toggleExpand(img.image_name)}
@@ -527,6 +721,7 @@ export default function ScansPage() {
                     <ImageChildren
                       key={`${img.image_name}-${childRefreshKey[img.image_name] ?? 0}`}
                       imageName={img.image_name}
+                      mode="table"
                       onDelete={scanId => handleDelete(scanId, img.image_name)}
                       onCancel={scanId => handleCancel(scanId, img.image_name)}
                       selectedScans={selectedScans}
@@ -543,7 +738,7 @@ export default function ScansPage() {
                       }}
                     />
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>
@@ -558,15 +753,13 @@ export default function ScansPage() {
             <button
               disabled={page <= 1}
               onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+              className="btn-secondary"
             >← Prev</button>
             <span className="text-sm text-zinc-500 px-2">{page} / {totalPages}</span>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+              className="btn-secondary"
             >Next →</button>
           </div>
         </div>
@@ -583,34 +776,58 @@ export default function ScansPage() {
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
                 <form id="create-scan-form" onSubmit={handleCreate} className="space-y-4">
-                  {createError && (
-                    <div className="rounded-xl px-3 py-2.5 text-sm"
-                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
-                      {createError}
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image Name</label>
-                    <input className={inputCls + ' font-mono'} placeholder="nginx"
-                      value={imageName} onChange={e => setImageName(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Tag</label>
-                    <input className={inputCls + ' font-mono'} placeholder="latest"
-                      value={imageTag} onChange={e => setImageTag(e.target.value)} required />
-                  </div>
+                  {createError ? <FormAlert description={createError} title="Scan creation failed" /> : null}
+                  <FormField className="font-mono" label="Image Name" onChange={e => setImageName(e.target.value)} placeholder="nginx" value={imageName} />
+                  <FormField className="font-mono" label="Tag" onChange={e => setImageTag(e.target.value)} placeholder="latest" required value={imageTag} />
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                      Additional Images <span className="text-zinc-400 dark:text-zinc-600 font-normal">(one per line)</span>
+                      Additional Images <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span>
                     </label>
                     <textarea
-                      className={inputCls + ' min-h-28 font-mono resize-y'}
-                      placeholder={'ghcr.io/example/api:1.2.3\nregistry.example.com/team/worker:latest\nnginx'}
-                      value={additionalImages}
-                      onChange={e => setAdditionalImages(e.target.value)}
+                      className={joinClassNames(inputCls, 'min-h-24 font-mono resize-y')}
+                      placeholder={'Paste one or more full image references here\nExample: ghcr.io/example/api:1.2.3, registry.example.com/team/worker:latest'}
+                      value={additionalImageDraft}
+                      onChange={e => setAdditionalImageDraft(e.target.value)}
                     />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-zinc-500">
+                        Paste one or many full image references, separated by commas or new lines. Anything still in this box is included when you start the scan.
+                      </p>
+                      <button
+                        className="btn-secondary-sm shrink-0"
+                        onClick={addAdditionalImagesFromDraft}
+                        type="button"
+                      >
+                        Add {pendingAdditionalImages.length > 1 ? `${pendingAdditionalImages.length} refs` : 'to list'}
+                      </button>
+                    </div>
+                    {additionalImageEntries.length > 0 ? (
+                      <div className="rounded-2xl p-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">Queued additional images</p>
+                          <span className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-500" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}>
+                            {additionalImageEntries.length}
+                          </span>
+                        </div>
+                        <div className="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
+                          {additionalImageEntries.map((image) => (
+                            <div key={image} className="flex items-start justify-between gap-3 rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)' }}>
+                              <span className="min-w-0 break-all font-mono text-xs text-zinc-600 dark:text-zinc-300">{image}</span>
+                              <button
+                                aria-label={`Remove ${image}`}
+                                className="btn-icon-subtle h-8 w-8 shrink-0 rounded-lg"
+                                onClick={() => removeAdditionalImageEntry(image)}
+                                type="button"
+                              >
+                                <Cancel01Icon aria-hidden size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     <p className="text-xs text-zinc-500">
-                      Use the Image Name and Tag fields for a primary image, or paste multiple full image references here. Untagged refs default to <span className="font-mono">latest</span>.
+                      Use Image Name and Tag for the primary image. Untagged full references default to <span className="font-mono">latest</span>.
                     </p>
                   </div>
                   <div className="space-y-1.5">
@@ -618,14 +835,14 @@ export default function ScansPage() {
                       Registry <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span>
                     </label>
                     <Select selectedKey={registryId || '__auto__'} onSelectionChange={k => setRegistryId(String(k === '__auto__' ? '' : k))}>
-                      <Select.Trigger className={inputCls}>
+                      <Select.Trigger className={selectTriggerCls}>
                         <Select.Value />
                         <Select.Indicator />
                       </Select.Trigger>
                       <Select.Popover>
                         <ListBox>
-                          <ListBox.Item id="__auto__">Auto-match from image hostname</ListBox.Item>
-                          {registries.map(registry => (
+                          <ListBox.Item id="__auto__">{capabilities.enable_trivy ? 'Auto-match from image hostname' : 'Auto-match from configured Xray registries'}</ListBox.Item>
+                          {selectableRegistries.map(registry => (
                             <ListBox.Item key={registry.id} id={registry.id}>
                               {registry.name} · {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
                             </ListBox.Item>
@@ -634,15 +851,20 @@ export default function ScansPage() {
                       </Select.Popover>
                     </Select>
                     <p className="text-xs text-zinc-500">
-                      Leave this empty to let JustScan match a registry automatically from the image hostname.
+                      {capabilities.enable_trivy
+                        ? 'Leave this empty to let JustScan match a registry automatically from the image hostname.'
+                        : 'Auto-match only considers registries configured for Artifactory Xray.'}
                     </p>
+                    {xrayOnlyWithoutRegistries && (
+                      <p className="text-xs" style={{ color: '#f87171' }}>No Xray-backed registry is available for this deployment yet.</p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                       Platform <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span>
                     </label>
                     <Select selectedKey={platform || '__auto__'} onSelectionChange={k => setPlatform(String(k === '__auto__' ? '' : k))}>
-                      <Select.Trigger className={inputCls}>
+                      <Select.Trigger className={selectTriggerCls}>
                         <Select.Value />
                         <Select.Indicator />
                       </Select.Trigger>
@@ -667,15 +889,14 @@ export default function ScansPage() {
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <button
                   onClick={modal.close}
-                  className="px-4 py-2 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                  className="btn-secondary"
+                  type="button"
                 >
                   Cancel
                 </button>
                 <button
-                  type="submit" form="create-scan-form" disabled={creating}
-                  className="px-4 py-2 text-sm rounded-xl font-semibold text-white disabled:opacity-60 flex items-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.35),inset 0 1px 0 rgba(255,255,255,0.15)' }}
+                  type="submit" form="create-scan-form" disabled={creating || xrayOnlyWithoutRegistries}
+                  className="btn-primary inline-flex items-center gap-2"
                 >
                   {creating && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   Start Scan

@@ -1,10 +1,12 @@
 'use client';
+import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { getKBEntry, listKBEntries, VulnKBEntry } from '@/lib/api';
 import { Label, ListBox, Select, Switch } from '@heroui/react';
 import { InformationCircleIcon, Shield01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const inputCls = 'px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input';
+const inputCls = nativeFieldClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
 
 const SEV_STYLE: Record<string, React.CSSProperties> = {
   CRITICAL: { color: '#f87171', background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.22)' },
@@ -60,7 +62,7 @@ function DetailPanel({ entry, onClose }: { entry: VulnKBEntry; onClose: () => vo
               {entry.cvss_vector && <span className="ml-3 font-mono">{entry.cvss_vector}</span>}
             </p>
           </div>
-          <button onClick={onClose} className="shrink-0 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 text-xl leading-none transition-colors">×</button>
+          <button aria-label="Close vulnerability details" className="btn-icon-subtle shrink-0" onClick={onClose} type="button">×</button>
         </div>
 
         {entry.description && (
@@ -217,7 +219,7 @@ export default function VulnKBPage() {
               className="w-full"
               placeholder="All Severities"
             >
-              <Select.Trigger className={inputCls}>
+              <Select.Trigger className={selectTriggerCls}>
                 <Select.Value />
                 <Select.Indicator />
               </Select.Trigger>
@@ -243,7 +245,7 @@ export default function VulnKBPage() {
               className="w-full"
               placeholder="Any CVSS"
             >
-              <Select.Trigger className={inputCls}>
+              <Select.Trigger className={selectTriggerCls}>
                 <Select.Value />
                 <Select.Indicator />
               </Select.Trigger>
@@ -269,7 +271,7 @@ export default function VulnKBPage() {
               className="w-full"
               placeholder="Any Time"
             >
-              <Select.Trigger className={inputCls}>
+              <Select.Trigger className={selectTriggerCls}>
                 <Select.Value />
                 <Select.Indicator />
               </Select.Trigger>
@@ -307,8 +309,7 @@ export default function VulnKBPage() {
           {activeFilters.length > 0 && (
             <button
               onClick={() => { setSeverity(''); setMinCvss('0'); setExploitOnly(false); setPublishedRange(''); setQueryInput(''); setQuery(''); setPage(1); }}
-              className="px-3 py-2 text-sm rounded-xl text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors self-end"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+              className="btn-secondary self-end"
             >
               Reset
             </button>
@@ -409,8 +410,7 @@ export default function VulnKBPage() {
             <button
               disabled={page <= 1}
               onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+              className="btn-secondary"
             >
               ← Prev
             </button>
@@ -418,8 +418,7 @@ export default function VulnKBPage() {
             <button
               disabled={page >= Math.ceil(total / LIMIT)}
               onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 text-sm rounded-xl text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+              className="btn-secondary"
             >
               Next →
             </button>

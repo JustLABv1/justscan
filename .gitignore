@@ -67,3 +67,6 @@ services/backend/alertflow-backend
 services/backend/config.yaml
 
 csv-files/
+
+.agents/
+.superpowers/

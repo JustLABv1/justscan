@@ -29,6 +29,10 @@ func CreatePublicHelmScans(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusForbidden, gin.H{"error": "public scanning is currently disabled by the administrator"})
 			return
 		}
+		if !scanner.TrivyEnabled() {
+			c.JSON(http.StatusForbidden, gin.H{"error": "public Helm scanning is unavailable because local Trivy scanning is disabled"})
+			return
+		}
 
 		var req struct {
 			ChartURL     string                `json:"chart_url" binding:"required"`

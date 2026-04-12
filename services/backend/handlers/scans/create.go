@@ -61,6 +61,11 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		provider, err := scanner.ProviderForRegistry(registry)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(req.Image, req.Tag, registry)
 
 		scan := &models.Scan{
@@ -68,7 +73,7 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			ImageTag:     normalizedImageTag,
 			Platform:     req.Platform,
 			RegistryID:   requestedRegistryID,
-			ScanProvider: scanner.ProviderForRegistry(registry),
+			ScanProvider: provider,
 			CurrentStep:  models.ScanStepQueued,
 			Status:       models.ScanStatusPending,
 			UserID:       &userID,
@@ -159,13 +164,18 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
+			provider, err := scanner.ProviderForRegistry(registry)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 
 			normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(imageName, imageTag, registry)
 			scan := models.Scan{
 				ImageName:    normalizedImageName,
 				ImageTag:     normalizedImageTag,
 				Platform:     req.Platform,
-				ScanProvider: scanner.ProviderForRegistry(registry),
+				ScanProvider: provider,
 				CurrentStep:  models.ScanStepQueued,
 				Status:       models.ScanStatusPending,
 				UserID:       &userID,

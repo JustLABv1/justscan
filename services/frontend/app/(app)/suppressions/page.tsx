@@ -2,7 +2,7 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { deleteSuppression, listAllSuppressions, Suppression } from '@/lib/api';
-import { timeAgo, fullDate } from '@/lib/time';
+import { fullDate, timeAgo } from '@/lib/time';
 import { ListBox, Select } from '@heroui/react';
 import { Delete01Icon, SecurityLockIcon } from 'hugeicons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -218,15 +218,15 @@ export default function SuppressionsPage() {
             <button
               disabled={page <= 1}
               onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 text-sm rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+              className="btn-secondary"
+              type="button"
             >← Prev</button>
             <span className="text-sm text-zinc-500 px-2">{page} / {totalPages}</span>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 text-sm rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+              className="btn-secondary"
+              type="button"
             >Next →</button>
           </div>
         </div>

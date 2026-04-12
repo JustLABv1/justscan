@@ -1,11 +1,11 @@
 'use client';
 import { Logo } from '@/components/logo';
-import { createPublicHelmScans, extractPublicHelmImages, getPublicHelmScanRun, getToken, HelmExtractResponse, Scan } from '@/lib/api';
+import { createPublicHelmScans, extractPublicHelmImages, getPublicHelmScanRun, getPublicSettings, getToken, HelmExtractResponse, PublicSettings, Scan } from '@/lib/api';
 import {
-    createEditableHelmImages,
-    EditableHelmImage,
-    getHelmImageSourceLabel,
-    parseHelmImageRef,
+  createEditableHelmImages,
+  EditableHelmImage,
+  getHelmImageSourceLabel,
+  parseHelmImageRef,
 } from '@/lib/helm-image-overrides';
 import { addToHelmPublicHistory, addToPublicHistory, getHelmPublicHistory, PublicHelmRunHistoryEntry, timeAgo, updateHelmPublicHistoryEntry } from '@/lib/publicScanHistory';
 import { useTheme } from 'next-themes';
@@ -76,11 +76,14 @@ export default function PublicHelmScanPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [helmHistory, setHelmHistory] = useState<PublicHelmRunHistoryEntry[]>([]);
+  const [settings, setSettings] = useState<PublicSettings | null>(null);
 
   const isDark = mounted && resolvedTheme === 'dark';
   const isOCI = chartUrl.startsWith('oci://');
   const selectedImages = images.filter((img) => selected.has(img.id));
   const hasInvalidSelection = selectedImages.some((img) => img.edited_ref.trim() === '');
+  const isDisabled = settings !== null && (!settings.enabled || settings.local_scan_available === false);
+  const disabledMessage = settings?.disabled_reason || 'The administrator has disabled this feature. Please check back later.';
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +115,7 @@ export default function PublicHelmScanPage() {
 
     setMounted(true);
     setIsLoggedIn(!!getToken());
+    getPublicSettings().then(setSettings).catch(() => setSettings({ enabled: true, rate_limit_per_hour: 5, local_scan_available: true }));
     loadHistory().catch(() => setHelmHistory(getHelmPublicHistory()));
 
     return () => {
@@ -347,7 +351,14 @@ export default function PublicHelmScanPage() {
           </div>
 
           {/* Step 1 — Chart URL form */}
-          {(step === 'form' || step === 'extracting') && (
+          {(step === 'form' || step === 'extracting') && isDisabled && (
+            <div className="rounded-2xl px-6 py-5 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <p className="text-red-500 dark:text-red-400 font-medium">Public Helm scanning is temporarily disabled</p>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{disabledMessage}</p>
+            </div>
+          )}
+
+          {(step === 'form' || step === 'extracting') && !isDisabled && (
             <form onSubmit={handleExtract} className="space-y-3">
               {/* Chart URL */}
               <div>
@@ -435,7 +446,7 @@ export default function PublicHelmScanPage() {
               </button>
 
               <p className="text-xs text-center" style={{ color: 'var(--text-faint)' }}>
-                5 free scans per hour · Public charts only · Powered by Trivy
+                {settings?.rate_limit_per_hour ?? 5} free scans per hour · Public charts only
               </p>
             </form>
           )}

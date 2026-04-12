@@ -1,8 +1,29 @@
+import type { HourCyclePreference } from '@/lib/cron';
+
+type FormatOptions = {
+  hourCycle?: HourCyclePreference;
+  timeZone?: string;
+};
+
+function hour12FromPreference(hourCycle?: HourCyclePreference): boolean | undefined {
+  if (hourCycle === '12') return true;
+  if (hourCycle === '24') return false;
+  return undefined;
+}
+
+function formatLocaleDate(date: Date, options: Intl.DateTimeFormatOptions, formatOptions?: FormatOptions): string {
+  return new Intl.DateTimeFormat(undefined, {
+    ...options,
+    hour12: hour12FromPreference(formatOptions?.hourCycle),
+    timeZone: formatOptions?.timeZone,
+  }).format(date);
+}
+
 /**
  * Returns a relative time string for dates within the last 7 days,
  * and falls back to a locale date string for older dates.
  */
-export function timeAgo(dateString: string | null | undefined): string {
+export function timeAgo(dateString: string | null | undefined, formatOptions?: FormatOptions): string {
   if (!dateString) return '—';
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return dateString;
@@ -20,15 +41,15 @@ export function timeAgo(dateString: string | null | undefined): string {
   if (diffDay === 1) return 'Yesterday';
   if (diffDay < 7) return `${diffDay} days ago`;
 
-  return date.toLocaleDateString();
+  return formatLocaleDate(date, { dateStyle: 'medium' }, formatOptions);
 }
 
 /**
  * Returns a full locale date+time string (for titles/tooltips).
  */
-export function fullDate(dateString: string | null | undefined): string {
+export function fullDate(dateString: string | null | undefined, formatOptions?: FormatOptions): string {
   if (!dateString) return '';
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return dateString;
-  return date.toLocaleString();
+  return formatLocaleDate(date, { dateStyle: 'medium', timeStyle: 'short' }, formatOptions);
 }

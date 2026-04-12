@@ -1,23 +1,66 @@
 'use client';
 
 // ── StatusBadge ────────────────────────────────────────────────────────
+const STATUS_ALIASES: Record<string, string> = {
+  warming_artifactory_cache: 'warming_cache',
+  indexing: 'indexing_artifact',
+  queued: 'queued_in_xray',
+};
+
 const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; label?: string }> = {
+  healthy: { color: '#34d399', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.22)' },
+  degraded: { color: '#f97316', bg: 'rgba(249,115,22,0.12)', border: 'rgba(249,115,22,0.22)' },
+  stale: { color: '#eab308', bg: 'rgba(234,179,8,0.12)', border: 'rgba(234,179,8,0.22)' },
   completed: { color: '#34d399', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.22)' },
   failed:    { color: '#f87171', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.22)'  },
   running:   { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.22)' },
   pending:   { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)', label: 'queued' },
   cancelled: { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.20)' },
-  warming_artifactory_cache: { color: '#38bdf8', bg: 'rgba(14,165,233,0.12)', border: 'rgba(14,165,233,0.22)', label: 'warming artifactory cache' },
+  warming_cache: { color: '#38bdf8', bg: 'rgba(14,165,233,0.12)', border: 'rgba(14,165,233,0.22)', label: 'warming cache' },
+  indexing_artifact: { color: '#f97316', bg: 'rgba(249,115,22,0.12)', border: 'rgba(249,115,22,0.22)', label: 'indexing artifact' },
+  queued_in_xray: { color: '#c084fc', bg: 'rgba(192,132,252,0.12)', border: 'rgba(192,132,252,0.22)', label: 'queued in xray' },
   blocked_by_xray_policy: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.22)', label: 'blocked by xray policy' },
   waiting_for_xray: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.22)', label: 'waiting for xray' },
 };
 
+export function normalizeStatus(status?: string) {
+  if (!status) {
+    return '';
+  }
+
+  return STATUS_ALIASES[status] ?? status;
+}
+
+export function resolveDisplayStatus(status: string, externalStatus?: string) {
+  const normalizedStatus = normalizeStatus(status);
+  const normalizedExternalStatus = normalizeStatus(externalStatus);
+
+  if ((normalizedStatus === 'pending' || normalizedStatus === 'running') && normalizedExternalStatus && normalizedExternalStatus !== normalizedStatus) {
+    return normalizedExternalStatus;
+  }
+
+  if (normalizedStatus === 'failed' && normalizedExternalStatus === 'blocked_by_xray_policy') {
+    return normalizedExternalStatus;
+  }
+
+  return normalizedStatus;
+}
+
+export function formatStatusLabel(status: string) {
+  const normalizedStatus = normalizeStatus(status);
+  const labels: Record<string, string> = {
+    blocked_by_xray_policy: 'blocked by xray policy',
+    waiting_for_xray: 'waiting for xray',
+    warming_cache: 'warming cache',
+    indexing_artifact: 'indexing artifact',
+    queued_in_xray: 'queued in xray',
+  };
+
+  return labels[normalizedStatus] ?? normalizedStatus.replace(/_/g, ' ');
+}
+
 export function StatusBadge({ status, externalStatus }: { status: string; externalStatus?: string }) {
-  const effectiveStatus =
-    ((status === 'pending' || status === 'running') && (externalStatus === 'waiting_for_xray' || externalStatus === 'warming_artifactory_cache')) ||
-    (status === 'failed' && externalStatus === 'blocked_by_xray_policy')
-      ? externalStatus
-      : status;
+  const effectiveStatus = resolveDisplayStatus(status, externalStatus);
   const s = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.pending;
   return (
     <span
@@ -25,10 +68,10 @@ export function StatusBadge({ status, externalStatus }: { status: string; extern
       style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}` }}
     >
       <span
-        className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${effectiveStatus === 'warming_artifactory_cache' ? 'animate-bounce' : effectiveStatus === 'running' || effectiveStatus === 'waiting_for_xray' ? 'animate-pulse' : ''}`}
+        className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${effectiveStatus === 'warming_cache' ? 'animate-bounce' : effectiveStatus === 'running' || effectiveStatus === 'waiting_for_xray' || effectiveStatus === 'queued_in_xray' || effectiveStatus === 'indexing_artifact' ? 'animate-pulse' : ''}`}
         aria-hidden
       />
-      {s.label ?? effectiveStatus}
+      {s.label ?? formatStatusLabel(effectiveStatus)}
     </span>
   );
 }

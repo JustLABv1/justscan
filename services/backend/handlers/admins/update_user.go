@@ -1,6 +1,7 @@
 package admins
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -27,6 +28,11 @@ func UpdateUser(context *gin.Context, db *bun.DB) {
 	err := db.NewSelect().Model(&userDB).Where("id = ?", userID).Scan(context)
 	if err != nil {
 		httperror.InternalServerError(context, "Error getting user from db", err)
+		return
+	}
+
+	if userDB.AuthType == "oidc" && user.Password != "" {
+		httperror.StatusBadRequest(context, "Password is managed by the OIDC provider for this user", errors.New("oidc-managed user password update blocked"))
 		return
 	}
 

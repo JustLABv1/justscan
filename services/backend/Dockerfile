@@ -22,7 +22,7 @@ WORKDIR /app
 ARG INCLUDE_TRIVY=true
 ARG INCLUDE_GRYPE=true
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates tzdata
 
 RUN --mount=type=bind,from=trivy-bin,source=/usr/local/bin/trivy,target=/tmp/trivy,ro \
     --mount=type=bind,from=grype-bin,source=/grype,target=/tmp/grype,ro \

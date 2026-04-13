@@ -819,24 +819,26 @@ export default function ScanDetailPage() {
 
       {/* Tab bar */}
       {scan.status !== 'pending' && scan.status !== 'running' && (
-        <div className="segmented-control w-fit">
-          {([
-            { id: 'vulns', label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities' },
-            ...(hasPolicyTab ? [{ id: 'policy' as const, label: blockedPolicyDetails?.totalViolations ? `Policy Violations (${blockedPolicyDetails.totalViolations})` : 'Policy Violations' }] : []),
-            { id: 'sbom', label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
-            { id: 'timeline', label: scan.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
-            { id: 'details', label: 'Details' },
-          ] as { id: ScanTab; label: string }[]).map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className="segmented-control-item"
-              data-active={activeTab === id ? 'true' : 'false'}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
+        <div className="w-full overflow-x-auto pb-1">
+          <div className="segmented-control min-w-max">
+            {([
+              { id: 'vulns', label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities' },
+              ...(hasPolicyTab ? [{ id: 'policy' as const, label: blockedPolicyDetails?.totalViolations ? `Policy Violations (${blockedPolicyDetails.totalViolations})` : 'Policy Violations' }] : []),
+              { id: 'sbom', label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
+              { id: 'timeline', label: scan.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
+              { id: 'details', label: 'Details' },
+            ] as { id: ScanTab; label: string }[]).map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className="segmented-control-item"
+                data-active={activeTab === id ? 'true' : 'false'}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -877,15 +879,15 @@ export default function ScanDetailPage() {
       {/* SBOM tab */}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'sbom' && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center">
             <input
               type="text"
               value={sbomNameInput}
               onChange={e => setSbomNameInput(e.target.value)}
               placeholder="Filter by name…"
-              className={inputCls}
+              className={`${inputCls} min-w-0 md:flex-1`}
             />
-            <Select selectedKey={sbomTypeFilter || '__all__'} onSelectionChange={k => { setSbomTypeFilter(String(k === '__all__' ? '' : k)); setSbomLoaded(false); }} className="flex-1">
+            <Select selectedKey={sbomTypeFilter || '__all__'} onSelectionChange={k => { setSbomTypeFilter(String(k === '__all__' ? '' : k)); setSbomLoaded(false); }} className="min-w-0 md:w-56 md:flex-none">
               <Select.Trigger className={selectTriggerCls}>
                 <Select.Value />
                 <Select.Indicator />
@@ -901,48 +903,50 @@ export default function ScanDetailPage() {
             </Select>
           </div>
           <div className="glass-panel rounded-2xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Version</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Type</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">License</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Package URL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sbomLoading ? (
-                  <tr><td colSpan={5} className="py-12 text-center">
-                    <div className="flex justify-center">
-                      <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
-                    </div>
-                  </td></tr>
-                ) : sbomComponents.length === 0 ? (
-                  <tr><td colSpan={5} className="py-12 text-center text-sm text-zinc-500">
-                    No SBOM components found for this scan.
-                  </td></tr>
-                ) : sbomComponents.map((c, i) => (
-                  <tr
-                    key={c.id}
-                    style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-700 dark:text-zinc-200">{c.name}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{c.version || '—'}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="text-xs px-1.5 py-0.5 rounded font-medium"
-                        style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
-                        {c.type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-zinc-500">{c.license || '—'}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-400 max-w-xs truncate" title={c.package_url}>{c.package_url || '—'}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Version</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Type</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">License</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Package URL</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {sbomLoading ? (
+                    <tr><td colSpan={5} className="py-12 text-center">
+                      <div className="flex justify-center">
+                        <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      </div>
+                    </td></tr>
+                  ) : sbomComponents.length === 0 ? (
+                    <tr><td colSpan={5} className="py-12 text-center text-sm text-zinc-500">
+                      No SBOM components found for this scan.
+                    </td></tr>
+                  ) : sbomComponents.map((c, i) => (
+                    <tr
+                      key={c.id}
+                      style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <td className="px-4 py-2.5 font-mono text-xs text-zinc-700 dark:text-zinc-200">{c.name}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{c.version || '—'}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="text-xs px-1.5 py-0.5 rounded font-medium"
+                          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
+                          {c.type}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-zinc-500">{c.license || '—'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-zinc-400 max-w-xs truncate" title={c.package_url}>{c.package_url || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -952,46 +956,48 @@ export default function ScanDetailPage() {
             Vulnerabilities
             {vulnTotal > 0 && <span className="text-sm font-normal text-zinc-500 ml-2">{vulnTotal} found</span>}
           </h2>
-          {/* Severity pills + secondary filters in one row */}
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="segmented-control flex-wrap">
-            {([
-              { id: '',         label: 'All',      count: (scan.critical_count ?? 0) + (scan.high_count ?? 0) + (scan.medium_count ?? 0) + (scan.low_count ?? 0) },
-              { id: 'CRITICAL', label: 'Critical', count: scan.critical_count ?? 0, color: 'rgba(239,68,68,0.15)',   activeColor: '#f87171', border: 'rgba(239,68,68,0.3)'   },
-              { id: 'HIGH',     label: 'High',     count: scan.high_count     ?? 0, color: 'rgba(249,115,22,0.15)', activeColor: '#fb923c', border: 'rgba(249,115,22,0.3)' },
-              { id: 'MEDIUM',   label: 'Medium',   count: scan.medium_count   ?? 0, color: 'rgba(234,179,8,0.15)',  activeColor: '#facc15', border: 'rgba(234,179,8,0.3)'  },
-              { id: 'LOW',      label: 'Low',      count: scan.low_count      ?? 0, color: 'rgba(59,130,246,0.15)', activeColor: '#60a5fa', border: 'rgba(59,130,246,0.3)' },
-            ] as { id: string; label: string; count: number; color?: string; activeColor?: string; border?: string }[]).map(({ id, label, count, color, activeColor, border }) => {
-              const active = severityFilter === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => { setSeverityFilter(id); setPage(1); }}
-                  className="segmented-control-item"
-                  data-active={active ? 'true' : 'false'}
-                  data-size="sm"
-                  type="button"
-                  style={active
-                    ? { background: color ?? 'rgba(124,58,237,0.15)', color: activeColor ?? '#a78bfa', borderColor: border ?? 'rgba(167,139,250,0.3)' }
-                    : undefined
-                  }
-                >
-                  {label}
-                  {count > 0 && <span className="opacity-60">{count}</span>}
-                </button>
-              );
-            })}
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="w-full overflow-x-auto pb-1 xl:w-auto">
+              <div className="segmented-control min-w-max">
+                {([
+                  { id: '',         label: 'All',      count: (scan.critical_count ?? 0) + (scan.high_count ?? 0) + (scan.medium_count ?? 0) + (scan.low_count ?? 0) },
+                  { id: 'CRITICAL', label: 'Critical', count: scan.critical_count ?? 0, color: 'rgba(239,68,68,0.15)',   activeColor: '#f87171', border: 'rgba(239,68,68,0.3)'   },
+                  { id: 'HIGH',     label: 'High',     count: scan.high_count     ?? 0, color: 'rgba(249,115,22,0.15)', activeColor: '#fb923c', border: 'rgba(249,115,22,0.3)' },
+                  { id: 'MEDIUM',   label: 'Medium',   count: scan.medium_count   ?? 0, color: 'rgba(234,179,8,0.15)',  activeColor: '#facc15', border: 'rgba(234,179,8,0.3)'  },
+                  { id: 'LOW',      label: 'Low',      count: scan.low_count      ?? 0, color: 'rgba(59,130,246,0.15)', activeColor: '#60a5fa', border: 'rgba(59,130,246,0.3)' },
+                ] as { id: string; label: string; count: number; color?: string; activeColor?: string; border?: string }[]).map(({ id, label, count, color, activeColor, border }) => {
+                  const active = severityFilter === id;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => { setSeverityFilter(id); setPage(1); }}
+                      className="segmented-control-item"
+                      data-active={active ? 'true' : 'false'}
+                      data-size="sm"
+                      type="button"
+                      style={active
+                        ? { background: color ?? 'rgba(124,58,237,0.15)', color: activeColor ?? '#a78bfa', borderColor: border ?? 'rgba(167,139,250,0.3)' }
+                        : undefined
+                      }
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>{label}</span>
+                        {count > 0 && <span className="text-[11px] font-semibold opacity-70">{count}</span>}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            {/* Secondary filters */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex w-full flex-col gap-2 md:flex-row md:items-end xl:w-auto xl:justify-end">
               <input
                 type="text"
                 value={pkgInput}
                 onChange={(e) => setPkgInput(e.target.value)}
                 placeholder="Package…"
-                className={inputCls}
+                className={`${inputCls} min-w-[220px] flex-1 md:min-w-[280px] xl:w-[320px] xl:flex-none`}
               />
-              <div className="flex items-center gap-1.5">
+              <div className="flex shrink-0 flex-col gap-1.5">
                 <label className="text-xs text-zinc-500 whitespace-nowrap">Min CVSS</label>
                 <input
                   type="number"
@@ -1005,12 +1011,12 @@ export default function ScanDetailPage() {
                     setMinCvss(!isNaN(val) ? val : 0);
                     setPage(1);
                   }}
-                  className={`${inputCls} w-20`}
+                  className={`${inputCls} w-full min-w-[5.5rem] md:w-24`}
                 />
               </div>
               <button
                 onClick={() => { setHasFix(!hasFix); setPage(1); }}
-                className={hasFix ? 'btn-primary' : 'btn-secondary'}
+                className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full shrink-0 md:w-auto`}
                 type="button"
               >
                 Has Fix
@@ -1020,70 +1026,71 @@ export default function ScanDetailPage() {
         </div>
 
         <div className="glass-panel rounded-2xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                {([
-                  { label: 'CVE ID',     key: 'vuln_id',           align: 'left'  },
-                  { label: 'Package',    key: 'pkg_name',          align: 'left'  },
-                  { label: 'Installed',  key: 'installed_version', align: 'left'  },
-                  { label: 'Fixed In',   key: 'fixed_version',     align: 'left'  },
-                  { label: 'Severity',   key: 'severity',          align: 'left'  },
-                  { label: 'CVSS',       key: 'cvss_score',        align: 'right' },
-                  { label: 'First Seen', key: 'first_seen_at',     align: 'left'  },
-                ] as { label: string; key: string; align: 'left' | 'right' }[]).map(({ label, key, align }) => {
-                  const active = sortBy === key;
-                  return (
-                    <th
-                      key={key}
-                      onClick={() => {
-                        if (active) {
-                          setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-                        } else {
-                          setSortBy(key);
-                          setSortDir('asc');
-                        }
-                        setPage(1);
-                      }}
-                      className={`px-4 py-3 text-xs font-medium uppercase tracking-wider cursor-pointer select-none transition-colors text-${align}`}
-                      style={{ color: active ? '#a78bfa' : 'rgba(113,113,122,0.8)' }}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        {label}
-                        <span className={`transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`}>
-                          {active && sortDir === 'desc' ? '↓' : '↑'}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1120px] text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                  {([
+                    { label: 'CVE ID',     key: 'vuln_id',           align: 'left'  },
+                    { label: 'Package',    key: 'pkg_name',          align: 'left'  },
+                    { label: 'Installed',  key: 'installed_version', align: 'left'  },
+                    { label: 'Fixed In',   key: 'fixed_version',     align: 'left'  },
+                    { label: 'Severity',   key: 'severity',          align: 'left'  },
+                    { label: 'CVSS',       key: 'cvss_score',        align: 'right' },
+                    { label: 'First Seen', key: 'first_seen_at',     align: 'left'  },
+                  ] as { label: string; key: string; align: 'left' | 'right' }[]).map(({ label, key, align }) => {
+                    const active = sortBy === key;
+                    return (
+                      <th
+                        key={key}
+                        onClick={() => {
+                          if (active) {
+                            setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setSortBy(key);
+                            setSortDir('asc');
+                          }
+                          setPage(1);
+                        }}
+                        className={`px-4 py-3 text-xs font-medium uppercase tracking-wider cursor-pointer select-none transition-colors text-${align}`}
+                        style={{ color: active ? '#a78bfa' : 'rgba(113,113,122,0.8)' }}
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          {label}
+                          <span className={`transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`}>
+                            {active && sortDir === 'desc' ? '↓' : '↑'}
+                          </span>
                         </span>
-                      </span>
-                    </th>
-                  );
-                })}
-                <th className="text-right px-4 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(113,113,122,0.8)' }}>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vulnLoading ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center">
-                    <div className="flex justify-center">
-                      <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
-                    </div>
-                  </td>
+                      </th>
+                    );
+                  })}
+                  <th className="text-right px-4 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(113,113,122,0.8)' }}>Notes</th>
                 </tr>
-              ) : vulns.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-zinc-500 text-sm">
-                    {scan.external_status === 'blocked_by_xray_policy'
-                      ? 'No imported vulnerabilities are available because Xray blocked this artifact before the normal scan summary was produced. See the Policy Violations tab for the matched issues, watches, and policies.'
-                      : 'No vulnerabilities found.'}
-                  </td>
-                </tr>
-              ) : vulns.map((v, i) => (
-                <Fragment key={v.id}>
-                  <tr
-                    style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
+              </thead>
+              <tbody>
+                {vulnLoading ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center">
+                      <div className="flex justify-center">
+                        <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      </div>
+                    </td>
+                  </tr>
+                ) : vulns.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-zinc-500 text-sm">
+                      {scan.external_status === 'blocked_by_xray_policy'
+                        ? 'No imported vulnerabilities are available because Xray blocked this artifact before the normal scan summary was produced. See the Policy Violations tab for the matched issues, watches, and policies.'
+                        : 'No vulnerabilities found.'}
+                    </td>
+                  </tr>
+                ) : vulns.map((v, i) => (
+                  <Fragment key={v.id}>
+                    <tr
+                      style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
                     <td className="px-4 py-3">
                       {v.vuln_id ? (
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -1312,10 +1319,11 @@ export default function ScanDetailPage() {
                       </td>
                     </tr>
                   )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {totalPages > 1 && (

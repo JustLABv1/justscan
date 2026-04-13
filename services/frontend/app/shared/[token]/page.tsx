@@ -328,21 +328,23 @@ export default function SharedScanPage() {
         )}
 
         {showResultTabs && (
-          <div className="segmented-control w-fit">
-            {([
-              { id: 'overview', label: showRecoveredOverview ? 'Overview' : 'Status' },
-              { id: 'timeline', label: scan?.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
-            ] as { id: ResultTab; label: string }[]).map(({ id, label }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className="segmented-control-item"
-                data-active={activeTab === id ? 'true' : 'false'}
-                type="button"
-              >
-                {label}
-              </button>
-            ))}
+          <div className="w-full overflow-x-auto pb-1">
+            <div className="segmented-control min-w-max">
+              {([
+                { id: 'overview', label: showRecoveredOverview ? 'Overview' : 'Status' },
+                { id: 'timeline', label: scan?.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
+              ] as { id: ResultTab; label: string }[]).map(({ id, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className="segmented-control-item"
+                  data-active={activeTab === id ? 'true' : 'false'}
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -399,59 +401,66 @@ export default function SharedScanPage() {
 
             {/* Vulnerabilities */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="space-y-3">
                 <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
                   Vulnerabilities
                   {vulnTotal > 0 && <span className="text-sm font-normal ml-2" style={{ color: 'var(--text-muted)' }}>{vulnTotal} found</span>}
                 </h2>
-                <div className="flex flex-wrap gap-2 items-center">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                   {/* Severity pills */}
-                  <div className="segmented-control">
-                    {['', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map(sev => (
-                      <button key={sev || '__all__'} onClick={() => { setSeverityFilter(sev); setPage(1); }}
-                        className="segmented-control-item"
-                        data-active={severityFilter === sev ? 'true' : 'false'}
-                        data-size="sm"
-                        type="button">
-                        {sev || 'All'}
-                      </button>
-                    ))}
+                  <div className="w-full overflow-x-auto pb-1 xl:w-auto">
+                    <div className="segmented-control min-w-max">
+                      {['', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map(sev => (
+                        <button key={sev || '__all__'} onClick={() => { setSeverityFilter(sev); setPage(1); }}
+                          className="segmented-control-item"
+                          data-active={severityFilter === sev ? 'true' : 'false'}
+                          data-size="sm"
+                          type="button">
+                          {sev || 'All'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <input
-                    type="text"
-                    value={pkgInput}
-                    onChange={e => setPkgInput(e.target.value)}
-                    placeholder="Package…"
-                    className={inputCls}
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    max={10}
-                    step={0.1}
-                    value={minCvssInput}
-                    onChange={e => {
-                      setMinCvssInput(e.target.value);
-                      const v = parseFloat(e.target.value);
-                      setMinCvss(isNaN(v) ? 0 : v);
-                      setPage(1);
-                    }}
-                    placeholder="Min CVSS"
-                    className={inputCls}
-                    style={{ width: 100 }}
-                  />
-                  <button
-                    onClick={() => { setHasFix(!hasFix); setPage(1); }}
-                    className={hasFix ? 'btn-primary' : 'btn-secondary'}
-                  >
-                    Has Fix
-                  </button>
+                  <div className="flex w-full flex-col gap-2 md:flex-row md:items-end xl:w-auto xl:justify-end">
+                    <input
+                      type="text"
+                      value={pkgInput}
+                      onChange={e => setPkgInput(e.target.value)}
+                      placeholder="Package…"
+                      className={`${inputCls} min-w-[220px] flex-1 md:min-w-[280px] xl:w-[320px] xl:flex-none`}
+                    />
+                    <div className="flex shrink-0 flex-col gap-1.5">
+                      <label className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>Min CVSS</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        value={minCvssInput}
+                        onChange={e => {
+                          setMinCvssInput(e.target.value);
+                          const v = parseFloat(e.target.value);
+                          setMinCvss(isNaN(v) ? 0 : v);
+                          setPage(1);
+                        }}
+                        placeholder="0"
+                        className={`${inputCls} w-full min-w-[5.5rem] md:w-24`}
+                      />
+                    </div>
+                    <button
+                      onClick={() => { setHasFix(!hasFix); setPage(1); }}
+                      className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full shrink-0 md:w-auto`}
+                    >
+                      Has Fix
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {/* Table */}
               <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[920px] text-sm">
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
                       {([
@@ -519,6 +528,7 @@ export default function SharedScanPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
 
               {totalPages > 1 && (

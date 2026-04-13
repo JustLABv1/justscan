@@ -1,4 +1,5 @@
 'use client';
+import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
 import { useToast } from '@/components/toast';
 import { SeverityBadge, SourceBadge, StatusBadge } from '@/components/ui/badges';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
@@ -7,31 +8,31 @@ import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-mo
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import type { ComplianceResult, Org, SBOMComponent, Scan, Suppression, Tag, Vulnerability } from '@/lib/api';
 import {
-    addTagToScan,
-    assignScanToOrg,
-    cancelScan,
-    createComment,
-    createShare,
-    deleteComment,
-    deleteShare,
-    deleteSuppression,
-    getScan,
-    getScanCompliance,
-    getScanSBOM,
-    getUser,
-    getVulnerabilityContextAnalysis,
-    listOrgs,
-    listScans,
-    listTags,
-    listVulnerabilities,
-    reEvaluateCompliance,
-    removeScanFromOrg,
-    removeTagFromScan,
-    reScan,
-    upsertSuppression,
+  addTagToScan,
+  assignScanToOrg,
+  cancelScan,
+  createComment,
+  createShare,
+  deleteComment,
+  deleteShare,
+  deleteSuppression,
+  getScan,
+  getScanCompliance,
+  getScanSBOM,
+  getUser,
+  getVulnerabilityContextAnalysis,
+  listOrgs,
+  listScans,
+  listTags,
+  listVulnerabilities,
+  reEvaluateCompliance,
+  removeScanFromOrg,
+  removeTagFromScan,
+  reScan,
+  upsertSuppression,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select, useOverlayState } from '@heroui/react';
+import { Button, Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select, useOverlayState } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
 import { ArrowLeft01Icon, Cancel01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, GitCompareIcon, MoreVerticalIcon, Refresh01Icon, Share01Icon, ShieldKeyIcon } from 'hugeicons-react';
@@ -556,23 +557,17 @@ export default function ScanDetailPage() {
   return (
     <div className="p-6 max-w-[1500px] mx-auto space-y-5">
       {/* Header */}
-      <div>
-        <button
-          onClick={() => router.back()}
-          className="btn-secondary inline-flex items-center gap-1.5 mb-3"
-          type="button"
-        >
-          <ArrowLeft01Icon size={15} />
-          Back to scans
-        </button>
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold font-mono text-zinc-900 dark:text-white break-words" style={{ overflowWrap: 'anywhere' }}>
-              {scan.image_name}:{scan.image_tag}
-            </h1>
-            {scan.image_digest && (
-              <p className="mt-1 text-xs font-mono text-zinc-500 break-words" style={{ overflowWrap: 'anywhere' }}>{scan.image_digest}</p>
-            )}
+      <ScanDetailHeader
+        navigation={(
+          <Button className="btn-secondary" onPress={() => router.back()} variant="secondary">
+            <ArrowLeft01Icon size={15} />
+            Back to scans
+          </Button>
+        )}
+        title={`${scan.image_name}:${scan.image_tag}`}
+        subtitle={scan.image_digest ? <span>{scan.image_digest}</span> : undefined}
+        meta={(
+          <>
             {scan.architecture && (
               <p className="flex items-center gap-1.5 text-xs text-zinc-500 mt-1">
                 <CpuIcon size={12} />
@@ -588,170 +583,172 @@ export default function ScanDetailPage() {
                 )}
               </p>
             )}
-          </div>
-          <div className="relative flex flex-wrap items-center gap-2 xl:max-w-[40%] xl:justify-end">
+          </>
+        )}
+        actions={(
+          <div className="relative flex flex-wrap items-center gap-2">
             {(scan.status === 'pending' || scan.status === 'running') && (
-              <button
-                onClick={handleCancel}
-                disabled={cancelling}
-                className="btn-warning inline-flex items-center gap-2"
-                title="Stop this scan"
-                type="button"
+              <Button
+                className="btn-warning"
+                isDisabled={cancelling}
+                onPress={handleCancel}
+                variant="secondary"
               >
                 {cancelling
                   ? <span className="w-3.5 h-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
                   : <Cancel01Icon size={15} />}
                 Cancel
-              </button>
+              </Button>
             )}
-            <button
-              onClick={handleReScan}
-              disabled={reScanning || scan.status === 'running' || scan.status === 'pending'}
-              className="btn-primary inline-flex items-center gap-2"
-              title="Start a new scan with the same image and tag"
-              type="button"
+            <Button
+              className="btn-primary"
+              isDisabled={reScanning || scan.status === 'running' || scan.status === 'pending'}
+              onPress={handleReScan}
+              variant="primary"
             >
               {reScanning
                 ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
                 : <Refresh01Icon size={15} />}
               Re-scan
-            </button>
-            <Dropdown>
-              <Dropdown.Trigger>
-                <button
-                  type="button"
-                  className="btn-icon-subtle h-10 w-10"
-                  style={shareOpen ? { color: '#a78bfa', borderColor: 'rgba(167,139,250,0.25)' } : undefined}
-                  aria-label="Open scan actions"
-                  title="More actions"
-                >
-                  <MoreVerticalIcon size={16} />
-                </button>
-              </Dropdown.Trigger>
-              <Dropdown.Popover className="min-w-[220px]">
-                <Dropdown.Menu onAction={(key) => {
-                  if (key === 'export') {
-                    window.open(`/reports/print?scans=${scan.id}`, '_blank', 'noopener,noreferrer');
-                  }
-                  if (key === 'compare') {
-                    void handleComparePrev();
-                  }
-                  if (key === 'share') {
-                    if (scan.share_visibility) setShareVisibility(scan.share_visibility as 'public' | 'authenticated');
-                    setShareOpen(true);
-                  }
-                }}>
-                  <Dropdown.Item id="export" textValue="Export scan report">
-                    <div className="flex items-center gap-2">
-                      <FileExportIcon size={15} />
-                      <Label>Export</Label>
+            </Button>
+            <div className="relative">
+              <Dropdown>
+                <Dropdown.Trigger>
+                  <Button
+                    aria-label="Open scan actions"
+                    className="btn-icon-subtle h-10 w-10"
+                    isIconOnly
+                    style={shareOpen ? { color: '#a78bfa', borderColor: 'rgba(167,139,250,0.25)' } : undefined}
+                    variant="secondary"
+                  >
+                    <MoreVerticalIcon size={16} />
+                  </Button>
+                </Dropdown.Trigger>
+                <Dropdown.Popover className="min-w-[220px]">
+                  <Dropdown.Menu onAction={(key) => {
+                    if (key === 'export') {
+                      window.open(`/reports/print?scans=${scan.id}`, '_blank', 'noopener,noreferrer');
+                    }
+                    if (key === 'compare') {
+                      void handleComparePrev();
+                    }
+                    if (key === 'share') {
+                      if (scan.share_visibility) setShareVisibility(scan.share_visibility as 'public' | 'authenticated');
+                      setShareOpen(true);
+                    }
+                  }}>
+                    <Dropdown.Item id="export" textValue="Export scan report">
+                      <div className="flex items-center gap-2">
+                        <FileExportIcon size={15} />
+                        <Label>Export</Label>
+                      </div>
+                    </Dropdown.Item>
+                    <Dropdown.Item id="compare" textValue="Compare with previous scan" isDisabled={comparingPrev}>
+                      <div className="flex items-center gap-2">
+                        <GitCompareIcon size={15} />
+                        <Label>{comparingPrev ? 'Compare…' : 'Compare'}</Label>
+                      </div>
+                    </Dropdown.Item>
+                    <Dropdown.Item id="share" textValue="Manage scan sharing">
+                      <div className="flex items-center gap-2">
+                        <Share01Icon size={15} />
+                        <Label>{scan.share_token ? 'Manage share' : 'Share'}</Label>
+                      </div>
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
+              {shareOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />
+                  <div className="absolute right-0 top-12 w-80 rounded-xl z-50 p-4 space-y-3"
+                    style={{ background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-zinc-800 dark:text-white">Share scan</p>
+                      <button className="btn-icon-subtle text-lg leading-none" onClick={() => setShareOpen(false)} type="button">✕</button>
                     </div>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="compare" textValue="Compare with previous scan" isDisabled={comparingPrev}>
-                    <div className="flex items-center gap-2">
-                      <GitCompareIcon size={15} />
-                      <Label>{comparingPrev ? 'Compare…' : 'Compare'}</Label>
-                    </div>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="share" textValue="Manage scan sharing">
-                    <div className="flex items-center gap-2">
-                      <Share01Icon size={15} />
-                      <Label>{scan.share_token ? 'Manage share' : 'Share'}</Label>
-                    </div>
-                  </Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
-            {shareOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />
-                <div className="absolute right-0 top-12 w-80 rounded-xl z-50 p-4 space-y-3"
-                  style={{ background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-zinc-800 dark:text-white">Share scan</p>
-                    <button className="btn-icon-subtle text-lg leading-none" onClick={() => setShareOpen(false)} type="button">✕</button>
+                    {scan.share_token ? (
+                      <>
+                        <div>
+                          <p className="text-xs text-zinc-500 mb-1.5">Share link
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium"
+                              style={{ background: scan.share_visibility === 'public' ? 'rgba(34,197,94,0.1)' : 'rgba(124,58,237,0.1)', color: scan.share_visibility === 'public' ? '#4ade80' : '#a78bfa', border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'rgba(124,58,237,0.2)'}` }}>
+                              {scan.share_visibility}
+                            </span>
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 text-xs text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 rounded-lg px-2 py-1.5 truncate">
+                              {typeof window !== 'undefined' ? `${window.location.origin}/shared/${scan.share_token}` : ''}
+                            </code>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/shared/${scan.share_token}`);
+                                setShareCopied(true);
+                                setTimeout(() => setShareCopied(false), 1500);
+                              }}
+                              className="btn-secondary shrink-0"
+                              type="button"
+                            >
+                              {shareCopied ? '✓ Copied' : 'Copy'}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <p className="text-xs text-zinc-500">Change visibility</p>
+                          <div className="segmented-control w-full">
+                            {(['public', 'authenticated'] as const).map(v => (
+                              <button key={v} onClick={() => setShareVisibility(v)}
+                                className="segmented-control-item flex-1"
+                                data-active={shareVisibility === v ? 'true' : 'false'}
+                                data-size="sm"
+                                type="button">
+                                {v === 'public' ? 'Public' : 'Signed in'}
+                              </button>
+                            ))}
+                          </div>
+                          {shareVisibility !== scan.share_visibility && (
+                            <button className="btn-primary w-full" disabled={shareLoading} onClick={handleEnableShare} type="button">
+                              {shareLoading ? 'Updating…' : 'Update visibility'}
+                            </button>
+                          )}
+                        </div>
+                        <button className="btn-danger w-full" disabled={shareLoading} onClick={handleDisableShare} type="button">
+                          {shareLoading ? 'Processing…' : 'Disable sharing'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="space-y-1.5">
+                          <p className="text-xs text-zinc-500">Visibility</p>
+                          <div className="segmented-control w-full">
+                            {(['public', 'authenticated'] as const).map(v => (
+                              <button key={v} onClick={() => setShareVisibility(v)}
+                                className="segmented-control-item flex-1"
+                                data-active={shareVisibility === v ? 'true' : 'false'}
+                                data-size="sm"
+                                type="button">
+                                {v === 'public' ? 'Public' : 'Signed in'}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-xs text-zinc-400 leading-relaxed">
+                            {shareVisibility === 'public'
+                              ? 'Anyone with the link can view this scan.'
+                              : 'Only signed-in users can view this scan.'}
+                          </p>
+                        </div>
+                        <button className="btn-primary w-full" disabled={shareLoading} onClick={handleEnableShare} type="button">
+                          {shareLoading ? 'Creating link…' : 'Create share link'}
+                        </button>
+                      </>
+                    )}
                   </div>
-                  {scan.share_token ? (
-                    <>
-                      <div>
-                        <p className="text-xs text-zinc-500 mb-1.5">Share link
-                          <span className="ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium"
-                            style={{ background: scan.share_visibility === 'public' ? 'rgba(34,197,94,0.1)' : 'rgba(124,58,237,0.1)', color: scan.share_visibility === 'public' ? '#4ade80' : '#a78bfa', border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'rgba(124,58,237,0.2)'}` }}>
-                            {scan.share_visibility}
-                          </span>
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <code className="flex-1 text-xs text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 rounded-lg px-2 py-1.5 truncate">
-                            {typeof window !== 'undefined' ? `${window.location.origin}/shared/${scan.share_token}` : ''}
-                          </code>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(`${window.location.origin}/shared/${scan.share_token}`);
-                              setShareCopied(true);
-                              setTimeout(() => setShareCopied(false), 1500);
-                            }}
-                            className="btn-secondary shrink-0"
-                            type="button"
-                          >
-                            {shareCopied ? '✓ Copied' : 'Copy'}
-                          </button>
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <p className="text-xs text-zinc-500">Change visibility</p>
-                        <div className="segmented-control w-full">
-                          {(['public', 'authenticated'] as const).map(v => (
-                            <button key={v} onClick={() => setShareVisibility(v)}
-                              className="segmented-control-item flex-1"
-                              data-active={shareVisibility === v ? 'true' : 'false'}
-                              data-size="sm"
-                              type="button">
-                              {v === 'public' ? 'Public' : 'Signed in'}
-                            </button>
-                          ))}
-                        </div>
-                        {shareVisibility !== scan.share_visibility && (
-                          <button className="btn-primary w-full" disabled={shareLoading} onClick={handleEnableShare} type="button">
-                            {shareLoading ? 'Updating…' : 'Update visibility'}
-                          </button>
-                        )}
-                      </div>
-                      <button className="btn-danger w-full" disabled={shareLoading} onClick={handleDisableShare} type="button">
-                        {shareLoading ? 'Processing…' : 'Disable sharing'}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="space-y-1.5">
-                        <p className="text-xs text-zinc-500">Visibility</p>
-                        <div className="segmented-control w-full">
-                          {(['public', 'authenticated'] as const).map(v => (
-                            <button key={v} onClick={() => setShareVisibility(v)}
-                              className="segmented-control-item flex-1"
-                              data-active={shareVisibility === v ? 'true' : 'false'}
-                              data-size="sm"
-                              type="button">
-                              {v === 'public' ? 'Public' : 'Signed in'}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-xs text-zinc-400 leading-relaxed">
-                          {shareVisibility === 'public'
-                            ? 'Anyone with the link can view this scan.'
-                            : 'Only signed-in users can view this scan.'}
-                        </p>
-                      </div>
-                      <button className="btn-primary w-full" disabled={shareLoading} onClick={handleEnableShare} type="button">
-                        {shareLoading ? 'Creating link…' : 'Create share link'}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+        )}
+      />
 
       {/* Status + severity cards */}
       {scan.status !== 'pending' && scan.status !== 'running' && (

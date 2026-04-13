@@ -565,13 +565,13 @@ export default function ScanDetailPage() {
           <ArrowLeft01Icon size={15} />
           Back to scans
         </button>
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
-            <h1 className="text-xl font-bold font-mono text-zinc-900 dark:text-white break-all">
+            <h1 className="text-xl font-bold font-mono text-zinc-900 dark:text-white break-words" style={{ overflowWrap: 'anywhere' }}>
               {scan.image_name}:{scan.image_tag}
             </h1>
             {scan.image_digest && (
-              <p className="text-xs font-mono text-zinc-500 mt-1 break-all">{scan.image_digest}</p>
+              <p className="mt-1 text-xs font-mono text-zinc-500 break-words" style={{ overflowWrap: 'anywhere' }}>{scan.image_digest}</p>
             )}
             {scan.architecture && (
               <p className="flex items-center gap-1.5 text-xs text-zinc-500 mt-1">
@@ -580,16 +580,16 @@ export default function ScanDetailPage() {
               </p>
             )}
             {scan.helm_chart && (
-              <p className="flex items-center gap-1.5 text-xs text-zinc-500 mt-1" title={scan.helm_source_path}>
+              <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500" title={scan.helm_source_path}>
                 <span className="font-medium text-violet-400">Helm</span>
-                <span className="font-mono truncate max-w-[320px]">{scan.helm_chart}</span>
+                <span className="max-w-full font-mono break-words" style={{ overflowWrap: 'anywhere' }}>{scan.helm_chart}</span>
                 {scan.helm_source_path && (
-                  <span className="text-zinc-400 truncate max-w-[200px]">· {scan.helm_source_path}</span>
+                  <span className="text-zinc-400 break-words" style={{ overflowWrap: 'anywhere' }}>· {scan.helm_source_path}</span>
                 )}
               </p>
             )}
           </div>
-          <div className="relative flex items-center gap-2 shrink-0">
+          <div className="relative flex flex-wrap items-center gap-2 xl:max-w-[40%] xl:justify-end">
             {(scan.status === 'pending' || scan.status === 'running') && (
               <button
                 onClick={handleCancel}

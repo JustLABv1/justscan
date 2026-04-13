@@ -588,9 +588,9 @@ export function ScanningAnimation({
 					* { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 				}
 			`}</style>
-			<div className="flex flex-col gap-6">
+			<div className="flex min-w-0 flex-col gap-6">
 				<div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-					<div className="space-y-1.5 flex-1">
+					<div className="min-w-0 flex-1 space-y-1.5">
 						<div className="flex items-center gap-3">
 							<span className="relative flex h-3 w-3">
 								<span className="absolute inset-0 rounded-full" style={{ background: progress.accent, animation: 'stepPulse 1.6s ease-in-out infinite' }} />
@@ -603,7 +603,7 @@ export function ScanningAnimation({
 						</p>
 					</div>
 
-					<div className="flex flex-wrap gap-2 items-center shrink-0">
+					<div className="flex flex-wrap items-center gap-2 md:justify-end">
 						<span className="rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
 							{providerName}
 						</span>
@@ -623,7 +623,7 @@ export function ScanningAnimation({
 					</div>
 				</div>
 
-				<div className="pt-2 pb-6 md:pb-2">
+				<div className="overflow-x-hidden pt-2 pb-6 md:pb-2">
 					<ol className="flex items-center w-full">
 						{progress.steps.map((step, index) => {
 							const isActive = step.state === 'active';
@@ -651,7 +651,7 @@ export function ScanningAnimation({
 												<span className="text-[11px] font-bold">{index + 1}</span>
 											)}
 										</div>
-										<span className="absolute top-9 text-[10px] font-semibold tracking-wide whitespace-nowrap uppercase opacity-0 md:opacity-100" style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+										<span className="absolute left-1/2 top-9 hidden w-16 -translate-x-1/2 text-center text-[10px] font-semibold uppercase tracking-wide opacity-100 lg:block" style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-muted)', lineHeight: 1.1 }}>
 											{step.title}
 										</span>
 									</div>
@@ -670,19 +670,19 @@ export function ScanningAnimation({
 				</div>
 
 				<div className="mt-2 grid gap-4 lg:grid-cols-[1fr_2fr]">
-					<div className="rounded-xl px-4 py-3 pb-4" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}>
+					<div className="min-w-0 rounded-xl px-4 py-3 pb-4" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}>
 						<p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 mb-1.5">Context</p>
-						<p className="text-sm font-mono truncate" style={{ color: compactImage ? 'var(--text-primary)' : 'var(--text-muted)' }} title={image}>{compactImage || '—'}</p>
+						<p className="text-sm font-mono break-words" style={{ color: compactImage ? 'var(--text-primary)' : 'var(--text-muted)', overflowWrap: 'anywhere' }} title={image}>{image || compactImage || '—'}</p>
 						<p className="text-[11px] mt-1.5" style={{ color: 'var(--text-muted)' }}>{progress.note}</p>
 					</div>
-					<div className="rounded-xl px-4 py-3 pb-4" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}>
-						<div className="flex justify-between items-center mb-1.5 gap-2">
+					<div className="min-w-0 rounded-xl px-4 py-3 pb-4" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}>
+						<div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
 							<p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Live signal</p>
 							<span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
 								{stepOutputCount(activeStepLog) ? `${stepOutputCount(activeStepLog)} update${stepOutputCount(activeStepLog) === 1 ? '' : 's'}` : 'Awaiting'}
 							</span>
 						</div>
-						<p className="text-[13px] font-mono truncate" style={{ color: latestOutput ? 'var(--text-primary)' : 'var(--text-muted)' }} title={latestOutput ?? ''}>
+						<p className="text-[13px] font-mono break-words leading-5" style={{ color: latestOutput ? 'var(--text-primary)' : 'var(--text-muted)', overflowWrap: 'anywhere' }} title={latestOutput ?? ''}>
 							{latestOutput ?? 'No output recorded yet.'}
 						</p>
 					</div>

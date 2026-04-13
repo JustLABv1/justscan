@@ -1,11 +1,53 @@
 package scanner
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
+}
+
+func newTestHTTPClient(fn roundTripFunc) *http.Client {
+	return &http.Client{Transport: fn}
+}
+
+func jsonResponse(statusCode int, payload any) *http.Response {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		panic(err)
+	}
+
+	return &http.Response{
+		StatusCode: statusCode,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(bytes.NewReader(body)),
+	}
+}
+
+func decodeJSONBody(req *http.Request, out any) error {
+	defer req.Body.Close()
+	return json.NewDecoder(req.Body).Decode(out)
+}
+
+func testContext() context.Context {
+	return context.Background()
+}
+
+func containsFold(value, fragment string) bool {
+	return strings.Contains(strings.ToLower(value), strings.ToLower(fragment))
+}
 
 func TestParseXrayVulnerabilitiesReadsCombinedSummaryCVSS(t *testing.T) {
 	scanID := uuid.New()
@@ -208,6 +250,66 @@ func TestShouldWarnBlockedReindexErrorSuppressesExpectedStatuses(t *testing.T) {
 				t.Fatalf("shouldWarnBlockedReindexError() = %v, want %v", got, test.want)
 			}
 		})
+	}
+}
+
+func TestExportComponentCycloneDXSkipsEmptyPathFallbackWhenPathsProvided(t *testing.T) {
+	requestedPaths := make([]string, 0, 2)
+	client := &xrayClient{
+		baseURL: "http://example.com",
+		httpClient: newTestHTTPClient(func(req *http.Request) (*http.Response, error) {
+			if req.URL.Path != "/xray/api/v2/component/exportDetails" {
+				return jsonResponse(http.StatusNotFound, map[string]string{"error": "not found"}), nil
+			}
+
+			var body map[string]any
+			if err := decodeJSONBody(req, &body); err != nil {
+				return nil, err
+			}
+			if path, _ := body["path"].(string); path != "" {
+				requestedPaths = append(requestedPaths, path)
+			}
+
+			return jsonResponse(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("path %v failed", body["path"])}), nil
+		}),
+	}
+
+	_, _, err := client.exportComponentCycloneDX(testContext(), "plain-images/alpine:3.23", "default/plain-images/alpine/3.23/manifest.json", "plain-images/alpine/3.23/manifest.json", "")
+	if err == nil {
+		t.Fatal("expected exportComponentCycloneDX to fail")
+	}
+	if len(requestedPaths) != 2 {
+		t.Fatalf("expected exactly 2 non-empty path attempts, got %d (%#v)", len(requestedPaths), requestedPaths)
+	}
+	if requestedPaths[0] != "default/plain-images/alpine/3.23/manifest.json" {
+		t.Fatalf("unexpected first path %q", requestedPaths[0])
+	}
+	if requestedPaths[1] != "plain-images/alpine/3.23/manifest.json" {
+		t.Fatalf("unexpected second path %q", requestedPaths[1])
+	}
+	if got := err.Error(); got != "xray API returned HTTP 400: {\"error\":\"path plain-images/alpine/3.23/manifest.json failed\"}" {
+		t.Fatalf("unexpected error %q", got)
+	}
+}
+
+func TestDescribeNonFatalXrayIndexErrorExplainsPermissionIssue(t *testing.T) {
+	message := describeNonFatalXrayIndexError("plain-images/alpine/3.23/manifest.json", &xrayHTTPError{StatusCode: http.StatusForbidden})
+	if want := "re-index permissions"; !containsFold(message, want) {
+		t.Fatalf("expected %q to contain %q", message, want)
+	}
+}
+
+func TestDescribeNonFatalXrayScanArtifactErrorExplainsKnownServerFailure(t *testing.T) {
+	message := describeNonFatalXrayScanArtifactError("docker://plain-images/alpine:3.23", &xrayHTTPError{StatusCode: http.StatusInternalServerError, Body: `{"error":"Failed to scan component"}`})
+	if want := "explicit scanArtifact request"; !containsFold(message, want) {
+		t.Fatalf("expected %q to contain %q", message, want)
+	}
+}
+
+func TestDescribeNonFatalXraySBOMImportErrorExplainsOptionalSkip(t *testing.T) {
+	message := describeNonFatalXraySBOMImportError(&xrayHTTPError{StatusCode: http.StatusBadRequest, Body: `{"error":"One parameter or more are missing"}`})
+	if want := "SBOM components were skipped"; !containsFold(message, want) {
+		t.Fatalf("expected %q to contain %q", message, want)
 	}
 }
 

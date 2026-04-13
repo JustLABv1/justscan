@@ -1,17 +1,9 @@
 'use client';
 import { StatusBadge } from '@/components/ui/badges';
-import { ChartSkeleton, RecentScanRowSkeleton, StatCardSkeleton } from '@/components/ui/skeleton';
+import { ChartSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
-import {
-  Activity01Icon,
-  Add01Icon,
-  AlertDiamondIcon,
-  CheckmarkBadge01Icon,
-  Clock01Icon,
-  EyeIcon,
-  Shield01Icon,
-} from 'hugeicons-react';
+import { Activity01Icon, Add01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
@@ -22,89 +14,6 @@ const SEV = [
   { key: 'medium',   label: 'Medium',   hex: '#fbbf24', glow: 'rgba(245,158,11,0.3)',   grad: 'linear-gradient(90deg,#b45309,#fbbf24)' },
   { key: 'low',      label: 'Low',      hex: '#60a5fa', glow: 'rgba(59,130,246,0.3)',   grad: 'linear-gradient(90deg,#1d4ed8,#60a5fa)' },
   { key: 'unknown',  label: 'Unknown',  hex: '#a1a1aa', glow: 'rgba(113,113,122,0.25)', grad: 'linear-gradient(90deg,#3f3f46,#a1a1aa)' },
-];
-
-// ── stat card config ─────────────────────────────────────────────────
-type TrendKey = 'total' | 'completed' | 'failed';
-
-type StatSub = {
-  text: string;
-  pulse?: boolean;
-} | null;
-
-type StatCardConfig = {
-  key: string;
-  trendKey: TrendKey | null;
-  invertTrend: boolean;
-  label: string;
-  Icon: typeof Shield01Icon;
-  tint: string;
-  iconColor: string;
-  iconBg: string;
-  glow: string;
-  getValue: (s: DashboardStats) => number;
-  getSub: (s: DashboardStats) => StatSub;
-};
-
-const STATS: StatCardConfig[] = [
-  {
-    key: 'total',
-    trendKey: 'total' as TrendKey | null,
-    invertTrend: false,
-    label: 'Total Scans',
-    Icon: Shield01Icon,
-    tint: 'rgba(124,58,237,0.14)',
-    iconColor: '#a78bfa',
-    iconBg: 'rgba(124,58,237,0.22)',
-    glow: 'rgba(124,58,237,0.4)',
-    getValue: (s: DashboardStats) => s.total_scans,
-    getSub:   (s: DashboardStats) => {
-      const r = s.status_counts['running'] ?? 0;
-      return r > 0 ? { text: `${r} running`, pulse: true } : null;
-    },
-  },
-  {
-    key: 'completed',
-    trendKey: 'completed' as TrendKey | null,
-    invertTrend: false,
-    label: 'Completed',
-    Icon: CheckmarkBadge01Icon,
-    tint: 'rgba(16,185,129,0.11)',
-    iconColor: '#34d399',
-    iconBg: 'rgba(16,185,129,0.2)',
-    glow: 'rgba(16,185,129,0.35)',
-    getValue: (s: DashboardStats) => s.status_counts['completed'] ?? 0,
-    getSub:   () => null,
-  },
-  {
-    key: 'failed',
-    trendKey: 'failed' as TrendKey | null,
-    invertTrend: true,
-    label: 'Failed',
-    Icon: AlertDiamondIcon,
-    tint: 'rgba(239,68,68,0.11)',
-    iconColor: '#f87171',
-    iconBg: 'rgba(239,68,68,0.2)',
-    glow: 'rgba(239,68,68,0.35)',
-    getValue: (s: DashboardStats) => s.status_counts['failed'] ?? 0,
-	getSub:   (s: DashboardStats) => {
-	  const blocked = s.operations?.blocked_policy_count ?? s.status_counts['blocked_by_xray_policy'] ?? 0;
-	  return blocked > 0 ? { text: `${blocked} blocked by policy` } : null;
-	},
-  },
-  {
-    key: 'watchlist',
-    trendKey: null as TrendKey | null,
-    invertTrend: false,
-    label: 'Watchlist',
-    Icon: EyeIcon,
-    tint: 'rgba(59,130,246,0.11)',
-    iconColor: '#60a5fa',
-    iconBg: 'rgba(59,130,246,0.2)',
-    glow: 'rgba(59,130,246,0.35)',
-    getValue: (s: DashboardStats) => s.watchlist_count,
-    getSub:   () => null,
-  },
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -234,32 +143,6 @@ function RecentScanRow({ scan }: { scan: Scan }) {
           </span>
         )}
       </div>
-    </Link>
-  );
-}
-
-function OperationTile({
-  href,
-  label,
-  value,
-  description,
-  color,
-  background,
-  border,
-}: {
-  href: string;
-  label: string;
-  value: number;
-  description: string;
-  color: string;
-  background: string;
-  border: string;
-}) {
-  return (
-    <Link href={href} className="rounded-2xl p-4 transition-transform hover:-translate-y-0.5" style={{ background, border: `1px solid ${border}` }}>
-    <p className="text-xs font-semibold uppercase tracking-widest" style={{ color }}>{label}</p>
-    <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-white">{value}</p>
-    <p className="mt-3 text-xs text-zinc-500">{description}</p>
     </Link>
   );
 }
@@ -673,6 +556,7 @@ export default function DashboardPage() {
   const [scannerHealthError, setScannerHealthError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [attentionFilter, setAttentionFilter] = useState<'all' | 'failed' | 'blocked' | 'running'>('all');
   const currentUser = getUser() as { role?: string } | null;
   const isAdmin = currentUser?.role === 'admin' || getTokenType() === 'admin';
 
@@ -708,47 +592,25 @@ export default function DashboardPage() {
   }
 
   if (loading) return (
-    <div className="relative p-6 space-y-5 max-w-7xl mx-auto">
-      {/* Header skeleton */}
+    <div className="p-6 space-y-4 max-w-7xl mx-auto">
       <div className="flex items-start justify-between">
         <div className="space-y-2">
-          <div className="skeleton h-8 w-36 rounded-lg" />
-          <div className="skeleton h-4 w-52 rounded" />
+          <div className="skeleton h-7 w-32 rounded-lg" />
+          <div className="skeleton h-3.5 w-48 rounded" />
         </div>
         <div className="skeleton h-9 w-28 rounded-xl" />
       </div>
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
-      </div>
-      {/* Recent scans + severity */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-4">
-        <div className="rounded-2xl p-5"
-          style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="skeleton w-9 h-9 rounded-xl" />
-            <div className="space-y-1.5">
-              <div className="skeleton h-4 w-28 rounded" />
-              <div className="skeleton h-3 w-36 rounded" />
-            </div>
-          </div>
-          {Array.from({ length: 6 }).map((_, i) => <RecentScanRowSkeleton key={i} />)}
+      <div className="skeleton h-20 w-full rounded-xl" />
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
+        <div className="rounded-2xl p-5" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+          <div className="skeleton h-4 w-32 rounded mb-4" />
+          {Array.from({ length: 5 }).map((_, i) => <RecentScanRowSkeleton key={i} />)}
         </div>
-        <div className="rounded-2xl p-5"
-          style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
-          <div className="skeleton h-4 w-36 rounded mb-4" />
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="mb-3">
-              <div className="flex justify-between mb-1.5">
-                <div className="skeleton h-3 w-16 rounded" />
-                <div className="skeleton h-3 w-12 rounded" />
-              </div>
-              <div className="skeleton h-2 w-full rounded-full" />
-            </div>
-          ))}
+        <div className="flex flex-col gap-3">
+          <div className="skeleton h-44 w-full rounded-2xl" />
+          <div className="skeleton h-28 w-full rounded-2xl" />
         </div>
       </div>
-      {/* Chart skeleton */}
       <ChartSkeleton />
     </div>
   );
@@ -765,449 +627,314 @@ export default function DashboardPage() {
   if (!stats) return null;
 
   const totalVulns = Object.values(stats.severity_totals).reduce((a, b) => a + b, 0);
-  const hasCriticals = (stats.severity_totals['critical'] ?? 0) > 0;
-  const priorityScans = (stats.recent_scans ?? [])
-    .filter((scan) => scan.status === 'failed' || scan.status === 'running' || scan.status === 'pending' || scan.external_status === 'blocked_by_xray_policy')
-    .slice(0, 5);
   const todayKey = new Date().toISOString().slice(0, 10);
   const startedTodayCount = [...trends].reverse().find((point) => point.date === todayKey)?.total ?? 0;
   const failedCount = stats.status_counts['failed'] ?? 0;
   const activeQueueCount = (stats.status_counts['running'] ?? 0) + (stats.status_counts['pending'] ?? 0);
   const blockedPolicyCount = stats.operations?.blocked_policy_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
   const activeXrayCount = stats.operations?.active_xray_count ?? 0;
-  const activeXrayScans = stats.operations?.active_xray_scans ?? [];
-  const activeXraySteps = stats.operations?.active_xray_step_counts ?? {};
+  const completedCount = stats.status_counts['completed'] ?? 0;
+  const needsAttentionTotal = failedCount + blockedPolicyCount;
+  const successRate = stats.total_scans > 0 ? Math.round((completedCount / stats.total_scans) * 100) : 0;
+
+  const allAttentionScans = (stats.recent_scans ?? []).filter((scan) => {
+    const isFailed = scan.status === 'failed';
+    const isBlocked = scan.external_status === 'blocked_by_xray_policy';
+    const isRunning = scan.status === 'running' || scan.status === 'pending';
+    if (attentionFilter === 'failed') return isFailed && !isBlocked;
+    if (attentionFilter === 'blocked') return isBlocked;
+    if (attentionFilter === 'running') return isRunning;
+    return isFailed || isBlocked;
+  });
+  const displayedAttentionScans = allAttentionScans.slice(0, 7);
+  const moreAttentionCount = allAttentionScans.length - displayedAttentionScans.length;
+  const triageHref = attentionFilter === 'running' ? buildScansHref({ status: 'running' }) : buildScansHref({ status: 'failed' });
+  const sparkTrends = trends.slice(-30).map((d) => ({ date: d.date, value: d.total }));
 
   return (
-    <div className="relative p-6 space-y-5 max-w-7xl mx-auto">
-      {/* Ambient background orbs */}
-      <div className="pointer-events-none" aria-hidden>
-        <div className="fixed top-0 right-0 w-[560px] h-[560px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.09) 0%, transparent 70%)', filter: 'blur(48px)', zIndex: 0 }} />
-        <div className="fixed bottom-0 left-64 w-[480px] h-[480px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(29,78,216,0.07) 0%, transparent 70%)', filter: 'blur(48px)', zIndex: 0 }} />
-        {hasCriticals && (
-          <div className="fixed top-1/2 right-1/3 w-[360px] h-[360px] rounded-full"
-            style={{ background: 'radial-gradient(circle, rgba(239,68,68,0.05) 0%, transparent 70%)', filter: 'blur(48px)', zIndex: 0 }} />
-        )}
-      </div>
+    <div className="p-6 space-y-4 max-w-7xl mx-auto">
 
       {/* ── Header ── */}
-      <div className="relative flex items-start justify-between z-10">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Dashboard</h1>
-          <p className="text-sm text-zinc-500 mt-1">Security scan activity overview</p>
+          <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Dashboard</h1>
+          <p className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>
+            {new Date().toLocaleDateString('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
         </div>
         <Link
           href="/scans"
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 active:scale-95"
-          style={{
-            background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-            boxShadow: '0 0 24px rgba(124,58,237,0.45), inset 0 1px 0 rgba(255,255,255,0.15)',
-          }}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
+          style={{ background: '#7c3aed' }}
         >
-          <Add01Icon size={15} />
+          <Add01Icon size={14} />
           New Scan
         </Link>
       </div>
 
-      {/* ── Stat cards ── */}
-      <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-3 z-10">
-        {STATS.map(({ key, trendKey, invertTrend, label, Icon, tint, iconColor, iconBg, glow, getValue, getSub }) => {
-          const value = getValue(stats);
-          const sub = getSub(stats);
-          const sparkData = trendKey ? trends.slice(-14).map(d => ({ date: d.date, value: d[trendKey] })) : null;
-          const trend = sparkData && sparkData.length >= 4 ? calcTrend(sparkData.map(d => d.value)) : null;
-          const trendColor = trend && trend.dir !== 'flat'
-            ? ((invertTrend ? trend.dir === 'down' : trend.dir === 'up') ? '#34d399' : '#f87171')
-            : null;
-          return (
-            <div key={key} className="relative flex flex-col rounded-xl px-4 pt-3 pb-2 overflow-hidden gap-1.5" style={glassCard(tint)}>
-              {/* Watermark */}
-              <div className="absolute -right-2 -bottom-2 opacity-[0.05] pointer-events-none">
-                <Icon size={56} color={iconColor} />
-              </div>
-              {/* Top row: icon + value + trend badge */}
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: iconBg, boxShadow: `0 0 14px ${glow}` }}>
-                    <Icon size={17} color={iconColor} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight tabular-nums leading-none">{value}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5 truncate">{label}</p>
-                    {sub && (
-                      <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: '#60a5fa' }}>
-                        {sub.pulse && <span className="w-1 h-1 rounded-full bg-blue-400 animate-pulse shrink-0" />}
-                        {sub.text}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {trend && trend.dir !== 'flat' && trendColor && (
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md shrink-0 mt-0.5 tabular-nums"
-                    style={{ color: trendColor, background: `${trendColor}1a`, border: `1px solid ${trendColor}30` }}>
-                    {trend.dir === 'up' ? '↑' : '↓'} {trend.pct}%
-                  </span>
-                )}
-              </div>
-              {/* Sparkline */}
-              {sparkData && sparkData.length >= 2 && (
-                <div className="-mx-1">
-                  <MiniSparkline data={sparkData} color={iconColor} id={key} />
-                </div>
-              )}
-            </div>
-          );
-        })}
+      {/* ── Stat strip ── */}
+      <div className="overflow-x-auto rounded-xl" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(180px, 1fr))' }}>
+          <div className="px-5 py-4" style={{ borderRight: '1px solid var(--glass-border)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Total Scans</p>
+            <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight" style={{ color: 'var(--text-primary)' }}>{stats.total_scans.toLocaleString()}</p>
+            <p className="mt-1.5 text-[11px] flex items-center gap-1.5" style={{ color: activeQueueCount > 0 ? '#60a5fa' : 'var(--text-faint)' }}>
+              {activeQueueCount > 0 && <span className="h-1.5 w-1.5 rounded-full inline-block shrink-0 animate-pulse" style={{ background: '#60a5fa' }} />}
+              {activeQueueCount > 0 ? `${activeQueueCount} running` : 'none running'}
+            </p>
+          </div>
+          <div className="px-5 py-4" style={{ borderRight: '1px solid var(--glass-border)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Completed</p>
+            <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight" style={{ color: 'var(--text-primary)' }}>{completedCount.toLocaleString()}</p>
+            <p className="mt-1.5 text-[11px]" style={{ color: 'var(--text-faint)' }}>{successRate}% success rate</p>
+          </div>
+          <div className="px-5 py-4" style={{ borderRight: '1px solid var(--glass-border)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Needs Attention</p>
+            <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight" style={{ color: needsAttentionTotal > 0 ? '#f87171' : 'var(--text-primary)' }}>{needsAttentionTotal}</p>
+            <p className="mt-1.5 text-[11px] flex items-center gap-2">
+              {failedCount > 0 && <span style={{ color: '#f87171' }}>{failedCount} failed</span>}
+              {blockedPolicyCount > 0 && <span style={{ color: '#fb923c' }}>{blockedPolicyCount} blocked</span>}
+              {needsAttentionTotal === 0 && <span style={{ color: 'var(--text-faint)' }}>all clear</span>}
+            </p>
+          </div>
+          <div className="px-5 py-4">
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Watchlist</p>
+            <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight" style={{ color: 'var(--text-primary)' }}>{stats.watchlist_count.toLocaleString()}</p>
+            <p className="mt-1.5 text-[11px]" style={{ color: 'var(--text-faint)' }}>{startedTodayCount} started today</p>
+          </div>
+        </div>
       </div>
 
-      <div className="relative grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.95fr)] z-10">
-        <div className="rounded-2xl p-5" style={glassCard('rgba(239,68,68,0.04)')}>
-          <div className="flex items-center justify-between mb-4 gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Action Center</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">The scans most likely to need intervention right now.</p>
-            </div>
-            <Link href={buildScansHref({ status: 'failed' })} className="text-xs text-zinc-500 hover:text-violet-500 transition-colors">Open triage →</Link>
-          </div>
-          {priorityScans.length === 0 ? (
-            <p className="text-sm text-zinc-500 py-10 text-center">No active triage items right now.</p>
-          ) : (
-            <div className="space-y-2">
-              {priorityScans.map((scan) => (
-                <RecentScanRow key={scan.id} scan={scan} />
-              ))}
-            </div>
-          )}
-        </div>
+      {/* ── Zone 2: Action + Context ── */}
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
 
-        <div className="rounded-2xl p-5" style={glassCard('rgba(59,130,246,0.04)')}>
-          <div className="flex items-center justify-between mb-4 gap-3">
+        {/* Needs Attention */}
+        <div className="rounded-2xl p-5" style={glassCard()}>
+          <div className="flex items-start justify-between gap-3 mb-3">
             <div>
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Quick Queues</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">Direct links into the most common follow-up paths.</p>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Needs Attention</h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
+                {needsAttentionTotal > 0
+                  ? `${needsAttentionTotal} scan${needsAttentionTotal !== 1 ? 's' : ''} require intervention`
+                  : 'No items require intervention right now'}
+              </p>
             </div>
-            <Link href="/scans" className="text-xs text-zinc-500 hover:text-violet-500 transition-colors">All scans →</Link>
-          </div>
-          <div className="space-y-2.5">
-            <Link href={buildScansHref({ status: 'failed' })} className="flex items-center justify-between rounded-xl px-4 py-3 transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-              <div>
-                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Failed scans</p>
-                <p className="text-xs text-zinc-500 mt-0.5">General scan failures that likely need investigation.</p>
-              </div>
-              <span className="text-lg font-semibold" style={{ color: failedCount > 0 ? '#f87171' : 'var(--text-primary)' }}>{failedCount}</span>
+            <Link
+              href={triageHref}
+              className="text-xs shrink-0 transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+            >
+              Triage all →
             </Link>
-            <Link href={buildScansHref({ status: 'failed' })} className="flex items-center justify-between rounded-xl px-4 py-3 transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-              <div>
-                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Blocked by policy</p>
-                <p className="text-xs text-zinc-500 mt-0.5">Xray policy blocks surfaced separately from generic failures.</p>
-              </div>
-              <span className="text-lg font-semibold" style={{ color: blockedPolicyCount > 0 ? '#f59e0b' : 'var(--text-primary)' }}>{blockedPolicyCount}</span>
-            </Link>
-            <Link href={buildScansHref({ status: 'running' })} className="flex items-center justify-between rounded-xl px-4 py-3 transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-              <div>
-                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">In-flight queue</p>
-                <p className="text-xs text-zinc-500 mt-0.5">Running and pending scans that are still moving through the system.</p>
-              </div>
-              <span className="text-lg font-semibold" style={{ color: activeQueueCount > 0 ? '#60a5fa' : 'var(--text-primary)' }}>{activeQueueCount}</span>
-            </Link>
-            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Started today</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">New scan requests created since 00:00 UTC.</p>
-                </div>
-                <span className="text-lg font-semibold" style={{ color: '#a78bfa' }}>{startedTodayCount}</span>
-              </div>
-            </div>
           </div>
-        </div>
-      </div>
 
-      <div className="relative z-10">
-        <div className="rounded-2xl p-5" style={glassCard('rgba(124,58,237,0.04)')}>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Live Operations</h2>
-        <p className="text-xs text-zinc-500 mt-0.5">Provider-specific work that is still in motion, kept separate from triage.</p>
-            </div>
-            <Link href="/scans" className="text-xs text-zinc-500 hover:text-violet-500 transition-colors">Open scans →</Link>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-      <OperationTile
-        href="/scans"
-        label="Started Today"
-        value={startedTodayCount}
-        description="New scan requests created since 00:00 UTC."
-        color="#60a5fa"
-        background="rgba(59,130,246,0.12)"
-        border="rgba(59,130,246,0.2)"
-      />
-      <OperationTile
-        href="/scans?status=running"
-        label="Xray In Flight"
-        value={activeXrayCount}
-        description="Pending or running scans still moving through the Xray pipeline."
-        color="#a78bfa"
-        background="rgba(124,58,237,0.12)"
-        border="rgba(124,58,237,0.2)"
-      />
-      <OperationTile
-        href="/scans?status=failed"
-        label="Policy Blocked"
-        value={blockedPolicyCount}
-        description="Scans blocked by Xray policy, surfaced separately from generic failures."
-        color="#f59e0b"
-        background="rgba(245,158,11,0.12)"
-        border="rgba(245,158,11,0.2)"
-      />
-          </div>
-      <div className="rounded-2xl p-4" style={insetCard()}>
-        <div className="flex items-center justify-between mb-3 gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Active Xray Pipeline</h3>
-          <p className="text-xs text-zinc-500 mt-0.5">Current provider step for scans still in-flight.</p>
-        </div>
-        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md" style={{ color: '#a78bfa', background: 'rgba(124,58,237,0.16)', border: '1px solid rgba(124,58,237,0.24)' }}>
-          {activeXrayCount} live
-        </span>
-        </div>
-        {activeXrayScans.length === 0 ? (
-        <p className="text-sm text-zinc-500 py-10 text-center">No active Xray scans right now.</p>
-        ) : (
-        <div className="space-y-1.5">
-          {activeXrayScans.map((scan) => (
-          <RecentScanRow key={scan.id} scan={scan} />
-          ))}
-        </div>
-        )}
-        <details className="mt-4 group rounded-2xl p-4" style={insetCard()}>
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Live Step Breakdown</h3>
-              <p className="text-xs text-zinc-500 mt-0.5">Expand only when you need provider-specific pipeline detail.</p>
-            </div>
-            <span className="text-xs font-medium text-zinc-500 group-open:text-violet-500">{activeXrayCount} live</span>
-          </summary>
-          <div className="mt-4 space-y-2.5">
-          {XRAY_PIPELINE_STEPS.map((step) => {
-            const count = activeXraySteps[step] ?? 0;
-            const pct = activeXrayCount > 0 ? (count / activeXrayCount) * 100 : 0;
-            return (
-            <div key={step}>
-              <div className="flex items-center justify-between gap-3 mb-1">
-              <span className="text-xs text-zinc-600 dark:text-zinc-300">{formatStepLabel(step)}</span>
-              <span className="text-[11px] font-mono text-zinc-500">{count}</span>
-              </div>
-              <div className="h-1.5 rounded-full" style={{ background: 'var(--row-divider)' }}>
-              <div className="h-1.5 rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, rgba(124,58,237,0.85), rgba(96,165,250,0.85))' }} />
-              </div>
-            </div>
-            );
-          })}
-          </div>
-          <p className="text-[11px] text-zinc-500 mt-4 leading-5">
-          Findings widgets below count finalized results from completed scans and Xray policy-blocked scans that still imported findings. In-flight work is intentionally separated here so the top of the dashboard stays focused on decisions, not pipeline internals.
-          </p>
-        </details>
-        </div>
-        </div>
-      </div>
-
-      {isAdmin && (
-        <div className="relative flex items-center flex-wrap gap-x-5 gap-y-2 rounded-xl px-4 py-2.5 z-10" style={glassCard('rgba(59,130,246,0.05)')}>
-          <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 shrink-0">Scanner Health</span>
-          {scannerHealthError ? (
-            <span className="text-xs" style={{ color: '#f87171' }}>{scannerHealthError}</span>
-          ) : scannerHealth ? (
-            scannerHealth.local_scanner_enabled ? (
-              <>
-                <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1.5 text-xs text-zinc-500">
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#34d399', boxShadow: '0 0 5px #34d399' }} />
-                    {scannerHealth.healthy_workers} healthy
-                  </span>
-                  {scannerHealth.stale_workers > 0 && (
-                    <span className="flex items-center gap-1.5 text-xs text-zinc-500">
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#fbbf24', boxShadow: '0 0 5px #fbbf24' }} />
-                      {scannerHealth.stale_workers} stale
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-4 text-xs text-zinc-500 ml-auto">
-                  <span>Vuln DB <span className="font-semibold text-zinc-700 dark:text-zinc-300">{formatDbAge(scannerHealth.oldest_vuln_db_age_hours)}</span></span>
-                  <span>Java DB <span className="font-semibold text-zinc-700 dark:text-zinc-300">{formatDbAge(scannerHealth.oldest_java_db_age_hours)}</span></span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.18)' }}>
-                    Max {scannerHealth.max_allowed_age_hours}h
-                  </span>
-                </div>
-              </>
-            ) : (
-              <span className="text-xs text-zinc-500">{scannerHealth.message || 'Local scanner disabled for this deployment.'}</span>
-            )
-          ) : (
-            <span className="text-xs text-zinc-500">No data available</span>
-          )}
-        </div>
-      )}
-
-      <div className="relative z-10 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Security Landscape</p>
-          <p className="text-sm text-zinc-500 mt-1">Longer-horizon distribution and trend data lives below the action-oriented sections.</p>
-        </div>
-        <Link href="/scans" className="text-xs text-zinc-500 hover:text-violet-500 transition-colors">Open scans →</Link>
-      </div>
-
-      {/* ── Vulnerability landscape ── */}
-      <div className="relative rounded-2xl p-5 z-10" style={glassCard()}>
-        {/* Top edge shimmer */}
-        <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-          style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.2), transparent)' }} />
-
-        <div className="flex items-start justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background: 'rgba(124,58,237,0.2)', boxShadow: '0 0 14px rgba(124,58,237,0.3)' }}>
-              <Activity01Icon size={17} color="#a78bfa" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Vulnerability Landscape</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">Across all finalized scan results</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-zinc-900 dark:text-white tabular-nums">{totalVulns.toLocaleString()}</p>
-            <p className="text-xs text-zinc-500">total findings</p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {SEV.map(({ key, label, hex, glow, grad }) => {
-            const count = stats.severity_totals[key] ?? 0;
-            const pct   = totalVulns > 0 ? (count / totalVulns) * 100 : 0;
-            return (
-              <div key={key} className="flex items-center gap-3">
-                <span className="text-xs font-medium w-14 shrink-0 tabular-nums" style={{ color: hex }}>
-                  {label}
-                </span>
-                <div className="flex-1 rounded-full h-2 overflow-hidden"
-                  style={{ background: 'var(--row-divider)' }}>
-                  <div
-                    className="h-2 rounded-full transition-all duration-700"
-                    style={{
-                      width: `${pct}%`,
-                      background: grad,
-                      boxShadow: pct > 2 ? `0 0 10px ${glow}` : undefined,
-                    }}
-                  />
-                </div>
-                <span
-                  className="text-xs font-mono font-bold w-14 text-right shrink-0 px-2 py-0.5 rounded-lg tabular-nums"
-                  style={{
-                    color: hex,
-                    background: glow.replace('0.35', '0.1').replace('0.3', '0.08').replace('0.25', '0.07'),
-                    border: `1px solid ${glow.replace('0.35', '0.18').replace('0.3', '0.15').replace('0.25', '0.12')}`,
-                  }}
+          {/* Filter chips */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {([
+              { key: 'all' as const,     label: 'All',           count: needsAttentionTotal, activeBg: 'rgba(124,58,237,0.12)', activeBorder: 'rgba(124,58,237,0.3)',  activeColor: '#a78bfa' },
+              { key: 'failed' as const,  label: 'Failed',        count: failedCount,         activeBg: 'rgba(239,68,68,0.1)',   activeBorder: 'rgba(239,68,68,0.3)',   activeColor: '#f87171' },
+              { key: 'blocked' as const, label: 'Policy blocked', count: blockedPolicyCount,  activeBg: 'rgba(249,115,22,0.1)',  activeBorder: 'rgba(249,115,22,0.3)',  activeColor: '#fb923c' },
+              { key: 'running' as const, label: 'Running',       count: activeQueueCount,    activeBg: 'rgba(59,130,246,0.1)',  activeBorder: 'rgba(59,130,246,0.3)',  activeColor: '#60a5fa' },
+            ] as const).map(({ key, label, count, activeBg, activeBorder, activeColor }) => {
+              const isActive = attentionFilter === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setAttentionFilter(key)}
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition-all"
+                  style={isActive
+                    ? { background: activeBg, border: `1px solid ${activeBorder}`, color: activeColor }
+                    : { background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-faint)' }
+                  }
                 >
-                  {count}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Vulnerability Trend Chart ── */}
-      <VulnTrendChart data={vulnTrends} period={vulnTrendPeriod} onPeriod={handleVulnPeriodChange} />
-
-      <div className="relative z-10 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Recent Activity</p>
-          <p className="text-sm text-zinc-500 mt-1">Keep the most recent work visible, and collapse the lower-value frequency view by default.</p>
-        </div>
-      </div>
-
-      {/* ── Bottom row ── */}
-      <div className="relative grid md:grid-cols-2 gap-4 z-10">
-        {/* Recent scans */}
-        <div className="relative rounded-2xl p-5" style={glassCard()}>
-          <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.15), transparent)' }} />
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                <Clock01Icon size={14} color="#71717a" />
-              </div>
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Recent Scans</h2>
-            </div>
-            <Link href="/scans" className="text-xs text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors">
-              View all →
-            </Link>
+                  {label}
+                  <span className="tabular-nums opacity-70">{count}</span>
+                </button>
+              );
+            })}
           </div>
-          {(stats.recent_scans ?? []).length === 0 ? (
-            <p className="text-sm text-zinc-500 py-8 text-center">No scans yet</p>
+
+          {/* Scan list */}
+          {displayedAttentionScans.length === 0 ? (
+            <p className="py-10 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
+              {attentionFilter === 'all' ? 'No failed or blocked scans.' : `No ${attentionFilter === 'blocked' ? 'policy-blocked' : attentionFilter} scans.`}
+            </p>
           ) : (
             <div className="space-y-0.5 -mx-1">
-              {(stats.recent_scans ?? []).map((s) => <RecentScanRow key={s.id} scan={s} />)}
+              {displayedAttentionScans.map((scan) => <RecentScanRow key={scan.id} scan={scan} />)}
+            </div>
+          )}
+
+          {moreAttentionCount > 0 && (
+            <div className="mt-3 text-center">
+              <Link
+                href={triageHref}
+                className="text-xs transition-colors"
+                style={{ color: 'var(--text-faint)' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+              >
+                {moreAttentionCount} more →
+              </Link>
             </div>
           )}
         </div>
 
-        {/* Top scanned images */}
-        <div className="relative rounded-2xl p-5" style={glassCard()}>
-          <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.15), transparent)' }} />
-          <details className="group">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                  <Shield01Icon size={14} color="#71717a" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Top Scanned Images</h2>
-                  <p className="text-xs text-zinc-500 mt-0.5">Frequency view for repeated scan activity.</p>
-                </div>
+        {/* Right column: Exposure + Scanner */}
+        <div className="flex flex-col gap-3">
+
+          {/* Exposure Snapshot */}
+          <div className="rounded-2xl p-5" style={glassCard()}>
+            <div className="flex items-start justify-between gap-2 mb-4">
+              <div>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Exposure Snapshot</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>Across all finalized scan results</p>
               </div>
-              <span className="text-xs font-medium text-zinc-500 group-open:text-violet-500">Expand</span>
-            </summary>
-            {(stats.top_images ?? []).length === 0 ? (
-              <p className="text-sm text-zinc-500 py-8 text-center">No data yet</p>
-            ) : (
-              <div className="space-y-1.5 pt-4">
-                {(stats.top_images ?? []).map((img, i) => (
-                  <div
-                    key={img.image_name}
-                    className="flex items-center gap-3 px-2.5 py-2 rounded-xl"
-                    style={{ background: 'var(--row-hover)', border: '1px solid var(--row-divider)' }}
-                  >
-                    <span
-                      className="text-xs font-bold w-5 h-5 rounded-md flex items-center justify-center shrink-0"
-                      style={i === 0
-                        ? { background: 'rgba(124,58,237,0.25)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.2)' }
-                        : { background: 'var(--row-divider)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }
-                      }
-                    >
-                      {i + 1}
-                    </span>
-                    <span className="flex-1 font-mono text-xs text-zinc-700 dark:text-zinc-300 truncate">{img.image_name}</span>
-                    <span
-                      className="text-xs font-mono shrink-0 px-2 py-0.5 rounded-lg"
-                      style={{ color: 'var(--text-muted)', background: 'var(--row-divider)', border: '1px solid var(--glass-border)' }}
-                    >
-                      {img.count}×
-                    </span>
+              <div className="text-right shrink-0">
+                <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>{totalVulns.toLocaleString()}</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>total</p>
+              </div>
+            </div>
+            <div className="space-y-2.5">
+              {SEV.map(({ key, label, hex }) => {
+                const count = stats.severity_totals[key] ?? 0;
+                const pct = totalVulns > 0 ? (count / totalVulns) * 100 : 0;
+                return (
+                  <div key={key} className="flex items-center gap-3">
+                    <span className="text-[11px] font-medium w-12 shrink-0" style={{ color: hex }}>{label}</span>
+                    <div className="flex-1 h-[5px] rounded-full overflow-hidden" style={{ background: 'var(--row-divider)' }}>
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: hex, transition: 'width 0.6s ease' }} />
+                    </div>
+                    <span className="text-[11px] font-mono w-10 text-right shrink-0 tabular-nums" style={{ color: 'var(--text-muted)' }}>{count.toLocaleString()}</span>
                   </div>
-                ))}
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Scanner */}
+          <div className="rounded-2xl p-5" style={glassCard()}>
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Scanner</h2>
+              {activeXrayCount > 0 && (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full tabular-nums" style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.24)', color: '#60a5fa' }}>
+                  {activeXrayCount} Xray in flight
+                </span>
+              )}
+            </div>
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between text-[12px]">
+                <span style={{ color: 'var(--text-muted)' }}>In-flight</span>
+                <span style={{ color: activeQueueCount > 0 ? '#60a5fa' : 'var(--text-muted)' }}>{activeQueueCount}</span>
               </div>
-            )}
-          </details>
+              <div className="flex items-center justify-between text-[12px]">
+                <span style={{ color: 'var(--text-muted)' }}>Started today</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{startedTodayCount}</span>
+              </div>
+              {isAdmin && scannerHealthError && (
+                <p className="text-xs pt-1" style={{ color: '#f87171' }}>{scannerHealthError}</p>
+              )}
+              {isAdmin && !scannerHealthError && scannerHealth && (
+                scannerHealth.local_scanner_enabled ? (
+                  <>
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span style={{ color: 'var(--text-muted)' }}>Workers</span>
+                      <span className="flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                        <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: '#34d399' }} />
+                        {scannerHealth.healthy_workers} healthy{scannerHealth.stale_workers > 0 ? `, ${scannerHealth.stale_workers} stale` : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span style={{ color: 'var(--text-muted)' }}>Vuln DB</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>{formatDbAge(scannerHealth.oldest_vuln_db_age_hours)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span style={{ color: 'var(--text-muted)' }}>Java DB</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>{formatDbAge(scannerHealth.oldest_java_db_age_hours)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs pt-1" style={{ color: 'var(--text-faint)' }}>{scannerHealth.message || 'Local scanner disabled.'}</p>
+                )
+              )}
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* ── Zone 3: History ── */}
+      <div>
+        <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>History</p>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {/* Scan volume */}
+          <div className="rounded-2xl p-5" style={glassCard()}>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Scan Volume</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>Total scans per day — last 30 days</p>
+              </div>
+              <Link
+                href="/scans"
+                className="text-xs transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+              >
+                View all →
+              </Link>
+            </div>
+            {sparkTrends.length >= 2
+              ? <MiniSparkline data={sparkTrends} color="#a78bfa" id="scan-volume" />
+              : <div className="flex items-center justify-center py-8 text-sm" style={{ color: 'var(--text-faint)' }}>No trend data yet</div>
+            }
+          </div>
+
+          {/* Avg findings per scan */}
+          <VulnTrendChart data={vulnTrends} period={vulnTrendPeriod} onPeriod={handleVulnPeriodChange} />
+        </div>
+      </div>
+
+      {/* ── Recent Scans (collapsible) ── */}
+      <details className="group">
+        <summary
+          className="flex cursor-pointer list-none items-center justify-between rounded-xl px-5 py-3.5 transition-colors"
+          style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'var(--glass-bg)')}
+        >
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Recent Scans</h2>
+          <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
+            <span className="group-open:hidden">Expand ▸</span>
+            <span className="hidden group-open:inline">Collapse ▾</span>
+          </span>
+        </summary>
+        {(stats.recent_scans ?? []).length > 0 && (
+          <div className="mt-1 rounded-xl p-4" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+            <div className="space-y-0.5 -mx-1">
+              {(stats.recent_scans ?? []).map((scan) => <RecentScanRow key={scan.id} scan={scan} />)}
+            </div>
+            <div className="mt-3 text-center">
+              <Link
+                href="/scans"
+                className="text-xs transition-colors"
+                style={{ color: 'var(--text-faint)' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+              >
+                View all scans →
+              </Link>
+            </div>
+          </div>
+        )}
+        {(stats.recent_scans ?? []).length === 0 && (
+          <p className="mt-3 text-center text-sm" style={{ color: 'var(--text-faint)' }}>No scans yet</p>
+        )}
+      </details>
+
     </div>
   );
 }
+

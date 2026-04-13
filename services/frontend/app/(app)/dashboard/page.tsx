@@ -29,12 +29,6 @@ function glassCard(tint?: string): React.CSSProperties {
   };
 }
 
-function insetCard(): React.CSSProperties {
-  return {
-    background: 'var(--card-bg)',
-  };
-}
-
 const XRAY_STEP_LABELS: Record<string, string> = {
   queued: 'Queued',
   warming_cache: 'Warming Cache',
@@ -45,14 +39,6 @@ const XRAY_STEP_LABELS: Record<string, string> = {
   failed: 'Failed',
   completed: 'Completed',
 };
-
-const XRAY_PIPELINE_STEPS = [
-  'warming_cache',
-  'indexing_artifact',
-  'queued_in_xray',
-  'waiting_for_xray',
-  'importing_results',
-] as const;
 
 function formatStepLabel(step?: string): string {
   if (!step) return XRAY_STEP_LABELS.queued;
@@ -85,19 +71,6 @@ function buildScansHref(filters?: { status?: string; image?: string }): string {
   if (filters?.image) params.set('image', filters.image);
   const query = params.toString();
   return query ? `/scans?${query}` : '/scans';
-}
-
-
-function calcTrend(data: number[]): { pct: number; dir: 'up' | 'down' | 'flat' } {
-  if (data.length < 4) return { pct: 0, dir: 'flat' };
-  const half = Math.floor(data.length / 2);
-  const prev = data.slice(0, half).reduce((a, b) => a + b, 0) / half;
-  const curr = data.slice(half).reduce((a, b) => a + b, 0) / (data.length - half);
-  if (prev === 0 && curr === 0) return { pct: 0, dir: 'flat' };
-  if (prev === 0) return { pct: 100, dir: 'up' };
-  const rawPct = ((curr - prev) / prev) * 100;
-  const absPct = Math.abs(Math.round(rawPct));
-  return { pct: absPct, dir: absPct < 3 ? 'flat' : rawPct > 0 ? 'up' : 'down' };
 }
 
 function RecentScanRow({ scan }: { scan: Scan }) {

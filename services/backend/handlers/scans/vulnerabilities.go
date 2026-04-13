@@ -41,8 +41,10 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		if _, err := scanner.EnsureScanImageDigest(c.Request.Context(), db, scan); err != nil {
-			// Leave the response usable even if digest backfill is unavailable.
+		if scan.Status == models.ScanStatusCompleted {
+			if _, err := scanner.EnsureScanImageDigest(c.Request.Context(), db, scan); err != nil {
+				// Leave the response usable even if digest backfill is unavailable.
+			}
 		}
 
 		// Sorting

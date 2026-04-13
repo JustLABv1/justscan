@@ -195,6 +195,7 @@ export default function ScanDetailPage() {
   const [shareVisibility, setShareVisibility] = useState<'public' | 'authenticated'>('public');
   const [shareCopied, setShareCopied] = useState(false);
   const loadVersionRef = useRef(0);
+  const loadScanInFlightRef = useRef<Promise<Scan> | null>(null);
   const defaultTabInitializedRef = useRef(false);
 
   const [suppressStatus, setSuppressStatus] = useState<Suppression['status']>('accepted');
@@ -213,12 +214,26 @@ export default function ScanDetailPage() {
   const hasPolicyTab = Boolean(blockedPolicyDetails);
 
   const loadScan = useCallback(async () => {
-    const loadVersion = ++loadVersionRef.current;
-    const nextScan = await getScan(id);
-    if (loadVersion === loadVersionRef.current) {
-      setScan(nextScan);
+    if (loadScanInFlightRef.current) {
+      return loadScanInFlightRef.current;
     }
-    return nextScan;
+
+    const loadVersion = ++loadVersionRef.current;
+    const request = getScan(id)
+      .then((nextScan) => {
+        if (loadVersion === loadVersionRef.current) {
+          setScan(nextScan);
+        }
+        return nextScan;
+      })
+      .finally(() => {
+        if (loadScanInFlightRef.current === request) {
+          loadScanInFlightRef.current = null;
+        }
+      });
+
+    loadScanInFlightRef.current = request;
+    return request;
   }, [id]);
 
   // Initial load
@@ -320,7 +335,7 @@ export default function ScanDetailPage() {
   }, [sbomNameFilter, sbomTypeFilter]);
 
   function loadVulns() {
-    if (!scan) return;
+    if (!scan || scan.status === 'pending' || scan.status === 'running') return;
     setVulnLoading(true);
     listVulnerabilities(
       id, page, LIMIT,

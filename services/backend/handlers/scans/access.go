@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"justscan-backend/functions/auth"
+	"justscan-backend/middlewares"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -14,14 +15,22 @@ import (
 // LoadAuthorizedScan ensures the caller is a user and can access the scan
 // either by ownership or admin role.
 func LoadAuthorizedScan(c *gin.Context, db *bun.DB, scanID uuid.UUID) (*models.Scan, uuid.UUID, bool, bool) {
-	userID, isAdmin, err := auth.ResolveUserAccess(c.GetHeader("Authorization"), db)
-	if err != nil {
-		if err.Error() == "user token required" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "scan access requires a user token"})
+	userIDValue, hasUserID := c.Get(middlewares.AuthContextUserIDKey)
+	isAdminValue, hasIsAdmin := c.Get(middlewares.AuthContextIsAdminKey)
+
+	userID, userIDOK := userIDValue.(uuid.UUID)
+	isAdmin, isAdminOK := isAdminValue.(bool)
+	if !hasUserID || !hasIsAdmin || !userIDOK || !isAdminOK {
+		var err error
+		userID, isAdmin, err = auth.ResolveUserAccess(c.GetHeader("Authorization"), db)
+		if err != nil {
+			if err.Error() == "user token required" {
+				c.JSON(http.StatusForbidden, gin.H{"error": "scan access requires a user token"})
+				return nil, uuid.Nil, false, false
+			}
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return nil, uuid.Nil, false, false
 		}
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return nil, uuid.Nil, false, false
 	}
 
 	scan := &models.Scan{}

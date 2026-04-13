@@ -288,17 +288,15 @@ func processScan(job ScanJob, cacheDir string) {
 		recordScanStepOutput(ctx, db, scanID, "No vulnerability findings were produced by the local scanners.")
 	}
 
-	// Upsert KB entries from scan data (best-effort, non-fatal)
-	go func(entries []models.VulnKBEntry) {
-		if len(entries) == 0 {
-			return
-		}
-		if err := upsertKBEntries(context.Background(), db, entries); err != nil {
+	// Persist KB entries before the worker finishes so new scan data is available
+	// immediately and does not depend on a later startup backfill.
+	if len(kbEntries) > 0 {
+		if err := upsertKBEntries(context.Background(), db, kbEntries); err != nil {
 			log.Warnf("Worker: KB upsert failed for scan %s (non-fatal): %v", scanID, err)
 		} else {
-			log.Debugf("Worker: upserted %d KB entries for scan %s", len(entries), scanID)
+			log.Debugf("Worker: upserted %d KB entries for scan %s", len(kbEntries), scanID)
 		}
-	}(kbEntries)
+	}
 
 	var osvVulns []models.Vulnerability
 	if err := setScanStep(ctx, db, scan, models.ScanStepFinalizingReport); err != nil {

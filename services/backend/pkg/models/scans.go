@@ -41,6 +41,7 @@ type Scan struct {
 	Platform                string     `bun:"platform,type:text,default:''" json:"platform"`
 	ImageLocation           string     `bun:"image_location,type:text,default:''" json:"image_location"`
 	StartedAt               *time.Time `bun:"started_at,type:timestamptz" json:"started_at"`
+	LastProgressAt          *time.Time `bun:"last_progress_at,type:timestamptz,notnull,default:now()" json:"last_progress_at,omitempty"`
 	CompletedAt             *time.Time `bun:"completed_at,type:timestamptz" json:"completed_at"`
 	CreatedAt               time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	ShareToken              *string    `bun:"share_token,type:varchar(64)" json:"share_token,omitempty"`

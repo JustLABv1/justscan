@@ -29,10 +29,8 @@ const xrayDataSource = "JFrog Xray"
 const xrayRequestTimeout = 90 * time.Second
 const xraySummaryPollInterval = 10 * time.Second
 const xrayMissingArtifactWindow = 2 * time.Minute
-const xraySummaryWaitWindow = 15 * time.Minute
 const xrayBlockedSummaryWaitWindow = 45 * time.Second
 const registryWarmupRetryInterval = 10 * time.Second
-const registryWarmupWaitWindow = 10 * time.Minute
 
 type xrayClient struct {
 	baseURL       string
@@ -617,7 +615,8 @@ func (c *xrayClient) exportComponentCycloneDX(ctx context.Context, componentName
 }
 
 func (c *xrayClient) warmImageInArtifactory(ctx context.Context, imageRepoPath, tag, platform string) error {
-	deadline := time.Now().Add(registryWarmupWaitWindow)
+	waitWindow := registryWarmupWaitWindow()
+	deadline := time.Now().Add(waitWindow)
 	var lastErr error
 
 	for {
@@ -633,7 +632,7 @@ func (c *xrayClient) warmImageInArtifactory(ctx context.Context, imageRepoPath, 
 
 		lastErr = err
 		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out after %s warming the artifactory cache: %w", registryWarmupWaitWindow, lastErr)
+			return fmt.Errorf("timed out after %s warming the artifactory cache: %w", waitWindow, lastErr)
 		}
 
 		log.Warnf("Artifactory cache warm-up for %s:%s hit a transient error; retrying in %s: %v", imageRepoPath, tag, registryWarmupRetryInterval, err)
@@ -802,7 +801,7 @@ func (c *xrayClient) warmBlob(ctx context.Context, imageRepoPath, digest string,
 }
 
 func (c *xrayClient) pollArtifactSummary(ctx context.Context, artifactPath string) (*xraySummaryResponse, error) {
-	return c.pollArtifactSummaryWithin(ctx, artifactPath, xraySummaryWaitWindow)
+	return c.pollArtifactSummaryWithin(ctx, artifactPath, xraySummaryWaitWindow())
 }
 
 func (c *xrayClient) pollArtifactSummaryWithin(ctx context.Context, artifactPath string, waitWindow time.Duration) (*xraySummaryResponse, error) {

@@ -53,6 +53,7 @@ func setScanStepByID(ctx context.Context, db *bun.DB, scanID uuid.UUID, step str
 	if hasLatest && latest.Step == step {
 		if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
 			Set("current_step = ?", step).
+			Set("last_progress_at = ?", now).
 			Where("id = ?", scanID).
 			Exec(ctx); err != nil {
 			return fmt.Errorf("failed to update current step for scan %s: %w", scanID, err)
@@ -73,6 +74,7 @@ func setScanStepByID(ctx context.Context, db *bun.DB, scanID uuid.UUID, step str
 
 	if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
 		Set("current_step = ?", step).
+		Set("last_progress_at = ?", now).
 		Where("id = ?", scanID).
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to update current step for scan %s: %w", scanID, err)
@@ -122,6 +124,9 @@ func appendScanStepOutput(ctx context.Context, db *bun.DB, scanID uuid.UUID, mes
 		Where("id = ?", latest.ID).
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to append step output for scan %s: %w", scanID, err)
+	}
+	if err := touchScanProgress(ctx, db, scanID, time.Now()); err != nil {
+		return err
 	}
 	return nil
 }

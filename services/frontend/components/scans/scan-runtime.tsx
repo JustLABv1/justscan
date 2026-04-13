@@ -404,8 +404,8 @@ function buildRuntimeWarning(
 
 	if (normalizedOutput.includes('timed out')) {
 		return {
-			title: 'Provider wait threshold reached',
-			detail: latestOutput ?? 'The active step hit a timeout condition and may need operator attention.',
+			title: 'Still waiting on the provider',
+			detail: latestOutput ?? 'The active step is still running in the background. JustScan will keep polling until it finishes or goes stale.',
 		};
 	}
 
@@ -439,7 +439,7 @@ function buildRuntimeWarning(
 	if (activeKey === 'scanning_image' && activeStepElapsedSeconds >= 300) {
 		return {
 			title: 'Image analysis is taking longer than usual',
-			detail: 'The local scanner is still working through the image contents. This can happen on larger images or slower registries.',
+			detail: 'The local scanner is still working through the image contents. This is expected for larger images or slower registries and the scan remains active.',
 		};
 	}
 

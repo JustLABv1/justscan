@@ -1,5 +1,6 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
@@ -938,19 +939,18 @@ function UsersTab() {
                       </Select.Popover>
                     </Select>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                      Password{' '}
-                      {!isCreate && editingUser?.auth_type !== 'oidc' ? <span className="text-zinc-400 dark:text-zinc-600 font-normal">(leave blank to keep unchanged)</span> : null}
-                    </label>
-                    <input type="password" className={inputCls}
-                      placeholder={isCreate ? 'Password' : editingUser?.auth_type === 'oidc' ? 'Managed by OIDC' : '••••••••'}
-                      value={formPassword}
-                      onChange={e => setFormPassword(e.target.value)}
-                      disabled={Boolean(editingUser?.auth_type === 'oidc')}
-                      required={isCreate} />
-                    {editingUser?.auth_type === 'oidc' ? <p className="text-xs text-zinc-500">Password changes are disabled for users currently authenticated through OIDC.</p> : null}
-                  </div>
+                  <FormField
+                    autoComplete={editingUser?.auth_type === 'oidc' ? 'off' : 'new-password'}
+                    description={editingUser?.auth_type === 'oidc' ? 'Password changes are disabled for users currently authenticated through OIDC.' : (!isCreate ? 'Leave blank to keep unchanged.' : undefined)}
+                    disabled={Boolean(editingUser?.auth_type === 'oidc')}
+                    label="Password"
+                    name="user-password"
+                    onChange={e => setFormPassword(e.target.value)}
+                    placeholder={isCreate ? 'Password' : editingUser?.auth_type === 'oidc' ? 'Managed by OIDC' : '••••••••'}
+                    required={isCreate}
+                    type="password"
+                    value={formPassword}
+                  />
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
@@ -1990,10 +1990,15 @@ function NotificationsTab() {
                           <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Username</label>
                           <input className={inputCls} placeholder="user@example.com" value={formSMTPUser} onChange={e => setFormSMTPUser(e.target.value)} />
                         </div>
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Password</label>
-                          <input type="password" className={inputCls} placeholder={editing ? '(unchanged)' : 'Password'} value={formSMTPPass} onChange={e => setFormSMTPPass(e.target.value)} />
-                        </div>
+                        <FormField
+                          autoComplete="off"
+                          label="Password"
+                          name="smtp-password"
+                          onChange={e => setFormSMTPPass(e.target.value)}
+                          placeholder={editing ? '(unchanged)' : 'Password'}
+                          type="password"
+                          value={formSMTPPass}
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">From Address</label>
@@ -2015,10 +2020,16 @@ function NotificationsTab() {
                   {formType === 'telegram' && (
                     <>
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Bot Token</label>
-                          <input type="password" className={inputCls} placeholder={editing ? '(unchanged)' : 'Telegram bot token'} value={formTelegramBotToken} onChange={e => setFormTelegramBotToken(e.target.value)} required={!editing} />
-                        </div>
+                        <FormField
+                          autoComplete="off"
+                          label="Bot Token"
+                          name="telegram-bot-token"
+                          onChange={e => setFormTelegramBotToken(e.target.value)}
+                          placeholder={editing ? '(unchanged)' : 'Telegram bot token'}
+                          required={!editing}
+                          type="password"
+                          value={formTelegramBotToken}
+                        />
                         <div className="space-y-1.5">
                           <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Chat ID</label>
                           <input className={inputCls} placeholder="-1001234567890" value={formTelegramChatId} onChange={e => setFormTelegramChatId(e.target.value)} required />

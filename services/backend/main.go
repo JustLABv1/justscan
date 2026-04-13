@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	_ "time/tzdata"
 
 	"justscan-backend/config"
 	"justscan-backend/database"

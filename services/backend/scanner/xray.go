@@ -352,7 +352,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	if err := client.scanNow(ctx, repoPath); err != nil {
 		// Scan Artifact can still succeed for already-indexed images.
 		// Keep going so Xray-backed scans remain usable across setups.
-		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray index request returned a non-fatal response for %s: %v", repoPath, err))
+		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIndexError(repoPath, err))
 	}
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "queued", models.ScanStepQueuedInXray); err != nil {
@@ -367,7 +367,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 			return err
 		}
 		log.Warnf("Xray scanArtifact returned a non-fatal error for scan %s (%s); continuing to poll artifact summary: %v", scan.ID, componentID, err)
-		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray scanArtifact returned a non-fatal response; continuing to poll the artifact summary anyway: %v", err))
+		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayScanArtifactError(componentID, err))
 	}
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "waiting_for_xray", models.ScanStepWaitingForXray); err != nil {
@@ -394,7 +394,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 	if err := persistXraySBOMComponents(ctx, db, scan, client, artifactPath, repoPath); err != nil {
 		log.Warnf("Failed to persist Xray SBOM components for scan %s (non-fatal): %v", scan.ID, err)
-		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray SBOM import did not complete: %v", err))
+		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXraySBOMImportError(err))
 	}
 
 	completedAt := time.Now()
@@ -564,15 +564,21 @@ func (c *xrayClient) artifactSummary(ctx context.Context, artifactPath string) (
 }
 
 func (c *xrayClient) exportComponentCycloneDX(ctx context.Context, componentName string, candidatePaths ...string) (*TrivySBOMOutput, string, error) {
-	trimmedPaths := make([]string, 0, len(candidatePaths)+1)
+	trimmedPaths := make([]string, 0, len(candidatePaths))
 	seen := make(map[string]bool)
-	for _, candidate := range append(candidatePaths, "") {
+	for _, candidate := range candidatePaths {
 		path := strings.TrimSpace(candidate)
+		if path == "" {
+			continue
+		}
 		if seen[path] {
 			continue
 		}
 		seen[path] = true
 		trimmedPaths = append(trimmedPaths, path)
+	}
+	if len(trimmedPaths) == 0 {
+		trimmedPaths = append(trimmedPaths, "")
 	}
 
 	var lastErr error
@@ -1995,6 +2001,54 @@ func isRetriableXrayScanArtifactError(err error) bool {
 	}
 
 	return false
+}
+
+func describeNonFatalXrayIndexError(repoPath string, err error) string {
+	var httpErr *xrayHTTPError
+	if errors.As(err, &httpErr) {
+		switch httpErr.StatusCode {
+		case http.StatusForbidden, http.StatusUnauthorized:
+			return fmt.Sprintf("Xray skipped the optional index request for %s because the configured credentials do not have re-index permissions. Continuing with the existing artifact state.", repoPath)
+		case http.StatusConflict:
+			return fmt.Sprintf("Xray reported that %s is already being indexed. Continuing to wait for the artifact summary.", repoPath)
+		}
+	}
+
+	return fmt.Sprintf("Xray index request returned a non-fatal response for %s. Continuing anyway: %v", repoPath, err)
+}
+
+func describeNonFatalXrayScanArtifactError(componentID string, err error) string {
+	var httpErr *xrayHTTPError
+	if errors.As(err, &httpErr) {
+		body := strings.ToLower(strings.TrimSpace(httpErr.Body))
+		if httpErr.StatusCode == http.StatusInternalServerError && strings.Contains(body, "failed to scan component") {
+			return fmt.Sprintf("Xray did not accept the explicit scanArtifact request for %s, but the artifact summary endpoint can still return results. Continuing to poll Xray.", componentID)
+		}
+		if httpErr.StatusCode == http.StatusConflict {
+			return fmt.Sprintf("Xray reported that %s is already queued or scanning. Continuing to poll the artifact summary.", componentID)
+		}
+	}
+
+	return fmt.Sprintf("Xray scanArtifact returned a non-fatal response for %s. Continuing to poll the artifact summary: %v", componentID, err)
+}
+
+func describeNonFatalXraySBOMImportError(err error) string {
+	var httpErr *xrayHTTPError
+	if errors.As(err, &httpErr) {
+		body := strings.ToLower(strings.TrimSpace(httpErr.Body))
+		switch httpErr.StatusCode {
+		case http.StatusBadRequest:
+			if strings.Contains(body, "one parameter or more are missing") {
+				return "Xray returned vulnerability results, but its optional component export endpoint rejected the SBOM request. Vulnerability findings were imported; SBOM components were skipped."
+			}
+		case http.StatusForbidden, http.StatusUnauthorized:
+			return "Xray returned vulnerability results, but the configured credentials do not have permission to export SBOM component details. Vulnerability findings were imported; SBOM components were skipped."
+		case http.StatusNotFound:
+			return "Xray returned vulnerability results, but it did not expose a component export for this artifact. Vulnerability findings were imported; SBOM components were skipped."
+		}
+	}
+
+	return fmt.Sprintf("Xray returned vulnerability results, but the optional SBOM component import did not complete: %v", err)
 }
 
 func shouldWarnBlockedReindexError(err error) bool {

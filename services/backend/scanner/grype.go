@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"justscan-backend/config"
 	"justscan-backend/pkg/models"
@@ -82,17 +81,13 @@ func RunGrypeScan(ctx context.Context, imageName, imageTag string, envVars []str
 	if grypePath == "" {
 		grypePath = "grype"
 	}
-	timeout := config.Config.Scanner.Timeout
-	if timeout <= 0 {
-		timeout = 300
-	}
 
 	cacheDir := workerGrypeCacheDir(workerCacheDir)
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return nil, "", fmt.Errorf("failed to create grype cache dir: %w", err)
 	}
 
-	scanCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	scanCtx, cancel := context.WithTimeout(ctx, scanCommandTimeout())
 	defer cancel()
 
 	imageRef := buildImageRef(imageName, imageTag)

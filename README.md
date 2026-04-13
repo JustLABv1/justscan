@@ -85,7 +85,10 @@ If you plan to use OIDC, configure it before first login using the section below
 | `log_level` | Log verbosity: `debug`, `info`, `warn`, `error` | `info` |
 | `allow_origins` | CORS allowed origins (list) | `["http://localhost:3000"]` |
 | `scanner.trivy_path` | Path to Trivy binary | `trivy` |
-| `scanner.timeout` | Max scan duration in seconds | `600` |
+| `scanner.timeout` | Legacy fallback for the local scanner command timeout in seconds | `600` |
+| `scanner.command_timeout_seconds` | Local scanner command timeout in seconds for Trivy, Grype, and SBOM execution | `7200` |
+| `scanner.progress_heartbeat_seconds` | How often long-running scans refresh their liveness timestamp while work is still active | `30` |
+| `scanner.stale_timeout_seconds` | Fail a scan only after this many seconds without recorded progress | `7200` |
 | `scanner.concurrency` | Number of concurrent scans | `2` |
 | `scanner.db_max_age_hours` | Maximum age of each Trivy DB before JustScan refreshes it automatically | `24` |
 | `scanner.enable_osv_java_augmentation` | Query the free OSV API for additional Maven/Java advisories and merge them into scan results | `true` |
@@ -126,6 +129,9 @@ allow_origins:
 scanner:
   trivy_path: trivy
   timeout: 600
+  command_timeout_seconds: 7200
+  progress_heartbeat_seconds: 30
+  stale_timeout_seconds: 7200
   concurrency: 2
   db_max_age_hours: 24
   enable_osv_java_augmentation: true
@@ -389,7 +395,7 @@ Important values exposed by the chart include:
 
 - `imagePullSecrets` for private image or chart pulls from GHCR
 - `nameOverride`, `fullnameOverride`, and `serviceAccount.name` for release naming and service account control
-- `backend.config.scanner.trivyPath`, `backend.config.scanner.grypePath`, `backend.config.scanner.enableGrype`, `backend.config.scanner.timeout`, `backend.config.scanner.concurrency`, `backend.config.scanner.dbMaxAgeHours`, and `backend.config.scanner.enableOsvJavaAugmentation`
+- `backend.config.scanner.trivyPath`, `backend.config.scanner.grypePath`, `backend.config.scanner.enableGrype`, `backend.config.scanner.timeout`, `backend.config.scanner.commandTimeoutSeconds`, `backend.config.scanner.progressHeartbeatSeconds`, `backend.config.scanner.staleTimeoutSeconds`, `backend.config.scanner.concurrency`, `backend.config.scanner.dbMaxAgeHours`, and `backend.config.scanner.enableOsvJavaAugmentation`
 - `backend.config.oidc.debug`, `backend.config.oidc.adminGroups`, `backend.config.oidc.adminRoles`, `backend.config.oidc.groupsClaim`, and `backend.config.oidc.rolesClaim`
 - `backend.customCAs.configMapName`, `backend.customCAs.secretName`, and `backend.customCAs.bundlePath` for custom trust anchors used by OIDC and other outbound TLS calls
 - `backend.persistence.existingClaim`, `backend.persistence.size`, and `backend.persistence.storageClass`

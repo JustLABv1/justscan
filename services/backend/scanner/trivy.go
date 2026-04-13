@@ -162,11 +162,7 @@ func RunScan(ctx context.Context, imageName, imageTag string, envVars []string, 
 	if trivyPath == "" {
 		trivyPath = "trivy"
 	}
-	timeout := config.Config.Scanner.Timeout
-	if timeout <= 0 {
-		timeout = 300
-	}
-	scanCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	scanCtx, cancel := context.WithTimeout(ctx, scanCommandTimeout())
 	defer cancel()
 
 	imageRef := buildImageRef(imageName, imageTag)
@@ -261,11 +257,7 @@ func RefreshTrivyDatabases(ctx context.Context, cacheDir string) error {
 	if trivyPath == "" {
 		trivyPath = "trivy"
 	}
-	timeout := config.Config.Scanner.Timeout
-	if timeout <= 0 {
-		timeout = 600
-	}
-	refreshCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout*2)*time.Second)
+	refreshCtx, cancel := context.WithTimeout(ctx, scanCommandTimeout()*2)
 	defer cancel()
 
 	commands := [][]string{
@@ -292,11 +284,7 @@ func GetTrivyRuntimeInfo(ctx context.Context, cacheDir string) (*TrivyRuntimeInf
 	if trivyPath == "" {
 		trivyPath = "trivy"
 	}
-	timeout := config.Config.Scanner.Timeout
-	if timeout <= 0 {
-		timeout = 300
-	}
-	versionCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	versionCtx, cancel := context.WithTimeout(ctx, scanCommandTimeout())
 	defer cancel()
 
 	args := []string{"--version"}
@@ -323,11 +311,7 @@ func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []stri
 	if trivyPath == "" {
 		trivyPath = "trivy"
 	}
-	timeout := config.Config.Scanner.Timeout
-	if timeout <= 0 {
-		timeout = 600
-	}
-	scanCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	scanCtx, cancel := context.WithTimeout(ctx, scanCommandTimeout())
 	defer cancel()
 
 	imageRef := buildImageRef(imageName, imageTag)

@@ -776,9 +776,6 @@ func deriveStatus(staleAfterHours int, item StatusPageItem) string {
 	if staleAfterHours > 0 && item.FreshnessHours >= int64(staleAfterHours) {
 		return "stale"
 	}
-	if item.CriticalCount > 0 || item.HighCount > 0 {
-		return "degraded"
-	}
 	return "healthy"
 }
 

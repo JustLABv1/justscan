@@ -13,6 +13,11 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const (
+	AuthContextUserIDKey  = "auth.user_id"
+	AuthContextIsAdminKey = "auth.is_admin"
+)
+
 func Auth(db *bun.DB) gin.HandlerFunc {
 	return func(context *gin.Context) {
 		raw := context.GetHeader("Authorization")
@@ -50,6 +55,11 @@ func Auth(db *bun.DB) gin.HandlerFunc {
 				httperror.InternalServerError(context, "Error receiving userID from token", err)
 				return
 			}
+			isAdmin, err := gatekeeper.CheckAdmin(userId, db)
+			if err != nil {
+				httperror.InternalServerError(context, "Error checking for user role", err)
+				return
+			}
 			userDisabled, err := gatekeeper.CheckAccountStatus(userId.String(), db)
 			if err != nil {
 				httperror.InternalServerError(context, "Error checking for account status", err)
@@ -59,6 +69,9 @@ func Auth(db *bun.DB) gin.HandlerFunc {
 				httperror.Unauthorized(context, "Your Account is currently disabled", errors.New("user is disabled"))
 				return
 			}
+
+			context.Set(AuthContextUserIDKey, userId)
+			context.Set(AuthContextIsAdminKey, isAdmin)
 
 			context.Next()
 		} else if tokenType == "project" || tokenType == "service" {

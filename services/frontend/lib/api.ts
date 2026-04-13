@@ -852,6 +852,7 @@ export interface ScanStepLog {
   started_at: string;
   completed_at?: string | null;
   output: string[];
+  output_count?: number;
 }
 
 export interface Scan {

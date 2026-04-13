@@ -81,10 +81,12 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const [user, setUser] = useState(initialUser);
   const [collapsed, setCollapsed] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const mobileNav = useOverlayState();
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUser(getUser() ?? initialUser);
   }, [initialUser, pathname]);
 
@@ -94,8 +96,14 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
   useEffect(() => {
     if (localStorage.getItem('sidebar_collapsed') === 'true') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollapsed(true);
     }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -125,6 +133,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
   const initials = (user?.username ?? user?.email ?? 'U')[0]?.toUpperCase() ?? 'U';
   const isDark = resolvedTheme === 'dark';
+  const themeToggleTitle = !mounted ? 'Toggle theme' : isDark ? 'Switch to light mode' : 'Switch to dark mode';
   const navigationGroups = [
     ...navGroups,
     ...(user?.role === 'admin'
@@ -266,9 +275,9 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 className="flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-150 text-zinc-400 hover:text-violet-500 dark:text-zinc-500 dark:hover:text-violet-400 shrink-0"
                 onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
                 onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
-                title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                title={themeToggleTitle}
               >
-                {isDark ? <Sun01Icon size={15} /> : <Moon02Icon size={15} />}
+                {mounted ? (isDark ? <Sun01Icon size={15} /> : <Moon02Icon size={15} />) : <span aria-hidden className="block h-[15px] w-[15px]" />}
               </button>
 
               <button
@@ -434,9 +443,10 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                           className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors"
                           onClick={() => setTheme(isDark ? 'light' : 'dark')}
                           style={{ background: 'var(--row-hover)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}
+                          title={themeToggleTitle}
                           type="button"
                         >
-                          {isDark ? <Sun01Icon size={14} /> : <Moon02Icon size={14} />}
+                          {mounted ? (isDark ? <Sun01Icon size={14} /> : <Moon02Icon size={14} />) : <span aria-hidden className="block h-[14px] w-[14px]" />}
                           Theme
                         </button>
                         <Link

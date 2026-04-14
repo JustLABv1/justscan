@@ -32,15 +32,41 @@ func ListOrgs(db *bun.DB) gin.HandlerFunc {
 		var orgs []models.Org
 		query := db.NewSelect().Model(&orgs).OrderExpr("created_at DESC")
 		if !isAdmin {
-			query = query.Where("created_by_id = ?", userID)
+			accessibleOrgIDs, err := authz.ListAccessibleOrgIDs(c.Request.Context(), db, userID, false)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list organizations"})
+				return
+			}
+			if len(accessibleOrgIDs) == 0 {
+				c.JSON(http.StatusOK, gin.H{"data": []OrgWithCount{}})
+				return
+			}
+			query = query.Where("id IN (?)", bun.In(accessibleOrgIDs))
 		}
 		if err := query.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list organizations"})
 			return
 		}
 
+		roleMap := map[uuid.UUID]string{}
+		if !isAdmin {
+			var err error
+			roleMap, err = authz.LoadUserOrgRoles(c.Request.Context(), db, userID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list organizations"})
+				return
+			}
+		}
+
 		result := make([]OrgWithCount, 0, len(orgs))
 		for _, o := range orgs {
+			if !isAdmin {
+				if o.CreatedByID == userID {
+					o.CurrentUserRole = models.OrgRoleOwner
+				} else {
+					o.CurrentUserRole = roleMap[o.ID]
+				}
+			}
 			count, _ := db.NewSelect().Model((*models.OrgPolicy)(nil)).Where("org_id = ?", o.ID).Count(c.Request.Context())
 			result = append(result, OrgWithCount{Org: o, PolicyCount: count})
 		}
@@ -71,10 +97,30 @@ func CreateOrg(db *bun.DB) gin.HandlerFunc {
 			Description: body.Description,
 			CreatedByID: userID,
 		}
-		if _, err := db.NewInsert().Model(org).Exec(c.Request.Context()); err != nil {
+		if err := db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
+			if _, err := tx.NewInsert().Model(org).Exec(ctx); err != nil {
+				return err
+			}
+			member := &models.OrgMember{
+				OrgID:     org.ID,
+				UserID:    userID,
+				Role:      models.OrgRoleOwner,
+				JoinedAt:  time.Now(),
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+			if _, err := tx.NewInsert().Model(member).On("CONFLICT (org_id, user_id) DO UPDATE").
+				Set("role = ?", models.OrgRoleOwner).
+				Set("updated_at = now()").
+				Exec(ctx); err != nil {
+				return err
+			}
+			return nil
+		}); err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "organization name already exists"})
 			return
 		}
+		org.CurrentUserRole = models.OrgRoleOwner
 		c.JSON(http.StatusCreated, org)
 	}
 }
@@ -153,7 +199,7 @@ func GetComplianceTrend(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin); !ok {
 			return
 		}
 
@@ -221,7 +267,7 @@ func DeleteOrg(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleMember); !ok {
 			return
 		}
 		if _, err := db.NewDelete().Model((*models.Org)(nil)).Where("id = ?", orgID).Exec(c.Request.Context()); err != nil {
@@ -240,7 +286,7 @@ func ListPolicies(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleOwner); !ok {
 			return
 		}
 		var policies []models.OrgPolicy
@@ -268,7 +314,7 @@ func CreatePolicy(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleMember); !ok {
 			return
 		}
 
@@ -315,7 +361,7 @@ func UpdatePolicy(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin); !ok {
 			return
 		}
 
@@ -370,7 +416,7 @@ func DeletePolicy(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid policy ID"})
 			return
 		}
-		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin); !ok {
 			return
 		}
 
@@ -392,7 +438,7 @@ func AssignScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin); !ok {
 			return
 		}
 		scanID, err := uuid.Parse(c.Param("scanId"))
@@ -400,7 +446,7 @@ func AssignScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
 			return
 		}
-		if _, _, _, ok := scanhandlers.LoadAuthorizedScan(c, db, scanID); !ok {
+		if _, _, _, ok := scanhandlers.LoadAuthorizedScanForWrite(c, db, scanID); !ok {
 			return
 		}
 
@@ -423,7 +469,7 @@ func RemoveScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin); !ok {
 			return
 		}
 		scanID, err := uuid.Parse(c.Param("scanId"))
@@ -431,7 +477,7 @@ func RemoveScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
 			return
 		}
-		if _, _, _, ok := scanhandlers.LoadAuthorizedScan(c, db, scanID); !ok {
+		if _, _, _, ok := scanhandlers.LoadAuthorizedScanForWrite(c, db, scanID); !ok {
 			return
 		}
 
@@ -456,7 +502,7 @@ func ListOrgScans(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleMember); !ok {
 			return
 		}
 
@@ -616,18 +662,17 @@ func filterVisibleComplianceResults(ctx context.Context, db *bun.DB, results []m
 		orgIDs = append(orgIDs, result.OrgID)
 	}
 
-	var visibleOrgs []models.Org
-	if err := db.NewSelect().Model(&visibleOrgs).
-		Column("id").
-		Where("id IN (?)", bun.In(orgIDs)).
-		Where("created_by_id = ?", userID).
-		Scan(ctx); err != nil {
+	accessibleOrgIDs, err := authz.ListAccessibleOrgIDs(ctx, db, userID, isAdmin)
+	if err != nil {
 		return nil, err
 	}
+	if len(accessibleOrgIDs) == 0 {
+		return []models.ComplianceResult{}, nil
+	}
 
-	visible := make(map[uuid.UUID]struct{}, len(visibleOrgs))
-	for _, org := range visibleOrgs {
-		visible[org.ID] = struct{}{}
+	visible := make(map[uuid.UUID]struct{}, len(accessibleOrgIDs))
+	for _, orgID := range accessibleOrgIDs {
+		visible[orgID] = struct{}{}
 	}
 
 	filtered := make([]models.ComplianceResult, 0, len(results))

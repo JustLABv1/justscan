@@ -24,7 +24,7 @@ func CancelScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		scan, userID, _, ok := LoadAuthorizedScan(c, db, scanID)
+		scan, userID, _, ok := LoadAuthorizedScanForWrite(c, db, scanID)
 		if !ok {
 			return
 		}

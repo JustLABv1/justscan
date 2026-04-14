@@ -80,6 +80,7 @@ func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
 		existing := &models.Suppression{}
 		err := db.NewSelect().Model(existing).
 			Where("image_digest = ? AND vuln_id = ?", digest, body.VulnID).
+			Where("user_id = ? OR owner_user_id = ?", userID, userID).
 			Scan(c.Request.Context())
 
 		if err == nil {
@@ -87,10 +88,13 @@ func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
 			existing.Status = body.Status
 			existing.Justification = body.Justification
 			existing.UserID = userID
+			existing.OwnerType = models.OwnerTypeUser
+			existing.OwnerUserID = &userID
+			existing.OwnerOrgID = nil
 			existing.ExpiresAt = body.ExpiresAt
 			existing.UpdatedAt = time.Now()
 			if _, err := db.NewUpdate().Model(existing).
-				Column("status", "justification", "user_id", "expires_at", "updated_at").
+				Column("status", "justification", "user_id", "owner_type", "owner_user_id", "owner_org_id", "expires_at", "updated_at").
 				Where("id = ?", existing.ID).
 				Exec(c.Request.Context()); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update suppression"})
@@ -107,6 +111,8 @@ func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
 			Status:        body.Status,
 			Justification: body.Justification,
 			UserID:        userID,
+			OwnerType:     models.OwnerTypeUser,
+			OwnerUserID:   &userID,
 			ExpiresAt:     body.ExpiresAt,
 			CreatedAt:     time.Now(),
 			UpdatedAt:     time.Now(),
@@ -132,7 +138,7 @@ func ListSuppressions(db *bun.DB) gin.HandlerFunc {
 			Where("image_digest = ?", digest).
 			OrderExpr("created_at DESC")
 		if !isAdmin {
-			query = query.Where("user_id = ?", userID)
+			query = query.Where("user_id = ? OR owner_user_id = ?", userID, userID)
 		}
 		if err := query.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load suppressions"})
@@ -165,7 +171,7 @@ func DeleteSuppression(db *bun.DB) gin.HandlerFunc {
 		deleteQuery := db.NewDelete().Model((*models.Suppression)(nil)).
 			Where("image_digest = ? AND vuln_id = ?", digest, vulnID)
 		if !isAdmin {
-			deleteQuery = deleteQuery.Where("user_id = ?", userID)
+			deleteQuery = deleteQuery.Where("user_id = ? OR owner_user_id = ?", userID, userID)
 		}
 		if _, err := deleteQuery.Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete suppression"})

@@ -21,7 +21,7 @@ func LoadLocalSuppressionsByDigest(ctx context.Context, db *bun.DB, imageDigest 
 	query := db.NewSelect().Model(&suppressions).
 		Where("image_digest = ?", imageDigest)
 	if userID != nil {
-		query = query.Where("user_id = ?", *userID)
+		query = query.Where("user_id = ? OR owner_user_id = ?", *userID, *userID)
 	}
 	if err := query.Scan(ctx); err != nil {
 		return nil, err
@@ -195,7 +195,7 @@ func loadLocalSuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.
 	var suppressions []models.Suppression
 	q := db.NewSelect().Model(&suppressions).OrderExpr("updated_at DESC")
 	if !isAdmin {
-		q = q.Where("user_id = ?", userID)
+		q = q.Where("user_id = ? OR owner_user_id = ?", userID, userID)
 	}
 	if strings.TrimSpace(statusFilter) != "" {
 		q = q.Where("status = ?", statusFilter)

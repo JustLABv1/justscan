@@ -259,6 +259,21 @@ export const updateOrg = (id: string, data: Partial<Org>) =>
 export const deleteOrg = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/orgs/${id}`);
 
+export const listOrgMembers = (orgId: string) =>
+  req<{ data: OrgMember[] }>('GET', `/api/v1/orgs/${orgId}/members`).then((r) => r.data ?? []);
+export const updateOrgMemberRole = (orgId: string, userId: string, role: OrgRole) =>
+  req<{ result: string }>('PATCH', `/api/v1/orgs/${orgId}/members/${userId}`, { role });
+export const removeOrgMember = (orgId: string, userId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/orgs/${orgId}/members/${userId}`);
+export const listOrgInvites = (orgId: string) =>
+  req<{ data: OrgInvite[] }>('GET', `/api/v1/orgs/${orgId}/invites`).then((r) => r.data ?? []);
+export const createOrgInvite = (orgId: string, email: string, role: Extract<OrgRole, 'admin' | 'member'>) =>
+  req<OrgInvite>('POST', `/api/v1/orgs/${orgId}/invites`, { email, role });
+export const revokeOrgInvite = (orgId: string, inviteId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/orgs/${orgId}/invites/${inviteId}`);
+export const acceptOrgInvite = (token: string) =>
+  req<{ result: string; org_id: string; org_name?: string; role: OrgRole }>('POST', `/api/v1/orgs/invites/${token}/accept`);
+
 export const createPolicy = (orgId: string, name: string, rules: PolicyRule[]) =>
   req<OrgPolicy>('POST', `/api/v1/orgs/${orgId}/policies`, { name, rules });
 export const updatePolicy = (orgId: string, policyId: string, name: string, rules: PolicyRule[]) =>
@@ -796,6 +811,8 @@ export interface OrgPolicy {
   updated_at: string;
 }
 
+export type OrgRole = 'owner' | 'admin' | 'member';
+
 export interface Org {
   id: string;
   name: string;
@@ -804,7 +821,33 @@ export interface Org {
   created_by_id: string;
   created_at: string;
   updated_at: string;
+  current_user_role?: OrgRole;
   policies?: OrgPolicy[];
+}
+
+export interface OrgMember {
+  org_id: string;
+  user_id: string;
+  role: OrgRole;
+  joined_at: string;
+  created_at: string;
+  email?: string;
+  username?: string;
+}
+
+export interface OrgInvite {
+  id: string;
+  org_id: string;
+  email: string;
+  role: Extract<OrgRole, 'admin' | 'member'>;
+  token: string;
+  invited_by_user_id: string;
+  accepted_by_user_id?: string | null;
+  accepted_at?: string | null;
+  revoked_at?: string | null;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TrendPoint {

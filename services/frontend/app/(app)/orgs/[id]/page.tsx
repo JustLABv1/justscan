@@ -1,33 +1,45 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { FormAlert } from '@/components/ui/form-alert';
+import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import {
-    assignScanToOrg,
-    createPolicy,
-    deletePolicy,
-    getComplianceTrend,
-    getOrg,
-    getOrgRiskScore,
-    listOrgScans,
-    listScans,
-    Org,
-    OrgPolicy,
-    OrgRiskScore,
-    PolicyRule,
-    removeScanFromOrg,
-    Scan,
-    TrendPoint,
-    updateOrg,
-    updatePolicy,
+  assignScanToOrg,
+  createOrgInvite,
+  createPolicy,
+  deletePolicy,
+  getComplianceTrend,
+  getOrg,
+  getOrgRiskScore,
+  getUser,
+  listOrgScans,
+  listOrgInvites,
+  listOrgMembers,
+  listScans,
+  Org,
+  OrgInvite,
+  OrgMember,
+  OrgRole,
+  OrgPolicy,
+  OrgRiskScore,
+  PolicyRule,
+  removeOrgMember,
+  removeScanFromOrg,
+  revokeOrgInvite,
+  Scan,
+  TrendPoint,
+  updateOrg,
+  updateOrgMemberRole,
+  updatePolicy,
 } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import {
-    ArrowLeft01Icon,
-    Delete01Icon,
-    PencilEdit01Icon,
-    PlusSignIcon,
+  ArrowLeft01Icon,
+  Delete01Icon,
+  PencilEdit01Icon,
+  PlusSignIcon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -114,6 +126,8 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
 export default function OrgDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const currentUser = getUser() as { role?: string } | null;
+  const isSystemAdmin = currentUser?.role === 'admin';
 
   const [org, setOrg] = useState<Org | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,6 +136,14 @@ export default function OrgDetailPage() {
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [riskScore, setRiskScore] = useState<OrgRiskScore | null>(null);
   const [newPattern, setNewPattern] = useState('');
+  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [invites, setInvites] = useState<OrgInvite[]>([]);
+  const [membersLoading, setMembersLoading] = useState(true);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<Extract<OrgRole, 'admin' | 'member'>>('member');
+  const [inviteSaving, setInviteSaving] = useState(false);
+  const [inviteError, setInviteError] = useState('');
+  const inviteModal = useOverlayState();
 
   type OrgScanItem = Scan & { compliance: { policy_id: string; policy_name: string; status: string }[] };
   const [orgScans, setOrgScans] = useState<OrgScanItem[]>([]);
@@ -138,6 +160,9 @@ export default function OrgDetailPage() {
   const [allScans, setAllScans] = useState<Scan[]>([]);
   const [assignLoading, setAssignLoading] = useState(false);
   const assignModal = useOverlayState();
+  const currentOrgRole = org?.current_user_role;
+  const canManageMembers = isSystemAdmin || currentOrgRole === 'owner' || currentOrgRole === 'admin';
+  const canEditRoles = isSystemAdmin || currentOrgRole === 'owner';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -158,12 +183,94 @@ export default function OrgDetailPage() {
     } catch { /* ignore */ }
   }, [id]);
 
+  const loadMembers = useCallback(async () => {
+    setMembersLoading(true);
+    try {
+      const [nextMembers, nextInvites] = await Promise.all([listOrgMembers(id), listOrgInvites(id)]);
+      setMembers(nextMembers);
+      setInvites(nextInvites.filter((invite) => !invite.accepted_at && !invite.revoked_at));
+    } catch {
+      setMembers([]);
+      setInvites([]);
+    } finally {
+      setMembersLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     load();
     loadOrgScans();
+    loadMembers();
     getComplianceTrend(id).then(setTrend).catch(() => {});
     getOrgRiskScore(id).then(setRiskScore).catch(() => {});
-  }, [load, loadOrgScans, id]);
+  }, [load, loadMembers, loadOrgScans, id]);
+
+  function openInviteModal() {
+    setInviteEmail('');
+    setInviteRole('member');
+    setInviteError('');
+    inviteModal.open();
+  }
+
+  async function handleCreateInvite(e: React.FormEvent) {
+    e.preventDefault();
+    setInviteError('');
+    setInviteSaving(true);
+    try {
+      await createOrgInvite(id, inviteEmail, inviteRole);
+      inviteModal.close();
+      toast.success('Invite created');
+      await loadMembers();
+    } catch (err: unknown) {
+      setInviteError(err instanceof Error ? err.message : 'Failed to create invite');
+    } finally {
+      setInviteSaving(false);
+    }
+  }
+
+  async function handleMemberRoleChange(member: OrgMember, nextRole: Extract<OrgRole, 'admin' | 'member'>) {
+    if (member.role === nextRole) return;
+    try {
+      await updateOrgMemberRole(id, member.user_id, nextRole);
+      toast.success('Member role updated');
+      await loadMembers();
+      await load();
+    } catch {
+      toast.error('Failed to update member role');
+    }
+  }
+
+  async function handleRemoveMember(member: OrgMember) {
+    const ok = await confirm({
+      title: `Remove ${member.username || member.email || 'member'}?`,
+      message: 'This user will lose access to this organization immediately.',
+      confirmLabel: 'Remove',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    await removeOrgMember(id, member.user_id).catch(() => {});
+    toast.success('Member removed');
+    await loadMembers();
+  }
+
+  async function handleRevokeInvite(invite: OrgInvite) {
+    const ok = await confirm({
+      title: `Revoke invite for ${invite.email}?`,
+      message: 'The invite link will stop working immediately.',
+      confirmLabel: 'Revoke',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    await revokeOrgInvite(id, invite.id).catch(() => {});
+    toast.success('Invite revoked');
+    await loadMembers();
+  }
+
+  async function copyInviteLink(invite: OrgInvite) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    await navigator.clipboard.writeText(`${origin}/orgs/invites/${invite.token}`);
+    toast.success('Invite link copied');
+  }
 
   function openCreatePolicy() {
     setEditingPolicy(null);
@@ -409,6 +516,129 @@ export default function OrgDetailPage() {
           >
             Add
           </button>
+        </div>
+      </div>
+
+      {/* Members */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Members</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              {currentOrgRole ? `Your role: ${currentOrgRole}` : isSystemAdmin ? 'Platform admin access' : 'Organization members'}
+            </p>
+          </div>
+          {canManageMembers && (
+            <button onClick={openInviteModal} className="btn-primary inline-flex items-center gap-2">
+              <PlusSignIcon size={14} />
+              Invite Member
+            </button>
+          )}
+        </div>
+
+        <div className="glass-panel rounded-2xl overflow-hidden">
+          {membersLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+            </div>
+          ) : members.length === 0 ? (
+            <div className="px-6 py-8 text-sm text-zinc-500 text-center">No members found.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">User</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Joined</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((member, index) => (
+                  <tr key={member.user_id}
+                    style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    <td className="px-4 py-3">
+                      <div>
+                        <p className="font-medium text-zinc-800 dark:text-zinc-200">{member.username || member.email || member.user_id}</p>
+                        {member.email && <p className="text-xs text-zinc-500 mt-0.5">{member.email}</p>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {canEditRoles && member.role !== 'owner' ? (
+                        <select
+                          className={inputCls + ' py-2 px-3 max-w-[140px] text-sm'}
+                          value={member.role}
+                          onChange={(event) => { void handleMemberRoleChange(member, event.target.value as Extract<OrgRole, 'admin' | 'member'>); }}
+                        >
+                          <option value="member">member</option>
+                          <option value="admin">admin</option>
+                        </select>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-violet-500/10 text-violet-400 border-violet-500/20">
+                          {member.role}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-zinc-500">{timeAgo(member.joined_at)}</td>
+                    <td className="px-4 py-3 text-right">
+                      {canManageMembers && member.role !== 'owner' && (
+                        <button
+                          onClick={() => { void handleRemoveMember(member); }}
+                          className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors"
+                          title="Remove member"
+                        >
+                          <Delete01Icon size={15} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="glass-panel relative rounded-2xl p-5 space-y-3">
+          <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
+            style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)' }} />
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Pending Invites</h3>
+              <p className="text-xs text-zinc-500 mt-0.5">Active invite links for this organization.</p>
+            </div>
+          </div>
+          {invites.length === 0 ? (
+            <p className="text-sm text-zinc-500">No active invites.</p>
+          ) : (
+            <div className="space-y-2">
+              {invites.map((invite) => (
+                <div key={invite.id} className="rounded-xl px-4 py-3 flex items-center justify-between gap-3"
+                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">{invite.email}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">{invite.role} · expires {timeAgo(invite.expires_at)}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => { void copyInviteLink(invite); }} className="btn-secondary text-xs px-3 py-1.5" type="button">
+                      Copy link
+                    </button>
+                    {canManageMembers && (
+                      <button
+                        onClick={() => { void handleRevokeInvite(invite); }}
+                        className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors"
+                        title="Revoke invite"
+                        type="button"
+                      >
+                        <Delete01Icon size={15} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -778,6 +1008,39 @@ export default function OrgDetailPage() {
                   </div>
                 )}
               </Modal.Body>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal state={inviteModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Invite Member</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5">
+                <form id="invite-member-form" onSubmit={handleCreateInvite} className="space-y-4">
+                  {inviteError ? <FormAlert description={inviteError} title="Invite failed" /> : null}
+                  <FormField label="Email" onChange={(e) => setInviteEmail(e.target.value)} placeholder="teammate@example.com" required type="email" value={inviteEmail} />
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
+                    <select className={inputCls} value={inviteRole} onChange={(e) => setInviteRole(e.target.value as Extract<OrgRole, 'admin' | 'member'>)}>
+                      <option value="member">Member</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                </form>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={inviteModal.close} className="btn-secondary" type="button">Cancel</button>
+                <button type="submit" form="invite-member-form" disabled={inviteSaving} className="btn-primary inline-flex items-center gap-2">
+                  {inviteSaving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  Create Invite
+                </button>
+              </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>
         </Modal.Backdrop>

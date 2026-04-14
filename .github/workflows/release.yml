@@ -45,6 +45,7 @@ jobs:
           images: ${{ env.IMAGE }}
           tags: |
             type=semver,pattern=backend-{{version}}
+            type=raw,value=backend-beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=backend-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
       - uses: docker/build-push-action@v6
@@ -81,6 +82,7 @@ jobs:
           images: ${{ env.IMAGE }}
           tags: |
             type=semver,pattern=frontend-{{version}}
+            type=raw,value=frontend-beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=frontend-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
       - uses: docker/build-push-action@v6
@@ -119,6 +121,7 @@ jobs:
           images: ${{ env.IMAGE }}
           tags: |
             type=semver,pattern={{version}}
+            type=raw,value=beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
       - uses: docker/build-push-action@v6

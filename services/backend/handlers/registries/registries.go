@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"justscan-backend/config"
-	"justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/crypto"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
@@ -17,11 +17,19 @@ import (
 
 func ListRegistries(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+
 		var registries []models.Registry
-		if err := db.NewSelect().Model(&registries).
+		query := db.NewSelect().Model(&registries).
 			Column("id", "name", "url", "xray_url", "xray_artifactory_id", "auth_type", "scan_provider", "username", "created_by_id", "created_at", "updated_at", "health_status", "health_message", "last_health_check_at").
-			OrderExpr("name ASC").
-			Scan(c.Request.Context()); err != nil {
+			OrderExpr("name ASC")
+		if !isAdmin {
+			query = query.Where("created_by_id = ?", userID)
+		}
+		if err := query.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list registries"})
 			return
 		}
@@ -31,11 +39,11 @@ func ListRegistries(db *bun.DB) gin.HandlerFunc {
 
 func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		userID, _, ok := authz.RequireRequestUser(c, db)
+		if !ok {
 			return
 		}
+		var err error
 		var body struct {
 			Name              string `json:"name" binding:"required"`
 			URL               string `json:"url" binding:"required"`
@@ -115,9 +123,8 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		registry := &models.Registry{}
-		if err := db.NewSelect().Model(registry).Where("id = ?", registryID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "registry not found"})
+		registry, _, _, ok := authz.LoadAuthorizedRegistry(c, db, registryID)
+		if !ok {
 			return
 		}
 		if body.Name != "" {
@@ -172,6 +179,9 @@ func DeleteRegistry(db *bun.DB) gin.HandlerFunc {
 		registryID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry ID"})
+			return
+		}
+		if _, _, _, ok := authz.LoadAuthorizedRegistry(c, db, registryID); !ok {
 			return
 		}
 		if _, err := db.NewDelete().Model((*models.Registry)(nil)).

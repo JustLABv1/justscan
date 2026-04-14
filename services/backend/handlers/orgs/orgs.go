@@ -1,11 +1,13 @@
 package orgs
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"justscan-backend/compliance"
-	authfuncs "justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
+	scanhandlers "justscan-backend/handlers/scans"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -17,13 +19,22 @@ import (
 // ListOrgs returns all organisations with their policy count.
 func ListOrgs(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+
 		type OrgWithCount struct {
 			models.Org
 			PolicyCount int `json:"policy_count"`
 		}
 
 		var orgs []models.Org
-		if err := db.NewSelect().Model(&orgs).OrderExpr("created_at DESC").Scan(c.Request.Context()); err != nil {
+		query := db.NewSelect().Model(&orgs).OrderExpr("created_at DESC")
+		if !isAdmin {
+			query = query.Where("created_by_id = ?", userID)
+		}
+		if err := query.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list organizations"})
 			return
 		}
@@ -41,9 +52,8 @@ func ListOrgs(db *bun.DB) gin.HandlerFunc {
 // CreateOrg creates a new organisation.
 func CreateOrg(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authfuncs.GetUserIDFromToken(c.GetHeader("Authorization"))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		userID, _, ok := authz.RequireRequestUser(c, db)
+		if !ok {
 			return
 		}
 
@@ -78,9 +88,8 @@ func GetOrg(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		org := &models.Org{}
-		if err := db.NewSelect().Model(org).Where("id = ?", orgID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
+		org, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID)
+		if !ok {
 			return
 		}
 
@@ -103,8 +112,8 @@ func UpdateOrg(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var body struct {
-			Name          string           `json:"name"`
-			Description   string           `json:"description"`
+			Name          string            `json:"name"`
+			Description   string            `json:"description"`
 			ImagePatterns models.StringList `json:"image_patterns"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
@@ -112,9 +121,8 @@ func UpdateOrg(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		org := &models.Org{}
-		if err := db.NewSelect().Model(org).Where("id = ?", orgID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
+		org, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID)
+		if !ok {
 			return
 		}
 
@@ -143,6 +151,9 @@ func GetComplianceTrend(db *bun.DB) gin.HandlerFunc {
 		orgID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
+			return
+		}
+		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
 			return
 		}
 
@@ -210,6 +221,9 @@ func DeleteOrg(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
+		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+			return
+		}
 		if _, err := db.NewDelete().Model((*models.Org)(nil)).Where("id = ?", orgID).Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete organization"})
 			return
@@ -224,6 +238,9 @@ func ListPolicies(db *bun.DB) gin.HandlerFunc {
 		orgID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
+			return
+		}
+		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
 			return
 		}
 		var policies []models.OrgPolicy
@@ -251,9 +268,12 @@ func CreatePolicy(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
+		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+			return
+		}
 
 		var body struct {
-			Name  string               `json:"name" binding:"required"`
+			Name  string                `json:"name" binding:"required"`
 			Rules models.PolicyRuleList `json:"rules"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
@@ -295,8 +315,12 @@ func UpdatePolicy(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
+		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+			return
+		}
+
 		var body struct {
-			Name  string               `json:"name"`
+			Name  string                `json:"name"`
 			Rules models.PolicyRuleList `json:"rules"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
@@ -346,6 +370,10 @@ func DeletePolicy(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid policy ID"})
 			return
 		}
+		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+			return
+		}
+
 		if _, err := db.NewDelete().Model((*models.OrgPolicy)(nil)).
 			Where("id = ? AND org_id = ?", policyID, orgID).
 			Exec(c.Request.Context()); err != nil {
@@ -364,9 +392,15 @@ func AssignScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
+		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+			return
+		}
 		scanID, err := uuid.Parse(c.Param("scanId"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+			return
+		}
+		if _, _, _, ok := scanhandlers.LoadAuthorizedScan(c, db, scanID); !ok {
 			return
 		}
 
@@ -389,9 +423,15 @@ func RemoveScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
+		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
+			return
+		}
 		scanID, err := uuid.Parse(c.Param("scanId"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+			return
+		}
+		if _, _, _, ok := scanhandlers.LoadAuthorizedScan(c, db, scanID); !ok {
 			return
 		}
 
@@ -413,6 +453,10 @@ func ListOrgScans(db *bun.DB) gin.HandlerFunc {
 		orgID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
+			return
+		}
+
+		if _, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID); !ok {
 			return
 		}
 
@@ -478,9 +522,21 @@ func GetScanCompliance(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
 			return
 		}
+		if _, _, _, ok := scanhandlers.LoadAuthorizedScan(c, db, scanID); !ok {
+			return
+		}
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
 
 		var results []models.ComplianceResult
 		if err := db.NewSelect().Model(&results).Where("scan_id = ?", scanID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load compliance results"})
+			return
+		}
+		results, err = filterVisibleComplianceResults(c.Request.Context(), db, results, userID, isAdmin)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load compliance results"})
 			return
 		}
@@ -509,12 +565,24 @@ func ReEvaluate(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
 			return
 		}
+		if _, _, _, ok := scanhandlers.LoadAuthorizedScan(c, db, scanID); !ok {
+			return
+		}
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
 
 		compliance.RunForScan(db, scanID)
 
 		// Return updated results (reuse GetScanCompliance logic)
 		var results []models.ComplianceResult
 		if err := db.NewSelect().Model(&results).Where("scan_id = ?", scanID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load compliance results"})
+			return
+		}
+		results, err = filterVisibleComplianceResults(c.Request.Context(), db, results, userID, isAdmin)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load compliance results"})
 			return
 		}
@@ -531,4 +599,43 @@ func ReEvaluate(db *bun.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{"data": results})
 	}
+}
+
+func filterVisibleComplianceResults(ctx context.Context, db *bun.DB, results []models.ComplianceResult, userID uuid.UUID, isAdmin bool) ([]models.ComplianceResult, error) {
+	if isAdmin || len(results) == 0 {
+		return results, nil
+	}
+
+	orgIDs := make([]uuid.UUID, 0, len(results))
+	seen := make(map[uuid.UUID]struct{}, len(results))
+	for _, result := range results {
+		if _, ok := seen[result.OrgID]; ok {
+			continue
+		}
+		seen[result.OrgID] = struct{}{}
+		orgIDs = append(orgIDs, result.OrgID)
+	}
+
+	var visibleOrgs []models.Org
+	if err := db.NewSelect().Model(&visibleOrgs).
+		Column("id").
+		Where("id IN (?)", bun.In(orgIDs)).
+		Where("created_by_id = ?", userID).
+		Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	visible := make(map[uuid.UUID]struct{}, len(visibleOrgs))
+	for _, org := range visibleOrgs {
+		visible[org.ID] = struct{}{}
+	}
+
+	filtered := make([]models.ComplianceResult, 0, len(results))
+	for _, result := range results {
+		if _, ok := visible[result.OrgID]; ok {
+			filtered = append(filtered, result)
+		}
+	}
+
+	return filtered, nil
 }

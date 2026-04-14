@@ -4,9 +4,11 @@ import (
 	"context"
 	"net/http"
 
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
 
@@ -35,6 +37,10 @@ type topImage struct {
 func GetStats(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
 		result := statsResult{
 			StatusCounts:   make(map[string]int),
 			SeverityTotals: make(map[string]int),
@@ -45,7 +51,11 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		}
 
 		// Total scans
-		total, _ := db.NewSelect().Model((*models.Scan)(nil)).Count(ctx)
+		totalQuery := db.NewSelect().Model((*models.Scan)(nil))
+		if !isAdmin {
+			totalQuery = totalQuery.Where("user_id = ?", userID)
+		}
+		total, _ := totalQuery.Count(ctx)
 		result.TotalScans = total
 
 		// Status counts
@@ -55,11 +65,14 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 			Count          int    `bun:"count"`
 		}
 		var statusRows []statusRow
-		db.NewSelect().
+		statusQuery := db.NewSelect().
 			TableExpr("scans").
 			ColumnExpr("status, external_status, COUNT(*) AS count").
-			GroupExpr("status, external_status").
-			Scan(ctx, &statusRows) //nolint:errcheck
+			GroupExpr("status, external_status")
+		if !isAdmin {
+			statusQuery = statusQuery.Where("user_id = ?", userID)
+		}
+		statusQuery.Scan(ctx, &statusRows) //nolint:errcheck
 		for _, r := range statusRows {
 			result.StatusCounts[r.Status] += r.Count
 			if isBlockedByXrayPolicyStatus(r.Status, r.ExternalStatus) {
@@ -77,11 +90,14 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 			Unknown  int `bun:"unknown"`
 		}
 		var sev severityRow
-		db.NewSelect().
+		severityQuery := db.NewSelect().
 			TableExpr("scans").
 			ColumnExpr("COALESCE(SUM(critical_count),0) AS critical, COALESCE(SUM(high_count),0) AS high, COALESCE(SUM(medium_count),0) AS medium, COALESCE(SUM(low_count),0) AS low, COALESCE(SUM(unknown_count),0) AS unknown").
-			Where("(status = ? OR (status = ? AND external_status = ?))", models.ScanStatusCompleted, models.ScanStatusFailed, models.ScanExternalStatusBlockedByXrayPolicy).
-			Scan(ctx, &sev) //nolint:errcheck
+			Where("(status = ? OR (status = ? AND external_status = ?))", models.ScanStatusCompleted, models.ScanStatusFailed, models.ScanExternalStatusBlockedByXrayPolicy)
+		if !isAdmin {
+			severityQuery = severityQuery.Where("user_id = ?", userID)
+		}
+		severityQuery.Scan(ctx, &sev) //nolint:errcheck
 		result.SeverityTotals["critical"] = sev.Critical
 		result.SeverityTotals["high"] = sev.High
 		result.SeverityTotals["medium"] = sev.Medium
@@ -89,21 +105,27 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		result.SeverityTotals["unknown"] = sev.Unknown
 
 		// Recent scans
-		db.NewSelect().Model(&result.RecentScans).
+		recentQuery := db.NewSelect().Model(&result.RecentScans).
 			OrderExpr("created_at DESC").
-			Limit(5).
-			Scan(ctx) //nolint:errcheck
+			Limit(5)
+		if !isAdmin {
+			recentQuery = recentQuery.Where("user_id = ?", userID)
+		}
+		recentQuery.Scan(ctx) //nolint:errcheck
 		if result.RecentScans == nil {
 			result.RecentScans = []models.Scan{}
 		}
 
 		// Active Xray scans and current-step counts.
 		var activeXrayScans []models.Scan
-		db.NewSelect().Model(&activeXrayScans).
+		activeXrayQuery := db.NewSelect().Model(&activeXrayScans).
 			Where("scan_provider = ?", models.ScanProviderArtifactoryXray).
 			Where("status IN (?)", bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
-			OrderExpr("created_at DESC").
-			Scan(ctx) //nolint:errcheck
+			OrderExpr("created_at DESC")
+		if !isAdmin {
+			activeXrayQuery = activeXrayQuery.Where("user_id = ?", userID)
+		}
+		activeXrayQuery.Scan(ctx) //nolint:errcheck
 		result.Operations.ActiveXrayCount, result.Operations.ActiveXraySteps = summarizeActiveXrayScans(activeXrayScans)
 		if len(activeXrayScans) > 5 {
 			result.Operations.ActiveXrayScans = append([]models.Scan{}, activeXrayScans[:5]...)
@@ -112,12 +134,15 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		}
 
 		// Top images by scan count
-		result.TopImages = topImages(ctx, db)
+		result.TopImages = topImages(ctx, db, userID, isAdmin)
 
 		// Watchlist count
-		wlCount, _ := db.NewSelect().Model((*models.WatchlistItem)(nil)).
-			Where("enabled = true").
-			Count(ctx)
+		watchlistQuery := db.NewSelect().Model((*models.WatchlistItem)(nil)).
+			Where("enabled = true")
+		if !isAdmin {
+			watchlistQuery = watchlistQuery.Where("user_id = ?", userID)
+		}
+		wlCount, _ := watchlistQuery.Count(ctx)
 		result.WatchlistCount = wlCount
 
 		c.JSON(http.StatusOK, result)
@@ -144,19 +169,22 @@ func summarizeActiveXrayScans(scans []models.Scan) (int, map[string]int) {
 	return len(scans), stepCounts
 }
 
-func topImages(ctx context.Context, db *bun.DB) []topImage {
+func topImages(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool) []topImage {
 	type row struct {
 		ImageName string `bun:"image_name"`
 		Count     int    `bun:"count"`
 	}
 	var rows []row
-	db.NewSelect().
+	query := db.NewSelect().
 		TableExpr("scans").
 		ColumnExpr("image_name, COUNT(*) AS count").
 		GroupExpr("image_name").
 		OrderExpr("count DESC").
-		Limit(5).
-		Scan(ctx, &rows) //nolint:errcheck
+		Limit(5)
+	if !isAdmin {
+		query = query.Where("user_id = ?", userID)
+	}
+	query.Scan(ctx, &rows) //nolint:errcheck
 	result := make([]topImage, len(rows))
 	for i, r := range rows {
 		result[i] = topImage{ImageName: r.ImageName, Count: r.Count}

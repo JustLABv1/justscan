@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
 	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/pkg/models"
 
@@ -15,6 +15,11 @@ import (
 
 func ListAllSuppressions(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 		if page < 1 {
@@ -26,7 +31,7 @@ func ListAllSuppressions(db *bun.DB) gin.HandlerFunc {
 		statusFilter := c.Query("status")
 		search := c.Query("q")
 
-		suppressions, total, err := effectivesuppressions.LoadEffectiveSuppressionsPage(c.Request.Context(), db, page, limit, statusFilter, search)
+		suppressions, total, err := effectivesuppressions.LoadEffectiveSuppressionsPage(c.Request.Context(), db, userID, isAdmin, page, limit, statusFilter, search)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load suppressions"})
 			return
@@ -56,9 +61,8 @@ func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		userID, _, ok := authz.RequireRequestUser(c, db)
+		if !ok {
 			return
 		}
 
@@ -74,7 +78,7 @@ func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
 		}
 
 		existing := &models.Suppression{}
-		err = db.NewSelect().Model(existing).
+		err := db.NewSelect().Model(existing).
 			Where("image_digest = ? AND vuln_id = ?", digest, body.VulnID).
 			Scan(c.Request.Context())
 
@@ -117,12 +121,20 @@ func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
 
 func ListSuppressions(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+
 		digest := c.Param("digest")
 		var suppressions []models.Suppression
-		if err := db.NewSelect().Model(&suppressions).
+		query := db.NewSelect().Model(&suppressions).
 			Where("image_digest = ?", digest).
-			OrderExpr("created_at DESC").
-			Scan(c.Request.Context()); err != nil {
+			OrderExpr("created_at DESC")
+		if !isAdmin {
+			query = query.Where("user_id = ?", userID)
+		}
+		if err := query.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load suppressions"})
 			return
 		}
@@ -145,14 +157,17 @@ func DeleteSuppression(db *bun.DB) gin.HandlerFunc {
 		digest := c.Param("digest")
 		vulnID := c.Param("vulnId")
 
-		if _, err := auth.GetUserIDFromToken(c.GetHeader("Authorization")); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
 			return
 		}
 
-		if _, err := db.NewDelete().Model((*models.Suppression)(nil)).
-			Where("image_digest = ? AND vuln_id = ?", digest, vulnID).
-			Exec(c.Request.Context()); err != nil {
+		deleteQuery := db.NewDelete().Model((*models.Suppression)(nil)).
+			Where("image_digest = ? AND vuln_id = ?", digest, vulnID)
+		if !isAdmin {
+			deleteQuery = deleteQuery.Where("user_id = ?", userID)
+		}
+		if _, err := deleteQuery.Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete suppression"})
 			return
 		}

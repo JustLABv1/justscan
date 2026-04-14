@@ -346,6 +346,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 
 			if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, repoPath, artifactPath); err != nil {
 				log.Warnf("Failed to persist Xray ignore-rule snapshots for blocked scan %s: %v", scan.ID, err)
+				recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIgnoreRuleSyncError(err))
 			}
 			if suppressedCount, err := effectivesuppressions.RecalculateSuppressedCount(ctx, db, scan); err != nil {
 				log.Warnf("Failed to recalculate suppressed count for blocked scan %s: %v", scan.ID, err)
@@ -415,6 +416,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 	if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, repoPath, artifactPath); err != nil {
 		log.Warnf("Failed to persist Xray ignore-rule snapshots for scan %s (non-fatal): %v", scan.ID, err)
+		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIgnoreRuleSyncError(err))
 	}
 	if suppressedCount, err := effectivesuppressions.RecalculateSuppressedCount(ctx, db, scan); err != nil {
 		log.Warnf("Failed to recalculate suppressed count for scan %s: %v", scan.ID, err)

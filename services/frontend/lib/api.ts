@@ -855,6 +855,25 @@ export interface ScanStepLog {
   output_count?: number;
 }
 
+export type BlockedPolicyIgnoreRuleStatus = 'active_ignore' | 'no_ignore' | 'status_unavailable';
+
+export interface BlockedPolicyMatchedWatch {
+  name: string;
+  ignore_rule_status: BlockedPolicyIgnoreRuleStatus;
+}
+
+export interface BlockedPolicyDetails {
+  summary: string;
+  manifest?: string;
+  artifact?: string;
+  jfrog?: string;
+  matched_issues?: string[];
+  matched_watches?: BlockedPolicyMatchedWatch[];
+  blocking_policies?: string[];
+  matched_policies?: string[];
+  total_violations?: number;
+}
+
 export interface Scan {
   id: string;
   image_name: string;
@@ -895,6 +914,7 @@ export interface Scan {
   helm_chart_name?: string;
   helm_chart_version?: string;
   helm_source_path?: string;
+  blocked_policy_details?: BlockedPolicyDetails | null;
   step_logs?: ScanStepLog[];
 }
 
@@ -1371,6 +1391,7 @@ export interface StatusPageItem {
   started_at?: string;
   status: string;
   error_message?: string;
+  blocked_policy_details?: BlockedPolicyDetails | null;
   critical_count: number;
   high_count: number;
   medium_count: number;
@@ -1399,6 +1420,7 @@ export interface StatusPageScanSummary {
   scan_provider?: string;
   current_step?: string;
   error_message?: string;
+  blocked_policy_details?: BlockedPolicyDetails | null;
   critical_count: number;
   high_count: number;
   medium_count: number;

@@ -232,6 +232,92 @@ func TestParseXrayViolationVulnerabilitiesBuildsFallbackFindings(t *testing.T) {
 	}
 }
 
+func TestExtractXrayIgnoreRulesParsesNestedPayload(t *testing.T) {
+	payload := map[string]any{
+		"data": []any{
+			map[string]any{
+				"external_id": "rule-123",
+				"filters": map[string]any{
+					"policy_name": "Policy One",
+					"watch_name":  "Watch One",
+				},
+				"notes":      "Ignored for provider reasons",
+				"expires_at": "2026-05-01T00:00:00Z",
+			},
+		},
+	}
+
+	rules := extractXrayIgnoreRules(payload)
+	if len(rules) != 1 {
+		t.Fatalf("expected 1 ignore rule, got %d", len(rules))
+	}
+	if rules[0].RuleID != "rule-123" {
+		t.Fatalf("unexpected rule id %q", rules[0].RuleID)
+	}
+	if rules[0].PolicyName != "Policy One" {
+		t.Fatalf("unexpected policy name %q", rules[0].PolicyName)
+	}
+	if rules[0].WatchName != "Watch One" {
+		t.Fatalf("unexpected watch name %q", rules[0].WatchName)
+	}
+	if rules[0].Justification != "Ignored for provider reasons" {
+		t.Fatalf("unexpected justification %q", rules[0].Justification)
+	}
+	if rules[0].ExpiresAt == nil {
+		t.Fatal("expected expires_at to be parsed")
+	}
+}
+
+func TestXrayIgnoreRuleVulnerabilityFilter(t *testing.T) {
+	tests := []struct {
+		name            string
+		vulnerabilityID string
+		wantKey         string
+		wantValue       string
+		wantOK          bool
+	}{
+		{name: "cve", vulnerabilityID: "CVE-2026-1000", wantKey: "cve", wantValue: "CVE-2026-1000", wantOK: true},
+		{name: "xray issue", vulnerabilityID: "XRAY-12345", wantKey: "vulnerability", wantValue: "XRAY-12345", wantOK: true},
+		{name: "unsupported advisory id", vulnerabilityID: "GHSA-abcd-1234", wantOK: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gotKey, gotValue, gotOK := xrayIgnoreRuleVulnerabilityFilter(test.vulnerabilityID)
+			if gotKey != test.wantKey || gotValue != test.wantValue || gotOK != test.wantOK {
+				t.Fatalf("xrayIgnoreRuleVulnerabilityFilter(%q) = (%q, %q, %v), want (%q, %q, %v)", test.vulnerabilityID, gotKey, gotValue, gotOK, test.wantKey, test.wantValue, test.wantOK)
+			}
+		})
+	}
+}
+
+func TestShouldTreatIgnoreRuleLookupAsUnavailable(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "bad request", err: &xrayHTTPError{StatusCode: http.StatusBadRequest}, want: true},
+		{name: "forbidden", err: &xrayHTTPError{StatusCode: http.StatusForbidden}, want: true},
+		{name: "internal server error", err: &xrayHTTPError{StatusCode: http.StatusInternalServerError}, want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := shouldTreatIgnoreRuleLookupAsUnavailable(test.err); got != test.want {
+				t.Fatalf("shouldTreatIgnoreRuleLookupAsUnavailable() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestDescribeNonFatalXrayIgnoreRuleSyncErrorExplainsPermissionIssue(t *testing.T) {
+	message := describeNonFatalXrayIgnoreRuleSyncError(&xrayHTTPError{StatusCode: http.StatusForbidden})
+	if want := "permission to read ignore rules"; !containsFold(message, want) {
+		t.Fatalf("expected %q to contain %q", message, want)
+	}
+}
+
 func TestShouldWarnBlockedReindexErrorSuppressesExpectedStatuses(t *testing.T) {
 	tests := []struct {
 		name string

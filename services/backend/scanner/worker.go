@@ -11,6 +11,7 @@ import (
 
 	"justscan-backend/compliance"
 	"justscan-backend/config"
+	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/notifications"
 	"justscan-backend/pkg/models"
 
@@ -376,12 +377,17 @@ func processScan(job ScanJob, cacheDir string) {
 	scan.MediumCount = severityCounts[models.SeverityMedium]
 	scan.LowCount = severityCounts[models.SeverityLow]
 	scan.UnknownCount = severityCounts[models.SeverityUnknown]
+	if suppressedCount, err := effectivesuppressions.RecalculateSuppressedCount(context.Background(), db, scan); err != nil {
+		log.Warnf("Worker: failed to recalculate suppressed count for scan %s (non-fatal): %v", scanID, err)
+	} else {
+		scan.SuppressedCount = suppressedCount
+	}
 
 	if _, err := db.NewUpdate().Model(scan).
 		Column("status", "completed_at", "trivy_version", "grype_version", "image_digest",
 			"trivy_vuln_db_updated_at", "trivy_vuln_db_downloaded_at",
 			"trivy_java_db_updated_at", "trivy_java_db_downloaded_at",
-			"critical_count", "high_count", "medium_count", "low_count", "unknown_count",
+			"critical_count", "high_count", "medium_count", "low_count", "unknown_count", "suppressed_count",
 			"architecture", "os_family", "os_name").
 		Where("id = ?", scanID).Exec(context.Background()); err != nil {
 		log.Errorf("Worker: failed to mark scan %s as completed: %v", scanID, err)
@@ -444,7 +450,7 @@ func setFailed(db *bun.DB, scan *models.Scan, msg string) {
 	scan.ErrorMessage = msg
 	completedAt := time.Now()
 	scan.CompletedAt = &completedAt
-	columns := []string{"status", "error_message", "completed_at"}
+	columns := []string{"status", "error_message", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "suppressed_count"}
 	if scan.ScanProvider == models.ScanProviderArtifactoryXray {
 		if !preserveXrayExternalStatusOnFailure(scan.ExternalStatus) {
 			scan.ExternalStatus = models.ScanStatusFailed

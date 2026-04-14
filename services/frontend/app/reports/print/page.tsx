@@ -12,7 +12,7 @@ interface Vulnerability {
   id: string; vuln_id: string; pkg_name: string; installed_version: string;
   fixed_version: string; severity: string; title: string; description: string;
   cvss_score: number; references: string[];
-  suppression?: { status: string; justification: string; username?: string } | null;
+  suppression?: { status: string; justification: string; username?: string; source?: string; xray_policy_name?: string; xray_watch_name?: string } | null;
   comments?: Comment[];
 }
 interface Scan {
@@ -601,21 +601,22 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
               <tr style={{ background: '#f9fafb' }}>
-                {['CVE ID', 'Package', 'Severity', 'Status', 'Justification'].map(h => (
+                {['CVE ID', 'Package', 'Severity', 'Status', 'Source', 'Justification'].map(h => (
                   <th key={h} style={{ padding: '5px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600, color: '#6b7280' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {suppressedVulns.map(v => {
-                const statusLabel: Record<string, string> = { accepted: 'Accepted', wont_fix: "Won't Fix", false_positive: 'False Positive' };
+                const statusLabel: Record<string, string> = { accepted: 'Accepted', wont_fix: "Won't Fix", false_positive: 'False Positive', xray_ignore: 'Xray Ignore' };
                 return (
                   <tr key={v.id} style={{ color: '#6b7280' }}>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace' }}>{v.vuln_id}</td>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.pkg_name}</td>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.severity}</td>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.suppression ? (statusLabel[v.suppression.status] ?? v.suppression.status) : '—'}</td>
-                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{v.suppression?.justification || '—'}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.suppression?.source ?? 'local'}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{[v.suppression?.justification, v.suppression?.xray_policy_name, v.suppression?.xray_watch_name].filter(Boolean).join(' · ') || '—'}</td>
                   </tr>
                 );
               })}

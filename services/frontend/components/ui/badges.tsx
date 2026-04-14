@@ -116,6 +116,22 @@ export function SourceBadge({ source }: { source?: string }) {
   );
 }
 
+export function SuppressionSourceBadge({ source }: { source?: string }) {
+  const normalized = (source ?? 'local').trim().toLowerCase();
+  const label = normalized === 'xray' ? 'Xray' : normalized === 'mixed' ? 'Mixed' : 'Local';
+  const style = normalized === 'xray'
+    ? { background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.22)' }
+    : normalized === 'mixed'
+      ? { background: 'rgba(236,72,153,0.12)', color: '#f472b6', border: '1px solid rgba(236,72,153,0.22)' }
+      : { background: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.22)' };
+
+  return (
+    <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0" style={style} title={`Suppression source: ${label}`}>
+      {label}
+    </span>
+  );
+}
+
 // ── SevCount (table cell) ──────────────────────────────────────────────
 const SEV_TEXT: Record<string, string> = {
   critical: 'text-red-400 font-bold',

@@ -22,7 +22,7 @@ interface Vulnerability {
   description: string;
   cvss_score: number;
   references: string[];
-  suppression?: { status: string; justification: string; username?: string } | null;
+  suppression?: { status: string; justification: string; username?: string; source?: string; xray_policy_name?: string; xray_watch_name?: string } | null;
   comments?: Comment[];
 }
 
@@ -596,19 +596,21 @@ export default function PrintReportPage() {
                   <th style={{ padding: '6px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600 }}>Package</th>
                   <th style={{ padding: '6px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600 }}>Severity</th>
                   <th style={{ padding: '6px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600 }}>Status</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600 }}>Source</th>
                   <th style={{ padding: '6px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600 }}>Justification</th>
                 </tr>
               </thead>
               <tbody>
                 {suppressedVulns.map((v) => {
-                  const statusLabel: Record<string, string> = { accepted: 'Accepted', wont_fix: "Won't Fix", false_positive: 'False Positive' };
+                  const statusLabel: Record<string, string> = { accepted: 'Accepted', wont_fix: "Won't Fix", false_positive: 'False Positive', xray_ignore: 'Xray Ignore' };
                   return (
                     <tr key={v.id} style={{ borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
                       <td style={{ padding: '5px 8px', fontFamily: 'monospace', border: '1px solid #e5e7eb' }}>{v.vuln_id}</td>
                       <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.pkg_name}</td>
                       <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.severity}</td>
                       <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.suppression ? (statusLabel[v.suppression.status] ?? v.suppression.status) : '—'}</td>
-                      <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{v.suppression?.justification || '—'}</td>
+                      <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.suppression?.source ?? 'local'}</td>
+                      <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{[v.suppression?.justification, v.suppression?.xray_policy_name, v.suppression?.xray_watch_name].filter(Boolean).join(' · ') || '—'}</td>
                     </tr>
                   );
                 })}

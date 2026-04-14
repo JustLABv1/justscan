@@ -152,16 +152,6 @@ export default function RegistriesPage() {
 
       {error ? <FormAlert description={error} title="Registry loading failed" /> : null}
 
-      <div className="rounded-2xl px-4 py-3 text-sm flex items-start gap-3"
-        style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.18)', color: 'var(--text-secondary)' }}>
-        <div className="mt-0.5 w-2 h-2 rounded-full shrink-0" style={{ background: '#60a5fa' }} />
-        <div className="space-y-1">
-          <p className="font-medium text-zinc-800 dark:text-zinc-100">Provider choice is configured here in the frontend.</p>
-          <p className="text-zinc-600 dark:text-zinc-400">You do not need to edit backend/config.yaml to assign a registry to Trivy or Artifactory Xray. Provider selection, Xray base URL, and Artifactory ID are stored with the registry record in JustScan.</p>
-          <p className="text-zinc-600 dark:text-zinc-400">Registry health is checked automatically every 15 minutes, and you can still run a manual test from the actions menu.</p>
-        </div>
-      </div>
-
       {loading ? (
         <div className="glass-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
@@ -337,8 +327,10 @@ export default function RegistriesPage() {
                   )}
                   <FormField label="Username" onChange={(e) => setUsername(e.target.value)} placeholder="Optional" value={username} />
                   <FormField
+                    autoComplete="off"
                     description={editing ? 'Leave blank to keep the stored password unchanged.' : 'Optional unless your registry provider requires credentials.'}
                     label="Password"
+                    name="registry-password"
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder={editing ? '••••••••' : 'Optional'}
                     type="password"

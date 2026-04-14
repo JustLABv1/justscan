@@ -33,7 +33,8 @@ WORKDIR /app
 RUN apk update && apk add --no-cache \
     ca-certificates \
     tini \
-    postgresql-client
+    postgresql-client \
+    tzdata
 
 COPY --from=trivy-bin /usr/local/bin/trivy /usr/local/bin/trivy
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh

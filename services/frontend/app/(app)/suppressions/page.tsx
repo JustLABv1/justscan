@@ -1,6 +1,7 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { SuppressionSourceBadge } from '@/components/ui/badges';
 import { deleteSuppression, listAllSuppressions, Suppression } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { ListBox, Select } from '@heroui/react';
@@ -11,12 +12,14 @@ const STATUS_STYLE: Record<string, React.CSSProperties> = {
   accepted:       { color: '#60a5fa', background: 'rgba(59,130,246,0.1)',   border: '1px solid rgba(59,130,246,0.22)'   },
   wont_fix:       { color: '#a78bfa', background: 'rgba(124,58,237,0.1)',   border: '1px solid rgba(124,58,237,0.22)'   },
   false_positive: { color: '#34d399', background: 'rgba(16,185,129,0.1)',   border: '1px solid rgba(16,185,129,0.22)'   },
+  xray_ignore:    { color: '#f59e0b', background: 'rgba(245,158,11,0.1)',   border: '1px solid rgba(245,158,11,0.22)'   },
 };
 
 const STATUS_LABEL: Record<string, string> = {
   accepted: 'Accepted Risk',
   wont_fix: "Won't Fix",
   false_positive: 'False Positive',
+  xray_ignore: 'Xray Ignore',
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -58,6 +61,7 @@ export default function SuppressionsPage() {
   useEffect(() => { load(page, statusFilter, searchQuery); }, [load, page, statusFilter, searchQuery]);
 
   async function handleDelete(s: Suppression) {
+    if (s.read_only || s.source === 'xray') return;
     const ok = await confirm({
       title: `Remove suppression for ${s.vuln_id}?`,
       message: 'The vulnerability will no longer be suppressed for this image.',
@@ -109,6 +113,7 @@ export default function SuppressionsPage() {
                 <ListBox.Item id="accepted">Accepted Risk</ListBox.Item>
                 <ListBox.Item id="wont_fix">Won&apos;t Fix</ListBox.Item>
                 <ListBox.Item id="false_positive">False Positive</ListBox.Item>
+                <ListBox.Item id="xray_ignore">Xray Ignore</ListBox.Item>
               </ListBox>
             </Select.Popover>
           </Select>
@@ -128,6 +133,7 @@ export default function SuppressionsPage() {
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">CVE ID</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image Digest</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Source</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Justification</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">By</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Expires</th>
@@ -138,7 +144,7 @@ export default function SuppressionsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="py-16 text-center">
+                <td colSpan={9} className="py-16 text-center">
                   <div className="flex justify-center">
                     <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                   </div>
@@ -146,7 +152,7 @@ export default function SuppressionsPage() {
               </tr>
             ) : suppressions.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-16 text-center">
+                <td colSpan={9} className="py-16 text-center">
                   <div className="flex flex-col items-center gap-3">
                     <SecurityLockIcon size={32} className="text-zinc-400 dark:text-zinc-600" />
                     <p className="text-sm text-zinc-500">{searchQuery || statusFilter ? 'No suppressions match your filters.' : 'No suppressions found.'}</p>
@@ -180,8 +186,16 @@ export default function SuppressionsPage() {
                 <td className="px-4 py-3">
                   <StatusBadge status={s.status} />
                 </td>
+                <td className="px-4 py-3">
+                  <SuppressionSourceBadge source={s.source} />
+                </td>
                 <td className="px-4 py-3 text-xs text-zinc-500 max-w-xs">
                   <span className="line-clamp-2">{s.justification || '—'}</span>
+                  {(s.xray_policy_name || s.xray_watch_name) && (
+                    <p className="mt-1 text-[11px] text-zinc-400">
+                      {[s.xray_policy_name, s.xray_watch_name].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-xs text-zinc-500">{s.username || '—'}</td>
                 <td className="px-4 py-3 text-xs">
@@ -197,13 +211,17 @@ export default function SuppressionsPage() {
                   {timeAgo(s.created_at)}
                 </td>
                 <td className="px-4 py-3">
-                  <button
-                    onClick={() => handleDelete(s)}
-                    className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1"
-                    title="Remove suppression"
-                  >
-                    <Delete01Icon size={15} />
-                  </button>
+                  {s.read_only || s.source === 'xray' ? (
+                    <span className="text-[11px] text-zinc-400">Read only</span>
+                  ) : (
+                    <button
+                      onClick={() => handleDelete(s)}
+                      className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1"
+                      title="Remove suppression"
+                    >
+                      <Delete01Icon size={15} />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

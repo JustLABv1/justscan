@@ -17,4 +17,5 @@ type ScanStepLog struct {
 	StartedAt   time.Time  `bun:"started_at,type:timestamptz,notnull,default:now()" json:"started_at"`
 	CompletedAt *time.Time `bun:"completed_at,type:timestamptz" json:"completed_at,omitempty"`
 	Output      []string   `bun:"output,type:jsonb" json:"output"`
+	OutputCount int        `bun:"output_count,scanonly" json:"output_count,omitempty"`
 }

@@ -852,6 +852,26 @@ export interface ScanStepLog {
   started_at: string;
   completed_at?: string | null;
   output: string[];
+  output_count?: number;
+}
+
+export type BlockedPolicyIgnoreRuleStatus = 'active_ignore' | 'no_ignore' | 'status_unavailable';
+
+export interface BlockedPolicyMatchedWatch {
+  name: string;
+  ignore_rule_status: BlockedPolicyIgnoreRuleStatus;
+}
+
+export interface BlockedPolicyDetails {
+  summary: string;
+  manifest?: string;
+  artifact?: string;
+  jfrog?: string;
+  matched_issues?: string[];
+  matched_watches?: BlockedPolicyMatchedWatch[];
+  blocking_policies?: string[];
+  matched_policies?: string[];
+  total_violations?: number;
 }
 
 export interface Scan {
@@ -894,6 +914,7 @@ export interface Scan {
   helm_chart_name?: string;
   helm_chart_version?: string;
   helm_source_path?: string;
+  blocked_policy_details?: BlockedPolicyDetails | null;
   step_logs?: ScanStepLog[];
 }
 
@@ -1030,13 +1051,19 @@ export interface Suppression {
   id: string;
   vuln_id: string;
   image_digest: string;
-  status: 'accepted' | 'wont_fix' | 'false_positive';
+  status: 'accepted' | 'wont_fix' | 'false_positive' | 'xray_ignore';
   justification: string;
   user_id: string;
   expires_at: string | null;
   created_at: string;
   updated_at: string;
   username?: string;
+  source?: 'local' | 'xray' | 'mixed';
+  sources?: Array<'local' | 'xray'>;
+  read_only?: boolean;
+  xray_rule_id?: string;
+  xray_policy_name?: string;
+  xray_watch_name?: string;
 }
 
 export interface Comment {
@@ -1364,6 +1391,7 @@ export interface StatusPageItem {
   started_at?: string;
   status: string;
   error_message?: string;
+  blocked_policy_details?: BlockedPolicyDetails | null;
   critical_count: number;
   high_count: number;
   medium_count: number;
@@ -1392,6 +1420,7 @@ export interface StatusPageScanSummary {
   scan_provider?: string;
   current_step?: string;
   error_message?: string;
+  blocked_policy_details?: BlockedPolicyDetails | null;
   critical_count: number;
   high_count: number;
   medium_count: number;

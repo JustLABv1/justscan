@@ -3,6 +3,7 @@ package scanner
 import (
 	"context"
 	"strings"
+	"time"
 
 	"justscan-backend/pkg/models"
 
@@ -14,17 +15,84 @@ func upsertKBEntries(ctx context.Context, db *bun.DB, entries []models.VulnKBEnt
 		return nil
 	}
 
-	_, err := db.NewInsert().Model(&entries).
+	mergedEntries, err := prepareKBEntriesForUpsert(ctx, db, entries, time.Now())
+	if err != nil {
+		return err
+	}
+
+	_, err = db.NewInsert().Model(&mergedEntries).
 		On("CONFLICT (vuln_id) DO UPDATE").
-		Set("description = CASE WHEN EXCLUDED.description != '' THEN EXCLUDED.description ELSE vuln_kb.description END").
-		Set("severity = CASE WHEN EXCLUDED.severity != '' THEN EXCLUDED.severity ELSE vuln_kb.severity END").
-		Set("cvss_score = CASE WHEN EXCLUDED.cvss_score > vuln_kb.cvss_score THEN EXCLUDED.cvss_score ELSE vuln_kb.cvss_score END").
-		Set("cvss_vector = CASE WHEN EXCLUDED.cvss_score > vuln_kb.cvss_score THEN EXCLUDED.cvss_vector ELSE vuln_kb.cvss_vector END").
-		Set(`"references" = COALESCE(NULLIF(EXCLUDED."references", '[]'::jsonb), vuln_kb."references")`).
-		Set("exploit_available = EXCLUDED.exploit_available OR vuln_kb.exploit_available").
-		Set("fetched_at = now()").
+		Set("description = EXCLUDED.description").
+		Set("severity = EXCLUDED.severity").
+		Set("cvss_score = EXCLUDED.cvss_score").
+		Set("cvss_vector = EXCLUDED.cvss_vector").
+		Set("published_date = EXCLUDED.published_date").
+		Set("modified_date = EXCLUDED.modified_date").
+		Set(`"references" = EXCLUDED."references"`).
+		Set("exploit_available = EXCLUDED.exploit_available").
+		Set("fetched_at = EXCLUDED.fetched_at").
 		Exec(ctx)
 	return err
+}
+
+func prepareKBEntriesForUpsert(ctx context.Context, db *bun.DB, entries []models.VulnKBEntry, fetchedAt time.Time) ([]models.VulnKBEntry, error) {
+	mergedIncoming := mergeKBEntriesForUpsert(entries)
+	if len(mergedIncoming) == 0 {
+		return nil, nil
+	}
+
+	vulnIDs := make([]string, 0, len(mergedIncoming))
+	for _, entry := range mergedIncoming {
+		if strings.TrimSpace(entry.VulnID) == "" {
+			continue
+		}
+		vulnIDs = append(vulnIDs, entry.VulnID)
+	}
+	if len(vulnIDs) == 0 {
+		return nil, nil
+	}
+
+	var existing []models.VulnKBEntry
+	if err := db.NewSelect().Model(&existing).Where("vuln_id IN (?)", bun.In(vulnIDs)).Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	existingByID := make(map[string]models.VulnKBEntry, len(existing))
+	for _, entry := range existing {
+		existingByID[entry.VulnID] = entry
+	}
+
+	prepared := make([]models.VulnKBEntry, 0, len(mergedIncoming))
+	for _, entry := range mergedIncoming {
+		if existingEntry, ok := existingByID[entry.VulnID]; ok {
+			entry = mergeKBEntry(existingEntry, entry)
+		}
+		entry.FetchedAt = fetchedAt
+		prepared = append(prepared, entry)
+	}
+
+	return prepared, nil
+}
+
+func mergeKBEntriesForUpsert(entries []models.VulnKBEntry) []models.VulnKBEntry {
+	merged := make([]models.VulnKBEntry, 0, len(entries))
+	byID := make(map[string]int, len(entries))
+
+	for _, entry := range entries {
+		vulnID := strings.TrimSpace(entry.VulnID)
+		if vulnID == "" {
+			continue
+		}
+		entry.VulnID = vulnID
+		if idx, ok := byID[vulnID]; ok {
+			merged[idx] = mergeKBEntry(merged[idx], entry)
+			continue
+		}
+		byID[vulnID] = len(merged)
+		merged = append(merged, entry)
+	}
+
+	return merged
 }
 
 func mergeKBRefs(existing, incoming []models.KBRef) []models.KBRef {

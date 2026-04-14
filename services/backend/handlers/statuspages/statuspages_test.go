@@ -78,3 +78,16 @@ func TestDeriveStatusKeepsRunningState(t *testing.T) {
 		t.Fatalf("expected running status, got %q", status)
 	}
 }
+
+func TestDeriveStatusKeepsCompletedScanOperationallyHealthyDespiteFindings(t *testing.T) {
+	status := deriveStatus(72, StatusPageItem{
+		ScanStatus:     models.ScanStatusCompleted,
+		CriticalCount:  2,
+		HighCount:      5,
+		FreshnessHours: 4,
+	})
+
+	if status != "healthy" {
+		t.Fatalf("expected healthy operational status for completed scan with findings, got %q", status)
+	}
+}

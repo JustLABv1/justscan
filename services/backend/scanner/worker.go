@@ -11,6 +11,7 @@ import (
 
 	"justscan-backend/compliance"
 	"justscan-backend/config"
+	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/notifications"
 	"justscan-backend/pkg/models"
 
@@ -85,6 +86,7 @@ func InitWorker(db *bun.DB) {
 	}
 
 	log.Infof("Scanner worker pool started with concurrency=%d", concurrency)
+	startScanStaleWatchdog(db)
 
 	// Periodically refresh trivy databases for all workers so they stay current
 	// even when no scans are running (e.g. after a startup where the initial
@@ -165,7 +167,8 @@ func processScan(job ScanJob, cacheDir string) {
 	now := time.Now()
 	scan.Status = models.ScanStatusRunning
 	scan.StartedAt = &now
-	if _, err := db.NewUpdate().Model(scan).Column("status", "started_at").Where("id = ?", scanID).Exec(ctx); err != nil {
+	scan.LastProgressAt = &now
+	if _, err := db.NewUpdate().Model(scan).Column("status", "started_at", "last_progress_at").Where("id = ?", scanID).Exec(ctx); err != nil {
 		log.Errorf("Worker: failed to update scan status to running: %v", err)
 		return
 	}
@@ -174,7 +177,10 @@ func processScan(job ScanJob, cacheDir string) {
 
 	if scan.ScanProvider == models.ScanProviderArtifactoryXray {
 		recordScanStepOutput(ctx, db, scanID, "Worker started and handed off to the Xray provider flow.")
-		if err := processXrayScan(ctx, db, scan); err != nil {
+		stopHeartbeat := startScanProgressHeartbeat(ctx, db, scanID)
+		err := processXrayScan(ctx, db, scan)
+		stopHeartbeat()
+		if err != nil {
 			if ctx.Err() != nil {
 				return
 			}
@@ -197,7 +203,9 @@ func processScan(job ScanJob, cacheDir string) {
 		recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Requested platform override: %s.", job.Platform))
 	}
 
+	stopHeartbeat := startScanProgressHeartbeat(ctx, db, scanID)
 	runtimeInfo, err := EnsureDatabasesFresh(ctx, cacheDir)
+	stopHeartbeat()
 	if err != nil {
 		setFailed(db, scan, "failed to refresh trivy databases: "+err.Error())
 		return
@@ -221,7 +229,9 @@ func processScan(job ScanJob, cacheDir string) {
 	recordScanStepOutput(ctx, db, scanID, "Starting the image analysis with Trivy.")
 
 	// Run vulnerability scan
+	stopHeartbeat = startScanProgressHeartbeat(ctx, db, scanID)
 	trivyOut, trivyVersion, err := RunScanWithRegistryRetry(ctx, db, scan, job.EnvVars, job.Platform, cacheDir)
+	stopHeartbeat()
 	if err != nil {
 		if ctx.Err() != nil {
 			// Context was cancelled — scan was interrupted by user
@@ -244,7 +254,9 @@ func processScan(job ScanJob, cacheDir string) {
 	grypeVersion := ""
 	kbEntries := ExtractKBEntries(trivyOut)
 	if GrypeEnabled() {
+		stopHeartbeat = startScanProgressHeartbeat(ctx, db, scanID)
 		grypeOut, version, grypeErr := RunGrypeScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
+		stopHeartbeat()
 		if grypeErr != nil {
 			if ctx.Err() == nil {
 				log.Warnf("Worker: Grype scan failed for %s (non-fatal): %v", scanID, grypeErr)
@@ -277,17 +289,15 @@ func processScan(job ScanJob, cacheDir string) {
 		recordScanStepOutput(ctx, db, scanID, "No vulnerability findings were produced by the local scanners.")
 	}
 
-	// Upsert KB entries from scan data (best-effort, non-fatal)
-	go func(entries []models.VulnKBEntry) {
-		if len(entries) == 0 {
-			return
-		}
-		if err := upsertKBEntries(context.Background(), db, entries); err != nil {
+	// Persist KB entries before the worker finishes so new scan data is available
+	// immediately and does not depend on a later startup backfill.
+	if len(kbEntries) > 0 {
+		if err := upsertKBEntries(context.Background(), db, kbEntries); err != nil {
 			log.Warnf("Worker: KB upsert failed for scan %s (non-fatal): %v", scanID, err)
 		} else {
-			log.Debugf("Worker: upserted %d KB entries for scan %s", len(entries), scanID)
+			log.Debugf("Worker: upserted %d KB entries for scan %s", len(kbEntries), scanID)
 		}
-	}(kbEntries)
+	}
 
 	var osvVulns []models.Vulnerability
 	if err := setScanStep(ctx, db, scan, models.ScanStepFinalizingReport); err != nil {
@@ -298,7 +308,9 @@ func processScan(job ScanJob, cacheDir string) {
 	recordScanStepOutput(ctx, db, scanID, "Collecting SBOM components and applying Java OSV enrichment where applicable.")
 
 	// Run SBOM scan (best-effort, don't fail the whole scan if it errors)
+	stopHeartbeat = startScanProgressHeartbeat(ctx, db, scanID)
 	sbomOut, sbomErr := RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
+	stopHeartbeat()
 	if sbomErr != nil {
 		if ctx.Err() == nil {
 			log.Warnf("Worker: SBOM scan failed for %s (non-fatal): %v", scanID, sbomErr)
@@ -365,12 +377,17 @@ func processScan(job ScanJob, cacheDir string) {
 	scan.MediumCount = severityCounts[models.SeverityMedium]
 	scan.LowCount = severityCounts[models.SeverityLow]
 	scan.UnknownCount = severityCounts[models.SeverityUnknown]
+	if suppressedCount, err := effectivesuppressions.RecalculateSuppressedCount(context.Background(), db, scan); err != nil {
+		log.Warnf("Worker: failed to recalculate suppressed count for scan %s (non-fatal): %v", scanID, err)
+	} else {
+		scan.SuppressedCount = suppressedCount
+	}
 
 	if _, err := db.NewUpdate().Model(scan).
 		Column("status", "completed_at", "trivy_version", "grype_version", "image_digest",
 			"trivy_vuln_db_updated_at", "trivy_vuln_db_downloaded_at",
 			"trivy_java_db_updated_at", "trivy_java_db_downloaded_at",
-			"critical_count", "high_count", "medium_count", "low_count", "unknown_count",
+			"critical_count", "high_count", "medium_count", "low_count", "unknown_count", "suppressed_count",
 			"architecture", "os_family", "os_name").
 		Where("id = ?", scanID).Exec(context.Background()); err != nil {
 		log.Errorf("Worker: failed to mark scan %s as completed: %v", scanID, err)
@@ -433,7 +450,7 @@ func setFailed(db *bun.DB, scan *models.Scan, msg string) {
 	scan.ErrorMessage = msg
 	completedAt := time.Now()
 	scan.CompletedAt = &completedAt
-	columns := []string{"status", "error_message", "completed_at"}
+	columns := []string{"status", "error_message", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "suppressed_count"}
 	if scan.ScanProvider == models.ScanProviderArtifactoryXray {
 		if !preserveXrayExternalStatusOnFailure(scan.ExternalStatus) {
 			scan.ExternalStatus = models.ScanStatusFailed

@@ -31,6 +31,7 @@ import {
   reScan,
   upsertSuppression,
 } from '@/lib/api';
+import { formatIgnoreRuleStatusLabel, getBlockedPolicyDetails } from '@/lib/blocked-policy';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Button, Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select, useOverlayState } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
@@ -45,55 +46,6 @@ const selectTriggerCls = heroSelectTriggerClassName;
 
 type ScanTab = 'vulns' | 'policy' | 'sbom' | 'details' | 'timeline';
 
-type BlockedPolicyDetails = {
-  summary: string;
-  manifest?: string;
-  artifact?: string;
-  jfrog?: string;
-  matchedIssues?: string;
-  matchedWatches?: string;
-  blockingPolicies?: string;
-  matchedPolicies?: string;
-  totalViolations?: string;
-};
-
-function parseBlockedPolicyDetails(errorMessage?: string | null): BlockedPolicyDetails | null {
-  const message = errorMessage?.trim();
-  if (!message) return null;
-
-  const lines = message
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (lines.length === 0) return null;
-
-  const details: BlockedPolicyDetails = { summary: lines[0] };
-  for (const line of lines.slice(1)) {
-    if (line.startsWith('Manifest: ')) details.manifest = line.slice('Manifest: '.length);
-    else if (line.startsWith('Artifact: ')) details.artifact = line.slice('Artifact: '.length);
-    else if (line.startsWith('JFrog: ')) details.jfrog = line.slice('JFrog: '.length);
-    else if (line.startsWith('Matched issues: ')) details.matchedIssues = line.slice('Matched issues: '.length);
-    else if (line.startsWith('Matched watches: ')) details.matchedWatches = line.slice('Matched watches: '.length);
-    else if (line.startsWith('Blocking policies: ')) details.blockingPolicies = line.slice('Blocking policies: '.length);
-    else if (line.startsWith('Matched policies: ')) details.matchedPolicies = line.slice('Matched policies: '.length);
-    else if (line.startsWith('Xray violations found for this artifact: ')) details.totalViolations = line.slice('Xray violations found for this artifact: '.length);
-  }
-
-  const hasStructuredDetails = Boolean(
-    details.manifest ||
-    details.artifact ||
-    details.jfrog ||
-    details.matchedIssues ||
-    details.matchedWatches ||
-    details.blockingPolicies ||
-    details.matchedPolicies ||
-    details.totalViolations
-  );
-
-  return hasStructuredDetails ? details : null;
-}
-
 function DetailBlock({ label, value, mono = false }: { label: string; value?: string; mono?: boolean }) {
   if (!value) return null;
 
@@ -103,6 +55,65 @@ function DetailBlock({ label, value, mono = false }: { label: string; value?: st
       <p className={mono ? 'text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all leading-relaxed' : 'text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed'}>
         {value}
       </p>
+    </div>
+  );
+}
+
+function PolicyListSection({ label, items, mono = false }: { label: string; items: string[]; mono?: boolean }) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">{label}</p>
+        <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'var(--glass-border)', color: 'var(--text-secondary)', background: 'var(--app-bg)' }}>
+          {items.length}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div key={item} className={`rounded-lg border px-3 py-2 text-sm leading-relaxed ${mono ? 'font-mono text-xs break-all' : ''}`} style={{ borderColor: 'var(--glass-border)', color: 'var(--text-primary)', background: 'var(--app-bg)' }}>
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WatchStatusBadge({ status }: { status: 'active_ignore' | 'no_ignore' | 'status_unavailable' }) {
+  const palette = status === 'active_ignore'
+    ? { color: '#b45309', background: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.26)' }
+    : status === 'status_unavailable'
+      ? { color: '#7c2d12', background: 'rgba(251,146,60,0.12)', border: 'rgba(251,146,60,0.28)' }
+      : { color: 'var(--text-secondary)', background: 'var(--app-bg)', border: 'var(--glass-border)' };
+
+  return (
+    <span className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ color: palette.color, background: palette.background, borderColor: palette.border }}>
+      {formatIgnoreRuleStatusLabel(status)}
+    </span>
+  );
+}
+
+function PolicyWatchList({ watches }: { watches: Array<{ name: string; ignoreRuleStatus: 'active_ignore' | 'no_ignore' | 'status_unavailable' }> }) {
+  if (watches.length === 0) return null;
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Matched Watches</p>
+        <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'var(--glass-border)', color: 'var(--text-secondary)', background: 'var(--app-bg)' }}>
+          {watches.length}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {watches.map((watch) => (
+          <div key={watch.name} className="flex flex-col gap-2 rounded-lg border px-3 py-2 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--glass-border)', background: 'var(--app-bg)' }}>
+            <span className="text-sm break-all" style={{ color: 'var(--text-primary)' }}>{watch.name}</span>
+            <WatchStatusBadge status={watch.ignoreRuleStatus} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -209,9 +220,7 @@ export default function ScanDetailPage() {
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanStatus = scan?.status;
-  const blockedPolicyDetails = scan?.external_status === 'blocked_by_xray_policy'
-    ? parseBlockedPolicyDetails(scan.error_message)
-    : null;
+  const blockedPolicyDetails = getBlockedPolicyDetails(scan?.external_status, scan?.blocked_policy_details, scan?.error_message);
   const hasPolicyTab = Boolean(blockedPolicyDetails);
 
   const loadScan = useCallback(async () => {
@@ -876,16 +885,23 @@ export default function ScanDetailPage() {
 
           <div className="grid gap-3 md:grid-cols-2">
             <DetailBlock label="Summary" value={blockedPolicyDetails.summary} />
-            <DetailBlock label="Xray Violations" value={blockedPolicyDetails.totalViolations} />
+            <DetailBlock label="Xray Violations" value={blockedPolicyDetails.totalViolations ? String(blockedPolicyDetails.totalViolations) : undefined} />
             <DetailBlock label="Manifest" value={blockedPolicyDetails.manifest} mono />
             <DetailBlock label="Artifact" value={blockedPolicyDetails.artifact} mono />
-            <DetailBlock label="Matched Issues" value={blockedPolicyDetails.matchedIssues} />
-            <DetailBlock label="Matched Watches" value={blockedPolicyDetails.matchedWatches} />
-            <DetailBlock label="Blocking Policies" value={blockedPolicyDetails.blockingPolicies} />
-            <DetailBlock label="Matched Policies" value={blockedPolicyDetails.matchedPolicies} />
           </div>
 
-          <DetailBlock label="JFrog Response" value={blockedPolicyDetails.jfrog} mono />
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)]">
+            <PolicyWatchList watches={blockedPolicyDetails.matchedWatches} />
+            <div className="space-y-3">
+              <PolicyListSection label="Blocking Policies" items={blockedPolicyDetails.blockingPolicies} />
+              <PolicyListSection label="Matched Policies" items={blockedPolicyDetails.matchedPolicies} />
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <PolicyListSection label="Matched Issues" items={blockedPolicyDetails.matchedIssues} />
+            <DetailBlock label="JFrog Response" value={blockedPolicyDetails.jfrog} mono />
+          </div>
         </div>
       )}
 

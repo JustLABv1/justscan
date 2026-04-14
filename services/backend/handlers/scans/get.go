@@ -3,6 +3,7 @@ package scans
 import (
 	"net/http"
 
+	"justscan-backend/functions/blockedpolicy"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -64,6 +65,10 @@ func GetScan(db *bun.DB) gin.HandlerFunc {
 			}
 		}
 		scan.StepLogs = stepLogs
+		if err := blockedpolicy.AttachScanDetails(c.Request.Context(), db, scan); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load blocked policy details"})
+			return
+		}
 
 		c.JSON(http.StatusOK, scan)
 	}

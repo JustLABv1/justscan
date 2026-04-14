@@ -5,6 +5,8 @@ import { SeverityBadge, SourceBadge, StatusBadge, formatStatusLabel, resolveDisp
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type { StatusPageItem, StatusPageResponse, StatusPageScanSummary, Vulnerability } from '@/lib/api';
 import { ApiError, getStatusPageBySlug, getStatusPageItemVulnerabilityContextAnalysis, getStatusPageTrackedScan, getToken, listStatusPageItemVulnerabilities, listStatusPageScanHistory } from '@/lib/api';
+import type { BlockedPolicyDetailsView } from '@/lib/blocked-policy';
+import { compactBlockedPolicyList, countBlockedPolicyList, formatIgnoreRuleStatusLabel, getBlockedPolicyDetails } from '@/lib/blocked-policy';
 import { timeAgo } from '@/lib/time';
 import { Button, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import Link from 'next/link';
@@ -205,74 +207,6 @@ function compareItemsByPriority(left: StatusPageItem, right: StatusPageItem) {
   );
 }
 
-type BlockedPolicyDetails = {
-  summary: string;
-  manifest?: string;
-  artifact?: string;
-  jfrog?: string;
-  matchedIssues?: string;
-  matchedWatches?: string;
-  blockingPolicies?: string;
-  matchedPolicies?: string;
-  totalViolations?: string;
-};
-
-function parseBlockedPolicyDetails(errorMessage?: string | null): BlockedPolicyDetails | null {
-  const message = errorMessage?.trim();
-  if (!message) return null;
-
-  const lines = message
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (lines.length === 0) return null;
-
-  const details: BlockedPolicyDetails = { summary: lines[0] };
-  for (const line of lines.slice(1)) {
-    if (line.startsWith('Manifest: ')) details.manifest = line.slice('Manifest: '.length);
-    else if (line.startsWith('Artifact: ')) details.artifact = line.slice('Artifact: '.length);
-    else if (line.startsWith('JFrog: ')) details.jfrog = line.slice('JFrog: '.length);
-    else if (line.startsWith('Matched issues: ')) details.matchedIssues = line.slice('Matched issues: '.length);
-    else if (line.startsWith('Matched watches: ')) details.matchedWatches = line.slice('Matched watches: '.length);
-    else if (line.startsWith('Blocking policies: ')) details.blockingPolicies = line.slice('Blocking policies: '.length);
-    else if (line.startsWith('Matched policies: ')) details.matchedPolicies = line.slice('Matched policies: '.length);
-    else if (line.startsWith('Xray violations found for this artifact: ')) details.totalViolations = line.slice('Xray violations found for this artifact: '.length);
-  }
-
-  const hasStructuredDetails = Boolean(
-    details.manifest ||
-    details.artifact ||
-    details.jfrog ||
-    details.matchedIssues ||
-    details.matchedWatches ||
-    details.blockingPolicies ||
-    details.matchedPolicies ||
-    details.totalViolations,
-  );
-
-  return hasStructuredDetails ? details : null;
-}
-
-function countDelimitedValues(value?: string) {
-  if (!value) return 0;
-  return value
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .length;
-}
-
-function compactDelimitedValues(value?: string, maxItems = 2) {
-  if (!value) return '';
-  const items = value
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-  if (items.length <= maxItems) return items.join(', ');
-  return `${items.slice(0, maxItems).join(', ')} +${items.length - maxItems} more`;
-}
-
 function TagBadge({ tag }: { tag: string }) {
   return (
     <span
@@ -297,14 +231,35 @@ function compactErrorSummary(message?: string) {
   return firstLine.length > 180 ? `${firstLine.slice(0, 177)}...` : firstLine;
 }
 
-function buildItemNote(item: StatusPageItem, blockedPolicyDetails: BlockedPolicyDetails | null) {
+function summarizeWatchCoverage(blockedPolicyDetails: BlockedPolicyDetailsView) {
+  const totalWatches = blockedPolicyDetails.matchedWatches.length;
+  if (totalWatches === 0) return '';
+
+  const activeIgnoreCount = blockedPolicyDetails.matchedWatches.filter((watch) => watch.ignoreRuleStatus === 'active_ignore').length;
+  if (activeIgnoreCount > 0) {
+    return `${activeIgnoreCount}/${totalWatches} watches have active ignore`;
+  }
+
+  const unavailableCount = blockedPolicyDetails.matchedWatches.filter((watch) => watch.ignoreRuleStatus === 'status_unavailable').length;
+  if (unavailableCount > 0) {
+    return `${unavailableCount}/${totalWatches} watch statuses unavailable`;
+  }
+
+  return `${totalWatches} watches with no ignore`;
+}
+
+function buildItemNote(item: StatusPageItem, blockedPolicyDetails: BlockedPolicyDetailsView | null) {
   if (blockedPolicyDetails) {
     const details: string[] = [];
     if (blockedPolicyDetails.totalViolations) {
       details.push(`${blockedPolicyDetails.totalViolations} violations`);
     }
-    if (blockedPolicyDetails.blockingPolicies) {
-      details.push(`${countDelimitedValues(blockedPolicyDetails.blockingPolicies)} blocking policies`);
+    if (blockedPolicyDetails.blockingPolicies.length > 0) {
+      details.push(`${countBlockedPolicyList(blockedPolicyDetails.blockingPolicies)} blocking policies`);
+    }
+    const watchCoverage = summarizeWatchCoverage(blockedPolicyDetails);
+    if (watchCoverage) {
+      details.push(watchCoverage);
     }
     return details.length > 0 ? details.join(' · ') : blockedPolicyDetails.summary;
   }
@@ -319,6 +274,39 @@ function buildItemNote(item: StatusPageItem, blockedPolicyDetails: BlockedPolicy
   if (item.medium_count > 0) parts.push(`${item.medium_count} medium`);
   if (item.low_count > 0) parts.push(`${item.low_count} low`);
   return parts.length > 0 ? parts.join(' · ') : 'No active findings';
+}
+
+function BlockedPolicyWatchBadge({ status }: { status: 'active_ignore' | 'no_ignore' | 'status_unavailable' }) {
+  const palette = status === 'active_ignore'
+    ? { color: '#b45309', background: 'rgba(245,158,11,0.12)', borderColor: 'rgba(245,158,11,0.26)' }
+    : status === 'status_unavailable'
+      ? { color: '#9a3412', background: 'rgba(251,146,60,0.12)', borderColor: 'rgba(251,146,60,0.28)' }
+      : { color: 'var(--text-secondary)', background: 'var(--status-pill-bg)', borderColor: 'var(--status-pill-border)' };
+
+  return (
+    <span className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={palette}>
+      {formatIgnoreRuleStatusLabel(status)}
+    </span>
+  );
+}
+
+function BlockedPolicyWatchList({ watches, compact = false }: { watches: BlockedPolicyDetailsView['matchedWatches']; compact?: boolean }) {
+  if (watches.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {watches.map((watch) => (
+        <div
+          key={`${watch.name}-${watch.ignoreRuleStatus}`}
+          className={`flex flex-col gap-2 rounded-xl border ${compact ? 'px-3 py-2' : 'px-3 py-2.5'} sm:flex-row sm:items-center sm:justify-between`}
+          style={{ borderColor: 'rgba(245,158,11,0.18)', background: 'color-mix(in srgb, rgba(245,158,11,0.06) 60%, var(--status-card-bg))' }}
+        >
+          <span className={`break-all ${compact ? 'text-[12px]' : 'text-[13px]'}`} style={{ color: 'var(--text-primary)' }}>{watch.name}</span>
+          <BlockedPolicyWatchBadge status={watch.ignoreRuleStatus} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function getRefreshCadence(lastLoadedAt: number | null, now: number) {
@@ -576,7 +564,7 @@ function CompactStatusRow({
   const exposureStatus = getExposureStatus(item, status);
   const accent = getPrimaryAccent(status, exposureStatus);
   const totalFindings = getFindingTotal(item);
-  const blockedPolicyDetails = status === 'blocked_by_xray_policy' ? parseBlockedPolicyDetails(item.error_message) : null;
+  const blockedPolicyDetails = getBlockedPolicyDetails(item.external_status, item.blocked_policy_details, item.error_message);
   const note = buildItemNote(item, blockedPolicyDetails);
   const isRunning = ACTIVE_SCAN_STATUSES.has(effectiveScanStatus);
 
@@ -904,9 +892,12 @@ function StatusItemVulnerabilityModal({
       : 'pending';
   const displayedScan = selectedScan ?? item;
   const blockedPolicyDetails = useMemo(() => {
-    if (effectiveScanStatus !== 'blocked_by_xray_policy') return null;
-    return parseBlockedPolicyDetails(selectedScan?.error_message ?? item?.error_message ?? null);
-  }, [effectiveScanStatus, item?.error_message, selectedScan?.error_message]);
+    return getBlockedPolicyDetails(
+      selectedScan?.external_status ?? item?.external_status,
+      selectedScan?.blocked_policy_details ?? item?.blocked_policy_details,
+      selectedScan?.error_message ?? item?.error_message ?? null,
+    );
+  }, [item?.blocked_policy_details, item?.error_message, item?.external_status, selectedScan?.blocked_policy_details, selectedScan?.error_message, selectedScan?.external_status]);
 
   const totalPages = Math.max(1, Math.ceil(vulnTotal / VULN_PAGE_SIZE));
 
@@ -986,19 +977,19 @@ function StatusItemVulnerabilityModal({
                           {blockedPolicyDetails.totalViolations} violations
                         </span>
                       )}
-                      {blockedPolicyDetails.blockingPolicies && (
+                      {blockedPolicyDetails.blockingPolicies.length > 0 && (
                         <span className="rounded-full border px-2.5 py-1 text-[11px]" style={getTintedChipStyle('#f59e0b', 'var(--text-secondary)')}>
-                          {countDelimitedValues(blockedPolicyDetails.blockingPolicies)} blocking policies
+                          {countBlockedPolicyList(blockedPolicyDetails.blockingPolicies)} blocking policies
                         </span>
                       )}
-                      {blockedPolicyDetails.matchedWatches && (
+                      {blockedPolicyDetails.matchedWatches.length > 0 && (
                         <span className="rounded-full border px-2.5 py-1 text-[11px]" style={getTintedChipStyle('#f59e0b', 'var(--text-secondary)')}>
-                          {countDelimitedValues(blockedPolicyDetails.matchedWatches)} watches
+                          {blockedPolicyDetails.matchedWatches.length} watches
                         </span>
                       )}
-                      {blockedPolicyDetails.matchedIssues && (
+                      {blockedPolicyDetails.matchedIssues.length > 0 && (
                         <span className="rounded-full border px-2.5 py-1 text-[11px]" style={getTintedChipStyle('#f59e0b', 'var(--text-secondary)')}>
-                          {countDelimitedValues(blockedPolicyDetails.matchedIssues)} matched issues
+                          {countBlockedPolicyList(blockedPolicyDetails.matchedIssues)} matched issues
                         </span>
                       )}
                     </div>
@@ -1006,14 +997,21 @@ function StatusItemVulnerabilityModal({
                       <summary className="cursor-pointer list-none text-[12px] font-semibold" style={{ color: '#b45309' }}>
                         Show Xray details
                       </summary>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {blockedPolicyDetails.blockingPolicies && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Blocking policies:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactDelimitedValues(blockedPolicyDetails.blockingPolicies, 3)}</span></div>}
-                        {blockedPolicyDetails.matchedPolicies && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Matched policies:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactDelimitedValues(blockedPolicyDetails.matchedPolicies, 3)}</span></div>}
-                        {blockedPolicyDetails.matchedWatches && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Matched watches:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactDelimitedValues(blockedPolicyDetails.matchedWatches, 3)}</span></div>}
-                        {blockedPolicyDetails.matchedIssues && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Matched issues:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactDelimitedValues(blockedPolicyDetails.matchedIssues, 3)}</span></div>}
+                      <div className="mt-3 space-y-3">
+                        {blockedPolicyDetails.matchedWatches.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>Matched watches</p>
+                            <BlockedPolicyWatchList watches={blockedPolicyDetails.matchedWatches} compact />
+                          </div>
+                        )}
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {blockedPolicyDetails.blockingPolicies.length > 0 && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Blocking policies:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactBlockedPolicyList(blockedPolicyDetails.blockingPolicies, 3)}</span></div>}
+                          {blockedPolicyDetails.matchedPolicies.length > 0 && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Matched policies:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactBlockedPolicyList(blockedPolicyDetails.matchedPolicies, 3)}</span></div>}
+                          {blockedPolicyDetails.matchedIssues.length > 0 && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Matched issues:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactBlockedPolicyList(blockedPolicyDetails.matchedIssues, 3)}</span></div>}
                         {blockedPolicyDetails.artifact && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Artifact:</span> <span className="break-all" style={{ color: 'var(--text-secondary)' }}>{blockedPolicyDetails.artifact}</span></div>}
                         {blockedPolicyDetails.manifest && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Manifest:</span> <span className="break-all" style={{ color: 'var(--text-secondary)' }}>{blockedPolicyDetails.manifest}</span></div>}
                         {blockedPolicyDetails.jfrog && <div className="text-[12px] leading-5 sm:col-span-2"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>JFrog:</span> <span className="break-all" style={{ color: 'var(--text-secondary)' }}>{blockedPolicyDetails.jfrog}</span></div>}
+                        </div>
                       </div>
                     </details>
                     <div className="mt-3 border-t pt-3 text-[12px]" style={{ borderColor: 'rgba(245,158,11,0.16)', color: 'var(--text-secondary)' }}>
@@ -1246,7 +1244,7 @@ function ItemCard({
   const exposureStatus = getExposureStatus(item, cardStatus);
   const color = getPrimaryAccent(cardStatus, exposureStatus);
   const totalFindings = getFindingTotal(item);
-  const blockedPolicyDetails = cardStatus === 'blocked_by_xray_policy' ? parseBlockedPolicyDetails(item.error_message) : null;
+  const blockedPolicyDetails = getBlockedPolicyDetails(item.external_status, item.blocked_policy_details, item.error_message);
   const itemNote = buildItemNote(item, blockedPolicyDetails);
   const isRunning = ACTIVE_SCAN_STATUSES.has(effectiveScanStatus);
   const isCompact = layout === 'compact';
@@ -1393,9 +1391,14 @@ function ItemCard({
           <div className={`rounded-xl border ${isDense ? 'px-3 py-2.5' : 'px-4 py-3'}`} style={{ borderColor: 'rgba(245,158,11,0.22)', background: 'rgba(245,158,11,0.08)' }}>
             <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: '#b45309' }}>Xray policy violation</p>
             <p className={`leading-6 ${isDense ? 'text-[12px]' : 'text-[13px]'}`} style={{ color: 'var(--text-primary)' }}>{blockedPolicyDetails.summary}</p>
-            {blockedPolicyDetails.blockingPolicies && !isGrid && (
+            {blockedPolicyDetails.blockingPolicies.length > 0 && !isGrid && (
               <p className="mt-2 text-[12px] leading-5" style={{ color: 'var(--text-secondary)' }}>
-                Blocking policies: {isDense ? compactDelimitedValues(blockedPolicyDetails.blockingPolicies, 2) : blockedPolicyDetails.blockingPolicies}
+                Blocking policies: {isDense ? compactBlockedPolicyList(blockedPolicyDetails.blockingPolicies, 2) : blockedPolicyDetails.blockingPolicies.join(', ')}
+              </p>
+            )}
+            {blockedPolicyDetails.matchedWatches.length > 0 && !isGrid && (
+              <p className="mt-2 text-[12px] leading-5" style={{ color: 'var(--text-secondary)' }}>
+                {summarizeWatchCoverage(blockedPolicyDetails)}
               </p>
             )}
             {blockedPolicyDetails.totalViolations && isDense && (
@@ -1517,7 +1520,7 @@ function StatusTable({ items, onOpen }: { items: StatusPageItem[]; onOpen: (item
             {items.map((item, index) => {
               const cardStatus = getPresentationStatus(item);
               const exposureStatus = getExposureStatus(item, cardStatus);
-              const blockedPolicyDetails = cardStatus === 'blocked_by_xray_policy' ? parseBlockedPolicyDetails(item.error_message) : null;
+              const blockedPolicyDetails = getBlockedPolicyDetails(item.external_status, item.blocked_policy_details, item.error_message);
               const totalFindings = getFindingTotal(item);
               return (
                 <tr

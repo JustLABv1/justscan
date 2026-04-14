@@ -5,7 +5,7 @@ import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashbo
 import { fullDate, timeAgo } from '@/lib/time';
 import { Activity01Icon, Add01Icon } from 'hugeicons-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 // ── severity config ──────────────────────────────────────────────────
 const SEV = [
@@ -133,21 +133,15 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
   }, []);
   if (data.length < 2) return null;
 
-  const H = 84, SPARK_TOP = 22, PAD = 4;
+  const H = 176, SPARK_TOP = 28, PAD = 8;
   const sparkH = H - SPARK_TOP;
   const values = data.map(d => d.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
+  const max = Math.max(...values, 5); // Ensure at least 5 for a healthy curve even if all 0s
+  const baselineY = H - PAD;
 
-  // Amplify the range slightly if it's very small to avoid "flat" lines when there's minor variation
-  // but ensure we don't have too much blank space if the user wants it to feel tighter.
-  // Actually, the user complained about "many blank space below", which usually happens 
-  // if the range is small and min is far from 0.
-  
   const pts = data.map((_, i) => [
     (i / (data.length - 1)) * W,
-    SPARK_TOP + sparkH - PAD - ((values[i]! - min) / range) * (sparkH - PAD * 2),
+    baselineY - ((values[i]! / max) * (sparkH - PAD * 2)),
   ] as [number, number]);
 
   let path = `M${pts[0]![0].toFixed(1)},${pts[0]![1].toFixed(1)}`;
@@ -169,11 +163,10 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
   const hd = hoverIdx !== null ? data[hoverIdx] : null;
 
   return (
-    <div ref={containerRef} className="w-full">
+    <div ref={containerRef} className="h-full min-h-[176px] w-full">
     <svg
       viewBox={`0 0 ${W} ${H}`}
-      className="w-full cursor-crosshair"
-      style={{ height: H }}
+      className="h-full w-full cursor-crosshair"
       aria-hidden
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setHoverIdx(null)}
@@ -186,12 +179,13 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
       </defs>
 
       <path d={`${path} L${W},${H} L0,${H} Z`} fill={`url(#${gradId})`} />
+      <line x1={0} x2={W} y1={baselineY} y2={baselineY} stroke={color} strokeOpacity="0.12" strokeWidth="1" />
       <path d={path} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
         style={{ filter: `drop-shadow(0 0 2px ${color}88)` }} />
 
       {hp && hd ? (
         <>
-          <line x1={hp[0]} x2={hp[0]} y1={SPARK_TOP} y2={H}
+          <line x1={hp[0]} x2={hp[0]} y1={SPARK_TOP} y2={baselineY}
             stroke={color} strokeOpacity="0.25" strokeWidth="1" strokeDasharray="2 3" />
           <circle cx={hp[0]} cy={hp[1]} r="3" fill={color}
             style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
@@ -540,6 +534,20 @@ export default function DashboardPage() {
   const currentUser = getUser() as { role?: string } | null;
   const isAdmin = currentUser?.role === 'admin' || getTokenType() === 'admin';
 
+  const sparkTrends = useMemo(() => {
+    // Fill gaps for the last 30 days to ensure we show 0 when no scans were performed
+    const result: { date: string; value: number }[] = [];
+    const map = new Map(trends.map(t => [t.date, t.total]));
+    const now = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setUTCDate(d.getUTCDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      result.push({ date: key, value: map.get(key) ?? 0 });
+    }
+    return result;
+  }, [trends]);
+
   useEffect(() => {
     const healthPromise = isAdmin
       ? getScannerHealth()
@@ -629,7 +637,6 @@ export default function DashboardPage() {
   const displayedAttentionScans = allAttentionScans.slice(0, 7);
   const moreAttentionCount = allAttentionScans.length - displayedAttentionScans.length;
   const triageHref = attentionFilter === 'running' ? buildScansHref({ status: 'running' }) : buildScansHref({ status: 'failed' });
-  const sparkTrends = trends.slice(-30).map((d) => ({ date: d.date, value: d.total }));
 
   return (
     <div className="p-6 space-y-4 max-w-7xl mx-auto">
@@ -850,7 +857,7 @@ export default function DashboardPage() {
         <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>History</p>
         <div className="grid gap-3 lg:grid-cols-2">
           {/* Scan volume */}
-          <div className="rounded-2xl p-5" style={glassCard()}>
+          <div className="flex min-h-[280px] flex-col rounded-2xl p-5" style={glassCard()}>
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Scan Volume</h2>
@@ -867,7 +874,7 @@ export default function DashboardPage() {
               </Link>
             </div>
             {sparkTrends.length >= 2
-              ? <MiniSparkline data={sparkTrends} color="#a78bfa" id="scan-volume" />
+              ? <div className="flex-1"><MiniSparkline data={sparkTrends} color="#a78bfa" id="scan-volume" /></div>
               : <div className="flex items-center justify-center py-8 text-sm" style={{ color: 'var(--text-faint)' }}>No trend data yet</div>
             }
           </div>

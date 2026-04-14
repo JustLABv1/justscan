@@ -44,7 +44,7 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=semver,pattern=backend-{{version}}
+            type=semver,pattern={{version}},prefix=backend-
             type=raw,value=backend-beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=backend-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
@@ -81,7 +81,7 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=semver,pattern=frontend-{{version}}
+            type=semver,pattern={{version}},prefix=frontend-
             type=raw,value=frontend-beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=frontend-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 

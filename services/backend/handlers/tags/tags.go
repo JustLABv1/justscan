@@ -37,7 +37,8 @@ func ListTags(db *bun.DB) gin.HandlerFunc {
 
 func CreateTag(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if _, ok := authz.RequireAdmin(c, db); !ok {
+		userID, ok := authz.RequireAdmin(c, db)
+		if !ok {
 			return
 		}
 
@@ -52,7 +53,7 @@ func CreateTag(db *bun.DB) gin.HandlerFunc {
 		if body.Color == "" {
 			body.Color = "#6366f1"
 		}
-		tag := &models.Tag{Name: body.Name, Color: body.Color}
+		tag := &models.Tag{Name: body.Name, Color: body.Color, OwnerType: models.OwnerTypeUser, OwnerUserID: &userID}
 		if _, err := db.NewInsert().Model(tag).Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "tag name already exists"})
 			return
@@ -125,7 +126,7 @@ func AddTagToScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
 			return
 		}
-		if _, _, _, ok := scanhandlers.LoadAuthorizedScan(c, db, scanID); !ok {
+		if _, _, _, ok := scanhandlers.LoadAuthorizedScanForWrite(c, db, scanID); !ok {
 			return
 		}
 		tagID, err := uuid.Parse(c.Param("tagId"))
@@ -149,7 +150,7 @@ func RemoveTagFromScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
 			return
 		}
-		if _, _, _, ok := scanhandlers.LoadAuthorizedScan(c, db, scanID); !ok {
+		if _, _, _, ok := scanhandlers.LoadAuthorizedScanForWrite(c, db, scanID); !ok {
 			return
 		}
 		tagID, err := uuid.Parse(c.Param("tagId"))

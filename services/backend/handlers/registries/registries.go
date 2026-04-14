@@ -21,14 +21,17 @@ func ListRegistries(db *bun.DB) gin.HandlerFunc {
 		if !ok {
 			return
 		}
+		accessibleOrgIDs, err := authz.ListAccessibleOrgIDs(c.Request.Context(), db, userID, isAdmin)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve organization access"})
+			return
+		}
 
 		var registries []models.Registry
 		query := db.NewSelect().Model(&registries).
-			Column("id", "name", "url", "xray_url", "xray_artifactory_id", "auth_type", "scan_provider", "username", "created_by_id", "created_at", "updated_at", "health_status", "health_message", "last_health_check_at").
+			Column("id", "name", "url", "xray_url", "xray_artifactory_id", "auth_type", "scan_provider", "username", "created_by_id", "owner_type", "owner_user_id", "owner_org_id", "created_at", "updated_at", "health_status", "health_message", "last_health_check_at").
 			OrderExpr("name ASC")
-		if !isAdmin {
-			query = query.Where("created_by_id = ?", userID)
-		}
+		query = authz.ApplyOwnershipVisibility(query, "", "created_by_id", "owner_user_id", "owner_org_id", "org_registries", "registry_id", userID, isAdmin, accessibleOrgIDs)
 		if err := query.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list registries"})
 			return
@@ -49,6 +52,7 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 			URL               string `json:"url" binding:"required"`
 			XrayURL           string `json:"xray_url"`
 			XrayArtifactoryID string `json:"xray_artifactory_id"`
+			OrgID             string `json:"org_id"`
 			AuthType          string `json:"auth_type" binding:"omitempty,oneof=basic token aws_ecr none"`
 			ScanProvider      string `json:"scan_provider" binding:"omitempty,oneof=trivy artifactory_xray"`
 			Username          string `json:"username"`
@@ -71,6 +75,18 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 		if body.XrayArtifactoryID == "" {
 			body.XrayArtifactoryID = "default"
 		}
+		var ownerOrgID *uuid.UUID
+		if body.OrgID != "" {
+			parsedOrgID, err := uuid.Parse(body.OrgID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+				return
+			}
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleAdmin); !ok {
+				return
+			}
+			ownerOrgID = &parsedOrgID
+		}
 		encryptedPassword := ""
 		if body.Password != "" {
 			key := crypto.KeyFromString(config.Config.Encryption.Key)
@@ -90,12 +106,25 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 			Username:          body.Username,
 			Password:          encryptedPassword,
 			CreatedByID:       userID,
+			OwnerType:         models.OwnerTypeUser,
+			OwnerUserID:       &userID,
 			CreatedAt:         time.Now(),
 			UpdatedAt:         time.Now(),
+		}
+		if ownerOrgID != nil {
+			registry.OwnerType = models.OwnerTypeOrg
+			registry.OwnerUserID = nil
+			registry.OwnerOrgID = ownerOrgID
 		}
 		if _, err := db.NewInsert().Model(registry).Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create registry"})
 			return
+		}
+		if ownerOrgID != nil {
+			if _, err := db.NewInsert().Model(&models.OrgRegistry{OrgID: *ownerOrgID, RegistryID: registry.ID}).On("CONFLICT DO NOTHING").Exec(c.Request.Context()); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to share registry with organization"})
+				return
+			}
 		}
 		registry.Password = "" // never return password
 		c.JSON(http.StatusCreated, registry)

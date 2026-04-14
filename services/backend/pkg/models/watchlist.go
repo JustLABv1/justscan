@@ -21,6 +21,9 @@ type WatchlistItem struct {
 	RegistryID    *uuid.UUID `bun:"registry_id,type:uuid" json:"registry_id"`
 	TagIDs        []string   `bun:"tag_ids,type:jsonb" json:"tag_ids"`
 	UserID        uuid.UUID  `bun:"user_id,type:uuid,notnull" json:"user_id"`
+	OwnerType     string     `bun:"owner_type,type:text,notnull,default:'user'" json:"owner_type"`
+	OwnerUserID   *uuid.UUID `bun:"owner_user_id,type:uuid" json:"owner_user_id,omitempty"`
+	OwnerOrgID    *uuid.UUID `bun:"owner_org_id,type:uuid" json:"owner_org_id,omitempty"`
 	CreatedAt     time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	UpdatedAt     time.Time  `bun:"updated_at,type:timestamptz" json:"updated_at"`
 

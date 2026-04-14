@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"justscan-backend/functions/auth"
+	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -22,28 +23,19 @@ func ListAllSuppressions(db *bun.DB) gin.HandlerFunc {
 		if limit < 1 || limit > 200 {
 			limit = 50
 		}
-		offset := (page - 1) * limit
-
 		statusFilter := c.Query("status")
 		search := c.Query("q")
 
-		var suppressions []models.Suppression
-		q := db.NewSelect().Model(&suppressions).OrderExpr("created_at DESC")
-		if statusFilter != "" {
-			q = q.Where("status = ?", statusFilter)
-		}
-		if search != "" {
-			q = q.Where("vuln_id ILIKE ? OR image_digest ILIKE ?", "%"+search+"%", "%"+search+"%")
-		}
-
-		total, _ := db.NewSelect().TableExpr("suppressions").Count(c.Request.Context())
-
-		if err := q.Limit(limit).Offset(offset).Scan(c.Request.Context()); err != nil {
+		suppressions, total, err := effectivesuppressions.LoadEffectiveSuppressionsPage(c.Request.Context(), db, page, limit, statusFilter, search)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load suppressions"})
 			return
 		}
 
 		for i := range suppressions {
+			if suppressions[i].Source == "xray" {
+				continue
+			}
 			user := &models.Users{}
 			if err := db.NewSelect().Model(user).Column("username").
 				Where("id = ?", suppressions[i].UserID).

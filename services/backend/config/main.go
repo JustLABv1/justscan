@@ -60,6 +60,9 @@ type ScannerConf struct {
 	GrypePath                 string `mapstructure:"grype_path"`
 	EnableGrype               bool   `mapstructure:"enable_grype"`
 	Timeout                   int    `mapstructure:"timeout"`
+	CommandTimeoutSeconds     int    `mapstructure:"command_timeout_seconds"`
+	ProgressHeartbeatSeconds  int    `mapstructure:"progress_heartbeat_seconds"`
+	StaleTimeoutSeconds       int    `mapstructure:"stale_timeout_seconds"`
 	Concurrency               int    `mapstructure:"concurrency"`
 	DBMaxAgeHours             int    `mapstructure:"db_max_age_hours"`
 	EnableOSVJavaAugmentation bool   `mapstructure:"enable_osv_java_augmentation"`
@@ -122,6 +125,9 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"scanner.grype_path":                   "BACKEND_SCANNER_GRYPE_PATH",
 		"scanner.enable_grype":                 "BACKEND_SCANNER_ENABLE_GRYPE",
 		"scanner.timeout":                      "BACKEND_SCANNER_TIMEOUT",
+		"scanner.command_timeout_seconds":      "BACKEND_SCANNER_COMMAND_TIMEOUT_SECONDS",
+		"scanner.progress_heartbeat_seconds":   "BACKEND_SCANNER_PROGRESS_HEARTBEAT_SECONDS",
+		"scanner.stale_timeout_seconds":        "BACKEND_SCANNER_STALE_TIMEOUT_SECONDS",
 		"scanner.concurrency":                  "BACKEND_SCANNER_CONCURRENCY",
 		"scanner.db_max_age_hours":             "BACKEND_SCANNER_DB_MAX_AGE_HOURS",
 		"scanner.enable_osv_java_augmentation": "BACKEND_SCANNER_ENABLE_OSV_JAVA_AUGMENTATION",

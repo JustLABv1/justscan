@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"justscan-backend/functions/auth"
+	"justscan-backend/functions/blockedpolicy"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -48,53 +49,55 @@ type statusPagePayload struct {
 }
 
 type StatusPageItem struct {
-	ImageName             string     `json:"image_name"`
-	ImageTag              string     `json:"image_tag"`
-	LatestScanID          string     `json:"latest_scan_id"`
-	ScanStatus            string     `json:"scan_status"`
-	ExternalStatus        string     `json:"external_status,omitempty"`
-	ScanProvider          string     `json:"scan_provider,omitempty"`
-	CurrentStep           string     `json:"current_step,omitempty"`
-	StartedAt             *time.Time `json:"started_at,omitempty"`
-	Status                string     `json:"status"`
-	ErrorMessage          string     `json:"error_message,omitempty"`
-	CriticalCount         int        `json:"critical_count"`
-	HighCount             int        `json:"high_count"`
-	MediumCount           int        `json:"medium_count"`
-	LowCount              int        `json:"low_count"`
-	PreviousScanID        *string    `json:"previous_scan_id,omitempty"`
-	PreviousCriticalCount *int       `json:"previous_critical_count,omitempty"`
-	PreviousHighCount     *int       `json:"previous_high_count,omitempty"`
-	PreviousMediumCount   *int       `json:"previous_medium_count,omitempty"`
-	PreviousLowCount      *int       `json:"previous_low_count,omitempty"`
-	FreshnessHours        int64      `json:"freshness_hours"`
-	ObservedAt            time.Time  `json:"observed_at"`
-	PreviousScanAt        *time.Time `json:"previous_scan_at,omitempty"`
-	DisplayOrder          int        `json:"display_order"`
-	DeltaCriticalCount    *int       `json:"delta_critical_count,omitempty"`
-	DeltaHighCount        *int       `json:"delta_high_count,omitempty"`
-	DeltaMediumCount      *int       `json:"delta_medium_count,omitempty"`
-	DeltaLowCount         *int       `json:"delta_low_count,omitempty"`
+	ImageName             string                       `json:"image_name"`
+	ImageTag              string                       `json:"image_tag"`
+	LatestScanID          string                       `json:"latest_scan_id"`
+	ScanStatus            string                       `json:"scan_status"`
+	ExternalStatus        string                       `json:"external_status,omitempty"`
+	ScanProvider          string                       `json:"scan_provider,omitempty"`
+	CurrentStep           string                       `json:"current_step,omitempty"`
+	StartedAt             *time.Time                   `json:"started_at,omitempty"`
+	Status                string                       `json:"status"`
+	ErrorMessage          string                       `json:"error_message,omitempty"`
+	BlockedPolicyDetails  *models.BlockedPolicyDetails `json:"blocked_policy_details,omitempty"`
+	CriticalCount         int                          `json:"critical_count"`
+	HighCount             int                          `json:"high_count"`
+	MediumCount           int                          `json:"medium_count"`
+	LowCount              int                          `json:"low_count"`
+	PreviousScanID        *string                      `json:"previous_scan_id,omitempty"`
+	PreviousCriticalCount *int                         `json:"previous_critical_count,omitempty"`
+	PreviousHighCount     *int                         `json:"previous_high_count,omitempty"`
+	PreviousMediumCount   *int                         `json:"previous_medium_count,omitempty"`
+	PreviousLowCount      *int                         `json:"previous_low_count,omitempty"`
+	FreshnessHours        int64                        `json:"freshness_hours"`
+	ObservedAt            time.Time                    `json:"observed_at"`
+	PreviousScanAt        *time.Time                   `json:"previous_scan_at,omitempty"`
+	DisplayOrder          int                          `json:"display_order"`
+	DeltaCriticalCount    *int                         `json:"delta_critical_count,omitempty"`
+	DeltaHighCount        *int                         `json:"delta_high_count,omitempty"`
+	DeltaMediumCount      *int                         `json:"delta_medium_count,omitempty"`
+	DeltaLowCount         *int                         `json:"delta_low_count,omitempty"`
 }
 
 type statusPageScanSummary struct {
-	ScanID         string     `json:"scan_id"`
-	ImageName      string     `json:"image_name"`
-	ImageTag       string     `json:"image_tag"`
-	ScanStatus     string     `json:"scan_status"`
-	ExternalStatus string     `json:"external_status,omitempty"`
-	ScanProvider   string     `json:"scan_provider,omitempty"`
-	CurrentStep    string     `json:"current_step,omitempty"`
-	ErrorMessage   string     `json:"error_message,omitempty"`
-	CriticalCount  int        `json:"critical_count"`
-	HighCount      int        `json:"high_count"`
-	MediumCount    int        `json:"medium_count"`
-	LowCount       int        `json:"low_count"`
-	StartedAt      *time.Time `json:"started_at,omitempty"`
-	CompletedAt    *time.Time `json:"completed_at,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
-	ObservedAt     time.Time  `json:"observed_at"`
-	IsLatest       bool       `json:"is_latest"`
+	ScanID               string                       `json:"scan_id"`
+	ImageName            string                       `json:"image_name"`
+	ImageTag             string                       `json:"image_tag"`
+	ScanStatus           string                       `json:"scan_status"`
+	ExternalStatus       string                       `json:"external_status,omitempty"`
+	ScanProvider         string                       `json:"scan_provider,omitempty"`
+	CurrentStep          string                       `json:"current_step,omitempty"`
+	ErrorMessage         string                       `json:"error_message,omitempty"`
+	BlockedPolicyDetails *models.BlockedPolicyDetails `json:"blocked_policy_details,omitempty"`
+	CriticalCount        int                          `json:"critical_count"`
+	HighCount            int                          `json:"high_count"`
+	MediumCount          int                          `json:"medium_count"`
+	LowCount             int                          `json:"low_count"`
+	StartedAt            *time.Time                   `json:"started_at,omitempty"`
+	CompletedAt          *time.Time                   `json:"completed_at,omitempty"`
+	CreatedAt            time.Time                    `json:"created_at"`
+	ObservedAt           time.Time                    `json:"observed_at"`
+	IsLatest             bool                         `json:"is_latest"`
 }
 
 type statusPageResponse struct {
@@ -314,6 +317,10 @@ func ViewStatusPageScanBySlug(db *bun.DB) gin.HandlerFunc {
 			c.JSON(status, gin.H{"error": err.Error()})
 			return
 		}
+		if err := blockedpolicy.AttachScanDetails(c.Request.Context(), db, scan); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load blocked policy details"})
+			return
+		}
 
 		latestScanID, _ := latestTrackedScanID(c.Request.Context(), db, page.OwnerUserID, scan.ImageName, scan.ImageTag)
 		c.JSON(http.StatusOK, buildStatusPageScanSummary(scan, latestScanID))
@@ -355,6 +362,10 @@ func ViewStatusPageScanHistoryBySlug(db *bun.DB) gin.HandlerFunc {
 
 		items := make([]statusPageScanSummary, 0, len(scans))
 		for i := range scans {
+			if err := blockedpolicy.AttachScanDetails(c.Request.Context(), db, &scans[i]); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load blocked policy details"})
+				return
+			}
 			items = append(items, buildStatusPageScanSummary(&scans[i], scans[0].ID))
 		}
 
@@ -680,6 +691,15 @@ ORDER BY l.image_name ASC, l.image_tag ASC`
 		if errorMessage.Valid {
 			item.ErrorMessage = errorMessage.String
 		}
+		if item.ExternalStatus == models.ScanExternalStatusBlockedByXrayPolicy {
+			if scanID, err := uuid.Parse(item.LatestScanID); err == nil {
+				details, detailErr := blockedpolicy.BuildDetails(c.Request.Context(), db, scanID, item.ExternalStatus, item.ErrorMessage)
+				if detailErr != nil {
+					return nil, detailErr
+				}
+				item.BlockedPolicyDetails = details
+			}
+		}
 
 		item.FreshnessHours = int64(now.Sub(item.ObservedAt).Hours())
 		item.Status = deriveStatus(page.StaleAfterHours, item)
@@ -776,9 +796,6 @@ func deriveStatus(staleAfterHours int, item StatusPageItem) string {
 	if staleAfterHours > 0 && item.FreshnessHours >= int64(staleAfterHours) {
 		return "stale"
 	}
-	if item.CriticalCount > 0 || item.HighCount > 0 {
-		return "degraded"
-	}
 	return "healthy"
 }
 
@@ -857,23 +874,24 @@ func buildStatusPageScanSummary(scan *models.Scan, latestScanID uuid.UUID) statu
 	}
 
 	return statusPageScanSummary{
-		ScanID:         scan.ID.String(),
-		ImageName:      scan.ImageName,
-		ImageTag:       scan.ImageTag,
-		ScanStatus:     scan.Status,
-		ExternalStatus: scan.ExternalStatus,
-		ScanProvider:   scan.ScanProvider,
-		CurrentStep:    scan.CurrentStep,
-		ErrorMessage:   scan.ErrorMessage,
-		CriticalCount:  scan.CriticalCount,
-		HighCount:      scan.HighCount,
-		MediumCount:    scan.MediumCount,
-		LowCount:       scan.LowCount,
-		StartedAt:      scan.StartedAt,
-		CompletedAt:    scan.CompletedAt,
-		CreatedAt:      scan.CreatedAt,
-		ObservedAt:     observedAt,
-		IsLatest:       latestScanID != uuid.Nil && scan.ID == latestScanID,
+		ScanID:               scan.ID.String(),
+		ImageName:            scan.ImageName,
+		ImageTag:             scan.ImageTag,
+		ScanStatus:           scan.Status,
+		ExternalStatus:       scan.ExternalStatus,
+		ScanProvider:         scan.ScanProvider,
+		CurrentStep:          scan.CurrentStep,
+		ErrorMessage:         scan.ErrorMessage,
+		BlockedPolicyDetails: scan.BlockedPolicyDetails,
+		CriticalCount:        scan.CriticalCount,
+		HighCount:            scan.HighCount,
+		MediumCount:          scan.MediumCount,
+		LowCount:             scan.LowCount,
+		StartedAt:            scan.StartedAt,
+		CompletedAt:          scan.CompletedAt,
+		CreatedAt:            scan.CreatedAt,
+		ObservedAt:           observedAt,
+		IsLatest:             latestScanID != uuid.Nil && scan.ID == latestScanID,
 	}
 }
 

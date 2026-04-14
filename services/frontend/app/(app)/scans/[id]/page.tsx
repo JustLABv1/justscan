@@ -1,37 +1,39 @@
 'use client';
+import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
 import { useToast } from '@/components/toast';
-import { SeverityBadge, SourceBadge, StatusBadge } from '@/components/ui/badges';
+import { SeverityBadge, SourceBadge, StatusBadge, SuppressionSourceBadge } from '@/components/ui/badges';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import type { ComplianceResult, Org, SBOMComponent, Scan, Suppression, Tag, Vulnerability } from '@/lib/api';
 import {
-    addTagToScan,
-    assignScanToOrg,
-    cancelScan,
-    createComment,
-    createShare,
-    deleteComment,
-    deleteShare,
-    deleteSuppression,
-    getScan,
-    getScanCompliance,
-    getScanSBOM,
-    getUser,
-    getVulnerabilityContextAnalysis,
-    listOrgs,
-    listScans,
-    listTags,
-    listVulnerabilities,
-    reEvaluateCompliance,
-    removeScanFromOrg,
-    removeTagFromScan,
-    reScan,
-    upsertSuppression,
+  addTagToScan,
+  assignScanToOrg,
+  cancelScan,
+  createComment,
+  createShare,
+  deleteComment,
+  deleteShare,
+  deleteSuppression,
+  getScan,
+  getScanCompliance,
+  getScanSBOM,
+  getUser,
+  getVulnerabilityContextAnalysis,
+  listOrgs,
+  listScans,
+  listTags,
+  listVulnerabilities,
+  reEvaluateCompliance,
+  removeScanFromOrg,
+  removeTagFromScan,
+  reScan,
+  upsertSuppression,
 } from '@/lib/api';
+import { formatIgnoreRuleStatusLabel, getBlockedPolicyDetails } from '@/lib/blocked-policy';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select, useOverlayState } from '@heroui/react';
+import { Button, Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select, useOverlayState } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
 import { ArrowLeft01Icon, Cancel01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, GitCompareIcon, MoreVerticalIcon, Refresh01Icon, Share01Icon, ShieldKeyIcon } from 'hugeicons-react';
@@ -44,55 +46,6 @@ const selectTriggerCls = heroSelectTriggerClassName;
 
 type ScanTab = 'vulns' | 'policy' | 'sbom' | 'details' | 'timeline';
 
-type BlockedPolicyDetails = {
-  summary: string;
-  manifest?: string;
-  artifact?: string;
-  jfrog?: string;
-  matchedIssues?: string;
-  matchedWatches?: string;
-  blockingPolicies?: string;
-  matchedPolicies?: string;
-  totalViolations?: string;
-};
-
-function parseBlockedPolicyDetails(errorMessage?: string | null): BlockedPolicyDetails | null {
-  const message = errorMessage?.trim();
-  if (!message) return null;
-
-  const lines = message
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (lines.length === 0) return null;
-
-  const details: BlockedPolicyDetails = { summary: lines[0] };
-  for (const line of lines.slice(1)) {
-    if (line.startsWith('Manifest: ')) details.manifest = line.slice('Manifest: '.length);
-    else if (line.startsWith('Artifact: ')) details.artifact = line.slice('Artifact: '.length);
-    else if (line.startsWith('JFrog: ')) details.jfrog = line.slice('JFrog: '.length);
-    else if (line.startsWith('Matched issues: ')) details.matchedIssues = line.slice('Matched issues: '.length);
-    else if (line.startsWith('Matched watches: ')) details.matchedWatches = line.slice('Matched watches: '.length);
-    else if (line.startsWith('Blocking policies: ')) details.blockingPolicies = line.slice('Blocking policies: '.length);
-    else if (line.startsWith('Matched policies: ')) details.matchedPolicies = line.slice('Matched policies: '.length);
-    else if (line.startsWith('Xray violations found for this artifact: ')) details.totalViolations = line.slice('Xray violations found for this artifact: '.length);
-  }
-
-  const hasStructuredDetails = Boolean(
-    details.manifest ||
-    details.artifact ||
-    details.jfrog ||
-    details.matchedIssues ||
-    details.matchedWatches ||
-    details.blockingPolicies ||
-    details.matchedPolicies ||
-    details.totalViolations
-  );
-
-  return hasStructuredDetails ? details : null;
-}
-
 function DetailBlock({ label, value, mono = false }: { label: string; value?: string; mono?: boolean }) {
   if (!value) return null;
 
@@ -102,6 +55,65 @@ function DetailBlock({ label, value, mono = false }: { label: string; value?: st
       <p className={mono ? 'text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all leading-relaxed' : 'text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed'}>
         {value}
       </p>
+    </div>
+  );
+}
+
+function PolicyListSection({ label, items, mono = false }: { label: string; items: string[]; mono?: boolean }) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">{label}</p>
+        <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'var(--glass-border)', color: 'var(--text-secondary)', background: 'var(--app-bg)' }}>
+          {items.length}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div key={item} className={`rounded-lg border px-3 py-2 text-sm leading-relaxed ${mono ? 'font-mono text-xs break-all' : ''}`} style={{ borderColor: 'var(--glass-border)', color: 'var(--text-primary)', background: 'var(--app-bg)' }}>
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WatchStatusBadge({ status }: { status: 'active_ignore' | 'no_ignore' | 'status_unavailable' }) {
+  const palette = status === 'active_ignore'
+    ? { color: '#b45309', background: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.26)' }
+    : status === 'status_unavailable'
+      ? { color: '#7c2d12', background: 'rgba(251,146,60,0.12)', border: 'rgba(251,146,60,0.28)' }
+      : { color: 'var(--text-secondary)', background: 'var(--app-bg)', border: 'var(--glass-border)' };
+
+  return (
+    <span className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ color: palette.color, background: palette.background, borderColor: palette.border }}>
+      {formatIgnoreRuleStatusLabel(status)}
+    </span>
+  );
+}
+
+function PolicyWatchList({ watches }: { watches: Array<{ name: string; ignoreRuleStatus: 'active_ignore' | 'no_ignore' | 'status_unavailable' }> }) {
+  if (watches.length === 0) return null;
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Matched Watches</p>
+        <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'var(--glass-border)', color: 'var(--text-secondary)', background: 'var(--app-bg)' }}>
+          {watches.length}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {watches.map((watch) => (
+          <div key={watch.name} className="flex flex-col gap-2 rounded-lg border px-3 py-2 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--glass-border)', background: 'var(--app-bg)' }}>
+            <span className="text-sm break-all" style={{ color: 'var(--text-primary)' }}>{watch.name}</span>
+            <WatchStatusBadge status={watch.ignoreRuleStatus} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -195,6 +207,7 @@ export default function ScanDetailPage() {
   const [shareVisibility, setShareVisibility] = useState<'public' | 'authenticated'>('public');
   const [shareCopied, setShareCopied] = useState(false);
   const loadVersionRef = useRef(0);
+  const loadScanInFlightRef = useRef<Promise<Scan> | null>(null);
   const defaultTabInitializedRef = useRef(false);
 
   const [suppressStatus, setSuppressStatus] = useState<Suppression['status']>('accepted');
@@ -207,18 +220,30 @@ export default function ScanDetailPage() {
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanStatus = scan?.status;
-  const blockedPolicyDetails = scan?.external_status === 'blocked_by_xray_policy'
-    ? parseBlockedPolicyDetails(scan.error_message)
-    : null;
+  const blockedPolicyDetails = getBlockedPolicyDetails(scan?.external_status, scan?.blocked_policy_details, scan?.error_message);
   const hasPolicyTab = Boolean(blockedPolicyDetails);
 
   const loadScan = useCallback(async () => {
-    const loadVersion = ++loadVersionRef.current;
-    const nextScan = await getScan(id);
-    if (loadVersion === loadVersionRef.current) {
-      setScan(nextScan);
+    if (loadScanInFlightRef.current) {
+      return loadScanInFlightRef.current;
     }
-    return nextScan;
+
+    const loadVersion = ++loadVersionRef.current;
+    const request = getScan(id)
+      .then((nextScan) => {
+        if (loadVersion === loadVersionRef.current) {
+          setScan(nextScan);
+        }
+        return nextScan;
+      })
+      .finally(() => {
+        if (loadScanInFlightRef.current === request) {
+          loadScanInFlightRef.current = null;
+        }
+      });
+
+    loadScanInFlightRef.current = request;
+    return request;
   }, [id]);
 
   // Initial load
@@ -320,7 +345,7 @@ export default function ScanDetailPage() {
   }, [sbomNameFilter, sbomTypeFilter]);
 
   function loadVulns() {
-    if (!scan) return;
+    if (!scan || scan.status === 'pending' || scan.status === 'running') return;
     setVulnLoading(true);
     listVulnerabilities(
       id, page, LIMIT,
@@ -485,6 +510,7 @@ export default function ScanDetailPage() {
 
   async function handleLiftSuppression(vuln: Vulnerability) {
     if (!scan?.image_digest) return;
+    if (vuln.suppression?.read_only || vuln.suppression?.source === 'xray') return;
     setSuppressSaving(true);
     setSuppressError('');
     try {
@@ -541,23 +567,17 @@ export default function ScanDetailPage() {
   return (
     <div className="p-6 max-w-[1500px] mx-auto space-y-5">
       {/* Header */}
-      <div>
-        <button
-          onClick={() => router.back()}
-          className="btn-secondary inline-flex items-center gap-1.5 mb-3"
-          type="button"
-        >
-          <ArrowLeft01Icon size={15} />
-          Back to scans
-        </button>
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold font-mono text-zinc-900 dark:text-white break-all">
-              {scan.image_name}:{scan.image_tag}
-            </h1>
-            {scan.image_digest && (
-              <p className="text-xs font-mono text-zinc-500 mt-1 break-all">{scan.image_digest}</p>
-            )}
+      <ScanDetailHeader
+        navigation={(
+          <Button className="btn-secondary" onPress={() => router.back()} variant="secondary">
+            <ArrowLeft01Icon size={15} />
+            Back to scans
+          </Button>
+        )}
+        title={`${scan.image_name}:${scan.image_tag}`}
+        subtitle={scan.image_digest ? <span>{scan.image_digest}</span> : undefined}
+        meta={(
+          <>
             {scan.architecture && (
               <p className="flex items-center gap-1.5 text-xs text-zinc-500 mt-1">
                 <CpuIcon size={12} />
@@ -565,178 +585,180 @@ export default function ScanDetailPage() {
               </p>
             )}
             {scan.helm_chart && (
-              <p className="flex items-center gap-1.5 text-xs text-zinc-500 mt-1" title={scan.helm_source_path}>
+              <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500" title={scan.helm_source_path}>
                 <span className="font-medium text-violet-400">Helm</span>
-                <span className="font-mono truncate max-w-[320px]">{scan.helm_chart}</span>
+                <span className="max-w-full font-mono break-words" style={{ overflowWrap: 'anywhere' }}>{scan.helm_chart}</span>
                 {scan.helm_source_path && (
-                  <span className="text-zinc-400 truncate max-w-[200px]">· {scan.helm_source_path}</span>
+                  <span className="text-zinc-400 break-words" style={{ overflowWrap: 'anywhere' }}>· {scan.helm_source_path}</span>
                 )}
               </p>
             )}
-          </div>
-          <div className="relative flex items-center gap-2 shrink-0">
+          </>
+        )}
+        actions={(
+          <div className="relative flex flex-wrap items-center gap-2">
             {(scan.status === 'pending' || scan.status === 'running') && (
-              <button
-                onClick={handleCancel}
-                disabled={cancelling}
-                className="btn-warning inline-flex items-center gap-2"
-                title="Stop this scan"
-                type="button"
+              <Button
+                className="btn-warning"
+                isDisabled={cancelling}
+                onPress={handleCancel}
+                variant="secondary"
               >
                 {cancelling
                   ? <span className="w-3.5 h-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
                   : <Cancel01Icon size={15} />}
                 Cancel
-              </button>
+              </Button>
             )}
-            <button
-              onClick={handleReScan}
-              disabled={reScanning || scan.status === 'running' || scan.status === 'pending'}
-              className="btn-primary inline-flex items-center gap-2"
-              title="Start a new scan with the same image and tag"
-              type="button"
+            <Button
+              className="btn-primary"
+              isDisabled={reScanning || scan.status === 'running' || scan.status === 'pending'}
+              onPress={handleReScan}
+              variant="primary"
             >
               {reScanning
                 ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
                 : <Refresh01Icon size={15} />}
               Re-scan
-            </button>
-            <Dropdown>
-              <Dropdown.Trigger>
-                <button
-                  type="button"
-                  className="btn-icon-subtle h-10 w-10"
-                  style={shareOpen ? { color: '#a78bfa', borderColor: 'rgba(167,139,250,0.25)' } : undefined}
-                  aria-label="Open scan actions"
-                  title="More actions"
-                >
-                  <MoreVerticalIcon size={16} />
-                </button>
-              </Dropdown.Trigger>
-              <Dropdown.Popover className="min-w-[220px]">
-                <Dropdown.Menu onAction={(key) => {
-                  if (key === 'export') {
-                    window.open(`/reports/print?scans=${scan.id}`, '_blank', 'noopener,noreferrer');
-                  }
-                  if (key === 'compare') {
-                    void handleComparePrev();
-                  }
-                  if (key === 'share') {
-                    if (scan.share_visibility) setShareVisibility(scan.share_visibility as 'public' | 'authenticated');
-                    setShareOpen(true);
-                  }
-                }}>
-                  <Dropdown.Item id="export" textValue="Export scan report">
-                    <div className="flex items-center gap-2">
-                      <FileExportIcon size={15} />
-                      <Label>Export</Label>
+            </Button>
+            <div className="relative">
+              <Dropdown>
+                <Dropdown.Trigger>
+                  <Button
+                    aria-label="Open scan actions"
+                    className="btn-icon-subtle h-10 w-10"
+                    isIconOnly
+                    style={shareOpen ? { color: '#a78bfa', borderColor: 'rgba(167,139,250,0.25)' } : undefined}
+                    variant="secondary"
+                  >
+                    <MoreVerticalIcon size={16} />
+                  </Button>
+                </Dropdown.Trigger>
+                <Dropdown.Popover className="min-w-[220px]">
+                  <Dropdown.Menu onAction={(key) => {
+                    if (key === 'export') {
+                      window.open(`/reports/print?scans=${scan.id}`, '_blank', 'noopener,noreferrer');
+                    }
+                    if (key === 'compare') {
+                      void handleComparePrev();
+                    }
+                    if (key === 'share') {
+                      if (scan.share_visibility) setShareVisibility(scan.share_visibility as 'public' | 'authenticated');
+                      setShareOpen(true);
+                    }
+                  }}>
+                    <Dropdown.Item id="export" textValue="Export scan report">
+                      <div className="flex items-center gap-2">
+                        <FileExportIcon size={15} />
+                        <Label>Export</Label>
+                      </div>
+                    </Dropdown.Item>
+                    <Dropdown.Item id="compare" textValue="Compare with previous scan" isDisabled={comparingPrev}>
+                      <div className="flex items-center gap-2">
+                        <GitCompareIcon size={15} />
+                        <Label>{comparingPrev ? 'Compare…' : 'Compare'}</Label>
+                      </div>
+                    </Dropdown.Item>
+                    <Dropdown.Item id="share" textValue="Manage scan sharing">
+                      <div className="flex items-center gap-2">
+                        <Share01Icon size={15} />
+                        <Label>{scan.share_token ? 'Manage share' : 'Share'}</Label>
+                      </div>
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
+              {shareOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />
+                  <div className="absolute right-0 top-12 w-80 rounded-xl z-50 p-4 space-y-3"
+                    style={{ background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-zinc-800 dark:text-white">Share scan</p>
+                      <button className="btn-icon-subtle text-lg leading-none" onClick={() => setShareOpen(false)} type="button">✕</button>
                     </div>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="compare" textValue="Compare with previous scan" isDisabled={comparingPrev}>
-                    <div className="flex items-center gap-2">
-                      <GitCompareIcon size={15} />
-                      <Label>{comparingPrev ? 'Compare…' : 'Compare'}</Label>
-                    </div>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="share" textValue="Manage scan sharing">
-                    <div className="flex items-center gap-2">
-                      <Share01Icon size={15} />
-                      <Label>{scan.share_token ? 'Manage share' : 'Share'}</Label>
-                    </div>
-                  </Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
-            {shareOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />
-                <div className="absolute right-0 top-12 w-80 rounded-xl z-50 p-4 space-y-3"
-                  style={{ background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-zinc-800 dark:text-white">Share scan</p>
-                    <button className="btn-icon-subtle text-lg leading-none" onClick={() => setShareOpen(false)} type="button">✕</button>
+                    {scan.share_token ? (
+                      <>
+                        <div>
+                          <p className="text-xs text-zinc-500 mb-1.5">Share link
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium"
+                              style={{ background: scan.share_visibility === 'public' ? 'rgba(34,197,94,0.1)' : 'rgba(124,58,237,0.1)', color: scan.share_visibility === 'public' ? '#4ade80' : '#a78bfa', border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'rgba(124,58,237,0.2)'}` }}>
+                              {scan.share_visibility}
+                            </span>
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 text-xs text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 rounded-lg px-2 py-1.5 truncate">
+                              {typeof window !== 'undefined' ? `${window.location.origin}/shared/${scan.share_token}` : ''}
+                            </code>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/shared/${scan.share_token}`);
+                                setShareCopied(true);
+                                setTimeout(() => setShareCopied(false), 1500);
+                              }}
+                              className="btn-secondary shrink-0"
+                              type="button"
+                            >
+                              {shareCopied ? '✓ Copied' : 'Copy'}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <p className="text-xs text-zinc-500">Change visibility</p>
+                          <div className="segmented-control w-full">
+                            {(['public', 'authenticated'] as const).map(v => (
+                              <button key={v} onClick={() => setShareVisibility(v)}
+                                className="segmented-control-item flex-1"
+                                data-active={shareVisibility === v ? 'true' : 'false'}
+                                data-size="sm"
+                                type="button">
+                                {v === 'public' ? 'Public' : 'Signed in'}
+                              </button>
+                            ))}
+                          </div>
+                          {shareVisibility !== scan.share_visibility && (
+                            <button className="btn-primary w-full" disabled={shareLoading} onClick={handleEnableShare} type="button">
+                              {shareLoading ? 'Updating…' : 'Update visibility'}
+                            </button>
+                          )}
+                        </div>
+                        <button className="btn-danger w-full" disabled={shareLoading} onClick={handleDisableShare} type="button">
+                          {shareLoading ? 'Processing…' : 'Disable sharing'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="space-y-1.5">
+                          <p className="text-xs text-zinc-500">Visibility</p>
+                          <div className="segmented-control w-full">
+                            {(['public', 'authenticated'] as const).map(v => (
+                              <button key={v} onClick={() => setShareVisibility(v)}
+                                className="segmented-control-item flex-1"
+                                data-active={shareVisibility === v ? 'true' : 'false'}
+                                data-size="sm"
+                                type="button">
+                                {v === 'public' ? 'Public' : 'Signed in'}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-xs text-zinc-400 leading-relaxed">
+                            {shareVisibility === 'public'
+                              ? 'Anyone with the link can view this scan.'
+                              : 'Only signed-in users can view this scan.'}
+                          </p>
+                        </div>
+                        <button className="btn-primary w-full" disabled={shareLoading} onClick={handleEnableShare} type="button">
+                          {shareLoading ? 'Creating link…' : 'Create share link'}
+                        </button>
+                      </>
+                    )}
                   </div>
-                  {scan.share_token ? (
-                    <>
-                      <div>
-                        <p className="text-xs text-zinc-500 mb-1.5">Share link
-                          <span className="ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium"
-                            style={{ background: scan.share_visibility === 'public' ? 'rgba(34,197,94,0.1)' : 'rgba(124,58,237,0.1)', color: scan.share_visibility === 'public' ? '#4ade80' : '#a78bfa', border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'rgba(124,58,237,0.2)'}` }}>
-                            {scan.share_visibility}
-                          </span>
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <code className="flex-1 text-xs text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 rounded-lg px-2 py-1.5 truncate">
-                            {typeof window !== 'undefined' ? `${window.location.origin}/shared/${scan.share_token}` : ''}
-                          </code>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(`${window.location.origin}/shared/${scan.share_token}`);
-                              setShareCopied(true);
-                              setTimeout(() => setShareCopied(false), 1500);
-                            }}
-                            className="btn-secondary shrink-0"
-                            type="button"
-                          >
-                            {shareCopied ? '✓ Copied' : 'Copy'}
-                          </button>
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <p className="text-xs text-zinc-500">Change visibility</p>
-                        <div className="segmented-control w-full">
-                          {(['public', 'authenticated'] as const).map(v => (
-                            <button key={v} onClick={() => setShareVisibility(v)}
-                              className="segmented-control-item flex-1"
-                              data-active={shareVisibility === v ? 'true' : 'false'}
-                              data-size="sm"
-                              type="button">
-                              {v === 'public' ? 'Public' : 'Signed in'}
-                            </button>
-                          ))}
-                        </div>
-                        {shareVisibility !== scan.share_visibility && (
-                          <button className="btn-primary w-full" disabled={shareLoading} onClick={handleEnableShare} type="button">
-                            {shareLoading ? 'Updating…' : 'Update visibility'}
-                          </button>
-                        )}
-                      </div>
-                      <button className="btn-danger w-full" disabled={shareLoading} onClick={handleDisableShare} type="button">
-                        {shareLoading ? 'Processing…' : 'Disable sharing'}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="space-y-1.5">
-                        <p className="text-xs text-zinc-500">Visibility</p>
-                        <div className="segmented-control w-full">
-                          {(['public', 'authenticated'] as const).map(v => (
-                            <button key={v} onClick={() => setShareVisibility(v)}
-                              className="segmented-control-item flex-1"
-                              data-active={shareVisibility === v ? 'true' : 'false'}
-                              data-size="sm"
-                              type="button">
-                              {v === 'public' ? 'Public' : 'Signed in'}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-xs text-zinc-400 leading-relaxed">
-                          {shareVisibility === 'public'
-                            ? 'Anyone with the link can view this scan.'
-                            : 'Only signed-in users can view this scan.'}
-                        </p>
-                      </div>
-                      <button className="btn-primary w-full" disabled={shareLoading} onClick={handleEnableShare} type="button">
-                        {shareLoading ? 'Creating link…' : 'Create share link'}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+        )}
+      />
 
       {/* Status + severity cards */}
       {scan.status !== 'pending' && scan.status !== 'running' && (
@@ -819,24 +841,26 @@ export default function ScanDetailPage() {
 
       {/* Tab bar */}
       {scan.status !== 'pending' && scan.status !== 'running' && (
-        <div className="segmented-control w-fit">
-          {([
-            { id: 'vulns', label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities' },
-            ...(hasPolicyTab ? [{ id: 'policy' as const, label: blockedPolicyDetails?.totalViolations ? `Policy Violations (${blockedPolicyDetails.totalViolations})` : 'Policy Violations' }] : []),
-            { id: 'sbom', label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
-            { id: 'timeline', label: scan.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
-            { id: 'details', label: 'Details' },
-          ] as { id: ScanTab; label: string }[]).map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className="segmented-control-item"
-              data-active={activeTab === id ? 'true' : 'false'}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
+        <div className="w-full overflow-x-auto pb-1">
+          <div className="segmented-control min-w-max">
+            {([
+              { id: 'vulns', label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities' },
+              ...(hasPolicyTab ? [{ id: 'policy' as const, label: blockedPolicyDetails?.totalViolations ? `Policy Violations (${blockedPolicyDetails.totalViolations})` : 'Policy Violations' }] : []),
+              { id: 'sbom', label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
+              { id: 'timeline', label: scan.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
+              { id: 'details', label: 'Details' },
+            ] as { id: ScanTab; label: string }[]).map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className="segmented-control-item"
+                data-active={activeTab === id ? 'true' : 'false'}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -861,31 +885,38 @@ export default function ScanDetailPage() {
 
           <div className="grid gap-3 md:grid-cols-2">
             <DetailBlock label="Summary" value={blockedPolicyDetails.summary} />
-            <DetailBlock label="Xray Violations" value={blockedPolicyDetails.totalViolations} />
+            <DetailBlock label="Xray Violations" value={blockedPolicyDetails.totalViolations ? String(blockedPolicyDetails.totalViolations) : undefined} />
             <DetailBlock label="Manifest" value={blockedPolicyDetails.manifest} mono />
             <DetailBlock label="Artifact" value={blockedPolicyDetails.artifact} mono />
-            <DetailBlock label="Matched Issues" value={blockedPolicyDetails.matchedIssues} />
-            <DetailBlock label="Matched Watches" value={blockedPolicyDetails.matchedWatches} />
-            <DetailBlock label="Blocking Policies" value={blockedPolicyDetails.blockingPolicies} />
-            <DetailBlock label="Matched Policies" value={blockedPolicyDetails.matchedPolicies} />
           </div>
 
-          <DetailBlock label="JFrog Response" value={blockedPolicyDetails.jfrog} mono />
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)]">
+            <PolicyWatchList watches={blockedPolicyDetails.matchedWatches} />
+            <div className="space-y-3">
+              <PolicyListSection label="Blocking Policies" items={blockedPolicyDetails.blockingPolicies} />
+              <PolicyListSection label="Matched Policies" items={blockedPolicyDetails.matchedPolicies} />
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <PolicyListSection label="Matched Issues" items={blockedPolicyDetails.matchedIssues} />
+            <DetailBlock label="JFrog Response" value={blockedPolicyDetails.jfrog} mono />
+          </div>
         </div>
       )}
 
       {/* SBOM tab */}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'sbom' && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center">
             <input
               type="text"
               value={sbomNameInput}
               onChange={e => setSbomNameInput(e.target.value)}
               placeholder="Filter by name…"
-              className={inputCls}
+              className={`${inputCls} min-w-0 md:flex-1`}
             />
-            <Select selectedKey={sbomTypeFilter || '__all__'} onSelectionChange={k => { setSbomTypeFilter(String(k === '__all__' ? '' : k)); setSbomLoaded(false); }} className="flex-1">
+            <Select selectedKey={sbomTypeFilter || '__all__'} onSelectionChange={k => { setSbomTypeFilter(String(k === '__all__' ? '' : k)); setSbomLoaded(false); }} className="min-w-0 md:w-56 md:flex-none">
               <Select.Trigger className={selectTriggerCls}>
                 <Select.Value />
                 <Select.Indicator />
@@ -901,48 +932,50 @@ export default function ScanDetailPage() {
             </Select>
           </div>
           <div className="glass-panel rounded-2xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Version</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Type</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">License</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Package URL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sbomLoading ? (
-                  <tr><td colSpan={5} className="py-12 text-center">
-                    <div className="flex justify-center">
-                      <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
-                    </div>
-                  </td></tr>
-                ) : sbomComponents.length === 0 ? (
-                  <tr><td colSpan={5} className="py-12 text-center text-sm text-zinc-500">
-                    No SBOM components found for this scan.
-                  </td></tr>
-                ) : sbomComponents.map((c, i) => (
-                  <tr
-                    key={c.id}
-                    style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-700 dark:text-zinc-200">{c.name}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{c.version || '—'}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="text-xs px-1.5 py-0.5 rounded font-medium"
-                        style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
-                        {c.type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-zinc-500">{c.license || '—'}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-400 max-w-xs truncate" title={c.package_url}>{c.package_url || '—'}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Version</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Type</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">License</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Package URL</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {sbomLoading ? (
+                    <tr><td colSpan={5} className="py-12 text-center">
+                      <div className="flex justify-center">
+                        <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      </div>
+                    </td></tr>
+                  ) : sbomComponents.length === 0 ? (
+                    <tr><td colSpan={5} className="py-12 text-center text-sm text-zinc-500">
+                      No SBOM components found for this scan.
+                    </td></tr>
+                  ) : sbomComponents.map((c, i) => (
+                    <tr
+                      key={c.id}
+                      style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <td className="px-4 py-2.5 font-mono text-xs text-zinc-700 dark:text-zinc-200">{c.name}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{c.version || '—'}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="text-xs px-1.5 py-0.5 rounded font-medium"
+                          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
+                          {c.type}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-zinc-500">{c.license || '—'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-zinc-400 max-w-xs truncate" title={c.package_url}>{c.package_url || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -952,46 +985,48 @@ export default function ScanDetailPage() {
             Vulnerabilities
             {vulnTotal > 0 && <span className="text-sm font-normal text-zinc-500 ml-2">{vulnTotal} found</span>}
           </h2>
-          {/* Severity pills + secondary filters in one row */}
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="segmented-control flex-wrap">
-            {([
-              { id: '',         label: 'All',      count: (scan.critical_count ?? 0) + (scan.high_count ?? 0) + (scan.medium_count ?? 0) + (scan.low_count ?? 0) },
-              { id: 'CRITICAL', label: 'Critical', count: scan.critical_count ?? 0, color: 'rgba(239,68,68,0.15)',   activeColor: '#f87171', border: 'rgba(239,68,68,0.3)'   },
-              { id: 'HIGH',     label: 'High',     count: scan.high_count     ?? 0, color: 'rgba(249,115,22,0.15)', activeColor: '#fb923c', border: 'rgba(249,115,22,0.3)' },
-              { id: 'MEDIUM',   label: 'Medium',   count: scan.medium_count   ?? 0, color: 'rgba(234,179,8,0.15)',  activeColor: '#facc15', border: 'rgba(234,179,8,0.3)'  },
-              { id: 'LOW',      label: 'Low',      count: scan.low_count      ?? 0, color: 'rgba(59,130,246,0.15)', activeColor: '#60a5fa', border: 'rgba(59,130,246,0.3)' },
-            ] as { id: string; label: string; count: number; color?: string; activeColor?: string; border?: string }[]).map(({ id, label, count, color, activeColor, border }) => {
-              const active = severityFilter === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => { setSeverityFilter(id); setPage(1); }}
-                  className="segmented-control-item"
-                  data-active={active ? 'true' : 'false'}
-                  data-size="sm"
-                  type="button"
-                  style={active
-                    ? { background: color ?? 'rgba(124,58,237,0.15)', color: activeColor ?? '#a78bfa', borderColor: border ?? 'rgba(167,139,250,0.3)' }
-                    : undefined
-                  }
-                >
-                  {label}
-                  {count > 0 && <span className="opacity-60">{count}</span>}
-                </button>
-              );
-            })}
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="w-full overflow-x-auto pb-1 xl:w-auto">
+              <div className="segmented-control min-w-max">
+                {([
+                  { id: '',         label: 'All',      count: (scan.critical_count ?? 0) + (scan.high_count ?? 0) + (scan.medium_count ?? 0) + (scan.low_count ?? 0) },
+                  { id: 'CRITICAL', label: 'Critical', count: scan.critical_count ?? 0, color: 'rgba(239,68,68,0.15)',   activeColor: '#f87171', border: 'rgba(239,68,68,0.3)'   },
+                  { id: 'HIGH',     label: 'High',     count: scan.high_count     ?? 0, color: 'rgba(249,115,22,0.15)', activeColor: '#fb923c', border: 'rgba(249,115,22,0.3)' },
+                  { id: 'MEDIUM',   label: 'Medium',   count: scan.medium_count   ?? 0, color: 'rgba(234,179,8,0.15)',  activeColor: '#facc15', border: 'rgba(234,179,8,0.3)'  },
+                  { id: 'LOW',      label: 'Low',      count: scan.low_count      ?? 0, color: 'rgba(59,130,246,0.15)', activeColor: '#60a5fa', border: 'rgba(59,130,246,0.3)' },
+                ] as { id: string; label: string; count: number; color?: string; activeColor?: string; border?: string }[]).map(({ id, label, count, color, activeColor, border }) => {
+                  const active = severityFilter === id;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => { setSeverityFilter(id); setPage(1); }}
+                      className="segmented-control-item"
+                      data-active={active ? 'true' : 'false'}
+                      data-size="sm"
+                      type="button"
+                      style={active
+                        ? { background: color ?? 'rgba(124,58,237,0.15)', color: activeColor ?? '#a78bfa', borderColor: border ?? 'rgba(167,139,250,0.3)' }
+                        : undefined
+                      }
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>{label}</span>
+                        {count > 0 && <span className="text-[11px] font-semibold opacity-70">{count}</span>}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            {/* Secondary filters */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex w-full flex-col gap-2 md:flex-row md:items-end xl:w-auto xl:justify-end">
               <input
                 type="text"
                 value={pkgInput}
                 onChange={(e) => setPkgInput(e.target.value)}
                 placeholder="Package…"
-                className={inputCls}
+                className={`${inputCls} min-w-[220px] flex-1 md:min-w-[280px] xl:w-[320px] xl:flex-none`}
               />
-              <div className="flex items-center gap-1.5">
+              <div className="flex shrink-0 flex-col gap-1.5">
                 <label className="text-xs text-zinc-500 whitespace-nowrap">Min CVSS</label>
                 <input
                   type="number"
@@ -1005,12 +1040,12 @@ export default function ScanDetailPage() {
                     setMinCvss(!isNaN(val) ? val : 0);
                     setPage(1);
                   }}
-                  className={`${inputCls} w-20`}
+                  className={`${inputCls} w-full min-w-[5.5rem] md:w-24`}
                 />
               </div>
               <button
                 onClick={() => { setHasFix(!hasFix); setPage(1); }}
-                className={hasFix ? 'btn-primary' : 'btn-secondary'}
+                className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full shrink-0 md:w-auto`}
                 type="button"
               >
                 Has Fix
@@ -1020,70 +1055,71 @@ export default function ScanDetailPage() {
         </div>
 
         <div className="glass-panel rounded-2xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                {([
-                  { label: 'CVE ID',     key: 'vuln_id',           align: 'left'  },
-                  { label: 'Package',    key: 'pkg_name',          align: 'left'  },
-                  { label: 'Installed',  key: 'installed_version', align: 'left'  },
-                  { label: 'Fixed In',   key: 'fixed_version',     align: 'left'  },
-                  { label: 'Severity',   key: 'severity',          align: 'left'  },
-                  { label: 'CVSS',       key: 'cvss_score',        align: 'right' },
-                  { label: 'First Seen', key: 'first_seen_at',     align: 'left'  },
-                ] as { label: string; key: string; align: 'left' | 'right' }[]).map(({ label, key, align }) => {
-                  const active = sortBy === key;
-                  return (
-                    <th
-                      key={key}
-                      onClick={() => {
-                        if (active) {
-                          setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-                        } else {
-                          setSortBy(key);
-                          setSortDir('asc');
-                        }
-                        setPage(1);
-                      }}
-                      className={`px-4 py-3 text-xs font-medium uppercase tracking-wider cursor-pointer select-none transition-colors text-${align}`}
-                      style={{ color: active ? '#a78bfa' : 'rgba(113,113,122,0.8)' }}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        {label}
-                        <span className={`transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`}>
-                          {active && sortDir === 'desc' ? '↓' : '↑'}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1120px] text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                  {([
+                    { label: 'CVE ID',     key: 'vuln_id',           align: 'left'  },
+                    { label: 'Package',    key: 'pkg_name',          align: 'left'  },
+                    { label: 'Installed',  key: 'installed_version', align: 'left'  },
+                    { label: 'Fixed In',   key: 'fixed_version',     align: 'left'  },
+                    { label: 'Severity',   key: 'severity',          align: 'left'  },
+                    { label: 'CVSS',       key: 'cvss_score',        align: 'right' },
+                    { label: 'First Seen', key: 'first_seen_at',     align: 'left'  },
+                  ] as { label: string; key: string; align: 'left' | 'right' }[]).map(({ label, key, align }) => {
+                    const active = sortBy === key;
+                    return (
+                      <th
+                        key={key}
+                        onClick={() => {
+                          if (active) {
+                            setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setSortBy(key);
+                            setSortDir('asc');
+                          }
+                          setPage(1);
+                        }}
+                        className={`px-4 py-3 text-xs font-medium uppercase tracking-wider cursor-pointer select-none transition-colors text-${align}`}
+                        style={{ color: active ? '#a78bfa' : 'rgba(113,113,122,0.8)' }}
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          {label}
+                          <span className={`transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`}>
+                            {active && sortDir === 'desc' ? '↓' : '↑'}
+                          </span>
                         </span>
-                      </span>
-                    </th>
-                  );
-                })}
-                <th className="text-right px-4 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(113,113,122,0.8)' }}>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vulnLoading ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center">
-                    <div className="flex justify-center">
-                      <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
-                    </div>
-                  </td>
+                      </th>
+                    );
+                  })}
+                  <th className="text-right px-4 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(113,113,122,0.8)' }}>Notes</th>
                 </tr>
-              ) : vulns.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-zinc-500 text-sm">
-                    {scan.external_status === 'blocked_by_xray_policy'
-                      ? 'No imported vulnerabilities are available because Xray blocked this artifact before the normal scan summary was produced. See the Policy Violations tab for the matched issues, watches, and policies.'
-                      : 'No vulnerabilities found.'}
-                  </td>
-                </tr>
-              ) : vulns.map((v, i) => (
-                <Fragment key={v.id}>
-                  <tr
-                    style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
+              </thead>
+              <tbody>
+                {vulnLoading ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center">
+                      <div className="flex justify-center">
+                        <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      </div>
+                    </td>
+                  </tr>
+                ) : vulns.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-zinc-500 text-sm">
+                      {scan.external_status === 'blocked_by_xray_policy'
+                        ? 'No imported vulnerabilities are available because Xray blocked this artifact before the normal scan summary was produced. See the Policy Violations tab for the matched issues, watches, and policies.'
+                        : 'No vulnerabilities found.'}
+                    </td>
+                  </tr>
+                ) : vulns.map((v, i) => (
+                  <Fragment key={v.id}>
+                    <tr
+                      style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
                     <td className="px-4 py-3">
                       {v.vuln_id ? (
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -1104,6 +1140,7 @@ export default function ScanDetailPage() {
                               {v.suppression.status.replace(/_/g, ' ')}
                             </span>
                           )}
+                          {v.suppression && <SuppressionSourceBadge source={v.suppression.source} />}
                         </div>
                       ) : <span className="text-zinc-400 dark:text-zinc-600">—</span>}
                     </td>
@@ -1161,14 +1198,24 @@ export default function ScanDetailPage() {
                                 <div className="rounded-lg px-3 py-2 space-y-1"
                                   style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)' }}>
                                   <p className="text-xs text-zinc-400">{v.suppression.justification || '—'}</p>
+                                  <div className="flex items-center gap-2 pt-1">
+                                    <SuppressionSourceBadge source={v.suppression.source} />
+                                    {v.suppression.read_only && <span className="text-[11px] text-zinc-400">Managed by Xray</span>}
+                                  </div>
                                   {v.suppression.expires_at && (
                                     <p className="text-xs text-zinc-500">Expires: {new Date(v.suppression.expires_at).toLocaleDateString()}</p>
+                                  )}
+                                  {(v.suppression.xray_policy_name || v.suppression.xray_watch_name) && (
+                                    <p className="text-xs text-zinc-500">
+                                      {[v.suppression.xray_policy_name, v.suppression.xray_watch_name].filter(Boolean).join(' · ')}
+                                    </p>
                                   )}
                                   {v.suppression.username && (
                                     <p className="text-xs text-zinc-500">By: {v.suppression.username}</p>
                                   )}
                                 </div>
                               )}
+                              {!(v.suppression?.read_only || v.suppression?.source === 'xray') ? (
                               <div className="flex gap-2 items-center flex-wrap">
                                 <Select selectedKey={suppressStatus} onSelectionChange={k => setSuppressStatus(k as Suppression['status'])}>
                                   <Select.Trigger className={selectTriggerCls}>
@@ -1248,6 +1295,9 @@ export default function ScanDetailPage() {
                                   </button>
                                 )}
                               </div>
+                              ) : (
+                                <p className="text-xs text-zinc-500">This suppression comes from Xray and cannot be edited here.</p>
+                              )}
                               {suppressError && (
                                 <p className="text-xs mt-1" style={{ color: '#f87171' }}>{suppressError}</p>
                               )}
@@ -1312,10 +1362,11 @@ export default function ScanDetailPage() {
                       </td>
                     </tr>
                   )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {totalPages > 1 && (

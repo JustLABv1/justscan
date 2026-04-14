@@ -287,6 +287,13 @@ function latestStepOutput(stepLog?: ScanStepLog | null): string | null {
 	return stepLog.output[stepLog.output.length - 1] ?? null;
 }
 
+function stepOutputCount(stepLog?: ScanStepLog | null): number {
+	if (!stepLog) {
+		return 0;
+	}
+	return stepLog.output_count ?? stepLog.output.length;
+}
+
 function providerLabel(scanProvider?: string | null, stepLogs?: ScanStepLog[] | null): string {
 	if (scanProvider && PROVIDER_LABELS[scanProvider]) {
 		return PROVIDER_LABELS[scanProvider];
@@ -295,53 +302,6 @@ function providerLabel(scanProvider?: string | null, stepLogs?: ScanStepLog[] | 
 		return PROVIDER_LABELS.artifactory_xray;
 	}
 	return PROVIDER_LABELS.trivy;
-}
-
-function providerSummary(scanProvider?: string | null): string {
-	if (scanProvider === 'artifactory_xray') {
-		return 'JustScan is following the external Artifactory/Xray pipeline and will import findings as soon as the provider publishes the artifact summary.';
-	}
-	return 'JustScan is executing its built-in local scanner flow and will publish the report after normalization, enrichment, and persistence finish.';
-}
-
-type ProviderHeroModel = {
-	title: string;
-	summary: string;
-	panelBackground: string;
-	panelBorder: string;
-	primary: string;
-	secondary: string;
-	grid: string;
-	glow: string;
-	cardBackground: string;
-};
-
-function runtimeProviderHero(scanProvider?: string | null): ProviderHeroModel {
-	if (scanProvider === 'artifactory_xray') {
-		return {
-			title: 'Artifact streaming through Xray',
-			summary: 'Artifactory is warming, indexing, and handing the artifact off until Xray publishes a summary that JustScan can import.',
-			panelBackground: 'linear-gradient(160deg, rgba(249,115,22,0.14) 0%, rgba(249,115,22,0.05) 30%, transparent 100%), var(--card-bg)',
-			panelBorder: 'rgba(249,115,22,0.18)',
-			primary: 'rgba(249,115,22,0.94)',
-			secondary: 'rgba(251,146,60,0.82)',
-			grid: 'rgba(249,115,22,0.09)',
-			glow: 'rgba(249,115,22,0.16)',
-			cardBackground: 'linear-gradient(135deg, rgba(249,115,22,0.07) 0%, rgba(249,115,22,0.025) 42%, transparent 100%), var(--glass-bg)',
-		};
-	}
-
-	return {
-		title: 'Trivy sweeping the image',
-		summary: 'The local worker is traversing packages, correlating findings, and assembling the report before the result is finalized.',
-		panelBackground: 'linear-gradient(160deg, rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.04) 28%, transparent 100%), var(--card-bg)',
-		panelBorder: 'rgba(16,185,129,0.22)',
-		primary: 'rgba(16,185,129,0.92)',
-		secondary: 'rgba(45,212,191,0.72)',
-		grid: 'rgba(16,185,129,0.14)',
-		glow: 'rgba(16,185,129,0.16)',
-		cardBackground: 'linear-gradient(135deg, rgba(16,185,129,0.07) 0%, rgba(16,185,129,0.025) 46%, transparent 100%), var(--glass-bg)',
-	};
 }
 
 function compactImageLabel(image?: string | null): string | null {
@@ -444,8 +404,8 @@ function buildRuntimeWarning(
 
 	if (normalizedOutput.includes('timed out')) {
 		return {
-			title: 'Provider wait threshold reached',
-			detail: latestOutput ?? 'The active step hit a timeout condition and may need operator attention.',
+			title: 'Still waiting on the provider',
+			detail: latestOutput ?? 'The active step is still running in the background. JustScan will keep polling until it finishes or goes stale.',
 		};
 	}
 
@@ -479,7 +439,7 @@ function buildRuntimeWarning(
 	if (activeKey === 'scanning_image' && activeStepElapsedSeconds >= 300) {
 		return {
 			title: 'Image analysis is taking longer than usual',
-			detail: 'The local scanner is still working through the image contents. This can happen on larger images or slower registries.',
+			detail: 'The local scanner is still working through the image contents. This is expected for larger images or slower registries and the scan remains active.',
 		};
 	}
 
@@ -584,21 +544,28 @@ export function ScanningAnimation({
 	currentStep?: string | null;
 	stepLogs?: ScanStepLog[] | null;
 }) {
-	const [fallbackStart] = useState(() => Date.now());
-	const [now, setNow] = useState(() => Date.now());
+	const startedAtMs = startedAt ? new Date(startedAt).getTime() : null;
+	const [fallbackStart, setFallbackStart] = useState<number | null>(startedAtMs);
+	const [now, setNow] = useState(() => startedAtMs ?? 0);
 	const [detailTick, setDetailTick] = useState(0);
 
 	useEffect(() => {
-		const timer = setInterval(() => setNow(Date.now()), 1000);
+		const timer = setInterval(() => {
+			const currentNow = Date.now();
+			if (startedAtMs === null) {
+				setFallbackStart((current) => current ?? currentNow);
+			}
+			setNow(currentNow);
+		}, 1000);
 		return () => clearInterval(timer);
-	}, []);
+	}, [startedAtMs]);
 
 	useEffect(() => {
 		const timer = setInterval(() => setDetailTick((previous) => previous + 1), 2600);
 		return () => clearInterval(timer);
 	}, []);
 
-	const baseStart = startedAt ? new Date(startedAt).getTime() : fallbackStart;
+	const baseStart = startedAtMs ?? fallbackStart ?? now;
 	const elapsed = Math.max(0, Math.floor((now - baseStart) / 1000));
 	const progress = buildProgressModel(status, currentStep, scanProvider);
 	const detailMessage = progress.detailMessages[detailTick % progress.detailMessages.length] ?? progress.detailMessages[0];
@@ -609,186 +576,55 @@ export function ScanningAnimation({
 	const latestOutput = latestStepOutput(activeStepLog);
 	const runtimeWarning = buildRuntimeWarning(progress.activeKey, activeStepElapsed, latestOutput, scanProvider);
 	const providerName = providerLabel(scanProvider, orderedLogs);
-	const providerDetail = providerSummary(scanProvider);
-	const providerHero = runtimeProviderHero(scanProvider);
 	const compactImage = compactImageLabel(image);
-	const isXrayProvider = scanProvider === 'artifactory_xray';
 
 	return (
-		<div className="scan-runtime-animated glass-panel relative isolate overflow-hidden rounded-[28px]" style={{ background: providerHero.cardBackground }}>
-			<div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-				<div
-					className="absolute -left-20 top-6 h-44 w-44 rounded-full blur-3xl"
-					style={{
-						background: `radial-gradient(circle, ${providerHero.primary} 0%, ${providerHero.glow} 46%, transparent 76%)`,
-						animation: 'ambientFloat 14s ease-in-out infinite',
-					}}
-				/>
-				<div
-					className="absolute right-[-72px] top-20 h-52 w-52 rounded-full blur-3xl"
-					style={{
-						background: `radial-gradient(circle, ${providerHero.secondary} 0%, ${providerHero.glow} 42%, transparent 74%)`,
-						animation: 'ambientDrift 17s ease-in-out infinite',
-					}}
-				/>
-				<div
-					className="absolute bottom-[-84px] left-[24%] h-56 w-56 rounded-full blur-3xl"
-					style={{
-						background: `radial-gradient(circle, ${providerHero.secondary} 0%, rgba(255,255,255,0.04) 46%, transparent 74%)`,
-						animation: 'ambientFloat 19s ease-in-out infinite reverse',
-					}}
-				/>
-				<div
-					className="absolute inset-x-10 top-16 h-36"
-					style={{
-						background: `linear-gradient(90deg, transparent 0%, ${providerHero.glow} 18%, rgba(255,255,255,0.18) 50%, ${providerHero.glow} 82%, transparent 100%)`,
-						opacity: 0.5,
-						filter: 'blur(24px)',
-						animation: 'scanSweep 8.2s ease-in-out infinite',
-					}}
-				/>
-			</div>
-			<div className="relative h-0.5 w-full overflow-hidden" style={{ background: 'rgba(124,58,237,0.16)' }}>
-				<div
-					className="absolute inset-y-0 left-0"
-					style={{
-						width: '34%',
-						background: progress.beam,
-						animation: 'stepperBeam 1.85s linear infinite',
-					}}
-				/>
-			</div>
-
+		<div className="rounded-2xl px-5 py-6 md:px-7" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
 			<style>{`
-				@keyframes stepperBeam { 0% { left: -34%; } 100% { left: 100%; } }
-				@keyframes ambientFloat { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 33% { transform: translate3d(18px, -12px, 0) scale(1.06); } 66% { transform: translate3d(-10px, 16px, 0) scale(0.96); } }
-				@keyframes ambientDrift { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 30% { transform: translate3d(-14px, 10px, 0) scale(1.04); } 70% { transform: translate3d(12px, -18px, 0) scale(0.98); } }
-				@keyframes gridPan { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(22px, 22px, 0); } }
-				@keyframes scanSweep { 0% { transform: translateX(-28%) scaleX(0.92); opacity: 0; } 14% { opacity: 0.85; } 50% { opacity: 1; } 86% { opacity: 0.7; } 100% { transform: translateX(28%) scaleX(1.08); opacity: 0; } }
-				@keyframes stepPulse { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.18); opacity: 0.24; } }
-				@keyframes activeCard { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
-				@keyframes activeOutline { 0%, 100% { opacity: 0.32; box-shadow: 0 0 0 0 rgba(167,139,250,0.14); } 50% { opacity: 0.74; box-shadow: 0 0 0 6px rgba(167,139,250,0.04); } }
-				@keyframes cardSheen { 0% { transform: translateX(-130%) skewX(-18deg); opacity: 0; } 18% { opacity: 0.28; } 54% { opacity: 0.22; } 100% { transform: translateX(150%) skewX(-18deg); opacity: 0; } }
-				@keyframes detailFade { 0% { opacity: 0; transform: translateY(8px); } 14% { opacity: 1; transform: translateY(0); } 86% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-8px); } }
-				@keyframes shimmerTrail { 0% { transform: translateY(-100%); opacity: 0; } 18% { opacity: 1; } 100% { transform: translateY(120%); opacity: 0; } }
-				@keyframes horizontalTrail { 0% { transform: translateX(-100%); opacity: 0; } 14% { opacity: 1; } 100% { transform: translateX(120%); opacity: 0; } }
-				@keyframes statusFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
-				@keyframes heroFloat { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
-				@keyframes xrayPacket { 0% { transform: translateX(-18px) scale(0.92); opacity: 0; } 12% { opacity: 1; } 82% { opacity: 1; } 100% { transform: translateX(240px) scale(1.04); opacity: 0; } }
-				@keyframes xrayPacketAlt { 0% { transform: translateX(-24px) scale(0.86); opacity: 0; } 18% { opacity: 0.9; } 84% { opacity: 0.9; } 100% { transform: translateX(240px) scale(1.02); opacity: 0; } }
-				@keyframes xrayNodePulse { 0%, 100% { transform: scale(1); opacity: 0.46; } 50% { transform: scale(1.12); opacity: 1; } }
-				@keyframes xrayFramePulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.08); opacity: 0.72; } 50% { box-shadow: 0 0 0 10px rgba(249,115,22,0.02); opacity: 1; } }
-				@keyframes radarSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-				@keyframes radarPulse { 0% { transform: scale(0.45); opacity: 0.82; } 100% { transform: scale(1.2); opacity: 0; } }
+				@keyframes stepPulse { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.6); opacity: 0.2; } }
+				@keyframes horizontalTrail { 0% { transform: translateX(-100%); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; transform: translateX(300%); } 100% { opacity: 0;  } }
+				@keyframes fadeDetails { 0% { opacity: 0; transform: translateY(4px); } 12% { opacity: 1; transform: translateY(0); } 88% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-4px); } }
 				@media (prefers-reduced-motion: reduce) {
-					.scan-runtime-animated,
-					.scan-runtime-animated * {
-						animation-duration: 0.01ms !important;
-						animation-iteration-count: 1 !important;
-						transition-duration: 0.01ms !important;
-					}
+					* { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 				}
 			`}</style>
-
-			<div className="relative z-10 space-y-6 px-5 py-5 md:px-7 md:py-6">
-				<div className="space-y-5">
-					<div
-						className="relative overflow-hidden rounded-[30px] border px-5 py-5 md:px-6 md:py-6"
-						style={{
-							background: providerHero.panelBackground,
-							border: `1px solid ${providerHero.panelBorder}`,
-							boxShadow: `0 24px 60px -42px ${providerHero.glow}`,
-						}}
-					>
-						<div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-							<div className="absolute inset-0 opacity-70" style={{ backgroundImage: `linear-gradient(${providerHero.grid} 1px, transparent 1px), linear-gradient(90deg, ${providerHero.grid} 1px, transparent 1px)`, backgroundSize: '20px 20px', animation: 'gridPan 26s linear infinite' }} />
-							<div className="absolute inset-0" style={{ background: `radial-gradient(circle at 18% 24%, ${providerHero.glow} 0%, transparent 40%), radial-gradient(circle at 78% 62%, ${providerHero.glow} 0%, transparent 38%)` }} />
-							<div className="absolute inset-x-0 top-1/2 h-28 -translate-y-1/2" style={{ background: `linear-gradient(90deg, transparent 0%, ${providerHero.glow} 18%, rgba(255,255,255,0.4) 50%, ${providerHero.glow} 82%, transparent 100%)`, filter: 'blur(20px)', animation: 'scanSweep 6.6s ease-in-out infinite' }} />
+			<div className="flex min-w-0 flex-col gap-6">
+				<div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+					<div className="min-w-0 flex-1 space-y-1.5">
+						<div className="flex items-center gap-3">
+							<span className="relative flex h-3 w-3">
+								<span className="absolute inset-0 rounded-full" style={{ background: progress.accent, animation: 'stepPulse 1.6s ease-in-out infinite' }} />
+								<span className="relative h-3 w-3 rounded-full" style={{ background: progress.accent }} />
+							</span>
+							<h3 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>{progress.title}</h3>
 						</div>
-
-						<div className="relative z-10 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-center">
-							<div className="space-y-4">
-							<div className="flex flex-wrap items-center gap-2.5">
-								<span
-									className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em]"
-									style={{
-										color: progress.accent,
-										background: progress.accentSoft,
-										border: `1px solid ${progress.accentBorder}`,
-									}}
-								>
-									<span className="relative flex h-2.5 w-2.5" style={{ animation: 'statusFloat 1.8s ease-in-out infinite' }}>
-										<span className="absolute inset-0 rounded-full" style={{ background: progress.accent, animation: 'stepPulse 1.6s ease-in-out infinite' }} />
-										<span className="relative h-2.5 w-2.5 rounded-full" style={{ background: progress.accent }} />
-									</span>
-									{progress.badgeLabel}
-								</span>
-								<span className="rounded-full px-3 py-1 text-[11px] font-medium" style={{ background: 'var(--card-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>
-									{providerName}
-								</span>
-								{(startedAt || elapsed > 0) && <span className="rounded-full border px-3 py-1 font-mono text-xs" style={{ borderColor: 'var(--glass-border)', background: 'var(--card-bg)', color: 'var(--text-muted)' }}>{formatElapsed(elapsed)}</span>}
-								{activeStepElapsed !== null && <span className="rounded-full border px-3 py-1 font-mono text-xs" style={{ borderColor: 'var(--glass-border)', background: 'var(--card-bg)', color: 'var(--text-muted)' }}>step {formatElapsed(activeStepElapsed)}</span>}
-							</div>
-
-							<div className="space-y-3">
-								<p className="text-[11px] font-semibold uppercase tracking-[0.22em]" style={{ color: 'var(--text-muted)' }}>{progress.eyebrow}</p>
-								<h2 className="text-3xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>{progress.title}</h2>
-								<p className="max-w-2xl text-sm leading-6" key={`${progress.activeKey}-${detailTick}`} style={{ animation: 'detailFade 2.6s ease-in-out forwards', minHeight: 48, color: 'var(--text-secondary)' }}>
-									{detailMessage}
-								</p>
-									<p className="max-w-2xl text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>{providerHero.summary}</p>
-							</div>
-
-							<div className="flex flex-wrap gap-2 text-xs">
-								{compactImage && (
-									<span className="rounded-full border px-3 py-1 font-mono" style={{ borderColor: 'var(--glass-border)', background: 'var(--card-bg)', color: 'var(--text-secondary)' }} title={image}>
-										{compactImage}
-									</span>
-								)}
-								<span className="rounded-full border px-3 py-1" style={{ borderColor: 'var(--glass-border)', background: 'var(--card-bg)', color: 'var(--text-secondary)' }}>
-									{progress.note}
-								</span>
-							</div>
-						</div>
-
-							<div className="relative h-[230px]">
-								<div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-								{isXrayProvider ? (
-									<>
-										<div className="absolute left-7 top-[50px] h-[126px] w-[58px] rounded-[20px] border" style={{ borderColor: providerHero.panelBorder, background: 'rgba(255,255,255,0.06)' }} />
-										<div className="absolute left-[42px] top-[70px] h-[86px] w-[28px] rounded-[14px]" style={{ background: `linear-gradient(180deg, ${providerHero.glow}, rgba(255,255,255,0.03))` }} />
-										<div className="absolute right-7 top-[50px] h-[126px] w-[76px] rounded-[22px] border" style={{ borderColor: providerHero.panelBorder, background: 'rgba(255,255,255,0.05)', animation: 'xrayFramePulse 2.8s ease-in-out infinite' }} />
-										{[0, 1, 2].map((lane) => (
-											<div key={lane} className="absolute left-[52px] right-[66px]" style={{ top: `${82 + lane * 32}px` }}>
-												<div className="absolute left-0 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full" style={{ background: providerHero.primary, boxShadow: `0 0 14px ${providerHero.glow}` }} />
-												<div className="absolute left-[16px] right-[24px] top-1/2 h-px -translate-y-1/2" style={{ background: `linear-gradient(90deg, ${providerHero.primary}, ${providerHero.secondary}, rgba(255,255,255,0.18))` }} />
-												<div className="absolute left-[24px] top-1/2 h-2.5 w-10 -translate-y-1/2 rounded-full blur-[1px]" style={{ background: `linear-gradient(90deg, transparent, ${providerHero.secondary}, rgba(255,255,255,0.55), transparent)`, animation: `${lane % 2 === 0 ? 'xrayPacket' : 'xrayPacketAlt'} ${2.4 + lane * 0.3}s linear infinite`, animationDelay: `${lane * 0.22}s` }} />
-												<div className="absolute right-[8px] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full" style={{ background: providerHero.secondary, animation: `xrayNodePulse ${1.6 + lane * 0.14}s ease-in-out infinite` }} />
-											</div>
-										))}
-										<div className="absolute right-[43px] top-[76px] h-3 w-34 rounded-full" style={{ width: 44, background: `linear-gradient(90deg, ${providerHero.secondary}, ${providerHero.primary})`, opacity: 0.9 }} />
-										<div className="absolute right-[43px] top-[108px] h-3 rounded-full" style={{ width: 30, background: `linear-gradient(90deg, ${providerHero.secondary}, ${providerHero.primary})`, opacity: 0.7 }} />
-										<div className="absolute right-[43px] top-[140px] h-3 rounded-full" style={{ width: 20, background: `linear-gradient(90deg, ${providerHero.secondary}, ${providerHero.primary})`, opacity: 0.52 }} />
-									</>
-								) : (
-									<div className="absolute inset-0 flex items-center justify-center">
-										<div className="relative h-40 w-40" style={{ animation: 'heroFloat 3.4s ease-in-out infinite' }}>
-											<div className="absolute inset-0 rounded-full border" style={{ borderColor: providerHero.panelBorder }} />
-											<div className="absolute inset-[14px] rounded-full border" style={{ borderColor: providerHero.panelBorder }} />
-											<div className="absolute inset-[28px] rounded-full border" style={{ borderColor: providerHero.panelBorder }} />
-											<div className="absolute inset-0 rounded-full" style={{ background: `conic-gradient(from 90deg, transparent 0deg, transparent 294deg, ${providerHero.secondary} 326deg, rgba(255,255,255,0.78) 340deg, transparent 360deg)`, animation: 'radarSpin 5.8s linear infinite' }} />
-											<div className="absolute inset-[34px] rounded-full" style={{ background: `radial-gradient(circle, rgba(255,255,255,0.95) 0%, ${providerHero.secondary} 36%, ${providerHero.primary} 100%)` }} />
-											<div className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border" style={{ borderColor: providerHero.panelBorder, animation: 'radarPulse 2.2s linear infinite' }} />
-											<div className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border" style={{ borderColor: providerHero.panelBorder, animation: 'radarPulse 2.2s linear infinite 1.1s' }} />
-										</div>
-									</div>
-								)}
-							</div>
-						</div>
-						</div>
+						<p key={`${progress.activeKey}-${detailTick}`} className="text-sm leading-5" style={{ color: 'var(--text-secondary)', animation: 'fadeDetails 2.6s forwards', minHeight: 40 }}>
+							{detailMessage}
+						</p>
 					</div>
 
-					<ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+					<div className="flex flex-wrap items-center gap-2 md:justify-end">
+						<span className="rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+							{providerName}
+						</span>
+						<span className="rounded-full px-2.5 py-1 text-[11px] font-mono uppercase tracking-wide" style={{ background: progress.accentSoft, border: `1px solid ${progress.accentBorder}`, color: progress.accent }}>
+							{progress.eyebrow}
+						</span>
+						{(startedAt || elapsed > 0) && (
+							<span className="rounded-full px-2.5 py-1 text-[11px] font-mono" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
+								total {formatElapsed(elapsed)}
+							</span>
+						)}
+						{activeStepElapsed !== null && (
+							<span className="rounded-full px-2.5 py-1 text-[11px] font-mono" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
+								step {formatElapsed(activeStepElapsed)}
+							</span>
+						)}
+					</div>
+				</div>
+
+				<div className="overflow-x-hidden pt-2 pb-6 md:pb-2">
+					<ol className="flex items-center w-full">
 						{progress.steps.map((step, index) => {
 							const isActive = step.state === 'active';
 							const isComplete = step.state === 'complete';
@@ -796,134 +632,69 @@ export function ScanningAnimation({
 							const nodeColor = isActive || isComplete ? progress.accent : 'rgba(148,163,184,0.44)';
 
 							return (
-								<li
-									key={step.key}
-									className="relative rounded-2xl px-4 py-3 xl:min-h-[122px]"
-									style={{
-										background: isActive ? progress.accentSoft : isComplete ? 'rgba(139,92,246,0.08)' : 'rgba(124,58,237,0.05)',
-										border: `1px solid ${isActive ? progress.accentBorder : isComplete ? 'rgba(139,92,246,0.18)' : 'rgba(124,58,237,0.1)'}`,
-										animation: isActive ? 'activeCard 2.6s ease-in-out infinite' : undefined,
-									}}
-								>
-									{isActive && (
-										<>
-											<span
-												className="pointer-events-none absolute inset-0 rounded-2xl"
-												style={{
-													border: `1px solid ${progress.accentBorder}`,
-													boxShadow: `0 0 0 1px ${progress.accentSoft}, 0 18px 40px -28px ${progress.accent}`,
-													animation: 'activeOutline 2.4s ease-in-out infinite',
-												}}
-											/>
-											<span className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
-												<span
-													className="absolute inset-y-0 left-[-28%] w-1/2"
-													style={{
-														background: `linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 20%, rgba(255,255,255,0.34) 50%, rgba(255,255,255,0.04) 80%, transparent 100%)`,
-														animation: 'cardSheen 2.9s linear infinite',
-													}}
-												/>
-											</span>
-										</>
-									)}
-									<div className="flex gap-3 xl:flex-col xl:items-start xl:gap-3">
-										<div className="relative flex shrink-0 flex-col items-center pt-0.5 xl:w-full xl:flex-row xl:items-center xl:pt-0">
-											<span
-												className="relative flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold"
-												style={{
-													color: isActive || isComplete ? '#ffffff' : '#71717a',
-													background: isActive || isComplete ? nodeColor : 'rgba(255,255,255,0.72)',
-													border: `1px solid ${isActive || isComplete ? nodeColor : 'rgba(124,58,237,0.18)'}`,
-													boxShadow: isActive ? `0 0 18px ${progress.accentSoft}` : undefined,
-												}}
-											>
-												{isActive && <span className="absolute inset-0 rounded-full" style={{ background: progress.accent, animation: 'stepPulse 1.7s ease-in-out infinite' }} />}
-												<span className="relative">{isComplete ? '✓' : index + 1}</span>
-											</span>
-											{!isLast && (
-												<span
-													className="relative mt-1 block h-10 w-px overflow-hidden rounded-full xl:mt-0 xl:ml-3 xl:h-px xl:w-auto xl:flex-1"
-													style={{ background: isComplete ? 'rgba(139,92,246,0.22)' : 'rgba(124,58,237,0.18)' }}
-												>
-													{isActive && (
-														<>
-															<span
-																className="absolute inset-x-0 top-0 h-8 rounded-full xl:hidden"
-																style={{ background: progress.accent, animation: 'shimmerTrail 1.35s linear infinite' }}
-															/>
-															<span
-																className="absolute inset-y-0 left-0 hidden w-12 rounded-full xl:block"
-																style={{ background: progress.accent, animation: 'horizontalTrail 1.45s linear infinite' }}
-															/>
-														</>
-													)}
-												</span>
-											)}
-										</div>
-
-										<div className="min-w-0 pt-0.5 xl:pt-0">
-											<div className="flex flex-wrap items-center gap-2">
-												<p className="text-sm font-semibold text-zinc-900 dark:text-white">{step.title}</p>
-												{isActive && (
-													<span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: progress.accent, background: progress.accentSoft }}>
-														Live
-													</span>
-												)}
-												{isComplete && <span className="text-[11px] font-medium text-violet-600 dark:text-violet-300">Done</span>}
-											</div>
-											{isActive ? (
-												<p className="mt-1 text-sm leading-5 text-zinc-600 dark:text-zinc-400">{step.description}</p>
+								<li key={step.key} className={`flex items-center ${isLast ? '' : 'flex-1'}`}>
+									<div className="relative flex flex-col items-center">
+										<div
+											className="z-10 flex items-center justify-center w-7 h-7 rounded-full shadow-sm"
+											style={{
+												color: isActive || isComplete ? '#ffffff' : '#71717a',
+												background: isActive || isComplete ? nodeColor : 'var(--card-bg)',
+												border: `1px solid ${isActive || isComplete ? nodeColor : 'var(--glass-border)'}`,
+												boxShadow: isActive ? `0 0 14px ${progress.accentSoft}` : undefined,
+												transform: isActive ? 'scale(1.1)' : 'scale(1)',
+												transition: 'all 0.3s ease',
+											}}
+										>
+											{isComplete ? (
+												<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
 											) : (
-												<p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">{isComplete ? 'Completed' : 'Pending'}</p>
+												<span className="text-[11px] font-bold">{index + 1}</span>
 											)}
 										</div>
+										<span className="absolute left-1/2 top-9 hidden w-16 -translate-x-1/2 text-center text-[10px] font-semibold uppercase tracking-wide opacity-100 lg:block" style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-muted)', lineHeight: 1.1 }}>
+											{step.title}
+										</span>
 									</div>
+
+									{!isLast && (
+										<div className="flex-1 mx-2 h-1 rounded-full overflow-hidden" style={{ background: isComplete ? progress.accentSoft : 'var(--glass-border)' }}>
+											{isActive && (
+												<div className="h-full w-[40%] rounded-full" style={{ background: progress.accent, animation: 'horizontalTrail 1.8s linear infinite' }} />
+											)}
+										</div>
+									)}
 								</li>
 							);
 						})}
 					</ol>
+				</div>
 
-					<div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
-						<div className="rounded-2xl px-4 py-3" style={{ background: 'var(--card-bg)', border: '1px solid var(--glass-border)' }}>
-							<div className="flex flex-wrap items-center justify-between gap-2">
-								<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Live backend signal</p>
-								<span className="text-[11px] text-zinc-500">
-									{activeStepLog?.output.length ? `${activeStepLog.output.length} update${activeStepLog.output.length === 1 ? '' : 's'} in this step` : 'Awaiting next update'}
-								</span>
-							</div>
-							<p className="mt-2 text-sm leading-6 text-zinc-800 dark:text-zinc-200">
-								{latestOutput ?? 'The backend has not emitted a step message for this stage yet.'}
-							</p>
-							{activeStepLog?.started_at && (
-								<p className="mt-2 text-xs text-zinc-500">
-									Step started {timeAgo(activeStepLog.started_at)}
-									{activeStepElapsed !== null ? ` · active for ${formatElapsed(activeStepElapsed)}` : ''}
-								</p>
-							)}
-						</div>
-
-						<div className="space-y-3">
-							{runtimeWarning && (
-								<div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.22)' }}>
-									<p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: '#f59e0b' }}>Attention</p>
-									<p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">{runtimeWarning.title}</p>
-									<p className="mt-1 text-sm leading-5 text-zinc-600 dark:text-zinc-400">{runtimeWarning.detail}</p>
-								</div>
-							)}
-							<div className="rounded-2xl px-4 py-3" style={{ background: 'var(--card-bg)', border: '1px solid var(--glass-border)' }}>
-								<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Live context</p>
-								<div className="mt-2 space-y-2 text-sm leading-5 text-zinc-700 dark:text-zinc-300">
-									<p><span className="mr-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Path</span>{providerName}</p>
-									<p><span className="mr-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Started</span>{startedAt ? `${timeAgo(startedAt)} · ${fullDate(startedAt)}` : 'Waiting to start'}</p>
-									{compactImage && <p className="font-mono text-xs text-zinc-600 dark:text-zinc-400" title={image}>{compactImage}</p>}
-								</div>
-							</div>
-						</div>
+				<div className="mt-2 grid gap-4 lg:grid-cols-[1fr_2fr]">
+					<div className="min-w-0 rounded-xl px-4 py-3 pb-4" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}>
+						<p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 mb-1.5">Context</p>
+						<p className="text-sm font-mono break-words" style={{ color: compactImage ? 'var(--text-primary)' : 'var(--text-muted)', overflowWrap: 'anywhere' }} title={image}>{image || compactImage || '—'}</p>
+						<p className="text-[11px] mt-1.5" style={{ color: 'var(--text-muted)' }}>{progress.note}</p>
 					</div>
+					<div className="min-w-0 rounded-xl px-4 py-3 pb-4" style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}>
+						<div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+							<p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Live signal</p>
+							<span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+								{stepOutputCount(activeStepLog) ? `${stepOutputCount(activeStepLog)} update${stepOutputCount(activeStepLog) === 1 ? '' : 's'}` : 'Awaiting'}
+							</span>
+						</div>
+						<p className="text-[13px] font-mono break-words leading-5" style={{ color: latestOutput ? 'var(--text-primary)' : 'var(--text-muted)', overflowWrap: 'anywhere' }} title={latestOutput ?? ''}>
+							{latestOutput ?? 'No output recorded yet.'}
+						</p>
+					</div>
+					{runtimeWarning && (
+						<div className="lg:col-span-2 rounded-xl px-4 py-3" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)' }}>
+							<p className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: '#f59e0b' }}>Attention</p>
+							<p className="mt-1 text-[13px] font-medium text-zinc-900 dark:text-white">{runtimeWarning.title}</p>
+							<p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">{runtimeWarning.detail}</p>
+						</div>
+					)}
 				</div>
 			</div>
-
-			<div className="relative z-10 px-5 pb-5 text-xs text-zinc-500 md:px-7 md:pb-6">Results will appear automatically when the scan finishes.</div>
 		</div>
 	);
 }
@@ -953,7 +724,7 @@ export function ScanStepTimeline({
 		? Math.max(0, new Date(finalTimestamp).getTime() - new Date(firstStartedAt).getTime())
 		: null;
 	const providerName = providerLabel(scanProvider, orderedLogs);
-	const totalOutputs = orderedLogs.reduce((count, stepLog) => count + stepLog.output.length, 0);
+	const totalOutputs = orderedLogs.reduce((count, stepLog) => count + stepOutputCount(stepLog), 0);
 	const blockedByPolicy = isBlockedXrayPolicy(externalStatus, scanProvider);
 	const recoveredBlockedSummary = blockedByPolicy && hasRecoveredBlockedSummary(orderedLogs);
 	const effectiveStatus = effectiveTimelineStatus(status, externalStatus);
@@ -1090,9 +861,9 @@ export function ScanStepTimeline({
 															Active
 														</span>
 													)}
-													{stepLog.output.length > 0 && (
+													{stepOutputCount(stepLog) > 0 && (
 														<span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-secondary)', background: 'var(--row-hover)' }}>
-															{stepLog.output.length} update{stepLog.output.length === 1 ? '' : 's'}
+															{stepOutputCount(stepLog)} update{stepOutputCount(stepLog) === 1 ? '' : 's'}
 														</span>
 													)}
 											</div>

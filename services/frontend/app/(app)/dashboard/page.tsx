@@ -133,13 +133,18 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
   }, []);
   if (data.length < 2) return null;
 
-  const H = 52, SPARK_TOP = 18, PAD = 3;
+  const H = 84, SPARK_TOP = 22, PAD = 4;
   const sparkH = H - SPARK_TOP;
   const values = data.map(d => d.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
 
+  // Amplify the range slightly if it's very small to avoid "flat" lines when there's minor variation
+  // but ensure we don't have too much blank space if the user wants it to feel tighter.
+  // Actually, the user complained about "many blank space below", which usually happens 
+  // if the range is small and min is far from 0.
+  
   const pts = data.map((_, i) => [
     (i / (data.length - 1)) * W,
     SPARK_TOP + sparkH - PAD - ((values[i]! - min) / range) * (sparkH - PAD * 2),
@@ -192,16 +197,18 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
             style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
           {(() => {
             const dateStr = new Date(hd.date).toLocaleDateString('en', { month: 'short', day: 'numeric' });
-            const pillW = 78;
+            const pillW = 96;
+            const pillH = 22;
             const pillX = Math.max(1, Math.min(W - pillW - 1, hp[0] - pillW / 2));
             return (
               <g>
-                <rect x={pillX} y={1.5} width={pillW} height={14} rx={3.5}
-                  fill="rgba(10,10,15,0.82)" stroke={color} strokeOpacity={0.4} strokeWidth={0.75} />
-                <text x={pillX + 8} y={11.5} fontSize={9} fontWeight="700" fill={color} fontFamily="ui-monospace,monospace">
+                <rect x={pillX} y={1.5} width={pillW} height={pillH} rx={6}
+                  fill="rgba(24,24,27,0.94)" stroke={color} strokeOpacity={0.6} strokeWidth={1}
+                  style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.4))' }} />
+                <text x={pillX + 10} y={15} fontSize={11} fontWeight="700" fill={color} fontFamily="ui-monospace,monospace">
                   {hd.value}
                 </text>
-                <text x={pillX + pillW - 6} y={11.5} textAnchor="end" fontSize={8.5} fill="rgba(255,255,255,0.5)" fontFamily="ui-sans-serif,system-ui">
+                <text x={pillX + pillW - 8} y={15.5} textAnchor="end" fontSize={10} fill="rgba(255,255,255,0.7)" fontFamily="ui-sans-serif,system-ui">
                   {dateStr}
                 </text>
               </g>

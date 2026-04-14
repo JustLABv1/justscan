@@ -2658,7 +2658,7 @@ export default function AdminPage() {
   const activeTab = resolveAdminTab(pathname);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-xl font-bold text-zinc-900 dark:text-white">Admin</h1>
         <p className="text-sm text-zinc-500 mt-1">Manage system configuration, users, service credentials, notifications, and cross-user scans.</p>

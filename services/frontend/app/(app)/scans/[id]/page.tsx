@@ -1,7 +1,7 @@
 'use client';
 import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
 import { useToast } from '@/components/toast';
-import { SeverityBadge, SourceBadge, StatusBadge } from '@/components/ui/badges';
+import { SeverityBadge, SourceBadge, StatusBadge, SuppressionSourceBadge } from '@/components/ui/badges';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
@@ -501,6 +501,7 @@ export default function ScanDetailPage() {
 
   async function handleLiftSuppression(vuln: Vulnerability) {
     if (!scan?.image_digest) return;
+    if (vuln.suppression?.read_only || vuln.suppression?.source === 'xray') return;
     setSuppressSaving(true);
     setSuppressError('');
     try {
@@ -1123,6 +1124,7 @@ export default function ScanDetailPage() {
                               {v.suppression.status.replace(/_/g, ' ')}
                             </span>
                           )}
+                          {v.suppression && <SuppressionSourceBadge source={v.suppression.source} />}
                         </div>
                       ) : <span className="text-zinc-400 dark:text-zinc-600">—</span>}
                     </td>
@@ -1180,14 +1182,24 @@ export default function ScanDetailPage() {
                                 <div className="rounded-lg px-3 py-2 space-y-1"
                                   style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)' }}>
                                   <p className="text-xs text-zinc-400">{v.suppression.justification || '—'}</p>
+                                  <div className="flex items-center gap-2 pt-1">
+                                    <SuppressionSourceBadge source={v.suppression.source} />
+                                    {v.suppression.read_only && <span className="text-[11px] text-zinc-400">Managed by Xray</span>}
+                                  </div>
                                   {v.suppression.expires_at && (
                                     <p className="text-xs text-zinc-500">Expires: {new Date(v.suppression.expires_at).toLocaleDateString()}</p>
+                                  )}
+                                  {(v.suppression.xray_policy_name || v.suppression.xray_watch_name) && (
+                                    <p className="text-xs text-zinc-500">
+                                      {[v.suppression.xray_policy_name, v.suppression.xray_watch_name].filter(Boolean).join(' · ')}
+                                    </p>
                                   )}
                                   {v.suppression.username && (
                                     <p className="text-xs text-zinc-500">By: {v.suppression.username}</p>
                                   )}
                                 </div>
                               )}
+                              {!(v.suppression?.read_only || v.suppression?.source === 'xray') ? (
                               <div className="flex gap-2 items-center flex-wrap">
                                 <Select selectedKey={suppressStatus} onSelectionChange={k => setSuppressStatus(k as Suppression['status'])}>
                                   <Select.Trigger className={selectTriggerCls}>
@@ -1267,6 +1279,9 @@ export default function ScanDetailPage() {
                                   </button>
                                 )}
                               </div>
+                              ) : (
+                                <p className="text-xs text-zinc-500">This suppression comes from Xray and cannot be edited here.</p>
+                              )}
                               {suppressError && (
                                 <p className="text-xs mt-1" style={{ color: '#f87171' }}>{suppressError}</p>
                               )}

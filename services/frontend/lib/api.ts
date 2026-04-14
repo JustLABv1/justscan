@@ -1031,13 +1031,19 @@ export interface Suppression {
   id: string;
   vuln_id: string;
   image_digest: string;
-  status: 'accepted' | 'wont_fix' | 'false_positive';
+  status: 'accepted' | 'wont_fix' | 'false_positive' | 'xray_ignore';
   justification: string;
   user_id: string;
   expires_at: string | null;
   created_at: string;
   updated_at: string;
   username?: string;
+  source?: 'local' | 'xray' | 'mixed';
+  sources?: Array<'local' | 'xray'>;
+  read_only?: boolean;
+  xray_rule_id?: string;
+  xray_policy_name?: string;
+  xray_watch_name?: string;
 }
 
 export interface Comment {

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -103,22 +104,9 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Enrich with suppressions (per image digest + vuln_id)
-		if scan.ImageDigest != "" {
-			var suppressions []models.Suppression
-			db.NewSelect().Model(&suppressions).
-				Where("image_digest = ?", scan.ImageDigest).
-				Scan(c.Request.Context()) //nolint:errcheck
-
-			suppMap := make(map[string]*models.Suppression, len(suppressions))
-			for i := range suppressions {
-				suppMap[suppressions[i].VulnID] = &suppressions[i]
-			}
-			for i := range vulns {
-				if s, ok := suppMap[vulns[i].VulnID]; ok {
-					vulns[i].Suppression = s
-				}
-			}
+		if _, err := effectivesuppressions.ApplyEffectiveSuppressions(c.Request.Context(), db, scan, vulns); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve suppressions"})
+			return
 		}
 
 		// Enrich with KB entries

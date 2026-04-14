@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"justscan-backend/compliance"
+	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/notifications"
 	"justscan-backend/pkg/models"
 
@@ -160,6 +161,15 @@ type xrayViolationsPagination struct {
 type xrayViolationsResponse struct {
 	Total      int                   `json:"total_violations,omitempty"`
 	Violations []xrayViolationRecord `json:"violations,omitempty"`
+}
+
+type xrayIgnoreRule struct {
+	RuleID        string
+	PolicyName    string
+	WatchName     string
+	Justification string
+	ExpiresAt     *time.Time
+	Raw           models.JSONObject
 }
 
 type xrayViolationRecord struct {
@@ -334,6 +344,15 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 				log.Warnf("Failed to persist Xray SBOM components for blocked scan %s: %v", scan.ID, err)
 			}
 
+			if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, repoPath, artifactPath); err != nil {
+				log.Warnf("Failed to persist Xray ignore-rule snapshots for blocked scan %s: %v", scan.ID, err)
+			}
+			if suppressedCount, err := effectivesuppressions.RecalculateSuppressedCount(ctx, db, scan); err != nil {
+				log.Warnf("Failed to recalculate suppressed count for blocked scan %s: %v", scan.ID, err)
+			} else {
+				scan.SuppressedCount = suppressedCount
+			}
+
 			return errors.New(normalizedMessage)
 		}
 		return fmt.Errorf("failed to warm image into artifactory cache: %w", err)
@@ -394,6 +413,14 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		log.Warnf("Failed to persist Xray SBOM components for scan %s (non-fatal): %v", scan.ID, err)
 		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXraySBOMImportError(err))
 	}
+	if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, repoPath, artifactPath); err != nil {
+		log.Warnf("Failed to persist Xray ignore-rule snapshots for scan %s (non-fatal): %v", scan.ID, err)
+	}
+	if suppressedCount, err := effectivesuppressions.RecalculateSuppressedCount(ctx, db, scan); err != nil {
+		log.Warnf("Failed to recalculate suppressed count for scan %s: %v", scan.ID, err)
+	} else {
+		scan.SuppressedCount = suppressedCount
+	}
 
 	completedAt := time.Now()
 	scan.Status = models.ScanStatusCompleted
@@ -402,7 +429,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	scan.CurrentStep = models.ScanStepCompleted
 
 	if _, err := db.NewUpdate().Model(scan).
-		Column("status", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "external_scan_id", "external_status", "image_config", "architecture", "os_family", "os_name").
+		Column("status", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "suppressed_count", "external_scan_id", "external_status", "image_config", "architecture", "os_family", "os_name").
 		Where("id = ?", scan.ID).
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to mark xray scan as completed: %w", err)
@@ -1038,6 +1065,347 @@ func (c *xrayClient) getViolations(ctx context.Context, targets []xrayViolationL
 		return nil, err
 	}
 	return &response, nil
+}
+
+func (c *xrayClient) getIgnoreRules(ctx context.Context, vulnerabilityID string, artifactPaths []string, artifactName, artifactVersion string) ([]xrayIgnoreRule, error) {
+	filterKey, filterValue, ok := xrayIgnoreRuleVulnerabilityFilter(vulnerabilityID)
+	if !ok {
+		return nil, nil
+	}
+
+	candidatePaths := make([]string, 0, len(artifactPaths))
+	seenPaths := make(map[string]bool)
+	for _, artifactPath := range artifactPaths {
+		trimmed := strings.TrimSpace(artifactPath)
+		if trimmed == "" || seenPaths[trimmed] {
+			continue
+		}
+		seenPaths[trimmed] = true
+		candidatePaths = append(candidatePaths, trimmed)
+	}
+	if len(candidatePaths) == 0 {
+		candidatePaths = append(candidatePaths, "")
+	}
+
+	for _, artifactPath := range candidatePaths {
+		params := url.Values{}
+		params.Set(filterKey, filterValue)
+		if artifactPath != "" {
+			params.Set("artifact_path", artifactPath)
+		}
+		if trimmedName := strings.TrimSpace(artifactName); trimmedName != "" {
+			params.Set("artifact_name", trimmedName)
+		}
+		if trimmedVersion := strings.TrimPrefix(strings.TrimSpace(artifactVersion), ":"); trimmedVersion != "" {
+			params.Set("artifact_version", trimmedVersion)
+		}
+		params.Set("page_num", "1")
+		params.Set("num_of_rows", "25")
+		params.Set("order_by", "created")
+		params.Set("direction", "desc")
+
+		endpoint := "/xray/api/v1/ignore_rules?" + params.Encode()
+		var raw any
+		if _, err := c.doJSON(ctx, http.MethodGet, endpoint, nil, &raw, http.StatusOK); err != nil {
+			var httpErr *xrayHTTPError
+			if errors.As(err, &httpErr) {
+				switch httpErr.StatusCode {
+				case http.StatusNotFound, http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusMethodNotAllowed:
+					return nil, err
+				}
+			}
+			return nil, err
+		}
+
+		rules := extractXrayIgnoreRules(raw)
+		if len(rules) > 0 {
+			return rules, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func xrayIgnoreRuleVulnerabilityFilter(vulnerabilityID string) (string, string, bool) {
+	trimmed := strings.TrimSpace(vulnerabilityID)
+	if trimmed == "" {
+		return "", "", false
+	}
+
+	upper := strings.ToUpper(trimmed)
+	if strings.HasPrefix(upper, "CVE-") {
+		return "cve", trimmed, true
+	}
+	if strings.HasPrefix(upper, "XRAY-") {
+		return "vulnerability", trimmed, true
+	}
+
+	return "", "", false
+}
+
+func persistXrayIgnoreRuleSnapshots(ctx context.Context, db *bun.DB, scan *models.Scan, client *xrayClient, artifactPaths ...string) error {
+	if scan == nil || client == nil {
+		return nil
+	}
+
+	var rows []struct {
+		VulnID string `bun:"vuln_id"`
+	}
+	if err := db.NewSelect().Model((*models.Vulnerability)(nil)).
+		ColumnExpr("DISTINCT vuln_id").
+		Where("scan_id = ?", scan.ID).
+		Scan(ctx, &rows); err != nil {
+		return fmt.Errorf("failed to load vulnerabilities for xray suppression snapshot: %w", err)
+	}
+
+	artifactName := lastPathSegment(scan.ImageName)
+	artifactVersion := strings.TrimPrefix(scan.ImageTag, ":")
+	results := make([]models.XraySuppression, 0, len(rows))
+	successfulLookups := 0
+	lookupErrors := 0
+	var firstLookupErr error
+	now := time.Now()
+
+	for _, row := range rows {
+		vulnID := strings.TrimSpace(row.VulnID)
+		if vulnID == "" {
+			continue
+		}
+
+		rules, err := client.getIgnoreRules(ctx, vulnID, artifactPaths, artifactName, artifactVersion)
+		if err != nil {
+			if shouldTreatIgnoreRuleLookupAsUnavailable(err) {
+				recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIgnoreRuleSyncError(err))
+				return nil
+			}
+			lookupErrors += 1
+			if firstLookupErr == nil {
+				firstLookupErr = err
+			}
+			if successfulLookups == 0 && lookupErrors >= 5 {
+				return fmt.Errorf("aborted xray ignore-rule sync after %d lookup failures: %w", lookupErrors, firstLookupErr)
+			}
+			continue
+		}
+		successfulLookups += 1
+		if len(rules) == 0 {
+			continue
+		}
+
+		rule := rules[0]
+		ruleID := strings.TrimSpace(rule.RuleID)
+		if ruleID == "" {
+			ruleID = fallbackXrayIgnoreRuleID(vulnID, rule.PolicyName, rule.WatchName)
+		}
+
+		results = append(results, models.XraySuppression{
+			ScanID:        scan.ID,
+			ImageDigest:   scan.ImageDigest,
+			VulnID:        vulnID,
+			RuleID:        ruleID,
+			PolicyName:    strings.TrimSpace(rule.PolicyName),
+			WatchName:     strings.TrimSpace(rule.WatchName),
+			Justification: strings.TrimSpace(rule.Justification),
+			ArtifactPath:  firstNonEmpty(artifactPaths...),
+			ExpiresAt:     rule.ExpiresAt,
+			Raw:           rule.Raw,
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		})
+	}
+
+	if successfulLookups == 0 && lookupErrors > 0 {
+		return fmt.Errorf("failed to fetch xray ignore rules after %d lookup errors: %w", lookupErrors, firstLookupErr)
+	}
+
+	if _, err := db.NewDelete().Model((*models.XraySuppression)(nil)).Where("scan_id = ?", scan.ID).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to clear xray suppression snapshots: %w", err)
+	}
+
+	if len(results) == 0 {
+		return nil
+	}
+
+	if _, err := db.NewInsert().Model(&results).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to persist xray suppression snapshots: %w", err)
+	}
+
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Resolved %d Xray ignore-rule suppressions.", len(results)))
+	return nil
+}
+
+func shouldTreatIgnoreRuleLookupAsUnavailable(err error) bool {
+	var httpErr *xrayHTTPError
+	if !errors.As(err, &httpErr) {
+		return false
+	}
+
+	switch httpErr.StatusCode {
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusMethodNotAllowed:
+		return true
+	default:
+		return false
+	}
+}
+
+func describeNonFatalXrayIgnoreRuleSyncError(err error) string {
+	var httpErr *xrayHTTPError
+	if errors.As(err, &httpErr) {
+		switch httpErr.StatusCode {
+		case http.StatusBadRequest:
+			return "Xray returned vulnerability results, but its optional ignore-rule lookup rejected the query parameters. Ignore-rule suppressions were skipped for this scan."
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return "Xray returned vulnerability results, but the configured credentials do not have permission to read ignore rules. Ignore-rule suppressions were skipped for this scan."
+		case http.StatusNotFound, http.StatusMethodNotAllowed:
+			return "Xray returned vulnerability results, but this instance does not expose the ignore-rule lookup API. Ignore-rule suppressions were skipped for this scan."
+		}
+	}
+
+	return fmt.Sprintf("Xray returned vulnerability results, but the optional ignore-rule lookup did not complete: %v", err)
+}
+
+func extractXrayIgnoreRules(payload any) []xrayIgnoreRule {
+	objects := collectXrayIgnoreRuleObjects(payload)
+	results := make([]xrayIgnoreRule, 0, len(objects))
+	for _, object := range objects {
+		ruleID := firstNonEmpty(
+			findStringValue(object, "external_id"),
+			findStringValue(object, "rule_id"),
+			findStringValue(object, "id"),
+		)
+		policyName := firstNonEmpty(
+			findStringValue(object, "policy_name"),
+			findStringValue(object, "policy"),
+		)
+		watchName := firstNonEmpty(
+			findStringValue(object, "watch_name"),
+			findStringValue(object, "watch"),
+		)
+		justification := firstNonEmpty(
+			findStringValue(object, "notes"),
+			findStringValue(object, "note"),
+			findStringValue(object, "reason"),
+			findStringValue(object, "description"),
+			findStringValue(object, "summary"),
+		)
+		if ruleID == "" && policyName == "" && watchName == "" && justification == "" {
+			continue
+		}
+		results = append(results, xrayIgnoreRule{
+			RuleID:        ruleID,
+			PolicyName:    policyName,
+			WatchName:     watchName,
+			Justification: justification,
+			ExpiresAt:     findTimeValue(object, "expires_at", "expiresAt", "expiration_date", "expiry_date"),
+			Raw:           object,
+		})
+	}
+	return results
+}
+
+func collectXrayIgnoreRuleObjects(payload any) []models.JSONObject {
+	switch typed := payload.(type) {
+	case []any:
+		results := make([]models.JSONObject, 0, len(typed))
+		for _, item := range typed {
+			results = append(results, collectXrayIgnoreRuleObjects(item)...)
+		}
+		return results
+	case map[string]any:
+		object := toJSONObject(typed)
+		for _, key := range []string{"ignore_rules", "data", "results", "items", "rules"} {
+			if nested, ok := typed[key]; ok {
+				results := collectXrayIgnoreRuleObjects(nested)
+				if len(results) > 0 {
+					return results
+				}
+			}
+		}
+		return []models.JSONObject{object}
+	default:
+		return nil
+	}
+}
+
+func toJSONObject(value map[string]any) models.JSONObject {
+	result := make(models.JSONObject, len(value))
+	for key, item := range value {
+		result[key] = item
+	}
+	return result
+}
+
+func findStringValue(value any, targetKey string) string {
+	switch typed := value.(type) {
+	case models.JSONObject:
+		for key, item := range typed {
+			if strings.EqualFold(strings.TrimSpace(key), targetKey) {
+				if text := strings.TrimSpace(fmt.Sprint(item)); text != "" && text != "<nil>" {
+					return text
+				}
+			}
+			if nested := findStringValue(item, targetKey); nested != "" {
+				return nested
+			}
+		}
+	case map[string]any:
+		for key, item := range typed {
+			if strings.EqualFold(strings.TrimSpace(key), targetKey) {
+				if text := strings.TrimSpace(fmt.Sprint(item)); text != "" && text != "<nil>" {
+					return text
+				}
+			}
+			if nested := findStringValue(item, targetKey); nested != "" {
+				return nested
+			}
+		}
+	case []any:
+		for _, item := range typed {
+			if nested := findStringValue(item, targetKey); nested != "" {
+				return nested
+			}
+		}
+	}
+	return ""
+}
+
+func findTimeValue(value any, keys ...string) *time.Time {
+	for _, key := range keys {
+		if raw := findStringValue(value, key); raw != "" {
+			for _, layout := range []string{time.RFC3339, time.RFC3339Nano, "2006-01-02T15:04:05.000Z07:00", "2006-01-02 15:04:05"} {
+				parsed, err := time.Parse(layout, raw)
+				if err == nil {
+					return &parsed
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func fallbackXrayIgnoreRuleID(vulnID, policyName, watchName string) string {
+	parts := []string{strings.TrimSpace(vulnID), strings.TrimSpace(policyName), strings.TrimSpace(watchName)}
+	filtered := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part != "" {
+			filtered = append(filtered, part)
+		}
+	}
+	if len(filtered) == 0 {
+		return "xray-ignore"
+	}
+	return strings.Join(filtered, ":")
+}
+
+func lastPathSegment(value string) string {
+	trimmed := strings.Trim(strings.TrimSpace(value), "/")
+	if trimmed == "" {
+		return ""
+	}
+	if idx := strings.LastIndex(trimmed, "/"); idx >= 0 {
+		return trimmed[idx+1:]
+	}
+	return trimmed
 }
 
 func (c *xrayClient) contextualAnalysis(ctx context.Context, vulnerabilityID, componentID, sourceComponentID, artifactPath string) (models.JSONObject, error) {

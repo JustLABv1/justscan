@@ -12,15 +12,18 @@ import (
 	"github.com/uptrace/bun"
 )
 
-func LoadLocalSuppressionsByDigest(ctx context.Context, db *bun.DB, imageDigest string) (map[string]*models.Suppression, error) {
+func LoadLocalSuppressionsByDigest(ctx context.Context, db *bun.DB, imageDigest string, userID *uuid.UUID) (map[string]*models.Suppression, error) {
 	if strings.TrimSpace(imageDigest) == "" {
 		return map[string]*models.Suppression{}, nil
 	}
 
 	var suppressions []models.Suppression
-	if err := db.NewSelect().Model(&suppressions).
-		Where("image_digest = ?", imageDigest).
-		Scan(ctx); err != nil {
+	query := db.NewSelect().Model(&suppressions).
+		Where("image_digest = ?", imageDigest)
+	if userID != nil {
+		query = query.Where("user_id = ?", *userID)
+	}
+	if err := query.Scan(ctx); err != nil {
 		return nil, err
 	}
 
@@ -61,7 +64,7 @@ func LoadXraySuppressionsByScan(ctx context.Context, db *bun.DB, scanID uuid.UUI
 }
 
 func ApplyEffectiveSuppressions(ctx context.Context, db *bun.DB, scan *models.Scan, vulns []models.Vulnerability) (int, error) {
-	localByVuln, err := LoadLocalSuppressionsByDigest(ctx, db, scan.ImageDigest)
+	localByVuln, err := LoadLocalSuppressionsByDigest(ctx, db, scan.ImageDigest, scan.UserID)
 	if err != nil {
 		return 0, err
 	}
@@ -130,13 +133,13 @@ func MergeEffectiveSuppression(local *models.Suppression, xray *models.XraySuppr
 	return &merged
 }
 
-func LoadEffectiveSuppressionsPage(ctx context.Context, db *bun.DB, page, limit int, statusFilter, query string) ([]models.Suppression, int, error) {
-	localRows, err := loadLocalSuppressionsPageRows(ctx, db, statusFilter, query)
+func LoadEffectiveSuppressionsPage(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, page, limit int, statusFilter, query string) ([]models.Suppression, int, error) {
+	localRows, err := loadLocalSuppressionsPageRows(ctx, db, userID, isAdmin, statusFilter, query)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	xrayRows, err := loadXraySuppressionsPageRows(ctx, db, statusFilter, query)
+	xrayRows, err := loadXraySuppressionsPageRows(ctx, db, userID, isAdmin, statusFilter, query)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -188,9 +191,12 @@ func LoadEffectiveSuppressionsPage(ctx context.Context, db *bun.DB, page, limit 
 	return rows[start:end], total, nil
 }
 
-func loadLocalSuppressionsPageRows(ctx context.Context, db *bun.DB, statusFilter, query string) ([]models.Suppression, error) {
+func loadLocalSuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, statusFilter, query string) ([]models.Suppression, error) {
 	var suppressions []models.Suppression
 	q := db.NewSelect().Model(&suppressions).OrderExpr("updated_at DESC")
+	if !isAdmin {
+		q = q.Where("user_id = ?", userID)
+	}
 	if strings.TrimSpace(statusFilter) != "" {
 		q = q.Where("status = ?", statusFilter)
 	}
@@ -211,15 +217,19 @@ func loadLocalSuppressionsPageRows(ctx context.Context, db *bun.DB, statusFilter
 	return rows, nil
 }
 
-func loadXraySuppressionsPageRows(ctx context.Context, db *bun.DB, statusFilter, query string) ([]models.XraySuppression, error) {
+func loadXraySuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, statusFilter, query string) ([]models.XraySuppression, error) {
 	if strings.TrimSpace(statusFilter) != "" && statusFilter != models.SuppressionXrayIgnore {
 		return []models.XraySuppression{}, nil
 	}
 
 	var suppressions []models.XraySuppression
 	q := db.NewSelect().Model(&suppressions).
+		Join("JOIN scans ON scans.id = xray_suppression.scan_id").
 		DistinctOn("image_digest, vuln_id").
 		OrderExpr("image_digest, vuln_id, updated_at DESC")
+	if !isAdmin {
+		q = q.Where("scans.user_id = ?", userID)
+	}
 	if trimmedQuery := strings.TrimSpace(query); trimmedQuery != "" {
 		q = q.Where("vuln_id ILIKE ? OR image_digest ILIKE ? OR policy_name ILIKE ? OR watch_name ILIKE ?", "%"+trimmedQuery+"%", "%"+trimmedQuery+"%", "%"+trimmedQuery+"%", "%"+trimmedQuery+"%")
 	}

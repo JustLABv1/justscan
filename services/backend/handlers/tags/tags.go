@@ -3,6 +3,7 @@ package tags
 import (
 	"net/http"
 
+	"justscan-backend/functions/authz"
 	scanhandlers "justscan-backend/handlers/scans"
 	"justscan-backend/pkg/models"
 
@@ -13,8 +14,20 @@ import (
 
 func ListTags(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+
 		var tags []models.Tag
-		if err := db.NewSelect().Model(&tags).OrderExpr("name ASC").Scan(c.Request.Context()); err != nil {
+		query := db.NewSelect().Model(&tags).Distinct().OrderExpr("tag.name ASC")
+		if !isAdmin {
+			query = query.
+				Join("JOIN scan_tags ON scan_tags.tag_id = tag.id").
+				Join("JOIN scans ON scans.id = scan_tags.scan_id").
+				Where("scans.user_id = ?", userID)
+		}
+		if err := query.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tags"})
 			return
 		}
@@ -24,6 +37,10 @@ func ListTags(db *bun.DB) gin.HandlerFunc {
 
 func CreateTag(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if _, ok := authz.RequireAdmin(c, db); !ok {
+			return
+		}
+
 		var body struct {
 			Name  string `json:"name" binding:"required"`
 			Color string `json:"color"`
@@ -46,6 +63,10 @@ func CreateTag(db *bun.DB) gin.HandlerFunc {
 
 func UpdateTag(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if _, ok := authz.RequireAdmin(c, db); !ok {
+			return
+		}
+
 		tagID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tag ID"})
@@ -80,6 +101,10 @@ func UpdateTag(db *bun.DB) gin.HandlerFunc {
 
 func DeleteTag(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if _, ok := authz.RequireAdmin(c, db); !ok {
+			return
+		}
+
 		tagID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tag ID"})

@@ -1,5 +1,5 @@
 import { OrgInvite, OrgMember, OrgRole } from '@/lib/api';
-import { timeAgo } from '@/lib/time';
+import { timeAgo, timeUntil } from '@/lib/time';
 import { Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 
 interface OrgTeamTabProps {
@@ -129,7 +129,7 @@ export function OrgTeamTab({
               <div key={invite.id} className="rounded-xl px-4 py-3 flex items-center justify-between gap-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">{invite.email}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">{invite.role} · expires {timeAgo(invite.expires_at)}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{invite.role} · expires {timeUntil(invite.expires_at)}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => void onCopyInviteLink(invite)} className="btn-secondary text-xs px-3 py-1.5" type="button">Copy link</button>

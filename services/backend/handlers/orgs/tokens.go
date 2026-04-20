@@ -89,21 +89,25 @@ func CreateOrgToken(db *bun.DB) gin.HandlerFunc {
 		if body.ExpiresIn > 0 {
 			expiry = time.Duration(body.ExpiresIn) * time.Second
 		}
+		expiresAt := time.Now().Add(expiry)
 
-		tokenString, expiresAt, err := auth.GenerateJWT(userID, false)
+		// Pre-generate the token UUID so we can embed it in the JWT claim.
+		// The middleware will look up the record by this ID to obtain org_id.
+		tokenID := uuid.New()
+		tokenString, err := auth.GenerateOrgToken(tokenID, expiresAt)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 			return
 		}
-		_ = expiresAt
 
 		token := models.Tokens{
+			ID:          tokenID,
 			UserID:      userID.String(),
 			OrgID:       &orgID,
 			Key:         tokenString,
 			Description: body.Description,
 			Type:        "org",
-			ExpiresAt:   time.Now().Add(expiry),
+			ExpiresAt:   expiresAt,
 			CreatedAt:   time.Now(),
 		}
 		if _, err := db.NewInsert().Model(&token).Exec(c.Request.Context()); err != nil {

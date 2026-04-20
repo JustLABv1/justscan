@@ -14,8 +14,10 @@ import (
 )
 
 const (
-	AuthContextUserIDKey  = "auth.user_id"
-	AuthContextIsAdminKey = "auth.is_admin"
+	AuthContextUserIDKey     = "auth.user_id"
+	AuthContextIsAdminKey    = "auth.is_admin"
+	AuthContextOrgTokenIDKey = "auth.org_token_id"
+	AuthContextOrgTokenOrgID = "auth.org_token_org_id"
 )
 
 func Auth(db *bun.DB) gin.HandlerFunc {
@@ -49,7 +51,7 @@ func Auth(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if tokenType == "user" {
+		if tokenType == "user" || tokenType == "personal" {
 			userId, err := auth.GetUserIDFromToken(tokenString)
 			if err != nil {
 				httperror.InternalServerError(context, "Error receiving userID from token", err)
@@ -93,6 +95,35 @@ func Auth(db *bun.DB) gin.HandlerFunc {
 				httperror.Unauthorized(context, "Token is currently disabled", errors.New("token is disabled"))
 				return
 			}
+
+			context.Next()
+		} else if tokenType == "org" {
+			tokenID, err := auth.GetIDFromToken(tokenString)
+			if err != nil {
+				httperror.InternalServerError(context, "Error receiving tokenID from token", err)
+				return
+			}
+
+			var token models.Tokens
+			err = db.NewSelect().Model(&token).
+				Column("id", "disabled", "disabled_reason", "org_id").
+				Where("id = ?", tokenID).
+				Scan(context)
+			if err != nil {
+				httperror.Unauthorized(context, "Token is not valid", err)
+				return
+			}
+			if token.Disabled {
+				httperror.Unauthorized(context, "Token is currently disabled", errors.New("token is disabled"))
+				return
+			}
+			if token.OrgID == nil {
+				httperror.Unauthorized(context, "Org token has no associated organization", errors.New("org token missing org_id"))
+				return
+			}
+
+			context.Set(AuthContextOrgTokenIDKey, token.ID)
+			context.Set(AuthContextOrgTokenOrgID, *token.OrgID)
 
 			context.Next()
 		} else {

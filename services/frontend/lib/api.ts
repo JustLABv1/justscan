@@ -400,10 +400,27 @@ export interface APIToken {
 }
 export const listOrgTokens = (orgId: string) =>
   req<{ data: APIToken[] }>('GET', `/api/v1/orgs/${orgId}/tokens`).then((r) => r.data ?? []);
-export const createOrgToken = (orgId: string, name: string, expiresAt?: string) =>
-  req<APIToken & { raw_token: string }>('POST', `/api/v1/orgs/${orgId}/tokens`, { name, expires_at: expiresAt });
+export const createOrgToken = (orgId: string, description: string, expiresIn?: number) =>
+  req<APIToken & { key: string }>('POST', `/api/v1/orgs/${orgId}/tokens`, { description, expires_in: expiresIn });
 export const revokeOrgToken = (orgId: string, tokenId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/orgs/${orgId}/tokens/${tokenId}`);
+
+// Personal access tokens (PATs)
+export interface PersonalToken {
+  id: string;
+  description: string;
+  type: string;
+  disabled: boolean;
+  disabled_reason: string;
+  created_at: string;
+  expires_at: string;
+}
+export const listUserTokens = () =>
+  req<{ data: PersonalToken[]; total: number }>('GET', '/api/v1/user/tokens');
+export const createUserToken = (description: string, expiresIn?: number) =>
+  req<PersonalToken & { key: string }>('POST', '/api/v1/user/tokens', { description, expires_in: expiresIn });
+export const revokeUserToken = (tokenId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/user/tokens/${tokenId}`);
 
 // Org ownership transfer
 export const transferOrgOwnership = (orgId: string, newOwnerUserId: string) =>

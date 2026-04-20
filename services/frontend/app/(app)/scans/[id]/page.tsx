@@ -547,7 +547,7 @@ export default function ScanDetailPage() {
 
   function canManageScanAccess() {
     if (isPlatformAdmin) return true;
-    if (scan.owner_type === 'org' && scan.owner_org_id) {
+    if (scan?.owner_type === 'org' && scan.owner_org_id) {
       return manageableOrgIds.has(scan.owner_org_id);
     }
     return true;

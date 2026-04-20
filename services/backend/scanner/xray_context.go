@@ -54,6 +54,13 @@ func GetVulnerabilityContextAnalysis(ctx context.Context, db *bun.DB, scan *mode
 
 	_, artifactPath, pathErr := xrayArtifactPaths(scan.ImageName, scan.ImageTag, registry, client.artifactoryID)
 	if pathErr == nil {
+		repoKey, artifactName, imageTag, partsErr := xrayImageParts(scan.ImageName, scan.ImageTag, registry)
+		if partsErr == nil {
+			manifestFilename := client.resolveManifestFilename(ctx, repoKey+"/"+artifactName, imageTag)
+			if manifestFilename != "manifest.json" {
+				artifactPath = client.artifactoryID + "/" + repoKey + "/" + artifactName + "/" + imageTag + "/" + manifestFilename
+			}
+		}
 		analysis.ArtifactPath = artifactPath
 	}
 	analysis.SourceComponentID = analysis.ComponentID

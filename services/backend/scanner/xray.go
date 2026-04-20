@@ -247,8 +247,9 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 
 	imageRepoPath := repoKey + "/" + artifactName
-	artifactRepoPath := artifactName + "/" + imageTag + "/manifest.json"
-	repoPath := imageRepoPath + "/" + imageTag + "/manifest.json"
+	manifestFilename := client.resolveManifestFilename(ctx, imageRepoPath, imageTag)
+	artifactRepoPath := artifactName + "/" + imageTag + "/" + manifestFilename
+	repoPath := imageRepoPath + "/" + imageTag + "/" + manifestFilename
 	artifactPath := client.artifactoryID + "/" + repoPath
 	if imageConfig, configErr := client.imageConfigMetadata(ctx, imageRepoPath, imageTag, scan.Platform); configErr != nil {
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to load image config metadata from Artifactory: %v", configErr))
@@ -749,6 +750,21 @@ func (c *xrayClient) fetchRegistryManifest(ctx context.Context, imageRepoPath, r
 	}
 
 	return &manifest, manifest.MediaType, strings.TrimSpace(response.Header.Get("Docker-Content-Digest")), nil
+}
+
+// resolveManifestFilename returns "list.manifest.json" when the given
+// reference resolves to a manifest list (multi-arch image) and
+// "manifest.json" for single-platform images. Errors fall back to
+// "manifest.json" so callers are not blocked on a non-fatal probe.
+func (c *xrayClient) resolveManifestFilename(ctx context.Context, imageRepoPath, reference string) string {
+	manifest, mediaType, _, err := c.fetchRegistryManifest(ctx, imageRepoPath, reference)
+	if err != nil {
+		return "manifest.json"
+	}
+	if isRegistryManifestIndex(mediaType, manifest) {
+		return "list.manifest.json"
+	}
+	return "manifest.json"
 }
 
 func (c *xrayClient) resolveImageManifest(ctx context.Context, imageRepoPath, reference, platform string) (*registryManifest, string, error) {
@@ -2491,6 +2507,10 @@ func isRetriableRegistryWarmupError(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
+	// Unexpected EOF during blob streaming is a transient connection drop.
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
 
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
@@ -2498,7 +2518,11 @@ func isRetriableRegistryWarmupError(err error) bool {
 	}
 
 	normalizedErr := strings.ToLower(err.Error())
-	if strings.Contains(normalizedErr, "client.timeout exceeded") || strings.Contains(normalizedErr, "context deadline exceeded") {
+	if strings.Contains(normalizedErr, "client.timeout exceeded") ||
+		strings.Contains(normalizedErr, "context deadline exceeded") ||
+		strings.Contains(normalizedErr, "unexpected eof") ||
+		strings.Contains(normalizedErr, "connection reset by peer") ||
+		strings.Contains(normalizedErr, "connection refused") {
 		return true
 	}
 

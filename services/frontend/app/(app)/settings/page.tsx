@@ -3,7 +3,8 @@ import { FormField } from '@/components/ui/form-field';
 import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { changePassword, getAuthSnapshot, getUserDetails, setUser, updateUserDetails, User } from '@/lib/api';
 import { fullDate } from '@/lib/time';
-import { Clock01Icon, Key01Icon, Shield01Icon, UserAccountIcon } from 'hugeicons-react';
+import { ApiIcon, Clock01Icon, Key01Icon, Shield01Icon, UserAccountIcon } from 'hugeicons-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -275,6 +276,16 @@ export default function SettingsPage() {
             </div>
           </form>
         )}
+      </Section>
+
+      <Section title="API Tokens" description="Create and manage personal access tokens for use in CI/CD pipelines, scripts, and external tools.">
+        <Link
+          href="/settings/tokens"
+          className="btn-secondary inline-flex items-center gap-2"
+        >
+          <ApiIcon size={15} />
+          Manage API Tokens
+        </Link>
       </Section>
     </div>
   );

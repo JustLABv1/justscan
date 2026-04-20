@@ -71,7 +71,43 @@ func LoadAuthorizedOrg(c *gin.Context, db *bun.DB, orgID uuid.UUID) (*models.Org
 	return org, userID, isAdmin, ok
 }
 
+// IsOrgTokenRequest returns true when the request was authenticated with an org-scoped API token.
+func IsOrgTokenRequest(c *gin.Context) bool {
+	_, ok := c.Get(middlewares.AuthContextOrgTokenOrgID)
+	return ok
+}
+
+// GetOrgTokenOrgID returns the org UUID associated with the current org token request.
+func GetOrgTokenOrgID(c *gin.Context) (uuid.UUID, bool) {
+	val, ok := c.Get(middlewares.AuthContextOrgTokenOrgID)
+	if !ok {
+		return uuid.Nil, false
+	}
+	orgID, ok := val.(uuid.UUID)
+	return orgID, ok
+}
+
 func RequireOrgRole(c *gin.Context, db *bun.DB, orgID uuid.UUID, minRole string) (*models.Org, *models.OrgMember, uuid.UUID, bool, bool) {
+	// Org token service-account path: grant access when the token is scoped to the requested org.
+	if tokenOrgID, isOrgToken := GetOrgTokenOrgID(c); isOrgToken {
+		if tokenOrgID != orgID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "insufficient organization permissions"})
+			return nil, nil, uuid.Nil, false, false
+		}
+		// Org tokens are granted admin-level access to their own org.
+		if roleRank(models.OrgRoleAdmin) < roleRank(minRole) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "insufficient organization permissions"})
+			return nil, nil, uuid.Nil, false, false
+		}
+		org := &models.Org{}
+		if err := db.NewSelect().Model(org).Where("id = ?", orgID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
+			return nil, nil, uuid.Nil, false, false
+		}
+		org.CurrentUserRole = models.OrgRoleAdmin
+		return org, nil, uuid.Nil, false, true
+	}
+
 	userID, isAdmin, ok := RequireRequestUser(c, db)
 	if !ok {
 		return nil, nil, uuid.Nil, false, false

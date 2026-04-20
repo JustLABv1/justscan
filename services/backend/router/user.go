@@ -28,5 +28,15 @@ func User(router *gin.RouterGroup, db *bun.DB) {
 		user.DELETE("/", func(c *gin.Context) {
 			users.DeleteUser(c, db)
 		})
+
+		user.GET("/tokens", func(c *gin.Context) {
+			users.ListUserTokens(c, db)
+		})
+		user.POST("/tokens", func(c *gin.Context) {
+			users.CreateUserToken(c, db)
+		})
+		user.DELETE("/tokens/:tokenId", func(c *gin.Context) {
+			users.RevokeUserToken(c, db)
+		})
 	}
 }

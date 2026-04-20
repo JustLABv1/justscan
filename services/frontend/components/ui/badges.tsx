@@ -1,5 +1,6 @@
 'use client';
 
+import { useWorkScope } from '@/hooks/use-work-scope';
 import type { OwnerType } from '@/lib/api';
 
 // ── StatusBadge ────────────────────────────────────────────────────────
@@ -151,19 +152,27 @@ export function OwnershipBadge({
   orgNamesById?: Record<string, string>;
   className?: string;
 }) {
+  const workScope = useWorkScope();
   const resolvedType = ownerType === 'org' || ownerType === 'system' ? ownerType : 'user';
   const cfg = OWNERSHIP_CONFIG[resolvedType];
   const orgName = ownerOrgId ? orgNamesById?.[ownerOrgId] : undefined;
-  const label = resolvedType === 'org'
-    ? orgName ? `Org: ${orgName}` : 'Org workspace'
-    : resolvedType === 'system'
-      ? 'System'
-      : 'Personal';
-  const title = resolvedType === 'org'
-    ? orgName ? `Owned by organization ${orgName}` : 'Owned by an organization workspace'
-    : resolvedType === 'system'
-      ? 'Owned by the system'
-      : 'Owned by your personal workspace';
+  const isSharedIntoCurrentOrg = workScope.kind === 'org' && resolvedType === 'user';
+  const label = isSharedIntoCurrentOrg
+    ? 'Shared'
+    : resolvedType === 'org'
+      ? orgName ? `Org: ${orgName}` : 'Org workspace'
+      : resolvedType === 'system'
+        ? 'System'
+        : 'Personal';
+  const title = isSharedIntoCurrentOrg
+    ? workScope.orgName
+      ? `Shared with organization workspace ${workScope.orgName}`
+      : 'Shared with the current organization workspace'
+    : resolvedType === 'org'
+      ? orgName ? `Owned by organization ${orgName}` : 'Owned by an organization workspace'
+      : resolvedType === 'system'
+        ? 'Owned by the system'
+        : 'Owned by your personal workspace';
 
   return (
     <span

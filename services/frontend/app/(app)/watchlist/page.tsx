@@ -6,9 +6,10 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-  createWatchlistItem, deleteWatchlistItem, getDefaultScannerCapabilities, getTokenType, getWorkScope, listRegistriesWithCapabilities, listWatchlist, listWatchlistShares,
-  RegistryWithHealth, ResourceShare, ScannerCapabilities, shareWatchlistItem, triggerWatchlistScan, unshareWatchlistItem, updateWatchlistItem, WatchlistItem,
+    createWatchlistItem, deleteWatchlistItem, getDefaultScannerCapabilities, getTokenType, getWorkScope, listRegistriesWithCapabilities, listWatchlist, listWatchlistShares,
+    RegistryWithHealth, ResourceShare, ScannerCapabilities, shareWatchlistItem, triggerWatchlistScan, unshareWatchlistItem, updateWatchlistItem, WatchlistItem,
 } from '@/lib/api';
 import { cronToHuman, type HourCyclePreference } from '@/lib/cron';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -28,6 +29,8 @@ function getBrowserTimezone() {
 }
 
 export default function WatchlistPage() {
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const { orgs, orgNamesById } = useOrgDirectory();
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
@@ -73,7 +76,7 @@ export default function WatchlistPage() {
         setCapabilities(response.capabilities);
       })
       .catch(() => {});
-  }, [load]);
+  }, [load, scopeKey]);
 
   const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
   const registryOptions = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy || registry.id === registryId);

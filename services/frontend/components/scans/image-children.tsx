@@ -2,6 +2,7 @@
 
 import { OwnershipBadge, SevCount, StatusBadge } from '@/components/ui/badges';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import { listScans, Scan } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Checkbox } from '@heroui/react';
@@ -21,6 +22,8 @@ interface ImageChildrenProps {
 
 export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelete, onCancel, selectedScans, onSelectScan }: ImageChildrenProps) {
   const router = useRouter();
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const [scans, setScans] = useState<Scan[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -40,7 +43,7 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
 
   useEffect(() => {
     load(page);
-  }, [load, page]);
+  }, [load, page, scopeKey]);
 
   useConditionalInterval(() => {
     void load(page);

@@ -9,6 +9,7 @@ import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import { createRegistry, deleteRegistry, getDefaultScannerCapabilities, getTokenType, getWorkScope, listRegistriesWithCapabilities, listRegistryShares, RegistryWithHealth, ResourceShare, ScannerCapabilities, shareRegistry, testRegistry, unshareRegistry, updateRegistry } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
@@ -52,6 +53,8 @@ function HealthBadge({ status, message }: { status: string; message: string }) {
 }
 
 export default function RegistriesPage() {
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const { orgs, orgNamesById } = useOrgDirectory();
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
   const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
@@ -93,7 +96,7 @@ export default function RegistriesPage() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, scopeKey]);
 
   function openCreate() {
     setEditing(null); setName(''); setUrl(''); setXrayUrl(''); setXrayArtifactoryId('default'); setAuthType('none'); setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray'); setUsername(''); setPassword(''); setFormError('');
@@ -106,6 +109,7 @@ export default function RegistriesPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setFormError(''); setSaving(true);
     try {
+      const currentScope = getWorkScope();
       const payload = {
         name,
         url,
@@ -115,7 +119,7 @@ export default function RegistriesPage() {
         scan_provider: scanProvider,
         username,
         ...(password ? { password } : {}),
-        ...(getWorkScope().kind === 'org' ? { org_id: getWorkScope().orgId } : {}),
+        ...(currentScope.kind === 'org' ? { org_id: currentScope.orgId } : {}),
       };
       if (editing) { await updateRegistry(editing.id, payload); toast.success('Registry updated'); }
       else { await createRegistry(payload); toast.success('Registry added'); }

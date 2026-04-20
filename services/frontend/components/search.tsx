@@ -1,4 +1,5 @@
 'use client';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import { search, SearchImageResult, SearchScanResult, SearchVulnResult } from '@/lib/api';
 import { Cancel01Icon, Search01Icon, Shield01Icon, ShieldKeyIcon, TaskDone02Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
@@ -18,6 +19,8 @@ type ResultItem =
   | { kind: 'vuln';  data: SearchVulnResult  };
 
 export function SearchModal({ onClose }: { onClose: () => void }) {
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [images, setImages] = useState<SearchImageResult[]>([]);
@@ -64,6 +67,11 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (query.trim().length < 2) return;
+    void doSearch(query);
+  }, [doSearch, query, scopeKey]);
 
   function handleChange(val: string) {
     setQuery(val);

@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"justscan-backend/functions/authz"
+
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
@@ -21,6 +23,11 @@ type trendRow struct {
 // GetTrends returns daily aggregated vulnerability counts for completed scans.
 func GetTrends(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
+		if !ok {
+			return
+		}
+
 		days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
 		if days <= 0 {
 			days = 30
@@ -49,6 +56,7 @@ func GetTrends(db *bun.DB) gin.HandlerFunc {
 		if imageTag != "" {
 			q = q.Where("image_tag = ?", imageTag)
 		}
+		q = authz.ApplyOwnershipVisibility(q, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
 
 		var rows []trendRow
 		if err := q.Scan(c.Request.Context(), &rows); err != nil {

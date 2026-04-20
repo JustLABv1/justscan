@@ -1,19 +1,24 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
+import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { createTag, deleteTag, listTags, Tag, updateTag } from '@/lib/api';
+import { useOrgDirectory } from '@/hooks/use-org-name-map';
+import { createTag, deleteTag, getTokenType, getUser, getWorkScope, listTagShares, listTags, ResourceShare, shareTag, Tag, unshareTag, updateTag } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
-import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Tag01Icon } from 'hugeicons-react';
+import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon, Tag01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
 
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#14b8a6'];
+const inputCls = nativeFieldClassName;
 
 export default function TagsPage() {
+  const { orgs, orgNamesById } = useOrgDirectory();
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -22,9 +27,19 @@ export default function TagsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [editing, setEditing] = useState<Tag | null>(null);
+  const [shareTarget, setShareTarget] = useState<Tag | null>(null);
+  const [shares, setShares] = useState<ResourceShare[]>([]);
+  const [sharesLoading, setSharesLoading] = useState(false);
+  const [shareError, setShareError] = useState('');
+  const [shareOrgId, setShareOrgId] = useState('');
+  const [shareSaving, setShareSaving] = useState(false);
   const modal = useOverlayState();
+  const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
+  const isPlatformAdmin = getTokenType() === 'admin';
+  const currentUserId = getUser()?.id as string | undefined;
+  const manageableOrgIds = new Set(orgs.filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin').map((org) => org.id));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,11 +53,80 @@ export default function TagsPage() {
   function openCreate() { setEditing(null); setName(''); setColor(COLORS[0]); setFormError(''); modal.open(); }
   function openEdit(tag: Tag) { setEditing(tag); setName(tag.name); setColor(tag.color); setFormError(''); modal.open(); }
 
+  function canManageTag(tag: Tag) {
+    if (tag.owner_type === 'system') return isPlatformAdmin;
+    if (isPlatformAdmin) return true;
+    if (tag.owner_type === 'org' && tag.owner_org_id) {
+      return manageableOrgIds.has(tag.owner_org_id);
+    }
+    return !tag.owner_user_id || tag.owner_user_id === currentUserId;
+  }
+
+  async function loadShares(tagId: string) {
+    setSharesLoading(true);
+    setShareError('');
+    try {
+      setShares(await listTagShares(tagId));
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to load access grants');
+    } finally {
+      setSharesLoading(false);
+    }
+  }
+
+  function openShareModal(tag: Tag) {
+    setShareTarget(tag);
+    setShares([]);
+    setShareOrgId('');
+    setShareError('');
+    shareModal.open();
+    void loadShares(tag.id);
+  }
+
+  async function handleGrantShare() {
+    if (!shareTarget || !shareOrgId) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await shareTag(shareTarget.id, shareOrgId);
+      toast.success('Tag access granted');
+      setShareOrgId('');
+      await loadShares(shareTarget.id);
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to grant access');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
+  async function handleRevokeShare(orgId: string) {
+    if (!shareTarget) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await unshareTag(shareTarget.id, orgId);
+      toast.success('Tag access revoked');
+      await loadShares(shareTarget.id);
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to revoke access');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
+  const availableShareTargets = shareTarget
+    ? orgs.filter((org) => (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id && !shares.some((share) => share.org_id === org.id))
+    : [];
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setFormError(''); setSaving(true);
     try {
+      const currentScope = getWorkScope();
       if (editing) { await updateTag(editing.id, name, color); toast.success('Tag updated'); }
-      else { await createTag(name, color); toast.success(`Tag "${name}" created`); }
+      else {
+        await createTag(name, color, currentScope.kind === 'org' ? currentScope.orgId : undefined);
+        toast.success(`Tag "${name}" created`);
+      }
       modal.close(); await load();
     } catch (err: unknown) { setFormError(err instanceof Error ? err.message : 'Failed to save'); }
     finally { setSaving(false); }
@@ -119,15 +203,23 @@ export default function TagsPage() {
               >
                 {tag.name}
               </span>
-              <span className="flex-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">{tag.name}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate">{tag.name}</p>
+                <div className="mt-1">
+                  <OwnershipBadge ownerType={tag.owner_type} ownerOrgId={tag.owner_org_id} orgNamesById={orgNamesById} />
+                </div>
+              </div>
               <span className="font-mono text-xs text-zinc-500">{tag.color}</span>
-              <RowActionsMenu
-                label={`Open actions menu for tag ${tag.name}`}
-                items={[
-                  { id: 'edit', label: 'Edit tag', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(tag) },
-                  { id: 'delete', label: 'Delete tag', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(tag.id); } },
-                ]}
-              />
+              {canManageTag(tag) ? (
+                <RowActionsMenu
+                  label={`Open actions menu for tag ${tag.name}`}
+                  items={[
+                    { id: 'share', label: 'Manage access', icon: <Shield01Icon size={15} />, onAction: () => openShareModal(tag) },
+                    { id: 'edit', label: 'Edit tag', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(tag) },
+                    { id: 'delete', label: 'Delete tag', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(tag.id); } },
+                  ]}
+                />
+              ) : null}
             </div>
           ))}
         </div>
@@ -180,6 +272,89 @@ export default function TagsPage() {
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Create'}
                 </button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+      <Modal state={shareModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Tag Access</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5 space-y-4">
+                {shareError ? <FormAlert description={shareError} title="Access update failed" /> : null}
+                {shareTarget ? (
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <div className="flex items-center gap-3">
+                      <span className="w-4 h-4 rounded-full shrink-0" style={{ background: shareTarget.color, boxShadow: `0 0 8px ${shareTarget.color}88` }} />
+                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{shareTarget.name}</p>
+                    </div>
+                    <div className="mt-2">
+                      <OwnershipBadge ownerType={shareTarget.owner_type} ownerOrgId={shareTarget.owner_org_id} orgNamesById={orgNamesById} />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Current access</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Organizations listed here can apply this tag to scans they manage.</p>
+                  </div>
+                  {sharesLoading ? (
+                    <div className="flex justify-center py-6">
+                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                    </div>
+                  ) : shares.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {shares.map((share) => (
+                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
+                            <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>
+                          </div>
+                          {share.is_owner ? (
+                            <span className="text-xs font-medium text-zinc-500">Locked</span>
+                          ) : (
+                            <button type="button" onClick={() => { void handleRevokeShare(share.org_id); }} disabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50">
+                              <Delete01Icon size={15} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Grant access</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Share this tag with another organization you manage.</p>
+                  </div>
+                  {availableShareTargets.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
+                  ) : (
+                    <div className="flex gap-2">
+                      <select className={inputCls + ' flex-1'} value={shareOrgId} onChange={(event) => setShareOrgId(event.target.value)}>
+                        <option value="">Select an organization</option>
+                        {availableShareTargets.map((org) => (
+                          <option key={org.id} value={org.id}>{org.name}</option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => { void handleGrantShare(); }} disabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60">
+                        Grant
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={shareModal.close} className="btn-secondary" type="button">Close</button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

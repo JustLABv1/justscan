@@ -1,11 +1,12 @@
 package helm
 
 import (
+	"context"
 	"net/http"
 	"sort"
 	"strconv"
 
-	authfuncs "justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -57,9 +58,8 @@ type HelmRunDetailResponse struct {
 
 func ListRuns(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, isAdmin, err := authfuncs.ResolveUserAccess(c.GetHeader("Authorization"), db)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
+		if !ok {
 			return
 		}
 
@@ -73,9 +73,19 @@ func ListRuns(db *bun.DB) gin.HandlerFunc {
 		}
 		offset := (page - 1) * limit
 
+		visibleRunIDs, err := visibleHelmRunIDs(c.Request.Context(), db, userID, isAdmin, accessibleOrgIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve Helm run visibility"})
+			return
+		}
+		if !isAdmin && len(visibleRunIDs) == 0 {
+			c.JSON(http.StatusOK, gin.H{"data": []HelmRunSummary{}, "total": 0, "page": page, "limit": limit})
+			return
+		}
+
 		countQuery := db.NewSelect().Model((*models.HelmScanRun)(nil))
 		if !isAdmin {
-			countQuery = countQuery.Where("user_id = ?", userID)
+			countQuery = countQuery.Where("id IN (?)", bun.In(visibleRunIDs))
 		}
 		if chartURL := c.Query("chart_url"); chartURL != "" {
 			countQuery = countQuery.Where("chart_url = ?", chartURL)
@@ -90,7 +100,7 @@ func ListRuns(db *bun.DB) gin.HandlerFunc {
 		var runs []models.HelmScanRun
 		listQuery := db.NewSelect().Model(&runs)
 		if !isAdmin {
-			listQuery = listQuery.Where("user_id = ?", userID)
+			listQuery = listQuery.Where("id IN (?)", bun.In(visibleRunIDs))
 		}
 		if chartURL := c.Query("chart_url"); chartURL != "" {
 			listQuery = listQuery.Where("chart_url = ?", chartURL)
@@ -211,9 +221,8 @@ func ListRuns(db *bun.DB) gin.HandlerFunc {
 
 func GetRun(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, isAdmin, err := authfuncs.ResolveUserAccess(c.GetHeader("Authorization"), db)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
+		if !ok {
 			return
 		}
 
@@ -225,12 +234,22 @@ func GetRun(db *bun.DB) gin.HandlerFunc {
 
 		var run models.HelmScanRun
 		q := db.NewSelect().Model(&run).Where("id = ?", runID)
-		if !isAdmin {
-			q = q.Where("user_id = ?", userID)
-		}
 		if err := q.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Helm run not found"})
 			return
+		}
+		if !isAdmin {
+			visibleQuery := db.NewSelect().TableExpr("scans").ColumnExpr("1").Where("helm_scan_run_id = ?", runID)
+			visibleQuery = authz.ApplyOwnershipVisibility(visibleQuery, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+			visible, err := visibleQuery.Exists(c.Request.Context())
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve Helm run visibility"})
+				return
+			}
+			if !visible {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Helm run not found"})
+				return
+			}
 		}
 
 		var scans []models.Scan
@@ -302,4 +321,28 @@ func helmRunItemKey(scan models.Scan) string {
 		return scan.HelmSourcePath + "|" + scan.ImageName + "|" + scan.ImageTag
 	}
 	return scan.ImageName + "|" + scan.ImageTag
+}
+
+func visibleHelmRunIDs(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) ([]uuid.UUID, error) {
+	if isAdmin {
+		return nil, nil
+	}
+
+	type row struct {
+		RunID uuid.UUID `bun:"helm_scan_run_id"`
+	}
+
+	var rows []row
+	query := db.NewSelect().TableExpr("scans").ColumnExpr("DISTINCT helm_scan_run_id").Where("helm_scan_run_id IS NOT NULL")
+	query = authz.ApplyOwnershipVisibility(query, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+	if err := query.Scan(ctx, &rows); err != nil {
+		return nil, err
+	}
+
+	runIDs := make([]uuid.UUID, 0, len(rows))
+	for _, row := range rows {
+		runIDs = append(runIDs, row.RunID)
+	}
+
+	return runIDs, nil
 }

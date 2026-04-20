@@ -38,6 +38,21 @@ func RequireRequestUser(c *gin.Context, db *bun.DB) (uuid.UUID, bool, bool) {
 	return userID, isAdmin, true
 }
 
+func RequireOwnershipContext(c *gin.Context, db *bun.DB) (uuid.UUID, bool, []uuid.UUID, bool) {
+	userID, isAdmin, ok := RequireRequestUser(c, db)
+	if !ok {
+		return uuid.Nil, false, nil, false
+	}
+
+	accessibleOrgIDs, err := ListAccessibleOrgIDs(c.Request.Context(), db, userID, isAdmin)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve organization access"})
+		return uuid.Nil, false, nil, false
+	}
+
+	return userID, isAdmin, accessibleOrgIDs, true
+}
+
 func RequireAdmin(c *gin.Context, db *bun.DB) (uuid.UUID, bool) {
 	userID, isAdmin, ok := RequireRequestUser(c, db)
 	if !ok {

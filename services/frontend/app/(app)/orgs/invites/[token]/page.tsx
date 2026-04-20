@@ -1,7 +1,7 @@
 'use client';
 
 import { FormAlert } from '@/components/ui/form-alert';
-import { acceptOrgInvite } from '@/lib/api';
+import { acceptOrgInviteByToken } from '@/lib/api';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -17,7 +17,7 @@ export default function AcceptOrgInvitePage() {
     setLoading(true);
     setError('');
     try {
-      const result = await acceptOrgInvite(token);
+      const result = await acceptOrgInviteByToken(token);
       setAccepted({ orgId: result.org_id, orgName: result.org_name, role: result.role });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to accept organization invite');
@@ -51,7 +51,7 @@ export default function AcceptOrgInvitePage() {
         ) : (
           <>
             <p className="text-sm text-zinc-600 dark:text-zinc-300">
-              This action will attach the invite to the currently signed-in user.
+              This action will attach the invite to the currently signed-in user. You can also review pending invites from the Organizations page.
             </p>
             <div className="flex gap-3">
               <button className="btn-primary inline-flex items-center gap-2" disabled={loading} onClick={() => { void handleAccept(); }} type="button">

@@ -1,12 +1,13 @@
 'use client';
 import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
 import { useToast } from '@/components/toast';
-import { SeverityBadge, SourceBadge, StatusBadge, SuppressionSourceBadge } from '@/components/ui/badges';
+import { OwnershipBadge, SeverityBadge, SourceBadge, StatusBadge, SuppressionSourceBadge } from '@/components/ui/badges';
+import { FormAlert } from '@/components/ui/form-alert';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
-import type { ComplianceResult, Org, SBOMComponent, Scan, Suppression, Tag, Vulnerability } from '@/lib/api';
+import type { ComplianceResult, Org, ResourceShare, SBOMComponent, Scan, Suppression, Tag, Vulnerability } from '@/lib/api';
 import {
   addTagToScan,
   assignScanToOrg,
@@ -16,27 +17,34 @@ import {
   deleteComment,
   deleteShare,
   deleteSuppression,
+  grantScanOrgAccess,
   getScan,
   getScanCompliance,
   getScanSBOM,
+  getTokenType,
   getUser,
   getVulnerabilityContextAnalysis,
   listOrgs,
+  listScanOrgGrants,
   listScans,
+  listSuppressionShares,
   listTags,
   listVulnerabilities,
   reEvaluateCompliance,
   removeScanFromOrg,
   removeTagFromScan,
   reScan,
+  revokeScanOrgAccess,
+  shareSuppression,
+  unshareSuppression,
   upsertSuppression,
 } from '@/lib/api';
 import { formatIgnoreRuleStatusLabel, getBlockedPolicyDetails } from '@/lib/blocked-policy';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Select, useOverlayState } from '@heroui/react';
+import { Button, Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
-import { ArrowLeft01Icon, Cancel01Icon, Comment01Icon, CpuIcon, Delete02Icon, FileExportIcon, GitCompareIcon, MoreVerticalIcon, Refresh01Icon, Share01Icon, ShieldKeyIcon } from 'hugeicons-react';
+import { ArrowLeft01Icon, Cancel01Icon, Comment01Icon, CpuIcon, Delete01Icon, Delete02Icon, FileExportIcon, GitCompareIcon, MoreVerticalIcon, Refresh01Icon, Share01Icon, Shield01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import { useParams, useRouter } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { ScannerDatabaseCard, ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
@@ -215,7 +223,20 @@ export default function ScanDetailPage() {
   const [suppressExpiry, setSuppressExpiry] = useState<DateValue | null>(null);
   const [suppressSaving, setSuppressSaving] = useState(false);
   const [suppressError, setSuppressError] = useState('');
+  const [scanOrgGrants, setScanOrgGrants] = useState<ResourceShare[]>([]);
+  const [scanOrgGrantsLoading, setScanOrgGrantsLoading] = useState(false);
+  const [scanOrgGrantsError, setScanOrgGrantsError] = useState('');
+  const [scanOrgGrantOrgId, setScanOrgGrantOrgId] = useState('');
+  const [scanOrgGrantSaving, setScanOrgGrantSaving] = useState(false);
+  const [suppressionAccessTarget, setSuppressionAccessTarget] = useState<Suppression | null>(null);
+  const [suppressionAccessShares, setSuppressionAccessShares] = useState<ResourceShare[]>([]);
+  const [suppressionAccessLoading, setSuppressionAccessLoading] = useState(false);
+  const [suppressionAccessError, setSuppressionAccessError] = useState('');
+  const [suppressionAccessOrgId, setSuppressionAccessOrgId] = useState('');
+  const [suppressionAccessSaving, setSuppressionAccessSaving] = useState(false);
   const vulnerabilityDetailsModal = useOverlayState();
+  const scanAccessModal = useOverlayState();
+  const suppressionAccessModal = useOverlayState();
   const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -499,6 +520,7 @@ export default function ScanDetailPage() {
         status: suppressStatus,
         justification: suppressJustification,
         expires_at: suppressExpiry ? new Date(suppressExpiry.toString()).toISOString() : null,
+        org_id: scan.owner_type === 'org' ? scan.owner_org_id ?? undefined : undefined,
       });
       loadVulns();
     } catch (e: unknown) {
@@ -514,12 +536,130 @@ export default function ScanDetailPage() {
     setSuppressSaving(true);
     setSuppressError('');
     try {
-      await deleteSuppression(scan.image_digest, vuln.vuln_id);
+      await deleteSuppression(scan.image_digest, vuln.vuln_id, scan.owner_type === 'org' ? scan.owner_org_id ?? undefined : undefined);
       loadVulns();
     } catch (e: unknown) {
       setSuppressError(e instanceof Error ? e.message : 'Failed to lift suppression');
     } finally {
       setSuppressSaving(false);
+    }
+  }
+
+  function canManageScanAccess() {
+    if (isPlatformAdmin) return true;
+    if (scan.owner_type === 'org' && scan.owner_org_id) {
+      return manageableOrgIds.has(scan.owner_org_id);
+    }
+    return true;
+  }
+
+  async function loadScanOrgGrantState() {
+    setScanOrgGrantsLoading(true);
+    setScanOrgGrantsError('');
+    try {
+      setScanOrgGrants(await listScanOrgGrants(scan.id));
+    } catch (err: unknown) {
+      setScanOrgGrantsError(err instanceof Error ? err.message : 'Failed to load scan access grants');
+    } finally {
+      setScanOrgGrantsLoading(false);
+    }
+  }
+
+  function openScanAccessModal() {
+    setScanOrgGrantOrgId('');
+    setScanOrgGrantsError('');
+    scanAccessModal.open();
+    void loadScanOrgGrantState();
+  }
+
+  async function handleGrantScanAccess() {
+    if (!scanOrgGrantOrgId) return;
+    setScanOrgGrantSaving(true);
+    setScanOrgGrantsError('');
+    try {
+      await grantScanOrgAccess(scan.id, scanOrgGrantOrgId);
+      toast.success('Scan access granted');
+      setScanOrgGrantOrgId('');
+      await loadScanOrgGrantState();
+    } catch (err: unknown) {
+      setScanOrgGrantsError(err instanceof Error ? err.message : 'Failed to grant scan access');
+    } finally {
+      setScanOrgGrantSaving(false);
+    }
+  }
+
+  async function handleRevokeScanAccess(orgId: string) {
+    setScanOrgGrantSaving(true);
+    setScanOrgGrantsError('');
+    try {
+      await revokeScanOrgAccess(scan.id, orgId);
+      toast.success('Scan access revoked');
+      await loadScanOrgGrantState();
+    } catch (err: unknown) {
+      setScanOrgGrantsError(err instanceof Error ? err.message : 'Failed to revoke scan access');
+    } finally {
+      setScanOrgGrantSaving(false);
+    }
+  }
+
+  function canManageSuppressionAccess(suppression?: Suppression | null) {
+    if (!suppression || suppression.read_only || suppression.source === 'xray' || suppression.owner_type === 'system') return false;
+    if (isPlatformAdmin) return true;
+    if (suppression.owner_type === 'org' && suppression.owner_org_id) {
+      return manageableOrgIds.has(suppression.owner_org_id);
+    }
+    return true;
+  }
+
+  async function loadSuppressionAccessShares(suppressionId: string) {
+    setSuppressionAccessLoading(true);
+    setSuppressionAccessError('');
+    try {
+      setSuppressionAccessShares(await listSuppressionShares(suppressionId));
+    } catch (err: unknown) {
+      setSuppressionAccessError(err instanceof Error ? err.message : 'Failed to load access grants');
+    } finally {
+      setSuppressionAccessLoading(false);
+    }
+  }
+
+  function openSuppressionAccess(suppression: Suppression) {
+    setSuppressionAccessTarget(suppression);
+    setSuppressionAccessShares([]);
+    setSuppressionAccessOrgId('');
+    setSuppressionAccessError('');
+    suppressionAccessModal.open();
+    void loadSuppressionAccessShares(suppression.id);
+  }
+
+  async function handleGrantSuppressionAccess() {
+    if (!suppressionAccessTarget || !suppressionAccessOrgId) return;
+    setSuppressionAccessSaving(true);
+    setSuppressionAccessError('');
+    try {
+      await shareSuppression(suppressionAccessTarget.id, suppressionAccessOrgId);
+      toast.success('Suppression access granted');
+      setSuppressionAccessOrgId('');
+      await loadSuppressionAccessShares(suppressionAccessTarget.id);
+    } catch (err: unknown) {
+      setSuppressionAccessError(err instanceof Error ? err.message : 'Failed to grant access');
+    } finally {
+      setSuppressionAccessSaving(false);
+    }
+  }
+
+  async function handleRevokeSuppressionAccess(orgId: string) {
+    if (!suppressionAccessTarget) return;
+    setSuppressionAccessSaving(true);
+    setSuppressionAccessError('');
+    try {
+      await unshareSuppression(suppressionAccessTarget.id, orgId);
+      toast.success('Suppression access revoked');
+      await loadSuppressionAccessShares(suppressionAccessTarget.id);
+    } catch (err: unknown) {
+      setSuppressionAccessError(err instanceof Error ? err.message : 'Failed to revoke access');
+    } finally {
+      setSuppressionAccessSaving(false);
     }
   }
 
@@ -543,6 +683,9 @@ export default function ScanDetailPage() {
 
   const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
   const currentUser = getUser();
+  const isPlatformAdmin = getTokenType() === 'admin' || currentUser?.role === 'admin';
+  const orgNamesById = Object.fromEntries(allOrgs.map((org) => [org.id, org.name]));
+  const manageableOrgIds = new Set(allOrgs.filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin').map((org) => org.id));
   const fullImageConfig = scan.image_config;
   const runtimeImageConfig = imageConfigObject(fullImageConfig?.['config']);
   const imageCreated = imageConfigString(fullImageConfig?.['created']);
@@ -556,6 +699,10 @@ export default function ScanDetailPage() {
   const imageLabelEntries = imageConfigEntries(runtimeImageConfig?.['Labels']);
   const imageExposedPorts = imageConfigEntries(runtimeImageConfig?.['ExposedPorts']).map(([port]) => port);
   const imageVolumes = imageConfigEntries(runtimeImageConfig?.['Volumes']).map(([volume]) => volume);
+  const availableScanGrantTargets = allOrgs.filter((org) => (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== scan.owner_org_id && !scanOrgGrants.some((share) => share.org_id === org.id));
+  const availableSuppressionShareTargets = suppressionAccessTarget
+    ? allOrgs.filter((org) => (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== suppressionAccessTarget.owner_org_id && !suppressionAccessShares.some((share) => share.org_id === org.id))
+    : [];
 
   const sevCards = [
     { count: scan.critical_count, label: 'Critical', color: 'text-red-400',    border: 'border-red-500/20'    },
@@ -568,6 +715,7 @@ export default function ScanDetailPage() {
     <div className="p-6 max-w-[1500px] mx-auto space-y-5">
       {/* Header */}
       <ScanDetailHeader
+        badges={<OwnershipBadge ownerType={scan.owner_type} ownerOrgId={scan.owner_org_id} orgNamesById={orgNamesById} />}
         navigation={(
           <Button className="btn-secondary" onPress={() => router.back()} variant="secondary">
             <ArrowLeft01Icon size={15} />
@@ -593,6 +741,9 @@ export default function ScanDetailPage() {
                 )}
               </p>
             )}
+            <p className="mt-1 text-xs text-zinc-500">
+              Workspace: {scan.owner_type === 'org' && scan.owner_org_id ? (orgNamesById[scan.owner_org_id] ?? 'Org workspace') : 'Personal'}
+            </p>
           </>
         )}
         actions={(
@@ -621,6 +772,12 @@ export default function ScanDetailPage() {
                 : <Refresh01Icon size={15} />}
               Re-scan
             </Button>
+            {canManageScanAccess() && (
+              <Button className="btn-secondary" onPress={openScanAccessModal} variant="secondary">
+                <Shield01Icon size={15} />
+                Manage Access
+              </Button>
+            )}
             <div className="relative">
               <Dropdown>
                 <Dropdown.Trigger>
@@ -1198,9 +1355,20 @@ export default function ScanDetailPage() {
                                 <div className="rounded-lg px-3 py-2 space-y-1"
                                   style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)' }}>
                                   <p className="text-xs text-zinc-400">{v.suppression.justification || '—'}</p>
-                                  <div className="flex items-center gap-2 pt-1">
+                                  <div className="flex items-center gap-2 pt-1 flex-wrap">
                                     <SuppressionSourceBadge source={v.suppression.source} />
+                                    <OwnershipBadge ownerType={v.suppression.owner_type} ownerOrgId={v.suppression.owner_org_id} orgNamesById={orgNamesById} />
                                     {v.suppression.read_only && <span className="text-[11px] text-zinc-400">Managed by Xray</span>}
+                                    {canManageSuppressionAccess(v.suppression) && (
+                                      <button
+                                        onClick={() => openSuppressionAccess(v.suppression as Suppression)}
+                                        className="inline-flex items-center gap-1 text-[11px] text-violet-400 hover:text-violet-300 transition-colors"
+                                        type="button"
+                                      >
+                                        <Shield01Icon size={12} />
+                                        Manage access
+                                      </button>
+                                    )}
                                   </div>
                                   {v.suppression.expires_at && (
                                     <p className="text-xs text-zinc-500">Expires: {new Date(v.suppression.expires_at).toLocaleDateString()}</p>
@@ -1615,6 +1783,174 @@ export default function ScanDetailPage() {
           )}
         </div>
       )}
+
+      <Modal state={scanAccessModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Scan Access</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5 space-y-4">
+                {scanOrgGrantsError ? <FormAlert description={scanOrgGrantsError} title="Access update failed" /> : null}
+                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{scan.image_name}:{scan.image_tag}</p>
+                  <p className="mt-1 font-mono text-xs text-zinc-500" title={scan.image_digest}>{scan.image_digest}</p>
+                  <div className="mt-2">
+                    <OwnershipBadge ownerType={scan.owner_type} ownerOrgId={scan.owner_org_id} orgNamesById={orgNamesById} />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Current access</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Organizations listed here can open this scan directly. Public or authenticated share links remain configured separately.</p>
+                  </div>
+                  {scanOrgGrantsLoading ? (
+                    <div className="flex justify-center py-6">
+                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                    </div>
+                  ) : scanOrgGrants.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {scanOrgGrants.map((share) => (
+                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
+                            <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>
+                          </div>
+                          {share.is_owner ? (
+                            <span className="text-xs font-medium text-zinc-500">Locked</span>
+                          ) : (
+                            <button type="button" onClick={() => { void handleRevokeScanAccess(share.org_id); }} disabled={scanOrgGrantSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50">
+                              <Delete01Icon size={15} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Grant access</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Share this scan with another organization you manage.</p>
+                  </div>
+                  {availableScanGrantTargets.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
+                  ) : (
+                    <div className="flex gap-2">
+                      <select className={inputCls + ' flex-1'} value={scanOrgGrantOrgId} onChange={(event) => setScanOrgGrantOrgId(event.target.value)}>
+                        <option value="">Select an organization</option>
+                        {availableScanGrantTargets.map((org) => (
+                          <option key={org.id} value={org.id}>{org.name}</option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => { void handleGrantScanAccess(); }} disabled={!scanOrgGrantOrgId || scanOrgGrantSaving} className="btn-primary disabled:opacity-60">
+                        Grant
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={scanAccessModal.close} className="btn-secondary" type="button">Close</button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal state={suppressionAccessModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Suppression Access</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5 space-y-4">
+                {suppressionAccessError ? (
+                  <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+                    {suppressionAccessError}
+                  </div>
+                ) : null}
+                {suppressionAccessTarget ? (
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{suppressionAccessTarget.vuln_id}</p>
+                    <p className="mt-1 font-mono text-xs text-zinc-500" title={suppressionAccessTarget.image_digest}>
+                      {suppressionAccessTarget.image_digest.length > 48 ? `${suppressionAccessTarget.image_digest.slice(0, 48)}…` : suppressionAccessTarget.image_digest}
+                    </p>
+                    <div className="mt-2">
+                      <OwnershipBadge ownerType={suppressionAccessTarget.owner_type} ownerOrgId={suppressionAccessTarget.owner_org_id} orgNamesById={orgNamesById} />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Current access</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Organizations listed here can use this suppression.</p>
+                  </div>
+                  {suppressionAccessLoading ? (
+                    <div className="flex justify-center py-6">
+                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                    </div>
+                  ) : suppressionAccessShares.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {suppressionAccessShares.map((share) => (
+                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
+                            <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>
+                          </div>
+                          {share.is_owner ? (
+                            <span className="text-xs font-medium text-zinc-500">Locked</span>
+                          ) : (
+                            <button type="button" onClick={() => { void handleRevokeSuppressionAccess(share.org_id); }} disabled={suppressionAccessSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50">
+                              <Delete01Icon size={15} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Grant access</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Share this suppression with another organization you manage.</p>
+                  </div>
+                  {availableSuppressionShareTargets.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
+                  ) : (
+                    <div className="flex gap-2">
+                      <select className={inputCls + ' flex-1'} value={suppressionAccessOrgId} onChange={(event) => setSuppressionAccessOrgId(event.target.value)}>
+                        <option value="">Select an organization</option>
+                        {availableSuppressionShareTargets.map((org) => (
+                          <option key={org.id} value={org.id}>{org.name}</option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => { void handleGrantSuppressionAccess(); }} disabled={!suppressionAccessOrgId || suppressionAccessSaving} className="btn-primary disabled:opacity-60">
+                        Grant
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={suppressionAccessModal.close} className="btn-secondary" type="button">Close</button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
 
       <VulnerabilityDetailsModal
         vulnerability={selectedVulnerability}

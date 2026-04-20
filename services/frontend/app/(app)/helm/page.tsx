@@ -7,6 +7,7 @@ import {
     extractHelmImages,
     getDefaultScannerCapabilities,
     getTokenType,
+    getWorkScope,
     HelmExtractResponse,
     HelmScanRunSummary,
     listHelmScanRuns,
@@ -182,6 +183,7 @@ export default function HelmPage() {
         extracted.chart_name,
         extracted.chart_version,
         registryId || undefined,
+        getWorkScope().kind === 'org' ? getWorkScope().orgId : undefined,
       );
 
       if (makePublic && (result.scans?.length ?? 0) > 0) {

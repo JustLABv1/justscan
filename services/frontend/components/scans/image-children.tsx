@@ -1,6 +1,6 @@
 'use client';
 
-import { SevCount, StatusBadge } from '@/components/ui/badges';
+import { OwnershipBadge, SevCount, StatusBadge } from '@/components/ui/badges';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { listScans, Scan } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -12,13 +12,14 @@ import { useCallback, useEffect, useState } from 'react';
 interface ImageChildrenProps {
   imageName: string;
   mode?: 'table' | 'stacked';
+  orgNamesById?: Record<string, string>;
   onDelete: (id: string, imageName: string) => Promise<void> | void;
   onCancel: (id: string, imageName: string) => Promise<void> | void;
   selectedScans: Set<string>;
   onSelectScan: (scanId: string, selected: boolean) => void;
 }
 
-export function ImageChildren({ imageName, mode = 'table', onDelete, onCancel, selectedScans, onSelectScan }: ImageChildrenProps) {
+export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelete, onCancel, selectedScans, onSelectScan }: ImageChildrenProps) {
   const router = useRouter();
   const [scans, setScans] = useState<Scan[]>([]);
   const [total, setTotal] = useState(0);
@@ -74,6 +75,7 @@ export function ImageChildren({ imageName, mode = 'table', onDelete, onCancel, s
                         <p className="font-mono text-sm font-medium text-zinc-700 dark:text-zinc-200">:{scan.image_tag}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+                          <OwnershipBadge ownerType={scan.owner_type} ownerOrgId={scan.owner_org_id} orgNamesById={orgNamesById} />
                           <span className="text-xs text-zinc-500" title={fullDate(scan.created_at)}>{timeAgo(scan.created_at)}</span>
                         </div>
                       </div>
@@ -188,9 +190,12 @@ export function ImageChildren({ imageName, mode = 'table', onDelete, onCancel, s
                       </Checkbox>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-1 h-5 rounded-full shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: 'linear-gradient(180deg,#a78bfa,#7c3aed)' }} />
-                        <span className="font-mono text-sm font-medium text-zinc-700 dark:text-zinc-200">:{scan.image_tag}</span>
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 w-1 h-5 rounded-full shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: 'linear-gradient(180deg,#a78bfa,#7c3aed)' }} />
+                        <div className="space-y-1">
+                          <span className="font-mono text-sm font-medium text-zinc-700 dark:text-zinc-200">:{scan.image_tag}</span>
+                          <OwnershipBadge ownerType={scan.owner_type} ownerOrgId={scan.owner_org_id} orgNamesById={orgNamesById} />
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={scan.status} externalStatus={scan.external_status} /></td>

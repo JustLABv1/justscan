@@ -137,16 +137,22 @@ export default function OrgDetailPage() {
   const loadMembers = useCallback(async () => {
     setMembersLoading(true);
     try {
-      const [nextMembers, nextInvites] = await Promise.all([listOrgMembers(id), listOrgInvites(id)]);
+      const nextMembers = await listOrgMembers(id);
       setMembers(nextMembers);
-      setInvites(nextInvites.filter((invite) => !invite.accepted_at && !invite.revoked_at));
+
+      if (canManageMembers) {
+        const nextInvites = await listOrgInvites(id);
+        setInvites(nextInvites.filter((invite) => !invite.accepted_at && !invite.revoked_at));
+      } else {
+        setInvites([]);
+      }
     } catch {
       setMembers([]);
       setInvites([]);
     } finally {
       setMembersLoading(false);
     }
-  }, [id]);
+  }, [canManageMembers, id]);
 
   useEffect(() => {
     load();

@@ -4,7 +4,7 @@ import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
-import { acceptOrgInvite, createOrg, declineOrgInvite, deleteOrg, listMyOrgInvites, listOrgs, Org, OrgInvite } from '@/lib/api';
+import { acceptOrgInvite, createOrg, declineOrgInvite, deleteOrg, getUser, listMyOrgInvites, listOrgs, Org, OrgInvite } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
 import { ArrowRight01Icon, Building04Icon, Delete01Icon, PlusSignIcon, UserAdd01Icon } from 'hugeicons-react';
 import Link from 'next/link';
@@ -13,6 +13,8 @@ import { useCallback, useEffect, useState } from 'react';
 interface OrgWithCount extends Org { policy_count: number }
 
 export default function OrgsPage() {
+  const currentUser = getUser() as { role?: string } | null;
+  const isSystemAdmin = currentUser?.role === 'admin';
   const [orgs, setOrgs] = useState<OrgWithCount[]>([]);
   const [pendingInvites, setPendingInvites] = useState<OrgInvite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,12 +220,14 @@ export default function OrgsPage() {
                   className="flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors">
                   View details <ArrowRight01Icon size={13} />
                 </Link>
-                <RowActionsMenu
-                  label={`Open actions menu for ${org.name}`}
-                  items={[
-                    { id: 'delete', label: 'Delete organization', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(org.id, org.name); } },
-                  ]}
-                />
+                {(isSystemAdmin || org.current_user_role === 'owner') ? (
+                  <RowActionsMenu
+                    label={`Open actions menu for ${org.name}`}
+                    items={[
+                      { id: 'delete', label: 'Delete organization', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(org.id, org.name); } },
+                    ]}
+                  />
+                ) : null}
               </div>
             </div>
           ))}

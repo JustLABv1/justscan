@@ -28,6 +28,7 @@ type Registry struct {
 	HealthStatus      string     `bun:"health_status,type:text,default:'unknown'" json:"health_status"`
 	HealthMessage     string     `bun:"health_message,type:text,default:''" json:"health_message"`
 	LastHealthCheckAt *time.Time `bun:"last_health_check_at,type:timestamptz" json:"last_health_check_at"`
+	IsDefault         bool       `bun:"is_default,type:bool,notnull,default:false" json:"is_default"`
 }
 
 // Registry auth types

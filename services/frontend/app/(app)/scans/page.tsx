@@ -171,6 +171,8 @@ export default function ScansPage() {
       .then((response) => {
         setRegistries(response.data);
         setCapabilities(response.capabilities);
+        const defaultReg = response.data.find((r) => r.is_default);
+        if (defaultReg) setRegistryId((prev) => prev || defaultReg.id);
       })
       .catch(() => {});
   }, [scopeKey]);

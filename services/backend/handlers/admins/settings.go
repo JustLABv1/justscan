@@ -133,3 +133,79 @@ func UpdateXRayLogRetention(c *gin.Context, db *bun.DB) {
 	}
 	c.JSON(http.StatusOK, gin.H{"days": req.Days})
 }
+
+// UpdateScannerSettings updates DB-backed scanner settings.
+func UpdateScannerSettings(c *gin.Context, db *bun.DB) {
+	var req struct {
+		EnableTrivy               *bool `json:"enable_trivy"`
+		EnableGrype               *bool `json:"enable_grype"`
+		Concurrency               *int  `json:"concurrency"`
+		TimeoutSeconds            *int  `json:"timeout_seconds"`
+		DBMaxAgeHours             *int  `json:"db_max_age_hours"`
+		EnableOSVJavaAugmentation *bool `json:"enable_osv_java_augmentation"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	boolStr := func(v bool) string {
+		if v {
+			return "true"
+		}
+		return "false"
+	}
+	settings := map[string]string{}
+	if req.EnableTrivy != nil {
+		settings["scanner.enable_trivy"] = boolStr(*req.EnableTrivy)
+	}
+	if req.EnableGrype != nil {
+		settings["scanner.enable_grype"] = boolStr(*req.EnableGrype)
+	}
+	if req.Concurrency != nil {
+		if *req.Concurrency < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "concurrency must be >= 1"})
+			return
+		}
+		settings["scanner.concurrency"] = strconv.Itoa(*req.Concurrency)
+	}
+	if req.TimeoutSeconds != nil {
+		settings["scanner.timeout_seconds"] = strconv.Itoa(*req.TimeoutSeconds)
+	}
+	if req.DBMaxAgeHours != nil {
+		settings["scanner.db_max_age_hours"] = strconv.Itoa(*req.DBMaxAgeHours)
+	}
+	if req.EnableOSVJavaAugmentation != nil {
+		settings["scanner.enable_osv_java_augmentation"] = boolStr(*req.EnableOSVJavaAugmentation)
+	}
+	for key, value := range settings {
+		if err := upsertSystemSetting(c, db, key, value); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update setting: " + key})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"updated": settings})
+}
+
+// UpdateAuthSettings updates DB-backed authentication settings.
+func UpdateAuthSettings(c *gin.Context, db *bun.DB) {
+	var req struct {
+		LocalAuthEnabled *bool `json:"local_auth_enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.LocalAuthEnabled == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no settings provided"})
+		return
+	}
+	value := "false"
+	if *req.LocalAuthEnabled {
+		value = "true"
+	}
+	if err := upsertSystemSetting(c, db, "auth.local_enabled", value); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update auth settings"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"local_auth_enabled": *req.LocalAuthEnabled})
+}

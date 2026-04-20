@@ -106,7 +106,7 @@ func canWriteScan(ctx context.Context, db *bun.DB, scan *models.Scan, userID uui
 	if err != nil {
 		return false
 	}
-	return authz.HasOrgRoleAtLeast(roles, *scan.OwnerOrgID, models.OrgRoleAdmin)
+	return authz.HasOrgRoleAtLeast(roles, *scan.OwnerOrgID, models.OrgRoleEditor)
 }
 
 func EnsureOrgScanLink(ctx context.Context, db bun.IDB, orgID, scanID uuid.UUID) error {

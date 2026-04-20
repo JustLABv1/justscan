@@ -12,7 +12,7 @@ interface OrgTeamTabProps {
   members: OrgMember[];
   membersLoading: boolean;
   onCopyInviteLink: (invite: OrgInvite) => void | Promise<void>;
-  onMemberRoleChange: (member: OrgMember, nextRole: Extract<OrgRole, 'admin' | 'member'>) => void | Promise<void>;
+  onMemberRoleChange: (member: OrgMember, nextRole: Extract<OrgRole, 'admin' | 'editor' | 'viewer'>) => void | Promise<void>;
   onOpenInviteModal: () => void;
   onRemoveMember: (member: OrgMember) => void | Promise<void>;
   onRevokeInvite: (invite: OrgInvite) => void | Promise<void>;
@@ -87,9 +87,10 @@ export function OrgTeamTab({
                         <select
                           className={`${inputClassName} py-2 px-3 max-w-[140px] text-sm`}
                           value={member.role}
-                          onChange={(event) => void onMemberRoleChange(member, event.target.value as Extract<OrgRole, 'admin' | 'member'>)}
+                          onChange={(event) => void onMemberRoleChange(member, event.target.value as Extract<OrgRole, 'admin' | 'editor' | 'viewer'>)}
                         >
-                          <option value="member">member</option>
+                          <option value="viewer">viewer</option>
+                          <option value="editor">editor</option>
                           <option value="admin">admin</option>
                         </select>
                       ) : (

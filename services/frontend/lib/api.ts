@@ -127,6 +127,18 @@ export const clearWorkScope = () => {
   window.dispatchEvent(new CustomEvent('justscan-work-scope-changed', { detail: { kind: 'personal' } }));
 };
 
+function scopeQueryParam(): string {
+  const scope = getWorkScope();
+  if (scope.kind === 'personal') return 'personal';
+  if (scope.kind === 'org') return scope.orgId;
+  return '';
+}
+
+function appendScope(params: URLSearchParams): void {
+  const s = scopeQueryParam();
+  if (s) params.set('scope', s);
+}
+
 function notifyOrgMembershipChanged() {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new Event(ORG_MEMBERSHIP_EVENT));
@@ -176,8 +188,12 @@ export const register = (username: string, email: string, password: string) =>
   req<{ result: string }>('POST', '/api/v1/auth/register', { username, email, password });
 
 // Dashboard
-export const getStats = () =>
-  req<DashboardStats>('GET', '/api/v1/dashboard/stats');
+export const getStats = () => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const qs = params.toString();
+  return req<DashboardStats>('GET', `/api/v1/dashboard/stats${qs ? `?${qs}` : ''}`);
+};
 
 export const getScannerHealth = () =>
   req<ScannerHealth>('GET', '/api/v1/dashboard/scanner-health');
@@ -190,6 +206,7 @@ export const listScans = (page = 1, limit = 20, image?: string, status?: string,
   if (exact) params.set('exact', 'true');
   if (helmOnly) params.set('helm_only', 'true');
   if (helmChart) params.set('helm_chart', helmChart);
+  appendScope(params);
   return req<{ data: Scan[]; total: number }>('GET', `/api/v1/scans/?${params}`);
 };
 
@@ -197,6 +214,7 @@ export const listScanImages = (page = 1, limit = 30, image?: string, status?: st
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
   if (status) params.set('status', status);
+  appendScope(params);
   return req<{ data: ImageSummary[]; total: number }>('GET', `/api/v1/scans/images?${params}`);
 };
 
@@ -237,8 +255,12 @@ export const listVulnerabilities = (
 
 export const getVulnerabilityContextAnalysis = (scanId: string, vulnerabilityId: string) =>
   req<VulnerabilityContextAnalysis>('GET', `/api/v1/scans/${scanId}/vulnerabilities/${vulnerabilityId}/analysis`);
-export const listTags = () =>
-  req<{ data: Tag[] }>('GET', '/api/v1/tags/').then((r) => r.data ?? []);
+export const listTags = () => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const qs = params.toString();
+  return req<{ data: Tag[] }>('GET', `/api/v1/tags/${qs ? `?${qs}` : ''}`).then((r) => r.data ?? []);
+};
 export const createTag = (name: string, color: string, orgId?: string) =>
   req<Tag>('POST', '/api/v1/tags/', { name, color, org_id: orgId });
 export const updateTag = (id: string, name: string, color: string) =>
@@ -265,13 +287,21 @@ export const deleteComment = (commentId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/comments/${commentId}`);
 
 // Registries
-export const listRegistries = () =>
-  req<RegistryListResponse>('GET', '/api/v1/registries/').then((r) => r.data ?? []);
-export const listRegistriesWithCapabilities = () =>
-  req<RegistryListResponse>('GET', '/api/v1/registries/').then((r) => ({
+export const listRegistries = () => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const qs = params.toString();
+  return req<RegistryListResponse>('GET', `/api/v1/registries/${qs ? `?${qs}` : ''}`).then((r) => r.data ?? []);
+};
+export const listRegistriesWithCapabilities = () => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const qs = params.toString();
+  return req<RegistryListResponse>('GET', `/api/v1/registries/${qs ? `?${qs}` : ''}`).then((r) => ({
     data: r.data ?? [],
     capabilities: r.capabilities ?? getDefaultScannerCapabilities(),
   }));
+};
 export const createRegistry = (data: Partial<Registry> & { org_id?: string }) =>
   req<Registry>('POST', '/api/v1/registries/', data);
 export const updateRegistry = (id: string, data: Partial<Registry>) =>
@@ -286,8 +316,12 @@ export const unshareRegistry = (id: string, orgId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/registries/${id}/shares/${orgId}`);
 
 // Watchlist
-export const listWatchlist = () =>
-  req<{ data: WatchlistItem[] }>('GET', '/api/v1/watchlist/').then((r) => r.data ?? []);
+export const listWatchlist = () => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const qs = params.toString();
+  return req<{ data: WatchlistItem[] }>('GET', `/api/v1/watchlist/${qs ? `?${qs}` : ''}`).then((r) => r.data ?? []);
+};
 export const createWatchlistItem = (data: Partial<WatchlistItem> & { org_id?: string }) =>
   req<WatchlistItem>('POST', '/api/v1/watchlist/', data);
 export const updateWatchlistItem = (id: string, data: Partial<WatchlistItem>) =>
@@ -331,7 +365,7 @@ export const listOrgInvites = (orgId: string) =>
   req<{ data: OrgInvite[] }>('GET', `/api/v1/orgs/${orgId}/invites`).then((r) => r.data ?? []);
 export const listMyOrgInvites = () =>
   req<{ data: OrgInvite[] }>('GET', '/api/v1/orgs/invites').then((r) => r.data ?? []);
-export const createOrgInvite = (orgId: string, email: string, role: Extract<OrgRole, 'admin' | 'member'>) =>
+export const createOrgInvite = (orgId: string, email: string, role: Extract<OrgRole, 'admin' | 'editor' | 'viewer'>) =>
   req<OrgInvite>('POST', `/api/v1/orgs/${orgId}/invites`, { email, role });
 export const revokeOrgInvite = (orgId: string, inviteId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/orgs/${orgId}/invites/${inviteId}`);
@@ -350,6 +384,46 @@ export const acceptOrgInviteByToken = (token: string) =>
     notifyOrgMembershipChanged();
     return result;
   });
+
+// Org tokens
+export interface APIToken {
+  id: string;
+  key: string;
+  description: string;
+  type: string;
+  disabled: boolean;
+  disabled_reason: string;
+  created_at: string;
+  expires_at: string;
+  user_id: string;
+  org_id?: string;
+}
+export const listOrgTokens = (orgId: string) =>
+  req<{ data: APIToken[] }>('GET', `/api/v1/orgs/${orgId}/tokens`).then((r) => r.data ?? []);
+export const createOrgToken = (orgId: string, name: string, expiresAt?: string) =>
+  req<APIToken & { raw_token: string }>('POST', `/api/v1/orgs/${orgId}/tokens`, { name, expires_at: expiresAt });
+export const revokeOrgToken = (orgId: string, tokenId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/orgs/${orgId}/tokens/${tokenId}`);
+
+// Org ownership transfer
+export const transferOrgOwnership = (orgId: string, newOwnerUserId: string) =>
+  req<{ result: string }>('POST', `/api/v1/orgs/${orgId}/transfer-ownership`, { new_owner_user_id: newOwnerUserId });
+
+// Org audit log
+export interface AuditEntry {
+  id: string;
+  org_id: string;
+  user_id: string;
+  username: string;
+  email: string;
+  action: string;
+  details: string;
+  created_at: string;
+}
+export const listOrgAuditLog = (orgId: string, page = 1, limit = 50) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  return req<{ data: AuditEntry[]; total: number }>('GET', `/api/v1/orgs/${orgId}/audit?${params}`);
+};
 
 export const createPolicy = (orgId: string, name: string, rules: PolicyRule[]) =>
   req<OrgPolicy>('POST', `/api/v1/orgs/${orgId}/policies`, { name, rules });
@@ -497,8 +571,11 @@ export const getDashboardVulnTrends = (days = 30) =>
   req<{ data: DashboardVulnTrendPoint[] }>('GET', `/api/v1/dashboard/vuln-trends?days=${days}`).then(r => r.data ?? []);
 
 // Global search
-export const search = (q: string) =>
-  req<{ images: SearchImageResult[]; vulns: SearchVulnResult[]; scans: SearchScanResult[] }>('GET', `/api/v1/search/?q=${encodeURIComponent(q)}`);
+export const search = (q: string) => {
+  const params = new URLSearchParams({ q });
+  appendScope(params);
+  return req<{ images: SearchImageResult[]; vulns: SearchVulnResult[]; scans: SearchScanResult[] }>('GET', `/api/v1/search/?${params}`);
+};
 
 // Org risk score
 export const getOrgRiskScore = (orgId: string) =>
@@ -726,6 +803,7 @@ export const listAllSuppressions = (page = 1, limit = 50, status?: string, q?: s
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (status) params.set('status', status);
   if (q) params.set('q', q);
+  appendScope(params);
   return req<{ data: Suppression[]; total: number }>('GET', `/api/v1/suppressions/?${params}`);
 };
 
@@ -743,8 +821,12 @@ export const revokeScanOrgAccess = (scanId: string, orgId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/scans/${scanId}/org-grants/${orgId}`);
 
 // Status pages
-export const listStatusPages = () =>
-  req<{ data: StatusPage[] }>('GET', '/api/v1/status-pages/').then(r => r.data ?? []);
+export const listStatusPages = () => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const qs = params.toString();
+  return req<{ data: StatusPage[] }>('GET', `/api/v1/status-pages/${qs ? `?${qs}` : ''}`).then(r => r.data ?? []);
+};
 
 export const createStatusPage = (data: StatusPagePayload) =>
   req<StatusPage>('POST', '/api/v1/status-pages/', data);
@@ -914,7 +996,7 @@ export interface OrgPolicy {
   updated_at: string;
 }
 
-export type OrgRole = 'owner' | 'admin' | 'member';
+export type OrgRole = 'owner' | 'admin' | 'editor' | 'viewer';
 
 export interface Org {
   id: string;
@@ -951,7 +1033,7 @@ export interface OrgInvite {
   org_name?: string;
   org_description?: string;
   email: string;
-  role: Extract<OrgRole, 'admin' | 'member'>;
+  role: Extract<OrgRole, 'admin' | 'editor' | 'viewer'>;
   token: string;
   invited_by_user_id: string;
   invited_by_email?: string;

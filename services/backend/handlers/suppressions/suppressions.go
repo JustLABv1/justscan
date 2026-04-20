@@ -89,7 +89,7 @@ func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
 				return
 			}
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleMember); !ok {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleViewer); !ok {
 				return
 			}
 			ownerType = models.OwnerTypeOrg
@@ -328,7 +328,7 @@ func ShareSuppression(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		if !isAdmin {
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleAdmin); !ok {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleEditor); !ok {
 				return
 			}
 		}
@@ -414,7 +414,7 @@ func canManageSuppression(ctx context.Context, db *bun.DB, suppression *models.S
 	if err != nil {
 		return false
 	}
-	return authz.HasOrgRoleAtLeast(roles, *suppression.OwnerOrgID, models.OrgRoleAdmin)
+	return authz.HasOrgRoleAtLeast(roles, *suppression.OwnerOrgID, models.OrgRoleEditor)
 }
 
 func parseSuppressionMutationOrg(c *gin.Context, db *bun.DB, isAdmin bool) (*uuid.UUID, bool) {
@@ -429,7 +429,7 @@ func parseSuppressionMutationOrg(c *gin.Context, db *bun.DB, isAdmin bool) (*uui
 		return nil, false
 	}
 	if !isAdmin {
-		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleMember); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleViewer); !ok {
 			return nil, false
 		}
 	}

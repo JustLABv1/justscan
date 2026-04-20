@@ -83,7 +83,7 @@ func GrantScanOrgAccess(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		if !isAdmin {
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleAdmin); !ok {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleEditor); !ok {
 				return
 			}
 		}

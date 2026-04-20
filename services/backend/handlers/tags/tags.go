@@ -34,6 +34,7 @@ func ListTags(db *bun.DB) gin.HandlerFunc {
 				return q
 			})
 		}
+		query = authz.ApplyWorkspaceScope(c, query, "tag", "owner_user_id", "owner_org_id", "org_tags", "tag_id", userID)
 		if err := query.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tags"})
 			return
@@ -242,7 +243,7 @@ func ShareTag(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		if !isAdmin {
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleAdmin); !ok {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleEditor); !ok {
 				return
 			}
 		}
@@ -301,7 +302,7 @@ func parseTagMutationOrg(c *gin.Context, db *bun.DB, rawOrgID string) (uuid.UUID
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
 		return uuid.Nil, false, false
 	}
-	if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin); !ok {
+	if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleEditor); !ok {
 		return uuid.Nil, false, false
 	}
 

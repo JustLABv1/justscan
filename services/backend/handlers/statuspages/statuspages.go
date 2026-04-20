@@ -126,6 +126,7 @@ func ListStatusPages(db *bun.DB) gin.HandlerFunc {
 		if !isAdmin {
 			q = authz.ApplyOwnershipVisibility(q, "status_page", "", "owner_user_id", "owner_org_id", "org_status_pages", "status_page_id", userID, isAdmin, accessibleOrgIDs)
 		}
+		q = authz.ApplyWorkspaceScope(c, q, "status_page", "owner_user_id", "owner_org_id", "org_status_pages", "status_page_id", userID)
 		if err := q.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list status pages"})
 			return
@@ -356,7 +357,7 @@ func ShareStatusPage(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		if !isAdmin {
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleAdmin); !ok {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleEditor); !ok {
 				return
 			}
 		}
@@ -1218,7 +1219,7 @@ func parseStatusPageMutationOrg(c *gin.Context, db *bun.DB, rawOrgID string) (uu
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
 		return uuid.Nil, false, false
 	}
-	if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin); !ok {
+	if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleEditor); !ok {
 		return uuid.Nil, false, false
 	}
 
@@ -1247,7 +1248,7 @@ func canManageStatusPage(ctx context.Context, db *bun.DB, page *models.StatusPag
 	if err != nil {
 		return false
 	}
-	return authz.HasOrgRoleAtLeast(roles, *page.OwnerOrgID, models.OrgRoleAdmin)
+	return authz.HasOrgRoleAtLeast(roles, *page.OwnerOrgID, models.OrgRoleEditor)
 }
 
 func canReadStatusPageRecord(ctx context.Context, db *bun.DB, page *models.StatusPage, userID uuid.UUID, isAdmin bool) bool {

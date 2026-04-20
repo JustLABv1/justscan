@@ -31,6 +31,7 @@ func ListWatchlist(db *bun.DB) gin.HandlerFunc {
 		var items []models.WatchlistItem
 		q := db.NewSelect().Model(&items).OrderExpr("created_at DESC")
 		q = authz.ApplyOwnershipVisibility(q, "", "user_id", "owner_user_id", "owner_org_id", "org_watchlist_items", "watchlist_item_id", userID, isAdmin, accessibleOrgIDs)
+		q = authz.ApplyWorkspaceScope(c, q, "", "owner_user_id", "owner_org_id", "org_watchlist_items", "watchlist_item_id", userID)
 		if err := q.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list watchlist"})
 			return
@@ -73,7 +74,7 @@ func CreateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
 				return
 			}
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleAdmin); !ok {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleEditor); !ok {
 				return
 			}
 			ownerOrgID = &parsedOrgID
@@ -305,7 +306,7 @@ func canWriteWatchlistItem(ctx context.Context, db *bun.DB, item *models.Watchli
 	if err != nil {
 		return false
 	}
-	return authz.HasOrgRoleAtLeast(roles, *item.OwnerOrgID, models.OrgRoleAdmin)
+	return authz.HasOrgRoleAtLeast(roles, *item.OwnerOrgID, models.OrgRoleEditor)
 }
 
 type watchlistShare struct {
@@ -369,7 +370,7 @@ func ShareWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		if !isAdmin {
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleAdmin); !ok {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleEditor); !ok {
 				return
 			}
 		}

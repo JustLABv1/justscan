@@ -64,5 +64,5 @@ func CanManageTag(ctx context.Context, db *bun.DB, tag *models.Tag, userID uuid.
 	if err != nil {
 		return false
 	}
-	return HasOrgRoleAtLeast(roles, *tag.OwnerOrgID, models.OrgRoleAdmin)
+	return HasOrgRoleAtLeast(roles, *tag.OwnerOrgID, models.OrgRoleEditor)
 }

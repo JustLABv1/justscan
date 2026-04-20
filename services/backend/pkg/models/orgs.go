@@ -51,7 +51,8 @@ type Org struct {
 const (
 	OrgRoleOwner  = "owner"
 	OrgRoleAdmin  = "admin"
-	OrgRoleMember = "member"
+	OrgRoleEditor = "editor"
+	OrgRoleViewer = "viewer"
 )
 
 type OrgMember struct {
@@ -59,7 +60,7 @@ type OrgMember struct {
 
 	OrgID     uuid.UUID `bun:"org_id,pk,type:uuid,notnull" json:"org_id"`
 	UserID    uuid.UUID `bun:"user_id,pk,type:uuid,notnull" json:"user_id"`
-	Role      string    `bun:"role,type:text,notnull,default:'member'" json:"role"`
+	Role      string    `bun:"role,type:text,notnull,default:'viewer'" json:"role"`
 	JoinedAt  time.Time `bun:"joined_at,type:timestamptz,notnull,default:now()" json:"joined_at"`
 	CreatedAt time.Time `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	UpdatedAt time.Time `bun:"updated_at,type:timestamptz,default:now()" json:"updated_at"`
@@ -73,7 +74,7 @@ type OrgInvite struct {
 	ID               uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
 	OrgID            uuid.UUID  `bun:"org_id,type:uuid,notnull" json:"org_id"`
 	Email            string     `bun:"email,type:text,notnull" json:"email"`
-	Role             string     `bun:"role,type:text,notnull,default:'member'" json:"role"`
+	Role             string     `bun:"role,type:text,notnull,default:'viewer'" json:"role"`
 	Token            string     `bun:"token,type:varchar(64),notnull,unique" json:"token"`
 	InvitedByUserID  uuid.UUID  `bun:"invited_by_user_id,type:uuid,notnull" json:"invited_by_user_id"`
 	AcceptedByUserID *uuid.UUID `bun:"accepted_by_user_id,type:uuid" json:"accepted_by_user_id,omitempty"`

@@ -74,6 +74,7 @@ func ListScanImages(db *bun.DB) gin.HandlerFunc {
 		statusFilter := c.Query("status")
 		// Build WHERE clause fragments based on role and filter
 		userWhere, userArgs := scanOwnershipWhere(userID, isAdmin, accessibleOrgIDs)
+		scopeWhere, scopeArgs := scanScopeWhere(c, userID)
 
 		imageWhere := "1=1"
 		var imageArgs []interface{}
@@ -82,7 +83,8 @@ func ListScanImages(db *bun.DB) gin.HandlerFunc {
 			imageArgs = []interface{}{"%" + imageFilter + "%"}
 		}
 
-		allArgs := append(userArgs, imageArgs...)
+		allArgs := append(userArgs, scopeArgs...)
+		allArgs = append(allArgs, imageArgs...)
 		latestStatusWhere, latestStatusArgs := latestImageStatusWhereClause(statusFilter)
 
 		countQuery := `
@@ -92,7 +94,7 @@ WITH latest AS (
         status               AS latest_status,
         COALESCE(external_status, '') AS latest_external_status
     FROM scans
-    WHERE ` + userWhere + ` AND ` + imageWhere + `
+    WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND ` + imageWhere + `
     ORDER BY image_name, created_at DESC
 )
 SELECT COUNT(*) FROM latest WHERE ` + latestStatusWhere
@@ -123,13 +125,13 @@ WITH latest AS (
         medium_count,
         low_count
     FROM scans
-    WHERE ` + userWhere + ` AND ` + imageWhere + `
+    WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND ` + imageWhere + `
     ORDER BY image_name, created_at DESC
 ),
 counts AS (
     SELECT image_name, COUNT(*) AS scan_count
     FROM scans
-    WHERE ` + userWhere + ` AND ` + imageWhere + `
+    WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND ` + imageWhere + `
     GROUP BY image_name
 )
 SELECT
@@ -221,4 +223,19 @@ func scanOwnershipWhere(userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.
 	}
 
 	return "(" + strings.Join(clauses, " OR ") + ")", args
+}
+
+func scanScopeWhere(c *gin.Context, userID uuid.UUID) (string, []interface{}) {
+	scope := c.Query("scope")
+	if scope == "" {
+		return "1=1", nil
+	}
+	if scope == "personal" {
+		return "owner_user_id = ?", []interface{}{userID}
+	}
+	orgID, err := uuid.Parse(scope)
+	if err != nil {
+		return "1=1", nil
+	}
+	return "(owner_org_id = ? OR EXISTS (SELECT 1 FROM org_scans os2 WHERE os2.scan_id = scans.id AND os2.org_id = ?))", []interface{}{orgID, orgID}
 }

@@ -3,6 +3,7 @@ package tokens
 import (
 	"net/http"
 
+	"justscan-backend/functions/authz"
 	"justscan-backend/functions/httperror"
 	"justscan-backend/pkg/models"
 
@@ -13,6 +14,11 @@ import (
 
 func UpdateToken(context *gin.Context, db *bun.DB) {
 	id := context.Param("id")
+
+	userID, isAdmin, ok := authz.RequireRequestUser(context, db)
+	if !ok {
+		return
+	}
 
 	var token models.Tokens
 	if err := context.ShouldBindJSON(&token); err != nil {
@@ -25,6 +31,11 @@ func UpdateToken(context *gin.Context, db *bun.DB) {
 	err := db.NewSelect().Model(&dbToken).Where("id = ?", id).Scan(context)
 	if err != nil {
 		httperror.InternalServerError(context, "Error getting token from db", err)
+		return
+	}
+
+	if !isAdmin && dbToken.UserID != userID.String() {
+		context.JSON(http.StatusForbidden, gin.H{"error": "you can only update your own tokens"})
 		return
 	}
 

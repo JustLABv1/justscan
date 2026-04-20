@@ -66,7 +66,7 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
 				return
 			}
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleMember); !ok {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleViewer); !ok {
 				return
 			}
 			requestedOrgID = &parsedOrgID
@@ -184,7 +184,7 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
 				return
 			}
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleMember); !ok {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleViewer); !ok {
 				return
 			}
 			requestedOrgID = &parsedOrgID

@@ -92,7 +92,7 @@ export default function OrgDetailPage() {
   const [invites, setInvites] = useState<OrgInvite[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<Extract<OrgRole, 'admin' | 'member'>>('member');
+  const [inviteRole, setInviteRole] = useState<Extract<OrgRole, 'admin' | 'editor' | 'viewer'>>('viewer');
   const [inviteSaving, setInviteSaving] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const inviteModal = useOverlayState();
@@ -164,7 +164,7 @@ export default function OrgDetailPage() {
 
   function openInviteModal() {
     setInviteEmail('');
-    setInviteRole('member');
+    setInviteRole('viewer');
     setInviteError('');
     inviteModal.open();
   }
@@ -185,7 +185,7 @@ export default function OrgDetailPage() {
     }
   }
 
-  async function handleMemberRoleChange(member: OrgMember, nextRole: Extract<OrgRole, 'admin' | 'member'>) {
+  async function handleMemberRoleChange(member: OrgMember, nextRole: Extract<OrgRole, 'admin' | 'editor' | 'viewer'>) {
     if (member.role === nextRole) return;
     try {
       await updateOrgMemberRole(id, member.user_id, nextRole);
@@ -703,8 +703,9 @@ export default function OrgDetailPage() {
                   <FormField label="Email" onChange={(e) => setInviteEmail(e.target.value)} placeholder="teammate@example.com" required type="email" value={inviteEmail} />
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
-                    <select className={inputCls} value={inviteRole} onChange={(e) => setInviteRole(e.target.value as Extract<OrgRole, 'admin' | 'member'>)}>
-                      <option value="member">Member</option>
+                    <select className={inputCls} value={inviteRole} onChange={(e) => setInviteRole(e.target.value as Extract<OrgRole, 'admin' | 'editor' | 'viewer'>)}>
+                      <option value="viewer">Viewer</option>
+                      <option value="editor">Editor</option>
                       <option value="admin">Admin</option>
                     </select>
                   </div>

@@ -3,6 +3,7 @@ package authz
 import (
 	"fmt"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
@@ -46,6 +47,46 @@ func ApplyOwnershipVisibility(query *bun.SelectQuery, alias, legacyUserColumn, o
 			q = q.Where("1 = 0")
 		}
 
+		return q
+	})
+}
+
+// ApplyWorkspaceScope filters a query to only include resources matching the
+// selected workspace scope. The scope value comes from the "scope" query
+// parameter:
+//   - ""          → no additional filter (show everything the user can see)
+//   - "personal"  → only user-owned resources
+//   - org UUID    → only resources owned by or shared with that org
+//
+// alias, ownerUserColumn, ownerOrgColumn and shareTable/shareResourceColumn
+// mirror the same columns used in ApplyOwnershipVisibility.
+func ApplyWorkspaceScope(c *gin.Context, query *bun.SelectQuery, alias, ownerUserColumn, ownerOrgColumn, shareTable, shareResourceColumn string, userID uuid.UUID) *bun.SelectQuery {
+	scope := c.Query("scope")
+	if scope == "" {
+		return query
+	}
+
+	qualify := func(column string) string {
+		if alias == "" {
+			return column
+		}
+		return alias + "." + column
+	}
+
+	if scope == "personal" {
+		return query.Where(fmt.Sprintf("%s = ?", qualify(ownerUserColumn)), userID)
+	}
+
+	orgID, err := uuid.Parse(scope)
+	if err != nil {
+		return query
+	}
+
+	return query.WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
+		q = q.Where(fmt.Sprintf("%s = ?", qualify(ownerOrgColumn)), orgID)
+		if shareTable != "" && shareResourceColumn != "" {
+			q = q.WhereOr(fmt.Sprintf("EXISTS (SELECT 1 FROM %s shared WHERE shared.%s = %s AND shared.org_id = ?)", shareTable, shareResourceColumn, qualify("id")), orgID)
+		}
 		return q
 	})
 }

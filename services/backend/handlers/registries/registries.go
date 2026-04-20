@@ -33,6 +33,7 @@ func ListRegistries(db *bun.DB) gin.HandlerFunc {
 			Column("id", "name", "url", "xray_url", "xray_artifactory_id", "auth_type", "scan_provider", "username", "created_by_id", "owner_type", "owner_user_id", "owner_org_id", "created_at", "updated_at", "health_status", "health_message", "last_health_check_at").
 			OrderExpr("name ASC")
 		query = authz.ApplyOwnershipVisibility(query, "", "created_by_id", "owner_user_id", "owner_org_id", "org_registries", "registry_id", userID, isAdmin, accessibleOrgIDs)
+		query = authz.ApplyWorkspaceScope(c, query, "", "owner_user_id", "owner_org_id", "org_registries", "registry_id", userID)
 		if err := query.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list registries"})
 			return
@@ -83,7 +84,7 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
 				return
 			}
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleAdmin); !ok {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleEditor); !ok {
 				return
 			}
 			ownerOrgID = &parsedOrgID
@@ -285,7 +286,7 @@ func ShareRegistry(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		if !isAdmin {
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleAdmin); !ok {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleEditor); !ok {
 				return
 			}
 		}
@@ -371,5 +372,5 @@ func canManageRegistryShares(ctx context.Context, db *bun.DB, registry *models.R
 	if err != nil {
 		return false
 	}
-	return authz.HasOrgRoleAtLeast(roles, *registry.OwnerOrgID, models.OrgRoleAdmin)
+	return authz.HasOrgRoleAtLeast(roles, *registry.OwnerOrgID, models.OrgRoleEditor)
 }

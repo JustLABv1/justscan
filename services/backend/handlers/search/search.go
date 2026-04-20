@@ -64,6 +64,7 @@ func Search(db *bun.DB) gin.HandlerFunc {
 			Limit(6)
 
 		imgQ = authz.ApplyOwnershipVisibility(imgQ, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		imgQ = authz.ApplyWorkspaceScope(c, imgQ, "", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 		imgQ.Scan(ctx, &images) //nolint:errcheck
 		if images == nil {
 			images = []imageResult{}
@@ -84,6 +85,7 @@ func Search(db *bun.DB) gin.HandlerFunc {
 			Limit(6)
 
 		vulnQ = authz.ApplyOwnershipVisibility(vulnQ, "s", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		vulnQ = authz.ApplyWorkspaceScope(c, vulnQ, "s", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 		vulnQ.Scan(ctx, &vulns) //nolint:errcheck
 		if vulns == nil {
 			vulns = []vulnResult{}
@@ -97,6 +99,7 @@ func Search(db *bun.DB) gin.HandlerFunc {
 			OrderExpr("CASE WHEN LOWER(image_name) = LOWER(?) THEN 0 WHEN image_name ILIKE ? THEN 1 ELSE 2 END, created_at DESC", q, q+"%").
 			Limit(6)
 		scanQ = authz.ApplyOwnershipVisibility(scanQ, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		scanQ = authz.ApplyWorkspaceScope(c, scanQ, "", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 		scanQ.Scan(ctx, &scans) //nolint:errcheck
 		if scans == nil {
 			scans = []scanResult{}

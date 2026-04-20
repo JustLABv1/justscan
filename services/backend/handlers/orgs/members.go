@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"justscan-backend/functions/audit"
 	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 
@@ -23,7 +25,7 @@ func ListMembers(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleMember); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleViewer); !ok {
 			return
 		}
 
@@ -43,7 +45,7 @@ func ListMembers(db *bun.DB) gin.HandlerFunc {
 			FROM org_members om
 			JOIN users u ON u.id = om.user_id
 			WHERE om.org_id = ?
-			ORDER BY CASE om.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, lower(u.username), lower(u.email)
+			ORDER BY CASE om.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'editor' THEN 2 WHEN 'viewer' THEN 3 ELSE 4 END, lower(u.username), lower(u.email)
 		`, orgID).Scan(c.Request.Context(), &rows); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load organization members"})
 			return
@@ -73,7 +75,7 @@ func UpdateMemberRole(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		_, requesterMember, _, isAdmin, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
+		_, requesterMember, userID, isAdmin, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
 		if !ok {
 			return
 		}
@@ -89,7 +91,7 @@ func UpdateMemberRole(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var body struct {
-			Role string `json:"role" binding:"required,oneof=admin member"`
+			Role string `json:"role" binding:"required,oneof=admin editor viewer"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -115,6 +117,9 @@ func UpdateMemberRole(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
+		go audit.WriteOrgAction(context.Background(), db, userID.String(), orgID, "org.member.role_change",
+			fmt.Sprintf("Changed role of %s to %s", targetUserID, body.Role))
+
 		c.JSON(http.StatusOK, gin.H{"result": "updated"})
 	}
 }
@@ -126,7 +131,7 @@ func RemoveMember(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		_, requesterMember, _, isAdmin, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
+		_, requesterMember, userID, isAdmin, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
 		if !ok {
 			return
 		}
@@ -146,8 +151,8 @@ func RemoveMember(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusForbidden, gin.H{"error": "organization owners cannot be removed through this endpoint"})
 			return
 		}
-		if !isAdmin && requesterMember != nil && requesterMember.Role == models.OrgRoleAdmin && targetMembership.Role != models.OrgRoleMember {
-			c.JSON(http.StatusForbidden, gin.H{"error": "organization admins can only remove members"})
+		if !isAdmin && requesterMember != nil && requesterMember.Role == models.OrgRoleAdmin && targetMembership.Role != models.OrgRoleViewer && targetMembership.Role != models.OrgRoleEditor {
+			c.JSON(http.StatusForbidden, gin.H{"error": "organization admins can only remove viewers and editors"})
 			return
 		}
 
@@ -157,6 +162,9 @@ func RemoveMember(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove organization member"})
 			return
 		}
+
+		go audit.WriteOrgAction(context.Background(), db, userID.String(), orgID, "org.member.remove",
+			fmt.Sprintf("Removed member %s", targetUserID))
 
 		c.JSON(http.StatusOK, gin.H{"result": "removed"})
 	}
@@ -263,14 +271,14 @@ func CreateInvite(db *bun.DB) gin.HandlerFunc {
 
 		var body struct {
 			Email string `json:"email" binding:"required,email"`
-			Role  string `json:"role" binding:"required,oneof=admin member"`
+			Role  string `json:"role" binding:"required,oneof=admin editor viewer"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if !isAdmin && requesterMember != nil && requesterMember.Role == models.OrgRoleAdmin && body.Role != models.OrgRoleMember {
-			c.JSON(http.StatusForbidden, gin.H{"error": "organization admins can only invite members"})
+		if !isAdmin && requesterMember != nil && requesterMember.Role == models.OrgRoleAdmin && body.Role != models.OrgRoleViewer && body.Role != models.OrgRoleEditor {
+			c.JSON(http.StatusForbidden, gin.H{"error": "organization admins can only invite viewers and editors"})
 			return
 		}
 
@@ -372,8 +380,8 @@ func RevokeInvite(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusConflict, gin.H{"error": "organization invite is no longer active"})
 			return
 		}
-		if !isAdmin && requesterMember != nil && requesterMember.Role == models.OrgRoleAdmin && invite.Role != models.OrgRoleMember {
-			c.JSON(http.StatusForbidden, gin.H{"error": "organization admins can only revoke member invites"})
+		if !isAdmin && requesterMember != nil && requesterMember.Role == models.OrgRoleAdmin && invite.Role != models.OrgRoleViewer && invite.Role != models.OrgRoleEditor {
+			c.JSON(http.StatusForbidden, gin.H{"error": "organization admins can only revoke viewer and editor invites"})
 			return
 		}
 

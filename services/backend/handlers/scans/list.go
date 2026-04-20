@@ -36,6 +36,7 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 			Limit(limit).
 			Offset(offset)
 		q = authz.ApplyOwnershipVisibility(q, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		q = authz.ApplyWorkspaceScope(c, q, "scan", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 
 		// Filters
 		if status := c.Query("status"); status != "" {

@@ -39,5 +39,13 @@ func Orgs(router *gin.RouterGroup, db *bun.DB) {
 		r.DELETE("/:id/scans/:scanId", orgs.RemoveScan(db))
 
 		r.GET("/:id/risk", orgs.GetRiskScore(db))
+
+		r.POST("/:id/transfer-ownership", orgs.TransferOwnership(db))
+
+		r.GET("/:id/tokens", orgs.ListOrgTokens(db))
+		r.POST("/:id/tokens", orgs.CreateOrgToken(db))
+		r.DELETE("/:id/tokens/:tokenId", orgs.RevokeOrgToken(db))
+
+		r.GET("/:id/audit", orgs.ListOrgAuditLog(db))
 	}
 }

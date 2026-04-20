@@ -67,7 +67,7 @@ func RequireAdmin(c *gin.Context, db *bun.DB) (uuid.UUID, bool) {
 }
 
 func LoadAuthorizedOrg(c *gin.Context, db *bun.DB, orgID uuid.UUID) (*models.Org, uuid.UUID, bool, bool) {
-	org, _, userID, isAdmin, ok := RequireOrgRole(c, db, orgID, models.OrgRoleMember)
+	org, _, userID, isAdmin, ok := RequireOrgRole(c, db, orgID, models.OrgRoleViewer)
 	return org, userID, isAdmin, ok
 }
 
@@ -124,7 +124,7 @@ func LoadAuthorizedRegistry(c *gin.Context, db *bun.DB, registryID uuid.UUID) (*
 	}
 	if registry.OwnerOrgID != nil {
 		roles, err := LoadUserOrgRoles(c.Request.Context(), db, userID)
-		if err == nil && HasOrgRoleAtLeast(roles, *registry.OwnerOrgID, models.OrgRoleAdmin) {
+		if err == nil && HasOrgRoleAtLeast(roles, *registry.OwnerOrgID, models.OrgRoleEditor) {
 			return registry, userID, isAdmin, true
 		}
 	}
@@ -210,10 +210,12 @@ func ListAccessibleOrgIDs(ctx context.Context, db *bun.DB, userID uuid.UUID, isA
 func roleRank(role string) int {
 	switch role {
 	case models.OrgRoleOwner:
-		return 3
+		return 4
 	case models.OrgRoleAdmin:
+		return 3
+	case models.OrgRoleEditor:
 		return 2
-	case models.OrgRoleMember:
+	case models.OrgRoleViewer:
 		return 1
 	default:
 		return 0

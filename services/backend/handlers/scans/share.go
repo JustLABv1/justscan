@@ -35,7 +35,7 @@ func CreateShare(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
+		if _, _, _, ok := LoadAuthorizedScanForWrite(c, db, scanID); !ok {
 			return
 		}
 
@@ -72,7 +72,7 @@ func DeleteShare(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
+		if _, _, _, ok := LoadAuthorizedScanForWrite(c, db, scanID); !ok {
 			return
 		}
 

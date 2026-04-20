@@ -25,7 +25,7 @@ func ReScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		orig, userID, _, ok := LoadAuthorizedScan(c, db, scanID)
+		orig, userID, _, ok := LoadAuthorizedScanForWrite(c, db, scanID)
 		if !ok {
 			return
 		}
@@ -56,10 +56,17 @@ func ReScan(db *bun.DB) gin.HandlerFunc {
 			HelmSourcePath:   orig.HelmSourcePath,
 			Status:           models.ScanStatusPending,
 			UserID:           &userID,
+			OwnerType:        orig.OwnerType,
+			OwnerUserID:      orig.OwnerUserID,
+			OwnerOrgID:       orig.OwnerOrgID,
 			CreatedAt:        time.Now(),
 		}
 		if _, err := db.NewInsert().Model(newScan).Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create rescan"})
+			return
+		}
+		if err := CopyOrgScanLinks(c.Request.Context(), db, orig.ID, newScan.ID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to scope rescan"})
 			return
 		}
 		if registry != nil {

@@ -7,6 +7,7 @@ import (
 
 	"justscan-backend/functions/audit"
 	"justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -64,9 +65,23 @@ type bulkTagRequest struct {
 // BulkAddTagToScans attaches a tag to multiple scans at once.
 func BulkAddTagToScans(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+
 		tagID, err := uuid.Parse(c.Param("tagId"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tag ID"})
+			return
+		}
+		tag := &models.Tag{}
+		if err := db.NewSelect().Model(tag).Where("id = ?", tagID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "tag not found"})
+			return
+		}
+		if !authz.CanReadTag(c.Request.Context(), db, tag, userID, isAdmin) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "tag not found"})
 			return
 		}
 
@@ -81,6 +96,15 @@ func BulkAddTagToScans(db *bun.DB) gin.HandlerFunc {
 			id, err := uuid.Parse(raw)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID: " + raw})
+				return
+			}
+			scan := &models.Scan{}
+			if err := db.NewSelect().Model(scan).Where("id = ?", id).Scan(c.Request.Context()); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "scan not found: " + raw})
+				return
+			}
+			if !canWriteScan(c.Request.Context(), db, scan, userID, isAdmin) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "scan not found: " + raw})
 				return
 			}
 			scanTags = append(scanTags, models.ScanTag{ScanID: id, TagID: tagID})

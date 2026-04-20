@@ -34,6 +34,9 @@ type Scan struct {
 	TrivyJavaDBUpdatedAt    *time.Time            `bun:"trivy_java_db_updated_at,type:timestamptz" json:"trivy_java_db_updated_at,omitempty"`
 	TrivyJavaDBDownloadedAt *time.Time            `bun:"trivy_java_db_downloaded_at,type:timestamptz" json:"trivy_java_db_downloaded_at,omitempty"`
 	UserID                  *uuid.UUID            `bun:"user_id,type:uuid" json:"user_id,omitempty"`
+	OwnerType               string                `bun:"owner_type,type:text,notnull,default:'user'" json:"owner_type"`
+	OwnerUserID             *uuid.UUID            `bun:"owner_user_id,type:uuid" json:"owner_user_id,omitempty"`
+	OwnerOrgID              *uuid.UUID            `bun:"owner_org_id,type:uuid" json:"owner_org_id,omitempty"`
 	RegistryID              *uuid.UUID            `bun:"registry_id,type:uuid" json:"registry_id,omitempty"`
 	Architecture            string                `bun:"architecture,type:text,default:''" json:"architecture"`
 	OSFamily                string                `bun:"os_family,type:text,default:''" json:"os_family"`

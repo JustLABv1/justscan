@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"justscan-backend/functions/audit"
-	"justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -22,6 +22,7 @@ type CreateScanRequest struct {
 	Tag        string   `json:"tag" binding:"required"`
 	Platform   string   `json:"platform"`
 	RegistryID string   `json:"registry_id"`
+	OrgID      string   `json:"org_id"`
 	TagIDs     []string `json:"tag_ids"`
 }
 
@@ -29,6 +30,7 @@ type CreateScansRequest struct {
 	Images     []string `json:"images" binding:"required,min=1"`
 	Platform   string   `json:"platform"`
 	RegistryID string   `json:"registry_id"`
+	OrgID      string   `json:"org_id"`
 	TagIDs     []string `json:"tag_ids"`
 }
 
@@ -40,20 +42,34 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		userID, _, ok := authz.RequireRequestUser(c, db)
+		if !ok {
 			return
 		}
 
 		var requestedRegistryID *uuid.UUID
+		var requestedOrgID *uuid.UUID
 		if req.RegistryID != "" {
 			parsedRegistryID, err := uuid.Parse(req.RegistryID)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry_id"})
 				return
 			}
+			if _, _, _, ok := authz.LoadAuthorizedRegistry(c, db, parsedRegistryID); !ok {
+				return
+			}
 			requestedRegistryID = &parsedRegistryID
+		}
+		if req.OrgID != "" {
+			parsedOrgID, err := uuid.Parse(req.OrgID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+				return
+			}
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleViewer); !ok {
+				return
+			}
+			requestedOrgID = &parsedOrgID
 		}
 
 		registry, envVars, err := scanner.ResolveRegistryForScan(c.Request.Context(), db, req.Image, requestedRegistryID)
@@ -77,7 +93,14 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			CurrentStep:  models.ScanStepQueued,
 			Status:       models.ScanStatusPending,
 			UserID:       &userID,
+			OwnerType:    models.OwnerTypeUser,
+			OwnerUserID:  &userID,
 			CreatedAt:    time.Now(),
+		}
+		if requestedOrgID != nil {
+			scan.OwnerType = models.OwnerTypeOrg
+			scan.OwnerUserID = nil
+			scan.OwnerOrgID = requestedOrgID
 		}
 		if registry != nil {
 			scan.RegistryID = &registry.ID
@@ -86,6 +109,12 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			log.Errorf("CreateScan DB insert error: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create scan"})
 			return
+		}
+		if requestedOrgID != nil {
+			if err := EnsureOrgScanLink(c.Request.Context(), db, *requestedOrgID, scan.ID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to scope scan to organization"})
+				return
+			}
 		}
 
 		// Attach tags if provided
@@ -131,20 +160,34 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		userID, _, ok := authz.RequireRequestUser(c, db)
+		if !ok {
 			return
 		}
 
 		var requestedRegistryID *uuid.UUID
+		var requestedOrgID *uuid.UUID
 		if req.RegistryID != "" {
 			parsedRegistryID, err := uuid.Parse(req.RegistryID)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry_id"})
 				return
 			}
+			if _, _, _, ok := authz.LoadAuthorizedRegistry(c, db, parsedRegistryID); !ok {
+				return
+			}
 			requestedRegistryID = &parsedRegistryID
+		}
+		if req.OrgID != "" {
+			parsedOrgID, err := uuid.Parse(req.OrgID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+				return
+			}
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleViewer); !ok {
+				return
+			}
+			requestedOrgID = &parsedOrgID
 		}
 
 		type preparedScan struct {
@@ -179,7 +222,14 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				CurrentStep:  models.ScanStepQueued,
 				Status:       models.ScanStatusPending,
 				UserID:       &userID,
+				OwnerType:    models.OwnerTypeUser,
+				OwnerUserID:  &userID,
 				CreatedAt:    time.Now(),
+			}
+			if requestedOrgID != nil {
+				scan.OwnerType = models.OwnerTypeOrg
+				scan.OwnerUserID = nil
+				scan.OwnerOrgID = requestedOrgID
 			}
 			if registry != nil {
 				scan.RegistryID = &registry.ID
@@ -199,6 +249,11 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				scan := prepared[i].Scan
 				if _, err := tx.NewInsert().Model(&scan).Exec(ctx); err != nil {
 					return err
+				}
+				if requestedOrgID != nil {
+					if err := EnsureOrgScanLink(ctx, tx, *requestedOrgID, scan.ID); err != nil {
+						return err
+					}
 				}
 
 				if len(req.TagIDs) > 0 {

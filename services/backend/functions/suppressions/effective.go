@@ -2,27 +2,65 @@ package suppressions
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
 
-func LoadLocalSuppressionsByDigest(ctx context.Context, db *bun.DB, imageDigest string, userID *uuid.UUID) (map[string]*models.Suppression, error) {
+func ApplySuppressionVisibility(query *bun.SelectQuery, alias string, userID *uuid.UUID, accessibleOrgIDs []uuid.UUID) *bun.SelectQuery {
+	qualify := func(column string) string {
+		if alias == "" {
+			return column
+		}
+		return alias + "." + column
+	}
+
+	return query.WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
+		hasCondition := false
+		addWhere := func(condition string, args ...interface{}) {
+			if !hasCondition {
+				q = q.Where(condition, args...)
+				hasCondition = true
+				return
+			}
+			q = q.WhereOr(condition, args...)
+		}
+
+		if userID != nil {
+			addWhere(fmt.Sprintf("%s = ?", qualify("user_id")), *userID)
+			addWhere(fmt.Sprintf("%s = ?", qualify("owner_user_id")), *userID)
+		}
+		if len(accessibleOrgIDs) > 0 {
+			addWhere(fmt.Sprintf("%s IN (?)", qualify("owner_org_id")), bun.In(accessibleOrgIDs))
+			addWhere(fmt.Sprintf("EXISTS (SELECT 1 FROM org_suppressions shared WHERE shared.suppression_id = %s AND shared.org_id IN (?))", qualify("id")), bun.In(accessibleOrgIDs))
+		}
+		if !hasCondition {
+			q = q.Where("1 = 0")
+		}
+
+		return q
+	})
+}
+
+func LoadLocalSuppressionsByDigest(ctx context.Context, db *bun.DB, imageDigest string, userID *uuid.UUID, accessibleOrgIDs []uuid.UUID) (map[string]*models.Suppression, error) {
 	if strings.TrimSpace(imageDigest) == "" {
+		return map[string]*models.Suppression{}, nil
+	}
+	if userID == nil && len(accessibleOrgIDs) == 0 {
 		return map[string]*models.Suppression{}, nil
 	}
 
 	var suppressions []models.Suppression
 	query := db.NewSelect().Model(&suppressions).
 		Where("image_digest = ?", imageDigest)
-	if userID != nil {
-		query = query.Where("user_id = ?", *userID)
-	}
+	query = ApplySuppressionVisibility(query, "", userID, accessibleOrgIDs)
 	if err := query.Scan(ctx); err != nil {
 		return nil, err
 	}
@@ -64,7 +102,8 @@ func LoadXraySuppressionsByScan(ctx context.Context, db *bun.DB, scanID uuid.UUI
 }
 
 func ApplyEffectiveSuppressions(ctx context.Context, db *bun.DB, scan *models.Scan, vulns []models.Vulnerability) (int, error) {
-	localByVuln, err := LoadLocalSuppressionsByDigest(ctx, db, scan.ImageDigest, scan.UserID)
+	ownerUserID, accessibleOrgIDs := suppressionScopeForScan(scan)
+	localByVuln, err := LoadLocalSuppressionsByDigest(ctx, db, scan.ImageDigest, ownerUserID, accessibleOrgIDs)
 	if err != nil {
 		return 0, err
 	}
@@ -133,13 +172,13 @@ func MergeEffectiveSuppression(local *models.Suppression, xray *models.XraySuppr
 	return &merged
 }
 
-func LoadEffectiveSuppressionsPage(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, page, limit int, statusFilter, query string) ([]models.Suppression, int, error) {
-	localRows, err := loadLocalSuppressionsPageRows(ctx, db, userID, isAdmin, statusFilter, query)
+func LoadEffectiveSuppressionsPage(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, page, limit int, statusFilter, query string) ([]models.Suppression, int, error) {
+	localRows, err := loadLocalSuppressionsPageRows(ctx, db, userID, isAdmin, accessibleOrgIDs, statusFilter, query)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	xrayRows, err := loadXraySuppressionsPageRows(ctx, db, userID, isAdmin, statusFilter, query)
+	xrayRows, err := loadXraySuppressionsPageRows(ctx, db, userID, isAdmin, accessibleOrgIDs, statusFilter, query)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -191,11 +230,11 @@ func LoadEffectiveSuppressionsPage(ctx context.Context, db *bun.DB, userID uuid.
 	return rows[start:end], total, nil
 }
 
-func loadLocalSuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, statusFilter, query string) ([]models.Suppression, error) {
+func loadLocalSuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, statusFilter, query string) ([]models.Suppression, error) {
 	var suppressions []models.Suppression
 	q := db.NewSelect().Model(&suppressions).OrderExpr("updated_at DESC")
 	if !isAdmin {
-		q = q.Where("user_id = ?", userID)
+		q = ApplySuppressionVisibility(q, "", &userID, accessibleOrgIDs)
 	}
 	if strings.TrimSpace(statusFilter) != "" {
 		q = q.Where("status = ?", statusFilter)
@@ -217,7 +256,7 @@ func loadLocalSuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.
 	return rows, nil
 }
 
-func loadXraySuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, statusFilter, query string) ([]models.XraySuppression, error) {
+func loadXraySuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, statusFilter, query string) ([]models.XraySuppression, error) {
 	if strings.TrimSpace(statusFilter) != "" && statusFilter != models.SuppressionXrayIgnore {
 		return []models.XraySuppression{}, nil
 	}
@@ -228,7 +267,7 @@ func loadXraySuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.U
 		DistinctOn("image_digest, vuln_id").
 		OrderExpr("image_digest, vuln_id, updated_at DESC")
 	if !isAdmin {
-		q = q.Where("scans.user_id = ?", userID)
+		q = authz.ApplyOwnershipVisibility(q, "scans", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
 	}
 	if trimmedQuery := strings.TrimSpace(query); trimmedQuery != "" {
 		q = q.Where("vuln_id ILIKE ? OR image_digest ILIKE ? OR policy_name ILIKE ? OR watch_name ILIKE ?", "%"+trimmedQuery+"%", "%"+trimmedQuery+"%", "%"+trimmedQuery+"%", "%"+trimmedQuery+"%")
@@ -258,6 +297,7 @@ func xrayAsSuppression(xray *models.XraySuppression) *models.Suppression {
 		VulnID:         xray.VulnID,
 		Status:         models.SuppressionXrayIgnore,
 		Justification:  xrayJustification(xray),
+		OwnerType:      models.OwnerTypeSystem,
 		ExpiresAt:      xray.ExpiresAt,
 		CreatedAt:      xray.CreatedAt,
 		UpdatedAt:      xray.UpdatedAt,
@@ -297,4 +337,17 @@ func isExpiredAt(expiresAt *time.Time) bool {
 		return false
 	}
 	return expiresAt.Before(time.Now())
+}
+
+func suppressionScopeForScan(scan *models.Scan) (*uuid.UUID, []uuid.UUID) {
+	if scan == nil {
+		return nil, nil
+	}
+	if scan.OwnerOrgID != nil {
+		return nil, []uuid.UUID{*scan.OwnerOrgID}
+	}
+	if scan.OwnerUserID != nil {
+		return scan.OwnerUserID, nil
+	}
+	return scan.UserID, nil
 }

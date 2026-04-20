@@ -37,7 +37,7 @@ type topImage struct {
 func GetStats(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
 		if !ok {
 			return
 		}
@@ -52,9 +52,8 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 
 		// Total scans
 		totalQuery := db.NewSelect().Model((*models.Scan)(nil))
-		if !isAdmin {
-			totalQuery = totalQuery.Where("user_id = ?", userID)
-		}
+		totalQuery = authz.ApplyOwnershipVisibility(totalQuery, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		totalQuery = authz.ApplyWorkspaceScope(c, totalQuery, "scan", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 		total, _ := totalQuery.Count(ctx)
 		result.TotalScans = total
 
@@ -69,9 +68,8 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 			TableExpr("scans").
 			ColumnExpr("status, external_status, COUNT(*) AS count").
 			GroupExpr("status, external_status")
-		if !isAdmin {
-			statusQuery = statusQuery.Where("user_id = ?", userID)
-		}
+		statusQuery = authz.ApplyOwnershipVisibility(statusQuery, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		statusQuery = authz.ApplyWorkspaceScope(c, statusQuery, "", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 		statusQuery.Scan(ctx, &statusRows) //nolint:errcheck
 		for _, r := range statusRows {
 			result.StatusCounts[r.Status] += r.Count
@@ -94,9 +92,8 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 			TableExpr("scans").
 			ColumnExpr("COALESCE(SUM(critical_count),0) AS critical, COALESCE(SUM(high_count),0) AS high, COALESCE(SUM(medium_count),0) AS medium, COALESCE(SUM(low_count),0) AS low, COALESCE(SUM(unknown_count),0) AS unknown").
 			Where("(status = ? OR (status = ? AND external_status = ?))", models.ScanStatusCompleted, models.ScanStatusFailed, models.ScanExternalStatusBlockedByXrayPolicy)
-		if !isAdmin {
-			severityQuery = severityQuery.Where("user_id = ?", userID)
-		}
+		severityQuery = authz.ApplyOwnershipVisibility(severityQuery, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		severityQuery = authz.ApplyWorkspaceScope(c, severityQuery, "", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 		severityQuery.Scan(ctx, &sev) //nolint:errcheck
 		result.SeverityTotals["critical"] = sev.Critical
 		result.SeverityTotals["high"] = sev.High
@@ -108,9 +105,8 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		recentQuery := db.NewSelect().Model(&result.RecentScans).
 			OrderExpr("created_at DESC").
 			Limit(5)
-		if !isAdmin {
-			recentQuery = recentQuery.Where("user_id = ?", userID)
-		}
+		recentQuery = authz.ApplyOwnershipVisibility(recentQuery, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		recentQuery = authz.ApplyWorkspaceScope(c, recentQuery, "scan", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 		recentQuery.Scan(ctx) //nolint:errcheck
 		if result.RecentScans == nil {
 			result.RecentScans = []models.Scan{}
@@ -122,9 +118,8 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 			Where("scan_provider = ?", models.ScanProviderArtifactoryXray).
 			Where("status IN (?)", bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
 			OrderExpr("created_at DESC")
-		if !isAdmin {
-			activeXrayQuery = activeXrayQuery.Where("user_id = ?", userID)
-		}
+		activeXrayQuery = authz.ApplyOwnershipVisibility(activeXrayQuery, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		activeXrayQuery = authz.ApplyWorkspaceScope(c, activeXrayQuery, "scan", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 		activeXrayQuery.Scan(ctx) //nolint:errcheck
 		result.Operations.ActiveXrayCount, result.Operations.ActiveXraySteps = summarizeActiveXrayScans(activeXrayScans)
 		if len(activeXrayScans) > 5 {
@@ -134,14 +129,13 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		}
 
 		// Top images by scan count
-		result.TopImages = topImages(ctx, db, userID, isAdmin)
+		result.TopImages = topImages(c, ctx, db, userID, isAdmin, accessibleOrgIDs)
 
 		// Watchlist count
-		watchlistQuery := db.NewSelect().Model((*models.WatchlistItem)(nil)).
+		watchlistQuery := db.NewSelect().TableExpr("watchlist_items").
 			Where("enabled = true")
-		if !isAdmin {
-			watchlistQuery = watchlistQuery.Where("user_id = ?", userID)
-		}
+		watchlistQuery = authz.ApplyOwnershipVisibility(watchlistQuery, "", "user_id", "owner_user_id", "owner_org_id", "org_watchlist_items", "watchlist_item_id", userID, isAdmin, accessibleOrgIDs)
+		watchlistQuery = authz.ApplyWorkspaceScope(c, watchlistQuery, "", "owner_user_id", "owner_org_id", "org_watchlist_items", "watchlist_item_id", userID)
 		wlCount, _ := watchlistQuery.Count(ctx)
 		result.WatchlistCount = wlCount
 
@@ -169,7 +163,7 @@ func summarizeActiveXrayScans(scans []models.Scan) (int, map[string]int) {
 	return len(scans), stepCounts
 }
 
-func topImages(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool) []topImage {
+func topImages(c *gin.Context, ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) []topImage {
 	type row struct {
 		ImageName string `bun:"image_name"`
 		Count     int    `bun:"count"`
@@ -181,9 +175,8 @@ func topImages(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool) 
 		GroupExpr("image_name").
 		OrderExpr("count DESC").
 		Limit(5)
-	if !isAdmin {
-		query = query.Where("user_id = ?", userID)
-	}
+	query = authz.ApplyOwnershipVisibility(query, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+	query = authz.ApplyWorkspaceScope(c, query, "", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 	query.Scan(ctx, &rows) //nolint:errcheck
 	result := make([]topImage, len(rows))
 	for i, r := range rows {

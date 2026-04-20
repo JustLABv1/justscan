@@ -1,6 +1,6 @@
 'use client';
 
-import { clearToken, clearUser, getUser } from '@/lib/api';
+import { clearToken, clearUser, getUser, getWorkScope, listMyOrgInvites, listOrgs, Org, setWorkScope, WorkScope } from '@/lib/api';
 import { Button, Drawer, useOverlayState } from '@heroui/react';
 import {
     AiContentGenerator01Icon,
@@ -83,7 +83,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [orgs, setOrgs] = useState<Org[]>([]);
+  const [pendingInviteCount, setPendingInviteCount] = useState(0);
+  const [workScope, setWorkScopeState] = useState<WorkScope>(() => getWorkScope());
   const mobileNav = useOverlayState();
+  const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -117,6 +121,50 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  useEffect(() => {
+    function handleScopeChanged(event: Event) {
+      const detail = (event as CustomEvent<WorkScope>).detail;
+      setWorkScopeState(detail ?? getWorkScope());
+    }
+
+    window.addEventListener('justscan-work-scope-changed', handleScopeChanged as EventListener);
+    return () => window.removeEventListener('justscan-work-scope-changed', handleScopeChanged as EventListener);
+  }, []);
+
+  useEffect(() => {
+    function handleOrgMembershipChanged() {
+      setOrgRefreshVersion((current) => current + 1);
+    }
+
+    window.addEventListener('justscan-org-membership-changed', handleOrgMembershipChanged);
+    return () => window.removeEventListener('justscan-org-membership-changed', handleOrgMembershipChanged);
+  }, []);
+
+  useEffect(() => {
+    Promise.allSettled([listOrgs(), listMyOrgInvites()])
+      .then(([orgsResult, invitesResult]) => {
+        const nextOrgs = orgsResult.status === 'fulfilled' ? orgsResult.value : [];
+        setOrgs(nextOrgs);
+        setPendingInviteCount(invitesResult.status === 'fulfilled' ? invitesResult.value.length : 0);
+        const current = getWorkScope();
+        if (current.kind !== 'org') {
+          return;
+        }
+        const match = nextOrgs.find((org) => org.id === current.orgId);
+        if (!match) {
+          setWorkScope({ kind: 'personal' });
+          return;
+        }
+        if (current.orgName !== match.name) {
+          setWorkScope({ kind: 'org', orgId: match.id, orgName: match.name });
+        }
+      })
+      .catch(() => {
+        setOrgs([]);
+        setPendingInviteCount(0);
+      });
+  }, [orgRefreshVersion, pathname]);
+
   function toggleCollapsed() {
     setCollapsed((previous) => {
       const next = !previous;
@@ -131,9 +179,26 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     router.replace('/login');
   }
 
+  function handleScopeChange(value: string) {
+    if (value === 'personal') {
+      const nextScope: WorkScope = { kind: 'personal' };
+      setWorkScopeState(nextScope);
+      setWorkScope(nextScope);
+      return;
+    }
+
+    const matchedOrg = orgs.find((org) => org.id === value);
+    if (!matchedOrg) return;
+
+    const nextScope: WorkScope = { kind: 'org', orgId: matchedOrg.id, orgName: matchedOrg.name };
+    setWorkScopeState(nextScope);
+    setWorkScope(nextScope);
+  }
+
   const initials = (user?.username ?? user?.email ?? 'U')[0]?.toUpperCase() ?? 'U';
   const isDark = resolvedTheme === 'dark';
   const themeToggleTitle = !mounted ? 'Toggle theme' : isDark ? 'Switch to light mode' : 'Switch to dark mode';
+  const scopeLabel = workScope.kind === 'org' ? workScope.orgName ?? 'Organization' : 'Personal workspace';
   const navigationGroups = [
     ...navGroups,
     ...(user?.role === 'admin'
@@ -216,6 +281,44 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 New Scan
               </span>
             </Link>
+
+            {!collapsed && (
+              <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
+                  <span className="text-[10px] text-zinc-400 truncate">{scopeLabel}</span>
+                </div>
+                <select
+                  aria-label="Select workspace"
+                  className="w-full rounded-xl px-3 py-2 text-sm bg-transparent text-zinc-700 dark:text-zinc-200 outline-none"
+                  onChange={(event) => handleScopeChange(event.target.value)}
+                  style={{ border: '1px solid var(--glass-border)' }}
+                  value={workScope.kind === 'org' ? workScope.orgId : 'personal'}
+                >
+                  <option value="personal">Personal workspace</option>
+                  {orgs.map((org) => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {!collapsed && pendingInviteCount > 0 && (
+              <Link
+                href="/orgs"
+                className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all duration-150 text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+                style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)' }}
+              >
+                <div>
+                  <p className="font-medium">Pending invites</p>
+                  <p className="text-xs text-zinc-500">Review organization access requests</p>
+                </div>
+                <span className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-300"
+                  style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
+                  {pendingInviteCount}
+                </span>
+              </Link>
+            )}
           </div>
 
           <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2">
@@ -260,6 +363,12 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                         >
                           {itemLabel}
                         </span>
+                        {href === '/orgs' && pendingInviteCount > 0 && !collapsed && (
+                          <span className="relative z-10 ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
+                            style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
+                            {pendingInviteCount}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}
@@ -389,6 +498,43 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                     </Drawer.Header>
                     <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
                       <div className="space-y-4">
+                        <div className="rounded-xl px-3 py-3 space-y-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>
+                            Workspace
+                          </p>
+                          <select
+                            aria-label="Select workspace"
+                            className="w-full rounded-xl px-3 py-2 text-sm bg-transparent text-zinc-700 dark:text-zinc-200 outline-none"
+                            onChange={(event) => handleScopeChange(event.target.value)}
+                            style={{ border: '1px solid var(--glass-border)' }}
+                            value={workScope.kind === 'org' ? workScope.orgId : 'personal'}
+                          >
+                            <option value="personal">Personal workspace</option>
+                            {orgs.map((org) => (
+                              <option key={org.id} value={org.id}>{org.name}</option>
+                            ))}
+                          </select>
+                          <p className="text-xs text-zinc-500">New scans, registries, watchlist items, and Helm runs will use this workspace.</p>
+                        </div>
+
+                        {pendingInviteCount > 0 && (
+                          <Link
+                            href="/orgs"
+                            className="flex items-center justify-between rounded-xl px-3 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
+                            onClick={() => mobileNav.close()}
+                            style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)' }}
+                          >
+                            <div>
+                              <p>Pending invites</p>
+                              <p className="text-xs font-normal text-zinc-500">Review organization access requests</p>
+                            </div>
+                            <span className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
+                              style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
+                              {pendingInviteCount}
+                            </span>
+                          </Link>
+                        )}
+
                         {navigationGroups.map(({ label, items }) => (
                           <div key={label} className="space-y-1.5">
                             <p className="px-2 text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>
@@ -414,6 +560,12 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                                   >
                                     <Icon size={18} className="shrink-0" />
                                     <span>{itemLabel}</span>
+                                    {href === '/orgs' && pendingInviteCount > 0 && (
+                                      <span className="ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
+                                        style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
+                                        {pendingInviteCount}
+                                      </span>
+                                    )}
                                   </Link>
                                 );
                               })}

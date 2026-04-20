@@ -176,6 +176,7 @@ export default function HelmRunDetailPage() {
       }
 
       const firstTaggedScan = latestScans.find((scan) => (scan.tags?.length ?? 0) > 0);
+      const inheritedOrgId = latestScans.find((scan) => scan.owner_org_id)?.owner_org_id;
       const created = await createHelmScans(
         latestRun.chart_url,
         images,
@@ -183,6 +184,8 @@ export default function HelmRunDetailPage() {
         firstTaggedScan?.tags?.map((tag) => tag.id),
         extracted.chart_name || chartName || undefined,
         extracted.chart_version || latestRun.chart_version || undefined,
+        undefined,
+        inheritedOrgId || undefined,
       );
 
       toast.success(`Queued ${images.length} image${images.length === 1 ? '' : 's'} in new Helm run`);

@@ -80,5 +80,23 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.DELETE("/notifications/:channelID", func(c *gin.Context) {
 			admins.DeleteNotificationChannel(c, db)
 		})
+		// insights — API request log
+		admin.GET("/api-logs", func(c *gin.Context) {
+			admins.GetAPIRequestLogs(c, db)
+		})
+		admin.GET("/api-usage", func(c *gin.Context) {
+			admins.GetAPIUsageStats(c, db)
+		})
+		// insights — xRay request log
+		admin.GET("/xray-logs", func(c *gin.Context) {
+			admins.GetXRayRequestLogs(c, db)
+		})
+		// log retention settings
+		admin.PUT("/settings/api-log-retention", func(c *gin.Context) {
+			admins.UpdateAPILogRetention(c, db)
+		})
+		admin.PUT("/settings/xray-log-retention", func(c *gin.Context) {
+			admins.UpdateXRayLogRetention(c, db)
+		})
 	}
 }

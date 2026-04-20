@@ -2,6 +2,7 @@ package router
 
 import (
 	"justscan-backend/config"
+	"justscan-backend/middlewares"
 	"net/http"
 	"strconv"
 	"time"
@@ -32,6 +33,7 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 	}))
 
 	v1 := router.Group("/api/v1")
+	v1.Use(middlewares.RequestLog(db))
 	{
 		Auth(v1, db)
 		Token(v1, db)

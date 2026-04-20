@@ -47,7 +47,7 @@ func GetVulnerabilityContextAnalysis(ctx context.Context, db *bun.DB, scan *mode
 		return nil, fmt.Errorf("failed to load registry for contextual analysis: %w", err)
 	}
 
-	client, err := newXrayClient(registry)
+	client, err := newXrayClient(registry, nil, nil)
 	if err != nil {
 		return nil, err
 	}

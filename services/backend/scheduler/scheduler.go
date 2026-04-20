@@ -29,6 +29,8 @@ func Start(db *bun.DB) {
 			log.Errorf("scheduler: initial load failed: %v", err)
 		}
 	}()
+	// Daily cleanup of insight logs older than configured retention.
+	go startInsightLogCleanup(db)
 	cronRunner.Start()
 	log.Info("Watchlist scheduler started")
 }
@@ -168,4 +170,59 @@ func buildCronSpec(schedule string, timezone string) (string, error) {
 		return "", fmt.Errorf("invalid cron expression: %w", err)
 	}
 	return fmt.Sprintf("CRON_TZ=%s %s", trimmedTimezone, trimmedSchedule), nil
+}
+
+// startInsightLogCleanup runs once at startup and then every 24 hours to prune
+// api_request_logs and xray_request_logs that are older than their configured
+// retention window.
+func startInsightLogCleanup(db *bun.DB) {
+	runCleanup := func() {
+		ctx := context.Background()
+
+		// Read current retention settings.
+		apiDays := settingInt(ctx, db, "api_log_retention_days", 30)
+		xrayDays := settingInt(ctx, db, "xray_log_retention_days", 30)
+
+		if apiDays > 0 {
+			cutoff := time.Now().AddDate(0, 0, -apiDays)
+			res, err := db.NewDelete().TableExpr("api_request_logs").Where("created_at < ?", cutoff).Exec(ctx)
+			if err != nil {
+				log.Warnf("insight cleanup: failed to prune api_request_logs: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Infof("insight cleanup: pruned %d api_request_logs older than %d days", n, apiDays)
+			}
+		}
+
+		if xrayDays > 0 {
+			cutoff := time.Now().AddDate(0, 0, -xrayDays)
+			res, err := db.NewDelete().TableExpr("xray_request_logs").Where("created_at < ?", cutoff).Exec(ctx)
+			if err != nil {
+				log.Warnf("insight cleanup: failed to prune xray_request_logs: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Infof("insight cleanup: pruned %d xray_request_logs older than %d days", n, xrayDays)
+			}
+		}
+	}
+
+	// Run immediately, then every 24 hours.
+	runCleanup()
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		runCleanup()
+	}
+}
+
+// settingInt reads a system_settings integer value with a fallback default.
+func settingInt(ctx context.Context, db *bun.DB, key string, defaultVal int) int {
+	var s models.SystemSetting
+	if err := db.NewSelect().Model(&s).Where("key = ?", key).Scan(ctx); err != nil {
+		return defaultVal
+	}
+	var v int
+	fmt.Sscanf(s.Value, "%d", &v)
+	if v <= 0 {
+		return defaultVal
+	}
+	return v
 }

@@ -168,6 +168,7 @@ export default function HelmPage() {
 
     setScanning(true);
     try {
+      const currentScope = getWorkScope();
       const images = editableImages
         .filter((img) => selected.has(img.id))
         .map((img) => ({
@@ -183,7 +184,7 @@ export default function HelmPage() {
         extracted.chart_name,
         extracted.chart_version,
         registryId || undefined,
-        getWorkScope().kind === 'org' ? getWorkScope().orgId : undefined,
+        currentScope.kind === 'org' ? currentScope.orgId : undefined,
       );
 
       if (makePublic && (result.scans?.length ?? 0) > 0) {

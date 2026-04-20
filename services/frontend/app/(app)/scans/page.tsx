@@ -8,8 +8,9 @@ import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, joinClassNames, nativeFieldClassName } from '@/components/ui/form-styles';
 import { ImageRowSkeleton } from '@/components/ui/skeleton';
-import { useOrgNameMap } from '@/hooks/use-org-name-map';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
+import { useOrgNameMap } from '@/hooks/use-org-name-map';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import {
     cancelScan,
     createScans,
@@ -99,6 +100,8 @@ export default function ScansPage() {
   const searchParams = useSearchParams();
   const toast = useToast();
   const orgNamesById = useOrgNameMap();
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
 
   const [images, setImages] = useState<ImageSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -161,8 +164,8 @@ export default function ScansPage() {
     }
   }, []);
 
-  useEffect(() => { load(page, imageFilter, statusFilter); }, [load, page]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { listTags().then(setAvailableTags).catch(() => {}); }, []);
+  useEffect(() => { load(page, imageFilter, statusFilter); }, [imageFilter, load, page, scopeKey, statusFilter]);
+  useEffect(() => { listTags().then(setAvailableTags).catch(() => {}); }, [scopeKey]);
   useEffect(() => {
     listRegistriesWithCapabilities()
       .then((response) => {
@@ -170,7 +173,7 @@ export default function ScansPage() {
         setCapabilities(response.capabilities);
       })
       .catch(() => {});
-  }, []);
+  }, [scopeKey]);
 
   const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
   const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;

@@ -1,6 +1,7 @@
 'use client';
 import { StatusBadge } from '@/components/ui/badges';
 import { ChartSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Activity01Icon, Add01Icon } from 'hugeicons-react';
@@ -522,6 +523,8 @@ function VulnTrendChart({ data, period, onPeriod }: {
 
 // ── page ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [trends, setTrends] = useState<DashboardTrendPoint[]>([]);
   const [vulnTrends, setVulnTrends] = useState<DashboardVulnTrendPoint[]>([]);
@@ -570,7 +573,7 @@ export default function DashboardPage() {
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAdmin, scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleVulnPeriodChange(days: number) {
     setVulnTrendPeriod(days);

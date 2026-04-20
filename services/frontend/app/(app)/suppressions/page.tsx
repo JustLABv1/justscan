@@ -5,6 +5,7 @@ import { OwnershipBadge, SuppressionSourceBadge } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
 import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import { deleteSuppressionById, getTokenType, listAllSuppressions, listSuppressionShares, ResourceShare, shareSuppression, Suppression, unshareSuppression } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
@@ -38,6 +39,8 @@ const LIMIT = 50;
 const inputCls = nativeFieldClassName;
 
 export default function SuppressionsPage() {
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const { orgs, orgNamesById } = useOrgDirectory();
   const [suppressions, setSuppressions] = useState<Suppression[]>([]);
   const [total, setTotal] = useState(0);
@@ -72,7 +75,7 @@ export default function SuppressionsPage() {
     }
   }, []);
 
-  useEffect(() => { load(page, statusFilter, searchQuery); }, [load, page, statusFilter, searchQuery]);
+  useEffect(() => { load(page, statusFilter, searchQuery); }, [load, page, scopeKey, statusFilter, searchQuery]);
 
     function canManageAccess(suppression: Suppression) {
       if (suppression.read_only || suppression.source === 'xray' || suppression.owner_type === 'system') return false;

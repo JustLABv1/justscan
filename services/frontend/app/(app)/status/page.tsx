@@ -5,23 +5,24 @@ import { useToast } from '@/components/toast';
 import { OwnershipBadge } from '@/components/ui/badges';
 import { fieldLabelClassName, heroFieldClassName, heroSelectTriggerClassName, heroTextAreaClassName } from '@/components/ui/form-styles';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import {
     createStatusPage,
     deleteStatusPage,
-  getTokenType,
-    getUser,
-  getWorkScope,
     getStatusPage,
+    getTokenType,
+    getUser,
+    getWorkScope,
     listStatusPages,
-  listStatusPageShares,
+    listStatusPageShares,
     listStatusPageTargetOptions,
-  ResourceShare,
-  shareStatusPage,
+    ResourceShare,
+    shareStatusPage,
     StatusPage,
     StatusPagePayload,
     StatusPageTarget,
     StatusPageTargetOption,
-  unshareStatusPage,
+    unshareStatusPage,
     updateStatusPage,
 } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
@@ -78,6 +79,8 @@ function describeScope(page: StatusPage) {
 }
 
 export default function StatusPagesPage() {
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const { orgs, orgNamesById } = useOrgDirectory();
   const [pages, setPages] = useState<StatusPage[]>([]);
   const [targetOptions, setTargetOptions] = useState<StatusPageTargetOption[]>([]);
@@ -127,7 +130,7 @@ export default function StatusPagesPage() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, scopeKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,7 +157,7 @@ export default function StatusPagesPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scopeKey]);
 
   useEffect(() => {
     if (!modal.isOpen) {

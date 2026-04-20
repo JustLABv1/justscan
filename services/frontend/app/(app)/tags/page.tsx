@@ -9,7 +9,8 @@ import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
-import { createTag, deleteTag, getTokenType, getUser, getWorkScope, listTagShares, listTags, ResourceShare, shareTag, Tag, unshareTag, updateTag } from '@/lib/api';
+import { useWorkScope } from '@/hooks/use-work-scope';
+import { createTag, deleteTag, getTokenType, getUser, getWorkScope, listTags, listTagShares, ResourceShare, shareTag, Tag, unshareTag, updateTag } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon, Tag01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -18,6 +19,8 @@ const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444'
 const inputCls = nativeFieldClassName;
 
 export default function TagsPage() {
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const { orgs, orgNamesById } = useOrgDirectory();
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +51,7 @@ export default function TagsPage() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, scopeKey]);
 
   function openCreate() { setEditing(null); setName(''); setColor(COLORS[0]); setFormError(''); modal.open(); }
   function openEdit(tag: Tag) { setEditing(tag); setName(tag.name); setColor(tag.color); setFormError(''); modal.open(); }

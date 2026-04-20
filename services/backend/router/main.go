@@ -24,7 +24,7 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 	}
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     allowOrigins,
-		AllowMethods:     []string{"GET", "HEAD", "POST", "PUT", "OPTIONS", "DELETE"},
+		AllowMethods:     []string{"GET", "HEAD", "POST", "PUT", "PATCH", "OPTIONS", "DELETE"},
 		AllowHeaders:     []string{"Origin", "Authorization", "X-Requested-With", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,

@@ -314,6 +314,48 @@ export const shareRegistry = (id: string, orgId: string) =>
   req<{ result: string }>('POST', `/api/v1/registries/${id}/shares`, { org_id: orgId });
 export const unshareRegistry = (id: string, orgId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/registries/${id}/shares/${orgId}`);
+export const getDefaultRegistry = () =>
+  req<Registry>('GET', '/api/v1/registries/default').catch(() => null);
+
+// Multi-provider OIDC
+export const listOIDCProviders = () =>
+  req<OIDCProvider[]>('GET', '/api/v1/auth/oidc/providers').then((r) => (Array.isArray(r) ? r : []));
+
+// Admin: OIDC provider CRUD
+export const adminListOIDCProviders = () =>
+  req<{ data: OIDCProviderAdmin[] }>('GET', '/api/v1/admin/oidc-providers').then((r) => r.data ?? []);
+export const adminCreateOIDCProvider = (data: Partial<OIDCProviderAdmin>) =>
+  req<OIDCProviderAdmin>('POST', '/api/v1/admin/oidc-providers', data);
+export const adminUpdateOIDCProvider = (name: string, data: Partial<OIDCProviderAdmin>) =>
+  req<OIDCProviderAdmin>('PUT', `/api/v1/admin/oidc-providers/${name}`, data);
+export const adminDeleteOIDCProvider = (name: string) =>
+  req<void>('DELETE', `/api/v1/admin/oidc-providers/${name}`);
+
+// Admin: Group→org mappings
+export const adminListGroupMappings = (providerName: string) =>
+  req<{ data: OIDCGroupMapping[] }>('GET', `/api/v1/admin/oidc-providers/${providerName}/group-mappings`).then((r) => r.data ?? []);
+export const adminCreateGroupMapping = (providerName: string, data: Partial<OIDCGroupMapping>) =>
+  req<OIDCGroupMapping>('POST', `/api/v1/admin/oidc-providers/${providerName}/group-mappings`, data);
+export const adminDeleteGroupMapping = (providerName: string, mappingId: string) =>
+  req<void>('DELETE', `/api/v1/admin/oidc-providers/${providerName}/group-mappings/${mappingId}`);
+
+// Admin: Scanner settings
+export const adminUpdateScannerSettings = (data: Partial<ScannerSettings>) =>
+  req<{ updated: Record<string, string> }>('PUT', '/api/v1/admin/settings/scanner', data);
+export const adminUpdateAuthSettings = (data: { local_auth_enabled: boolean }) =>
+  req<{ local_auth_enabled: boolean }>('PUT', '/api/v1/admin/settings/auth', data);
+
+// Admin: Global registries
+export const adminListGlobalRegistries = () =>
+  req<RegistryListResponse>('GET', '/api/v1/admin/registries').then((r) => ({ data: r.data ?? [], capabilities: r.capabilities ?? getDefaultScannerCapabilities() }));
+export const adminCreateGlobalRegistry = (data: Partial<Registry>) =>
+  req<Registry>('POST', '/api/v1/admin/registries', data);
+export const adminDeleteGlobalRegistry = (id: string) =>
+  req<void>('DELETE', `/api/v1/admin/registries/${id}`);
+export const adminSetDefaultRegistry = (id: string) =>
+  req<{ id: string; is_default: boolean }>('PUT', `/api/v1/admin/registries/${id}/set-default`);
+export const adminUnsetDefaultRegistry = (id: string) =>
+  req<{ id: string; is_default: boolean }>('PUT', `/api/v1/admin/registries/${id}/unset-default`);
 
 // Watchlist
 export const listWatchlist = () => {
@@ -1286,6 +1328,50 @@ export interface Registry {
   owner_type?: OwnerType;
   owner_user_id?: string | null;
   owner_org_id?: string | null;
+  is_default?: boolean;
+}
+
+export interface OIDCProvider {
+  name: string;
+  display_name: string;
+  button_color?: string;
+}
+
+export interface OIDCProviderAdmin extends OIDCProvider {
+  issuer_url: string;
+  client_id: string;
+  client_secret?: string;
+  redirect_uri: string;
+  scopes: string[];
+  admin_groups: string[];
+  admin_roles: string[];
+  groups_claim: string;
+  roles_claim: string;
+  enabled: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OIDCGroupMapping {
+  id: string;
+  provider_name: string;
+  oidc_group: string;
+  org_id: string;
+  org_name?: string;
+  role: string;
+  auto_create_org: boolean;
+  remove_on_unsync: boolean;
+  created_at: string;
+}
+
+export interface ScannerSettings {
+  enable_trivy?: boolean;
+  enable_grype?: boolean;
+  concurrency?: number;
+  timeout_seconds?: number;
+  db_max_age_hours?: number;
+  enable_osv_java_augmentation?: boolean;
 }
 
 export type ScanProvider = 'trivy' | 'artifactory_xray';

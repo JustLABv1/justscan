@@ -5,8 +5,22 @@ import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/u
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
   addTagToScan,
+  adminCreateGlobalRegistry,
+  adminCreateGroupMapping,
+  adminCreateOIDCProvider,
+  adminDeleteGlobalRegistry,
+  adminDeleteGroupMapping,
+  adminDeleteOIDCProvider,
+  adminListGlobalRegistries,
+  adminListGroupMappings,
+  adminListOIDCProviders,
   AdminScan,
+  adminSetDefaultRegistry,
   AdminToken,
+  adminUnsetDefaultRegistry,
+  adminUpdateAuthSettings,
+  adminUpdateOIDCProvider,
+  adminUpdateScannerSettings,
   AdminUser,
   APIRequestLog,
   APIRequestLogFilters,
@@ -41,9 +55,15 @@ import {
   listXRayRequestLogs,
   NotificationChannel,
   NotificationDelivery,
+  OIDCGroupMapping,
+  OIDCProviderAdmin,
   Org,
+  Registry,
+  RegistryWithHealth,
   reScan,
+  ScannerCapabilities,
   ScannerHealth,
+  ScannerSettings,
   setPublicScanEnabled,
   Tag,
   testNotificationChannel,
@@ -65,7 +85,6 @@ import { ArrowDown01Icon, ArrowRight01Icon, Delete01Icon, Notification01Icon, Pe
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
 
@@ -83,12 +102,14 @@ function userAuthLabel(authType?: string) {
   return USER_AUTH_LABEL[authType ?? 'local'] ?? (authType ? authType.toUpperCase() : 'Unknown');
 }
 
-type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans' | 'insights';
+type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans' | 'insights' | 'identity' | 'registries';
 
 const ADMIN_TABS: { value: AdminTab; label: string; href: string }[] = [
   { value: 'overview', label: 'Overview', href: '/admin' },
   { value: 'settings', label: 'Settings', href: '/admin/settings' },
   { value: 'scanner', label: 'Scanner', href: '/admin/scanner' },
+  { value: 'identity', label: 'Identity Providers', href: '/admin/identity' },
+  { value: 'registries', label: 'Global Registries', href: '/admin/registries' },
   { value: 'users', label: 'Users', href: '/admin/users' },
   { value: 'tokens', label: 'Tokens', href: '/admin/tokens' },
   { value: 'autotags', label: 'Auto Tags', href: '/admin/autotags' },
@@ -148,6 +169,13 @@ function scannerTone(status: 'healthy' | 'stale' | 'error') {
   return { color: '#f87171', bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.2)' };
 }
 
+function parseDelimitedList(value: string) {
+  return value
+    .split(/[\n,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 function ScannerHealthPanel() {
   const [health, setHealth] = useState<ScannerHealth | null>(null);
   const [loading, setLoading] = useState(true);
@@ -176,11 +204,7 @@ function ScannerHealthPanel() {
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Scanner Health</h2>
           <p className="text-sm text-zinc-500 mt-0.5">Live worker cache status from the current backend instance.</p>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="btn-secondary"
-        >
+        <button onClick={load} disabled={loading} className="btn-secondary">
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
@@ -564,6 +588,134 @@ function SettingsTab() {
           </button>
         </div>
       </div>
+
+      <ScannerSettingsPanel />
+      <AuthSettingsPanel />
+    </div>
+  );
+}
+
+function ScannerSettingsPanel() {
+  const [settings, setSettings] = useState<ScannerSettings>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getAdminSettings().then((s) => {
+      setSettings({
+        enable_trivy: s['scanner.enable_trivy'] !== 'false',
+        enable_grype: s['scanner.enable_grype'] !== 'false',
+        concurrency: parseInt(s['scanner.concurrency'] ?? '2', 10),
+        timeout_seconds: parseInt(s['scanner.timeout_seconds'] ?? '300', 10),
+        db_max_age_hours: parseInt(s['scanner.db_max_age_hours'] ?? '24', 10),
+        enable_osv_java_augmentation: s['scanner.enable_osv_java_augmentation'] === 'true',
+      });
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true); setError(''); setSuccess('');
+    try {
+      await adminUpdateScannerSettings(settings);
+      setSuccess('Scanner settings updated');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to update scanner settings');
+    } finally { setSaving(false); }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div className="glass-panel rounded-2xl p-5 space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Scanner Settings</h2>
+        <p className="text-sm text-zinc-500 mt-0.5">Configure runtime scanner behavior. These override config.yaml values.</p>
+      </div>
+      {error && <p className="text-sm text-red-400">{error}</p>}
+      {success && <p className="text-sm text-green-400">{success}</p>}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
+          <input type="checkbox" checked={settings.enable_trivy ?? true} onChange={(e) => setSettings((s) => ({ ...s, enable_trivy: e.target.checked }))} className="rounded" />
+          Enable Trivy
+        </label>
+        <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
+          <input type="checkbox" checked={settings.enable_grype ?? true} onChange={(e) => setSettings((s) => ({ ...s, enable_grype: e.target.checked }))} className="rounded" />
+          Enable Grype
+        </label>
+        <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
+          <input type="checkbox" checked={settings.enable_osv_java_augmentation ?? false} onChange={(e) => setSettings((s) => ({ ...s, enable_osv_java_augmentation: e.target.checked }))} className="rounded" />
+          OSV Java Augmentation
+        </label>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label className="block text-xs text-zinc-500 mb-1">Concurrency</label>
+          <input type="number" min={1} max={32} value={settings.concurrency ?? 2} onChange={(e) => setSettings((s) => ({ ...s, concurrency: parseInt(e.target.value, 10) }))} className={inputCls + ' w-full'} />
+        </div>
+        <div>
+          <label className="block text-xs text-zinc-500 mb-1">Timeout (seconds)</label>
+          <input type="number" min={30} value={settings.timeout_seconds ?? 300} onChange={(e) => setSettings((s) => ({ ...s, timeout_seconds: parseInt(e.target.value, 10) }))} className={inputCls + ' w-full'} />
+        </div>
+        <div>
+          <label className="block text-xs text-zinc-500 mb-1">DB Max Age (hours)</label>
+          <input type="number" min={1} value={settings.db_max_age_hours ?? 24} onChange={(e) => setSettings((s) => ({ ...s, db_max_age_hours: parseInt(e.target.value, 10) }))} className={inputCls + ' w-full'} />
+        </div>
+      </div>
+      <button onClick={handleSave} disabled={saving} className="btn-primary inline-flex items-center gap-2" type="button">
+        {saving && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+        Save Scanner Settings
+      </button>
+    </div>
+  );
+}
+
+function AuthSettingsPanel() {
+  const [localAuthEnabled, setLocalAuthEnabledState] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getAdminSettings().then((s) => {
+      setLocalAuthEnabledState(s['auth.local_enabled'] !== 'false');
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true); setError(''); setSuccess('');
+    try {
+      await adminUpdateAuthSettings({ local_auth_enabled: localAuthEnabled });
+      setSuccess('Auth settings updated');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to update auth settings');
+    } finally { setSaving(false); }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div className="glass-panel rounded-2xl p-5 space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Authentication Settings</h2>
+        <p className="text-sm text-zinc-500 mt-0.5">Control which sign-in methods are available to users.</p>
+      </div>
+      {error && <p className="text-sm text-red-400">{error}</p>}
+      {success && <p className="text-sm text-green-400">{success}</p>}
+      <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
+        <input type="checkbox" checked={localAuthEnabled} onChange={(e) => setLocalAuthEnabledState(e.target.checked)} className="rounded" />
+        Enable local username/password authentication
+      </label>
+      <button onClick={handleSave} disabled={saving} className="btn-primary inline-flex items-center gap-2" type="button">
+        {saving && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+        Save Auth Settings
+      </button>
     </div>
   );
 }
@@ -3201,6 +3353,790 @@ function InsightsTab() {
   );
 }
 
+// ── Identity Providers Tab ─────────────────────────────────────────────────────
+function IdentityProvidersTab() {
+  const [providers, setProviders] = useState<OIDCProviderAdmin[]>([]);
+  const [orgs, setOrgs] = useState<Org[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedProvider, setSelectedProvider] = useState<OIDCProviderAdmin | null>(null);
+  const [mappings, setMappings] = useState<OIDCGroupMapping[]>([]);
+  const [mappingsLoading, setMappingsLoading] = useState(false);
+  const [mappingError, setMappingError] = useState('');
+  const [editingProvider, setEditingProvider] = useState<OIDCProviderAdmin | null>(null);
+  const [providerName, setProviderName] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [buttonColor, setButtonColor] = useState('');
+  const [issuerUrl, setIssuerUrl] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [redirectUri, setRedirectUri] = useState('');
+  const [scopesInput, setScopesInput] = useState('openid, profile, email');
+  const [adminGroupsInput, setAdminGroupsInput] = useState('');
+  const [adminRolesInput, setAdminRolesInput] = useState('');
+  const [groupsClaim, setGroupsClaim] = useState('groups');
+  const [rolesClaim, setRolesClaim] = useState('roles');
+  const [providerEnabled, setProviderEnabled] = useState(true);
+  const [sortOrder, setSortOrder] = useState('0');
+  const [providerFormError, setProviderFormError] = useState('');
+  const [providerSaving, setProviderSaving] = useState(false);
+  const [mappingGroup, setMappingGroup] = useState('');
+  const [mappingOrgId, setMappingOrgId] = useState('');
+  const [mappingRole, setMappingRole] = useState<'viewer' | 'editor' | 'admin'>('viewer');
+  const [mappingAutoCreate, setMappingAutoCreate] = useState(false);
+  const [mappingRemoveOnUnsync, setMappingRemoveOnUnsync] = useState(true);
+  const [mappingFormError, setMappingFormError] = useState('');
+  const [mappingSaving, setMappingSaving] = useState(false);
+  const providerModal = useOverlayState();
+  const mappingModal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [providerData, orgData] = await Promise.all([adminListOIDCProviders(), listOrgs()]);
+      setProviders(providerData);
+      setOrgs(orgData);
+      setSelectedProvider((current) => current ? providerData.find((provider) => provider.name === current.name) ?? null : current);
+    } catch (loadError: unknown) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load identity provider settings');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const loadMappings = useCallback(async (providerName: string) => {
+    setMappingsLoading(true);
+    setMappingError('');
+    try {
+      setMappings(await adminListGroupMappings(providerName));
+    } catch (loadError: unknown) {
+      setMappingError(loadError instanceof Error ? loadError.message : 'Failed to load group mappings');
+    } finally {
+      setMappingsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedProvider) {
+      loadMappings(selectedProvider.name);
+    }
+  }, [selectedProvider, loadMappings]);
+
+  function openCreateProvider() {
+    setEditingProvider(null);
+    setProviderName('');
+    setDisplayName('');
+    setButtonColor('');
+    setIssuerUrl('');
+    setClientId('');
+    setClientSecret('');
+    setRedirectUri('');
+    setScopesInput('openid, profile, email');
+    setAdminGroupsInput('');
+    setAdminRolesInput('');
+    setGroupsClaim('groups');
+    setRolesClaim('roles');
+    setProviderEnabled(true);
+    setSortOrder(String(providers.length));
+    setProviderFormError('');
+    providerModal.open();
+  }
+
+  function openEditProvider(provider: OIDCProviderAdmin) {
+    setEditingProvider(provider);
+    setProviderName(provider.name);
+    setDisplayName(provider.display_name);
+    setButtonColor(provider.button_color ?? '');
+    setIssuerUrl(provider.issuer_url);
+    setClientId(provider.client_id);
+    setClientSecret('');
+    setRedirectUri(provider.redirect_uri);
+    setScopesInput((provider.scopes ?? []).join(', '));
+    setAdminGroupsInput((provider.admin_groups ?? []).join(', '));
+    setAdminRolesInput((provider.admin_roles ?? []).join(', '));
+    setGroupsClaim(provider.groups_claim || 'groups');
+    setRolesClaim(provider.roles_claim || 'roles');
+    setProviderEnabled(provider.enabled);
+    setSortOrder(String(provider.sort_order ?? 0));
+    setProviderFormError('');
+    providerModal.open();
+  }
+
+  function openCreateMapping() {
+    if (!selectedProvider) return;
+    setMappingGroup('');
+    setMappingOrgId(orgs[0]?.id ?? '');
+    setMappingRole('viewer');
+    setMappingAutoCreate(false);
+    setMappingRemoveOnUnsync(true);
+    setMappingFormError('');
+    mappingModal.open();
+  }
+
+  async function handleProviderSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setProviderSaving(true);
+    setProviderFormError('');
+    try {
+      const payload = {
+        name: providerName.trim(),
+        display_name: displayName.trim(),
+        button_color: buttonColor.trim() || undefined,
+        issuer_url: issuerUrl.trim(),
+        client_id: clientId.trim(),
+        ...(clientSecret.trim() ? { client_secret: clientSecret.trim() } : {}),
+        redirect_uri: redirectUri.trim(),
+        scopes: parseDelimitedList(scopesInput),
+        admin_groups: parseDelimitedList(adminGroupsInput),
+        admin_roles: parseDelimitedList(adminRolesInput),
+        groups_claim: groupsClaim.trim() || 'groups',
+        roles_claim: rolesClaim.trim() || 'roles',
+        enabled: providerEnabled,
+        sort_order: Number.parseInt(sortOrder, 10) || 0,
+      };
+
+      if (editingProvider) {
+        await adminUpdateOIDCProvider(editingProvider.name, payload);
+      } else {
+        if (!payload.name || !clientSecret.trim()) {
+          throw new Error('Name and client secret are required when creating a provider');
+        }
+        await adminCreateOIDCProvider(payload);
+      }
+
+      providerModal.close();
+      await load();
+    } catch (saveError: unknown) {
+      setProviderFormError(saveError instanceof Error ? saveError.message : 'Failed to save provider');
+    } finally {
+      setProviderSaving(false);
+    }
+  }
+
+  async function handleMappingSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedProvider) return;
+    setMappingSaving(true);
+    setMappingFormError('');
+    try {
+      await adminCreateGroupMapping(selectedProvider.name, {
+        oidc_group: mappingGroup.trim(),
+        org_id: mappingOrgId,
+        role: mappingRole,
+        auto_create_org: mappingAutoCreate,
+        remove_on_unsync: mappingRemoveOnUnsync,
+      });
+      mappingModal.close();
+      await loadMappings(selectedProvider.name);
+    } catch (saveError: unknown) {
+      setMappingFormError(saveError instanceof Error ? saveError.message : 'Failed to create mapping');
+    } finally {
+      setMappingSaving(false);
+    }
+  }
+
+  async function handleDelete(name: string) {
+    const ok = await confirm({
+      title: 'Delete OIDC Provider',
+      message: `Remove provider "${name}"? This will break any logins using this provider.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    await adminDeleteOIDCProvider(name);
+    if (selectedProvider?.name === name) setSelectedProvider(null);
+    await load();
+  }
+
+  async function handleToggleEnabled(provider: OIDCProviderAdmin) {
+    await adminUpdateOIDCProvider(provider.name, { enabled: !provider.enabled });
+    await load();
+  }
+
+  async function handleDeleteMapping(providerName: string, mappingId: string) {
+    const ok = await confirm({
+      title: 'Delete Mapping',
+      message: 'Remove this group to organization mapping?',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    await adminDeleteGroupMapping(providerName, mappingId);
+    await loadMappings(providerName);
+  }
+
+  return (
+    <div className="space-y-4">
+      {confirmDialog}
+
+      {error && (
+        <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          {error}
+        </div>
+      )}
+
+      <div className="glass-panel rounded-2xl p-5 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Identity Providers</h2>
+          <p className="text-sm text-zinc-500 mt-1">Create, edit, and disable OIDC providers without leaving the admin UI.</p>
+        </div>
+        <button onClick={openCreateProvider} className="btn-primary inline-flex items-center gap-2" type="button">
+          <PlusSignIcon size={15} /> Add Provider
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        </div>
+      ) : providers.length === 0 ? (
+        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+          <p className="text-sm text-zinc-500">No OIDC providers configured yet.</p>
+        </div>
+      ) : (
+        <div className="glass-panel rounded-2xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Provider</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Issuer</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Scopes</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {providers.map((provider, index) => (
+                <tr
+                  key={provider.name}
+                  style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
+                  onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
+                  onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
+                >
+                  <td className="px-4 py-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        {provider.button_color ? (
+                          <span className="w-2.5 h-2.5 rounded-full border border-white/30" style={{ background: provider.button_color }} />
+                        ) : null}
+                        <span className="font-medium text-zinc-700 dark:text-zinc-200">{provider.display_name}</span>
+                      </div>
+                      <p className="text-xs font-mono text-zinc-500">{provider.name}</p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-zinc-500 max-w-sm truncate">{provider.issuer_url}</td>
+                  <td className="px-4 py-3 text-xs text-zinc-500">{provider.scopes?.length ? provider.scopes.join(', ') : 'openid, profile, email'}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={provider.enabled
+                      ? { color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }
+                      : { color: '#a1a1aa', background: 'rgba(161,161,170,0.08)', border: '1px solid rgba(161,161,170,0.15)' }}>
+                      {provider.enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end">
+                      <RowActionsMenu
+                        label={`Open actions for provider ${provider.display_name}`}
+                        items={[
+                          { id: 'mappings', label: selectedProvider?.name === provider.name ? 'Hide mappings' : 'View mappings', icon: <ArrowRight01Icon size={15} />, onAction: () => setSelectedProvider(selectedProvider?.name === provider.name ? null : provider) },
+                          { id: 'edit', label: 'Edit provider', icon: <PencilEdit01Icon size={15} />, onAction: () => openEditProvider(provider) },
+                          { id: 'toggle', label: provider.enabled ? 'Disable provider' : 'Enable provider', onAction: () => { void handleToggleEnabled(provider); } },
+                          { id: 'delete', label: 'Delete provider', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(provider.name); } },
+                        ]}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {selectedProvider ? (
+        <div className="glass-panel rounded-2xl p-5 space-y-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Group Mappings</h3>
+              <p className="text-sm text-zinc-500 mt-1">Auto-assign users from <span className="font-mono">{selectedProvider.name}</span> into organizations based on group claims.</p>
+            </div>
+            <button onClick={openCreateMapping} className="btn-secondary inline-flex items-center gap-2" type="button" disabled={orgs.length === 0}>
+              <PlusSignIcon size={15} /> Add Mapping
+            </button>
+          </div>
+
+          {mappingError && (
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+              {mappingError}
+            </div>
+          )}
+
+          {mappingsLoading ? (
+            <p className="text-sm text-zinc-500">Loading mappings…</p>
+          ) : mappings.length === 0 ? (
+            <div className="rounded-xl px-4 py-6 text-sm text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              No mappings configured for this provider yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">OIDC Group</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Organization</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Behavior</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {mappings.map((mapping, index) => (
+                    <tr key={mapping.id} style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}>
+                      <td className="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-300">{mapping.oidc_group}</td>
+                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">{mapping.org_name ?? mapping.org_id}</td>
+                      <td className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-[0.14em]">{mapping.role}</td>
+                      <td className="px-4 py-3 text-xs text-zinc-500">{mapping.auto_create_org ? 'Auto-create org if missing' : 'Require existing org'} · {mapping.remove_on_unsync ? 'Remove on unsync' : 'Keep manual membership'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end">
+                          <RowActionsMenu
+                            label={`Open actions for mapping ${mapping.oidc_group}`}
+                            items={[
+                              { id: 'delete', label: 'Delete mapping', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDeleteMapping(selectedProvider.name, mapping.id); } },
+                            ]}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      <Modal state={providerModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="lg" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editingProvider ? 'Edit Identity Provider' : 'Add Identity Provider'}</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5">
+                <form id="oidc-provider-form" onSubmit={handleProviderSubmit} className="space-y-4">
+                  {providerFormError && (
+                    <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+                      {providerFormError}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Provider Name</label>
+                      <input className={inputCls} placeholder="google-workspace" value={providerName} onChange={(event) => setProviderName(event.target.value)} required disabled={Boolean(editingProvider)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Display Name</label>
+                      <input className={inputCls} placeholder="Google Workspace" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Issuer URL</label>
+                      <input className={inputCls} placeholder="https://accounts.google.com" value={issuerUrl} onChange={(event) => setIssuerUrl(event.target.value)} required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Redirect URI</label>
+                      <input className={inputCls} placeholder="https://app.example.com/api/v1/auth/oidc/provider/callback" value={redirectUri} onChange={(event) => setRedirectUri(event.target.value)} required />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Client ID</label>
+                      <input className={inputCls} value={clientId} onChange={(event) => setClientId(event.target.value)} required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Client Secret</label>
+                      <input type="password" className={inputCls} value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} placeholder={editingProvider ? 'Leave blank to keep existing secret' : ''} required={!editingProvider} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Scopes</label>
+                      <input className={inputCls} value={scopesInput} onChange={(event) => setScopesInput(event.target.value)} placeholder="openid, profile, email" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Button Color</label>
+                      <input className={inputCls} value={buttonColor} onChange={(event) => setButtonColor(event.target.value)} placeholder="#0f766e" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Admin Groups</label>
+                      <input className={inputCls} value={adminGroupsInput} onChange={(event) => setAdminGroupsInput(event.target.value)} placeholder="admins, platform-owners" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Admin Roles</label>
+                      <input className={inputCls} value={adminRolesInput} onChange={(event) => setAdminRolesInput(event.target.value)} placeholder="admin, superuser" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Groups Claim</label>
+                      <input className={inputCls} value={groupsClaim} onChange={(event) => setGroupsClaim(event.target.value)} placeholder="groups" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Roles Claim</label>
+                      <input className={inputCls} value={rolesClaim} onChange={(event) => setRolesClaim(event.target.value)} placeholder="roles" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Sort Order</label>
+                      <input type="number" className={inputCls} value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} />
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
+                    <input type="checkbox" className="rounded" checked={providerEnabled} onChange={(event) => setProviderEnabled(event.target.checked)} />
+                    Provider enabled
+                  </label>
+                </form>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button className="btn-secondary" onClick={providerModal.close} type="button">Cancel</button>
+                <button type="submit" form="oidc-provider-form" disabled={providerSaving} className="btn-primary inline-flex items-center gap-2">
+                  {providerSaving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {editingProvider ? 'Save Provider' : 'Create Provider'}
+                </button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal state={mappingModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Add Group Mapping</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5">
+                <form id="oidc-mapping-form" onSubmit={handleMappingSubmit} className="space-y-4">
+                  {mappingFormError && (
+                    <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+                      {mappingFormError}
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">OIDC Group</label>
+                    <input className={inputCls} placeholder="platform-admins" value={mappingGroup} onChange={(event) => setMappingGroup(event.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Organization</label>
+                    <select className={inputCls} value={mappingOrgId} onChange={(event) => setMappingOrgId(event.target.value)} required>
+                      <option value="" disabled>Select an organization</option>
+                      {orgs.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
+                    <select className={inputCls} value={mappingRole} onChange={(event) => setMappingRole(event.target.value as 'viewer' | 'editor' | 'admin')}>
+                      <option value="viewer">Viewer</option>
+                      <option value="editor">Editor</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
+                      <input type="checkbox" className="rounded" checked={mappingAutoCreate} onChange={(event) => setMappingAutoCreate(event.target.checked)} />
+                      Recreate the target org automatically if it is missing
+                    </label>
+                    <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
+                      <input type="checkbox" className="rounded" checked={mappingRemoveOnUnsync} onChange={(event) => setMappingRemoveOnUnsync(event.target.checked)} />
+                      Remove membership when the group is no longer present
+                    </label>
+                  </div>
+                </form>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button className="btn-secondary" onClick={mappingModal.close} type="button">Cancel</button>
+                <button type="submit" form="oidc-mapping-form" disabled={mappingSaving} className="btn-primary inline-flex items-center gap-2">
+                  {mappingSaving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  Create Mapping
+                </button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+    </div>
+  );
+}
+
+// ── Global Registries Tab ──────────────────────────────────────────────────────
+function GlobalRegistriesTab() {
+  const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>({ enable_trivy: true, enable_grype: true, providers: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+  const [xrayUrl, setXrayUrl] = useState('');
+  const [xrayArtifactoryId, setXrayArtifactoryId] = useState('default');
+  const [authType, setAuthType] = useState<'none' | 'basic' | 'token' | 'aws_ecr'>('none');
+  const [scanProvider, setScanProvider] = useState<'trivy' | 'artifactory_xray'>('trivy');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const modal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await adminListGlobalRegistries();
+      setRegistries(response.data);
+      setCapabilities(response.capabilities);
+    } catch (loadError: unknown) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load global registries');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function openCreate() {
+    setName('');
+    setUrl('');
+    setXrayUrl('');
+    setXrayArtifactoryId('default');
+    setAuthType('none');
+    setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray');
+    setUsername('');
+    setPassword('');
+    setFormError('');
+    modal.open();
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setFormError('');
+    try {
+      await adminCreateGlobalRegistry({
+        name: name.trim(),
+        url: url.trim(),
+        xray_url: scanProvider === 'artifactory_xray' ? xrayUrl.trim() || undefined : undefined,
+        xray_artifactory_id: scanProvider === 'artifactory_xray' ? xrayArtifactoryId.trim() || 'default' : undefined,
+        auth_type: authType,
+        scan_provider: scanProvider,
+        username: username.trim(),
+        ...(password.trim() ? { password: password.trim() } : {}),
+      });
+      modal.close();
+      await load();
+    } catch (saveError: unknown) {
+      setFormError(saveError instanceof Error ? saveError.message : 'Failed to create global registry');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string, registryName: string) {
+    const ok = await confirm({
+      title: 'Delete Registry',
+      message: `Remove global registry "${registryName}"?`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    await adminDeleteGlobalRegistry(id);
+    await load();
+  }
+
+  async function handleSetDefault(registry: Registry) {
+    if (registry.is_default) {
+      await adminUnsetDefaultRegistry(registry.id);
+    } else {
+      await adminSetDefaultRegistry(registry.id);
+    }
+    await load();
+  }
+
+  return (
+    <div className="space-y-4">
+      {confirmDialog}
+
+      {error && (
+        <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          {error}
+        </div>
+      )}
+
+      <div className="glass-panel rounded-2xl p-5 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Global Registries</h2>
+          <p className="text-sm text-zinc-500 mt-1">Create platform-wide registries that every scan flow can see and optionally use by default.</p>
+        </div>
+        <button onClick={openCreate} className="btn-primary inline-flex items-center gap-2" type="button">
+          <PlusSignIcon size={15} /> Add Global Registry
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        </div>
+      ) : registries.length === 0 ? (
+        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+          <p className="text-sm text-zinc-500">No global registries configured yet.</p>
+        </div>
+      ) : (
+        <div className="glass-panel rounded-2xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Registry</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Endpoint</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Provider</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Default</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {registries.map((registry, index) => (
+                <tr
+                  key={registry.id}
+                  style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
+                  onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
+                  onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
+                >
+                  <td className="px-4 py-3">
+                    <div className="space-y-1">
+                      <p className="font-medium text-zinc-700 dark:text-zinc-200">{registry.name}</p>
+                      <p className="text-xs text-zinc-500">Auth: {registry.auth_type}</p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs font-mono text-zinc-500 max-w-sm truncate">{registry.url}</td>
+                  <td className="px-4 py-3 text-xs text-zinc-500">{registry.scan_provider === 'artifactory_xray' ? 'Artifactory Xray' : 'Trivy'}</td>
+                  <td className="px-4 py-3">
+                    {registry.is_default ? (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ color: '#a78bfa', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' }}>Default</span>
+                    ) : (
+                      <span className="text-xs text-zinc-400 dark:text-zinc-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end">
+                      <RowActionsMenu
+                        label={`Open actions for registry ${registry.name}`}
+                        items={[
+                          { id: 'default', label: registry.is_default ? 'Unset default' : 'Set as default', onAction: () => { void handleSetDefault(registry); } },
+                          { id: 'delete', label: 'Delete registry', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(registry.id, registry.name); } },
+                        ]}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Modal state={modal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="lg" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Add Global Registry</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5">
+                <form id="global-registry-form" onSubmit={handleSubmit} className="space-y-4">
+                  {formError && (
+                    <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+                      {formError}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Name</label>
+                      <input className={inputCls} value={name} onChange={(event) => setName(event.target.value)} placeholder="Production Registry" required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Registry URL</label>
+                      <input className={inputCls} value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://registry.example.com" required />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Scan Provider</label>
+                      <select className={inputCls} value={scanProvider} onChange={(event) => setScanProvider(event.target.value as 'trivy' | 'artifactory_xray')}>
+                        {capabilities.enable_trivy ? <option value="trivy">Trivy</option> : null}
+                        <option value="artifactory_xray">Artifactory Xray</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Authentication</label>
+                      <select className={inputCls} value={authType} onChange={(event) => setAuthType(event.target.value as 'none' | 'basic' | 'token' | 'aws_ecr')}>
+                        <option value="none">None</option>
+                        <option value="basic">Basic</option>
+                        <option value="token">Token</option>
+                        <option value="aws_ecr">AWS ECR</option>
+                      </select>
+                    </div>
+                  </div>
+                  {scanProvider === 'artifactory_xray' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Xray URL</label>
+                        <input className={inputCls} value={xrayUrl} onChange={(event) => setXrayUrl(event.target.value)} placeholder="https://xray.example.com" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Artifactory ID</label>
+                        <input className={inputCls} value={xrayArtifactoryId} onChange={(event) => setXrayArtifactoryId(event.target.value)} placeholder="default" />
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Username</label>
+                      <input className={inputCls} value={username} onChange={(event) => setUsername(event.target.value)} placeholder={authType === 'token' ? 'optional token user' : 'registry user'} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Password or Token</label>
+                      <input type="password" className={inputCls} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={authType === 'token' ? 'Access token' : 'Secret'} />
+                    </div>
+                  </div>
+                </form>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button className="btn-secondary" onClick={modal.close} type="button">Cancel</button>
+                <button type="submit" form="global-registry-form" disabled={saving} className="btn-primary inline-flex items-center gap-2">
+                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  Create Registry
+                </button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+    </div>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────── ──────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const pathname = usePathname();
@@ -3210,14 +4146,17 @@ export default function AdminPage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-xl font-bold text-zinc-900 dark:text-white">Admin</h1>
-        <p className="text-sm text-zinc-500 mt-1">Manage system configuration, users, service credentials, notifications, and cross-user scans.</p>
+        <p className="text-sm text-zinc-500 mt-1">Manage system configuration, users, service credentials, notifications, identity providers, registries, and cross-user scans.</p>
       </div>
 
       <div className="segmented-control flex-wrap">
         {ADMIN_TABS.map((tab) => (
-          <Link key={tab.value} href={tab.href}
+          <Link
+            key={tab.value}
+            href={tab.href}
             className="segmented-control-item"
-            data-active={activeTab === tab.value ? 'true' : 'false'}>
+            data-active={activeTab === tab.value ? 'true' : 'false'}
+          >
             {tab.label}
           </Link>
         ))}
@@ -3226,6 +4165,8 @@ export default function AdminPage() {
       {activeTab === 'overview' && <OverviewTab />}
       {activeTab === 'settings' && <SettingsTab />}
       {activeTab === 'scanner' && <ScannerTab />}
+      {activeTab === 'identity' && <IdentityProvidersTab />}
+      {activeTab === 'registries' && <GlobalRegistriesTab />}
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'tokens' && <TokensTab />}
       {activeTab === 'autotags' && <AutoTagsTab />}

@@ -30,10 +30,12 @@ func ListRegistries(db *bun.DB) gin.HandlerFunc {
 
 		var registries []models.Registry
 		query := db.NewSelect().Model(&registries).
-			Column("id", "name", "url", "xray_url", "xray_artifactory_id", "auth_type", "scan_provider", "username", "created_by_id", "owner_type", "owner_user_id", "owner_org_id", "created_at", "updated_at", "health_status", "health_message", "last_health_check_at").
+			Column("id", "name", "url", "xray_url", "xray_artifactory_id", "auth_type", "scan_provider", "username", "created_by_id", "owner_type", "owner_user_id", "owner_org_id", "is_default", "created_at", "updated_at", "health_status", "health_message", "last_health_check_at").
 			OrderExpr("name ASC")
 		query = authz.ApplyOwnershipVisibility(query, "", "created_by_id", "owner_user_id", "owner_org_id", "org_registries", "registry_id", userID, isAdmin, accessibleOrgIDs)
 		query = authz.ApplyWorkspaceScope(c, query, "", "owner_user_id", "owner_org_id", "org_registries", "registry_id", userID)
+		// System registries are always visible to all authenticated users.
+		query = query.WhereOr("owner_type = ?", models.OwnerTypeSystem)
 		if err := query.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list registries"})
 			return
@@ -373,4 +375,20 @@ func canManageRegistryShares(ctx context.Context, db *bun.DB, registry *models.R
 		return false
 	}
 	return authz.HasOrgRoleAtLeast(roles, *registry.OwnerOrgID, models.OrgRoleEditor)
+}
+
+// GetDefaultRegistry returns the system registry marked as default, if any.
+func GetDefaultRegistry(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var registry models.Registry
+		err := db.NewSelect().Model(&registry).
+			Where("is_default = true AND owner_type = ?", models.OwnerTypeSystem).
+			Scan(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusNoContent, nil)
+			return
+		}
+		registry.Password = ""
+		c.JSON(http.StatusOK, registry)
+	}
 }

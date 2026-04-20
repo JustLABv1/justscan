@@ -1,10 +1,11 @@
 'use client';
+import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OrgAutomationTab } from '@/components/org-detail/automation-tab';
 import { OrgOverviewTab } from '@/components/org-detail/overview-tab';
 import { OrgScansTab } from '@/components/org-detail/scans-tab';
-import { OrgTeamTab } from '@/components/org-detail/team-tab';
 import { OrgScanItem, StatusBadge } from '@/components/org-detail/shared';
-import { useConfirmDialog } from '@/components/confirm-dialog';
+import { OrgTeamTab } from '@/components/org-detail/team-tab';
+import { OrgTokensTab } from '@/components/org-detail/tokens-tab';
 import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
@@ -70,6 +71,7 @@ const ORG_TABS = [
   { id: 'automation', label: 'Automation', description: 'Patterns and policies' },
   { id: 'team', label: 'Team', description: 'Members and invites' },
   { id: 'scans', label: 'Scans', description: 'Assigned assets' },
+  { id: 'tokens', label: 'Tokens', description: 'API access tokens' },
 ] as const;
 
 type OrgTabId = (typeof ORG_TABS)[number]['id'];
@@ -382,7 +384,7 @@ export default function OrgDetailPage() {
       </div>
 
       <div className="glass-panel rounded-2xl p-1.5" role="tablist" aria-label="Organization sections">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-1">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-1">
           {ORG_TABS.map((tab, index) => {
             const active = activeTab === tab.id;
             return (
@@ -448,6 +450,12 @@ export default function OrgDetailPage() {
             onOpenAssignModal={() => void openAssignModal()}
             onRemoveScan={(scanId) => void handleRemoveScan(scanId)}
             orgScans={orgScans}
+          />
+        )}
+        {activeTab === 'tokens' && (
+          <OrgTokensTab
+            orgId={id}
+            canManage={isSystemAdmin || currentOrgRole === 'owner' || currentOrgRole === 'admin'}
           />
         )}
       </div>

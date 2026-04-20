@@ -2,6 +2,7 @@ package router
 
 import (
 	"justscan-backend/handlers/tokens"
+	"justscan-backend/middlewares"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -16,7 +17,9 @@ func Token(router *gin.RouterGroup, db *bun.DB) {
 		token.POST("/refresh", func(c *gin.Context) {
 			tokens.RefreshToken(c, db)
 		})
-		token.PUT("/:id", func(c *gin.Context) {
+
+		protected := token.Group("").Use(middlewares.Auth(db))
+		protected.PUT("/:id", func(c *gin.Context) {
 			tokens.UpdateToken(c, db)
 		})
 	}

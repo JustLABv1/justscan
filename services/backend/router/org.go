@@ -11,11 +11,21 @@ import (
 func Orgs(router *gin.RouterGroup, db *bun.DB) {
 	r := router.Group("/orgs").Use(middlewares.Auth(db))
 	{
+		r.GET("/invites", orgs.ListMyInvites(db))
+		r.POST("/invites/:inviteId/accept", orgs.AcceptInviteByID(db))
+		r.POST("/invites/:inviteId/decline", orgs.DeclineInvite(db))
+		r.POST("/invites/by-token/:token/accept", orgs.AcceptInviteByToken(db))
 		r.GET("/", orgs.ListOrgs(db))
 		r.POST("/", orgs.CreateOrg(db))
 		r.GET("/:id", orgs.GetOrg(db))
 		r.PUT("/:id", orgs.UpdateOrg(db))
 		r.DELETE("/:id", orgs.DeleteOrg(db))
+		r.GET("/:id/members", orgs.ListMembers(db))
+		r.PATCH("/:id/members/:userId", orgs.UpdateMemberRole(db))
+		r.DELETE("/:id/members/:userId", orgs.RemoveMember(db))
+		r.GET("/:id/invites", orgs.ListInvites(db))
+		r.POST("/:id/invites", orgs.CreateInvite(db))
+		r.DELETE("/:id/invites/:inviteId", orgs.RevokeInvite(db))
 
 		r.GET("/:id/policies", orgs.ListPolicies(db))
 		r.POST("/:id/policies", orgs.CreatePolicy(db))
@@ -29,5 +39,13 @@ func Orgs(router *gin.RouterGroup, db *bun.DB) {
 		r.DELETE("/:id/scans/:scanId", orgs.RemoveScan(db))
 
 		r.GET("/:id/risk", orgs.GetRiskScore(db))
+
+		r.POST("/:id/transfer-ownership", orgs.TransferOwnership(db))
+
+		r.GET("/:id/tokens", orgs.ListOrgTokens(db))
+		r.POST("/:id/tokens", orgs.CreateOrgToken(db))
+		r.DELETE("/:id/tokens/:tokenId", orgs.RevokeOrgToken(db))
+
+		r.GET("/:id/audit", orgs.ListOrgAuditLog(db))
 	}
 }

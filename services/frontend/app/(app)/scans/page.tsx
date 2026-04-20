@@ -2,18 +2,21 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { ImageChildren } from '@/components/scans/image-children';
 import { useToast } from '@/components/toast';
-import { SevCount, StatusBadge } from '@/components/ui/badges';
+import { OwnershipBadge, SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, joinClassNames, nativeFieldClassName } from '@/components/ui/form-styles';
 import { ImageRowSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
+import { useOrgNameMap } from '@/hooks/use-org-name-map';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import {
     cancelScan,
     createScans,
     deleteScan,
     getDefaultScannerCapabilities,
+    getWorkScope,
     ImageSummary,
     listRegistriesWithCapabilities,
     listScanImages,
@@ -96,6 +99,9 @@ export default function ScansPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const toast = useToast();
+  const orgNamesById = useOrgNameMap();
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
 
   const [images, setImages] = useState<ImageSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -158,8 +164,8 @@ export default function ScansPage() {
     }
   }, []);
 
-  useEffect(() => { load(page, imageFilter, statusFilter); }, [load, page]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { listTags().then(setAvailableTags).catch(() => {}); }, []);
+  useEffect(() => { load(page, imageFilter, statusFilter); }, [imageFilter, load, page, scopeKey, statusFilter]);
+  useEffect(() => { listTags().then(setAvailableTags).catch(() => {}); }, [scopeKey]);
   useEffect(() => {
     listRegistriesWithCapabilities()
       .then((response) => {
@@ -167,7 +173,7 @@ export default function ScansPage() {
         setCapabilities(response.capabilities);
       })
       .catch(() => {});
-  }, []);
+  }, [scopeKey]);
 
   const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
   const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
@@ -247,7 +253,14 @@ export default function ScansPage() {
         return;
       }
 
-      const result = await createScans(requestedImages, registryId || undefined, undefined, platform || undefined);
+      const currentScope = getWorkScope();
+      const result = await createScans(
+        requestedImages,
+        registryId || undefined,
+        undefined,
+        platform || undefined,
+        currentScope.kind === 'org' ? currentScope.orgId : undefined,
+      );
       const createdScans = Array.isArray(result.scans) ? result.scans : [];
 
       modal.close();
@@ -538,6 +551,7 @@ export default function ScansPage() {
                           <div className="mt-1 flex flex-wrap items-center gap-2">
                             <span className="font-mono text-xs text-zinc-400">:{img.latest_tag}</span>
                             <StatusBadge status={img.latest_status} externalStatus={img.latest_external_status} />
+                            <OwnershipBadge ownerType={img.owner_type} ownerOrgId={img.owner_org_id} orgNamesById={orgNamesById} />
                           </div>
                         </div>
                         <span
@@ -579,6 +593,7 @@ export default function ScansPage() {
                       imageName={img.image_name}
                       key={`${img.image_name}-${childRefreshKey[img.image_name] ?? 0}-stacked`}
                       mode="stacked"
+                      orgNamesById={orgNamesById}
                       onCancel={(scanId) => handleCancel(scanId, img.image_name)}
                       onDelete={(scanId) => handleDelete(scanId, img.image_name)}
                       onSelectScan={(scanId, selected) => {
@@ -691,6 +706,7 @@ export default function ScansPage() {
                       <div className="flex items-center gap-2 mt-1">
                         <span className="font-mono text-xs text-zinc-400">:{img.latest_tag}</span>
                         <StatusBadge status={img.latest_status} externalStatus={img.latest_external_status} />
+                        <OwnershipBadge ownerType={img.owner_type} ownerOrgId={img.owner_org_id} orgNamesById={orgNamesById} />
                         <span className="text-xs text-zinc-500" title={fullDate(img.latest_scan_at)}>
                           {timeAgo(img.latest_scan_at)}
                         </span>
@@ -722,6 +738,7 @@ export default function ScansPage() {
                       key={`${img.image_name}-${childRefreshKey[img.image_name] ?? 0}`}
                       imageName={img.image_name}
                       mode="table"
+                      orgNamesById={orgNamesById}
                       onDelete={scanId => handleDelete(scanId, img.image_name)}
                       onCancel={scanId => handleCancel(scanId, img.image_name)}
                       selectedScans={selectedScans}

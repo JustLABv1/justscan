@@ -11,7 +11,10 @@ import (
 func Orgs(router *gin.RouterGroup, db *bun.DB) {
 	r := router.Group("/orgs").Use(middlewares.Auth(db))
 	{
-		r.POST("/invites/:token/accept", orgs.AcceptInvite(db))
+		r.GET("/invites", orgs.ListMyInvites(db))
+		r.POST("/invites/:inviteId/accept", orgs.AcceptInviteByID(db))
+		r.POST("/invites/:inviteId/decline", orgs.DeclineInvite(db))
+		r.POST("/invites/by-token/:token/accept", orgs.AcceptInviteByToken(db))
 		r.GET("/", orgs.ListOrgs(db))
 		r.POST("/", orgs.CreateOrg(db))
 		r.GET("/:id", orgs.GetOrg(db))

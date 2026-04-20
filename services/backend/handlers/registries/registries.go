@@ -1,6 +1,7 @@
 package registries
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -221,4 +222,154 @@ func DeleteRegistry(db *bun.DB) gin.HandlerFunc {
 		}
 		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
 	}
+}
+
+type registryShare struct {
+	OrgID          uuid.UUID `bun:"org_id" json:"org_id"`
+	OrgName        string    `bun:"org_name" json:"org_name"`
+	OrgDescription string    `bun:"org_description" json:"org_description"`
+	IsOwner        bool      `bun:"-" json:"is_owner"`
+}
+
+func ListRegistryShares(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		registry, _, _, ok := loadRegistryForShareManagement(c, db)
+		if !ok {
+			return
+		}
+
+		var shares []registryShare
+		if err := db.NewSelect().
+			TableExpr("org_registries AS org_registry").
+			ColumnExpr("o.id AS org_id").
+			ColumnExpr("o.name AS org_name").
+			ColumnExpr("o.description AS org_description").
+			Join("JOIN orgs AS o ON o.id = org_registry.org_id").
+			Where("org_registry.registry_id = ?", registry.ID).
+			OrderExpr("o.name ASC").
+			Scan(c.Request.Context(), &shares); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list registry shares"})
+			return
+		}
+
+		for index := range shares {
+			shares[index].IsOwner = registry.OwnerOrgID != nil && shares[index].OrgID == *registry.OwnerOrgID
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": shares})
+	}
+}
+
+func ShareRegistry(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		registry, _, isAdmin, ok := loadRegistryForShareManagement(c, db)
+		if !ok {
+			return
+		}
+
+		var body struct {
+			OrgID string `json:"org_id" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		targetOrgID, err := uuid.Parse(body.OrgID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+			return
+		}
+		if registry.OwnerOrgID != nil && *registry.OwnerOrgID == targetOrgID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "resource is already owned by that organization"})
+			return
+		}
+		if !isAdmin {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleAdmin); !ok {
+				return
+			}
+		}
+
+		if _, err := db.NewInsert().Model(&models.OrgRegistry{OrgID: targetOrgID, RegistryID: registry.ID}).On("CONFLICT DO NOTHING").Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to share registry"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{"result": "shared"})
+	}
+}
+
+func UnshareRegistry(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		registry, _, _, ok := loadRegistryForShareManagement(c, db)
+		if !ok {
+			return
+		}
+
+		targetOrgID, err := uuid.Parse(c.Param("orgId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+			return
+		}
+		if registry.OwnerOrgID != nil && *registry.OwnerOrgID == targetOrgID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot remove the owner organization"})
+			return
+		}
+
+		if _, err := db.NewDelete().Model((*models.OrgRegistry)(nil)).
+			Where("org_id = ?", targetOrgID).
+			Where("registry_id = ?", registry.ID).
+			Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke registry share"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"result": "unshared"})
+	}
+}
+
+func loadRegistryForShareManagement(c *gin.Context, db *bun.DB) (*models.Registry, uuid.UUID, bool, bool) {
+	registryID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry ID"})
+		return nil, uuid.Nil, false, false
+	}
+
+	userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+	if !ok {
+		return nil, uuid.Nil, false, false
+	}
+
+	registry := &models.Registry{}
+	if err := db.NewSelect().Model(registry).Where("id = ?", registryID).Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "registry not found"})
+		return nil, uuid.Nil, false, false
+	}
+
+	if !canManageRegistryShares(c.Request.Context(), db, registry, userID, isAdmin) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return nil, uuid.Nil, false, false
+	}
+
+	return registry, userID, isAdmin, true
+}
+
+func canManageRegistryShares(ctx context.Context, db *bun.DB, registry *models.Registry, userID uuid.UUID, isAdmin bool) bool {
+	if registry == nil {
+		return false
+	}
+	if isAdmin || registry.CreatedByID == userID {
+		return true
+	}
+	if registry.OwnerUserID != nil && *registry.OwnerUserID == userID {
+		return true
+	}
+	if registry.OwnerOrgID == nil {
+		return false
+	}
+	roles, err := authz.LoadUserOrgRoles(ctx, db, userID)
+	if err != nil {
+		return false
+	}
+	return authz.HasOrgRoleAtLeast(roles, *registry.OwnerOrgID, models.OrgRoleAdmin)
 }

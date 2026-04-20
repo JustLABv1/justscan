@@ -188,6 +188,67 @@ func ListInvites(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
+func ListMyInvites(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, _, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+
+		user := &models.Users{}
+		if err := db.NewSelect().Model(user).
+			Column("id", "email", "username").
+			Where("id = ?", userID).
+			Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unable to resolve current user"})
+			return
+		}
+
+		normalizedEmail := strings.ToLower(strings.TrimSpace(user.Email))
+		if normalizedEmail == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "current user does not have an email address"})
+			return
+		}
+
+		type row struct {
+			models.OrgInvite
+			OrgName        string `bun:"org_name"`
+			OrgDescription string `bun:"org_description"`
+			InvitedByEmail string `bun:"invited_by_email"`
+			InvitedByName  string `bun:"invited_by_username"`
+		}
+
+		var rows []row
+		if err := db.NewRaw(`
+			SELECT oi.*, o.name AS org_name, o.description AS org_description,
+			       u.email AS invited_by_email, u.username AS invited_by_username
+			FROM org_invites oi
+			JOIN orgs o ON o.id = oi.org_id
+			JOIN users u ON u.id = oi.invited_by_user_id
+			WHERE lower(oi.email) = ?
+			  AND oi.accepted_at IS NULL
+			  AND oi.revoked_at IS NULL
+			  AND oi.expires_at > now()
+			ORDER BY oi.created_at DESC
+		`, normalizedEmail).Scan(c.Request.Context(), &rows); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load pending organization invites"})
+			return
+		}
+
+		invites := make([]models.OrgInvite, 0, len(rows))
+		for _, row := range rows {
+			invite := row.OrgInvite
+			invite.OrgName = row.OrgName
+			invite.OrgDescription = row.OrgDescription
+			invite.InvitedByEmail = row.InvitedByEmail
+			invite.InvitedByName = row.InvitedByName
+			invites = append(invites, invite)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": invites})
+	}
+}
+
 func CreateInvite(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		orgID, err := uuid.Parse(c.Param("id"))
@@ -329,13 +390,14 @@ func RevokeInvite(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
-func AcceptInvite(db *bun.DB) gin.HandlerFunc {
+func DeclineInvite(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token := strings.TrimSpace(c.Param("token"))
-		if token == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invite token is required"})
+		inviteID, err := uuid.Parse(c.Param("inviteId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid invite ID"})
 			return
 		}
+
 		userID, _, ok := authz.RequireRequestUser(c, db)
 		if !ok {
 			return
@@ -352,7 +414,7 @@ func AcceptInvite(db *bun.DB) gin.HandlerFunc {
 
 		invite := &models.OrgInvite{}
 		if err := db.NewSelect().Model(invite).
-			Where("token = ?", token).
+			Where("id = ?", inviteID).
 			Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "organization invite not found"})
 			return
@@ -370,45 +432,139 @@ func AcceptInvite(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		now := time.Now()
-		acceptedBy := user.ID
-		if err := db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
-			member := &models.OrgMember{
-				OrgID:     invite.OrgID,
-				UserID:    user.ID,
-				Role:      invite.Role,
-				JoinedAt:  now,
-				CreatedAt: now,
-				UpdatedAt: now,
-			}
-			if _, err := tx.NewInsert().Model(member).
-				On("CONFLICT (org_id, user_id) DO NOTHING").
-				Exec(ctx); err != nil {
-				return err
-			}
-
-			if _, err := tx.NewUpdate().Model((*models.OrgInvite)(nil)).
-				Set("accepted_by_user_id = ?", acceptedBy).
-				Set("accepted_at = ?", now).
-				Set("updated_at = ?", now).
-				Where("id = ?", invite.ID).
-				Exec(ctx); err != nil {
-				return err
-			}
-
-			return nil
-		}); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to accept organization invite"})
+		if _, err := db.NewUpdate().Model((*models.OrgInvite)(nil)).
+			Set("revoked_at = now()").
+			Set("updated_at = now()").
+			Where("id = ?", inviteID).
+			Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to decline organization invite"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"result":   "accepted",
-			"org_id":   invite.OrgID,
-			"org_name": loadOrgName(c.Request.Context(), db, invite.OrgID),
-			"role":     invite.Role,
-		})
+		c.JSON(http.StatusOK, gin.H{"result": "declined"})
 	}
+}
+
+func AcceptInviteByID(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		inviteID, err := uuid.Parse(c.Param("inviteId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid invite ID"})
+			return
+		}
+
+		user, ok := loadCurrentInviteUser(c, db)
+		if !ok {
+			return
+		}
+
+		invite := &models.OrgInvite{}
+		if err := db.NewSelect().Model(invite).
+			Where("id = ?", inviteID).
+			Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "organization invite not found"})
+			return
+		}
+
+		completeInviteAcceptance(c, db, user, invite)
+	}
+}
+
+func AcceptInviteByToken(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := strings.TrimSpace(c.Param("token"))
+		if token == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invite token is required"})
+			return
+		}
+
+		user, ok := loadCurrentInviteUser(c, db)
+		if !ok {
+			return
+		}
+
+		invite := &models.OrgInvite{}
+		if err := db.NewSelect().Model(invite).
+			Where("token = ?", token).
+			Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "organization invite not found"})
+			return
+		}
+
+		completeInviteAcceptance(c, db, user, invite)
+	}
+}
+
+func loadCurrentInviteUser(c *gin.Context, db *bun.DB) (*models.Users, bool) {
+	userID, _, ok := authz.RequireRequestUser(c, db)
+	if !ok {
+		return nil, false
+	}
+
+	user := &models.Users{}
+	if err := db.NewSelect().Model(user).
+		Column("id", "email", "username").
+		Where("id = ?", userID).
+		Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unable to resolve current user"})
+		return nil, false
+	}
+
+	return user, true
+}
+
+func completeInviteAcceptance(c *gin.Context, db *bun.DB, user *models.Users, invite *models.OrgInvite) {
+	if invite.RevokedAt != nil || invite.AcceptedAt != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "organization invite is no longer active"})
+		return
+	}
+	if invite.ExpiresAt.Before(time.Now()) {
+		c.JSON(http.StatusGone, gin.H{"error": "organization invite has expired"})
+		return
+	}
+	if !strings.EqualFold(strings.TrimSpace(user.Email), strings.TrimSpace(invite.Email)) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "organization invite email does not match the current user"})
+		return
+	}
+
+	now := time.Now()
+	acceptedBy := user.ID
+	if err := db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
+		member := &models.OrgMember{
+			OrgID:     invite.OrgID,
+			UserID:    user.ID,
+			Role:      invite.Role,
+			JoinedAt:  now,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if _, err := tx.NewInsert().Model(member).
+			On("CONFLICT (org_id, user_id) DO NOTHING").
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		if _, err := tx.NewUpdate().Model((*models.OrgInvite)(nil)).
+			Set("accepted_by_user_id = ?", acceptedBy).
+			Set("accepted_at = ?", now).
+			Set("updated_at = ?", now).
+			Where("id = ?", invite.ID).
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to accept organization invite"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"result":   "accepted",
+		"org_id":   invite.OrgID,
+		"org_name": loadOrgName(c.Request.Context(), db, invite.OrgID),
+		"role":     invite.Role,
+	})
 }
 
 func loadOrgName(ctx context.Context, db *bun.DB, orgID uuid.UUID) string {

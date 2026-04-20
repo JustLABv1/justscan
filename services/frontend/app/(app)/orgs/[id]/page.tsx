@@ -1,4 +1,9 @@
 'use client';
+import { OrgAutomationTab } from '@/components/org-detail/automation-tab';
+import { OrgOverviewTab } from '@/components/org-detail/overview-tab';
+import { OrgScansTab } from '@/components/org-detail/scans-tab';
+import { OrgTeamTab } from '@/components/org-detail/team-tab';
+import { OrgScanItem, StatusBadge } from '@/components/org-detail/shared';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
@@ -38,10 +43,8 @@ import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import {
     ArrowLeft01Icon,
     Delete01Icon,
-    PencilEdit01Icon,
     PlusSignIcon,
 } from 'hugeicons-react';
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -58,70 +61,18 @@ const RULE_TYPE_LABELS: Record<string, string> = {
 
 const SEV_OPTIONS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 
-function RulePill({ rule }: { rule: PolicyRule }) {
-  const base = 'inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full border';
-  switch (rule.type) {
-    case 'max_cvss':
-      return <span className={`${base} bg-red-500/10 text-red-400 border-red-500/20`}>CVSS &lt; {rule.value}</span>;
-    case 'max_count':
-      return <span className={`${base} bg-orange-500/10 text-orange-400 border-orange-500/20`}>{rule.value} {rule.severity}</span>;
-    case 'max_total':
-      return <span className={`${base} bg-yellow-500/10 text-yellow-400 border-yellow-500/20`}>Total ≤ {rule.value}</span>;
-    case 'require_fix':
-      return <span className={`${base} bg-blue-500/10 text-blue-400 border-blue-500/20`}>Fix req. {rule.severity}</span>;
-    case 'blocked_cve':
-      return <span className={`${base} bg-red-500/10 text-red-400 border-red-500/20`}>Block {rule.cve_id}</span>;
-    default:
-      return <span className={`${base} bg-zinc-500/10 text-zinc-400 border-zinc-500/20`}>{rule.type}</span>;
-  }
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { color: string; bg: string; border: string }> = {
-    completed: { color: '#34d399', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.22)'  },
-    failed:    { color: '#f87171', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.22)'   },
-    running:   { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.22)'  },
-    pending:   { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)' },
-  };
-  const s = map[status] ?? map.pending;
-  return (
-    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full"
-      style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}` }}>
-      <span className={`w-1.5 h-1.5 rounded-full bg-current ${status === 'running' ? 'animate-pulse' : ''}`} />
-      {status}
-    </span>
-  );
-}
-
 function emptyRule(): PolicyRule {
   return { type: 'max_cvss', value: 7 };
 }
 
-function TrendChart({ points }: { points: TrendPoint[] }) {
-  if (points.length === 0) return (
-    <p className="text-xs text-zinc-500 py-4 text-center">No compliance history yet.</p>
-  );
+const ORG_TABS = [
+  { id: 'overview', label: 'Overview', description: 'Risk and compliance' },
+  { id: 'automation', label: 'Automation', description: 'Patterns and policies' },
+  { id: 'team', label: 'Team', description: 'Members and invites' },
+  { id: 'scans', label: 'Scans', description: 'Assigned assets' },
+] as const;
 
-  const maxVal = Math.max(...points.map(p => p.pass + p.fail), 1);
-  const H = 64;
-
-  return (
-    <div className="flex items-end gap-0.5 h-16 w-full overflow-hidden">
-      {points.map(p => {
-        const passH = Math.round((p.pass / maxVal) * H);
-        const failH = Math.round((p.fail / maxVal) * H);
-        return (
-          <div key={p.date} className="flex flex-col items-center gap-0 flex-1 min-w-0 group relative" title={`${p.date}: ${p.pass} pass, ${p.fail} fail`}>
-            <div className="w-full flex flex-col justify-end" style={{ height: H }}>
-              {failH > 0 && <div className="w-full bg-red-500/70 rounded-t-sm" style={{ height: failH }} />}
-              {passH > 0 && <div className="w-full bg-emerald-500/70" style={{ height: passH }} />}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+type OrgTabId = (typeof ORG_TABS)[number]['id'];
 
 export default function OrgDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -135,6 +86,7 @@ export default function OrgDetailPage() {
 
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [riskScore, setRiskScore] = useState<OrgRiskScore | null>(null);
+  const [activeTab, setActiveTab] = useState<OrgTabId>('overview');
   const [newPattern, setNewPattern] = useState('');
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [invites, setInvites] = useState<OrgInvite[]>([]);
@@ -145,7 +97,6 @@ export default function OrgDetailPage() {
   const [inviteError, setInviteError] = useState('');
   const inviteModal = useOverlayState();
 
-  type OrgScanItem = Scan & { compliance: { policy_id: string; policy_name: string; status: string }[] };
   const [orgScans, setOrgScans] = useState<OrgScanItem[]>([]);
 
   const [editingPolicy, setEditingPolicy] = useState<OrgPolicy | null>(null);
@@ -401,9 +352,17 @@ export default function OrgDetailPage() {
 
   if (!org) return null;
 
+  function handleTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    event.preventDefault();
+    const nextIndex = event.key === 'ArrowRight'
+      ? (index + 1) % ORG_TABS.length
+      : (index - 1 + ORG_TABS.length) % ORG_TABS.length;
+    setActiveTab(ORG_TABS[nextIndex].id);
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
       <div>
         <button
           onClick={() => router.back()}
@@ -416,363 +375,74 @@ export default function OrgDetailPage() {
         {org.description && <p className="text-sm text-zinc-500 mt-1">{org.description}</p>}
       </div>
 
-      {/* Risk Score */}
-      {riskScore && (() => {
-        const gradeColor = riskScore.grade === 'A' ? '#34d399' : riskScore.grade === 'B' ? '#60a5fa' : riskScore.grade === 'C' ? '#fbbf24' : riskScore.grade === 'D' ? '#fb923c' : '#f87171';
-        const pct = riskScore.compliance_pass + riskScore.compliance_fail > 0
-          ? Math.round(riskScore.compliance_pass_rate * 100)
-          : null;
-        return (
-          <div className="glass-panel relative rounded-2xl p-5">
-            <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-              style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.2),transparent)' }} />
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Risk Overview</h2>
-            <div className="flex items-center gap-6 flex-wrap">
-              {/* Grade */}
-              <div className="flex flex-col items-center justify-center w-20 h-20 rounded-2xl"
-                style={{ background: gradeColor + '18', border: `1px solid ${gradeColor}30` }}>
-                <span className="text-4xl font-black" style={{ color: gradeColor }}>{riskScore.grade}</span>
-                <span className="text-xs text-zinc-500 mt-0.5">grade</span>
-              </div>
-              {/* Severity counts */}
-              <div className="flex gap-4 flex-wrap">
-                {([['CRITICAL', riskScore.totals.critical, '#f87171'], ['HIGH', riskScore.totals.high, '#fb923c'], ['MEDIUM', riskScore.totals.medium, '#fbbf24'], ['LOW', riskScore.totals.low, '#60a5fa']] as [string, number, string][]).map(([label, val, color]) => (
-                  <div key={label} className="flex flex-col items-center">
-                    <span className="text-2xl font-bold" style={{ color }}>{val}</span>
-                    <span className="text-xs text-zinc-500 mt-0.5">{label}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Compliance */}
-              {pct !== null && (
-                <div className="ml-auto flex flex-col items-end">
-                  <span className="text-xs text-zinc-500 mb-1">Compliance</span>
-                  <div className="w-48 h-2 rounded-full overflow-hidden" style={{ background: 'var(--row-hover)' }}>
-                    <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="text-xs text-zinc-500 mt-1">{pct}% pass ({riskScore.compliance_pass}/{riskScore.compliance_pass + riskScore.compliance_fail})</span>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Compliance Trend */}
-      <div className="glass-panel relative rounded-2xl p-5 space-y-3">
-        <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-          style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.2),transparent)' }} />
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Compliance Trend</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Pass/fail evaluations over 30 days</p>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-zinc-500">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500/70 inline-block" />Pass</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500/70 inline-block" />Fail</span>
-          </div>
+      <div className="glass-panel rounded-2xl p-1.5" role="tablist" aria-label="Organization sections">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-1">
+          {ORG_TABS.map((tab, index) => {
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                id={`${tab.id}-tab`}
+                role="tab"
+                aria-controls={`${tab.id}-panel`}
+                aria-selected={active}
+                className="rounded-xl px-4 py-3 text-left transition-all duration-150"
+                onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(event) => handleTabKeyDown(event, index)}
+                type="button"
+                style={active
+                  ? {
+                      background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                      boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.2), 0 2px 8px rgba(124,58,237,0.08)',
+                    }
+                  : { background: 'transparent' }}
+              >
+                <p className={`text-sm font-semibold ${active ? 'text-violet-600 dark:text-violet-200' : 'text-zinc-700 dark:text-zinc-200'}`}>{tab.label}</p>
+                <p className="text-xs text-zinc-500 mt-1">{tab.description}</p>
+              </button>
+            );
+          })}
         </div>
-        <TrendChart points={trend} />
       </div>
 
-      {/* Auto-assign Patterns */}
-      <div className="glass-panel relative rounded-2xl p-5 space-y-3">
-        <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-          style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)' }} />
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Auto-assign Patterns</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Scans matching these patterns are automatically assigned to this org.
-            Use glob syntax: <code className="text-violet-500 dark:text-violet-400">nginx:*</code>, <code className="text-violet-500 dark:text-violet-400">docker.io/myapp:*</code>
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {(org.image_patterns ?? []).map((p, i) => (
-            <span key={i} className="inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-200"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-              {p}
-              <button onClick={() => removePattern(p)} className="text-zinc-400 hover:text-red-400 transition-colors ml-0.5">×</button>
-            </span>
-          ))}
-          {(org.image_patterns ?? []).length === 0 && (
-            <p className="text-xs text-zinc-500">No patterns configured.</p>
-          )}
-        </div>
-
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newPattern}
-            onChange={e => setNewPattern(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addPattern()}
-            placeholder="nginx:* or docker.io/myapp:*"
-            className={inputCls + ' font-mono'}
+      <div id={`${activeTab}-panel`} role="tabpanel" aria-labelledby={`${activeTab}-tab`}>
+        {activeTab === 'overview' && <OrgOverviewTab riskScore={riskScore} trend={trend} />}
+        {activeTab === 'automation' && (
+          <OrgAutomationTab
+            org={org}
+            inputClassName={inputCls}
+            newPattern={newPattern}
+            onPatternChange={setNewPattern}
+            onAddPattern={() => void addPattern()}
+            onRemovePattern={(pattern) => void removePattern(pattern)}
+            onCreatePolicy={openCreatePolicy}
+            onEditPolicy={openEditPolicy}
+            onDeletePolicy={(policyId) => void handleDeletePolicy(policyId)}
           />
-          <button
-            onClick={addPattern}
-            disabled={!newPattern.trim()}
-            className="btn-primary"
-          >
-            Add
-          </button>
-        </div>
-      </div>
-
-      {/* Members */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Members</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              {currentOrgRole ? `Your role: ${currentOrgRole}` : isSystemAdmin ? 'Platform admin access' : 'Organization members'}
-            </p>
-          </div>
-          {canManageMembers && (
-            <button onClick={openInviteModal} className="btn-primary inline-flex items-center gap-2">
-              <PlusSignIcon size={14} />
-              Invite Member
-            </button>
-          )}
-        </div>
-
-        <div className="glass-panel rounded-2xl overflow-hidden">
-          {membersLoading ? (
-            <div className="flex justify-center py-8">
-              <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
-            </div>
-          ) : members.length === 0 ? (
-            <div className="px-6 py-8 text-sm text-zinc-500 text-center">No members found.</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">User</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Joined</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {members.map((member, index) => (
-                  <tr key={member.user_id}
-                    style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="font-medium text-zinc-800 dark:text-zinc-200">{member.username || member.email || member.user_id}</p>
-                        {member.email && <p className="text-xs text-zinc-500 mt-0.5">{member.email}</p>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {canEditRoles && member.role !== 'owner' ? (
-                        <select
-                          className={inputCls + ' py-2 px-3 max-w-[140px] text-sm'}
-                          value={member.role}
-                          onChange={(event) => { void handleMemberRoleChange(member, event.target.value as Extract<OrgRole, 'admin' | 'member'>); }}
-                        >
-                          <option value="member">member</option>
-                          <option value="admin">admin</option>
-                        </select>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-violet-500/10 text-violet-400 border-violet-500/20">
-                          {member.role}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-zinc-500">{timeAgo(member.joined_at)}</td>
-                    <td className="px-4 py-3 text-right">
-                      {canManageMembers && member.role !== 'owner' && (
-                        <button
-                          onClick={() => { void handleRemoveMember(member); }}
-                          className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors"
-                          title="Remove member"
-                        >
-                          <Delete01Icon size={15} />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="glass-panel relative rounded-2xl p-5 space-y-3">
-          <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-            style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)' }} />
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Pending Invites</h3>
-              <p className="text-xs text-zinc-500 mt-0.5">Active invite links for this organization.</p>
-            </div>
-          </div>
-          {invites.length === 0 ? (
-            <p className="text-sm text-zinc-500">No active invites.</p>
-          ) : (
-            <div className="space-y-2">
-              {invites.map((invite) => (
-                <div key={invite.id} className="rounded-xl px-4 py-3 flex items-center justify-between gap-3"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">{invite.email}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">{invite.role} · expires {timeAgo(invite.expires_at)}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={() => { void copyInviteLink(invite); }} className="btn-secondary text-xs px-3 py-1.5" type="button">
-                      Copy link
-                    </button>
-                    {canManageMembers && (
-                      <button
-                        onClick={() => { void handleRevokeInvite(invite); }}
-                        className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors"
-                        title="Revoke invite"
-                        type="button"
-                      >
-                        <Delete01Icon size={15} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Policies */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Policies</h2>
-          <button
-            onClick={openCreatePolicy}
-            className="btn-primary inline-flex items-center gap-2"
-          >
-            <PlusSignIcon size={14} />
-            Add Policy
-          </button>
-        </div>
-
-        {(org.policies ?? []).length === 0 ? (
-          <div className="glass-panel rounded-2xl p-6 text-center text-sm text-zinc-500">
-            No policies yet. Add one to start evaluating compliance.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {(org.policies ?? []).map((policy) => (
-              <div key={policy.id} className="glass-panel rounded-2xl p-4 flex items-start justify-between gap-4">
-                <div className="space-y-2 min-w-0">
-                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{policy.name}</p>
-                  {policy.rules.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {policy.rules.map((r, i) => (
-                        <RulePill key={i} rule={r} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => openEditPolicy(policy)}
-                    className="text-zinc-400 dark:text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1"
-                    title="Edit policy"
-                  >
-                    <PencilEdit01Icon size={15} />
-                  </button>
-                  <button
-                    onClick={() => handleDeletePolicy(policy.id)}
-                    className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1"
-                    title="Delete policy"
-                  >
-                    <Delete01Icon size={15} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         )}
-      </div>
-
-      {/* Assigned Scans */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Assigned Scans</h2>
-          <button
-            onClick={openAssignModal}
-            className="btn-secondary inline-flex items-center gap-2"
-          >
-            <PlusSignIcon size={14} />
-            Assign Scan
-          </button>
-        </div>
-
-        {orgScans.length === 0 ? (
-          <div className="glass-panel rounded-2xl p-6 text-center text-sm text-zinc-500">
-            No scans assigned. Assign a scan to evaluate it against this organization&apos;s policies.
-          </div>
-        ) : (
-          <div className="glass-panel rounded-2xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Compliance</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {orgScans.map((scan, i) => (
-                  <tr key={scan.id}
-                    style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/scans/${scan.id}`}
-                        className="font-mono text-sm text-zinc-700 dark:text-zinc-300 hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
-                      >
-                        {scan.image_name}:{scan.image_tag}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={scan.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        {(scan.compliance ?? []).map((cr) => (
-                          <span
-                            key={cr.policy_id}
-                            className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${
-                              cr.status === 'pass'
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : 'bg-red-500/10 text-red-400 border-red-500/20'
-                            }`}
-                          >
-                            {cr.status === 'pass' ? '✓' : '✗'} {cr.policy_name}
-                          </span>
-                        ))}
-                        {(scan.compliance ?? []).length === 0 && (
-                          <span className="text-xs text-zinc-500">Not evaluated</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleRemoveScan(scan.id)}
-                        className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors"
-                        title="Remove scan from org"
-                      >
-                        <Delete01Icon size={15} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {activeTab === 'team' && (
+          <OrgTeamTab
+            canEditRoles={canEditRoles}
+            canManageMembers={canManageMembers}
+            currentOrgRole={currentOrgRole}
+            inputClassName={inputCls}
+            invites={invites}
+            isSystemAdmin={isSystemAdmin}
+            members={members}
+            membersLoading={membersLoading}
+            onCopyInviteLink={(invite) => void copyInviteLink(invite)}
+            onMemberRoleChange={(member, nextRole) => void handleMemberRoleChange(member, nextRole)}
+            onOpenInviteModal={openInviteModal}
+            onRemoveMember={(member) => void handleRemoveMember(member)}
+            onRevokeInvite={(invite) => void handleRevokeInvite(invite)}
+          />
+        )}
+        {activeTab === 'scans' && (
+          <OrgScansTab
+            onOpenAssignModal={() => void openAssignModal()}
+            onRemoveScan={(scanId) => void handleRemoveScan(scanId)}
+            orgScans={orgScans}
+          />
         )}
       </div>
 

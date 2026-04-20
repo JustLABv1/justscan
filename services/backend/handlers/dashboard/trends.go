@@ -21,7 +21,7 @@ type scanTrendRow struct {
 func GetTrends(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
 		if !ok {
 			return
 		}
@@ -38,9 +38,7 @@ func GetTrends(db *bun.DB) gin.HandlerFunc {
 			Where("created_at >= ?", cutoff).
 			GroupExpr("date").
 			OrderExpr("date ASC")
-		if !isAdmin {
-			query = query.Where("user_id = ?", userID)
-		}
+		query = authz.ApplyOwnershipVisibility(query, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
 		query.Scan(ctx, &rows) //nolint:errcheck
 
 		if rows == nil {

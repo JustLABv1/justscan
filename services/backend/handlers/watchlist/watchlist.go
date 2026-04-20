@@ -78,6 +78,11 @@ func CreateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			}
 			ownerOrgID = &parsedOrgID
 		}
+		if body.RegistryID != nil {
+			if _, _, _, ok := authz.LoadAuthorizedRegistry(c, db, *body.RegistryID); !ok {
+				return
+			}
+		}
 		item := &models.WatchlistItem{
 			ImageName:   body.ImageName,
 			ImageTag:    body.ImageTag,
@@ -154,6 +159,9 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			item.Enabled = *body.Enabled
 		}
 		if body.RegistryID != nil {
+			if _, _, _, ok := authz.LoadAuthorizedRegistry(c, db, *body.RegistryID); !ok {
+				return
+			}
 			item.RegistryID = body.RegistryID
 		}
 		if err := scheduler.ValidateSchedule(item.Schedule, item.Timezone); err != nil {
@@ -298,4 +306,134 @@ func canWriteWatchlistItem(ctx context.Context, db *bun.DB, item *models.Watchli
 		return false
 	}
 	return authz.HasOrgRoleAtLeast(roles, *item.OwnerOrgID, models.OrgRoleAdmin)
+}
+
+type watchlistShare struct {
+	OrgID          uuid.UUID `bun:"org_id" json:"org_id"`
+	OrgName        string    `bun:"org_name" json:"org_name"`
+	OrgDescription string    `bun:"org_description" json:"org_description"`
+	IsOwner        bool      `bun:"-" json:"is_owner"`
+}
+
+func ListWatchlistShares(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, _, _, ok := loadWatchlistForShareManagement(c, db)
+		if !ok {
+			return
+		}
+
+		var shares []watchlistShare
+		if err := db.NewSelect().
+			TableExpr("org_watchlist_items AS org_watchlist_item").
+			ColumnExpr("o.id AS org_id").
+			ColumnExpr("o.name AS org_name").
+			ColumnExpr("o.description AS org_description").
+			Join("JOIN orgs AS o ON o.id = org_watchlist_item.org_id").
+			Where("org_watchlist_item.watchlist_item_id = ?", item.ID).
+			OrderExpr("o.name ASC").
+			Scan(c.Request.Context(), &shares); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list watchlist shares"})
+			return
+		}
+
+		for index := range shares {
+			shares[index].IsOwner = item.OwnerOrgID != nil && shares[index].OrgID == *item.OwnerOrgID
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": shares})
+	}
+}
+
+func ShareWatchlistItem(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, _, isAdmin, ok := loadWatchlistForShareManagement(c, db)
+		if !ok {
+			return
+		}
+
+		var body struct {
+			OrgID string `json:"org_id" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		targetOrgID, err := uuid.Parse(body.OrgID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+			return
+		}
+		if item.OwnerOrgID != nil && *item.OwnerOrgID == targetOrgID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "resource is already owned by that organization"})
+			return
+		}
+		if !isAdmin {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleAdmin); !ok {
+				return
+			}
+		}
+
+		if _, err := db.NewInsert().Model(&models.OrgWatchlistItem{OrgID: targetOrgID, WatchlistItemID: item.ID}).On("CONFLICT DO NOTHING").Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to share watchlist item"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{"result": "shared"})
+	}
+}
+
+func UnshareWatchlistItem(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, _, _, ok := loadWatchlistForShareManagement(c, db)
+		if !ok {
+			return
+		}
+
+		targetOrgID, err := uuid.Parse(c.Param("orgId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+			return
+		}
+		if item.OwnerOrgID != nil && *item.OwnerOrgID == targetOrgID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot remove the owner organization"})
+			return
+		}
+
+		if _, err := db.NewDelete().Model((*models.OrgWatchlistItem)(nil)).
+			Where("org_id = ?", targetOrgID).
+			Where("watchlist_item_id = ?", item.ID).
+			Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke watchlist share"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"result": "unshared"})
+	}
+}
+
+func loadWatchlistForShareManagement(c *gin.Context, db *bun.DB) (*models.WatchlistItem, uuid.UUID, bool, bool) {
+	itemID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid watchlist item ID"})
+		return nil, uuid.Nil, false, false
+	}
+
+	userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+	if !ok {
+		return nil, uuid.Nil, false, false
+	}
+
+	item := &models.WatchlistItem{}
+	if err := db.NewSelect().Model(item).Where("id = ?", itemID).Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "watchlist item not found"})
+		return nil, uuid.Nil, false, false
+	}
+
+	if !canWriteWatchlistItem(c.Request.Context(), db, item, userID, isAdmin) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return nil, uuid.Nil, false, false
+	}
+
+	return item, userID, isAdmin, true
 }

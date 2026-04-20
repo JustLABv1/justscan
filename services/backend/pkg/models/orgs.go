@@ -82,6 +82,8 @@ type OrgInvite struct {
 	ExpiresAt        time.Time  `bun:"expires_at,type:timestamptz,notnull" json:"expires_at"`
 	CreatedAt        time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	UpdatedAt        time.Time  `bun:"updated_at,type:timestamptz,default:now()" json:"updated_at"`
+	OrgName          string     `bun:"-" json:"org_name,omitempty"`
+	OrgDescription   string     `bun:"-" json:"org_description,omitempty"`
 	InvitedByEmail   string     `bun:"-" json:"invited_by_email,omitempty"`
 	InvitedByName    string     `bun:"-" json:"invited_by_username,omitempty"`
 }
@@ -168,6 +170,13 @@ type OrgSuppression struct {
 
 	OrgID         uuid.UUID `bun:"org_id,type:uuid,notnull" json:"org_id"`
 	SuppressionID uuid.UUID `bun:"suppression_id,type:uuid,notnull" json:"suppression_id"`
+}
+
+type OrgStatusPage struct {
+	bun.BaseModel `bun:"table:org_status_pages"`
+
+	OrgID        uuid.UUID `bun:"org_id,type:uuid,notnull" json:"org_id"`
+	StatusPageID uuid.UUID `bun:"status_page_id,type:uuid,notnull" json:"status_page_id"`
 }
 
 type Violation struct {

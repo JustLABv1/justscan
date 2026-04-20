@@ -15,6 +15,9 @@ func Registries(router *gin.RouterGroup, db *bun.DB) {
 		r.POST("/", registries.CreateRegistry(db))
 		r.PUT("/:id", registries.UpdateRegistry(db))
 		r.DELETE("/:id", registries.DeleteRegistry(db))
+		r.GET("/:id/shares", registries.ListRegistryShares(db))
+		r.POST("/:id/shares", registries.ShareRegistry(db))
+		r.DELETE("/:id/shares/:orgId", registries.UnshareRegistry(db))
 		r.POST("/:id/test", registries.TestRegistry(db))
 	}
 }

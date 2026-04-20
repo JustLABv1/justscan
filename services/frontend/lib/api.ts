@@ -1,6 +1,14 @@
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 const TOKEN_STORAGE_KEY = 'justscan_token';
 const USER_STORAGE_KEY = 'justscan_user';
+const WORK_SCOPE_STORAGE_KEY = 'justscan_work_scope';
+const ORG_MEMBERSHIP_EVENT = 'justscan-org-membership-changed';
+
+export type OwnerType = 'user' | 'org' | 'system';
+
+export type WorkScope =
+  | { kind: 'personal' }
+  | { kind: 'org'; orgId: string; orgName?: string };
 
 function parseTokenPayload(token: string): Record<string, unknown> | null {
   try {
@@ -94,6 +102,36 @@ export const clearUser = () => {
   clearClientCookie(USER_STORAGE_KEY);
 };
 
+export const getWorkScope = (): WorkScope => {
+  if (typeof window === 'undefined') return { kind: 'personal' };
+  const raw = localStorage.getItem(WORK_SCOPE_STORAGE_KEY);
+  if (!raw) return { kind: 'personal' };
+  try {
+    const parsed = JSON.parse(raw) as WorkScope;
+    if (parsed && parsed.kind === 'org' && parsed.orgId) return parsed;
+    return { kind: 'personal' };
+  } catch {
+    return { kind: 'personal' };
+  }
+};
+
+export const setWorkScope = (scope: WorkScope) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(WORK_SCOPE_STORAGE_KEY, JSON.stringify(scope));
+  window.dispatchEvent(new CustomEvent('justscan-work-scope-changed', { detail: scope }));
+};
+
+export const clearWorkScope = () => {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(WORK_SCOPE_STORAGE_KEY);
+  window.dispatchEvent(new CustomEvent('justscan-work-scope-changed', { detail: { kind: 'personal' } }));
+};
+
+function notifyOrgMembershipChanged() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(ORG_MEMBERSHIP_EVENT));
+}
+
 function authHeaders(): HeadersInit {
   const t = getToken();
   return {
@@ -165,11 +203,11 @@ export const listScanImages = (page = 1, limit = 30, image?: string, status?: st
 export const getScan = (id: string) =>
   req<Scan>('GET', `/api/v1/scans/${id}`);
 
-export const createScan = (imageName: string, imageTag: string, registryId?: string, tagIds?: string[], platform?: string) =>
-  req<Scan>('POST', '/api/v1/scans/', { image: imageName, tag: imageTag, registry_id: registryId, tag_ids: tagIds, platform });
+export const createScan = (imageName: string, imageTag: string, registryId?: string, tagIds?: string[], platform?: string, orgId?: string) =>
+  req<Scan>('POST', '/api/v1/scans/', { image: imageName, tag: imageTag, registry_id: registryId, tag_ids: tagIds, platform, org_id: orgId });
 
-export const createScans = (images: string[], registryId?: string, tagIds?: string[], platform?: string) =>
-  req<{ scans: Scan[] }>('POST', '/api/v1/scans/batch', { images, registry_id: registryId, tag_ids: tagIds, platform });
+export const createScans = (images: string[], registryId?: string, tagIds?: string[], platform?: string, orgId?: string) =>
+  req<{ scans: Scan[] }>('POST', '/api/v1/scans/batch', { images, registry_id: registryId, tag_ids: tagIds, platform, org_id: orgId });
 
 export const deleteScan = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/scans/${id}`);
@@ -201,12 +239,18 @@ export const getVulnerabilityContextAnalysis = (scanId: string, vulnerabilityId:
   req<VulnerabilityContextAnalysis>('GET', `/api/v1/scans/${scanId}/vulnerabilities/${vulnerabilityId}/analysis`);
 export const listTags = () =>
   req<{ data: Tag[] }>('GET', '/api/v1/tags/').then((r) => r.data ?? []);
-export const createTag = (name: string, color: string) =>
-  req<Tag>('POST', '/api/v1/tags/', { name, color });
+export const createTag = (name: string, color: string, orgId?: string) =>
+  req<Tag>('POST', '/api/v1/tags/', { name, color, org_id: orgId });
 export const updateTag = (id: string, name: string, color: string) =>
   req<Tag>('PUT', `/api/v1/tags/${id}`, { name, color });
 export const deleteTag = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/tags/${id}`);
+export const listTagShares = (id: string) =>
+  req<{ data: ResourceShare[] }>('GET', `/api/v1/tags/${id}/shares`).then((r) => r.data ?? []);
+export const shareTag = (id: string, orgId: string) =>
+  req<{ result: string }>('POST', `/api/v1/tags/${id}/shares`, { org_id: orgId });
+export const unshareTag = (id: string, orgId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/tags/${id}/shares/${orgId}`);
 export const addTagToScan = (scanId: string, tagId: string) =>
   req<{ result: string }>('POST', `/api/v1/scans/${scanId}/tags/${tagId}`);
 export const removeTagFromScan = (scanId: string, tagId: string) =>
@@ -228,17 +272,23 @@ export const listRegistriesWithCapabilities = () =>
     data: r.data ?? [],
     capabilities: r.capabilities ?? getDefaultScannerCapabilities(),
   }));
-export const createRegistry = (data: Partial<Registry>) =>
+export const createRegistry = (data: Partial<Registry> & { org_id?: string }) =>
   req<Registry>('POST', '/api/v1/registries/', data);
 export const updateRegistry = (id: string, data: Partial<Registry>) =>
   req<Registry>('PUT', `/api/v1/registries/${id}`, data);
 export const deleteRegistry = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/registries/${id}`);
+export const listRegistryShares = (id: string) =>
+  req<{ data: ResourceShare[] }>('GET', `/api/v1/registries/${id}/shares`).then((r) => r.data ?? []);
+export const shareRegistry = (id: string, orgId: string) =>
+  req<{ result: string }>('POST', `/api/v1/registries/${id}/shares`, { org_id: orgId });
+export const unshareRegistry = (id: string, orgId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/registries/${id}/shares/${orgId}`);
 
 // Watchlist
 export const listWatchlist = () =>
   req<{ data: WatchlistItem[] }>('GET', '/api/v1/watchlist/').then((r) => r.data ?? []);
-export const createWatchlistItem = (data: Partial<WatchlistItem>) =>
+export const createWatchlistItem = (data: Partial<WatchlistItem> & { org_id?: string }) =>
   req<WatchlistItem>('POST', '/api/v1/watchlist/', data);
 export const updateWatchlistItem = (id: string, data: Partial<WatchlistItem>) =>
   req<WatchlistItem>('PUT', `/api/v1/watchlist/${id}`, data);
@@ -246,18 +296,30 @@ export const deleteWatchlistItem = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/watchlist/${id}`);
 export const triggerWatchlistScan = (id: string) =>
   req<{ result: string }>('POST', `/api/v1/watchlist/${id}/scan`);
+export const listWatchlistShares = (id: string) =>
+  req<{ data: ResourceShare[] }>('GET', `/api/v1/watchlist/${id}/shares`).then((r) => r.data ?? []);
+export const shareWatchlistItem = (id: string, orgId: string) =>
+  req<{ result: string }>('POST', `/api/v1/watchlist/${id}/shares`, { org_id: orgId });
+export const unshareWatchlistItem = (id: string, orgId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/watchlist/${id}/shares/${orgId}`);
 
 // Orgs
 export const listOrgs = () =>
   req<{ data: Org[] }>('GET', '/api/v1/orgs/').then((r) => r.data ?? []);
 export const createOrg = (name: string, description: string) =>
-  req<Org>('POST', '/api/v1/orgs/', { name, description });
+  req<Org>('POST', '/api/v1/orgs/', { name, description }).then((org) => {
+    notifyOrgMembershipChanged();
+    return org;
+  });
 export const getOrg = (id: string) =>
   req<Org>('GET', `/api/v1/orgs/${id}`);
 export const updateOrg = (id: string, data: Partial<Org>) =>
   req<Org>('PUT', `/api/v1/orgs/${id}`, data);
 export const deleteOrg = (id: string) =>
-  req<{ result: string }>('DELETE', `/api/v1/orgs/${id}`);
+  req<{ result: string }>('DELETE', `/api/v1/orgs/${id}`).then((result) => {
+    notifyOrgMembershipChanged();
+    return result;
+  });
 
 export const listOrgMembers = (orgId: string) =>
   req<{ data: OrgMember[] }>('GET', `/api/v1/orgs/${orgId}/members`).then((r) => r.data ?? []);
@@ -267,12 +329,27 @@ export const removeOrgMember = (orgId: string, userId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/orgs/${orgId}/members/${userId}`);
 export const listOrgInvites = (orgId: string) =>
   req<{ data: OrgInvite[] }>('GET', `/api/v1/orgs/${orgId}/invites`).then((r) => r.data ?? []);
+export const listMyOrgInvites = () =>
+  req<{ data: OrgInvite[] }>('GET', '/api/v1/orgs/invites').then((r) => r.data ?? []);
 export const createOrgInvite = (orgId: string, email: string, role: Extract<OrgRole, 'admin' | 'member'>) =>
   req<OrgInvite>('POST', `/api/v1/orgs/${orgId}/invites`, { email, role });
 export const revokeOrgInvite = (orgId: string, inviteId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/orgs/${orgId}/invites/${inviteId}`);
-export const acceptOrgInvite = (token: string) =>
-  req<{ result: string; org_id: string; org_name?: string; role: OrgRole }>('POST', `/api/v1/orgs/invites/${token}/accept`);
+export const declineOrgInvite = (inviteId: string) =>
+  req<{ result: string }>('POST', `/api/v1/orgs/invites/${inviteId}/decline`).then((result) => {
+    notifyOrgMembershipChanged();
+    return result;
+  });
+export const acceptOrgInvite = (inviteId: string) =>
+  req<{ result: string; org_id: string; org_name?: string; role: OrgRole }>('POST', `/api/v1/orgs/invites/${inviteId}/accept`).then((result) => {
+    notifyOrgMembershipChanged();
+    return result;
+  });
+export const acceptOrgInviteByToken = (token: string) =>
+  req<{ result: string; org_id: string; org_name?: string; role: OrgRole }>('POST', `/api/v1/orgs/invites/by-token/${token}/accept`).then((result) => {
+    notifyOrgMembershipChanged();
+    return result;
+  });
 
 export const createPolicy = (orgId: string, name: string, rules: PolicyRule[]) =>
   req<OrgPolicy>('POST', `/api/v1/orgs/${orgId}/policies`, { name, rules });
@@ -452,10 +529,22 @@ export const deleteAdminToken = (id: string) =>
 // Suppressions
 export const listSuppressions = (digest: string) =>
   req<Suppression[]>('GET', `/api/v1/images/${digest}/suppressions`);
-export const upsertSuppression = (digest: string, data: Partial<Suppression>) =>
+export const upsertSuppression = (digest: string, data: Partial<Suppression> & { org_id?: string }) =>
   req<Suppression>('POST', `/api/v1/images/${digest}/suppressions`, data);
-export const deleteSuppression = (digest: string, vulnId: string) =>
-  req<{ result: string }>('DELETE', `/api/v1/images/${digest}/suppressions/${encodeURIComponent(vulnId)}`);
+export const deleteSuppression = (digest: string, vulnId: string, orgId?: string) => {
+  const params = new URLSearchParams();
+  if (orgId) params.set('org_id', orgId);
+  const suffix = params.toString() ? `?${params}` : '';
+  return req<{ result: string }>('DELETE', `/api/v1/images/${digest}/suppressions/${encodeURIComponent(vulnId)}${suffix}`);
+};
+export const deleteSuppressionById = (id: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/suppressions/${id}`);
+export const listSuppressionShares = (id: string) =>
+  req<{ data: ResourceShare[] }>('GET', `/api/v1/suppressions/${id}/shares`).then((r) => r.data ?? []);
+export const shareSuppression = (id: string, orgId: string) =>
+  req<{ result: string }>('POST', `/api/v1/suppressions/${id}/shares`, { org_id: orgId });
+export const unshareSuppression = (id: string, orgId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/suppressions/${id}/shares/${orgId}`);
 
 // Scans - bulk & rescan
 export const reScan = (id: string) =>
@@ -568,6 +657,7 @@ export const createHelmScans = (
   chartName?: string,
   chartVersion?: string,
   registryId?: string,
+  orgId?: string,
 ) =>
   req<{ run: HelmScanRun; scans: Scan[] }>('POST', '/api/v1/helm/scan', {
     chart_url: chartUrl,
@@ -577,6 +667,7 @@ export const createHelmScans = (
     tag_ids: tagIds,
     chart_name: chartName,
     chart_version: chartVersion,
+    org_id: orgId,
   });
 
 export const listHelmScanRuns = (page = 1, limit = 20, chartUrl?: string) => {
@@ -644,6 +735,12 @@ export const createShare = (scanId: string, visibility: 'public' | 'authenticate
 
 export const deleteShare = (scanId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/scans/${scanId}/share`);
+export const listScanOrgGrants = (scanId: string) =>
+  req<{ data: ResourceShare[] }>('GET', `/api/v1/scans/${scanId}/org-grants`).then((r) => r.data ?? []);
+export const grantScanOrgAccess = (scanId: string, orgId: string) =>
+  req<{ result: string }>('POST', `/api/v1/scans/${scanId}/org-grants`, { org_id: orgId });
+export const revokeScanOrgAccess = (scanId: string, orgId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/scans/${scanId}/org-grants/${orgId}`);
 
 // Status pages
 export const listStatusPages = () =>
@@ -660,6 +757,12 @@ export const updateStatusPage = (id: string, data: StatusPagePayload) =>
 
 export const deleteStatusPage = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/status-pages/${id}`);
+export const listStatusPageShares = (id: string) =>
+  req<{ data: ResourceShare[] }>('GET', `/api/v1/status-pages/${id}/shares`).then((r) => r.data ?? []);
+export const shareStatusPage = (id: string, orgId: string) =>
+  req<{ result: string }>('POST', `/api/v1/status-pages/${id}/shares`, { org_id: orgId });
+export const unshareStatusPage = (id: string, orgId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/status-pages/${id}/shares/${orgId}`);
 
 export const getStatusPageBySlug = (slug: string) =>
   sharedReq<StatusPageResponse>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}`);
@@ -825,6 +928,13 @@ export interface Org {
   policies?: OrgPolicy[];
 }
 
+export interface ResourceShare {
+  org_id: string;
+  org_name: string;
+  org_description?: string;
+  is_owner: boolean;
+}
+
 export interface OrgMember {
   org_id: string;
   user_id: string;
@@ -838,10 +948,14 @@ export interface OrgMember {
 export interface OrgInvite {
   id: string;
   org_id: string;
+  org_name?: string;
+  org_description?: string;
   email: string;
   role: Extract<OrgRole, 'admin' | 'member'>;
   token: string;
   invited_by_user_id: string;
+  invited_by_email?: string;
+  invited_by_username?: string;
   accepted_by_user_id?: string | null;
   accepted_at?: string | null;
   revoked_at?: string | null;
@@ -943,6 +1057,9 @@ export interface Scan {
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
+  owner_type?: OwnerType;
+  owner_user_id?: string | null;
+  owner_org_id?: string | null;
   registry_id?: string;
   tags?: Tag[];
   architecture?: string;
@@ -1012,6 +1129,9 @@ export interface Tag {
   name: string;
   color: string;
   created_at: string;
+  owner_type?: OwnerType;
+  owner_user_id?: string | null;
+  owner_org_id?: string | null;
 }
 
 export interface Registry {
@@ -1025,6 +1145,9 @@ export interface Registry {
   username: string;
   password?: string;
   created_at: string;
+  owner_type?: OwnerType;
+  owner_user_id?: string | null;
+  owner_org_id?: string | null;
 }
 
 export type ScanProvider = 'trivy' | 'artifactory_xray';
@@ -1088,6 +1211,9 @@ export interface WatchlistItem {
   last_scan_id?: string;
   last_scanned_at?: string;
   created_at: string;
+  owner_type?: OwnerType;
+  owner_user_id?: string | null;
+  owner_org_id?: string | null;
 }
 
 export interface Suppression {
@@ -1097,6 +1223,9 @@ export interface Suppression {
   status: 'accepted' | 'wont_fix' | 'false_positive' | 'xray_ignore';
   justification: string;
   user_id: string;
+  owner_type?: OwnerType;
+  owner_user_id?: string | null;
+  owner_org_id?: string | null;
   expires_at: string | null;
   created_at: string;
   updated_at: string;
@@ -1367,6 +1496,9 @@ export interface ImageSummary {
   latest_status: string;
   latest_external_status?: string;
   latest_scan_at: string;
+  owner_type?: OwnerType;
+  owner_user_id?: string | null;
+  owner_org_id?: string | null;
   critical_count: number;
   high_count: number;
   medium_count: number;
@@ -1416,7 +1548,9 @@ export interface StatusPage {
   include_all_tags: boolean;
   image_patterns?: string[];
   stale_after_hours: number;
-  owner_user_id: string;
+  owner_type?: OwnerType;
+  owner_user_id?: string | null;
+  owner_org_id?: string | null;
   created_at: string;
   updated_at: string;
   targets?: StatusPageTarget[];
@@ -1486,6 +1620,7 @@ export interface StatusPagePayload {
   slug?: string;
   description?: string;
   visibility: 'private' | 'public' | 'authenticated';
+  org_id?: string;
   include_all_tags: boolean;
   image_patterns?: string[];
   stale_after_hours: number;

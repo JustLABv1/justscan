@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	authfuncs "justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -47,9 +47,8 @@ func Search(db *bun.DB) gin.HandlerFunc {
 		}
 		pattern := "%" + q + "%"
 
-		userID, isAdmin, err := authfuncs.ResolveUserAccess(c.GetHeader("Authorization"), db)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
+		if !ok {
 			return
 		}
 
@@ -64,9 +63,7 @@ func Search(db *bun.DB) gin.HandlerFunc {
 			OrderExpr("CASE WHEN LOWER(image_name) = LOWER(?) THEN 0 WHEN image_name ILIKE ? THEN 1 ELSE 2 END, COUNT(*) DESC", q, q+"%").
 			Limit(6)
 
-		if !isAdmin {
-			imgQ = imgQ.Where("user_id = ?", userID)
-		}
+		imgQ = authz.ApplyOwnershipVisibility(imgQ, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
 		imgQ.Scan(ctx, &images) //nolint:errcheck
 		if images == nil {
 			images = []imageResult{}
@@ -86,9 +83,7 @@ func Search(db *bun.DB) gin.HandlerFunc {
 			OrderExpr("CASE WHEN LOWER(v.vuln_id) = LOWER(?) THEN 0 WHEN v.vuln_id ILIKE ? THEN 1 WHEN LOWER(v.pkg_name) = LOWER(?) THEN 2 ELSE 3 END, COUNT(DISTINCT v.scan_id) DESC, v.severity ASC", q, q+"%", q).
 			Limit(6)
 
-		if !isAdmin {
-			vulnQ = vulnQ.Where("s.user_id = ?", userID)
-		}
+		vulnQ = authz.ApplyOwnershipVisibility(vulnQ, "s", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
 		vulnQ.Scan(ctx, &vulns) //nolint:errcheck
 		if vulns == nil {
 			vulns = []vulnResult{}
@@ -101,9 +96,7 @@ func Search(db *bun.DB) gin.HandlerFunc {
 			Where("image_name ILIKE ? OR image_tag ILIKE ?", pattern, pattern).
 			OrderExpr("CASE WHEN LOWER(image_name) = LOWER(?) THEN 0 WHEN image_name ILIKE ? THEN 1 ELSE 2 END, created_at DESC", q, q+"%").
 			Limit(6)
-		if !isAdmin {
-			scanQ = scanQ.Where("user_id = ?", userID)
-		}
+		scanQ = authz.ApplyOwnershipVisibility(scanQ, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
 		scanQ.Scan(ctx, &scans) //nolint:errcheck
 		if scans == nil {
 			scans = []scanResult{}

@@ -48,7 +48,7 @@ type vulnTrendAccumulator struct {
 func GetVulnTrends(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
 		if !ok {
 			return
 		}
@@ -70,9 +70,7 @@ func GetVulnTrends(db *bun.DB) gin.HandlerFunc {
 			Where("completed_at IS NOT NULL").
 			Where("completed_at >= ?", cutoff).
 			OrderExpr("completed_at ASC")
-		if !isAdmin {
-			query = query.Where("user_id = ?", userID)
-		}
+		query = authz.ApplyOwnershipVisibility(query, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
 		query.Scan(ctx, &samples) //nolint:errcheck
 
 		rows := aggregateVulnTrendRows(samples)

@@ -6,25 +6,29 @@ import (
 	"strings"
 	"time"
 
-	authfuncs "justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
 
 // ImageSummary holds the aggregated view of all scans for a single image name.
 type ImageSummary struct {
-	ImageName            string    `json:"image_name"`
-	ScanCount            int       `json:"scan_count"`
-	LatestScanID         string    `json:"latest_scan_id"`
-	LatestTag            string    `json:"latest_tag"`
-	LatestStatus         string    `json:"latest_status"`
-	LatestExternalStatus string    `json:"latest_external_status,omitempty"`
-	LatestScanAt         time.Time `json:"latest_scan_at"`
-	CriticalCount        int       `json:"critical_count"`
-	HighCount            int       `json:"high_count"`
-	MediumCount          int       `json:"medium_count"`
-	LowCount             int       `json:"low_count"`
+	ImageName            string     `json:"image_name"`
+	ScanCount            int        `json:"scan_count"`
+	LatestScanID         string     `json:"latest_scan_id"`
+	LatestTag            string     `json:"latest_tag"`
+	LatestStatus         string     `json:"latest_status"`
+	LatestExternalStatus string     `json:"latest_external_status,omitempty"`
+	LatestScanAt         time.Time  `json:"latest_scan_at"`
+	OwnerType            string     `json:"owner_type,omitempty"`
+	OwnerUserID          *uuid.UUID `json:"owner_user_id,omitempty"`
+	OwnerOrgID           *uuid.UUID `json:"owner_org_id,omitempty"`
+	CriticalCount        int        `json:"critical_count"`
+	HighCount            int        `json:"high_count"`
+	MediumCount          int        `json:"medium_count"`
+	LowCount             int        `json:"low_count"`
 }
 
 func latestImageStatusWhereClause(raw string) (string, []interface{}) {
@@ -51,9 +55,8 @@ func latestImageStatusWhereClause(raw string) (string, []interface{}) {
 // ListScanImages returns one summary row per distinct image name, ordered by most-recent scan.
 func ListScanImages(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, isAdmin, err := authfuncs.ResolveUserAccess(c.GetHeader("Authorization"), db)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
+		if !ok {
 			return
 		}
 
@@ -70,14 +73,7 @@ func ListScanImages(db *bun.DB) gin.HandlerFunc {
 		imageFilter := c.Query("image")
 		statusFilter := c.Query("status")
 		// Build WHERE clause fragments based on role and filter
-		var userWhere string
-		var userArgs []interface{}
-		if !isAdmin {
-			userWhere = "user_id = ?"
-			userArgs = []interface{}{userID}
-		} else {
-			userWhere = "1=1"
-		}
+		userWhere, userArgs := scanOwnershipWhere(userID, isAdmin, accessibleOrgIDs)
 
 		imageWhere := "1=1"
 		var imageArgs []interface{}
@@ -119,6 +115,9 @@ WITH latest AS (
         status               AS latest_status,
 		COALESCE(external_status, '') AS latest_external_status,
         created_at           AS latest_scan_at,
+		owner_type,
+		owner_user_id,
+		owner_org_id,
         critical_count,
         high_count,
         medium_count,
@@ -141,6 +140,9 @@ SELECT
     l.latest_status,
 	l.latest_external_status,
     l.latest_scan_at,
+	l.owner_type,
+	l.owner_user_id,
+	l.owner_org_id,
     l.critical_count,
     l.high_count,
     l.medium_count,
@@ -174,6 +176,9 @@ LIMIT ? OFFSET ?`
 				&img.LatestStatus,
 				&img.LatestExternalStatus,
 				&img.LatestScanAt,
+				&img.OwnerType,
+				&img.OwnerUserID,
+				&img.OwnerOrgID,
 				&img.CriticalCount,
 				&img.HighCount,
 				&img.MediumCount,
@@ -190,4 +195,30 @@ LIMIT ? OFFSET ?`
 
 		c.JSON(http.StatusOK, gin.H{"data": images, "total": total, "page": page, "limit": limit})
 	}
+}
+
+func scanOwnershipWhere(userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) (string, []interface{}) {
+	if isAdmin {
+		return "1=1", nil
+	}
+
+	clauses := []string{"user_id = ?", "owner_user_id = ?"}
+	args := []interface{}{userID, userID}
+
+	if len(accessibleOrgIDs) > 0 {
+		ownerOrgPlaceholders := make([]string, len(accessibleOrgIDs))
+		sharedOrgPlaceholders := make([]string, len(accessibleOrgIDs))
+		for i, orgID := range accessibleOrgIDs {
+			ownerOrgPlaceholders[i] = "?"
+			sharedOrgPlaceholders[i] = "?"
+			args = append(args, orgID)
+		}
+		for _, orgID := range accessibleOrgIDs {
+			args = append(args, orgID)
+		}
+		clauses = append(clauses, "owner_org_id IN ("+strings.Join(ownerOrgPlaceholders, ",")+")")
+		clauses = append(clauses, "EXISTS (SELECT 1 FROM org_scans os WHERE os.scan_id = scans.id AND os.org_id IN ("+strings.Join(sharedOrgPlaceholders, ",")+"))")
+	}
+
+	return "(" + strings.Join(clauses, " OR ") + ")", args
 }

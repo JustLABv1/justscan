@@ -345,7 +345,7 @@ func warmRegistryImageForTrivyScan(ctx context.Context, registry *models.Registr
 		return nil
 	}
 
-	client, err := newXrayClient(registry)
+	client, err := newXrayClient(registry, nil, nil)
 	if err != nil {
 		return err
 	}

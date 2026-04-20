@@ -101,3 +101,35 @@ func UpdateRegistrationRateLimit(c *gin.Context, db *bun.DB) {
 
 	c.JSON(http.StatusOK, gin.H{"limit": req.Limit})
 }
+
+// UpdateAPILogRetention updates the retention period (in days) for api_request_logs.
+func UpdateAPILogRetention(c *gin.Context, db *bun.DB) {
+	var req struct {
+		Days int `json:"days"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Days < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "days must be a non-negative integer"})
+		return
+	}
+	if err := upsertSystemSetting(c, db, "api_log_retention_days", strconv.Itoa(req.Days)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update API log retention"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"days": req.Days})
+}
+
+// UpdateXRayLogRetention updates the retention period (in days) for xray_request_logs.
+func UpdateXRayLogRetention(c *gin.Context, db *bun.DB) {
+	var req struct {
+		Days int `json:"days"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Days < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "days must be a non-negative integer"})
+		return
+	}
+	if err := upsertSystemSetting(c, db, "xray_log_retention_days", strconv.Itoa(req.Days)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update xRay log retention"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"days": req.Days})
+}

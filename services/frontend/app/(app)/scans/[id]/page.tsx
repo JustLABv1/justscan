@@ -554,6 +554,7 @@ export default function ScanDetailPage() {
   }
 
   async function loadScanOrgGrantState() {
+    if (!scan) return;
     setScanOrgGrantsLoading(true);
     setScanOrgGrantsError('');
     try {
@@ -573,7 +574,7 @@ export default function ScanDetailPage() {
   }
 
   async function handleGrantScanAccess() {
-    if (!scanOrgGrantOrgId) return;
+    if (!scan || !scanOrgGrantOrgId) return;
     setScanOrgGrantSaving(true);
     setScanOrgGrantsError('');
     try {
@@ -589,6 +590,7 @@ export default function ScanDetailPage() {
   }
 
   async function handleRevokeScanAccess(orgId: string) {
+    if (!scan) return;
     setScanOrgGrantSaving(true);
     setScanOrgGrantsError('');
     try {

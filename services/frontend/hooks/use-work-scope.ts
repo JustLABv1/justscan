@@ -9,8 +9,6 @@ export function useWorkScope(): WorkScope {
   const [workScope, setWorkScope] = useState<WorkScope>(() => getWorkScope());
 
   useEffect(() => {
-    setWorkScope(getWorkScope());
-
     function handleScopeChanged(event: Event) {
       const detail = (event as CustomEvent<WorkScope>).detail;
       setWorkScope(detail ?? getWorkScope());

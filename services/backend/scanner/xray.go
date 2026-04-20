@@ -41,6 +41,8 @@ type xrayClient struct {
 	username      string
 	secret        string
 	httpClient    *http.Client
+	db            *bun.DB
+	registryID    *uuid.UUID
 }
 
 type RegistryXrayTestClient struct {
@@ -233,10 +235,11 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		return fmt.Errorf("failed to load registry for xray scan: %w", err)
 	}
 
-	client, err := newXrayClient(registry)
+	client, err := newXrayClient(registry, db, scan.RegistryID)
 	if err != nil {
 		return err
 	}
+	ctx = xrayScanContext(ctx, scan.ID, scan.RegistryID)
 
 	repoKey, artifactName, imageTag, err := xrayImageParts(scan.ImageName, scan.ImageTag, registry)
 	if err != nil {
@@ -244,8 +247,9 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 
 	imageRepoPath := repoKey + "/" + artifactName
-	artifactRepoPath := artifactName + "/" + imageTag + "/manifest.json"
-	repoPath := imageRepoPath + "/" + imageTag + "/manifest.json"
+	manifestFilename := client.resolveManifestFilename(ctx, imageRepoPath, imageTag)
+	artifactRepoPath := artifactName + "/" + imageTag + "/" + manifestFilename
+	repoPath := imageRepoPath + "/" + imageTag + "/" + manifestFilename
 	artifactPath := client.artifactoryID + "/" + repoPath
 	if imageConfig, configErr := client.imageConfigMetadata(ctx, imageRepoPath, imageTag, scan.Platform); configErr != nil {
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to load image config metadata from Artifactory: %v", configErr))
@@ -477,7 +481,7 @@ func EnsureScanImageDigest(ctx context.Context, db *bun.DB, scan *models.Scan) (
 		return "", fmt.Errorf("failed to load registry for xray digest resolution: %w", err)
 	}
 
-	client, err := newXrayClient(registry)
+	client, err := newXrayClient(registry, nil, nil)
 	if err != nil {
 		return "", err
 	}
@@ -517,7 +521,7 @@ func (c *xrayClient) resolveImageDigest(ctx context.Context, imageRepoPath, refe
 	return digest, nil
 }
 
-func newXrayClient(registry *models.Registry) (*xrayClient, error) {
+func newXrayClient(registry *models.Registry, db *bun.DB, registryID *uuid.UUID) (*xrayClient, error) {
 	secret, err := decryptRegistrySecret(registry)
 	if err != nil {
 		return nil, err
@@ -545,11 +549,13 @@ func newXrayClient(registry *models.Registry) (*xrayClient, error) {
 		username:      registry.Username,
 		secret:        secret,
 		httpClient:    &http.Client{Timeout: xrayRequestTimeout},
+		db:            db,
+		registryID:    registryID,
 	}, nil
 }
 
 func NewRegistryXrayTestClient(registry *models.Registry) (*RegistryXrayTestClient, error) {
-	client, err := newXrayClient(registry)
+	client, err := newXrayClient(registry, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -744,6 +750,21 @@ func (c *xrayClient) fetchRegistryManifest(ctx context.Context, imageRepoPath, r
 	}
 
 	return &manifest, manifest.MediaType, strings.TrimSpace(response.Header.Get("Docker-Content-Digest")), nil
+}
+
+// resolveManifestFilename returns "list.manifest.json" when the given
+// reference resolves to a manifest list (multi-arch image) and
+// "manifest.json" for single-platform images. Errors fall back to
+// "manifest.json" so callers are not blocked on a non-fatal probe.
+func (c *xrayClient) resolveManifestFilename(ctx context.Context, imageRepoPath, reference string) string {
+	manifest, mediaType, _, err := c.fetchRegistryManifest(ctx, imageRepoPath, reference)
+	if err != nil {
+		return "manifest.json"
+	}
+	if isRegistryManifestIndex(mediaType, manifest) {
+		return "list.manifest.json"
+	}
+	return "manifest.json"
 }
 
 func (c *xrayClient) resolveImageManifest(ctx context.Context, imageRepoPath, reference, platform string) (*registryManifest, string, error) {
@@ -981,8 +1002,11 @@ func (c *xrayClient) doRawJSON(ctx context.Context, method, path string, body an
 	}
 	applyXrayAuth(req, c.authType, c.username, c.secret)
 
+	start := time.Now()
 	resp, err := c.httpClient.Do(req)
+	elapsed := time.Since(start)
 	if err != nil {
+		c.logXRayRequest(ctx, method, path, 0, elapsed, err)
 		return nil, fmt.Errorf("xray request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -994,11 +1018,56 @@ func (c *xrayClient) doRawJSON(ctx context.Context, method, path string, body an
 
 	for _, allowed := range allowedStatus {
 		if resp.StatusCode == allowed {
+			c.logXRayRequest(ctx, method, path, resp.StatusCode, elapsed, nil)
 			return responseBody, nil
 		}
 	}
 
-	return nil, &xrayHTTPError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(string(responseBody))}
+	httpErr := &xrayHTTPError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(string(responseBody))}
+	c.logXRayRequest(ctx, method, path, resp.StatusCode, elapsed, httpErr)
+	return nil, httpErr
+}
+
+// logXRayRequest persists a single xRay HTTP call to xray_request_logs. It is
+// always fire-and-forget so it never blocks or fails the caller.
+func (c *xrayClient) logXRayRequest(ctx context.Context, method, endpoint string, statusCode int, duration time.Duration, callErr error) {
+	if c.db == nil {
+		return
+	}
+
+	durationMs := int(duration.Milliseconds())
+
+	scanID := xrayScanIDFromContext(ctx)
+	registryID := xrayRegistryIDFromContext(ctx)
+	if registryID == nil {
+		registryID = c.registryID
+	}
+
+	var errMsg *string
+	if callErr != nil {
+		s := callErr.Error()
+		errMsg = &s
+		if statusCode == 0 {
+			statusCode = -1 // network error sentinel
+		}
+	}
+
+	entry := &models.XRayRequestLog{
+		ScanID:     scanID,
+		RegistryID: registryID,
+		Method:     method,
+		Endpoint:   endpoint,
+		StatusCode: statusCode,
+		DurationMs: durationMs,
+		Error:      errMsg,
+	}
+
+	db := c.db
+	go func() {
+		if _, err := db.NewInsert().Model(entry).Exec(context.Background()); err != nil {
+			log.Debugf("xray_log: failed to record xray request: %v", err)
+		}
+	}()
 }
 
 func (c *xrayClient) doRegistryRequest(ctx context.Context, method, path string, accept []string) (*http.Response, error) {
@@ -2438,6 +2507,10 @@ func isRetriableRegistryWarmupError(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
+	// Unexpected EOF during blob streaming is a transient connection drop.
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
 
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
@@ -2445,7 +2518,11 @@ func isRetriableRegistryWarmupError(err error) bool {
 	}
 
 	normalizedErr := strings.ToLower(err.Error())
-	if strings.Contains(normalizedErr, "client.timeout exceeded") || strings.Contains(normalizedErr, "context deadline exceeded") {
+	if strings.Contains(normalizedErr, "client.timeout exceeded") ||
+		strings.Contains(normalizedErr, "context deadline exceeded") ||
+		strings.Contains(normalizedErr, "unexpected eof") ||
+		strings.Contains(normalizedErr, "connection reset by peer") ||
+		strings.Contains(normalizedErr, "connection refused") {
 		return true
 	}
 

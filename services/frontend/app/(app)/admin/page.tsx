@@ -4,49 +4,59 @@ import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
-    addTagToScan,
-    AdminScan,
-    AdminToken,
-    AdminUser,
-    AuditLog,
-    AuditLogFilters,
-    AutoTagRule,
-    cancelScan,
-    createAdminUser,
-    createAutoTagRule,
-    createNotificationChannel,
-    createShare,
-    deleteAdminToken,
-    deleteAdminUser,
-    deleteAutoTagRule,
-    deleteNotificationChannel,
-    deleteShare,
-    disableAdminUser,
-    getAdminSettings,
-    getScannerHealth,
-    listAdminScans,
-    listAdminTokens,
-    listAdminUsers,
-    listAuditLogs,
-    listAutoTagRules,
-    listNotificationChannels,
-    listNotificationDeliveries,
-    listOrgs,
-    listTags,
-    NotificationChannel,
-    NotificationDelivery,
-    Org,
-    reScan,
-    ScannerHealth,
-    setPublicScanEnabled,
-    Tag,
-    testNotificationChannel,
-    updateAdminToken,
-    updateAdminUser,
-    updateAutoTagRule,
-    updateNotificationChannel,
-    updateRateLimit,
-    updateRegisterRateLimit,
+  addTagToScan,
+  AdminScan,
+  AdminToken,
+  AdminUser,
+  APIRequestLog,
+  APIRequestLogFilters,
+  APIUsageStats,
+  AuditLog,
+  AuditLogFilters,
+  AutoTagRule,
+  cancelScan,
+  createAdminUser,
+  createAutoTagRule,
+  createNotificationChannel,
+  createShare,
+  deleteAdminToken,
+  deleteAdminUser,
+  deleteAutoTagRule,
+  deleteNotificationChannel,
+  deleteShare,
+  disableAdminUser,
+  getAdminSettings,
+  getAPIUsageStats,
+  getScannerHealth,
+  listAdminScans,
+  listAdminTokens,
+  listAdminUsers,
+  listAPIRequestLogs,
+  listAuditLogs,
+  listAutoTagRules,
+  listNotificationChannels,
+  listNotificationDeliveries,
+  listOrgs,
+  listTags,
+  listXRayRequestLogs,
+  NotificationChannel,
+  NotificationDelivery,
+  Org,
+  reScan,
+  ScannerHealth,
+  setPublicScanEnabled,
+  Tag,
+  testNotificationChannel,
+  updateAdminToken,
+  updateAdminUser,
+  updateAPILogRetention,
+  updateAutoTagRule,
+  updateNotificationChannel,
+  updateRateLimit,
+  updateRegisterRateLimit,
+  updateXRayLogRetention,
+  XRayRequestLog,
+  XRayRequestLogFilters,
 } from '@/lib/api';
 import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -73,7 +83,7 @@ function userAuthLabel(authType?: string) {
   return USER_AUTH_LABEL[authType ?? 'local'] ?? (authType ? authType.toUpperCase() : 'Unknown');
 }
 
-type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans';
+type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans' | 'insights';
 
 const ADMIN_TABS: { value: AdminTab; label: string; href: string }[] = [
   { value: 'overview', label: 'Overview', href: '/admin' },
@@ -85,6 +95,7 @@ const ADMIN_TABS: { value: AdminTab; label: string; href: string }[] = [
   { value: 'audit', label: 'Audit Log', href: '/admin/audit' },
   { value: 'notifications', label: 'Notifications', href: '/admin/notifications' },
   { value: 'scans', label: 'Scans', href: '/admin/scans' },
+  { value: 'insights', label: 'Insights', href: '/admin/insights' },
 ];
 
 function resolveAdminTab(pathname: string): AdminTab {
@@ -259,9 +270,15 @@ function SettingsTab() {
   const [rateLimitInput, setRateLimitInput] = useState('5');
   const [registerRateLimit, setRegisterRateLimitState] = useState<number>(10);
   const [registerRateLimitInput, setRegisterRateLimitInput] = useState('10');
+  const [apiLogRetention, setApiLogRetention] = useState<number>(30);
+  const [apiLogRetentionInput, setApiLogRetentionInput] = useState('30');
+  const [xrayLogRetention, setXrayLogRetention] = useState<number>(30);
+  const [xrayLogRetentionInput, setXrayLogRetentionInput] = useState('30');
   const [saving, setSaving] = useState(false);
   const [savingRl, setSavingRl] = useState(false);
   const [savingRegisterRl, setSavingRegisterRl] = useState(false);
+  const [savingApiRetention, setSavingApiRetention] = useState(false);
+  const [savingXrayRetention, setSavingXrayRetention] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -271,10 +288,16 @@ function SettingsTab() {
         setPublicScanEnabledState(settings['public_scan_enabled'] !== 'false');
         const rl = parseInt(settings['public_scan_rate_limit'] ?? '5', 10);
         const registrationRl = parseInt(settings['register_rate_limit'] ?? '10', 10);
+        const apiRet = parseInt(settings['api_log_retention_days'] ?? '30', 10);
+        const xrayRet = parseInt(settings['xray_log_retention_days'] ?? '30', 10);
         setRateLimitState(rl);
         setRateLimitInput(String(rl));
         setRegisterRateLimitState(registrationRl);
         setRegisterRateLimitInput(String(registrationRl));
+        setApiLogRetention(apiRet);
+        setApiLogRetentionInput(String(apiRet));
+        setXrayLogRetention(xrayRet);
+        setXrayLogRetentionInput(String(xrayRet));
       })
       .catch(() => setError('Failed to load settings'));
   }, []);
@@ -324,6 +347,38 @@ function SettingsTab() {
       setError(e instanceof Error ? e.message : 'Failed to update registration rate limit');
     } finally {
       setSavingRegisterRl(false);
+    }
+  }
+
+  async function handleSaveApiLogRetention() {
+    const v = parseInt(apiLogRetentionInput, 10);
+    if (isNaN(v) || v < 0) { setError('Retention must be 0 or more (0 = keep forever)'); return; }
+    setSavingApiRetention(true); setError(''); setSuccess('');
+    try {
+      await updateAPILogRetention(v);
+      setApiLogRetention(v);
+      setSuccess('API log retention updated');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to update API log retention');
+    } finally {
+      setSavingApiRetention(false);
+    }
+  }
+
+  async function handleSaveXrayLogRetention() {
+    const v = parseInt(xrayLogRetentionInput, 10);
+    if (isNaN(v) || v < 0) { setError('Retention must be 0 or more (0 = keep forever)'); return; }
+    setSavingXrayRetention(true); setError(''); setSuccess('');
+    try {
+      await updateXRayLogRetention(v);
+      setXrayLogRetention(v);
+      setSuccess('xRay log retention updated');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to update xRay log retention');
+    } finally {
+      setSavingXrayRetention(false);
     }
   }
 
@@ -451,6 +506,60 @@ function SettingsTab() {
             className="btn-primary inline-flex items-center gap-2"
           >
             {savingRegisterRl && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            Save
+          </button>
+        </div>
+      </div>
+
+      {/* API Log Retention */}
+      <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">API Log Retention</h2>
+          <p className="text-sm text-zinc-500 mt-0.5">How many days to keep API request logs. Set to 0 to retain indefinitely.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            min={0}
+            className={inputCls + ' max-w-[120px]'}
+            value={apiLogRetentionInput}
+            onChange={e => setApiLogRetentionInput(e.target.value)}
+          />
+          <span className="text-sm text-zinc-500">days (0 = forever)</span>
+          <button
+            onClick={handleSaveApiLogRetention}
+            disabled={savingApiRetention || apiLogRetentionInput === String(apiLogRetention)}
+            className="btn-primary inline-flex items-center gap-2"
+            type="button"
+          >
+            {savingApiRetention && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            Save
+          </button>
+        </div>
+      </div>
+
+      {/* xRay Log Retention */}
+      <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">xRay Log Retention</h2>
+          <p className="text-sm text-zinc-500 mt-0.5">How many days to keep Artifactory xRay request logs. Set to 0 to retain indefinitely.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            min={0}
+            className={inputCls + ' max-w-[120px]'}
+            value={xrayLogRetentionInput}
+            onChange={e => setXrayLogRetentionInput(e.target.value)}
+          />
+          <span className="text-sm text-zinc-500">days (0 = forever)</span>
+          <button
+            onClick={handleSaveXrayLogRetention}
+            disabled={savingXrayRetention || xrayLogRetentionInput === String(xrayLogRetention)}
+            className="btn-primary inline-flex items-center gap-2"
+            type="button"
+          >
+            {savingXrayRetention && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Save
           </button>
         </div>
@@ -2652,6 +2761,446 @@ function ScansTab() {
   );
 }
 
+// ── Insights Tab ─────────────────────────────────────────────────────
+function statusColor(code: number): React.CSSProperties {
+  if (code <= 0) return { color: '#f87171', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' };
+  if (code >= 500) return { color: '#f87171', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' };
+  if (code >= 400) return { color: '#fbbf24', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' };
+  if (code >= 200) return { color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' };
+  return { color: '#a1a1aa' };
+}
+
+function InsightsTab() {
+  const [section, setSection] = useState<'api' | 'xray'>('api');
+
+  // ── API request logs ──────────────────────────────────────────────
+  const [apiLogs, setApiLogs] = useState<APIRequestLog[]>([]);
+  const [apiTotal, setApiTotal] = useState(0);
+  const [apiPage, setApiPage] = useState(1);
+  const [apiLoading, setApiLoading] = useState(true);
+  const [apiError, setApiError] = useState('');
+  const [apiFilters, setApiFilters] = useState<{ method: string; path: string; user: string; status: string; from: string; to: string }>({
+    method: '', path: '', user: '', status: '', from: '', to: '',
+  });
+  const [stats, setStats] = useState<APIUsageStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [apiExporting, setApiExporting] = useState(false);
+  const limit = 50;
+
+  const apiRequestFilters: APIRequestLogFilters = useMemo(() => ({
+    method: apiFilters.method || undefined,
+    path: apiFilters.path || undefined,
+    user: apiFilters.user || undefined,
+    status: apiFilters.status || undefined,
+    from: toIsoOrUndefined(apiFilters.from),
+    to: toIsoOrUndefined(apiFilters.to),
+  }), [apiFilters]);
+
+  const loadApiLogs = useCallback(async (p: number, f: APIRequestLogFilters) => {
+    setApiLoading(true);
+    setApiError('');
+    try {
+      const r = await listAPIRequestLogs(p, limit, f);
+      setApiLogs(r.data ?? []);
+      setApiTotal(r.total);
+    } catch (e: unknown) { setApiError(e instanceof Error ? e.message : 'Failed to load API logs'); }
+    finally { setApiLoading(false); }
+  }, []);
+
+  const loadStats = useCallback(async (from?: string, to?: string) => {
+    setStatsLoading(true);
+    try {
+      setStats(await getAPIUsageStats(from, to));
+    } catch { /* non-critical */ }
+    finally { setStatsLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    loadApiLogs(apiPage, apiRequestFilters);
+  }, [loadApiLogs, apiPage, apiRequestFilters]);
+
+  useEffect(() => {
+    loadStats(toIsoOrUndefined(apiFilters.from), toIsoOrUndefined(apiFilters.to));
+  }, [loadStats, apiFilters.from, apiFilters.to]);
+
+  function updateApiFilter<K extends keyof typeof apiFilters>(key: K, value: string) {
+    setApiFilters(prev => ({ ...prev, [key]: value }));
+    setApiPage(1);
+  }
+
+  async function handleApiExport() {
+    setApiExporting(true);
+    setApiError('');
+    try {
+      const rows: APIRequestLog[] = [];
+      let p = 1;
+      let total = 0;
+      do {
+        const r = await listAPIRequestLogs(p, 500, apiRequestFilters);
+        rows.push(...(r.data ?? []));
+        total = r.total ?? 0;
+        p++;
+      } while (rows.length < total);
+
+      const csv = [
+        ['created_at', 'method', 'path', 'status_code', 'duration_ms', 'username', 'email'].join(','),
+        ...rows.map(r => [
+          escapeCsv(r.created_at), escapeCsv(r.method), escapeCsv(r.path),
+          r.status_code, r.duration_ms,
+          escapeCsv(r.username ?? r.user_id ?? ''), escapeCsv(r.email ?? ''),
+        ].join(',')),
+      ].join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `justscan-api-logs-${new Date().toISOString().slice(0, 19)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setApiError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setApiExporting(false);
+    }
+  }
+
+  // ── xRay request logs ─────────────────────────────────────────────
+  const [xrayLogs, setXrayLogs] = useState<XRayRequestLog[]>([]);
+  const [xrayTotal, setXrayTotal] = useState(0);
+  const [xrayPage, setXrayPage] = useState(1);
+  const [xrayLoading, setXrayLoading] = useState(true);
+  const [xrayError, setXrayError] = useState('');
+  const [xrayFilters, setXrayFilters] = useState<XRayRequestLogFilters & { from: string; to: string }>({
+    scan_id: '', registry_id: '', endpoint: '', status: '', from: '', to: '',
+  });
+  const [xrayExporting, setXrayExporting] = useState(false);
+
+  const xrayRequestFilters: XRayRequestLogFilters = useMemo(() => ({
+    scan_id: xrayFilters.scan_id || undefined,
+    registry_id: xrayFilters.registry_id || undefined,
+    endpoint: xrayFilters.endpoint || undefined,
+    status: xrayFilters.status || undefined,
+    from: toIsoOrUndefined(xrayFilters.from),
+    to: toIsoOrUndefined(xrayFilters.to),
+  }), [xrayFilters]);
+
+  const loadXrayLogs = useCallback(async (p: number, f: XRayRequestLogFilters) => {
+    setXrayLoading(true);
+    setXrayError('');
+    try {
+      const r = await listXRayRequestLogs(p, limit, f);
+      setXrayLogs(r.data ?? []);
+      setXrayTotal(r.total);
+    } catch (e: unknown) { setXrayError(e instanceof Error ? e.message : 'Failed to load xRay logs'); }
+    finally { setXrayLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    loadXrayLogs(xrayPage, xrayRequestFilters);
+  }, [loadXrayLogs, xrayPage, xrayRequestFilters]);
+
+  function updateXrayFilter<K extends keyof typeof xrayFilters>(key: K, value: string) {
+    setXrayFilters(prev => ({ ...prev, [key]: value }));
+    setXrayPage(1);
+  }
+
+  async function handleXrayExport() {
+    setXrayExporting(true);
+    setXrayError('');
+    try {
+      const rows: XRayRequestLog[] = [];
+      let p = 1;
+      let total = 0;
+      do {
+        const r = await listXRayRequestLogs(p, 500, xrayRequestFilters);
+        rows.push(...(r.data ?? []));
+        total = r.total ?? 0;
+        p++;
+      } while (rows.length < total);
+
+      const csv = [
+        ['created_at', 'scan_id', 'registry_id', 'method', 'endpoint', 'status_code', 'duration_ms', 'error'].join(','),
+        ...rows.map(r => [
+          escapeCsv(r.created_at), escapeCsv(r.scan_id ?? ''), escapeCsv(r.registry_id ?? ''),
+          escapeCsv(r.method), escapeCsv(r.endpoint), r.status_code, r.duration_ms, escapeCsv(r.error ?? ''),
+        ].join(',')),
+      ].join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `justscan-xray-logs-${new Date().toISOString().slice(0, 19)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setXrayError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setXrayExporting(false);
+    }
+  }
+
+  const apiTotalPages = Math.max(1, Math.ceil(apiTotal / limit));
+  const xrayTotalPages = Math.max(1, Math.ceil(xrayTotal / limit));
+
+  return (
+    <div className="space-y-4">
+      {/* Section toggle */}
+      <div className="segmented-control w-fit">
+        <button type="button" className="segmented-control-item" data-active={section === 'api' ? 'true' : 'false'} onClick={() => setSection('api')}>
+          API Requests
+        </button>
+        <button type="button" className="segmented-control-item" data-active={section === 'xray' ? 'true' : 'false'} onClick={() => setSection('xray')}>
+          xRay Calls
+        </button>
+      </div>
+
+      {/* ── API Requests section ─────────────────────────────────────── */}
+      {section === 'api' && (
+        <div className="space-y-4">
+          {/* Stats cards */}
+          {!statsLoading && stats && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { label: 'Total Requests', value: stats.total_requests.toLocaleString(), color: '#60a5fa', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.18)' },
+                { label: 'Error Rate', value: stats.total_requests > 0 ? `${((stats.error_requests / stats.total_requests) * 100).toFixed(1)}%` : '0%', color: '#f87171', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.18)' },
+                { label: 'Avg Duration', value: `${stats.avg_duration_ms.toFixed(0)} ms`, color: '#a78bfa', bg: 'rgba(124,58,237,0.1)', border: 'rgba(124,58,237,0.18)' },
+                { label: 'p95 Duration', value: `${stats.p95_duration_ms.toFixed(0)} ms`, color: '#fbbf24', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.18)' },
+              ].map(card => (
+                <div key={card.label} className="rounded-xl p-4" style={{ background: card.bg, border: `1px solid ${card.border}` }}>
+                  <p className="text-xs text-zinc-500 mb-1">{card.label}</p>
+                  <p className="text-2xl font-bold" style={{ color: card.color }}>{card.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Top endpoints */}
+          {!statsLoading && stats && stats.top_endpoints.length > 0 && (
+            <div className="glass-panel rounded-2xl p-4 space-y-2">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Top Endpoints</h3>
+              <div className="space-y-1.5">
+                {stats.top_endpoints.map((ep, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm">
+                    <span className="font-mono text-xs px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>{ep.method}</span>
+                    <span className="flex-1 text-zinc-700 dark:text-zinc-300 truncate font-mono text-xs">{ep.path}</span>
+                    <span className="text-zinc-500 text-xs shrink-0">{ep.count.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {apiError && (
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+              {apiError}
+            </div>
+          )}
+
+          {/* Filters */}
+          <div className="glass-panel rounded-2xl p-4 space-y-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+              <select className={inputCls} value={apiFilters.method} onChange={e => updateApiFilter('method', e.target.value)}>
+                <option value="">All methods</option>
+                {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <input className={inputCls + ' xl:col-span-2'} placeholder="Path filter" value={apiFilters.path} onChange={e => updateApiFilter('path', e.target.value)} />
+              <input className={inputCls} placeholder="User or email" value={apiFilters.user} onChange={e => updateApiFilter('user', e.target.value)} />
+              <select className={inputCls} value={apiFilters.status} onChange={e => updateApiFilter('status', e.target.value)}>
+                <option value="">All statuses</option>
+                <option value="2xx">2xx Success</option>
+                <option value="4xx">4xx Client Error</option>
+                <option value="5xx">5xx Server Error</option>
+                <option value="error">Any Error (4xx+)</option>
+              </select>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <input type="datetime-local" className={inputCls} value={apiFilters.from} onChange={e => updateApiFilter('from', e.target.value)} />
+              <input type="datetime-local" className={inputCls} value={apiFilters.to} onChange={e => updateApiFilter('to', e.target.value)} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-zinc-500">{apiTotal.toLocaleString()} requests</p>
+              <button onClick={handleApiExport} disabled={apiExporting || apiTotal === 0} className="btn-primary inline-flex items-center gap-2" type="button">
+                {apiExporting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                Export CSV
+              </button>
+            </div>
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center gap-2 text-sm">
+            <button onClick={() => setApiPage(p => Math.max(1, p - 1))} disabled={apiPage <= 1} className="btn-secondary" type="button">←</button>
+            <span className="text-zinc-500">{apiPage} / {apiTotalPages}</span>
+            <button onClick={() => setApiPage(p => Math.min(apiTotalPages, p + 1))} disabled={apiPage >= apiTotalPages} className="btn-secondary" type="button">→</button>
+          </div>
+
+          {/* Table */}
+          {apiLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+            </div>
+          ) : apiLogs.length === 0 ? (
+            <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+              <p className="text-sm text-zinc-500">No API request logs yet.</p>
+            </div>
+          ) : (
+            <div className="glass-panel rounded-2xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Time</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">User</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Method</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Path</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {apiLogs.map((log, i) => (
+                    <tr key={log.id}
+                      style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <td className="px-4 py-2.5 text-xs text-zinc-400 whitespace-nowrap" title={fullDate(log.created_at)}>
+                        {timeAgo(log.created_at)}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-zinc-500 max-w-[120px] truncate">
+                        {log.username || log.email || (log.user_id ? log.user_id.slice(0, 8) : <span className="italic opacity-50">anon</span>)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className="text-xs font-mono font-medium px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
+                          {log.method}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs font-mono text-zinc-600 dark:text-zinc-300 max-w-xs truncate">{log.path}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="text-xs font-mono font-medium px-1.5 py-0.5 rounded-md" style={statusColor(log.status_code)}>
+                          {log.status_code}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-zinc-500 whitespace-nowrap">{log.duration_ms} ms</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── xRay Calls section ──────────────────────────────────────── */}
+      {section === 'xray' && (
+        <div className="space-y-4">
+          {xrayError && (
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+              {xrayError}
+            </div>
+          )}
+
+          {/* Filters */}
+          <div className="glass-panel rounded-2xl p-4 space-y-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <input className={inputCls} placeholder="Scan ID" value={xrayFilters.scan_id ?? ''} onChange={e => updateXrayFilter('scan_id', e.target.value)} />
+              <input className={inputCls} placeholder="Endpoint path" value={xrayFilters.endpoint ?? ''} onChange={e => updateXrayFilter('endpoint', e.target.value)} />
+              <select className={inputCls} value={xrayFilters.status ?? ''} onChange={e => updateXrayFilter('status', e.target.value)}>
+                <option value="">All statuses</option>
+                <option value="2xx">2xx Success</option>
+                <option value="4xx">4xx Client Error</option>
+                <option value="5xx">5xx Server Error</option>
+                <option value="error">Any Error</option>
+              </select>
+              <input className={inputCls} placeholder="Registry ID" value={xrayFilters.registry_id ?? ''} onChange={e => updateXrayFilter('registry_id', e.target.value)} />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <input type="datetime-local" className={inputCls} value={xrayFilters.from} onChange={e => updateXrayFilter('from', e.target.value)} />
+              <input type="datetime-local" className={inputCls} value={xrayFilters.to} onChange={e => updateXrayFilter('to', e.target.value)} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-zinc-500">{xrayTotal.toLocaleString()} calls recorded</p>
+              <button onClick={handleXrayExport} disabled={xrayExporting || xrayTotal === 0} className="btn-primary inline-flex items-center gap-2" type="button">
+                {xrayExporting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                Export CSV
+              </button>
+            </div>
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center gap-2 text-sm">
+            <button onClick={() => setXrayPage(p => Math.max(1, p - 1))} disabled={xrayPage <= 1} className="btn-secondary" type="button">←</button>
+            <span className="text-zinc-500">{xrayPage} / {xrayTotalPages}</span>
+            <button onClick={() => setXrayPage(p => Math.min(xrayTotalPages, p + 1))} disabled={xrayPage >= xrayTotalPages} className="btn-secondary" type="button">→</button>
+          </div>
+
+          {/* Table */}
+          {xrayLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+            </div>
+          ) : xrayLogs.length === 0 ? (
+            <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+              <p className="text-sm text-zinc-500">No xRay request logs yet. Run a scan against an Artifactory Xray registry to populate.</p>
+            </div>
+          ) : (
+            <div className="glass-panel rounded-2xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Time</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Scan</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Method</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Endpoint</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Duration</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {xrayLogs.map((log, i) => (
+                    <tr key={log.id}
+                      style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <td className="px-4 py-2.5 text-xs text-zinc-400 whitespace-nowrap" title={fullDate(log.created_at)}>
+                        {timeAgo(log.created_at)}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-zinc-500">
+                        {log.scan_id ? (
+                          <Link href={`/scans/${log.scan_id}`} className="text-violet-400 hover:underline font-mono">
+                            {log.scan_id.slice(0, 8)}…
+                          </Link>
+                        ) : <span className="opacity-40 italic">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className="text-xs font-mono font-medium px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
+                          {log.method}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs font-mono text-zinc-600 dark:text-zinc-300 max-w-xs truncate">{log.endpoint}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="text-xs font-mono font-medium px-1.5 py-0.5 rounded-md" style={statusColor(log.status_code)}>
+                          {log.status_code <= 0 ? 'ERR' : log.status_code}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-zinc-500 whitespace-nowrap">{log.duration_ms} ms</td>
+                      <td className="px-4 py-2.5 text-xs text-red-400 max-w-[200px] truncate" title={log.error}>{log.error ?? ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────── ──────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const pathname = usePathname();
@@ -2683,6 +3232,7 @@ export default function AdminPage() {
       {activeTab === 'audit' && <AuditLogTab />}
       {activeTab === 'notifications' && <NotificationsTab />}
       {activeTab === 'scans' && <ScansTab />}
+      {activeTab === 'insights' && <InsightsTab />}
     </div>
   );
 }

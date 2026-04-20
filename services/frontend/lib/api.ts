@@ -664,6 +664,45 @@ export const listAuditLogs = (page = 1, limit = 50, filters?: AuditLogFilters) =
   return req<{ data: AuditLog[]; total: number }>('GET', `/api/v1/admin/audit?${params}`);
 };
 
+// Admin - API request logs (insights)
+export const listAPIRequestLogs = (page = 1, limit = 50, filters?: APIRequestLogFilters) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (filters?.method) params.set('method', filters.method);
+  if (filters?.path) params.set('path', filters.path);
+  if (filters?.user) params.set('user', filters.user);
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  return req<{ data: APIRequestLog[]; total: number }>('GET', `/api/v1/admin/api-logs?${params}`);
+};
+
+export const getAPIUsageStats = (from?: string, to?: string) => {
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  const suffix = params.toString() ? `?${params}` : '';
+  return req<APIUsageStats>('GET', `/api/v1/admin/api-usage${suffix}`);
+};
+
+// Admin - xRay request logs (insights)
+export const listXRayRequestLogs = (page = 1, limit = 50, filters?: XRayRequestLogFilters) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (filters?.scan_id) params.set('scan_id', filters.scan_id);
+  if (filters?.registry_id) params.set('registry_id', filters.registry_id);
+  if (filters?.endpoint) params.set('endpoint', filters.endpoint);
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  return req<{ data: XRayRequestLog[]; total: number }>('GET', `/api/v1/admin/xray-logs?${params}`);
+};
+
+// Admin - log retention settings
+export const updateAPILogRetention = (days: number) =>
+  req<{ days: number }>('PUT', '/api/v1/admin/settings/api-log-retention', { days });
+
+export const updateXRayLogRetention = (days: number) =>
+  req<{ days: number }>('PUT', '/api/v1/admin/settings/xray-log-retention', { days });
+
 // Admin - notifications
 export const listNotificationChannels = () =>
   req<{ data: NotificationChannel[] }>('GET', '/api/v1/admin/notifications').then(r => r.data ?? []);
@@ -1532,6 +1571,75 @@ export interface AuditLog {
   username?: string;
   email?: string;
   role?: string;
+}
+
+export interface APIRequestLogFilters {
+  method?: string;
+  path?: string;
+  user?: string;
+  status?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface APIRequestLog {
+  id: string;
+  user_id?: string;
+  method: string;
+  path: string;
+  status_code: number;
+  duration_ms: number;
+  created_at: string;
+  username?: string;
+  email?: string;
+}
+
+export interface EndpointStat {
+  method: string;
+  path: string;
+  count: number;
+}
+
+export interface UserStat {
+  user_id?: string;
+  username: string;
+  count: number;
+}
+
+export interface StatusBucket {
+  status_code: number;
+  count: number;
+}
+
+export interface APIUsageStats {
+  total_requests: number;
+  error_requests: number;
+  avg_duration_ms: number;
+  p95_duration_ms: number;
+  top_endpoints: EndpointStat[];
+  top_users: UserStat[];
+  status_breakdown: StatusBucket[];
+}
+
+export interface XRayRequestLogFilters {
+  scan_id?: string;
+  registry_id?: string;
+  endpoint?: string;
+  status?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface XRayRequestLog {
+  id: string;
+  scan_id?: string;
+  registry_id?: string;
+  method: string;
+  endpoint: string;
+  status_code: number;
+  duration_ms: number;
+  error?: string;
+  created_at: string;
 }
 
 export interface NotificationConfig {

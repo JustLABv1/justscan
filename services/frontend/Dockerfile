@@ -1,12 +1,18 @@
 FROM node:25-alpine AS base
 
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
+FROM base AS platform
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
+
+# Install pnpm using the secret mount for CA trust
 RUN npm install -g pnpm
 
-FROM base AS builder
+FROM platform AS deps
+WORKDIR /app
+
+RUN apk add --no-cache libc6-compat
+COPY package.json pnpm-lock.yaml ./
+
+FROM platform AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

@@ -4,11 +4,14 @@ FROM node:25-alpine AS base
 
 # Stage 1: Build the frontend
 FROM node:25-alpine AS frontend-builder
-RUN apk add --no-cache libc6-compat
 WORKDIR /app/frontend
-COPY services/frontend/package.json services/frontend/pnpm-lock.yaml ./
+
 RUN npm install -g pnpm
+RUN apk add --no-cache libc6-compat
+
+COPY services/frontend/package.json services/frontend/pnpm-lock.yaml ./
 RUN pnpm install
+
 COPY services/frontend/ ./
 
 ARG NEXT_PUBLIC_API_URL=""

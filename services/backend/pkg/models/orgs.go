@@ -58,14 +58,16 @@ const (
 type OrgMember struct {
 	bun.BaseModel `bun:"table:org_members"`
 
-	OrgID     uuid.UUID `bun:"org_id,pk,type:uuid,notnull" json:"org_id"`
-	UserID    uuid.UUID `bun:"user_id,pk,type:uuid,notnull" json:"user_id"`
-	Role      string    `bun:"role,type:text,notnull,default:'viewer'" json:"role"`
-	JoinedAt  time.Time `bun:"joined_at,type:timestamptz,notnull,default:now()" json:"joined_at"`
-	CreatedAt time.Time `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
-	UpdatedAt time.Time `bun:"updated_at,type:timestamptz,default:now()" json:"updated_at"`
-	Email     string    `bun:"-" json:"email,omitempty"`
-	Username  string    `bun:"-" json:"username,omitempty"`
+	OrgID        uuid.UUID `bun:"org_id,pk,type:uuid,notnull" json:"org_id"`
+	UserID       uuid.UUID `bun:"user_id,pk,type:uuid,notnull" json:"user_id"`
+	Role         string    `bun:"role,type:text,notnull,default:'viewer'" json:"role"`
+	JoinedAt     time.Time `bun:"joined_at,type:timestamptz,notnull,default:now()" json:"joined_at"`
+	CreatedAt    time.Time `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+	UpdatedAt    time.Time `bun:"updated_at,type:timestamptz,default:now()" json:"updated_at"`
+	OIDCSynced   bool      `bun:"oidc_synced,type:bool,notnull,default:false" json:"oidc_synced"`
+	OIDCProvider string    `bun:"oidc_provider,type:text,notnull,default:''" json:"oidc_provider,omitempty"`
+	Email        string    `bun:"-" json:"email,omitempty"`
+	Username     string    `bun:"-" json:"username,omitempty"`
 }
 
 type OrgInvite struct {

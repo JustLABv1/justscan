@@ -98,5 +98,51 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.PUT("/settings/xray-log-retention", func(c *gin.Context) {
 			admins.UpdateXRayLogRetention(c, db)
 		})
+		// scanner & auth settings
+		admin.PUT("/settings/scanner", func(c *gin.Context) {
+			admins.UpdateScannerSettings(c, db)
+		})
+		admin.PUT("/settings/auth", func(c *gin.Context) {
+			admins.UpdateAuthSettings(c, db)
+		})
+		// OIDC provider management
+		admin.GET("/oidc-providers", func(c *gin.Context) {
+			admins.ListOIDCProviders(c, db)
+		})
+		admin.POST("/oidc-providers", func(c *gin.Context) {
+			admins.CreateOIDCProvider(c, db)
+		})
+		admin.PUT("/oidc-providers/:name", func(c *gin.Context) {
+			admins.UpdateOIDCProvider(c, db)
+		})
+		admin.DELETE("/oidc-providers/:name", func(c *gin.Context) {
+			admins.DeleteOIDCProvider(c, db)
+		})
+		// OIDC group→org mappings
+		admin.GET("/oidc-providers/:name/group-mappings", func(c *gin.Context) {
+			admins.ListGroupMappings(c, db)
+		})
+		admin.POST("/oidc-providers/:name/group-mappings", func(c *gin.Context) {
+			admins.CreateGroupMapping(c, db)
+		})
+		admin.DELETE("/oidc-providers/:name/group-mappings/:mappingID", func(c *gin.Context) {
+			admins.DeleteGroupMapping(c, db)
+		})
+		// global (system) registries
+		admin.GET("/registries", func(c *gin.Context) {
+			admins.ListGlobalRegistries(c, db)
+		})
+		admin.POST("/registries", func(c *gin.Context) {
+			admins.CreateGlobalRegistry(c, db)
+		})
+		admin.DELETE("/registries/:id", func(c *gin.Context) {
+			admins.DeleteGlobalRegistry(c, db)
+		})
+		admin.PUT("/registries/:id/set-default", func(c *gin.Context) {
+			admins.SetDefaultRegistry(c, db)
+		})
+		admin.PUT("/registries/:id/unset-default", func(c *gin.Context) {
+			admins.UnsetDefaultRegistry(c, db)
+		})
 	}
 }

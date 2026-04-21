@@ -2,7 +2,7 @@
 FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
 FROM anchore/grype:latest AS grype-bin
 
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 
 WORKDIR /app/backend

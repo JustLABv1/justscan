@@ -13,7 +13,9 @@ import (
 	"github.com/uptrace/bun/extra/bunotel"
 	"github.com/uptrace/bun/migrate"
 
+	"justscan-backend/config"
 	"justscan-backend/database/migrations"
+	authfuncs "justscan-backend/functions/auth"
 	"justscan-backend/middlewares"
 	"justscan-backend/pkg/models"
 
@@ -97,6 +99,15 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 		}
 	}
 
+	// Initialise the setting resolver (DB-backed runtime settings).
+	config.InitSettingResolver(db)
+
+	// Initialise the multi-provider OIDC runtime cache.
+	authfuncs.InitMultiOIDC(db)
+
+	// Seed legacy single-provider OIDC config into oidc_providers table if needed.
+	seedOIDCProvider(ctx, db)
+
 	return db
 }
 
@@ -109,4 +120,55 @@ func StartDatabase(dbDriver string, dbServer string, dbPort int, dbUser, dbPass,
 		log.Fatalf("Unsupported database type: %s", dbDriver)
 		return nil
 	}
+}
+
+// seedOIDCProvider migrates a legacy single-provider OIDC config block into the
+// oidc_providers table on first startup. It does nothing if rows already exist.
+func seedOIDCProvider(ctx context.Context, db *bun.DB) {
+	cfg := config.Config
+	if !cfg.OIDC.Enabled || cfg.OIDC.IssuerURL == "" {
+		return
+	}
+	exists, err := db.NewSelect().TableExpr("oidc_providers").Exists(ctx)
+	if err != nil || exists {
+		return
+	}
+
+	scopes := cfg.OIDC.Scopes
+	if len(scopes) == 0 {
+		scopes = []string{"openid", "email", "profile"}
+	}
+	groupsClaim := cfg.OIDC.GroupsClaim
+	if groupsClaim == "" {
+		groupsClaim = "groups"
+	}
+	rolesClaim := cfg.OIDC.RolesClaim
+	if rolesClaim == "" {
+		rolesClaim = "roles"
+	}
+
+	provider := &models.OIDCProvider{
+		Name:         "default",
+		DisplayName:  "Login with SSO",
+		ButtonColor:  "",
+		IssuerURL:    cfg.OIDC.IssuerURL,
+		ClientID:     cfg.OIDC.ClientID,
+		ClientSecret: cfg.OIDC.ClientSecret,
+		RedirectURI:  cfg.OIDC.RedirectURI,
+		Scopes:       scopes,
+		AdminGroups:  cfg.OIDC.AdminGroups,
+		AdminRoles:   cfg.OIDC.AdminRoles,
+		GroupsClaim:  groupsClaim,
+		RolesClaim:   rolesClaim,
+		Enabled:      true,
+		SortOrder:    0,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	if _, err := db.NewInsert().Model(provider).On("CONFLICT (name) DO NOTHING").Exec(ctx); err != nil {
+		log.Warnf("Failed to seed legacy OIDC provider into DB: %v", err)
+		return
+	}
+	log.Info("Seeded legacy OIDC config into oidc_providers table as 'default'")
 }

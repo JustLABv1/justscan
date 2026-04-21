@@ -72,8 +72,8 @@ export function timeUntil(dateString: string | null | undefined, formatOptions?:
   if (diffDay < 30) return `in ${diffDay} days`;
   if (diffMonth === 1) return 'in 1 month';
   if (diffMonth < 12) return `in ${diffMonth} months`;
-  if (diffYear === 1) return 'in 1 year';
-  return `in ${diffYear} years`;
+  if (diffYear < 2) return 'in 1 year';
+  return formatLocaleDate(date, { dateStyle: 'medium' }, formatOptions);
 }
 
 /**

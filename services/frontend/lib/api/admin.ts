@@ -1,8 +1,11 @@
 import { req } from './core';
 import { getDefaultScannerCapabilities } from './registries';
-import type { APIRequestLog, APIRequestLogFilters, APIUsageStats, AdminToken, AdminUser, AuditLog, AuditLogFilters, NotificationChannel, NotificationDelivery, XRayRequestLog, XRayRequestLogFilters } from './types/admin';
+import type { APIRequestLog, APIRequestLogFilters, APIUsageStats, AdminDashboard, AdminToken, AdminUser, AuditLog, AuditLogFilters, NotificationChannel, NotificationDelivery, XRayRequestLog, XRayRequestLogFilters } from './types/admin';
 import type { AutoTagRule, OIDCGroupMapping, OIDCProviderAdmin, Registry, RegistryListResponse, ScannerSettings } from './types/registries';
 import type { AdminScan } from './types/scans';
+
+export const getAdminDashboard = () =>
+  req<AdminDashboard>('GET', '/api/v1/admin/dashboard');
 
 export const adminListOIDCProviders = () =>
   req<{ data: OIDCProviderAdmin[] }>('GET', '/api/v1/admin/oidc-providers').then((result) => result.data ?? []);

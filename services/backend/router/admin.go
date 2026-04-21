@@ -11,6 +11,9 @@ import (
 func Admin(router *gin.RouterGroup, db *bun.DB) {
 	admin := router.Group("/admin").Use(middlewares.Admin(db))
 	{
+		admin.GET("/dashboard", func(c *gin.Context) {
+			admins.GetDashboard(c, db)
+		})
 		// users
 		admin.GET("/users", func(c *gin.Context) {
 			admins.GetUsers(c, db)

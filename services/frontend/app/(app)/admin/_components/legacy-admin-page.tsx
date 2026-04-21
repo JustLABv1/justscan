@@ -19,6 +19,7 @@ import {
   AdminToken,
   adminUnsetDefaultRegistry,
   adminUpdateAuthSettings,
+  adminUpdateGlobalRegistry,
   adminUpdateOIDCProvider,
   adminUpdateScannerSettings,
   AdminUser,
@@ -3865,6 +3866,7 @@ function GlobalRegistriesTab() {
   const [capabilities, setCapabilities] = useState<ScannerCapabilities>({ enable_trivy: true, enable_grype: true, providers: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editingRegistry, setEditingRegistry] = useState<RegistryWithHealth | null>(null);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [xrayUrl, setXrayUrl] = useState('');
@@ -3896,16 +3898,26 @@ function GlobalRegistriesTab() {
     load();
   }, [load]);
 
-  function openCreate() {
-    setName('');
-    setUrl('');
-    setXrayUrl('');
-    setXrayArtifactoryId('default');
-    setAuthType('none');
-    setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray');
+  function resetForm(registry?: RegistryWithHealth | null) {
+    setEditingRegistry(registry ?? null);
+    setName(registry?.name ?? '');
+    setUrl(registry?.url ?? '');
+    setXrayUrl(registry?.xray_url ?? '');
+    setXrayArtifactoryId(registry?.xray_artifactory_id ?? 'default');
+    setAuthType(registry?.auth_type ?? 'none');
+    setScanProvider(registry?.scan_provider ?? (capabilities.enable_trivy ? 'trivy' : 'artifactory_xray'));
     setUsername('');
     setPassword('');
     setFormError('');
+  }
+
+  function openCreate() {
+    resetForm();
+    modal.open();
+  }
+
+  function openEdit(registry: RegistryWithHealth) {
+    resetForm(registry);
     modal.open();
   }
 
@@ -3914,20 +3926,27 @@ function GlobalRegistriesTab() {
     setSaving(true);
     setFormError('');
     try {
-      await adminCreateGlobalRegistry({
+      const payload = {
         name: name.trim(),
         url: url.trim(),
         xray_url: scanProvider === 'artifactory_xray' ? xrayUrl.trim() || undefined : undefined,
         xray_artifactory_id: scanProvider === 'artifactory_xray' ? xrayArtifactoryId.trim() || 'default' : undefined,
         auth_type: authType,
         scan_provider: scanProvider,
-        username: username.trim(),
+        ...(!editingRegistry || username.trim() ? { username: username.trim() } : {}),
         ...(password.trim() ? { password: password.trim() } : {}),
-      });
+      };
+
+      if (editingRegistry) {
+        await adminUpdateGlobalRegistry(editingRegistry.id, payload);
+      } else {
+        await adminCreateGlobalRegistry(payload);
+      }
+
       modal.close();
       await load();
     } catch (saveError: unknown) {
-      setFormError(saveError instanceof Error ? saveError.message : 'Failed to create global registry');
+      setFormError(saveError instanceof Error ? saveError.message : 'Failed to save global registry');
     } finally {
       setSaving(false);
     }
@@ -4022,6 +4041,7 @@ function GlobalRegistriesTab() {
                       <RowActionsMenu
                         label={`Open actions for registry ${registry.name}`}
                         items={[
+                          { id: 'edit', label: 'Edit registry', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(registry) },
                           { id: 'default', label: registry.is_default ? 'Unset default' : 'Set as default', onAction: () => { void handleSetDefault(registry); } },
                           { id: 'delete', label: 'Delete registry', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(registry.id, registry.name); } },
                         ]}
@@ -4040,7 +4060,7 @@ function GlobalRegistriesTab() {
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Add Global Registry</Modal.Heading>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editingRegistry ? 'Edit Global Registry' : 'Add Global Registry'}</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
@@ -4093,11 +4113,11 @@ function GlobalRegistriesTab() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Username</label>
-                      <input className={inputCls} value={username} onChange={(event) => setUsername(event.target.value)} placeholder={authType === 'token' ? 'optional token user' : 'registry user'} />
+                      <input className={inputCls} value={username} onChange={(event) => setUsername(event.target.value)} placeholder={editingRegistry ? 'Leave blank to keep current username' : authType === 'token' ? 'optional token user' : 'registry user'} />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Password or Token</label>
-                      <input type="password" className={inputCls} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={authType === 'token' ? 'Access token' : 'Secret'} />
+                      <input type="password" className={inputCls} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={editingRegistry ? 'Leave blank to keep existing secret' : authType === 'token' ? 'Access token' : 'Secret'} />
                     </div>
                   </div>
                 </form>
@@ -4106,7 +4126,7 @@ function GlobalRegistriesTab() {
                 <button className="btn-secondary" onClick={modal.close} type="button">Cancel</button>
                 <button type="submit" form="global-registry-form" disabled={saving} className="btn-primary inline-flex items-center gap-2">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                  Create Registry
+                  {editingRegistry ? 'Save Registry' : 'Create Registry'}
                 </button>
               </Modal.Footer>
             </Modal.Dialog>

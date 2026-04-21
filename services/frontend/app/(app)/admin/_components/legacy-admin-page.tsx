@@ -85,6 +85,8 @@ import { ArrowDown01Icon, ArrowRight01Icon, Delete01Icon, Notification01Icon, Pe
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AdminChrome } from './admin-chrome';
+import { resolveAdminTab } from './admin-tabs';
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
 
@@ -100,28 +102,6 @@ const USER_AUTH_STYLE: Record<string, React.CSSProperties> = {
 
 function userAuthLabel(authType?: string) {
   return USER_AUTH_LABEL[authType ?? 'local'] ?? (authType ? authType.toUpperCase() : 'Unknown');
-}
-
-type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans' | 'insights' | 'identity' | 'registries';
-
-const ADMIN_TABS: { value: AdminTab; label: string; href: string }[] = [
-  { value: 'overview', label: 'Overview', href: '/admin' },
-  { value: 'settings', label: 'Settings', href: '/admin/settings' },
-  { value: 'scanner', label: 'Scanner', href: '/admin/scanner' },
-  { value: 'identity', label: 'Identity Providers', href: '/admin/identity' },
-  { value: 'registries', label: 'Global Registries', href: '/admin/registries' },
-  { value: 'users', label: 'Users', href: '/admin/users' },
-  { value: 'tokens', label: 'Tokens', href: '/admin/tokens' },
-  { value: 'autotags', label: 'Auto Tags', href: '/admin/autotags' },
-  { value: 'audit', label: 'Audit Log', href: '/admin/audit' },
-  { value: 'notifications', label: 'Notifications', href: '/admin/notifications' },
-  { value: 'scans', label: 'Scans', href: '/admin/scans' },
-  { value: 'insights', label: 'Insights', href: '/admin/insights' },
-];
-
-function resolveAdminTab(pathname: string): AdminTab {
-  const match = ADMIN_TABS.find((tab) => tab.href === '/admin' ? pathname === '/admin' : pathname.startsWith(tab.href));
-  return match?.value ?? 'overview';
 }
 
 function toIsoOrUndefined(value: string): string | undefined {
@@ -4144,23 +4124,7 @@ export default function AdminPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-zinc-900 dark:text-white">Admin</h1>
-        <p className="text-sm text-zinc-500 mt-1">Manage system configuration, users, service credentials, notifications, identity providers, registries, and cross-user scans.</p>
-      </div>
-
-      <div className="segmented-control flex-wrap">
-        {ADMIN_TABS.map((tab) => (
-          <Link
-            key={tab.value}
-            href={tab.href}
-            className="segmented-control-item"
-            data-active={activeTab === tab.value ? 'true' : 'false'}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </div>
+      <AdminChrome />
 
       {activeTab === 'overview' && <OverviewTab />}
       {activeTab === 'settings' && <SettingsTab />}

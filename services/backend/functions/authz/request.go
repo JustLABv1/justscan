@@ -169,6 +169,57 @@ func LoadAuthorizedRegistry(c *gin.Context, db *bun.DB, registryID uuid.UUID) (*
 
 }
 
+// LoadAccessibleRegistry returns a registry that the current user can view/use
+// in scan-related flows. This includes system registries and registries shared
+// with any organization the user can access.
+func LoadAccessibleRegistry(c *gin.Context, db *bun.DB, registryID uuid.UUID) (*models.Registry, uuid.UUID, bool, bool) {
+	userID, isAdmin, ok := RequireRequestUser(c, db)
+	if !ok {
+		return nil, uuid.Nil, false, false
+	}
+
+	registry := &models.Registry{}
+	if err := db.NewSelect().Model(registry).Where("id = ?", registryID).Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "registry not found"})
+		return nil, uuid.Nil, false, false
+	}
+
+	if isAdmin || registry.OwnerType == models.OwnerTypeSystem || registry.CreatedByID == userID {
+		return registry, userID, isAdmin, true
+	}
+	if registry.OwnerUserID != nil && *registry.OwnerUserID == userID {
+		return registry, userID, isAdmin, true
+	}
+
+	accessibleOrgIDs, err := ListAccessibleOrgIDs(c.Request.Context(), db, userID, isAdmin)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve organization access"})
+		return nil, uuid.Nil, false, false
+	}
+	for _, orgID := range accessibleOrgIDs {
+		if registry.OwnerOrgID != nil && *registry.OwnerOrgID == orgID {
+			return registry, userID, isAdmin, true
+		}
+	}
+
+	if len(accessibleOrgIDs) > 0 {
+		shared, err := db.NewSelect().Model((*models.OrgRegistry)(nil)).
+			Where("registry_id = ?", registry.ID).
+			Where("org_id IN (?)", bun.In(accessibleOrgIDs)).
+			Exists(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve registry access"})
+			return nil, uuid.Nil, false, false
+		}
+		if shared {
+			return registry, userID, isAdmin, true
+		}
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": "registry not found"})
+	return nil, uuid.Nil, false, false
+}
+
 func LoadOrgMembership(ctx context.Context, db *bun.DB, orgID, userID uuid.UUID) (*models.OrgMember, error) {
 	membership := &models.OrgMember{}
 	if err := db.NewSelect().Model(membership).

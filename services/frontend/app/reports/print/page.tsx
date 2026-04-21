@@ -718,10 +718,12 @@ function PrintReport() {
           .print\\:hidden { display: none !important; }
         }
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; background: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; }
+        html, body, #__next { margin: 0; padding: 0; min-height: 100%; background: #fff !important; color: #111827; color-scheme: light; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
       `}</style>
 
-      <div style={{ width: '100%', maxWidth: '178mm', margin: '0 auto', padding: '24px 0 32px' }}>
+      <div style={{ minHeight: '100vh', width: '100%', background: '#fff', color: '#111827' }}>
+        <div style={{ width: '100%', maxWidth: '178mm', margin: '0 auto', padding: '24px 0 32px' }}>
 
         {/* Report header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: 20, marginBottom: 28 }}>
@@ -800,6 +802,7 @@ function PrintReport() {
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12, marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9ca3af' }}>
           <span>JustScan Security Report</span>
           <span>{data.map(d => `${d.scan.image_name}:${d.scan.image_tag}`).join(', ')}</span>
+        </div>
         </div>
       </div>
     </>

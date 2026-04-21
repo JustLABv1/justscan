@@ -1,7 +1,7 @@
 import { req } from './core';
 import { notifyOrgMembershipChanged } from './scope';
-import type { ComplianceResult, Scan } from './types/scans';
 import type { AuditEntry, Org, OrgInvite, OrgMember, OrgPolicy, OrgRiskScore, OrgRole, PolicyRule, TrendPoint } from './types/orgs';
+import type { ComplianceResult, Scan } from './types/scans';
 
 export const listOrgs = () =>
   req<{ data: Org[] }>('GET', '/api/v1/orgs/').then((result) => result.data ?? []);

@@ -1,5 +1,5 @@
 import { sharedReq } from './core';
-import type { SharedScanRescanResponse, Scan, Vulnerability, VulnerabilityContextAnalysis } from './types/scans';
+import type { Scan, SharedScanRescanResponse, Vulnerability, VulnerabilityContextAnalysis } from './types/scans';
 
 export const getSharedScan = (token: string) =>
   sharedReq<Scan>('GET', `/api/v1/shared/${token}`);

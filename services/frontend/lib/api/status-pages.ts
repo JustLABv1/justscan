@@ -1,9 +1,9 @@
 import { req, sharedReq } from './core';
-import { appendScope } from './scope';
 import { listScans } from './scans';
+import { appendScope } from './scope';
 import type { ResourceShare } from './types/orgs';
-import type { StatusPage, StatusPagePayload, StatusPageResponse, StatusPageScanSummary, StatusPageTargetOption } from './types/status-pages';
 import type { Vulnerability, VulnerabilityContextAnalysis } from './types/scans';
+import type { StatusPage, StatusPagePayload, StatusPageResponse, StatusPageScanSummary, StatusPageTargetOption } from './types/status-pages';
 
 export const listStatusPages = () => {
   const params = new URLSearchParams();

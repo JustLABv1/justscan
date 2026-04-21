@@ -1,7 +1,7 @@
 import { req } from './core';
 import { appendScope } from './scope';
 import type { ResourceShare } from './types/orgs';
-import type { ProviderCapability, Registry, RegistryListResponse, ScannerCapabilities, ScanProvider } from './types/registries';
+import type { Registry, RegistryListResponse, ScannerCapabilities, ScanProvider } from './types/registries';
 
 export function getDefaultScannerCapabilities(): ScannerCapabilities {
   return {

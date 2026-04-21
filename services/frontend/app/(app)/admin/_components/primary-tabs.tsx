@@ -1,38 +1,37 @@
 'use client';
 
-import Link from 'next/link';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon, Tag01Icon } from 'hugeicons-react';
+import Link from 'next/link';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { FormField } from '@/components/ui/form-field';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
-import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import {
-  adminUpdateAuthSettings,
-  adminUpdateScannerSettings,
-  createAdminUser,
-  createAutoTagRule,
-  deleteAdminToken,
-  deleteAdminUser,
-  deleteAutoTagRule,
-  disableAdminUser,
-  getAdminSettings,
-  listAdminScans,
-  listAdminTokens,
-  listAdminUsers,
-  listAuditLogs,
-  listAutoTagRules,
-  listNotificationChannels,
-  setPublicScanEnabled,
-  updateAdminToken,
-  updateAdminUser,
-  updateAPILogRetention,
-  updateAutoTagRule,
-  updateRateLimit,
-  updateRegisterRateLimit,
-  updateXRayLogRetention,
+    adminUpdateAuthSettings,
+    adminUpdateScannerSettings,
+    createAdminUser,
+    createAutoTagRule,
+    deleteAdminToken,
+    deleteAdminUser,
+    deleteAutoTagRule,
+    disableAdminUser,
+    getAdminSettings,
+    listAdminScans,
+    listAdminTokens,
+    listAdminUsers,
+    listAuditLogs,
+    listAutoTagRules,
+    listNotificationChannels,
+    setPublicScanEnabled,
+    updateAdminToken,
+    updateAdminUser,
+    updateAPILogRetention,
+    updateAutoTagRule,
+    updateRateLimit,
+    updateRegisterRateLimit,
+    updateXRayLogRetention,
 } from '@/lib/api/admin';
 import { getScannerHealth } from '@/lib/api/dashboard';
 import { listTags } from '@/lib/api/tags';
@@ -40,9 +39,10 @@ import type { AdminToken, AdminUser, AuditLog, AuditLogFilters } from '@/lib/api
 import type { ScannerHealth } from '@/lib/api/types/dashboard';
 import type { AutoTagRule, ScannerSettings } from '@/lib/api/types/registries';
 import type { Tag } from '@/lib/api/types/scans';
+import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import { fullDate, timeAgo } from '@/lib/time';
 
-import { escapeCsv, formatDbAge, inputCls, parseDelimitedList, scannerTone, selectTriggerCls, toIsoOrUndefined, USER_AUTH_STYLE, userAuthLabel } from './utils';
+import { escapeCsv, formatDbAge, inputCls, scannerTone, selectTriggerCls, toIsoOrUndefined, USER_AUTH_STYLE, userAuthLabel } from './utils';
 
 function ScannerHealthPanel() {
   const [health, setHealth] = useState<ScannerHealth | null>(null);

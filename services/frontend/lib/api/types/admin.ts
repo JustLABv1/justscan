@@ -1,3 +1,5 @@
+import type { ScannerHealth } from './dashboard';
+
 export interface AdminUser {
   id: string;
   username: string;
@@ -89,6 +91,62 @@ export interface APIUsageStats {
   top_endpoints: EndpointStat[];
   top_users: UserStat[];
   status_breakdown: StatusBucket[];
+}
+
+export interface AdminDashboardQueues {
+  running: number;
+  pending: number;
+  failed: number;
+  blocked_policies: number;
+  needs_attention: number;
+}
+
+export interface AdminDashboardCounts {
+  users: number;
+  tokens: number;
+  active_channels: number;
+  identity_providers: number;
+  global_registries: number;
+}
+
+export interface AdminDashboardInsights {
+  api_requests_24h: number;
+  api_error_requests_24h: number;
+  api_average_ms: number;
+  api_p95_ms: number;
+  xray_requests_24h: number;
+  xray_error_requests_24h: number;
+}
+
+export interface AdminDashboardTrendPoint {
+  date: string;
+  total: number;
+  completed: number;
+  failed: number;
+}
+
+export interface AdminDashboardVulnerabilityTrendPoint {
+  date: string;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  unknown: number;
+}
+
+export interface AdminDashboard {
+  generated_at: string;
+  public_scan_enabled: boolean;
+  total_scans: number;
+  status_counts: Record<string, number>;
+  severity_totals: Record<string, number>;
+  queues: AdminDashboardQueues;
+  admin_counts: AdminDashboardCounts;
+  insights: AdminDashboardInsights;
+  scanner_health: ScannerHealth;
+  recent_audit: AuditLog[];
+  scan_trends: AdminDashboardTrendPoint[];
+  vulnerability_trends: AdminDashboardVulnerabilityTrendPoint[];
 }
 
 export interface XRayRequestLogFilters {

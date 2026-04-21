@@ -1,9 +1,10 @@
 'use client';
 
 import { clearToken, clearUser, getUser, getWorkScope, listMyOrgInvites, listOrgs, Org, setWorkScope, WorkScope } from '@/lib/api';
-import { Button, Drawer, useOverlayState } from '@heroui/react';
+import { Button, Drawer, Dropdown, Header, Label, Separator, useOverlayState } from '@heroui/react';
 import {
     AiContentGenerator01Icon,
+    ArrowDown01Icon,
     ArrowLeft01Icon,
     ArrowRight01Icon,
     Building04Icon,
@@ -243,12 +244,49 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             </span>
           </div>
 
-          <div className="px-2 pb-2 space-y-1.5" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <div className="px-2 pt-3 pb-2 space-y-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+            {!collapsed && (
+              <Dropdown>
+                <Dropdown.Trigger className="w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all duration-150 outline-none text-left"
+                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                  onMouseEnter={(event: any) => (event.currentTarget.style.borderColor = 'rgba(167,139,250,0.3)')}
+                  onMouseLeave={(event: any) => (event.currentTarget.style.borderColor = 'var(--glass-border)')}
+                >
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
+                    <span className="text-[12px] font-medium text-zinc-700 dark:text-zinc-200 truncate mt-0.5">{scopeLabel}</span>
+                  </div>
+                  <ArrowDown01Icon size={14} className="text-zinc-500 shrink-0 ml-2" />
+                </Dropdown.Trigger>
+                <Dropdown.Popover className="min-w-[200px]" placement="bottom start">
+                  <Dropdown.Menu
+                    onAction={(key) => handleScopeChange(key as string)}
+                    selectionMode="single"
+                    selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
+                  >
+                    <Dropdown.Item id="personal" textValue="Personal workspace">
+                      <Label>Personal workspace</Label>
+                    </Dropdown.Item>
+                    {orgs.length > 0 && (
+                      <Dropdown.Section>
+                        <Header>Organizations</Header>
+                        {orgs.map((org) => (
+                          <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
+                            <Label>{org.name}</Label>
+                          </Dropdown.Item>
+                        ))}
+                      </Dropdown.Section>
+                    )}
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
+            )}
+
             <button
               onClick={() => setSearchOpen(true)}
               title="Search (⌘K)"
               aria-label="Open search"
-              className={`w-full flex items-center rounded-xl px-3 py-2 text-sm transition-all duration-150 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 ${collapsed ? 'justify-center' : 'gap-2.5'}`}
+              className={`w-full flex items-center rounded-xl px-3 py-2.5 text-sm transition-all duration-150 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 ${collapsed ? 'justify-center' : 'gap-2.5'}`}
               style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
               onMouseEnter={(event) => (event.currentTarget.style.borderColor = 'rgba(167,139,250,0.3)')}
               onMouseLeave={(event) => (event.currentTarget.style.borderColor = 'var(--glass-border)')}
@@ -271,7 +309,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             <Link
               href="/scans?new=1"
               title={collapsed ? 'New Scan' : undefined}
-              className={`w-full flex items-center rounded-xl transition-all duration-150 btn-primary-sm ${collapsed ? 'justify-center px-2' : 'gap-2 px-3'}`}
+              className={`w-full flex items-center rounded-xl transition-all duration-150 btn-primary-sm py-2.5 ${collapsed ? 'justify-center px-2' : 'gap-2 px-3'}`}
             >
               <PlusSignIcon size={14} className="shrink-0" />
               <span
@@ -282,27 +320,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               </span>
             </Link>
 
-            {!collapsed && (
-              <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
-                  <span className="text-[10px] text-zinc-400 truncate">{scopeLabel}</span>
-                </div>
-                <select
-                  aria-label="Select workspace"
-                  className="w-full rounded-xl px-3 py-2 text-sm bg-transparent text-zinc-700 dark:text-zinc-200 outline-none"
-                  onChange={(event) => handleScopeChange(event.target.value)}
-                  style={{ border: '1px solid var(--glass-border)' }}
-                  value={workScope.kind === 'org' ? workScope.orgId : 'personal'}
-                >
-                  <option value="personal">Personal workspace</option>
-                  {orgs.map((org) => (
-                    <option key={org.id} value={org.id}>{org.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             {!collapsed && pendingInviteCount > 0 && (
               <Link
                 href="/orgs"
@@ -310,7 +327,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)' }}
               >
                 <div>
-                  <p className="font-medium">Pending invites</p>
+                  <p className="font-medium text-amber-600 dark:text-amber-400">Pending invites</p>
                   <p className="text-xs text-zinc-500">Review organization access requests</p>
                 </div>
                 <span className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-300"
@@ -378,79 +395,74 @@ export function AppShell({ children, initialUser }: AppShellProps) {
           </nav>
 
           <div className="shrink-0 px-2 pb-3 pt-2 space-y-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-            <div className={`flex items-center ${collapsed ? 'flex-col gap-0.5' : 'gap-1'}`}>
-              <button
-                onClick={() => setTheme(isDark ? 'light' : 'dark')}
-                className="flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-150 text-zinc-400 hover:text-violet-500 dark:text-zinc-500 dark:hover:text-violet-400 shrink-0"
-                onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
-                onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
-                title={themeToggleTitle}
-              >
-                {mounted ? (isDark ? <Sun01Icon size={15} /> : <Moon02Icon size={15} />) : <span aria-hidden className="block h-[15px] w-[15px]" />}
-              </button>
-
-              <button
-                onClick={toggleCollapsed}
-                className={`flex items-center justify-center h-9 rounded-xl transition-all duration-150 text-zinc-400 hover:text-zinc-700 dark:text-zinc-600 dark:hover:text-zinc-300 shrink-0 ${collapsed ? 'w-9' : 'flex-1'}`}
-                onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
-                onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
-                title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              >
-                {collapsed ? <ArrowRight01Icon size={14} /> : <ArrowLeft01Icon size={14} />}
-              </button>
-            </div>
-
-            <Link
-              href="/swagger/index.html"
-              target="_blank"
-              rel="noreferrer"
-              title="Open API docs"
-              className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} gap-2 rounded-xl px-2 py-2 text-xs font-medium transition-all duration-150 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100`}
-              onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
-              onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
-            >
-              <span className="flex items-center gap-2 overflow-hidden">
-                <FileExportIcon size={14} className="shrink-0" />
-                <span style={{ maxWidth: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1 }} className="overflow-hidden transition-all duration-300 whitespace-nowrap">
-                  API Docs
-                </span>
-              </span>
-              {!collapsed && <span className="text-[10px] uppercase tracking-[0.18em] text-zinc-400">Swagger</span>}
-            </Link>
-
-            <Link
-              href="/settings"
-              title={collapsed ? `${user?.username ?? 'Settings'}` : undefined}
-              className="flex items-center gap-2.5 px-2 py-2 rounded-xl transition-all duration-150 group overflow-hidden"
-              onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
-              onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
-            >
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
-                style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
-              >
-                {initials}
-              </div>
-              <div className="flex-1 min-w-0 overflow-hidden" style={{ maxWidth: collapsed ? 0 : 160, opacity: collapsed ? 0 : 1 }}>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200 truncate">{user?.username ?? user?.email ?? 'User'}</p>
-                <p className="text-[11px] text-zinc-500 truncate">{user?.role ?? 'user'}</p>
-              </div>
-            </Link>
-
             <button
-              onClick={handleLogout}
-              className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} gap-2 rounded-xl px-2 py-2 text-xs font-medium transition-all duration-150 text-zinc-500 hover:text-red-400`}
+              onClick={toggleCollapsed}
+              className={`w-full flex items-center justify-center h-9 rounded-xl transition-all duration-150 text-zinc-400 hover:text-zinc-700 dark:text-zinc-600 dark:hover:text-zinc-300`}
               onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
               onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
-              title="Sign out"
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              <span className="flex items-center gap-2 overflow-hidden">
-                <Logout02Icon size={14} className="shrink-0" />
-                <span style={{ maxWidth: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1 }} className="overflow-hidden transition-all duration-300 whitespace-nowrap">
-                  Sign Out
-                </span>
-              </span>
+              {collapsed ? <ArrowRight01Icon size={14} /> : <ArrowLeft01Icon size={14} />}
             </button>
+
+            <Dropdown>
+              <Dropdown.Trigger className={`w-full flex items-center ${collapsed ? 'justify-center' : 'gap-2.5 px-2'} py-2 rounded-xl transition-all duration-150 outline-none`}
+                style={{ background: 'transparent' }}
+                onMouseEnter={(event: any) => (event.currentTarget.style.background = 'var(--row-hover)')}
+                onMouseLeave={(event: any) => (event.currentTarget.style.background = 'transparent')}
+              >
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
+                  style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
+                >
+                  {initials}
+                </div>
+                {!collapsed && (
+                   <div className="flex-1 flex flex-col justify-center min-w-0 pl-1.5 pr-1">
+                     <div className="flex items-center justify-between w-full">
+                       <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200 truncate">{user?.username ?? user?.email ?? 'User'}</p>
+                     </div>
+                     <p className="text-[11px] text-zinc-500 truncate text-left">{user?.role ?? 'user'}</p>
+                   </div>
+                )}
+              </Dropdown.Trigger>
+
+              <Dropdown.Popover className="min-w-[200px]" placement="right bottom">
+                <Dropdown.Menu onAction={(key) => {
+                   if (key === 'settings') router.push('/settings');
+                   if (key === 'api-docs') window.open('/swagger/index.html', '_blank');
+                   if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
+                   if (key === 'signout') handleLogout();
+                }}>
+                  <Dropdown.Item id="settings" textValue="Settings">
+                    <div className="flex items-center gap-2">
+                       <Settings01Icon size={14} className="text-zinc-500" />
+                       <Label>Settings</Label>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item id="theme" textValue="Theme">
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2">
+                        {mounted ? (isDark ? <Sun01Icon size={14} className="text-zinc-500" /> : <Moon02Icon size={14} className="text-zinc-500" />) : <span aria-hidden className="block h-[14px] w-[14px]" />}
+                        <Label>Theme</Label>
+                      </div>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item id="api-docs" textValue="API Docs">
+                    <div className="flex items-center gap-2">
+                      <FileExportIcon size={14} className="text-zinc-500" />
+                      <Label>API Docs</Label>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item id="signout" textValue="Sign Out" className="text-danger flex items-center gap-2 mt-1 border-t border-zinc-200 dark:border-zinc-800 pt-1">
+                    <div className="flex items-center gap-2">
+                      <Logout02Icon size={14} />
+                      <Label className="text-danger">Sign Out</Label>
+                    </div>
+                  </Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
           </div>
         </aside>
 
@@ -498,24 +510,38 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                     </Drawer.Header>
                     <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
                       <div className="space-y-4">
-                        <div className="rounded-xl px-3 py-3 space-y-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                          <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>
-                            Workspace
-                          </p>
-                          <select
-                            aria-label="Select workspace"
-                            className="w-full rounded-xl px-3 py-2 text-sm bg-transparent text-zinc-700 dark:text-zinc-200 outline-none"
-                            onChange={(event) => handleScopeChange(event.target.value)}
-                            style={{ border: '1px solid var(--glass-border)' }}
-                            value={workScope.kind === 'org' ? workScope.orgId : 'personal'}
+                        <Dropdown>
+                          <Dropdown.Trigger className="w-full flex items-center justify-between rounded-xl px-3 py-3 text-sm transition-all duration-150 outline-none text-left"
+                            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
                           >
-                            <option value="personal">Personal workspace</option>
-                            {orgs.map((org) => (
-                              <option key={org.id} value={org.id}>{org.name}</option>
-                            ))}
-                          </select>
-                          <p className="text-xs text-zinc-500">New scans, registries, watchlist items, and Helm runs will use this workspace.</p>
-                        </div>
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
+                              <span className="text-[12px] font-medium text-zinc-700 dark:text-zinc-200 mt-0.5 truncate">{scopeLabel}</span>
+                            </div>
+                            <ArrowDown01Icon size={16} className="text-zinc-500 shrink-0 ml-2" />
+                          </Dropdown.Trigger>
+                          <Dropdown.Popover className="w-[min(80vw,300px)]">
+                            <Dropdown.Menu
+                              onAction={(key) => handleScopeChange(key as string)}
+                              selectionMode="single"
+                              selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
+                            >
+                              <Dropdown.Item id="personal" textValue="Personal workspace">
+                                <Label>Personal workspace</Label>
+                              </Dropdown.Item>
+                              {orgs.length > 0 && (
+                                <Dropdown.Section>
+                                  <Header>Organizations</Header>
+                                  {orgs.map((org) => (
+                                    <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
+                                      <Label>{org.name}</Label>
+                                    </Dropdown.Item>
+                                  ))}
+                                </Dropdown.Section>
+                              )}
+                            </Dropdown.Menu>
+                          </Dropdown.Popover>
+                        </Dropdown>
 
                         {pendingInviteCount > 0 && (
                           <Link
@@ -578,64 +604,61 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                       className="flex flex-col gap-2 px-3 py-3"
                       style={{ borderTop: '1px solid var(--border-subtle)' }}
                     >
-                      <div className="flex items-center gap-3 rounded-xl px-3 py-2" style={{ background: 'var(--row-hover)' }}>
-                        <div
-                          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
-                          style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
-                        >
-                          {initials}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{user?.username ?? user?.email ?? 'User'}</p>
-                          <p className="truncate text-[11px] text-zinc-500">{user?.role ?? 'user'}</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors"
-                          onClick={() => setTheme(isDark ? 'light' : 'dark')}
-                          style={{ background: 'var(--row-hover)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}
-                          title={themeToggleTitle}
-                          type="button"
-                        >
-                          {mounted ? (isDark ? <Sun01Icon size={14} /> : <Moon02Icon size={14} />) : <span aria-hidden className="block h-[14px] w-[14px]" />}
-                          Theme
-                        </button>
-                        <Link
-                          className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors"
-                          href="/settings"
-                          onClick={() => mobileNav.close()}
-                          style={{ background: 'var(--row-hover)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}
-                        >
-                          <Settings01Icon size={14} />
-                          Settings
-                        </Link>
-                      </div>
-                      <Link
-                        className="flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-colors"
-                        href="/swagger/index.html"
-                        onClick={() => mobileNav.close()}
-                        rel="noreferrer"
-                        style={{ background: 'var(--row-hover)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}
-                        target="_blank"
-                      >
-                        <span className="flex items-center gap-2">
-                          <FileExportIcon size={14} />
-                          API Docs
-                        </span>
-                        <span className="text-[10px] uppercase tracking-[0.18em] text-zinc-400">Swagger</span>
-                      </Link>
-                      <button
-                        className="flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-colors"
-                        onClick={handleLogout}
-                        style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171', border: '1px solid rgba(239,68,68,0.14)' }}
-                        type="button"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Logout02Icon size={14} />
-                          Sign Out
-                        </span>
-                      </button>
+                      <Dropdown>
+                        <Dropdown.Trigger className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 outline-none text-left" style={{ background: 'var(--row-hover)' }}>
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div
+                              className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
+                              style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
+                            >
+                              {initials}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{user?.username ?? user?.email ?? 'User'}</p>
+                              <p className="truncate text-[11px] text-zinc-500">{user?.role ?? 'user'}</p>
+                            </div>
+                          </div>
+                          <Settings01Icon size={16} className="text-zinc-400 shrink-0" />
+                        </Dropdown.Trigger>
+                        <Dropdown.Popover className="w-[min(80vw,300px)]" placement="top end">
+                          <Dropdown.Menu onAction={(key) => {
+                             if (key === 'settings') { router.push('/settings'); mobileNav.close(); }
+                             if (key === 'api-docs') { window.open('/swagger/index.html', '_blank'); mobileNav.close(); }
+                             if (key === 'theme') { setTheme(isDark ? 'light' : 'dark'); }
+                             if (key === 'signout') { handleLogout(); mobileNav.close(); }
+                          }}>
+                            <Dropdown.Item key="settings" id="settings" textValue="Settings">
+                              <div className="flex items-center gap-2">
+                                 <Settings01Icon size={14} className="text-zinc-500" />
+                                 <Label>Settings</Label>
+                              </div>
+                            </Dropdown.Item>
+                            <Dropdown.Item key="theme" id="theme" textValue="Theme">
+                              <div className="flex items-center justify-between w-full">
+                                <div className="flex items-center gap-2">
+                                  {mounted ? (isDark ? <Sun01Icon size={14} className="text-zinc-500" /> : <Moon02Icon size={14} className="text-zinc-500" />) : <span aria-hidden className="block h-[14px] w-[14px]" />}
+                                  <Label>Theme</Label>
+                                </div>
+                              </div>
+                            </Dropdown.Item>
+                            <Dropdown.Item key="api-docs" id="api-docs" textValue="API Docs">
+                              <div className="flex items-center gap-2">
+                                <FileExportIcon size={14} className="text-zinc-500" />
+                                <Label>API Docs</Label>
+                              </div>
+                            </Dropdown.Item>
+                            <Dropdown.Section>
+                              <Separator className="my-1" />
+                              <Dropdown.Item key="signout" id="signout" textValue="Sign Out" className="text-danger">
+                                <div className="flex items-center gap-2">
+                                  <Logout02Icon size={14} />
+                                  <Label className="text-danger">Sign Out</Label>
+                                </div>
+                              </Dropdown.Item>
+                            </Dropdown.Section>
+                          </Dropdown.Menu>
+                        </Dropdown.Popover>
+                      </Dropdown>
                     </Drawer.Footer>
                   </Drawer.Dialog>
                 </Drawer.Content>

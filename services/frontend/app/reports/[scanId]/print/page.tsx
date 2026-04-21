@@ -396,11 +396,13 @@ export default function PrintReportPage() {
           .no-break { page-break-inside: avoid; }
         }
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; color: #111; background: #fff; }
+        html, body, #__next { margin: 0; padding: 0; min-height: 100%; background: #fff !important; color: #111827; color-scheme: light; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; }
         h1, h2, h3 { margin: 0; }
       `}</style>
 
-      <div style={{ maxWidth: '210mm', margin: '0 auto', padding: '32px 40px', background: '#fff' }}>
+      <div style={{ minHeight: '100vh', width: '100%', background: '#fff', color: '#111827' }}>
+        <div style={{ maxWidth: '210mm', margin: '0 auto', padding: '32px 40px', background: '#fff' }}>
 
         {/* Header */}
         <div style={{ borderBottom: '3px solid #111', paddingBottom: '20px', marginBottom: '28px' }}>
@@ -623,6 +625,7 @@ export default function PrintReportPage() {
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '14px', marginTop: '16px', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#9ca3af' }}>
           <span>JustScan Security Report · {imageRef}</span>
           <span>Scan ID: {scan.id}</span>
+        </div>
         </div>
       </div>
     </>

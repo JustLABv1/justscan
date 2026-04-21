@@ -550,7 +550,7 @@ export default function ScansPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate font-mono text-sm font-medium text-zinc-800 dark:text-zinc-200">{img.image_name}</p>
-                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <span className="font-mono text-xs text-zinc-400">:{img.latest_tag}</span>
                             <StatusBadge status={img.latest_status} externalStatus={img.latest_external_status} />
                             <OwnershipBadge ownerType={img.owner_type} ownerOrgId={img.owner_org_id} orgNamesById={orgNamesById} />
@@ -627,6 +627,7 @@ export default function ScansPage() {
               <th className="w-8 px-3 py-3" />
               <th className="w-8 px-3 py-3" />
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Metadata</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Latest</th>
               <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }}>C</th>
               <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }}>H</th>
@@ -694,24 +695,28 @@ export default function ScansPage() {
 
                     {/* Image name + meta */}
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2.5">
-                        <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200 text-sm">
-                          {img.image_name}
-                        </span>
-                        <span
-                          className="text-xs px-1.5 py-0.5 rounded-md font-medium"
-                          style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.2)' }}
-                        >
-                          {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
+                      <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200 text-sm block truncate max-w-[400px]">
+                        {img.image_name}
+                      </span>
+                      <div className="flex items-center gap-2 mt-1.5">
                         <span className="font-mono text-xs text-zinc-400">:{img.latest_tag}</span>
                         <StatusBadge status={img.latest_status} externalStatus={img.latest_external_status} />
-                        <OwnershipBadge ownerType={img.owner_type} ownerOrgId={img.owner_org_id} orgNamesById={orgNamesById} />
                         <span className="text-xs text-zinc-500" title={fullDate(img.latest_scan_at)}>
                           {timeAgo(img.latest_scan_at)}
                         </span>
+                      </div>
+                    </td>
+
+                    {/* Meta info column (Scan count + Ownership) */}
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider whitespace-nowrap"
+                          style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.2)' }}
+                        >
+                          {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
+                        </div>
+                        <OwnershipBadge ownerType={img.owner_type} ownerOrgId={img.owner_org_id} orgNamesById={orgNamesById} />
                       </div>
                     </td>
 

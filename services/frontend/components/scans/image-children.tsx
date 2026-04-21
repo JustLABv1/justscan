@@ -76,7 +76,7 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-mono text-sm font-medium text-zinc-700 dark:text-zinc-200">:{scan.image_tag}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
                           <StatusBadge status={scan.status} externalStatus={scan.external_status} />
                           <OwnershipBadge ownerType={scan.owner_type} ownerOrgId={scan.owner_org_id} orgNamesById={orgNamesById} />
                           <span className="text-xs text-zinc-500" title={fullDate(scan.created_at)}>{timeAgo(scan.created_at)}</span>
@@ -166,6 +166,7 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
                   <th className="w-8 px-3 py-2" scope="col" />
                   <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Tag</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Status</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Ownership</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Tags</th>
                   <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }} scope="col"><abbr title="Critical">C</abbr></th>
                   <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }} scope="col"><abbr title="High">H</abbr></th>
@@ -193,15 +194,13 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
                       </Checkbox>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-start gap-2">
-                        <span className="mt-0.5 w-1 h-5 rounded-full shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: 'linear-gradient(180deg,#a78bfa,#7c3aed)' }} />
-                        <div className="space-y-1">
-                          <span className="font-mono text-sm font-medium text-zinc-700 dark:text-zinc-200">:{scan.image_tag}</span>
-                          <OwnershipBadge ownerType={scan.owner_type} ownerOrgId={scan.owner_org_id} orgNamesById={orgNamesById} />
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-1 h-5 rounded-full shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: 'linear-gradient(180deg,#a78bfa,#7c3aed)' }} />
+                        <span className="font-mono text-sm font-medium text-zinc-700 dark:text-zinc-200">:{scan.image_tag}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={scan.status} externalStatus={scan.external_status} /></td>
+                    <td className="px-4 py-3"><OwnershipBadge ownerType={scan.owner_type} ownerOrgId={scan.owner_org_id} orgNamesById={orgNamesById} /></td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 flex-wrap">
                         {(scan.tags ?? []).map((tag) => (

@@ -40,6 +40,9 @@ export const adminListGlobalRegistries = () =>
 export const adminCreateGlobalRegistry = (data: Partial<Registry>) =>
   req<Registry>('POST', '/api/v1/admin/registries', data);
 
+export const adminUpdateGlobalRegistry = (id: string, data: Partial<Registry>) =>
+  req<Registry>('PUT', `/api/v1/admin/registries/${id}`, data);
+
 export const adminDeleteGlobalRegistry = (id: string) =>
   req<void>('DELETE', `/api/v1/admin/registries/${id}`);
 

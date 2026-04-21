@@ -138,6 +138,9 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.POST("/registries", func(c *gin.Context) {
 			admins.CreateGlobalRegistry(c, db)
 		})
+		admin.PUT("/registries/:id", func(c *gin.Context) {
+			admins.UpdateGlobalRegistry(c, db)
+		})
 		admin.DELETE("/registries/:id", func(c *gin.Context) {
 			admins.DeleteGlobalRegistry(c, db)
 		})

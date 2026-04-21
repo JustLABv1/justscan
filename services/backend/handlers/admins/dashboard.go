@@ -14,26 +14,26 @@ import (
 )
 
 type adminDashboardResponse struct {
-	GeneratedAt        time.Time                 `json:"generated_at"`
-	PublicScanEnabled  bool                      `json:"public_scan_enabled"`
-	TotalScans         int                       `json:"total_scans"`
-	StatusCounts       map[string]int            `json:"status_counts"`
-	SeverityTotals     map[string]int            `json:"severity_totals"`
-	Queues             adminDashboardQueues      `json:"queues"`
-	AdminCounts        adminDashboardCounts      `json:"admin_counts"`
-	Insights           adminDashboardInsights    `json:"insights"`
-	ScannerHealth      scanner.HealthReport      `json:"scanner_health"`
-	RecentAudit        []models.AuditWithUser    `json:"recent_audit"`
-	ScanTrends         []adminScanTrendRow       `json:"scan_trends"`
+	GeneratedAt         time.Time                    `json:"generated_at"`
+	PublicScanEnabled   bool                         `json:"public_scan_enabled"`
+	TotalScans          int                          `json:"total_scans"`
+	StatusCounts        map[string]int               `json:"status_counts"`
+	SeverityTotals      map[string]int               `json:"severity_totals"`
+	Queues              adminDashboardQueues         `json:"queues"`
+	AdminCounts         adminDashboardCounts         `json:"admin_counts"`
+	Insights            adminDashboardInsights       `json:"insights"`
+	ScannerHealth       scanner.HealthReport         `json:"scanner_health"`
+	RecentAudit         []models.AuditWithUser       `json:"recent_audit"`
+	ScanTrends          []adminScanTrendRow          `json:"scan_trends"`
 	VulnerabilityTrends []adminVulnerabilityTrendRow `json:"vulnerability_trends"`
 }
 
 type adminDashboardQueues struct {
-	Running        int `json:"running"`
-	Pending        int `json:"pending"`
-	Failed         int `json:"failed"`
+	Running         int `json:"running"`
+	Pending         int `json:"pending"`
+	Failed          int `json:"failed"`
 	BlockedPolicies int `json:"blocked_policies"`
-	NeedsAttention int `json:"needs_attention"`
+	NeedsAttention  int `json:"needs_attention"`
 }
 
 type adminDashboardCounts struct {
@@ -45,12 +45,12 @@ type adminDashboardCounts struct {
 }
 
 type adminDashboardInsights struct {
-	APIRequests24h      int64   `json:"api_requests_24h"`
-	APIErrorRequests24h int64   `json:"api_error_requests_24h"`
-	APIAverageMs        float64 `json:"api_average_ms"`
-	APIP95Ms            float64 `json:"api_p95_ms"`
-	XrayRequests24h     int64   `json:"xray_requests_24h"`
-	XrayErrorRequests24h int64  `json:"xray_error_requests_24h"`
+	APIRequests24h       int64   `json:"api_requests_24h"`
+	APIErrorRequests24h  int64   `json:"api_error_requests_24h"`
+	APIAverageMs         float64 `json:"api_average_ms"`
+	APIP95Ms             float64 `json:"api_p95_ms"`
+	XrayRequests24h      int64   `json:"xray_requests_24h"`
+	XrayErrorRequests24h int64   `json:"xray_error_requests_24h"`
 }
 
 type adminScanTrendRow struct {
@@ -97,12 +97,12 @@ func GetDashboard(c *gin.Context, db *bun.DB) {
 	cutoff24h := now.Add(-24 * time.Hour)
 
 	response := adminDashboardResponse{
-		GeneratedAt:       now,
-		PublicScanEnabled: true,
-		StatusCounts:      make(map[string]int),
-		SeverityTotals:    make(map[string]int),
-		RecentAudit:       []models.AuditWithUser{},
-		ScanTrends:        []adminScanTrendRow{},
+		GeneratedAt:         now,
+		PublicScanEnabled:   true,
+		StatusCounts:        make(map[string]int),
+		SeverityTotals:      make(map[string]int),
+		RecentAudit:         []models.AuditWithUser{},
+		ScanTrends:          []adminScanTrendRow{},
 		VulnerabilityTrends: []adminVulnerabilityTrendRow{},
 	}
 

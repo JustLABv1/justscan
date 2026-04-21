@@ -55,7 +55,7 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry_id"})
 				return
 			}
-			if _, _, _, ok := authz.LoadAuthorizedRegistry(c, db, parsedRegistryID); !ok {
+			if _, _, _, ok := authz.LoadAccessibleRegistry(c, db, parsedRegistryID); !ok {
 				return
 			}
 			requestedRegistryID = &parsedRegistryID
@@ -173,7 +173,7 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry_id"})
 				return
 			}
-			if _, _, _, ok := authz.LoadAuthorizedRegistry(c, db, parsedRegistryID); !ok {
+			if _, _, _, ok := authz.LoadAccessibleRegistry(c, db, parsedRegistryID); !ok {
 				return
 			}
 			requestedRegistryID = &parsedRegistryID

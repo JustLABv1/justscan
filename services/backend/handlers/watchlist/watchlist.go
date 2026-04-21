@@ -80,7 +80,7 @@ func CreateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			ownerOrgID = &parsedOrgID
 		}
 		if body.RegistryID != nil {
-			if _, _, _, ok := authz.LoadAuthorizedRegistry(c, db, *body.RegistryID); !ok {
+			if _, _, _, ok := authz.LoadAccessibleRegistry(c, db, *body.RegistryID); !ok {
 				return
 			}
 		}
@@ -160,7 +160,7 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			item.Enabled = *body.Enabled
 		}
 		if body.RegistryID != nil {
-			if _, _, _, ok := authz.LoadAuthorizedRegistry(c, db, *body.RegistryID); !ok {
+			if _, _, _, ok := authz.LoadAccessibleRegistry(c, db, *body.RegistryID); !ok {
 				return
 			}
 			item.RegistryID = body.RegistryID

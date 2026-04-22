@@ -46,6 +46,8 @@ func OIDCCallback(db *bun.DB) gin.HandlerFunc {
 		// Clear state cookie immediately after verification.
 		c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie("oidc_state", "", -1, "/", "", false, true)
+		providerCookie, _ := c.Cookie("oidc_provider")
+		c.SetCookie("oidc_provider", "", -1, "/", "", false, true)
 
 		// Check for error from provider (e.g. user denied consent)
 		if errParam := c.Query("error"); errParam != "" {
@@ -61,7 +63,27 @@ func OIDCCallback(db *bun.DB) gin.HandlerFunc {
 		}
 
 		// --- 2. Exchange code for tokens ---
+		providerName := resolveLegacyOIDCProviderName(c.Request.Context(), providerCookie)
+		providerEntry, providerEntryErr := auth.GetProviderEntry(c.Request.Context(), providerName)
 		oauth2Cfg := auth.GetOIDCOAuth2Config()
+		providerClientID := cfg.OIDC.ClientID
+		adminCheck := auth.IsAdmin
+		extractClaims := auth.ExtractOIDCClaims
+		groupsClaimName := cfg.OIDC.GroupsClaim
+		rolesClaimName := cfg.OIDC.RolesClaim
+		if providerEntryErr == nil && providerEntry != nil {
+			model := providerEntry.GetModel()
+			oauth2Cfg = providerEntry.GetOAuth2Config()
+			providerClientID = model.ClientID
+			adminCheck = func(claims *auth.OIDCClaims) bool {
+				return auth.IsAdminForProvider(claims, model)
+			}
+			extractClaims = func(idToken *gooidc.IDToken) (*auth.OIDCClaims, error) {
+				return auth.ExtractOIDCClaimsForProvider(idToken, model)
+			}
+			groupsClaimName = model.GroupsClaim
+			rolesClaimName = model.RolesClaim
+		}
 		token, err := oauth2Cfg.Exchange(c.Request.Context(), code)
 		if err != nil {
 			httperror.InternalServerError(c, "Failed to exchange authorization code", err)
@@ -70,12 +92,15 @@ func OIDCCallback(db *bun.DB) gin.HandlerFunc {
 
 		// --- 3. Verify ID token ---
 		provider := auth.GetOIDCProvider()
+		if providerEntryErr == nil && providerEntry != nil {
+			provider = providerEntry.GetProvider()
+		}
 		if provider == nil {
 			httperror.InternalServerError(c, "OIDC provider not initialised", errors.New("oidc provider is nil"))
 			return
 		}
 
-		oidcVerifier := provider.Verifier(&gooidc.Config{ClientID: cfg.OIDC.ClientID})
+		oidcVerifier := provider.Verifier(&gooidc.Config{ClientID: providerClientID})
 		rawIDToken, ok := token.Extra("id_token").(string)
 		if !ok {
 			httperror.InternalServerError(c, "ID token missing from provider response", errors.New("no id_token in token response"))
@@ -88,10 +113,18 @@ func OIDCCallback(db *bun.DB) gin.HandlerFunc {
 		}
 
 		// --- 4. Extract claims ---
-		claims, err := auth.ExtractOIDCClaims(idToken)
+		claims, err := extractClaims(idToken)
 		if err != nil {
 			httperror.InternalServerError(c, "Failed to extract OIDC claims", err)
 			return
+		}
+		if len(claims.Groups) == 0 && providerEntryErr == nil && providerEntry != nil && token.AccessToken != "" {
+			userInfoGroups, userInfoErr := auth.FetchUserInfoGroups(c.Request.Context(), providerEntry, token.AccessToken)
+			if userInfoErr != nil {
+				log.WithFields(log.Fields{"provider": providerName}).WithError(userInfoErr).Warn("oidc: failed to fetch groups from userinfo")
+			} else if len(userInfoGroups) > 0 {
+				claims.Groups = userInfoGroups
+			}
 		}
 
 		if cfg.OIDC.Debug {
@@ -99,8 +132,8 @@ func OIDCCallback(db *bun.DB) gin.HandlerFunc {
 				"subject":            claims.Sub,
 				"email":              claims.Email,
 				"preferred_username": claims.PreferredUsername,
-				"groups_claim":       cfg.OIDC.GroupsClaim,
-				"roles_claim":        cfg.OIDC.RolesClaim,
+				"groups_claim":       groupsClaimName,
+				"roles_claim":        rolesClaimName,
 				"extracted_groups":   claims.Groups,
 				"extracted_roles":    claims.Roles,
 				"raw_claims":         claims.RawClaims,
@@ -122,7 +155,7 @@ func OIDCCallback(db *bun.DB) gin.HandlerFunc {
 
 		// --- 6. Re-evaluate admin role ---
 		newRole := "user"
-		if auth.IsAdmin(claims) {
+		if adminCheck(claims) || auth.IsAdmin(claims) {
 			newRole = "admin"
 		}
 		if user.Role != newRole {
@@ -132,6 +165,9 @@ func OIDCCallback(db *bun.DB) gin.HandlerFunc {
 				_ = fmt.Errorf("oidc: failed to update user role: %w", err)
 			}
 		}
+
+		// Keep legacy single-provider logins aligned with multi-provider claim mapping sync.
+		syncOIDCClaimOrgs(c.Request.Context(), db, user.ID, providerName, claims.Groups, claims.Roles)
 
 		if err := auth.RecordSuccessfulLogin(c.Request.Context(), db, user, "oidc"); err != nil {
 			httperror.InternalServerError(c, "Failed to update login metadata", err)

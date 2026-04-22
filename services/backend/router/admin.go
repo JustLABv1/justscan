@@ -128,8 +128,26 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.POST("/oidc-providers/:name/group-mappings", func(c *gin.Context) {
 			admins.CreateGroupMapping(c, db)
 		})
+		admin.PUT("/oidc-providers/:name/group-mappings/:mappingID", func(c *gin.Context) {
+			admins.UpdateGroupMapping(c, db)
+		})
 		admin.DELETE("/oidc-providers/:name/group-mappings/:mappingID", func(c *gin.Context) {
 			admins.DeleteGroupMapping(c, db)
+		})
+		admin.POST("/oidc-providers/:name/claim-sync-preview", func(c *gin.Context) {
+			admins.PreviewClaimSync(c, db)
+		})
+		admin.GET("/oidc-providers/:name/role-overrides", func(c *gin.Context) {
+			admins.ListRoleOverrides(c, db)
+		})
+		admin.POST("/oidc-providers/:name/role-overrides", func(c *gin.Context) {
+			admins.CreateRoleOverride(c, db)
+		})
+		admin.PUT("/oidc-providers/:name/role-overrides/:overrideID", func(c *gin.Context) {
+			admins.UpdateRoleOverride(c, db)
+		})
+		admin.DELETE("/oidc-providers/:name/role-overrides/:overrideID", func(c *gin.Context) {
+			admins.DeleteRoleOverride(c, db)
 		})
 		// global (system) registries
 		admin.GET("/registries", func(c *gin.Context) {

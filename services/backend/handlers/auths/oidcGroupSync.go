@@ -14,10 +14,10 @@ import (
 )
 
 type desiredOIDCMembership struct {
-	OrgID           uuid.UUID
-	Role            string
-	MappingID       *uuid.UUID
-	RemoveOnUnsync  bool
+	OrgID          uuid.UUID
+	Role           string
+	MappingID      *uuid.UUID
+	RemoveOnUnsync bool
 }
 
 // syncOIDCClaimOrgs syncs the user's org memberships based on explicit claim
@@ -258,14 +258,14 @@ func pointerToUUID(value uuid.UUID) *uuid.UUID {
 func upsertOIDCMembership(ctx context.Context, db *bun.DB, userID, orgID uuid.UUID, role, providerName string, mappingID *uuid.UUID) {
 	now := time.Now()
 	member := models.OrgMember{
-		OrgID:        orgID,
-		UserID:       userID,
-		Role:         role,
-		JoinedAt:     now,
-		CreatedAt:    now,
-		UpdatedAt:    now,
-		OIDCSynced:   true,
-		OIDCProvider: providerName,
+		OrgID:         orgID,
+		UserID:        userID,
+		Role:          role,
+		JoinedAt:      now,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+		OIDCSynced:    true,
+		OIDCProvider:  providerName,
 		OIDCMappingID: mappingID,
 	}
 	_, err := db.NewInsert().Model(&member).

@@ -5,6 +5,7 @@ import { Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 interface OrgTeamTabProps {
   canEditRoles: boolean;
   canManageMembers: boolean;
+  canTransferOwnership: boolean;
   currentOrgRole?: OrgRole;
   inputClassName: string;
   invites: OrgInvite[];
@@ -16,11 +17,13 @@ interface OrgTeamTabProps {
   onOpenInviteModal: () => void;
   onRemoveMember: (member: OrgMember) => void | Promise<void>;
   onRevokeInvite: (invite: OrgInvite) => void | Promise<void>;
+  onTransferOwnership: (member: OrgMember) => void | Promise<void>;
 }
 
 export function OrgTeamTab({
   canEditRoles,
   canManageMembers,
+  canTransferOwnership,
   currentOrgRole,
   inputClassName,
   invites,
@@ -32,6 +35,7 @@ export function OrgTeamTab({
   onOpenInviteModal,
   onRemoveMember,
   onRevokeInvite,
+  onTransferOwnership,
 }: OrgTeamTabProps) {
   return (
     <div className="space-y-6">
@@ -101,11 +105,22 @@ export function OrgTeamTab({
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-500">{timeAgo(member.joined_at)}</td>
                     <td className="px-4 py-3 text-right">
-                      {canManageMembers && member.role !== 'owner' && (
-                        <button onClick={() => void onRemoveMember(member)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors" title="Remove member" type="button">
-                          <Delete01Icon size={15} />
-                        </button>
-                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        {canTransferOwnership && member.role !== 'owner' && (
+                          <button
+                            onClick={() => void onTransferOwnership(member)}
+                            className="btn-secondary text-xs px-3 py-1.5"
+                            type="button"
+                          >
+                            Make owner
+                          </button>
+                        )}
+                        {canManageMembers && member.role !== 'owner' && (
+                          <button onClick={() => void onRemoveMember(member)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors" title="Remove member" type="button">
+                            <Delete01Icon size={15} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

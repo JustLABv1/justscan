@@ -74,6 +74,8 @@ export default function WatchlistPage() {
       .then((response) => {
         setRegistries(response.data);
         setCapabilities(response.capabilities);
+        const defaultReg = response.data.find((registry) => registry.is_default);
+        if (defaultReg) setRegistryId((prev) => prev || defaultReg.id);
       })
       .catch(() => {});
   }, [load, scopeKey]);
@@ -81,10 +83,11 @@ export default function WatchlistPage() {
   const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
   const registryOptions = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy || registry.id === registryId);
   const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
+  const defaultRegistryId = registries.find((registry) => registry.is_default)?.id ?? '';
 
   function openCreate() {
     setEditing(null); setImageName(''); setImageTag('latest'); setSchedule('0 2 * * *');
-    setTimezone(getBrowserTimezone()); setEnabled(true); setRegistryId(''); setFormError(''); modal.open();
+    setTimezone(getBrowserTimezone()); setEnabled(true); setRegistryId(defaultRegistryId); setFormError(''); modal.open();
   }
   function openEdit(item: WatchlistItem) {
     setEditing(item); setImageName(item.image_name); setImageTag(item.image_tag);
@@ -105,7 +108,7 @@ export default function WatchlistPage() {
         schedule,
         timezone,
         enabled,
-        ...(registryId ? { registry_id: registryId } : {}),
+        registry_id: registryId || null,
         ...(currentScope.kind === 'org' ? { org_id: currentScope.orgId } : {}),
       };
       if (editing) { await updateWatchlistItem(editing.id, data); toast.success('Watchlist item updated'); }

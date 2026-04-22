@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -311,6 +312,12 @@ func TestShouldTreatIgnoreRuleLookupAsUnavailable(t *testing.T) {
 	}
 }
 
+func TestIsRetriableXrayScanArtifactErrorTreatsGatewayTimeoutAsRetriable(t *testing.T) {
+	if got := isRetriableXrayScanArtifactError(&xrayHTTPError{StatusCode: http.StatusGatewayTimeout}); !got {
+		t.Fatal("expected gateway timeout to be treated as retriable for scanArtifact")
+	}
+}
+
 func TestDescribeNonFatalXrayIgnoreRuleSyncErrorExplainsPermissionIssue(t *testing.T) {
 	message := describeNonFatalXrayIgnoreRuleSyncError(&xrayHTTPError{StatusCode: http.StatusForbidden})
 	if want := "permission to read ignore rules"; !containsFold(message, want) {
@@ -375,6 +382,260 @@ func TestExportComponentCycloneDXSkipsEmptyPathFallbackWhenPathsProvided(t *test
 	}
 	if got := err.Error(); got != "xray API returned HTTP 400: {\"error\":\"path plain-images/alpine/3.23/manifest.json failed\"}" {
 		t.Fatalf("unexpected error %q", got)
+	}
+}
+
+func TestBuildXrayArtifactPathCandidatesIncludesDigestFallback(t *testing.T) {
+	candidates := buildXrayArtifactPathCandidates("default", "docker-remote", "n8nio/n8n", "2.17.5", "list.manifest.json", "sha256:f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69")
+	if len(candidates) != 4 {
+		t.Fatalf("expected 4 candidates, got %d (%#v)", len(candidates), candidates)
+	}
+	if candidates[0].ArtifactPath != "default/docker-remote/n8nio/n8n/2.17.5/list.manifest.json" {
+		t.Fatalf("unexpected primary artifact path %q", candidates[0].ArtifactPath)
+	}
+	if candidates[1].ArtifactPath != "default/docker-remote/n8nio/n8n/sha256__f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69/manifest.json" {
+		t.Fatalf("unexpected digest fallback artifact path %q", candidates[1].ArtifactPath)
+	}
+	if candidates[2].ArtifactPath != "default/docker-remote-cache/n8nio/n8n/2.17.5/list.manifest.json" {
+		t.Fatalf("unexpected cache tag artifact path %q", candidates[2].ArtifactPath)
+	}
+	if candidates[3].ArtifactPath != "default/docker-remote-cache/n8nio/n8n/sha256__f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69/manifest.json" {
+		t.Fatalf("unexpected cache digest fallback artifact path %q", candidates[3].ArtifactPath)
+	}
+}
+
+func TestPollArtifactSummaryFallsBackToCacheRepositoryCandidate(t *testing.T) {
+	client := &xrayClient{
+		baseURL: "http://example.com",
+		httpClient: newTestHTTPClient(func(req *http.Request) (*http.Response, error) {
+			if req.URL.Path != "/xray/api/v2/summary/artifact" {
+				return jsonResponse(http.StatusNotFound, map[string]string{"error": "not found"}), nil
+			}
+
+			var body map[string][]string
+			if err := decodeJSONBody(req, &body); err != nil {
+				return nil, err
+			}
+			path := ""
+			if len(body["paths"]) > 0 {
+				path = body["paths"][0]
+			}
+
+			switch path {
+			case "default/docker-remote-cache/n8nio/n8n/sha256__f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69/manifest.json":
+				return jsonResponse(http.StatusOK, map[string]any{
+					"artifacts": []map[string]any{{
+						"issues": []any{},
+					}},
+				}), nil
+			default:
+				return jsonResponse(http.StatusOK, map[string]any{
+					"artifacts": []any{},
+					"errors": []map[string]string{{
+						"identifier": path,
+						"error":      "Artifact doesn't exist or not indexed/cached in Xray",
+					}},
+				}), nil
+			}
+		}),
+	}
+
+	candidates := buildXrayArtifactPathCandidates("default", "docker-remote", "n8nio/n8n", "2.17.5", "list.manifest.json", "sha256:f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69")
+	summary, resolvedCandidate, err := client.pollArtifactSummaryWithin(testContext(), candidates, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("expected cache repository fallback summary lookup to succeed, got %v", err)
+	}
+	if len(summary.Artifacts) != 1 {
+		t.Fatalf("expected 1 artifact summary, got %d", len(summary.Artifacts))
+	}
+	if resolvedCandidate.ArtifactPath != "default/docker-remote-cache/n8nio/n8n/sha256__f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69/manifest.json" {
+		t.Fatalf("unexpected resolved artifact path %q", resolvedCandidate.ArtifactPath)
+	}
+}
+
+func TestPollArtifactSummaryFallsBackToDigestCandidate(t *testing.T) {
+	client := &xrayClient{
+		baseURL: "http://example.com",
+		httpClient: newTestHTTPClient(func(req *http.Request) (*http.Response, error) {
+			if req.URL.Path != "/xray/api/v2/summary/artifact" {
+				return jsonResponse(http.StatusNotFound, map[string]string{"error": "not found"}), nil
+			}
+
+			var body map[string][]string
+			if err := decodeJSONBody(req, &body); err != nil {
+				return nil, err
+			}
+			path := ""
+			if len(body["paths"]) > 0 {
+				path = body["paths"][0]
+			}
+
+			switch path {
+			case "default/docker-remote/n8nio/n8n/2.17.5/list.manifest.json":
+				return jsonResponse(http.StatusOK, map[string]any{
+					"artifacts": []any{},
+					"errors": []map[string]string{{
+						"identifier": path,
+						"error":      "Artifact doesn't exist or not indexed/cached in Xray",
+					}},
+				}), nil
+			case "default/docker-remote/n8nio/n8n/sha256__f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69/manifest.json":
+				return jsonResponse(http.StatusOK, map[string]any{
+					"artifacts": []map[string]any{{
+						"issues": []any{},
+					}},
+				}), nil
+			default:
+				return jsonResponse(http.StatusBadRequest, map[string]string{"error": path}), nil
+			}
+		}),
+	}
+
+	candidates := buildXrayArtifactPathCandidates("default", "docker-remote", "n8nio/n8n", "2.17.5", "list.manifest.json", "sha256:f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69")
+	summary, resolvedCandidate, err := client.pollArtifactSummaryWithin(testContext(), candidates, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("expected fallback summary lookup to succeed, got %v", err)
+	}
+	if len(summary.Artifacts) != 1 {
+		t.Fatalf("expected 1 artifact summary, got %d", len(summary.Artifacts))
+	}
+	if resolvedCandidate.ArtifactPath != "default/docker-remote/n8nio/n8n/sha256__f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69/manifest.json" {
+		t.Fatalf("unexpected resolved artifact path %q", resolvedCandidate.ArtifactPath)
+	}
+}
+
+func TestPollArtifactSummaryPrefersCandidateWithFindings(t *testing.T) {
+	client := &xrayClient{
+		baseURL: "http://example.com",
+		httpClient: newTestHTTPClient(func(req *http.Request) (*http.Response, error) {
+			if req.URL.Path != "/xray/api/v2/summary/artifact" {
+				return jsonResponse(http.StatusNotFound, map[string]string{"error": "not found"}), nil
+			}
+
+			var body map[string][]string
+			if err := decodeJSONBody(req, &body); err != nil {
+				return nil, err
+			}
+			path := ""
+			if len(body["paths"]) > 0 {
+				path = body["paths"][0]
+			}
+
+			switch path {
+			case "default/docker-remote/n8nio/n8n/2.17.5/list.manifest.json":
+				return jsonResponse(http.StatusOK, map[string]any{
+					"artifacts": []map[string]any{{
+						"issues": []any{},
+					}},
+				}), nil
+			case "default/docker-remote/n8nio/n8n/sha256__f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69/manifest.json":
+				return jsonResponse(http.StatusOK, map[string]any{
+					"artifacts": []map[string]any{{
+						"issues": []map[string]any{{
+							"issue_id":   "CVE-2026-9999",
+							"severity":   "High",
+							"summary":    "digest-only issue",
+							"components": []map[string]any{{"component_id": "docker://n8nio/n8n:2.17.5"}},
+						}},
+					}},
+				}), nil
+			default:
+				return jsonResponse(http.StatusBadRequest, map[string]string{"error": path}), nil
+			}
+		}),
+	}
+
+	candidates := buildXrayArtifactPathCandidates("default", "docker-remote", "n8nio/n8n", "2.17.5", "list.manifest.json", "sha256:f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69")
+	summary, resolvedCandidate, err := client.pollArtifactSummaryWithin(testContext(), candidates[:2], 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("expected summary lookup to prefer candidate with findings, got %v", err)
+	}
+	if len(summary.Artifacts) != 1 || len(summary.Artifacts[0].Issues) != 1 {
+		t.Fatalf("expected digest candidate issues to be returned, got %#v", summary.Artifacts)
+	}
+	if resolvedCandidate.ArtifactPath != "default/docker-remote/n8nio/n8n/sha256__f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69/manifest.json" {
+		t.Fatalf("unexpected resolved artifact path %q", resolvedCandidate.ArtifactPath)
+	}
+}
+
+func TestPollArtifactSummaryIgnoresTransientGatewayTimeout(t *testing.T) {
+	client := &xrayClient{
+		baseURL: "http://example.com",
+		httpClient: newTestHTTPClient(func(req *http.Request) (*http.Response, error) {
+			if req.URL.Path != "/xray/api/v2/summary/artifact" {
+				return jsonResponse(http.StatusNotFound, map[string]string{"error": "not found"}), nil
+			}
+
+			var body map[string][]string
+			if err := decodeJSONBody(req, &body); err != nil {
+				return nil, err
+			}
+			path := ""
+			if len(body["paths"]) > 0 {
+				path = body["paths"][0]
+			}
+
+			switch path {
+			case "default/docker-remote/n8nio/n8n/2.17.5/list.manifest.json":
+				return &http.Response{
+					StatusCode: http.StatusGatewayTimeout,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader("<html><body><h1>504 Gateway Time-out</h1></body></html>")),
+				}, nil
+			case "default/docker-remote/n8nio/n8n/sha256__f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69/manifest.json":
+				return jsonResponse(http.StatusOK, map[string]any{
+					"artifacts": []map[string]any{{
+						"issues": []map[string]any{{
+							"issue_id":   "CVE-2026-9998",
+							"severity":   "High",
+							"summary":    "digest issue after transient timeout",
+							"components": []map[string]any{{"component_id": "docker://n8nio/n8n:2.17.5"}},
+						}},
+					}},
+				}), nil
+			default:
+				return jsonResponse(http.StatusBadRequest, map[string]string{"error": path}), nil
+			}
+		}),
+	}
+
+	candidates := buildXrayArtifactPathCandidates("default", "docker-remote", "n8nio/n8n", "2.17.5", "list.manifest.json", "sha256:f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69")
+	summary, resolvedCandidate, err := client.pollArtifactSummaryWithin(testContext(), candidates[:2], 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("expected transient gateway timeout to be ignored, got %v", err)
+	}
+	if len(summary.Artifacts) != 1 || len(summary.Artifacts[0].Issues) != 1 {
+		t.Fatalf("expected digest candidate issues to be returned, got %#v", summary.Artifacts)
+	}
+	if resolvedCandidate.ArtifactPath != "default/docker-remote/n8nio/n8n/sha256__f462b5d11bae72b5d4b36c984c2459d4bf2ce17a59c933ddd7db468ef6754e69/manifest.json" {
+		t.Fatalf("unexpected resolved artifact path %q", resolvedCandidate.ArtifactPath)
+	}
+}
+
+func TestDoRegistryRequestUsesDedicatedRegistryClient(t *testing.T) {
+	registryClientUsed := false
+	client := &xrayClient{
+		registryURL: "http://registry.example",
+		httpClient: newTestHTTPClient(func(req *http.Request) (*http.Response, error) {
+			return nil, fmt.Errorf("xray client should not be used for registry requests")
+		}),
+		registryHTTPClient: newTestHTTPClient(func(req *http.Request) (*http.Response, error) {
+			registryClientUsed = true
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader("ok")),
+			}, nil
+		}),
+	}
+
+	response, err := client.doRegistryRequest(testContext(), http.MethodGet, "/v2/docker-remote/example/blobs/sha256:test", nil)
+	if err != nil {
+		t.Fatalf("expected registry request to succeed, got %v", err)
+	}
+	defer response.Body.Close()
+	if !registryClientUsed {
+		t.Fatal("expected registryHTTPClient to service registry requests")
 	}
 }
 

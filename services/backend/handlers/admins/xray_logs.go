@@ -78,3 +78,84 @@ func GetXRayRequestLogs(c *gin.Context, db *bun.DB) {
 
 	c.JSON(http.StatusOK, gin.H{"data": entries, "total": total})
 }
+
+// GetXRayUsageStats returns aggregated Xray request statistics for the admin insights view.
+func GetXRayUsageStats(c *gin.Context, db *bun.DB) {
+	ctx := c.Request.Context()
+
+	fromClause, toClause := "", ""
+	var fromArgs, toArgs []any
+	if from := c.Query("from"); from != "" {
+		if parsed, err := time.Parse(time.RFC3339, from); err == nil {
+			fromClause = "created_at >= ?"
+			fromArgs = append(fromArgs, parsed)
+		}
+	}
+	if to := c.Query("to"); to != "" {
+		if parsed, err := time.Parse(time.RFC3339, to); err == nil {
+			toClause = "created_at <= ?"
+			toArgs = append(toArgs, parsed)
+		}
+	}
+
+	applyRange := func(q *bun.SelectQuery) *bun.SelectQuery {
+		if fromClause != "" {
+			q = q.Where(fromClause, fromArgs...)
+		}
+		if toClause != "" {
+			q = q.Where(toClause, toArgs...)
+		}
+		return q
+	}
+
+	var summary struct {
+		Total  int64   `bun:"total"`
+		Errors int64   `bun:"errors"`
+		Avg    float64 `bun:"avg_ms"`
+		P95    float64 `bun:"p95_ms"`
+	}
+	summaryQ := applyRange(db.NewSelect().
+		TableExpr("xray_request_logs").
+		ColumnExpr("COUNT(*) AS total").
+		ColumnExpr("COUNT(*) FILTER (WHERE status_code >= 400 OR status_code = -1) AS errors").
+		ColumnExpr("COALESCE(AVG(duration_ms), 0) AS avg_ms").
+		ColumnExpr("COALESCE(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms), 0) AS p95_ms"))
+	if err := summaryQ.Scan(ctx, &summary); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to compute xray usage stats"})
+		return
+	}
+
+	var topEndpoints []models.EndpointStat
+	endpointsQ := applyRange(db.NewSelect().
+		TableExpr("xray_request_logs").
+		ColumnExpr("method, endpoint AS path, COUNT(*) AS count").
+		GroupExpr("method, endpoint").
+		OrderExpr("count DESC").
+		Limit(10))
+	if err := endpointsQ.Scan(ctx, &topEndpoints); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to compute xray top endpoints"})
+		return
+	}
+
+	var statusBreakdown []models.StatusBucket
+	statusQ := applyRange(db.NewSelect().
+		TableExpr("xray_request_logs").
+		ColumnExpr("status_code, COUNT(*) AS count").
+		GroupExpr("status_code").
+		OrderExpr("status_code"))
+	if err := statusQ.Scan(ctx, &statusBreakdown); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to compute xray status breakdown"})
+		return
+	}
+
+	stats := models.XRayUsageStats{
+		TotalRequests:   summary.Total,
+		ErrorRequests:   summary.Errors,
+		AvgDurationMs:   summary.Avg,
+		P95DurationMs:   summary.P95,
+		TopEndpoints:    topEndpoints,
+		StatusBreakdown: statusBreakdown,
+	}
+
+	c.JSON(http.StatusOK, stats)
+}

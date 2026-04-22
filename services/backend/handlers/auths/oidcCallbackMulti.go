@@ -82,6 +82,14 @@ func OIDCCallbackMulti(db *bun.DB) gin.HandlerFunc {
 			httperror.InternalServerError(c, "Failed to extract OIDC claims", err)
 			return
 		}
+		if len(claims.Groups) == 0 && token.AccessToken != "" {
+			userInfoGroups, userInfoErr := auth.FetchUserInfoGroups(c.Request.Context(), entry, token.AccessToken)
+			if userInfoErr != nil {
+				log.WithFields(log.Fields{"provider": providerName}).WithError(userInfoErr).Warn("oidc: failed to fetch groups from userinfo")
+			} else if len(userInfoGroups) > 0 {
+				claims.Groups = userInfoGroups
+			}
+		}
 
 		if m.GroupsClaim != "" {
 			log.WithFields(log.Fields{
@@ -106,7 +114,7 @@ func OIDCCallbackMulti(db *bun.DB) gin.HandlerFunc {
 
 		// --- 7. Re-evaluate admin role ---
 		newRole := "user"
-		if auth.IsAdminForProvider(claims, m) {
+		if auth.IsAdminForProvider(claims, m) || (providerName == "default" && auth.IsAdmin(claims)) {
 			newRole = "admin"
 		}
 		if user.Role != newRole {
@@ -116,8 +124,8 @@ func OIDCCallbackMulti(db *bun.DB) gin.HandlerFunc {
 			}
 		}
 
-		// --- 8. Sync group→org memberships ---
-		syncOIDCGroupOrgs(c.Request.Context(), db, user.ID, providerName, claims.Groups)
+		// --- 8. Sync explicit OIDC claim mappings into org memberships ---
+		syncOIDCClaimOrgs(c.Request.Context(), db, user.ID, providerName, claims.Groups, claims.Roles)
 
 		if err := auth.RecordSuccessfulLogin(c.Request.Context(), db, user, "oidc"); err != nil {
 			httperror.InternalServerError(c, "Failed to update login metadata", err)

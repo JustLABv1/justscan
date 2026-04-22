@@ -1,7 +1,7 @@
 import { req } from './core';
 import { getDefaultScannerCapabilities } from './registries';
 import type { APIRequestLog, APIRequestLogFilters, APIUsageStats, AdminDashboard, AdminToken, AdminUser, AuditLog, AuditLogFilters, NotificationChannel, NotificationDelivery, XRayRequestLog, XRayRequestLogFilters } from './types/admin';
-import type { AutoTagRule, OIDCGroupMapping, OIDCProviderAdmin, Registry, RegistryListResponse, ScannerSettings } from './types/registries';
+import type { AutoTagRule, OIDCClaimSyncPreview, OIDCGroupMapping, OIDCOrgRoleOverride, OIDCProviderAdmin, Registry, RegistryListResponse, ScannerSettings } from './types/registries';
 import type { AdminScan } from './types/scans';
 
 export const getAdminDashboard = () =>
@@ -25,8 +25,26 @@ export const adminListGroupMappings = (providerName: string) =>
 export const adminCreateGroupMapping = (providerName: string, data: Partial<OIDCGroupMapping>) =>
   req<OIDCGroupMapping>('POST', `/api/v1/admin/oidc-providers/${providerName}/group-mappings`, data);
 
+export const adminUpdateGroupMapping = (providerName: string, mappingId: string, data: Partial<OIDCGroupMapping>) =>
+  req<OIDCGroupMapping>('PUT', `/api/v1/admin/oidc-providers/${providerName}/group-mappings/${mappingId}`, data);
+
 export const adminDeleteGroupMapping = (providerName: string, mappingId: string) =>
   req<void>('DELETE', `/api/v1/admin/oidc-providers/${providerName}/group-mappings/${mappingId}`);
+
+export const adminPreviewOIDCClaimSync = (providerName: string, data: { groups?: string[]; roles?: string[] }) =>
+  req<{ data: OIDCClaimSyncPreview }>('POST', `/api/v1/admin/oidc-providers/${providerName}/claim-sync-preview`, data).then((result) => result.data);
+
+export const adminListOIDCRoleOverrides = (providerName: string) =>
+  req<{ data: OIDCOrgRoleOverride[] }>('GET', `/api/v1/admin/oidc-providers/${providerName}/role-overrides`).then((result) => result.data ?? []);
+
+export const adminCreateOIDCRoleOverride = (providerName: string, data: Partial<OIDCOrgRoleOverride>) =>
+  req<OIDCOrgRoleOverride>('POST', `/api/v1/admin/oidc-providers/${providerName}/role-overrides`, data);
+
+export const adminUpdateOIDCRoleOverride = (providerName: string, overrideId: string, data: Partial<OIDCOrgRoleOverride>) =>
+  req<OIDCOrgRoleOverride>('PUT', `/api/v1/admin/oidc-providers/${providerName}/role-overrides/${overrideId}`, data);
+
+export const adminDeleteOIDCRoleOverride = (providerName: string, overrideId: string) =>
+  req<void>('DELETE', `/api/v1/admin/oidc-providers/${providerName}/role-overrides/${overrideId}`);
 
 export const adminUpdateScannerSettings = (data: Partial<ScannerSettings>) =>
   req<{ updated: Record<string, string> }>('PUT', '/api/v1/admin/settings/scanner', data);
@@ -39,6 +57,9 @@ export const adminListGlobalRegistries = () =>
 
 export const adminCreateGlobalRegistry = (data: Partial<Registry>) =>
   req<Registry>('POST', '/api/v1/admin/registries', data);
+
+export const adminUpdateGlobalRegistry = (id: string, data: Partial<Registry>) =>
+  req<Registry>('PUT', `/api/v1/admin/registries/${id}`, data);
 
 export const adminDeleteGlobalRegistry = (id: string) =>
   req<void>('DELETE', `/api/v1/admin/registries/${id}`);

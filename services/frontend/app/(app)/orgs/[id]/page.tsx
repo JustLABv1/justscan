@@ -35,6 +35,7 @@ import {
     revokeOrgInvite,
     Scan,
     TrendPoint,
+    transferOrgOwnership,
     updateOrg,
     updateOrgMemberRole,
     updatePolicy,
@@ -210,6 +211,24 @@ export default function OrgDetailPage() {
     await removeOrgMember(id, member.user_id).catch(() => {});
     toast.success('Member removed');
     await loadMembers();
+  }
+
+  async function handleTransferOwnership(member: OrgMember) {
+    const label = member.username || member.email || 'this member';
+    const ok = await confirm({
+      title: `Transfer ownership to ${label}?`,
+      message: 'The selected member will become the organization owner and the current owner will be demoted to admin.',
+      confirmLabel: 'Transfer',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    try {
+      await transferOrgOwnership(id, member.user_id);
+      toast.success('Ownership transferred');
+      await Promise.all([load(), loadMembers()]);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to transfer ownership');
+    }
   }
 
   async function handleRevokeInvite(invite: OrgInvite) {
@@ -432,6 +451,7 @@ export default function OrgDetailPage() {
           <OrgTeamTab
             canEditRoles={canEditRoles}
             canManageMembers={canManageMembers}
+            canTransferOwnership={canEditRoles}
             currentOrgRole={currentOrgRole}
             inputClassName={inputCls}
             invites={invites}
@@ -443,6 +463,7 @@ export default function OrgDetailPage() {
             onOpenInviteModal={openInviteModal}
             onRemoveMember={(member) => void handleRemoveMember(member)}
             onRevokeInvite={(invite) => void handleRevokeInvite(invite)}
+            onTransferOwnership={(member) => void handleTransferOwnership(member)}
           />
         )}
         {activeTab === 'scans' && (

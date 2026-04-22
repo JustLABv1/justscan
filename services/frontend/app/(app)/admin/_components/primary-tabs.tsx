@@ -1402,6 +1402,7 @@ export function AuditLogTab() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({ q: '', user: '', operation: '', from: '', to: '' });
+  const [expandedDetails, setExpandedDetails] = useState<Set<string>>(new Set());
   const limit = 50;
 
   const requestFilters: AuditLogFilters = useMemo(() => ({
@@ -1432,6 +1433,18 @@ export function AuditLogTab() {
   function updateFilter<K extends keyof typeof filters>(key: K, value: string) {
     setFilters((previous) => ({ ...previous, [key]: value }));
     setPage(1);
+  }
+
+  function toggleDetails(logId: string) {
+    setExpandedDetails((previous) => {
+      const next = new Set(previous);
+      if (next.has(logId)) {
+        next.delete(logId);
+      } else {
+        next.add(logId);
+      }
+      return next;
+    });
   }
 
   async function handleExport() {
@@ -1477,12 +1490,6 @@ export function AuditLogTab() {
     }
   }
 
-  if (loading) return (
-    <div className="flex justify-center py-16">
-      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
-    </div>
-  );
-
   return (
     <div className="space-y-4">
       {error && (
@@ -1500,7 +1507,15 @@ export function AuditLogTab() {
           <input type="datetime-local" className={inputCls} value={filters.to} onChange={(event) => updateFilter('to', event.target.value)} />
         </div>
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-zinc-500">{total} total events</p>
+          <div className="flex items-center gap-3 text-sm text-zinc-500">
+            <p>{total} total events</p>
+            {loading ? (
+              <span className="inline-flex items-center gap-2 text-xs text-zinc-400">
+                <span className="h-3.5 w-3.5 rounded-full border-2 border-zinc-300/60 border-t-violet-500 animate-spin" />
+                Refreshing…
+              </span>
+            ) : null}
+          </div>
           <button onClick={handleExport} disabled={exporting || total === 0} className="btn-primary inline-flex items-center gap-2" type="button">
             {exporting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Export CSV
@@ -1516,7 +1531,11 @@ export function AuditLogTab() {
         </div>
       </div>
 
-      {logs.length === 0 ? (
+      {loading && logs.length === 0 ? (
+        <div className="glass-panel rounded-2xl py-16 flex justify-center">
+          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        </div>
+      ) : logs.length === 0 ? (
         <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
           <p className="text-sm text-zinc-500">No audit log entries yet.</p>
         </div>
@@ -1534,22 +1553,44 @@ export function AuditLogTab() {
             </thead>
             <tbody>
               {logs.map((log, index) => (
-                <tr
-                  key={log.id}
-                  style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
-                  onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
-                  onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
-                >
-                  <td className="px-4 py-3 text-xs text-zinc-400 whitespace-nowrap" title={fullDate(log.created_at)}>{timeAgo(log.created_at)}</td>
-                  <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-300 font-medium">{log.username ?? log.user_id.slice(0, 8)}</td>
-                  <td className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-[0.14em]">{log.role ?? 'n/a'}</td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs font-mono font-medium px-2 py-0.5 rounded-md" style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
-                      {log.operation}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-zinc-500 max-w-xs truncate">{log.details}</td>
-                </tr>
+                (() => {
+                  const details = log.details || 'No details recorded.';
+                  const isExpanded = expandedDetails.has(log.id);
+                  const canExpand = details.length > 140 || details.includes('\n');
+
+                  return (
+                    <tr
+                      key={log.id}
+                      style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
+                      onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
+                      onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
+                    >
+                      <td className="px-4 py-3 text-xs text-zinc-400 whitespace-nowrap" title={fullDate(log.created_at)}>{timeAgo(log.created_at)}</td>
+                      <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-300 font-medium">{log.username ?? log.user_id.slice(0, 8)}</td>
+                      <td className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-[0.14em]">{log.role ?? 'n/a'}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs font-mono font-medium px-2 py-0.5 rounded-md" style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
+                          {log.operation}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-zinc-500 max-w-xl align-top" title={details}>
+                        <div className={isExpanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-2 whitespace-pre-wrap break-words'}>
+                          {details}
+                        </div>
+                        {canExpand ? (
+                          <button
+                            aria-expanded={isExpanded}
+                            className="mt-2 text-xs font-medium text-violet-500 transition-colors hover:text-violet-400"
+                            onClick={() => toggleDetails(log.id)}
+                            type="button"
+                          >
+                            {isExpanded ? 'Show less' : 'Show more'}
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })()
               ))}
             </tbody>
           </table>

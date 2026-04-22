@@ -4,7 +4,7 @@ export interface WatchlistItem {
   id: string;
   image_name: string;
   image_tag: string;
-  registry_id?: string;
+  registry_id?: string | null;
   schedule: string;
   timezone: string;
   enabled: boolean;

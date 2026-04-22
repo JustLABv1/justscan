@@ -2,6 +2,7 @@ package watchlist
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -138,14 +139,22 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		var body struct {
-			Schedule   *string    `json:"schedule"`
-			Timezone   *string    `json:"timezone"`
-			Enabled    *bool      `json:"enabled"`
-			RegistryID *uuid.UUID `json:"registry_id"`
+			ImageName  *string          `json:"image_name"`
+			ImageTag   *string          `json:"image_tag"`
+			Schedule   *string          `json:"schedule"`
+			Timezone   *string          `json:"timezone"`
+			Enabled    *bool            `json:"enabled"`
+			RegistryID *json.RawMessage `json:"registry_id"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+		if body.ImageName != nil {
+			item.ImageName = *body.ImageName
+		}
+		if body.ImageTag != nil {
+			item.ImageTag = *body.ImageTag
 		}
 		if body.Schedule != nil {
 			item.Schedule = *body.Schedule
@@ -160,10 +169,19 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			item.Enabled = *body.Enabled
 		}
 		if body.RegistryID != nil {
-			if _, _, _, ok := authz.LoadAccessibleRegistry(c, db, *body.RegistryID); !ok {
-				return
+			if string(*body.RegistryID) == "null" {
+				item.RegistryID = nil
+			} else {
+				var registryID uuid.UUID
+				if err := json.Unmarshal(*body.RegistryID, &registryID); err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry_id"})
+					return
+				}
+				if _, _, _, ok := authz.LoadAccessibleRegistry(c, db, registryID); !ok {
+					return
+				}
+				item.RegistryID = &registryID
 			}
-			item.RegistryID = body.RegistryID
 		}
 		if err := scheduler.ValidateSchedule(item.Schedule, item.Timezone); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -171,7 +189,7 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 		}
 		item.UpdatedAt = time.Now()
 		if _, err := db.NewUpdate().Model(item).
-			Column("schedule", "timezone", "enabled", "registry_id", "updated_at").
+			Column("image_name", "image_tag", "schedule", "timezone", "enabled", "registry_id", "updated_at").
 			Where("id = ?", itemID).
 			Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update watchlist item"})

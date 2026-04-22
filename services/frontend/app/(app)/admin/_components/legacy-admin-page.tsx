@@ -48,6 +48,7 @@ import {
   disableAdminUser,
   getAdminSettings,
   getAPIUsageStats,
+  getXRayUsageStats,
   getScannerHealth,
   listAdminScans,
   listAdminTokens,
@@ -86,6 +87,7 @@ import {
   updateXRayLogRetention,
   XRayRequestLog,
   XRayRequestLogFilters,
+  XRayUsageStats,
 } from '@/lib/api';
 import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -3036,7 +3038,10 @@ function InsightsTab() {
   const [xrayFilters, setXrayFilters] = useState<XRayRequestLogFilters & { from: string; to: string }>({
     scan_id: '', registry_id: '', endpoint: '', status: '', from: '', to: '',
   });
+  const [xrayStats, setXrayStats] = useState<XRayUsageStats | null>(null);
+  const [xrayStatsLoading, setXrayStatsLoading] = useState(true);
   const [xrayExporting, setXrayExporting] = useState(false);
+  const [expandedXrayErrors, setExpandedXrayErrors] = useState<Set<string>>(new Set());
 
   const xrayRequestFilters: XRayRequestLogFilters = useMemo(() => ({
     scan_id: xrayFilters.scan_id || undefined,
@@ -3058,13 +3063,40 @@ function InsightsTab() {
     finally { setXrayLoading(false); }
   }, []);
 
+  const loadXrayStats = useCallback(async (from?: string, to?: string) => {
+    setXrayStatsLoading(true);
+    try {
+      setXrayStats(await getXRayUsageStats(from, to));
+    } catch {
+      /* non-critical */
+    } finally {
+      setXrayStatsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadXrayLogs(xrayPage, xrayRequestFilters);
   }, [loadXrayLogs, xrayPage, xrayRequestFilters]);
 
+  useEffect(() => {
+    loadXrayStats(toIsoOrUndefined(xrayFilters.from), toIsoOrUndefined(xrayFilters.to));
+  }, [loadXrayStats, xrayFilters.from, xrayFilters.to]);
+
   function updateXrayFilter<K extends keyof typeof xrayFilters>(key: K, value: string) {
     setXrayFilters(prev => ({ ...prev, [key]: value }));
     setXrayPage(1);
+  }
+
+  function toggleXrayError(logId: string) {
+    setExpandedXrayErrors(prev => {
+      const next = new Set(prev);
+      if (next.has(logId)) {
+        next.delete(logId);
+      } else {
+        next.add(logId);
+      }
+      return next;
+    });
   }
 
   async function handleXrayExport() {
@@ -3257,6 +3289,39 @@ function InsightsTab() {
       {/* ── xRay Calls section ──────────────────────────────────────── */}
       {section === 'xray' && (
         <div className="space-y-4">
+          {!xrayStatsLoading && xrayStats && (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {[
+                  { label: 'Total Calls', value: xrayStats.total_requests.toLocaleString(), color: '#60a5fa', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.18)' },
+                  { label: 'Error Rate', value: xrayStats.total_requests > 0 ? `${((xrayStats.error_requests / xrayStats.total_requests) * 100).toFixed(1)}%` : '0%', color: '#f87171', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.18)' },
+                  { label: 'Avg Duration', value: `${xrayStats.avg_duration_ms.toFixed(0)} ms`, color: '#a78bfa', bg: 'rgba(124,58,237,0.1)', border: 'rgba(124,58,237,0.18)' },
+                  { label: 'p95 Duration', value: `${xrayStats.p95_duration_ms.toFixed(0)} ms`, color: '#fbbf24', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.18)' },
+                ].map(card => (
+                  <div key={card.label} className="rounded-xl p-4" style={{ background: card.bg, border: `1px solid ${card.border}` }}>
+                    <p className="text-xs text-zinc-500 mb-1">{card.label}</p>
+                    <p className="text-2xl font-bold" style={{ color: card.color }}>{card.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {xrayStats.top_endpoints.length > 0 && (
+                <div className="glass-panel rounded-2xl p-4 space-y-2">
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Top Endpoints</h3>
+                  <div className="space-y-1.5">
+                    {xrayStats.top_endpoints.map((ep, i) => (
+                      <div key={i} className="flex items-center gap-3 text-sm">
+                        <span className="font-mono text-xs px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>{ep.method}</span>
+                        <span className="flex-1 text-zinc-700 dark:text-zinc-300 truncate font-mono text-xs">{ep.path}</span>
+                        <span className="text-zinc-500 text-xs shrink-0">{ep.count.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
           {xrayError && (
             <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
               {xrayError}
@@ -3321,36 +3386,60 @@ function InsightsTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {xrayLogs.map((log, i) => (
-                    <tr key={log.id}
-                      style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                      <td className="px-4 py-2.5 text-xs text-zinc-400 whitespace-nowrap" title={fullDate(log.created_at)}>
-                        {timeAgo(log.created_at)}
-                      </td>
-                      <td className="px-4 py-2.5 text-xs text-zinc-500">
-                        {log.scan_id ? (
-                          <Link href={`/scans/${log.scan_id}`} className="text-violet-400 hover:underline font-mono">
-                            {log.scan_id.slice(0, 8)}…
-                          </Link>
-                        ) : <span className="opacity-40 italic">—</span>}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <span className="text-xs font-mono font-medium px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
-                          {log.method}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-xs font-mono text-zinc-600 dark:text-zinc-300 max-w-xs truncate">{log.endpoint}</td>
-                      <td className="px-4 py-2.5">
-                        <span className="text-xs font-mono font-medium px-1.5 py-0.5 rounded-md" style={statusColor(log.status_code)}>
-                          {log.status_code <= 0 ? 'ERR' : log.status_code}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-xs text-zinc-500 whitespace-nowrap">{log.duration_ms} ms</td>
-                      <td className="px-4 py-2.5 text-xs text-red-400 max-w-[200px] truncate" title={log.error}>{log.error ?? ''}</td>
-                    </tr>
-                  ))}
+                  {xrayLogs.map((log, i) => {
+                    const errorMessage = log.error ?? '';
+                    const isExpanded = expandedXrayErrors.has(log.id);
+                    const canExpand = errorMessage.length > 0;
+
+                    return (
+                      <tr key={log.id}
+                        style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                        <td className="px-4 py-2.5 text-xs text-zinc-400 whitespace-nowrap" title={fullDate(log.created_at)}>
+                          {timeAgo(log.created_at)}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-zinc-500">
+                          {log.scan_id ? (
+                            <Link href={`/scans/${log.scan_id}`} className="text-violet-400 hover:underline font-mono">
+                              {log.scan_id.slice(0, 8)}…
+                            </Link>
+                          ) : <span className="opacity-40 italic">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="text-xs font-mono font-medium px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
+                            {log.method}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-xs font-mono text-zinc-600 dark:text-zinc-300 max-w-xs truncate">{log.endpoint}</td>
+                        <td className="px-4 py-2.5">
+                          <span className="text-xs font-mono font-medium px-1.5 py-0.5 rounded-md" style={statusColor(log.status_code)}>
+                            {log.status_code <= 0 ? 'ERR' : log.status_code}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-zinc-500 whitespace-nowrap">{log.duration_ms} ms</td>
+                        <td className="px-4 py-2.5 text-xs text-red-400 max-w-[280px] align-top" title={errorMessage}>
+                          {errorMessage ? (
+                            <>
+                              <div className={isExpanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-2 whitespace-pre-wrap break-words'}>
+                                {errorMessage}
+                              </div>
+                              {canExpand ? (
+                                <button
+                                  aria-expanded={isExpanded}
+                                  className="mt-2 text-xs font-medium text-violet-500 transition-colors hover:text-violet-400"
+                                  onClick={() => toggleXrayError(log.id)}
+                                  type="button"
+                                >
+                                  {isExpanded ? 'Show less' : 'Show more'}
+                                </button>
+                              ) : null}
+                            </>
+                          ) : ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

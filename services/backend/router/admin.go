@@ -91,6 +91,9 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 			admins.GetAPIUsageStats(c, db)
 		})
 		// insights — xRay request log
+		admin.GET("/xray-usage", func(c *gin.Context) {
+			admins.GetXRayUsageStats(c, db)
+		})
 		admin.GET("/xray-logs", func(c *gin.Context) {
 			admins.GetXRayRequestLogs(c, db)
 		})

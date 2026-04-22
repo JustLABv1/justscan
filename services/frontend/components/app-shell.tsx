@@ -1,6 +1,7 @@
 'use client';
 
 import { clearToken, clearUser, getUser, getWorkScope, listMyOrgInvites, listOrgs, Org, setWorkScope, WorkScope } from '@/lib/api';
+import { WorkspaceOnboarding } from '@/components/workspace-onboarding';
 import { Button, Drawer, Dropdown, Header, Label, Separator, useOverlayState } from '@heroui/react';
 import {
     AiContentGenerator01Icon,
@@ -33,6 +34,7 @@ import { useEffect, useState } from 'react';
 import { Logo } from '@/components/logo';
 import { SearchModal } from '@/components/search';
 import { ToastProvider } from '@/components/toast';
+import { hasSeenWorkspaceOnboarding, markWorkspaceOnboardingSeen } from '@/lib/workspace-onboarding';
 
 const navGroups = [
   {
@@ -69,7 +71,42 @@ const navGroups = [
 
 interface AppShellProps {
   children: React.ReactNode;
-  initialUser: { username?: string; email?: string; role?: string } | null;
+  initialUser: { id?: string; username?: string; email?: string; role?: string } | null;
+}
+
+function WorkspaceScopeHelp({
+  open,
+  currentScopeLabel,
+  onDismiss,
+  onToggle,
+}: {
+  open: boolean;
+  currentScopeLabel: string;
+  onDismiss: () => void;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        className="w-full rounded-xl px-3 py-2 text-left text-xs font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+        style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+        onClick={onToggle}
+      >
+        What changes with workspace?
+      </button>
+      {open && (
+        <div className="rounded-xl px-3 py-3 text-xs leading-5 text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+          <p className="font-medium text-zinc-800 dark:text-zinc-100">Current view: {currentScopeLabel}</p>
+          <p className="mt-2">Switch workspace to change the dashboard and lists you are viewing.</p>
+          <p className="mt-1">Scans, registries, tags, suppressions, and watchlist items belong to a workspace. Shared items can appear here without changing their original owner.</p>
+          <button type="button" className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500 transition-colors hover:text-zinc-800 dark:hover:text-zinc-100" onClick={onDismiss}>
+            Hide
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function isActiveRoute(pathname: string, href: string) {
@@ -85,8 +122,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const [mounted, setMounted] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [orgs, setOrgs] = useState<Org[]>([]);
+  const [orgsReady, setOrgsReady] = useState(false);
   const [pendingInviteCount, setPendingInviteCount] = useState(0);
   const [workScope, setWorkScopeState] = useState<WorkScope>(() => getWorkScope());
+  const [workspaceHelpOpen, setWorkspaceHelpOpen] = useState(false);
+  const [onboardingStatus, setOnboardingStatus] = useState<'checking' | 'show' | 'done'>('checking');
   const mobileNav = useOverlayState();
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
 
@@ -110,6 +150,12 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    const currentUser = (getUser() ?? user ?? initialUser) as { id?: string; email?: string; username?: string } | null;
+    setOnboardingStatus(hasSeenWorkspaceOnboarding(currentUser) ? 'done' : 'show');
+  }, [initialUser, mounted, user]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -142,6 +188,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   }, []);
 
   useEffect(() => {
+    setOrgsReady(false);
     Promise.allSettled([listOrgs(), listMyOrgInvites()])
       .then(([orgsResult, invitesResult]) => {
         const nextOrgs = orgsResult.status === 'fulfilled' ? orgsResult.value : [];
@@ -163,6 +210,9 @@ export function AppShell({ children, initialUser }: AppShellProps) {
       .catch(() => {
         setOrgs([]);
         setPendingInviteCount(0);
+      })
+      .finally(() => {
+        setOrgsReady(true);
       });
   }, [orgRefreshVersion, pathname]);
 
@@ -196,6 +246,36 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     setWorkScope(nextScope);
   }
 
+  function resolveFallbackScope(): WorkScope {
+    const current = getWorkScope();
+    if (current.kind !== 'org') return current;
+
+    const matchedOrg = orgs.find((org) => org.id === current.orgId);
+    if (!matchedOrg && orgsReady) return { kind: 'personal' };
+    if (!matchedOrg) return current;
+    return { kind: 'org', orgId: matchedOrg.id, orgName: matchedOrg.name };
+  }
+
+  function finishOnboarding(nextScope: WorkScope) {
+    const currentUser = (getUser() ?? user ?? initialUser) as { id?: string; email?: string; username?: string } | null;
+    markWorkspaceOnboardingSeen(currentUser);
+    setWorkScopeState(nextScope);
+    setWorkScope(nextScope);
+    setWorkspaceHelpOpen(true);
+    setOnboardingStatus('done');
+    router.replace('/dashboard');
+  }
+
+  function skipOnboarding() {
+    const currentUser = (getUser() ?? user ?? initialUser) as { id?: string; email?: string; username?: string } | null;
+    markWorkspaceOnboardingSeen(currentUser);
+    const nextScope = resolveFallbackScope();
+    setWorkScopeState(nextScope);
+    setWorkScope(nextScope);
+    setOnboardingStatus('done');
+    router.replace('/dashboard');
+  }
+
   const initials = (user?.username ?? user?.email ?? 'U')[0]?.toUpperCase() ?? 'U';
   const isDark = resolvedTheme === 'dark';
   const themeToggleTitle = !mounted ? 'Toggle theme' : isDark ? 'Switch to light mode' : 'Switch to dark mode';
@@ -206,6 +286,43 @@ export function AppShell({ children, initialUser }: AppShellProps) {
       ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
       : []),
   ];
+
+  if (onboardingStatus === 'checking') {
+    return (
+      <ToastProvider>
+        <div className="app-bg flex min-h-dvh items-center justify-center px-6 py-10">
+          <div className="glass-panel flex w-full max-w-md flex-col items-center rounded-[28px] px-8 py-10 text-center">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-2xl"
+              style={{
+                background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                boxShadow: '0 0 20px rgba(124,58,237,0.28), inset 0 1px 0 rgba(255,255,255,0.18)',
+              }}
+            >
+              <Logo size={20} className="text-white" />
+            </div>
+            <p className="mt-5 text-base font-semibold text-zinc-900 dark:text-white">Preparing your workspace view</p>
+            <p className="mt-2 text-sm text-zinc-500">Checking your workspace setup before entering JustScan.</p>
+          </div>
+        </div>
+      </ToastProvider>
+    );
+  }
+
+  if (onboardingStatus === 'show') {
+    return (
+      <ToastProvider>
+        <WorkspaceOnboarding
+          user={user}
+          orgs={orgs}
+          orgsReady={orgsReady}
+          initialScope={resolveFallbackScope()}
+          onComplete={finishOnboarding}
+          onSkip={skipOnboarding}
+        />
+      </ToastProvider>
+    );
+  }
 
   return (
     <ToastProvider>
@@ -246,40 +363,48 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
           <div className="px-2 pt-3 pb-2 space-y-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             {!collapsed && (
-              <Dropdown>
-                <Dropdown.Trigger className="w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all duration-150 outline-none text-left"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
-                  onMouseEnter={(event: any) => (event.currentTarget.style.borderColor = 'rgba(167,139,250,0.3)')}
-                  onMouseLeave={(event: any) => (event.currentTarget.style.borderColor = 'var(--glass-border)')}
-                >
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
-                    <span className="text-[12px] font-medium text-zinc-700 dark:text-zinc-200 truncate mt-0.5">{scopeLabel}</span>
-                  </div>
-                  <ArrowDown01Icon size={14} className="text-zinc-500 shrink-0 ml-2" />
-                </Dropdown.Trigger>
-                <Dropdown.Popover className="min-w-[200px]" placement="bottom start">
-                  <Dropdown.Menu
-                    onAction={(key) => handleScopeChange(key as string)}
-                    selectionMode="single"
-                    selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
+              <>
+                <Dropdown>
+                  <Dropdown.Trigger className="w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all duration-150 outline-none text-left"
+                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                    onMouseEnter={(event: any) => (event.currentTarget.style.borderColor = 'rgba(167,139,250,0.3)')}
+                    onMouseLeave={(event: any) => (event.currentTarget.style.borderColor = 'var(--glass-border)')}
                   >
-                    <Dropdown.Item id="personal" textValue="Personal workspace">
-                      <Label>Personal workspace</Label>
-                    </Dropdown.Item>
-                    {orgs.length > 0 && (
-                      <Dropdown.Section>
-                        <Header>Organizations</Header>
-                        {orgs.map((org) => (
-                          <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
-                            <Label>{org.name}</Label>
-                          </Dropdown.Item>
-                        ))}
-                      </Dropdown.Section>
-                    )}
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
-              </Dropdown>
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
+                      <span className="text-[12px] font-medium text-zinc-700 dark:text-zinc-200 truncate mt-0.5">{scopeLabel}</span>
+                    </div>
+                    <ArrowDown01Icon size={14} className="text-zinc-500 shrink-0 ml-2" />
+                  </Dropdown.Trigger>
+                  <Dropdown.Popover className="min-w-[200px]" placement="bottom start">
+                    <Dropdown.Menu
+                      onAction={(key) => handleScopeChange(key as string)}
+                      selectionMode="single"
+                      selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
+                    >
+                      <Dropdown.Item id="personal" textValue="Personal workspace">
+                        <Label>Personal workspace</Label>
+                      </Dropdown.Item>
+                      {orgs.length > 0 && (
+                        <Dropdown.Section>
+                          <Header>Organizations</Header>
+                          {orgs.map((org) => (
+                            <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
+                              <Label>{org.name}</Label>
+                            </Dropdown.Item>
+                          ))}
+                        </Dropdown.Section>
+                      )}
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
+                <WorkspaceScopeHelp
+                  open={workspaceHelpOpen}
+                  currentScopeLabel={scopeLabel}
+                  onDismiss={() => setWorkspaceHelpOpen(false)}
+                  onToggle={() => setWorkspaceHelpOpen((current) => !current)}
+                />
+              </>
             )}
 
             <button
@@ -542,6 +667,12 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                             </Dropdown.Menu>
                           </Dropdown.Popover>
                         </Dropdown>
+                        <WorkspaceScopeHelp
+                          open={workspaceHelpOpen}
+                          currentScopeLabel={scopeLabel}
+                          onDismiss={() => setWorkspaceHelpOpen(false)}
+                          onToggle={() => setWorkspaceHelpOpen((current) => !current)}
+                        />
 
                         {pendingInviteCount > 0 && (
                           <Link

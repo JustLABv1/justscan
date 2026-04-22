@@ -45,11 +45,15 @@ export interface OIDCProviderAdmin extends OIDCProvider {
 export interface OIDCGroupMapping {
   id: string;
   provider_name: string;
-  oidc_group: string;
-  org_id: string;
+  claim_type: 'group' | 'role';
+  match_type: 'exact' | 'prefix';
+  match_value: string;
+  org_id?: string | null;
   org_name?: string;
   role: string;
-  auto_create_org: boolean;
+  provisioning_mode: 'existing_org' | 'create_org';
+  org_name_template: string;
+  recreate_missing_org: boolean;
   remove_on_unsync: boolean;
   created_at: string;
 }

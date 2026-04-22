@@ -117,6 +117,25 @@ function escapeCsv(value: unknown) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+function renderClaimMappingPreview(template: string, providerName: string, matchType: 'exact' | 'prefix', matchValue: string) {
+  const exampleClaim = matchType === 'prefix'
+    ? `${matchValue || 'team:'}platform`
+    : (matchValue || 'platform-admins');
+  const exampleSuffix = matchType === 'prefix' && exampleClaim.startsWith(matchValue)
+    ? exampleClaim.slice(matchValue.length).trim()
+    : '';
+  const preview = (template || '{claim}')
+    .replaceAll('{claim}', exampleClaim)
+    .replaceAll('{suffix}', exampleSuffix)
+    .replaceAll('{provider}', providerName || 'provider');
+
+  return {
+    claim: exampleClaim,
+    suffix: exampleSuffix,
+    preview,
+  };
+}
+
 async function copyToClipboard(text: string) {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -3361,16 +3380,24 @@ function IdentityProvidersTab() {
   const [sortOrder, setSortOrder] = useState('0');
   const [providerFormError, setProviderFormError] = useState('');
   const [providerSaving, setProviderSaving] = useState(false);
-  const [mappingGroup, setMappingGroup] = useState('');
+  const [mappingClaimType, setMappingClaimType] = useState<'group' | 'role'>('group');
+  const [mappingMatchType, setMappingMatchType] = useState<'exact' | 'prefix'>('exact');
+  const [mappingMatchValue, setMappingMatchValue] = useState('');
+  const [mappingProvisioningMode, setMappingProvisioningMode] = useState<'existing_org' | 'create_org'>('existing_org');
   const [mappingOrgId, setMappingOrgId] = useState('');
+  const [mappingOrgNameTemplate, setMappingOrgNameTemplate] = useState('{claim}');
   const [mappingRole, setMappingRole] = useState<'viewer' | 'editor' | 'admin'>('viewer');
-  const [mappingAutoCreate, setMappingAutoCreate] = useState(false);
+  const [mappingRecreateMissingOrg, setMappingRecreateMissingOrg] = useState(false);
   const [mappingRemoveOnUnsync, setMappingRemoveOnUnsync] = useState(true);
   const [mappingFormError, setMappingFormError] = useState('');
   const [mappingSaving, setMappingSaving] = useState(false);
   const providerModal = useOverlayState();
   const mappingModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const mappingPreview = useMemo(
+    () => renderClaimMappingPreview(mappingOrgNameTemplate, selectedProvider?.name ?? '', mappingMatchType, mappingMatchValue),
+    [mappingMatchType, mappingMatchValue, mappingOrgNameTemplate, selectedProvider?.name],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -3397,7 +3424,7 @@ function IdentityProvidersTab() {
     try {
       setMappings(await adminListGroupMappings(providerName));
     } catch (loadError: unknown) {
-      setMappingError(loadError instanceof Error ? loadError.message : 'Failed to load group mappings');
+      setMappingError(loadError instanceof Error ? loadError.message : 'Failed to load claim mappings');
     } finally {
       setMappingsLoading(false);
     }
@@ -3451,10 +3478,14 @@ function IdentityProvidersTab() {
 
   function openCreateMapping() {
     if (!selectedProvider) return;
-    setMappingGroup('');
+    setMappingClaimType('group');
+    setMappingMatchType('exact');
+    setMappingMatchValue('');
+    setMappingProvisioningMode(orgs.length > 0 ? 'existing_org' : 'create_org');
     setMappingOrgId(orgs[0]?.id ?? '');
+    setMappingOrgNameTemplate('{claim}');
     setMappingRole('viewer');
-    setMappingAutoCreate(false);
+    setMappingRecreateMissingOrg(false);
     setMappingRemoveOnUnsync(true);
     setMappingFormError('');
     mappingModal.open();
@@ -3506,11 +3537,23 @@ function IdentityProvidersTab() {
     setMappingSaving(true);
     setMappingFormError('');
     try {
+      if (mappingProvisioningMode === 'existing_org' && !mappingOrgId) {
+        throw new Error('Select an organization or switch to create-org provisioning');
+      }
+      if ((mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg) && !mappingOrgNameTemplate.trim()) {
+        throw new Error('Org name template is required for org provisioning');
+      }
       await adminCreateGroupMapping(selectedProvider.name, {
-        oidc_group: mappingGroup.trim(),
-        org_id: mappingOrgId,
+        claim_type: mappingClaimType,
+        match_type: mappingMatchType,
+        match_value: mappingMatchValue.trim(),
+        provisioning_mode: mappingProvisioningMode,
+        org_id: mappingProvisioningMode === 'existing_org' ? mappingOrgId : undefined,
+        org_name_template: mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg
+          ? mappingOrgNameTemplate.trim()
+          : '',
         role: mappingRole,
-        auto_create_org: mappingAutoCreate,
+        recreate_missing_org: mappingProvisioningMode === 'existing_org' ? mappingRecreateMissingOrg : false,
         remove_on_unsync: mappingRemoveOnUnsync,
       });
       mappingModal.close();
@@ -3542,8 +3585,8 @@ function IdentityProvidersTab() {
 
   async function handleDeleteMapping(providerName: string, mappingId: string) {
     const ok = await confirm({
-      title: 'Delete Mapping',
-      message: 'Remove this group to organization mapping?',
+      title: 'Delete Claim Mapping',
+      message: 'Remove this OIDC claim mapping rule?',
       confirmLabel: 'Delete',
       variant: 'danger',
     });
@@ -3644,10 +3687,10 @@ function IdentityProvidersTab() {
         <div className="glass-panel rounded-2xl p-5 space-y-4">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
-              <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Group Mappings</h3>
-              <p className="text-sm text-zinc-500 mt-1">Auto-assign users from <span className="font-mono">{selectedProvider.name}</span> into organizations based on group claims.</p>
+              <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Claim Mappings</h3>
+              <p className="text-sm text-zinc-500 mt-1">Map groups or roles from <span className="font-mono">{selectedProvider.name}</span> into existing organizations or provision new ones from controlled templates.</p>
             </div>
-            <button onClick={openCreateMapping} className="btn-secondary inline-flex items-center gap-2" type="button" disabled={orgs.length === 0}>
+            <button onClick={openCreateMapping} className="btn-secondary inline-flex items-center gap-2" type="button">
               <PlusSignIcon size={15} /> Add Mapping
             </button>
           </div>
@@ -3662,15 +3705,15 @@ function IdentityProvidersTab() {
             <p className="text-sm text-zinc-500">Loading mappings…</p>
           ) : mappings.length === 0 ? (
             <div className="rounded-xl px-4 py-6 text-sm text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-              No mappings configured for this provider yet.
+              No claim mappings configured for this provider yet.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">OIDC Group</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Organization</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Claim</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Target</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Behavior</th>
                     <th className="px-4 py-3" />
@@ -3679,14 +3722,31 @@ function IdentityProvidersTab() {
                 <tbody>
                   {mappings.map((mapping, index) => (
                     <tr key={mapping.id} style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}>
-                      <td className="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-300">{mapping.oidc_group}</td>
-                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">{mapping.org_name ?? mapping.org_id}</td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-1">
+                          <div className="font-mono text-xs text-zinc-600 dark:text-zinc-300">{mapping.match_value}</div>
+                          <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">{mapping.claim_type} · {mapping.match_type}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">
+                        <div className="space-y-1">
+                          <div>{mapping.provisioning_mode === 'create_org' ? 'Create org from template' : (mapping.org_name ?? mapping.org_id ?? 'Missing org')}</div>
+                          {mapping.org_name_template ? (
+                            <div className="font-mono text-[11px] text-zinc-500">{mapping.org_name_template}</div>
+                          ) : null}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-[0.14em]">{mapping.role}</td>
-                      <td className="px-4 py-3 text-xs text-zinc-500">{mapping.auto_create_org ? 'Auto-create org if missing' : 'Require existing org'} · {mapping.remove_on_unsync ? 'Remove on unsync' : 'Keep manual membership'}</td>
+                      <td className="px-4 py-3 text-xs text-zinc-500">
+                        {mapping.provisioning_mode === 'create_org' ? 'Provision by template' : 'Use existing org'}
+                        {mapping.recreate_missing_org ? ' · Recreate if missing' : ''}
+                        {' · '}
+                        {mapping.remove_on_unsync ? 'Remove on unsync' : 'Keep membership on unsync'}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end">
                           <RowActionsMenu
-                            label={`Open actions for mapping ${mapping.oidc_group}`}
+                            label={`Open actions for mapping ${mapping.match_value}`}
                             items={[
                               { id: 'delete', label: 'Delete mapping', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDeleteMapping(selectedProvider.name, mapping.id); } },
                             ]}
@@ -3804,7 +3864,7 @@ function IdentityProvidersTab() {
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Add Group Mapping</Modal.Heading>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Add Claim Mapping</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
@@ -3814,35 +3874,93 @@ function IdentityProvidersTab() {
                       {mappingFormError}
                     </div>
                   )}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">OIDC Group</label>
-                    <input className={inputCls} placeholder="platform-admins" value={mappingGroup} onChange={(event) => setMappingGroup(event.target.value)} required />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Claim Source</label>
+                      <select className={inputCls} value={mappingClaimType} onChange={(event) => setMappingClaimType(event.target.value as 'group' | 'role')}>
+                        <option value="group">Group</option>
+                        <option value="role">Role</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Match Mode</label>
+                      <select className={inputCls} value={mappingMatchType} onChange={(event) => setMappingMatchType(event.target.value as 'exact' | 'prefix')}>
+                        <option value="exact">Exact</option>
+                        <option value="prefix">Prefix</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Organization</label>
-                    <select className={inputCls} value={mappingOrgId} onChange={(event) => setMappingOrgId(event.target.value)} required>
-                      <option value="" disabled>Select an organization</option>
-                      {orgs.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
-                    </select>
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Claim Value</label>
+                    <input
+                      className={inputCls}
+                      placeholder={mappingMatchType === 'prefix' ? 'team:' : 'platform-admins'}
+                      value={mappingMatchValue}
+                      onChange={(event) => setMappingMatchValue(event.target.value)}
+                      required
+                    />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
-                    <select className={inputCls} value={mappingRole} onChange={(event) => setMappingRole(event.target.value as 'viewer' | 'editor' | 'admin')}>
-                      <option value="viewer">Viewer</option>
-                      <option value="editor">Editor</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Provisioning</label>
+                      <select className={inputCls} value={mappingProvisioningMode} onChange={(event) => setMappingProvisioningMode(event.target.value as 'existing_org' | 'create_org')}>
+                        <option value="existing_org">Use existing org</option>
+                        <option value="create_org">Create org from template</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
+                      <select className={inputCls} value={mappingRole} onChange={(event) => setMappingRole(event.target.value as 'viewer' | 'editor' | 'admin')}>
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
                   </div>
+                  {mappingProvisioningMode === 'existing_org' ? (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Organization</label>
+                      <select className={inputCls} value={mappingOrgId} onChange={(event) => setMappingOrgId(event.target.value)}>
+                        <option value="">Select an organization</option>
+                        {orgs.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
+                      </select>
+                    </div>
+                  ) : null}
+                  {mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg ? (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Org Name Template</label>
+                      <input
+                        className={inputCls}
+                        value={mappingOrgNameTemplate}
+                        onChange={(event) => setMappingOrgNameTemplate(event.target.value)}
+                        placeholder="Team {suffix}"
+                        required={mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg}
+                      />
+                      <p className="text-xs text-zinc-500">Available placeholders: {'{claim}'}, {'{suffix}'}, {'{provider}'}.</p>
+                    </div>
+                  ) : null}
                   <div className="space-y-3">
-                    <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
-                      <input type="checkbox" className="rounded" checked={mappingAutoCreate} onChange={(event) => setMappingAutoCreate(event.target.checked)} />
-                      Recreate the target org automatically if it is missing
-                    </label>
+                    {mappingProvisioningMode === 'existing_org' ? (
+                      <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
+                        <input type="checkbox" className="rounded" checked={mappingRecreateMissingOrg} onChange={(event) => setMappingRecreateMissingOrg(event.target.checked)} />
+                        Recreate the target org automatically if it is missing
+                      </label>
+                    ) : null}
                     <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
                       <input type="checkbox" className="rounded" checked={mappingRemoveOnUnsync} onChange={(event) => setMappingRemoveOnUnsync(event.target.checked)} />
-                      Remove membership when the group is no longer present
+                      Remove membership when the claim no longer matches
                     </label>
                   </div>
+                  {mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg ? (
+                    <div className="rounded-xl px-3 py-3 text-sm text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="font-medium text-zinc-700 dark:text-zinc-200">Template preview</div>
+                      <div className="mt-1 font-mono text-xs text-zinc-500">Example claim: {mappingPreview.claim}</div>
+                      {mappingMatchType === 'prefix' ? (
+                        <div className="font-mono text-xs text-zinc-500">Derived suffix: {mappingPreview.suffix || '(empty)'}</div>
+                      ) : null}
+                      <div className="mt-2">Creates: <span className="font-semibold text-zinc-800 dark:text-zinc-100">{mappingPreview.preview}</span></div>
+                    </div>
+                  ) : null}
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>

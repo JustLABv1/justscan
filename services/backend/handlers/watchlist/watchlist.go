@@ -141,9 +141,9 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 		var body struct {
 			ImageName  *string          `json:"image_name"`
 			ImageTag   *string          `json:"image_tag"`
-			Schedule   *string    `json:"schedule"`
-			Timezone   *string    `json:"timezone"`
-			Enabled    *bool      `json:"enabled"`
+			Schedule   *string          `json:"schedule"`
+			Timezone   *string          `json:"timezone"`
+			Enabled    *bool            `json:"enabled"`
 			RegistryID *json.RawMessage `json:"registry_id"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {

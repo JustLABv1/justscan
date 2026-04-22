@@ -166,13 +166,13 @@ export function OwnershipBadge({
         : 'Personal';
   const title = isSharedIntoCurrentOrg
     ? workScope.orgName
-      ? `Shared with organization workspace ${workScope.orgName}`
-      : 'Shared with the current organization workspace'
+      ? `Shared item. You are viewing it in ${workScope.orgName}, but ownership stays with the original workspace.`
+      : 'Shared item. You are viewing it in the current organization workspace, but ownership stays with the original workspace.'
     : resolvedType === 'org'
-      ? orgName ? `Owned by organization ${orgName}` : 'Owned by an organization workspace'
+      ? orgName ? `Organization-owned item. ${orgName} controls access based on member role.` : 'Organization-owned item. Access is controlled by the owning organization workspace.'
       : resolvedType === 'system'
-        ? 'Owned by the system'
-        : 'Owned by your personal workspace';
+        ? 'System-owned item. It is provided globally by JustScan.'
+        : 'Personal item. It belongs to your personal workspace.';
 
   return (
     <span

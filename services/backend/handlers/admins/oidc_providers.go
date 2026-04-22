@@ -1,16 +1,55 @@
 package admins
 
 import (
+	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"justscan-backend/functions/auth"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/uptrace/bun"
 )
+
+var allowedOIDCClaimTypes = map[string]struct{}{
+	"group": {},
+	"role":  {},
+}
+
+var allowedOIDCMatchTypes = map[string]struct{}{
+	"exact":  {},
+	"prefix": {},
+}
+
+var allowedOIDCProvisioningModes = map[string]struct{}{
+	"existing_org": {},
+	"create_org":   {},
+}
+
+var allowedOIDCMappingRoles = map[string]struct{}{
+	"viewer": {},
+	"editor": {},
+	"admin":  {},
+}
+
+type oidcMappingRequest struct {
+	ClaimType           string  `json:"claim_type"`
+	MatchType           string  `json:"match_type"`
+	MatchValue          string  `json:"match_value"`
+	OIDCGroup           string  `json:"oidc_group"`
+	ProvisioningMode    string  `json:"provisioning_mode"`
+	OrgID               *string `json:"org_id"`
+	OrgNameTemplate     string  `json:"org_name_template"`
+	Role                string  `json:"role"`
+	RecreateMissingOrg  bool    `json:"recreate_missing_org"`
+	AutoCreateOrgLegacy bool    `json:"auto_create_org"`
+	RemoveOnUnsync      *bool   `json:"remove_on_unsync"`
+}
 
 // ListOIDCProviders returns all configured OIDC providers (admin).
 func ListOIDCProviders(c *gin.Context, db *bun.DB) {
@@ -184,46 +223,39 @@ func ListGroupMappings(c *gin.Context, db *bun.DB) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list mappings"})
 		return
 	}
-	// Hydrate org names.
+	// Hydrate org names for rules that reference a concrete org.
 	for i := range mappings {
+		if mappings[i].OrgID == nil {
+			continue
+		}
 		var org models.Org
-		if err := db.NewSelect().Model(&org).Where("id = ?", mappings[i].OrgID).Scan(c.Request.Context()); err == nil {
+		if err := db.NewSelect().Model(&org).Where("id = ?", *mappings[i].OrgID).Scan(c.Request.Context()); err == nil {
 			mappings[i].OrgName = org.Name
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"data": mappings})
 }
 
-// CreateGroupMapping adds a new group→org mapping for a provider.
+// CreateGroupMapping adds a new explicit OIDC claim mapping rule for a provider.
 func CreateGroupMapping(c *gin.Context, db *bun.DB) {
 	providerName := c.Param("name")
-	var body struct {
-		OIDCGroup      string `json:"oidc_group" binding:"required"`
-		OrgID          string `json:"org_id" binding:"required"`
-		Role           string `json:"role"`
-		AutoCreateOrg  bool   `json:"auto_create_org"`
-		RemoveOnUnsync *bool  `json:"remove_on_unsync"`
-	}
+	var body oidcMappingRequest
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if body.Role == "" {
-		body.Role = "viewer"
+	mapping, err := buildOIDCMapping(c.Request.Context(), db, providerName, body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
+
 	removeOnUnsync := true
 	if body.RemoveOnUnsync != nil {
 		removeOnUnsync = *body.RemoveOnUnsync
 	}
-	mapping := &models.OIDCGroupOrgMapping{
-		ProviderName:   providerName,
-		OIDCGroup:      body.OIDCGroup,
-		OrgID:          body.OrgID,
-		Role:           body.Role,
-		AutoCreateOrg:  body.AutoCreateOrg,
-		RemoveOnUnsync: removeOnUnsync,
-		CreatedAt:      time.Now(),
-	}
+	mapping.RemoveOnUnsync = removeOnUnsync
+	mapping.CreatedAt = time.Now()
 	if _, err := db.NewInsert().Model(mapping).Exec(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create mapping"})
 		return
@@ -239,4 +271,100 @@ func DeleteGroupMapping(c *gin.Context, db *bun.DB) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+func buildOIDCMapping(ctx context.Context, db *bun.DB, providerName string, body oidcMappingRequest) (*models.OIDCGroupOrgMapping, error) {
+	claimType := strings.TrimSpace(body.ClaimType)
+	if claimType == "" {
+		claimType = "group"
+	}
+	if _, ok := allowedOIDCClaimTypes[claimType]; !ok {
+		return nil, fmt.Errorf("invalid claim_type %q", claimType)
+	}
+
+	matchType := strings.TrimSpace(body.MatchType)
+	if matchType == "" {
+		matchType = "exact"
+	}
+	if _, ok := allowedOIDCMatchTypes[matchType]; !ok {
+		return nil, fmt.Errorf("invalid match_type %q", matchType)
+	}
+
+	matchValue := strings.TrimSpace(body.MatchValue)
+	if matchValue == "" {
+		matchValue = strings.TrimSpace(body.OIDCGroup)
+	}
+	if matchValue == "" {
+		return nil, fmt.Errorf("match_value is required")
+	}
+	if matchType == "prefix" && matchValue == "" {
+		return nil, fmt.Errorf("prefix mappings require a non-empty match_value")
+	}
+
+	provisioningMode := strings.TrimSpace(body.ProvisioningMode)
+	if provisioningMode == "" {
+		provisioningMode = "existing_org"
+	}
+	if _, ok := allowedOIDCProvisioningModes[provisioningMode]; !ok {
+		return nil, fmt.Errorf("invalid provisioning_mode %q", provisioningMode)
+	}
+
+	role := strings.TrimSpace(body.Role)
+	if role == "" {
+		role = "viewer"
+	}
+	if _, ok := allowedOIDCMappingRoles[role]; !ok {
+		return nil, fmt.Errorf("invalid role %q", role)
+	}
+
+	recreateMissingOrg := body.RecreateMissingOrg || body.AutoCreateOrgLegacy
+	orgNameTemplate := strings.TrimSpace(body.OrgNameTemplate)
+	if matchType == "exact" && strings.Contains(orgNameTemplate, "{suffix}") {
+		return nil, fmt.Errorf("{suffix} can only be used with prefix mappings")
+	}
+
+	var orgID *uuid.UUID
+	if body.OrgID != nil && strings.TrimSpace(*body.OrgID) != "" {
+		parsedOrgID, err := uuid.Parse(strings.TrimSpace(*body.OrgID))
+		if err != nil {
+			return nil, fmt.Errorf("invalid org_id")
+		}
+		orgID = &parsedOrgID
+	}
+
+	if provisioningMode == "existing_org" {
+		if orgID == nil {
+			return nil, fmt.Errorf("existing_org mappings require org_id")
+		}
+		orgExists, err := db.NewSelect().Model((*models.Org)(nil)).Where("id = ?", *orgID).Exists(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate org_id: %w", err)
+		}
+		if !orgExists && !recreateMissingOrg {
+			return nil, fmt.Errorf("organization not found")
+		}
+		if recreateMissingOrg && orgNameTemplate == "" {
+			orgNameTemplate = "{claim}"
+		}
+	}
+
+	if provisioningMode == "create_org" {
+		orgID = nil
+		if orgNameTemplate == "" {
+			return nil, fmt.Errorf("create_org mappings require org_name_template")
+		}
+		recreateMissingOrg = false
+	}
+
+	return &models.OIDCGroupOrgMapping{
+		ProviderName:       providerName,
+		ClaimType:          claimType,
+		MatchType:          matchType,
+		MatchValue:         matchValue,
+		OrgID:              orgID,
+		Role:               role,
+		ProvisioningMode:   provisioningMode,
+		OrgNameTemplate:    orgNameTemplate,
+		RecreateMissingOrg: recreateMissingOrg,
+	}, nil
 }

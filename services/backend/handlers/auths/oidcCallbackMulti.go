@@ -116,8 +116,8 @@ func OIDCCallbackMulti(db *bun.DB) gin.HandlerFunc {
 			}
 		}
 
-		// --- 8. Sync group→org memberships ---
-		syncOIDCGroupOrgs(c.Request.Context(), db, user.ID, providerName, claims.Groups)
+		// --- 8. Sync explicit OIDC claim mappings into org memberships ---
+		syncOIDCClaimOrgs(c.Request.Context(), db, user.ID, providerName, claims.Groups, claims.Roles)
 
 		if err := auth.RecordSuccessfulLogin(c.Request.Context(), db, user, "oidc"); err != nil {
 			httperror.InternalServerError(c, "Failed to update login metadata", err)

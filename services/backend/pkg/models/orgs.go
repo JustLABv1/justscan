@@ -66,6 +66,7 @@ type OrgMember struct {
 	UpdatedAt    time.Time `bun:"updated_at,type:timestamptz,default:now()" json:"updated_at"`
 	OIDCSynced   bool      `bun:"oidc_synced,type:bool,notnull,default:false" json:"oidc_synced"`
 	OIDCProvider string    `bun:"oidc_provider,type:text,notnull,default:''" json:"oidc_provider,omitempty"`
+	OIDCMappingID *uuid.UUID `bun:"oidc_mapping_id,type:uuid" json:"oidc_mapping_id,omitempty"`
 	Email        string    `bun:"-" json:"email,omitempty"`
 	Username     string    `bun:"-" json:"username,omitempty"`
 }

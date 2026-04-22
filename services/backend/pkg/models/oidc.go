@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/uptrace/bun"
 )
@@ -50,14 +51,18 @@ type UserOIDCLink struct {
 type OIDCGroupOrgMapping struct {
 	bun.BaseModel `bun:"table:oidc_group_org_mappings"`
 
-	ID             string    `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
-	ProviderName   string    `bun:"provider_name,type:text,notnull" json:"provider_name"`
-	OIDCGroup      string    `bun:"oidc_group,type:text,notnull" json:"oidc_group"`
-	OrgID          string    `bun:"org_id,type:uuid,notnull" json:"org_id"`
-	Role           string    `bun:"role,type:text,notnull,default:'viewer'" json:"role"`
-	AutoCreateOrg  bool      `bun:"auto_create_org,type:bool,notnull,default:false" json:"auto_create_org"`
-	RemoveOnUnsync bool      `bun:"remove_on_unsync,type:bool,notnull,default:true" json:"remove_on_unsync"`
-	CreatedAt      time.Time `bun:"created_at,type:timestamptz,notnull,default:now()" json:"created_at"`
+	ID                 uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	ProviderName       string     `bun:"provider_name,type:text,notnull" json:"provider_name"`
+	ClaimType          string     `bun:"claim_type,type:text,notnull,default:'group'" json:"claim_type"`
+	MatchType          string     `bun:"match_type,type:text,notnull,default:'exact'" json:"match_type"`
+	MatchValue         string     `bun:"match_value,type:text,notnull" json:"match_value"`
+	OrgID              *uuid.UUID `bun:"org_id,type:uuid" json:"org_id,omitempty"`
+	Role               string     `bun:"role,type:text,notnull,default:'viewer'" json:"role"`
+	ProvisioningMode   string     `bun:"provisioning_mode,type:text,notnull,default:'existing_org'" json:"provisioning_mode"`
+	OrgNameTemplate    string     `bun:"org_name_template,type:text,notnull,default:''" json:"org_name_template"`
+	RecreateMissingOrg bool       `bun:"recreate_missing_org,type:bool,notnull,default:false" json:"recreate_missing_org"`
+	RemoveOnUnsync     bool       `bun:"remove_on_unsync,type:bool,notnull,default:true" json:"remove_on_unsync"`
+	CreatedAt          time.Time  `bun:"created_at,type:timestamptz,notnull,default:now()" json:"created_at"`
 
 	// Computed fields (not in DB)
 	OrgName string `bun:"-" json:"org_name,omitempty"`

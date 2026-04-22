@@ -20,3 +20,12 @@ type XRayRequestLog struct {
 	Error      *string    `bun:"error,type:text" json:"error,omitempty"`
 	CreatedAt  time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 }
+
+type XRayUsageStats struct {
+	TotalRequests   int64          `json:"total_requests"`
+	ErrorRequests   int64          `json:"error_requests"`
+	AvgDurationMs   float64        `json:"avg_duration_ms"`
+	P95DurationMs   float64        `json:"p95_duration_ms"`
+	TopEndpoints    []EndpointStat `json:"top_endpoints"`
+	StatusBreakdown []StatusBucket `json:"status_breakdown"`
+}

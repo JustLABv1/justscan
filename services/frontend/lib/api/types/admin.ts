@@ -93,6 +93,15 @@ export interface APIUsageStats {
   status_breakdown: StatusBucket[];
 }
 
+export interface XRayUsageStats {
+  total_requests: number;
+  error_requests: number;
+  avg_duration_ms: number;
+  p95_duration_ms: number;
+  top_endpoints: EndpointStat[];
+  status_breakdown: StatusBucket[];
+}
+
 export interface AdminDashboardQueues {
   running: number;
   pending: number;

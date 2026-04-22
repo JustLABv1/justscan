@@ -34,6 +34,10 @@ export interface OIDCProviderAdmin extends OIDCProvider {
   scopes: string[];
   admin_groups: string[];
   admin_roles: string[];
+  included_groups: string[];
+  excluded_groups: string[];
+  included_org_names: string[];
+  excluded_org_names: string[];
   groups_claim: string;
   roles_claim: string;
   enabled: boolean;
@@ -45,6 +49,7 @@ export interface OIDCProviderAdmin extends OIDCProvider {
 export interface OIDCGroupMapping {
   id: string;
   provider_name: string;
+  effect: 'allow' | 'exclude';
   claim_type: 'group' | 'role';
   match_type: 'exact' | 'prefix';
   match_value: string;
@@ -56,6 +61,70 @@ export interface OIDCGroupMapping {
   recreate_missing_org: boolean;
   remove_on_unsync: boolean;
   created_at: string;
+}
+
+export interface OIDCOrgRoleOverride {
+  id: string;
+  provider_name: string;
+  claim_type: 'group' | 'role';
+  match_type: 'exact' | 'prefix';
+  match_value: string;
+  target_type: 'org_id' | 'rendered_name';
+  org_id?: string | null;
+  org_name?: string;
+  org_name_template: string;
+  role: 'viewer' | 'editor' | 'admin';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OIDCClaimSyncRoute {
+  mapping_id: string;
+  effect: string;
+  claim_type: 'group' | 'role';
+  match_type: 'exact' | 'prefix';
+  match_value: string;
+  claim: string;
+  suffix?: string;
+  provisioning_mode: 'existing_org' | 'create_org';
+  org_id?: string | null;
+  org_name?: string;
+  base_role?: string;
+  final_role?: string;
+  requires_create: boolean;
+  status: 'matched' | 'selected' | 'shadowed' | 'blocked_derived_org' | 'skipped' | 'error';
+  reason?: string;
+  override_applied: boolean;
+  remove_on_unsync: boolean;
+  recreate_missing_org: boolean;
+}
+
+export interface OIDCClaimSyncMembership {
+  mapping_id: string;
+  org_id?: string | null;
+  org_name: string;
+  claim: string;
+  suffix?: string;
+  base_role: string;
+  final_role: string;
+  requires_create: boolean;
+  provisioning_mode: 'existing_org' | 'create_org';
+  remove_on_unsync: boolean;
+  override_applied: boolean;
+}
+
+export interface OIDCClaimSyncPreview {
+  provider_name: string;
+  input_groups: string[];
+  input_roles: string[];
+  provider_filtered_groups: string[];
+  provider_filtered_out_groups: string[];
+  effective_groups: string[];
+  effective_roles: string[];
+  blocked_groups: string[];
+  blocked_roles: string[];
+  matched_routes: OIDCClaimSyncRoute[];
+  final_memberships: OIDCClaimSyncMembership[];
 }
 
 export interface ScannerSettings {

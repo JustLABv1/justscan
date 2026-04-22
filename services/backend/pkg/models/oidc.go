@@ -12,22 +12,26 @@ import (
 type OIDCProvider struct {
 	bun.BaseModel `bun:"table:oidc_providers"`
 
-	Name         string         `bun:"name,pk,type:text" json:"name"`
-	DisplayName  string         `bun:"display_name,type:text,notnull" json:"display_name"`
-	ButtonColor  string         `bun:"button_color,type:text,notnull,default:''" json:"button_color"`
-	IssuerURL    string         `bun:"issuer_url,type:text,notnull" json:"issuer_url"`
-	ClientID     string         `bun:"client_id,type:text,notnull" json:"client_id"`
-	ClientSecret string         `bun:"client_secret,type:text,notnull,default:''" json:"client_secret,omitempty"`
-	RedirectURI  string         `bun:"redirect_uri,type:text,notnull,default:''" json:"redirect_uri"`
-	Scopes       pq.StringArray `bun:"scopes,type:text[],notnull,default:'{}'" json:"scopes"`
-	AdminGroups  pq.StringArray `bun:"admin_groups,type:text[],notnull,default:'{}'" json:"admin_groups"`
-	AdminRoles   pq.StringArray `bun:"admin_roles,type:text[],notnull,default:'{}'" json:"admin_roles"`
-	GroupsClaim  string         `bun:"groups_claim,type:text,notnull,default:'groups'" json:"groups_claim"`
-	RolesClaim   string         `bun:"roles_claim,type:text,notnull,default:'roles'" json:"roles_claim"`
-	Enabled      bool           `bun:"enabled,type:bool,notnull,default:true" json:"enabled"`
-	SortOrder    int            `bun:"sort_order,type:int,notnull,default:0" json:"sort_order"`
-	CreatedAt    time.Time      `bun:"created_at,type:timestamptz,notnull,default:now()" json:"created_at"`
-	UpdatedAt    time.Time      `bun:"updated_at,type:timestamptz,notnull,default:now()" json:"updated_at"`
+	Name             string         `bun:"name,pk,type:text" json:"name"`
+	DisplayName      string         `bun:"display_name,type:text,notnull" json:"display_name"`
+	ButtonColor      string         `bun:"button_color,type:text,notnull,default:''" json:"button_color"`
+	IssuerURL        string         `bun:"issuer_url,type:text,notnull" json:"issuer_url"`
+	ClientID         string         `bun:"client_id,type:text,notnull" json:"client_id"`
+	ClientSecret     string         `bun:"client_secret,type:text,notnull,default:''" json:"client_secret,omitempty"`
+	RedirectURI      string         `bun:"redirect_uri,type:text,notnull,default:''" json:"redirect_uri"`
+	Scopes           pq.StringArray `bun:"scopes,type:text[],notnull,default:'{}'" json:"scopes"`
+	AdminGroups      pq.StringArray `bun:"admin_groups,type:text[],notnull,default:'{}'" json:"admin_groups"`
+	AdminRoles       pq.StringArray `bun:"admin_roles,type:text[],notnull,default:'{}'" json:"admin_roles"`
+	IncludedGroups   pq.StringArray `bun:"included_groups,type:text[],notnull,default:'{}'" json:"included_groups"`
+	ExcludedGroups   pq.StringArray `bun:"excluded_groups,type:text[],notnull,default:'{}'" json:"excluded_groups"`
+	IncludedOrgNames pq.StringArray `bun:"included_org_names,type:text[],notnull,default:'{}'" json:"included_org_names"`
+	ExcludedOrgNames pq.StringArray `bun:"excluded_org_names,type:text[],notnull,default:'{}'" json:"excluded_org_names"`
+	GroupsClaim      string         `bun:"groups_claim,type:text,notnull,default:'groups'" json:"groups_claim"`
+	RolesClaim       string         `bun:"roles_claim,type:text,notnull,default:'roles'" json:"roles_claim"`
+	Enabled          bool           `bun:"enabled,type:bool,notnull,default:true" json:"enabled"`
+	SortOrder        int            `bun:"sort_order,type:int,notnull,default:0" json:"sort_order"`
+	CreatedAt        time.Time      `bun:"created_at,type:timestamptz,notnull,default:now()" json:"created_at"`
+	UpdatedAt        time.Time      `bun:"updated_at,type:timestamptz,notnull,default:now()" json:"updated_at"`
 }
 
 // OIDCProviderPublic is the subset returned to unauthenticated clients (login page).
@@ -53,6 +57,7 @@ type OIDCGroupOrgMapping struct {
 
 	ID                 uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
 	ProviderName       string     `bun:"provider_name,type:text,notnull" json:"provider_name"`
+	Effect             string     `bun:"effect,type:text,notnull,default:'allow'" json:"effect"`
 	ClaimType          string     `bun:"claim_type,type:text,notnull,default:'group'" json:"claim_type"`
 	MatchType          string     `bun:"match_type,type:text,notnull,default:'exact'" json:"match_type"`
 	MatchValue         string     `bun:"match_value,type:text,notnull" json:"match_value"`
@@ -65,5 +70,24 @@ type OIDCGroupOrgMapping struct {
 	CreatedAt          time.Time  `bun:"created_at,type:timestamptz,notnull,default:now()" json:"created_at"`
 
 	// Computed fields (not in DB)
+	OrgName string `bun:"-" json:"org_name,omitempty"`
+}
+
+// OIDCOrgRoleOverride adjusts the final role for a resolved org target.
+type OIDCOrgRoleOverride struct {
+	bun.BaseModel `bun:"table:oidc_org_role_overrides"`
+
+	ID              uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	ProviderName    string     `bun:"provider_name,type:text,notnull" json:"provider_name"`
+	ClaimType       string     `bun:"claim_type,type:text,notnull,default:'group'" json:"claim_type"`
+	MatchType       string     `bun:"match_type,type:text,notnull,default:'exact'" json:"match_type"`
+	MatchValue      string     `bun:"match_value,type:text,notnull" json:"match_value"`
+	TargetType      string     `bun:"target_type,type:text,notnull,default:'org_id'" json:"target_type"`
+	OrgID           *uuid.UUID `bun:"org_id,type:uuid" json:"org_id,omitempty"`
+	OrgNameTemplate string     `bun:"org_name_template,type:text,notnull,default:''" json:"org_name_template"`
+	Role            string     `bun:"role,type:text,notnull,default:'viewer'" json:"role"`
+	CreatedAt       time.Time  `bun:"created_at,type:timestamptz,notnull,default:now()" json:"created_at"`
+	UpdatedAt       time.Time  `bun:"updated_at,type:timestamptz,notnull,default:now()" json:"updated_at"`
+
 	OrgName string `bun:"-" json:"org_name,omitempty"`
 }

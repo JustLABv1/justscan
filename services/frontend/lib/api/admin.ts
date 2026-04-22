@@ -1,6 +1,6 @@
 import { req } from './core';
 import { getDefaultScannerCapabilities } from './registries';
-import type { APIRequestLog, APIRequestLogFilters, APIUsageStats, AdminDashboard, AdminToken, AdminUser, AuditLog, AuditLogFilters, NotificationChannel, NotificationDelivery, XRayRequestLog, XRayRequestLogFilters } from './types/admin';
+import type { APIRequestLog, APIRequestLogFilters, APIUsageStats, AdminDashboard, AdminToken, AdminUser, AuditLog, AuditLogFilters, NotificationChannel, NotificationDelivery, XRayRequestLog, XRayRequestLogFilters, XRayUsageStats } from './types/admin';
 import type { AutoTagRule, OIDCClaimSyncPreview, OIDCGroupMapping, OIDCOrgRoleOverride, OIDCProviderAdmin, Registry, RegistryListResponse, ScannerSettings } from './types/registries';
 import type { AdminScan } from './types/scans';
 
@@ -139,6 +139,14 @@ export const getAPIUsageStats = (from?: string, to?: string) => {
   if (to) params.set('to', to);
   const suffix = params.toString() ? `?${params}` : '';
   return req<APIUsageStats>('GET', `/api/v1/admin/api-usage${suffix}`);
+};
+
+export const getXRayUsageStats = (from?: string, to?: string) => {
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  const suffix = params.toString() ? `?${params}` : '';
+  return req<XRayUsageStats>('GET', `/api/v1/admin/xray-usage${suffix}`);
 };
 
 export const listXRayRequestLogs = (page = 1, limit = 50, filters?: XRayRequestLogFilters) => {

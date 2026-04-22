@@ -2,7 +2,9 @@ package admins
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
+	"strings"
 	"time"
 
 	"justscan-backend/config"
@@ -14,6 +16,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
+
+type globalRegistryPayload struct {
+	Name              *string `json:"name" binding:"omitempty"`
+	URL               *string `json:"url" binding:"omitempty"`
+	XrayURL           *string `json:"xray_url"`
+	XrayArtifactoryID *string `json:"xray_artifactory_id"`
+	AuthType          *string `json:"auth_type" binding:"omitempty,oneof=basic token aws_ecr none"`
+	ScanProvider      *string `json:"scan_provider" binding:"omitempty,oneof=trivy artifactory_xray"`
+	Username          *string `json:"username"`
+	Password          *string `json:"password"`
+}
 
 // ListGlobalRegistries returns all system-owned registries.
 func ListGlobalRegistries(c *gin.Context, db *bun.DB) {
@@ -38,37 +51,44 @@ func CreateGlobalRegistry(c *gin.Context, db *bun.DB) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	var body struct {
-		Name              string `json:"name" binding:"required"`
-		URL               string `json:"url" binding:"required"`
-		XrayURL           string `json:"xray_url"`
-		XrayArtifactoryID string `json:"xray_artifactory_id"`
-		AuthType          string `json:"auth_type" binding:"omitempty,oneof=basic token aws_ecr none"`
-		ScanProvider      string `json:"scan_provider" binding:"omitempty,oneof=trivy artifactory_xray"`
-		Username          string `json:"username"`
-		Password          string `json:"password"`
-	}
+	var body globalRegistryPayload
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if body.AuthType == "" {
-		body.AuthType = models.RegistryAuthNone
+	name := strings.TrimSpace(stringValue(body.Name))
+	url := strings.TrimSpace(stringValue(body.URL))
+	if name == "" || url == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name and url are required"})
+		return
 	}
-	if body.ScanProvider == "" {
-		body.ScanProvider = "trivy"
+	authType := models.RegistryAuthNone
+	if body.AuthType != nil && strings.TrimSpace(*body.AuthType) != "" {
+		authType = strings.TrimSpace(*body.AuthType)
 	}
-	if err := scanner.ValidateRegistryProviderSelection(body.ScanProvider); err != nil {
+	scanProvider := models.ScanProviderTrivy
+	if body.ScanProvider != nil && strings.TrimSpace(*body.ScanProvider) != "" {
+		scanProvider = strings.TrimSpace(*body.ScanProvider)
+	}
+	if err := scanner.ValidateRegistryProviderSelection(scanProvider); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if body.XrayArtifactoryID == "" {
-		body.XrayArtifactoryID = "default"
+	xrayURL := strings.TrimSpace(stringValue(body.XrayURL))
+	xrayArtifactoryID := strings.TrimSpace(stringValue(body.XrayArtifactoryID))
+	if scanProvider == models.ScanProviderArtifactoryXray {
+		if xrayArtifactoryID == "" {
+			xrayArtifactoryID = "default"
+		}
+	} else {
+		xrayURL = ""
+		xrayArtifactoryID = "default"
 	}
+	username := strings.TrimSpace(stringValue(body.Username))
 	encryptedPassword := ""
-	if body.Password != "" {
+	if body.Password != nil && strings.TrimSpace(*body.Password) != "" {
 		key := crypto.KeyFromString(config.Config.Encryption.Key)
-		enc, err := crypto.Encrypt(key, body.Password)
+		enc, err := crypto.Encrypt(key, strings.TrimSpace(*body.Password))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encrypt credentials"})
 			return
@@ -76,13 +96,13 @@ func CreateGlobalRegistry(c *gin.Context, db *bun.DB) {
 		encryptedPassword = enc
 	}
 	registry := &models.Registry{
-		Name:              body.Name,
-		URL:               body.URL,
-		XrayURL:           body.XrayURL,
-		XrayArtifactoryID: body.XrayArtifactoryID,
-		AuthType:          body.AuthType,
-		ScanProvider:      body.ScanProvider,
-		Username:          body.Username,
+		Name:              name,
+		URL:               url,
+		XrayURL:           xrayURL,
+		XrayArtifactoryID: xrayArtifactoryID,
+		AuthType:          authType,
+		ScanProvider:      scanProvider,
+		Username:          username,
 		Password:          encryptedPassword,
 		CreatedByID:       userID,
 		OwnerType:         models.OwnerTypeSystem,
@@ -95,6 +115,107 @@ func CreateGlobalRegistry(c *gin.Context, db *bun.DB) {
 	}
 	registry.Password = ""
 	c.JSON(http.StatusCreated, registry)
+}
+
+// UpdateGlobalRegistry updates an existing system-owned registry.
+func UpdateGlobalRegistry(c *gin.Context, db *bun.DB) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry ID"})
+		return
+	}
+
+	var body globalRegistryPayload
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	registry := new(models.Registry)
+	if err := db.NewSelect().Model(registry).
+		Where("id = ? AND owner_type = ?", id, models.OwnerTypeSystem).
+		Scan(c.Request.Context()); err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "registry not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load registry"})
+		return
+	}
+
+	if body.Name != nil {
+		registry.Name = strings.TrimSpace(*body.Name)
+	}
+	if body.URL != nil {
+		registry.URL = strings.TrimSpace(*body.URL)
+	}
+	if registry.Name == "" || registry.URL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name and url are required"})
+		return
+	}
+	if body.AuthType != nil {
+		trimmed := strings.TrimSpace(*body.AuthType)
+		if trimmed == "" {
+			registry.AuthType = models.RegistryAuthNone
+		} else {
+			registry.AuthType = trimmed
+		}
+	}
+	if body.ScanProvider != nil {
+		trimmed := strings.TrimSpace(*body.ScanProvider)
+		if trimmed == "" {
+			registry.ScanProvider = models.ScanProviderTrivy
+		} else {
+			registry.ScanProvider = trimmed
+		}
+	}
+	if err := scanner.ValidateRegistryProviderSelection(registry.ScanProvider); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if body.Username != nil {
+		registry.Username = strings.TrimSpace(*body.Username)
+	}
+	if body.XrayURL != nil {
+		registry.XrayURL = strings.TrimSpace(*body.XrayURL)
+	}
+	if body.XrayArtifactoryID != nil {
+		registry.XrayArtifactoryID = strings.TrimSpace(*body.XrayArtifactoryID)
+	}
+	if registry.ScanProvider == models.ScanProviderArtifactoryXray {
+		if registry.XrayArtifactoryID == "" {
+			registry.XrayArtifactoryID = "default"
+		}
+	} else {
+		registry.XrayURL = ""
+		registry.XrayArtifactoryID = "default"
+	}
+	if body.Password != nil {
+		trimmed := strings.TrimSpace(*body.Password)
+		if trimmed == "" {
+			registry.Password = ""
+		} else {
+			key := crypto.KeyFromString(config.Config.Encryption.Key)
+			enc, err := crypto.Encrypt(key, trimmed)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encrypt credentials"})
+				return
+			}
+			registry.Password = enc
+		}
+	}
+
+	registry.UpdatedAt = time.Now()
+	if _, err := db.NewUpdate().Model(registry).
+		Column("name", "url", "xray_url", "xray_artifactory_id", "auth_type", "scan_provider", "username", "password", "updated_at").
+		Where("id = ? AND owner_type = ?", id, models.OwnerTypeSystem).
+		Exec(c.Request.Context()); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update global registry"})
+		return
+	}
+
+	registry.Password = ""
+	c.JSON(http.StatusOK, registry)
 }
 
 // DeleteGlobalRegistry removes a system registry.
@@ -174,4 +295,11 @@ func getUserIDFromContext(c *gin.Context) (uuid.UUID, error) {
 		return uuid.Parse(v)
 	}
 	return uuid.Nil, nil
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

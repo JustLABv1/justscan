@@ -7,18 +7,25 @@ import {
   addTagToScan,
   adminCreateGlobalRegistry,
   adminCreateGroupMapping,
+  adminCreateOIDCRoleOverride,
   adminCreateOIDCProvider,
   adminDeleteGlobalRegistry,
   adminDeleteGroupMapping,
+  adminDeleteOIDCRoleOverride,
   adminDeleteOIDCProvider,
   adminListGlobalRegistries,
   adminListGroupMappings,
+  adminListOIDCRoleOverrides,
   adminListOIDCProviders,
+  adminPreviewOIDCClaimSync,
   AdminScan,
   adminSetDefaultRegistry,
   AdminToken,
   adminUnsetDefaultRegistry,
+  adminUpdateGroupMapping,
   adminUpdateAuthSettings,
+  adminUpdateOIDCRoleOverride,
+  adminUpdateGlobalRegistry,
   adminUpdateOIDCProvider,
   adminUpdateScannerSettings,
   AdminUser,
@@ -55,7 +62,9 @@ import {
   listXRayRequestLogs,
   NotificationChannel,
   NotificationDelivery,
+  OIDCClaimSyncPreview,
   OIDCGroupMapping,
+  OIDCOrgRoleOverride,
   OIDCProviderAdmin,
   Org,
   Registry,
@@ -114,6 +123,25 @@ function escapeCsv(value: unknown) {
   const text = String(value ?? '');
   if (!/[",\n]/.test(text)) return text;
   return `"${text.replace(/"/g, '""')}"`;
+}
+
+function renderClaimMappingPreview(template: string, providerName: string, matchType: 'exact' | 'prefix', matchValue: string) {
+  const exampleClaim = matchType === 'prefix'
+    ? `${matchValue || 'team:'}platform`
+    : (matchValue || 'platform-admins');
+  const exampleSuffix = matchType === 'prefix' && exampleClaim.startsWith(matchValue)
+    ? exampleClaim.slice(matchValue.length).trim()
+    : '';
+  const preview = (template || '{claim}')
+    .replaceAll('{claim}', exampleClaim)
+    .replaceAll('{suffix}', exampleSuffix)
+    .replaceAll('{provider}', providerName || 'provider');
+
+  return {
+    claim: exampleClaim,
+    suffix: exampleSuffix,
+    preview,
+  };
 }
 
 async function copyToClipboard(text: string) {
@@ -3343,6 +3371,14 @@ function IdentityProvidersTab() {
   const [mappings, setMappings] = useState<OIDCGroupMapping[]>([]);
   const [mappingsLoading, setMappingsLoading] = useState(false);
   const [mappingError, setMappingError] = useState('');
+  const [roleOverrides, setRoleOverrides] = useState<OIDCOrgRoleOverride[]>([]);
+  const [roleOverridesLoading, setRoleOverridesLoading] = useState(false);
+  const [roleOverrideError, setRoleOverrideError] = useState('');
+  const [previewGroupsInput, setPreviewGroupsInput] = useState('');
+  const [previewRolesInput, setPreviewRolesInput] = useState('');
+  const [claimSyncPreview, setClaimSyncPreview] = useState<OIDCClaimSyncPreview | null>(null);
+  const [claimSyncPreviewLoading, setClaimSyncPreviewLoading] = useState(false);
+  const [claimSyncPreviewError, setClaimSyncPreviewError] = useState('');
   const [editingProvider, setEditingProvider] = useState<OIDCProviderAdmin | null>(null);
   const [providerName, setProviderName] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -3354,22 +3390,52 @@ function IdentityProvidersTab() {
   const [scopesInput, setScopesInput] = useState('openid, profile, email');
   const [adminGroupsInput, setAdminGroupsInput] = useState('');
   const [adminRolesInput, setAdminRolesInput] = useState('');
+  const [includedGroupsInput, setIncludedGroupsInput] = useState('');
+  const [excludedGroupsInput, setExcludedGroupsInput] = useState('');
+  const [includedOrgNamesInput, setIncludedOrgNamesInput] = useState('');
+  const [excludedOrgNamesInput, setExcludedOrgNamesInput] = useState('');
   const [groupsClaim, setGroupsClaim] = useState('groups');
   const [rolesClaim, setRolesClaim] = useState('roles');
   const [providerEnabled, setProviderEnabled] = useState(true);
   const [sortOrder, setSortOrder] = useState('0');
   const [providerFormError, setProviderFormError] = useState('');
   const [providerSaving, setProviderSaving] = useState(false);
-  const [mappingGroup, setMappingGroup] = useState('');
+  const [mappingEffect, setMappingEffect] = useState<'allow' | 'exclude'>('allow');
+  const [mappingClaimType, setMappingClaimType] = useState<'group' | 'role'>('group');
+  const [mappingMatchType, setMappingMatchType] = useState<'exact' | 'prefix'>('exact');
+  const [mappingMatchValue, setMappingMatchValue] = useState('');
+  const [mappingProvisioningMode, setMappingProvisioningMode] = useState<'existing_org' | 'create_org'>('existing_org');
   const [mappingOrgId, setMappingOrgId] = useState('');
+  const [mappingOrgNameTemplate, setMappingOrgNameTemplate] = useState('{claim}');
   const [mappingRole, setMappingRole] = useState<'viewer' | 'editor' | 'admin'>('viewer');
-  const [mappingAutoCreate, setMappingAutoCreate] = useState(false);
+  const [mappingRecreateMissingOrg, setMappingRecreateMissingOrg] = useState(false);
   const [mappingRemoveOnUnsync, setMappingRemoveOnUnsync] = useState(true);
   const [mappingFormError, setMappingFormError] = useState('');
   const [mappingSaving, setMappingSaving] = useState(false);
+  const [editingMapping, setEditingMapping] = useState<OIDCGroupMapping | null>(null);
+  const [overrideClaimType, setOverrideClaimType] = useState<'group' | 'role'>('group');
+  const [overrideMatchType, setOverrideMatchType] = useState<'exact' | 'prefix'>('exact');
+  const [overrideMatchValue, setOverrideMatchValue] = useState('');
+  const [overrideTargetType, setOverrideTargetType] = useState<'org_id' | 'rendered_name'>('org_id');
+  const [overrideOrgId, setOverrideOrgId] = useState('');
+  const [overrideOrgNameTemplate, setOverrideOrgNameTemplate] = useState('{claim}');
+  const [overrideRole, setOverrideRole] = useState<'viewer' | 'editor' | 'admin'>('admin');
+  const [overrideFormError, setOverrideFormError] = useState('');
+  const [overrideSaving, setOverrideSaving] = useState(false);
+  const [editingRoleOverride, setEditingRoleOverride] = useState<OIDCOrgRoleOverride | null>(null);
   const providerModal = useOverlayState();
   const mappingModal = useOverlayState();
+  const roleOverrideModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const mappingPreview = useMemo(
+    () => renderClaimMappingPreview(mappingOrgNameTemplate, selectedProvider?.name ?? '', mappingMatchType, mappingMatchValue),
+    [mappingMatchType, mappingMatchValue, mappingOrgNameTemplate, selectedProvider?.name],
+  );
+  const overridePreview = useMemo(
+    () => renderClaimMappingPreview(overrideOrgNameTemplate, selectedProvider?.name ?? '', overrideMatchType, overrideMatchValue),
+    [overrideMatchType, overrideMatchValue, overrideOrgNameTemplate, selectedProvider?.name],
+  );
+  const mappingIsExclude = mappingEffect === 'exclude';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -3396,17 +3462,37 @@ function IdentityProvidersTab() {
     try {
       setMappings(await adminListGroupMappings(providerName));
     } catch (loadError: unknown) {
-      setMappingError(loadError instanceof Error ? loadError.message : 'Failed to load group mappings');
+      setMappingError(loadError instanceof Error ? loadError.message : 'Failed to load claim mappings');
     } finally {
       setMappingsLoading(false);
+    }
+  }, []);
+
+  const loadRoleOverrides = useCallback(async (providerName: string) => {
+    setRoleOverridesLoading(true);
+    setRoleOverrideError('');
+    try {
+      setRoleOverrides(await adminListOIDCRoleOverrides(providerName));
+    } catch (loadError: unknown) {
+      setRoleOverrideError(loadError instanceof Error ? loadError.message : 'Failed to load role overrides');
+    } finally {
+      setRoleOverridesLoading(false);
     }
   }, []);
 
   useEffect(() => {
     if (selectedProvider) {
       loadMappings(selectedProvider.name);
+      loadRoleOverrides(selectedProvider.name);
     }
-  }, [selectedProvider, loadMappings]);
+  }, [selectedProvider, loadMappings, loadRoleOverrides]);
+
+  useEffect(() => {
+    setClaimSyncPreview(null);
+    setClaimSyncPreviewError('');
+    setPreviewGroupsInput('');
+    setPreviewRolesInput('');
+  }, [selectedProvider?.name]);
 
   function openCreateProvider() {
     setEditingProvider(null);
@@ -3420,6 +3506,10 @@ function IdentityProvidersTab() {
     setScopesInput('openid, profile, email');
     setAdminGroupsInput('');
     setAdminRolesInput('');
+    setIncludedGroupsInput('');
+    setExcludedGroupsInput('');
+    setIncludedOrgNamesInput('');
+    setExcludedOrgNamesInput('');
     setGroupsClaim('groups');
     setRolesClaim('roles');
     setProviderEnabled(true);
@@ -3440,6 +3530,10 @@ function IdentityProvidersTab() {
     setScopesInput((provider.scopes ?? []).join(', '));
     setAdminGroupsInput((provider.admin_groups ?? []).join(', '));
     setAdminRolesInput((provider.admin_roles ?? []).join(', '));
+    setIncludedGroupsInput((provider.included_groups ?? []).join(', '));
+    setExcludedGroupsInput((provider.excluded_groups ?? []).join(', '));
+    setIncludedOrgNamesInput((provider.included_org_names ?? []).join(', '));
+    setExcludedOrgNamesInput((provider.excluded_org_names ?? []).join(', '));
     setGroupsClaim(provider.groups_claim || 'groups');
     setRolesClaim(provider.roles_claim || 'roles');
     setProviderEnabled(provider.enabled);
@@ -3450,13 +3544,62 @@ function IdentityProvidersTab() {
 
   function openCreateMapping() {
     if (!selectedProvider) return;
-    setMappingGroup('');
+    setEditingMapping(null);
+    setMappingEffect('allow');
+    setMappingClaimType('group');
+    setMappingMatchType('exact');
+    setMappingMatchValue('');
+    setMappingProvisioningMode(orgs.length > 0 ? 'existing_org' : 'create_org');
     setMappingOrgId(orgs[0]?.id ?? '');
-    setMappingRole('viewer');
-    setMappingAutoCreate(false);
+    setMappingOrgNameTemplate('{claim}');
+    setMappingRole(orgs.length > 0 ? 'viewer' : 'admin');
+    setMappingRecreateMissingOrg(false);
     setMappingRemoveOnUnsync(true);
     setMappingFormError('');
     mappingModal.open();
+  }
+
+  function openEditMapping(mapping: OIDCGroupMapping) {
+    setEditingMapping(mapping);
+    setMappingEffect(mapping.effect);
+    setMappingClaimType(mapping.claim_type);
+    setMappingMatchType(mapping.match_type);
+    setMappingMatchValue(mapping.match_value);
+    setMappingProvisioningMode(mapping.provisioning_mode);
+    setMappingOrgId(mapping.org_id ?? '');
+    setMappingOrgNameTemplate(mapping.org_name_template || '{claim}');
+    setMappingRole((mapping.role as 'viewer' | 'editor' | 'admin') || 'viewer');
+    setMappingRecreateMissingOrg(mapping.recreate_missing_org);
+    setMappingRemoveOnUnsync(mapping.remove_on_unsync);
+    setMappingFormError('');
+    mappingModal.open();
+  }
+
+  function openCreateRoleOverride() {
+    if (!selectedProvider) return;
+    setEditingRoleOverride(null);
+    setOverrideClaimType('group');
+    setOverrideMatchType('exact');
+    setOverrideMatchValue('');
+    setOverrideTargetType(orgs.length > 0 ? 'org_id' : 'rendered_name');
+    setOverrideOrgId(orgs[0]?.id ?? '');
+    setOverrideOrgNameTemplate('{claim}');
+    setOverrideRole('admin');
+    setOverrideFormError('');
+    roleOverrideModal.open();
+  }
+
+  function openEditRoleOverride(override: OIDCOrgRoleOverride) {
+    setEditingRoleOverride(override);
+    setOverrideClaimType(override.claim_type);
+    setOverrideMatchType(override.match_type);
+    setOverrideMatchValue(override.match_value);
+    setOverrideTargetType(override.target_type);
+    setOverrideOrgId(override.org_id ?? '');
+    setOverrideOrgNameTemplate(override.org_name_template || '{claim}');
+    setOverrideRole(override.role);
+    setOverrideFormError('');
+    roleOverrideModal.open();
   }
 
   async function handleProviderSubmit(event: React.FormEvent) {
@@ -3475,6 +3618,10 @@ function IdentityProvidersTab() {
         scopes: parseDelimitedList(scopesInput),
         admin_groups: parseDelimitedList(adminGroupsInput),
         admin_roles: parseDelimitedList(adminRolesInput),
+        included_groups: parseDelimitedList(includedGroupsInput),
+        excluded_groups: parseDelimitedList(excludedGroupsInput),
+        included_org_names: parseDelimitedList(includedOrgNamesInput),
+        excluded_org_names: parseDelimitedList(excludedOrgNamesInput),
         groups_claim: groupsClaim.trim() || 'groups',
         roles_claim: rolesClaim.trim() || 'roles',
         enabled: providerEnabled,
@@ -3505,17 +3652,36 @@ function IdentityProvidersTab() {
     setMappingSaving(true);
     setMappingFormError('');
     try {
-      await adminCreateGroupMapping(selectedProvider.name, {
-        oidc_group: mappingGroup.trim(),
-        org_id: mappingOrgId,
-        role: mappingRole,
-        auto_create_org: mappingAutoCreate,
-        remove_on_unsync: mappingRemoveOnUnsync,
-      });
+      if (!mappingIsExclude && mappingProvisioningMode === 'existing_org' && !mappingOrgId) {
+        throw new Error('Select an organization or switch to create-org provisioning');
+      }
+      if (!mappingIsExclude && (mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg) && !mappingOrgNameTemplate.trim()) {
+        throw new Error('Org name template is required for org provisioning');
+      }
+      const payload = {
+        effect: mappingEffect,
+        claim_type: mappingClaimType,
+        match_type: mappingMatchType,
+        match_value: mappingMatchValue.trim(),
+        provisioning_mode: mappingIsExclude ? undefined : mappingProvisioningMode,
+        org_id: !mappingIsExclude && mappingProvisioningMode === 'existing_org' ? mappingOrgId : undefined,
+        org_name_template: !mappingIsExclude && (mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg)
+          ? mappingOrgNameTemplate.trim()
+          : '',
+        role: mappingIsExclude ? undefined : mappingRole,
+        recreate_missing_org: !mappingIsExclude && mappingProvisioningMode === 'existing_org' ? mappingRecreateMissingOrg : false,
+        remove_on_unsync: mappingIsExclude ? undefined : mappingRemoveOnUnsync,
+      };
+      if (editingMapping) {
+        await adminUpdateGroupMapping(selectedProvider.name, editingMapping.id, payload);
+      } else {
+        await adminCreateGroupMapping(selectedProvider.name, payload);
+      }
       mappingModal.close();
+      setEditingMapping(null);
       await loadMappings(selectedProvider.name);
     } catch (saveError: unknown) {
-      setMappingFormError(saveError instanceof Error ? saveError.message : 'Failed to create mapping');
+      setMappingFormError(saveError instanceof Error ? saveError.message : `Failed to ${editingMapping ? 'update' : 'create'} mapping`);
     } finally {
       setMappingSaving(false);
     }
@@ -3529,26 +3695,114 @@ function IdentityProvidersTab() {
       variant: 'danger',
     });
     if (!ok) return;
-    await adminDeleteOIDCProvider(name);
-    if (selectedProvider?.name === name) setSelectedProvider(null);
-    await load();
+    try {
+      await adminDeleteOIDCProvider(name);
+      if (selectedProvider?.name === name) setSelectedProvider(null);
+      await load();
+    } catch (deleteError: unknown) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete provider');
+    }
   }
 
   async function handleToggleEnabled(provider: OIDCProviderAdmin) {
-    await adminUpdateOIDCProvider(provider.name, { enabled: !provider.enabled });
-    await load();
+    try {
+      await adminUpdateOIDCProvider(provider.name, { enabled: !provider.enabled });
+      await load();
+    } catch (toggleError: unknown) {
+      setError(toggleError instanceof Error ? toggleError.message : 'Failed to update provider state');
+    }
   }
 
   async function handleDeleteMapping(providerName: string, mappingId: string) {
     const ok = await confirm({
-      title: 'Delete Mapping',
-      message: 'Remove this group to organization mapping?',
+      title: 'Delete Claim Mapping',
+      message: 'Remove this OIDC claim mapping rule?',
       confirmLabel: 'Delete',
       variant: 'danger',
     });
     if (!ok) return;
-    await adminDeleteGroupMapping(providerName, mappingId);
-    await loadMappings(providerName);
+    const previousMappings = mappings;
+    setMappingError('');
+    setMappings((current) => current.filter((mapping) => mapping.id !== mappingId));
+    try {
+      await adminDeleteGroupMapping(providerName, mappingId);
+    } catch (deleteError: unknown) {
+      setMappings(previousMappings);
+      setMappingError(deleteError instanceof Error ? deleteError.message : 'Failed to delete claim mapping');
+    }
+  }
+
+  async function handleRoleOverrideSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedProvider) return;
+    setOverrideSaving(true);
+    setOverrideFormError('');
+    try {
+      if (overrideTargetType === 'org_id' && !overrideOrgId) {
+        throw new Error('Select an organization or switch to rendered org name targeting');
+      }
+      if (overrideTargetType === 'rendered_name' && !overrideOrgNameTemplate.trim()) {
+        throw new Error('Org name template is required for rendered org name targeting');
+      }
+      const payload = {
+        claim_type: overrideClaimType,
+        match_type: overrideMatchType,
+        match_value: overrideMatchValue.trim(),
+        target_type: overrideTargetType,
+        org_id: overrideTargetType === 'org_id' ? overrideOrgId : undefined,
+        org_name_template: overrideTargetType === 'rendered_name' ? overrideOrgNameTemplate.trim() : '',
+        role: overrideRole,
+      };
+      if (editingRoleOverride) {
+        await adminUpdateOIDCRoleOverride(selectedProvider.name, editingRoleOverride.id, payload);
+      } else {
+        await adminCreateOIDCRoleOverride(selectedProvider.name, payload);
+      }
+      roleOverrideModal.close();
+      setEditingRoleOverride(null);
+      await loadRoleOverrides(selectedProvider.name);
+    } catch (saveError: unknown) {
+      setOverrideFormError(saveError instanceof Error ? saveError.message : `Failed to ${editingRoleOverride ? 'update' : 'create'} role override`);
+    } finally {
+      setOverrideSaving(false);
+    }
+  }
+
+  async function handleDeleteRoleOverride(providerName: string, overrideId: string) {
+    const ok = await confirm({
+      title: 'Delete Role Override',
+      message: 'Remove this OIDC role override rule?',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    const previousOverrides = roleOverrides;
+    setRoleOverrideError('');
+    setRoleOverrides((current) => current.filter((override) => override.id !== overrideId));
+    try {
+      await adminDeleteOIDCRoleOverride(providerName, overrideId);
+    } catch (deleteError: unknown) {
+      setRoleOverrides(previousOverrides);
+      setRoleOverrideError(deleteError instanceof Error ? deleteError.message : 'Failed to delete role override');
+    }
+  }
+
+  async function handlePreviewClaimSync(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedProvider) return;
+    setClaimSyncPreviewLoading(true);
+    setClaimSyncPreviewError('');
+    try {
+      const preview = await adminPreviewOIDCClaimSync(selectedProvider.name, {
+        groups: parseDelimitedList(previewGroupsInput),
+        roles: parseDelimitedList(previewRolesInput),
+      });
+      setClaimSyncPreview(preview);
+    } catch (previewError: unknown) {
+      setClaimSyncPreviewError(previewError instanceof Error ? previewError.message : 'Failed to preview claim sync');
+    } finally {
+      setClaimSyncPreviewLoading(false);
+    }
   }
 
   return (
@@ -3564,7 +3818,7 @@ function IdentityProvidersTab() {
       <div className="glass-panel rounded-2xl p-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Identity Providers</h2>
-          <p className="text-sm text-zinc-500 mt-1">Create, edit, and disable OIDC providers without leaving the admin UI.</p>
+          <p className="text-sm text-zinc-500 mt-1">Create, edit, and disable OIDC providers without leaving the admin UI. Select a row to manage mappings, overrides, and preview rules directly.</p>
         </div>
         <button onClick={openCreateProvider} className="btn-primary inline-flex items-center gap-2" type="button">
           <PlusSignIcon size={15} /> Add Provider
@@ -3595,9 +3849,30 @@ function IdentityProvidersTab() {
               {providers.map((provider, index) => (
                 <tr
                   key={provider.name}
-                  style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
-                  onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
-                  onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
+                  className="cursor-pointer"
+                  style={{
+                    borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined,
+                    background: selectedProvider?.name === provider.name ? 'var(--row-hover)' : 'transparent',
+                    boxShadow: selectedProvider?.name === provider.name ? 'inset 3px 0 0 rgba(99,102,241,0.65)' : undefined,
+                  }}
+                  onClick={() => setSelectedProvider(provider)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSelectedProvider(provider);
+                    }
+                  }}
+                  onMouseEnter={(event) => {
+                    if (selectedProvider?.name !== provider.name) {
+                      event.currentTarget.style.background = 'var(--row-hover)';
+                    }
+                  }}
+                  onMouseLeave={(event) => {
+                    if (selectedProvider?.name !== provider.name) {
+                      event.currentTarget.style.background = 'transparent';
+                    }
+                  }}
+                  tabIndex={0}
                 >
                   <td className="px-4 py-3">
                     <div className="space-y-1">
@@ -3606,6 +3881,11 @@ function IdentityProvidersTab() {
                           <span className="w-2.5 h-2.5 rounded-full border border-white/30" style={{ background: provider.button_color }} />
                         ) : null}
                         <span className="font-medium text-zinc-700 dark:text-zinc-200">{provider.display_name}</span>
+                        {selectedProvider?.name === provider.name ? (
+                          <span className="text-[10px] uppercase tracking-[0.14em] px-2 py-0.5 rounded-full" style={{ color: '#818cf8', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.18)' }}>
+                            Managing
+                          </span>
+                        ) : null}
                       </div>
                       <p className="text-xs font-mono text-zinc-500">{provider.name}</p>
                     </div>
@@ -3620,11 +3900,10 @@ function IdentityProvidersTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex justify-end">
+                    <div className="flex justify-end" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
                       <RowActionsMenu
                         label={`Open actions for provider ${provider.display_name}`}
                         items={[
-                          { id: 'mappings', label: selectedProvider?.name === provider.name ? 'Hide mappings' : 'View mappings', icon: <ArrowRight01Icon size={15} />, onAction: () => setSelectedProvider(selectedProvider?.name === provider.name ? null : provider) },
                           { id: 'edit', label: 'Edit provider', icon: <PencilEdit01Icon size={15} />, onAction: () => openEditProvider(provider) },
                           { id: 'toggle', label: provider.enabled ? 'Disable provider' : 'Enable provider', onAction: () => { void handleToggleEnabled(provider); } },
                           { id: 'delete', label: 'Delete provider', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(provider.name); } },
@@ -3643,10 +3922,59 @@ function IdentityProvidersTab() {
         <div className="glass-panel rounded-2xl p-5 space-y-4">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
-              <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Group Mappings</h3>
-              <p className="text-sm text-zinc-500 mt-1">Auto-assign users from <span className="font-mono">{selectedProvider.name}</span> into organizations based on group claims.</p>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Provider Workspace</p>
+              <h3 className="mt-2 text-lg font-semibold text-zinc-900 dark:text-white">{selectedProvider.display_name}</h3>
+              <p className="text-sm text-zinc-500 mt-1">Manage claim routing, preview outcomes, and provider-level filters for <span className="font-mono">{selectedProvider.name}</span>.</p>
             </div>
-            <button onClick={openCreateMapping} className="btn-secondary inline-flex items-center gap-2" type="button" disabled={orgs.length === 0}>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => openEditProvider(selectedProvider)} className="btn-secondary inline-flex items-center gap-2" type="button">
+                <PencilEdit01Icon size={15} /> Edit Provider
+              </button>
+              <button onClick={() => setSelectedProvider(null)} className="btn-secondary" type="button">
+                Close Workspace
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Group filters</div>
+              <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">
+                {selectedProvider.included_groups.length ? `Include: ${selectedProvider.included_groups.join(', ')}` : 'All groups allowed'}
+                {selectedProvider.excluded_groups.length ? ` | Exclude: ${selectedProvider.excluded_groups.join(', ')}` : ''}
+              </div>
+            </div>
+            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Derived org filters</div>
+              <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">
+                {selectedProvider.included_org_names.length ? `Include: ${selectedProvider.included_org_names.join(', ')}` : 'All rendered org names allowed'}
+                {selectedProvider.excluded_org_names.length ? ` | Exclude: ${selectedProvider.excluded_org_names.join(', ')}` : ''}
+              </div>
+            </div>
+            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Claim mappings</div>
+              <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{mappingsLoading ? 'Loading…' : `${mappings.length} configured`}</div>
+            </div>
+            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Role overrides</div>
+              <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{roleOverridesLoading ? 'Loading…' : `${roleOverrides.length} configured`}</div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="glass-panel rounded-2xl px-5 py-6 text-sm text-zinc-500" style={{ border: '1px solid var(--glass-border)' }}>
+          Select a provider row to open its rule workspace.
+        </div>
+      )}
+
+      {selectedProvider ? (
+        <div className="glass-panel rounded-2xl p-5 space-y-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Claim Mappings</h3>
+              <p className="text-sm text-zinc-500 mt-1">Map groups or roles from <span className="font-mono">{selectedProvider.name}</span> into existing organizations or provision new ones from controlled templates. Derived-org provider filters run after name rendering.</p>
+            </div>
+            <button onClick={openCreateMapping} className="btn-secondary inline-flex items-center gap-2" type="button">
               <PlusSignIcon size={15} /> Add Mapping
             </button>
           </div>
@@ -3661,15 +3989,15 @@ function IdentityProvidersTab() {
             <p className="text-sm text-zinc-500">Loading mappings…</p>
           ) : mappings.length === 0 ? (
             <div className="rounded-xl px-4 py-6 text-sm text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-              No mappings configured for this provider yet.
+              No claim mappings configured for this provider yet.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">OIDC Group</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Organization</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Claim</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Target</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Behavior</th>
                     <th className="px-4 py-3" />
@@ -3678,16 +4006,226 @@ function IdentityProvidersTab() {
                 <tbody>
                   {mappings.map((mapping, index) => (
                     <tr key={mapping.id} style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}>
-                      <td className="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-300">{mapping.oidc_group}</td>
-                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">{mapping.org_name ?? mapping.org_id}</td>
-                      <td className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-[0.14em]">{mapping.role}</td>
-                      <td className="px-4 py-3 text-xs text-zinc-500">{mapping.auto_create_org ? 'Auto-create org if missing' : 'Require existing org'} · {mapping.remove_on_unsync ? 'Remove on unsync' : 'Keep manual membership'}</td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-1">
+                          <div className="font-mono text-xs text-zinc-600 dark:text-zinc-300">{mapping.match_value}</div>
+                          <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">{mapping.claim_type} · {mapping.match_type} · {mapping.effect}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">
+                        <div className="space-y-1">
+                          <div>{mapping.effect === 'exclude' ? 'Excluded claim' : (mapping.provisioning_mode === 'create_org' ? 'Create org from template' : (mapping.org_name ?? mapping.org_id ?? 'Missing org'))}</div>
+                          {mapping.effect !== 'exclude' && mapping.org_name_template ? (
+                            <div className="font-mono text-[11px] text-zinc-500">{mapping.org_name_template}</div>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-[0.14em]">{mapping.effect === 'exclude' ? '—' : mapping.role}</td>
+                      <td className="px-4 py-3 text-xs text-zinc-500">
+                        {mapping.effect === 'exclude'
+                          ? 'Blocks provisioning and membership sync'
+                          : `${mapping.provisioning_mode === 'create_org' ? 'Provision by template' : 'Use existing org'}${mapping.recreate_missing_org ? ' · Recreate if missing' : ''} · ${mapping.remove_on_unsync ? 'Remove on unsync' : 'Keep membership on unsync'}`}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end">
                           <RowActionsMenu
-                            label={`Open actions for mapping ${mapping.oidc_group}`}
+                            label={`Open actions for mapping ${mapping.match_value}`}
                             items={[
+                              { id: 'edit', label: 'Edit mapping', icon: <PencilEdit01Icon size={15} />, onAction: () => openEditMapping(mapping) },
                               { id: 'delete', label: 'Delete mapping', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDeleteMapping(selectedProvider.name, mapping.id); } },
+                            ]}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {selectedProvider ? (
+        <div className="glass-panel rounded-2xl p-5 space-y-4">
+          <div>
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Claim Sync Preview</h3>
+            <p className="text-sm text-zinc-500 mt-1">Test sample groups and roles against the current provider rules to see filtering, matched routes, and the final memberships without mutating any data.</p>
+          </div>
+
+          {claimSyncPreviewError && (
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+              {claimSyncPreviewError}
+            </div>
+          )}
+
+          <form onSubmit={handlePreviewClaimSync} className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-4 items-end">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Sample Groups</label>
+              <textarea className={inputCls} rows={4} value={previewGroupsInput} onChange={(event) => setPreviewGroupsInput(event.target.value)} placeholder="/teams/platform, /teams/security" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Sample Roles</label>
+              <textarea className={inputCls} rows={4} value={previewRolesInput} onChange={(event) => setPreviewRolesInput(event.target.value)} placeholder="realm-admin, editor" />
+            </div>
+            <button type="submit" disabled={claimSyncPreviewLoading} className="btn-primary inline-flex items-center gap-2 h-fit">
+              {claimSyncPreviewLoading && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              Run Preview
+            </button>
+          </form>
+
+          {claimSyncPreview ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Provider filtered out</div>
+                  <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{claimSyncPreview.provider_filtered_out_groups.length ? claimSyncPreview.provider_filtered_out_groups.join(', ') : 'None'}</div>
+                </div>
+                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Blocked groups</div>
+                  <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{claimSyncPreview.blocked_groups.length ? claimSyncPreview.blocked_groups.join(', ') : 'None'}</div>
+                </div>
+                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Blocked roles</div>
+                  <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{claimSyncPreview.blocked_roles.length ? claimSyncPreview.blocked_roles.join(', ') : 'None'}</div>
+                </div>
+                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Final memberships</div>
+                  <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{claimSyncPreview.final_memberships.length}</div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Route</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Target</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {claimSyncPreview.matched_routes.map((route, index) => (
+                      <tr key={`${route.mapping_id}-${index}`} style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}>
+                        <td className="px-4 py-3">
+                          <div className="space-y-1">
+                            <div className="font-mono text-xs text-zinc-600 dark:text-zinc-300">{route.claim}</div>
+                            <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">{route.claim_type} · {route.match_type} · {route.match_value}</div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">
+                          <div>{route.org_name ?? route.org_id ?? '—'}</div>
+                          {route.requires_create ? <div className="text-[11px] text-zinc-500">Will create if selected</div> : null}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-zinc-500">
+                          {route.final_role ? `${route.base_role ?? '—'} → ${route.final_role}` : (route.base_role ?? '—')}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-zinc-500">
+                          <div className="uppercase tracking-[0.14em]">{route.status.replaceAll('_', ' ')}</div>
+                          {route.reason ? <div className="mt-1 normal-case tracking-normal text-zinc-500">{route.reason}</div> : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Final org</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Claim</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Behavior</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {claimSyncPreview.final_memberships.map((membership, index) => (
+                      <tr key={`${membership.mapping_id}-${membership.org_name}-${index}`} style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}>
+                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">{membership.org_name}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-zinc-500">{membership.claim}</td>
+                        <td className="px-4 py-3 text-xs text-zinc-500">{membership.base_role} → {membership.final_role}</td>
+                        <td className="px-4 py-3 text-xs text-zinc-500">
+                          {membership.provisioning_mode === 'create_org' ? 'Create org if needed' : 'Use existing org'}
+                          {membership.override_applied ? ' · Override applied' : ''}
+                          {membership.remove_on_unsync ? ' · Remove on unsync' : ' · Keep on unsync'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl px-4 py-6 text-sm text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              Enter sample claims and run the preview to inspect provider filtering, route matching, derived-org gating, and final membership resolution.
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {selectedProvider ? (
+        <div className="glass-panel rounded-2xl p-5 space-y-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Role Overrides</h3>
+              <p className="text-sm text-zinc-500 mt-1">Override the default route role for a resolved org when a narrower group or role claim should set the final permission.</p>
+            </div>
+            <button onClick={openCreateRoleOverride} className="btn-secondary inline-flex items-center gap-2" type="button">
+              <PlusSignIcon size={15} /> Add Override
+            </button>
+          </div>
+
+          {roleOverrideError && (
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+              {roleOverrideError}
+            </div>
+          )}
+
+          {roleOverridesLoading ? (
+            <p className="text-sm text-zinc-500">Loading role overrides…</p>
+          ) : roleOverrides.length === 0 ? (
+            <div className="rounded-xl px-4 py-6 text-sm text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              No role overrides configured for this provider yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Claim</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Target</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {roleOverrides.map((override, index) => (
+                    <tr key={override.id} style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}>
+                      <td className="px-4 py-3">
+                        <div className="space-y-1">
+                          <div className="font-mono text-xs text-zinc-600 dark:text-zinc-300">{override.match_value}</div>
+                          <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">{override.claim_type} · {override.match_type}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">
+                        <div className="space-y-1">
+                          <div>{override.target_type === 'rendered_name' ? 'Rendered org name' : (override.org_name ?? override.org_id ?? 'Missing org')}</div>
+                          {override.target_type === 'rendered_name' ? (
+                            <div className="font-mono text-[11px] text-zinc-500">{override.org_name_template}</div>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-[0.14em]">{override.role}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end">
+                          <RowActionsMenu
+                            label={`Open actions for role override ${override.match_value}`}
+                            items={[
+                              { id: 'edit', label: 'Edit override', icon: <PencilEdit01Icon size={15} />, onAction: () => openEditRoleOverride(override) },
+                              { id: 'delete', label: 'Delete override', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDeleteRoleOverride(selectedProvider.name, override.id); } },
                             ]}
                           />
                         </div>
@@ -3766,6 +4304,30 @@ function IdentityProvidersTab() {
                       <input className={inputCls} value={adminRolesInput} onChange={(event) => setAdminRolesInput(event.target.value)} placeholder="admin, superuser" />
                     </div>
                   </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Included Groups</label>
+                      <input className={inputCls} value={includedGroupsInput} onChange={(event) => setIncludedGroupsInput(event.target.value)} placeholder="/finance, /security" />
+                      <p className="text-xs text-zinc-500">If set, only these exact groups are eligible for group-based org sync.</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Excluded Groups</label>
+                      <input className={inputCls} value={excludedGroupsInput} onChange={(event) => setExcludedGroupsInput(event.target.value)} placeholder="/Mandanten-Administrator" />
+                      <p className="text-xs text-zinc-500">These exact groups are always ignored for group-based org sync.</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Included Org Names</label>
+                      <input className={inputCls} value={includedOrgNamesInput} onChange={(event) => setIncludedOrgNamesInput(event.target.value)} placeholder="finance, security" />
+                      <p className="text-xs text-zinc-500">If set, only these exact rendered org names are eligible after prefix or template rendering.</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Excluded Org Names</label>
+                      <input className={inputCls} value={excludedOrgNamesInput} onChange={(event) => setExcludedOrgNamesInput(event.target.value)} placeholder="platform" />
+                      <p className="text-xs text-zinc-500">These exact rendered org names are always blocked even if the raw claim matched.</p>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Groups Claim</label>
@@ -3803,7 +4365,7 @@ function IdentityProvidersTab() {
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Add Group Mapping</Modal.Heading>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editingMapping ? 'Edit Claim Mapping' : 'Add Claim Mapping'}</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
@@ -3813,42 +4375,212 @@ function IdentityProvidersTab() {
                       {mappingFormError}
                     </div>
                   )}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">OIDC Group</label>
-                    <input className={inputCls} placeholder="platform-admins" value={mappingGroup} onChange={(event) => setMappingGroup(event.target.value)} required />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Effect</label>
+                      <select className={inputCls} value={mappingEffect} onChange={(event) => setMappingEffect(event.target.value as 'allow' | 'exclude')}>
+                        <option value="allow">Allow</option>
+                        <option value="exclude">Exclude</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Claim Source</label>
+                      <select className={inputCls} value={mappingClaimType} onChange={(event) => setMappingClaimType(event.target.value as 'group' | 'role')}>
+                        <option value="group">Group</option>
+                        <option value="role">Role</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Match Mode</label>
+                      <select className={inputCls} value={mappingMatchType} onChange={(event) => setMappingMatchType(event.target.value as 'exact' | 'prefix')}>
+                        <option value="exact">Exact</option>
+                        <option value="prefix">Prefix</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Organization</label>
-                    <select className={inputCls} value={mappingOrgId} onChange={(event) => setMappingOrgId(event.target.value)} required>
-                      <option value="" disabled>Select an organization</option>
-                      {orgs.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
-                    </select>
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Claim Value</label>
+                    <input
+                      className={inputCls}
+                      placeholder={mappingMatchType === 'prefix' ? 'team:' : 'platform-admins'}
+                      value={mappingMatchValue}
+                      onChange={(event) => setMappingMatchValue(event.target.value)}
+                      required
+                    />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
-                    <select className={inputCls} value={mappingRole} onChange={(event) => setMappingRole(event.target.value as 'viewer' | 'editor' | 'admin')}>
-                      <option value="viewer">Viewer</option>
-                      <option value="editor">Editor</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
-                      <input type="checkbox" className="rounded" checked={mappingAutoCreate} onChange={(event) => setMappingAutoCreate(event.target.checked)} />
-                      Recreate the target org automatically if it is missing
-                    </label>
-                    <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
-                      <input type="checkbox" className="rounded" checked={mappingRemoveOnUnsync} onChange={(event) => setMappingRemoveOnUnsync(event.target.checked)} />
-                      Remove membership when the group is no longer present
-                    </label>
-                  </div>
+                  {!mappingIsExclude ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Provisioning</label>
+                        <select
+                          className={inputCls}
+                          value={mappingProvisioningMode}
+                          onChange={(event) => {
+                            const nextMode = event.target.value as 'existing_org' | 'create_org';
+                            setMappingProvisioningMode(nextMode);
+                            if (nextMode === 'create_org' && mappingRole === 'viewer') {
+                              setMappingRole('admin');
+                            }
+                          }}
+                        >
+                          <option value="existing_org">Use existing org</option>
+                          <option value="create_org">Create org from template</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Default Role</label>
+                        <select className={inputCls} value={mappingRole} onChange={(event) => setMappingRole(event.target.value as 'viewer' | 'editor' | 'admin')}>
+                          <option value="viewer">Viewer</option>
+                          <option value="editor">Editor</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </div>
+                    </div>
+                  ) : null}
+                  {!mappingIsExclude && mappingProvisioningMode === 'existing_org' ? (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Organization</label>
+                      <select className={inputCls} value={mappingOrgId} onChange={(event) => setMappingOrgId(event.target.value)}>
+                        <option value="">Select an organization</option>
+                        {orgs.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
+                      </select>
+                    </div>
+                  ) : null}
+                  {!mappingIsExclude && (mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg) ? (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Org Name Template</label>
+                      <input
+                        className={inputCls}
+                        value={mappingOrgNameTemplate}
+                        onChange={(event) => setMappingOrgNameTemplate(event.target.value)}
+                        placeholder="Team {suffix}"
+                        required={mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg}
+                      />
+                      <p className="text-xs text-zinc-500">Available placeholders: {'{claim}'}, {'{suffix}'}, {'{provider}'}.</p>
+                    </div>
+                  ) : null}
+                  {!mappingIsExclude ? (
+                    <div className="space-y-3">
+                      {mappingProvisioningMode === 'existing_org' ? (
+                        <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
+                          <input type="checkbox" className="rounded" checked={mappingRecreateMissingOrg} onChange={(event) => setMappingRecreateMissingOrg(event.target.checked)} />
+                          Recreate the target org automatically if it is missing
+                        </label>
+                      ) : null}
+                      <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
+                        <input type="checkbox" className="rounded" checked={mappingRemoveOnUnsync} onChange={(event) => setMappingRemoveOnUnsync(event.target.checked)} />
+                        Remove membership when the claim no longer matches
+                      </label>
+                    </div>
+                  ) : null}
+                  {!mappingIsExclude && (mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg) ? (
+                    <div className="rounded-xl px-3 py-3 text-sm text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="font-medium text-zinc-700 dark:text-zinc-200">Template preview</div>
+                      <div className="mt-1 font-mono text-xs text-zinc-500">Example claim: {mappingPreview.claim}</div>
+                      {mappingMatchType === 'prefix' ? (
+                        <div className="font-mono text-xs text-zinc-500">Derived suffix: {mappingPreview.suffix || '(empty)'}</div>
+                      ) : null}
+                      <div className="mt-2">Creates: <span className="font-semibold text-zinc-800 dark:text-zinc-100">{mappingPreview.preview}</span></div>
+                    </div>
+                  ) : null}
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button className="btn-secondary" onClick={mappingModal.close} type="button">Cancel</button>
+                <button className="btn-secondary" onClick={() => { setEditingMapping(null); mappingModal.close(); }} type="button">Cancel</button>
                 <button type="submit" form="oidc-mapping-form" disabled={mappingSaving} className="btn-primary inline-flex items-center gap-2">
                   {mappingSaving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                  Create Mapping
+                  {editingMapping ? 'Save Mapping' : 'Create Mapping'}
+                </button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal state={roleOverrideModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editingRoleOverride ? 'Edit Role Override' : 'Add Role Override'}</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5">
+                <form id="oidc-role-override-form" onSubmit={handleRoleOverrideSubmit} className="space-y-4">
+                  {overrideFormError && (
+                    <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+                      {overrideFormError}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Claim Source</label>
+                      <select className={inputCls} value={overrideClaimType} onChange={(event) => setOverrideClaimType(event.target.value as 'group' | 'role')}>
+                        <option value="group">Group</option>
+                        <option value="role">Role</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Match Mode</label>
+                      <select className={inputCls} value={overrideMatchType} onChange={(event) => setOverrideMatchType(event.target.value as 'exact' | 'prefix')}>
+                        <option value="exact">Exact</option>
+                        <option value="prefix">Prefix</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Claim Value</label>
+                    <input className={inputCls} placeholder={overrideMatchType === 'prefix' ? 'team:' : 'platform-admins'} value={overrideMatchValue} onChange={(event) => setOverrideMatchValue(event.target.value)} required />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Target Type</label>
+                      <select className={inputCls} value={overrideTargetType} onChange={(event) => setOverrideTargetType(event.target.value as 'org_id' | 'rendered_name')}>
+                        <option value="org_id">Existing org</option>
+                        <option value="rendered_name">Rendered org name</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
+                      <select className={inputCls} value={overrideRole} onChange={(event) => setOverrideRole(event.target.value as 'viewer' | 'editor' | 'admin')}>
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                  </div>
+                  {overrideTargetType === 'org_id' ? (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Organization</label>
+                      <select className={inputCls} value={overrideOrgId} onChange={(event) => setOverrideOrgId(event.target.value)}>
+                        <option value="">Select an organization</option>
+                        {orgs.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Rendered Org Name Template</label>
+                      <input className={inputCls} value={overrideOrgNameTemplate} onChange={(event) => setOverrideOrgNameTemplate(event.target.value)} placeholder="Team {suffix}" required />
+                      <p className="text-xs text-zinc-500">Available placeholders: {'{claim}'}, {'{suffix}'}, {'{provider}'}.</p>
+                    </div>
+                  )}
+                  {overrideTargetType === 'rendered_name' ? (
+                    <div className="rounded-xl px-3 py-3 text-sm text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="font-medium text-zinc-700 dark:text-zinc-200">Target preview</div>
+                      <div className="mt-1 font-mono text-xs text-zinc-500">Example claim: {overridePreview.claim}</div>
+                      {overrideMatchType === 'prefix' ? (
+                        <div className="font-mono text-xs text-zinc-500">Derived suffix: {overridePreview.suffix || '(empty)'}</div>
+                      ) : null}
+                      <div className="mt-2">Targets: <span className="font-semibold text-zinc-800 dark:text-zinc-100">{overridePreview.preview}</span></div>
+                    </div>
+                  ) : null}
+                </form>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button className="btn-secondary" onClick={() => { setEditingRoleOverride(null); roleOverrideModal.close(); }} type="button">Cancel</button>
+                <button type="submit" form="oidc-role-override-form" disabled={overrideSaving} className="btn-primary inline-flex items-center gap-2">
+                  {overrideSaving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {editingRoleOverride ? 'Save Override' : 'Create Override'}
                 </button>
               </Modal.Footer>
             </Modal.Dialog>
@@ -3865,6 +4597,7 @@ function GlobalRegistriesTab() {
   const [capabilities, setCapabilities] = useState<ScannerCapabilities>({ enable_trivy: true, enable_grype: true, providers: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editingRegistry, setEditingRegistry] = useState<RegistryWithHealth | null>(null);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [xrayUrl, setXrayUrl] = useState('');
@@ -3896,16 +4629,26 @@ function GlobalRegistriesTab() {
     load();
   }, [load]);
 
-  function openCreate() {
-    setName('');
-    setUrl('');
-    setXrayUrl('');
-    setXrayArtifactoryId('default');
-    setAuthType('none');
-    setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray');
+  function resetForm(registry?: RegistryWithHealth | null) {
+    setEditingRegistry(registry ?? null);
+    setName(registry?.name ?? '');
+    setUrl(registry?.url ?? '');
+    setXrayUrl(registry?.xray_url ?? '');
+    setXrayArtifactoryId(registry?.xray_artifactory_id ?? 'default');
+    setAuthType(registry?.auth_type ?? 'none');
+    setScanProvider(registry?.scan_provider ?? (capabilities.enable_trivy ? 'trivy' : 'artifactory_xray'));
     setUsername('');
     setPassword('');
     setFormError('');
+  }
+
+  function openCreate() {
+    resetForm();
+    modal.open();
+  }
+
+  function openEdit(registry: RegistryWithHealth) {
+    resetForm(registry);
     modal.open();
   }
 
@@ -3914,20 +4657,27 @@ function GlobalRegistriesTab() {
     setSaving(true);
     setFormError('');
     try {
-      await adminCreateGlobalRegistry({
+      const payload = {
         name: name.trim(),
         url: url.trim(),
         xray_url: scanProvider === 'artifactory_xray' ? xrayUrl.trim() || undefined : undefined,
         xray_artifactory_id: scanProvider === 'artifactory_xray' ? xrayArtifactoryId.trim() || 'default' : undefined,
         auth_type: authType,
         scan_provider: scanProvider,
-        username: username.trim(),
+        ...(!editingRegistry || username.trim() ? { username: username.trim() } : {}),
         ...(password.trim() ? { password: password.trim() } : {}),
-      });
+      };
+
+      if (editingRegistry) {
+        await adminUpdateGlobalRegistry(editingRegistry.id, payload);
+      } else {
+        await adminCreateGlobalRegistry(payload);
+      }
+
       modal.close();
       await load();
     } catch (saveError: unknown) {
-      setFormError(saveError instanceof Error ? saveError.message : 'Failed to create global registry');
+      setFormError(saveError instanceof Error ? saveError.message : 'Failed to save global registry');
     } finally {
       setSaving(false);
     }
@@ -4022,6 +4772,7 @@ function GlobalRegistriesTab() {
                       <RowActionsMenu
                         label={`Open actions for registry ${registry.name}`}
                         items={[
+                          { id: 'edit', label: 'Edit registry', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(registry) },
                           { id: 'default', label: registry.is_default ? 'Unset default' : 'Set as default', onAction: () => { void handleSetDefault(registry); } },
                           { id: 'delete', label: 'Delete registry', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(registry.id, registry.name); } },
                         ]}
@@ -4040,7 +4791,7 @@ function GlobalRegistriesTab() {
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Add Global Registry</Modal.Heading>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editingRegistry ? 'Edit Global Registry' : 'Add Global Registry'}</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
@@ -4093,11 +4844,11 @@ function GlobalRegistriesTab() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Username</label>
-                      <input className={inputCls} value={username} onChange={(event) => setUsername(event.target.value)} placeholder={authType === 'token' ? 'optional token user' : 'registry user'} />
+                      <input className={inputCls} value={username} onChange={(event) => setUsername(event.target.value)} placeholder={editingRegistry ? 'Leave blank to keep current username' : authType === 'token' ? 'optional token user' : 'registry user'} />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Password or Token</label>
-                      <input type="password" className={inputCls} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={authType === 'token' ? 'Access token' : 'Secret'} />
+                      <input type="password" className={inputCls} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={editingRegistry ? 'Leave blank to keep existing secret' : authType === 'token' ? 'Access token' : 'Secret'} />
                     </div>
                   </div>
                 </form>
@@ -4106,7 +4857,7 @@ function GlobalRegistriesTab() {
                 <button className="btn-secondary" onClick={modal.close} type="button">Cancel</button>
                 <button type="submit" form="global-registry-form" disabled={saving} className="btn-primary inline-flex items-center gap-2">
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                  Create Registry
+                  {editingRegistry ? 'Save Registry' : 'Create Registry'}
                 </button>
               </Modal.Footer>
             </Modal.Dialog>

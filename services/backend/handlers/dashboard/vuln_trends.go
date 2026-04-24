@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -47,6 +48,10 @@ type vulnTrendAccumulator struct {
 func GetVulnTrends(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
+		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
+		if !ok {
+			return
+		}
 
 		days := 30
 		if d := c.Query("days"); d != "" {
@@ -58,14 +63,15 @@ func GetVulnTrends(db *bun.DB) gin.HandlerFunc {
 		cutoff := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -days+1)
 
 		var samples []vulnTrendSample
-		db.NewSelect().
+		query := db.NewSelect().
 			TableExpr("scans").
 			Column("status", "external_status", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count").
 			Where("(status = ? OR (status = ? AND external_status = ?))", models.ScanStatusCompleted, models.ScanStatusFailed, models.ScanExternalStatusBlockedByXrayPolicy).
 			Where("completed_at IS NOT NULL").
 			Where("completed_at >= ?", cutoff).
-			OrderExpr("completed_at ASC").
-			Scan(ctx, &samples) //nolint:errcheck
+			OrderExpr("completed_at ASC")
+		query = authz.ApplyOwnershipVisibility(query, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		query.Scan(ctx, &samples) //nolint:errcheck
 
 		rows := aggregateVulnTrendRows(samples)
 

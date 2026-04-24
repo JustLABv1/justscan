@@ -10,7 +10,12 @@ import (
 
 func Suppressions(router *gin.RouterGroup, db *bun.DB) {
 	// Global list
-	router.Group("/suppressions").Use(middlewares.Auth(db)).GET("/", suppressions.ListAllSuppressions(db))
+	global := router.Group("/suppressions").Use(middlewares.Auth(db))
+	global.GET("/", suppressions.ListAllSuppressions(db))
+	global.DELETE("/:id", suppressions.DeleteSuppressionByID(db))
+	global.GET("/:id/shares", suppressions.ListSuppressionShares(db))
+	global.POST("/:id/shares", suppressions.ShareSuppression(db))
+	global.DELETE("/:id/shares/:orgId", suppressions.UnshareSuppression(db))
 
 	// Per-image CRUD
 	s := router.Group("/images/:digest/suppressions").Use(middlewares.Auth(db))

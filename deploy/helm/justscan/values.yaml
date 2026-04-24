@@ -58,6 +58,9 @@ backend:
       grypePath: grype
       enableGrype: false
       timeout: 600
+      commandTimeoutSeconds: 7200
+      progressHeartbeatSeconds: 30
+      staleTimeoutSeconds: 7200
       concurrency: 2
       dbMaxAgeHours: 7
       enableOsvJavaAugmentation: true

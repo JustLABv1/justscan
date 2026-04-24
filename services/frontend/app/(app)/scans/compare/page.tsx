@@ -1,5 +1,6 @@
 'use client';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import { compareScans, listScans, Scan, ScanComparison, Vulnerability } from '@/lib/api';
 import { ListBox, Select } from '@heroui/react';
 import { ArrowLeft01Icon } from 'hugeicons-react';
@@ -104,6 +105,8 @@ function ScanSelector({
 }
 
 function ComparePageInner() {
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const params = useSearchParams();
   const [scanA, setScanA] = useState(params.get('a') ?? '');
   const [scanB, setScanB] = useState(params.get('b') ?? '');
@@ -114,11 +117,12 @@ function ComparePageInner() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    setScansLoading(true);
     listScans(1, 100)
       .then(r => setScans(r.data ?? []))
       .catch(() => {})
       .finally(() => setScansLoading(false));
-  }, []);
+  }, [scopeKey]);
 
   // Auto-compare if both params are present on load
   useEffect(() => {

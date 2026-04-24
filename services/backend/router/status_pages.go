@@ -20,6 +20,9 @@ func StatusPages(router *gin.RouterGroup, db *bun.DB) {
 		s.GET("/", statuspages.ListStatusPages(db))
 		s.POST("/", statuspages.CreateStatusPage(db))
 		s.GET("/:id", statuspages.GetStatusPage(db))
+		s.GET("/:id/shares", statuspages.ListStatusPageShares(db))
+		s.POST("/:id/shares", statuspages.ShareStatusPage(db))
+		s.DELETE("/:id/shares/:orgId", statuspages.UnshareStatusPage(db))
 		s.PUT("/:id", statuspages.UpdateStatusPage(db))
 		s.DELETE("/:id", statuspages.DeleteStatusPage(db))
 	}

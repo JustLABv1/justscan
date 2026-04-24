@@ -15,6 +15,9 @@ func Watchlist(router *gin.RouterGroup, db *bun.DB) {
 		w.POST("/", watchlist.CreateWatchlistItem(db))
 		w.PUT("/:id", watchlist.UpdateWatchlistItem(db))
 		w.DELETE("/:id", watchlist.DeleteWatchlistItem(db))
+		w.GET("/:id/shares", watchlist.ListWatchlistShares(db))
+		w.POST("/:id/shares", watchlist.ShareWatchlistItem(db))
+		w.DELETE("/:id/shares/:orgId", watchlist.UnshareWatchlistItem(db))
 		w.POST("/:id/scan", watchlist.TriggerScan(db))
 	}
 }

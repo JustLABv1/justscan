@@ -1,13 +1,16 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
-import { createRegistry, deleteRegistry, getDefaultScannerCapabilities, listRegistriesWithCapabilities, RegistryWithHealth, ScannerCapabilities, testRegistry, updateRegistry } from '@/lib/api';
+import { useOrgDirectory } from '@/hooks/use-org-name-map';
+import { useWorkScope } from '@/hooks/use-work-scope';
+import { createRegistry, deleteRegistry, getDefaultScannerCapabilities, getTokenType, getWorkScope, listRegistriesWithCapabilities, listRegistryShares, RegistryWithHealth, ResourceShare, ScannerCapabilities, shareRegistry, testRegistry, unshareRegistry, updateRegistry } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, ServerStack01Icon, Shield01Icon, TestTube01Icon } from 'hugeicons-react';
@@ -50,6 +53,9 @@ function HealthBadge({ status, message }: { status: string; message: string }) {
 }
 
 export default function RegistriesPage() {
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
+  const { orgs, orgNamesById } = useOrgDirectory();
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
   const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
   const [loading, setLoading] = useState(true);
@@ -66,9 +72,18 @@ export default function RegistriesPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [testing, setTesting] = useState<string | null>(null);
+  const [shareTarget, setShareTarget] = useState<RegistryWithHealth | null>(null);
+  const [shares, setShares] = useState<ResourceShare[]>([]);
+  const [sharesLoading, setSharesLoading] = useState(false);
+  const [shareError, setShareError] = useState('');
+  const [shareOrgId, setShareOrgId] = useState('');
+  const [shareSaving, setShareSaving] = useState(false);
   const modal = useOverlayState();
+  const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
+  const isPlatformAdmin = getTokenType() === 'admin';
+  const manageableOrgIds = new Set(orgs.filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin').map((org) => org.id));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,7 +96,7 @@ export default function RegistriesPage() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, scopeKey]);
 
   function openCreate() {
     setEditing(null); setName(''); setUrl(''); setXrayUrl(''); setXrayArtifactoryId('default'); setAuthType('none'); setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray'); setUsername(''); setPassword(''); setFormError('');
@@ -94,6 +109,7 @@ export default function RegistriesPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setFormError(''); setSaving(true);
     try {
+      const currentScope = getWorkScope();
       const payload = {
         name,
         url,
@@ -103,6 +119,7 @@ export default function RegistriesPage() {
         scan_provider: scanProvider,
         username,
         ...(password ? { password } : {}),
+        ...(currentScope.kind === 'org' ? { org_id: currentScope.orgId } : {}),
       };
       if (editing) { await updateRegistry(editing.id, payload); toast.success('Registry updated'); }
       else { await createRegistry(payload); toast.success('Registry added'); }
@@ -134,6 +151,70 @@ export default function RegistriesPage() {
     } finally { setTesting(null); }
   }
 
+  function canManageAccess(registry: RegistryWithHealth) {
+    if (isPlatformAdmin) return true;
+    if (registry.owner_type === 'org' && registry.owner_org_id) {
+      return manageableOrgIds.has(registry.owner_org_id);
+    }
+    return true;
+  }
+
+  async function loadShares(registryId: string) {
+    setSharesLoading(true);
+    setShareError('');
+    try {
+      setShares(await listRegistryShares(registryId));
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to load access grants');
+    } finally {
+      setSharesLoading(false);
+    }
+  }
+
+  function openShareModal(registry: RegistryWithHealth) {
+    setShareTarget(registry);
+    setShares([]);
+    setShareOrgId('');
+    setShareError('');
+    shareModal.open();
+    void loadShares(registry.id);
+  }
+
+  async function handleGrantShare() {
+    if (!shareTarget || !shareOrgId) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await shareRegistry(shareTarget.id, shareOrgId);
+      toast.success('Registry access granted');
+      setShareOrgId('');
+      await loadShares(shareTarget.id);
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to grant access');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
+  async function handleRevokeShare(orgId: string) {
+    if (!shareTarget) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await unshareRegistry(shareTarget.id, orgId);
+      toast.success('Registry access revoked');
+      await loadShares(shareTarget.id);
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to revoke access');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
+  const availableShareTargets = shareTarget
+    ? orgs.filter((org) => (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id && !shares.some((share) => share.org_id === org.id))
+    : [];
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
       <div className="flex items-center justify-between">
@@ -151,16 +232,6 @@ export default function RegistriesPage() {
       </div>
 
       {error ? <FormAlert description={error} title="Registry loading failed" /> : null}
-
-      <div className="rounded-2xl px-4 py-3 text-sm flex items-start gap-3"
-        style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.18)', color: 'var(--text-secondary)' }}>
-        <div className="mt-0.5 w-2 h-2 rounded-full shrink-0" style={{ background: '#60a5fa' }} />
-        <div className="space-y-1">
-          <p className="font-medium text-zinc-800 dark:text-zinc-100">Provider choice is configured here in the frontend.</p>
-          <p className="text-zinc-600 dark:text-zinc-400">You do not need to edit backend/config.yaml to assign a registry to Trivy or Artifactory Xray. Provider selection, Xray base URL, and Artifactory ID are stored with the registry record in JustScan.</p>
-          <p className="text-zinc-600 dark:text-zinc-400">Registry health is checked automatically every 15 minutes, and you can still run a manual test from the actions menu.</p>
-        </div>
-      </div>
 
       {loading ? (
         <div className="glass-panel rounded-2xl overflow-hidden">
@@ -207,7 +278,12 @@ export default function RegistriesPage() {
                 <tr key={r.id} style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                  <td className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-200">{r.name}</td>
+                  <td className="px-4 py-3">
+                    <div className="space-y-1">
+                      <p className="font-medium text-zinc-700 dark:text-zinc-200">{r.name}</p>
+                      <OwnershipBadge ownerType={r.owner_type} ownerOrgId={r.owner_org_id} orgNamesById={orgNamesById} />
+                    </div>
+                  </td>
                   <td className="px-4 py-3 font-mono text-xs text-zinc-500">{r.url}</td>
                   <td className="px-4 py-3">
                     <span className="text-xs font-medium px-2 py-0.5 rounded-md"
@@ -238,6 +314,9 @@ export default function RegistriesPage() {
                         label={`Open actions menu for ${r.name}`}
                         items={[
                           { id: 'test', label: testing === r.id ? 'Testing…' : 'Test connection', icon: <TestTube01Icon size={15} />, disabled: testing === r.id, onAction: () => { void handleTest(r.id); } },
+                          ...(canManageAccess(r)
+                            ? [{ id: 'share', label: 'Manage access', icon: <Shield01Icon size={15} />, onAction: () => openShareModal(r) }]
+                            : []),
                           { id: 'edit', label: 'Edit registry', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(r) },
                           { id: 'delete', label: 'Delete registry', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(r.id); } },
                         ]}
@@ -337,8 +416,10 @@ export default function RegistriesPage() {
                   )}
                   <FormField label="Username" onChange={(e) => setUsername(e.target.value)} placeholder="Optional" value={username} />
                   <FormField
+                    autoComplete="off"
                     description={editing ? 'Leave blank to keep the stored password unchanged.' : 'Optional unless your registry provider requires credentials.'}
                     label="Password"
+                    name="registry-password"
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder={editing ? '••••••••' : 'Optional'}
                     type="password"
@@ -354,6 +435,86 @@ export default function RegistriesPage() {
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Add'}
                 </button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+      <Modal state={shareModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Registry Access</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5 space-y-4">
+                {shareError ? <FormAlert description={shareError} title="Access update failed" /> : null}
+                {shareTarget ? (
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{shareTarget.name}</p>
+                    <div className="mt-2">
+                      <OwnershipBadge ownerType={shareTarget.owner_type} ownerOrgId={shareTarget.owner_org_id} orgNamesById={orgNamesById} />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Current access</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Organizations listed here can use this registry.</p>
+                  </div>
+                  {sharesLoading ? (
+                    <div className="flex justify-center py-6">
+                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                    </div>
+                  ) : shares.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {shares.map((share) => (
+                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
+                            <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>
+                          </div>
+                          {share.is_owner ? (
+                            <span className="text-xs font-medium text-zinc-500">Locked</span>
+                          ) : (
+                            <button type="button" onClick={() => { void handleRevokeShare(share.org_id); }} disabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50">
+                              <Delete01Icon size={15} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Grant access</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Share this registry with another organization you manage.</p>
+                  </div>
+                  {availableShareTargets.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
+                  ) : (
+                    <div className="flex gap-2">
+                      <select className={inputCls + ' flex-1'} value={shareOrgId} onChange={(event) => setShareOrgId(event.target.value)}>
+                        <option value="">Select an organization</option>
+                        {availableShareTargets.map((org) => (
+                          <option key={org.id} value={org.id}>{org.name}</option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => { void handleGrantShare(); }} disabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60">
+                        Grant
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={shareModal.close} className="btn-secondary" type="button">Close</button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

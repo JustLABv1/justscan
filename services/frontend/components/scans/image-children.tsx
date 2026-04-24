@@ -1,7 +1,8 @@
 'use client';
 
-import { SevCount, StatusBadge } from '@/components/ui/badges';
+import { OwnershipBadge, SevCount, StatusBadge } from '@/components/ui/badges';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import { listScans, Scan } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Checkbox } from '@heroui/react';
@@ -12,14 +13,17 @@ import { useCallback, useEffect, useState } from 'react';
 interface ImageChildrenProps {
   imageName: string;
   mode?: 'table' | 'stacked';
+  orgNamesById?: Record<string, string>;
   onDelete: (id: string, imageName: string) => Promise<void> | void;
   onCancel: (id: string, imageName: string) => Promise<void> | void;
   selectedScans: Set<string>;
   onSelectScan: (scanId: string, selected: boolean) => void;
 }
 
-export function ImageChildren({ imageName, mode = 'table', onDelete, onCancel, selectedScans, onSelectScan }: ImageChildrenProps) {
+export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelete, onCancel, selectedScans, onSelectScan }: ImageChildrenProps) {
   const router = useRouter();
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const [scans, setScans] = useState<Scan[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -39,7 +43,7 @@ export function ImageChildren({ imageName, mode = 'table', onDelete, onCancel, s
 
   useEffect(() => {
     load(page);
-  }, [load, page]);
+  }, [load, page, scopeKey]);
 
   useConditionalInterval(() => {
     void load(page);
@@ -72,8 +76,9 @@ export function ImageChildren({ imageName, mode = 'table', onDelete, onCancel, s
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-mono text-sm font-medium text-zinc-700 dark:text-zinc-200">:{scan.image_tag}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
                           <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+                          <OwnershipBadge ownerType={scan.owner_type} ownerOrgId={scan.owner_org_id} orgNamesById={orgNamesById} />
                           <span className="text-xs text-zinc-500" title={fullDate(scan.created_at)}>{timeAgo(scan.created_at)}</span>
                         </div>
                       </div>
@@ -161,6 +166,7 @@ export function ImageChildren({ imageName, mode = 'table', onDelete, onCancel, s
                   <th className="w-8 px-3 py-2" scope="col" />
                   <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Tag</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Status</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Ownership</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Tags</th>
                   <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }} scope="col"><abbr title="Critical">C</abbr></th>
                   <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }} scope="col"><abbr title="High">H</abbr></th>
@@ -194,6 +200,7 @@ export function ImageChildren({ imageName, mode = 'table', onDelete, onCancel, s
                       </div>
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={scan.status} externalStatus={scan.external_status} /></td>
+                    <td className="px-4 py-3"><OwnershipBadge ownerType={scan.owner_type} ownerOrgId={scan.owner_org_id} orgNamesById={orgNamesById} /></td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 flex-wrap">
                         {(scan.tags ?? []).map((tag) => (

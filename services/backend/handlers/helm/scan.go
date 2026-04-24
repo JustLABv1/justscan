@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"justscan-backend/functions/audit"
-	"justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -30,6 +30,7 @@ type createScansRequest struct {
 	Images       []scanImageRequest `json:"images" binding:"required,min=1"`
 	Platform     string             `json:"platform"`
 	RegistryID   string             `json:"registry_id"`
+	OrgID        string             `json:"org_id"`
 	TagIDs       []string           `json:"tag_ids"`
 }
 
@@ -50,9 +51,8 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		userID, err := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		userID, _, ok := authz.RequireRequestUser(c, db)
+		if !ok {
 			return
 		}
 
@@ -84,13 +84,28 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var requestedRegistryID *uuid.UUID
+		var requestedOrgID *uuid.UUID
 		if req.RegistryID != "" {
 			parsedRegistryID, err := uuid.Parse(req.RegistryID)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry_id"})
 				return
 			}
+			if _, _, _, ok := authz.LoadAccessibleRegistry(c, db, parsedRegistryID); !ok {
+				return
+			}
 			requestedRegistryID = &parsedRegistryID
+		}
+		if req.OrgID != "" {
+			parsedOrgID, err := uuid.Parse(req.OrgID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+				return
+			}
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleViewer); !ok {
+				return
+			}
+			requestedOrgID = &parsedOrgID
 		}
 
 		preparedScans := make([]preparedHelmScan, 0, len(validImages))
@@ -114,12 +129,19 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				CurrentStep:      models.ScanStepQueued,
 				Status:           models.ScanStatusPending,
 				UserID:           &userID,
+				OwnerType:        models.OwnerTypeUser,
+				OwnerUserID:      &userID,
 				CreatedAt:        time.Now(),
 				HelmChart:        normalizedChartURL,
 				HelmChartName:    normalizedChartName,
 				HelmChartVersion: req.ChartVersion,
 				HelmSourcePath:   img.SourcePath,
 				ScanProvider:     provider,
+			}
+			if requestedOrgID != nil {
+				scan.OwnerType = models.OwnerTypeOrg
+				scan.OwnerUserID = nil
+				scan.OwnerOrgID = requestedOrgID
 			}
 			if registry != nil {
 				scan.RegistryID = &registry.ID
@@ -150,6 +172,11 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 
 				if _, err := tx.NewInsert().Model(&scan).Exec(ctx); err != nil {
 					return err
+				}
+				if requestedOrgID != nil {
+					if _, err := tx.NewInsert().Model(&models.OrgScan{OrgID: *requestedOrgID, ScanID: scan.ID}).On("CONFLICT DO NOTHING").Exec(ctx); err != nil {
+						return err
+					}
 				}
 
 				if len(req.TagIDs) > 0 {

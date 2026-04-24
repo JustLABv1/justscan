@@ -13,6 +13,13 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const (
+	AuthContextUserIDKey     = "auth.user_id"
+	AuthContextIsAdminKey    = "auth.is_admin"
+	AuthContextOrgTokenIDKey = "auth.org_token_id"
+	AuthContextOrgTokenOrgID = "auth.org_token_org_id"
+)
+
 func Auth(db *bun.DB) gin.HandlerFunc {
 	return func(context *gin.Context) {
 		raw := context.GetHeader("Authorization")
@@ -44,10 +51,15 @@ func Auth(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if tokenType == "user" {
+		if tokenType == "user" || tokenType == "personal" {
 			userId, err := auth.GetUserIDFromToken(tokenString)
 			if err != nil {
 				httperror.InternalServerError(context, "Error receiving userID from token", err)
+				return
+			}
+			isAdmin, err := gatekeeper.CheckAdmin(userId, db)
+			if err != nil {
+				httperror.InternalServerError(context, "Error checking for user role", err)
 				return
 			}
 			userDisabled, err := gatekeeper.CheckAccountStatus(userId.String(), db)
@@ -59,6 +71,9 @@ func Auth(db *bun.DB) gin.HandlerFunc {
 				httperror.Unauthorized(context, "Your Account is currently disabled", errors.New("user is disabled"))
 				return
 			}
+
+			context.Set(AuthContextUserIDKey, userId)
+			context.Set(AuthContextIsAdminKey, isAdmin)
 
 			context.Next()
 		} else if tokenType == "project" || tokenType == "service" {
@@ -80,6 +95,35 @@ func Auth(db *bun.DB) gin.HandlerFunc {
 				httperror.Unauthorized(context, "Token is currently disabled", errors.New("token is disabled"))
 				return
 			}
+
+			context.Next()
+		} else if tokenType == "org" {
+			tokenID, err := auth.GetIDFromToken(tokenString)
+			if err != nil {
+				httperror.InternalServerError(context, "Error receiving tokenID from token", err)
+				return
+			}
+
+			var token models.Tokens
+			err = db.NewSelect().Model(&token).
+				Column("id", "disabled", "disabled_reason", "org_id").
+				Where("id = ?", tokenID).
+				Scan(context)
+			if err != nil {
+				httperror.Unauthorized(context, "Token is not valid", err)
+				return
+			}
+			if token.Disabled {
+				httperror.Unauthorized(context, "Token is currently disabled", errors.New("token is disabled"))
+				return
+			}
+			if token.OrgID == nil {
+				httperror.Unauthorized(context, "Org token has no associated organization", errors.New("org token missing org_id"))
+				return
+			}
+
+			context.Set(AuthContextOrgTokenIDKey, token.ID)
+			context.Set(AuthContextOrgTokenOrgID, *token.OrgID)
 
 			context.Next()
 		} else {

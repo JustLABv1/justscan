@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*.*.*'
+      - 'v*.*.*-beta.*'
   workflow_dispatch:
     inputs:
       chart_version:
@@ -43,8 +44,9 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=semver,pattern=backend-{{version}}
-            type=raw,value=backend-latest
+            type=semver,pattern={{version}},prefix=backend-
+            type=raw,value=backend-beta,enable=${{ contains(github.ref_name, '-beta.') }}
+            type=raw,value=backend-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
       - uses: docker/build-push-action@v6
         with:
@@ -79,8 +81,9 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=semver,pattern=frontend-{{version}}
-            type=raw,value=frontend-latest
+            type=semver,pattern={{version}},prefix=frontend-
+            type=raw,value=frontend-beta,enable=${{ contains(github.ref_name, '-beta.') }}
+            type=raw,value=frontend-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
       - uses: docker/build-push-action@v6
         with:
@@ -118,7 +121,8 @@ jobs:
           images: ${{ env.IMAGE }}
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest
+            type=raw,value=beta,enable=${{ contains(github.ref_name, '-beta.') }}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
       - uses: docker/build-push-action@v6
         with:
@@ -133,6 +137,8 @@ jobs:
   release-helm-chart:
     name: Package & Push Helm Chart
     runs-on: ubuntu-latest
+    outputs:
+      is_beta: ${{ steps.vars.outputs.is_beta }}
     permissions:
       contents: read
       packages: write
@@ -143,6 +149,7 @@ jobs:
 
       - name: Resolve release versions
         id: vars
+        shell: bash
         env:
           INPUT_CHART_VERSION: ${{ github.event.inputs.chart_version }}
           INPUT_APP_VERSION: ${{ github.event.inputs.app_version }}
@@ -151,13 +158,22 @@ jobs:
             chart_version="$INPUT_CHART_VERSION"
             app_version="$INPUT_APP_VERSION"
           else
-            chart_version="${GITHUB_REF_NAME#v}"
-            app_version="${GITHUB_REF_NAME#v}"
+            # Strip 'v' prefix from tag (e.g., v1.0.0-beta.1 -> 1.0.0-beta.1)
+            raw_version="${GITHUB_REF_NAME#v}"
+            chart_version="$raw_version"
+            app_version="$raw_version"
           fi
 
           if [[ -z "$chart_version" || -z "$app_version" ]]; then
             echo "chart_version and app_version must be set" >&2
             exit 1
+          fi
+
+          # Determine if this is a beta release
+          if [[ "$GITHUB_REF_NAME" =~ -beta\. ]]; then
+            echo "is_beta=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_beta=false" >> "$GITHUB_OUTPUT"
           fi
 
           echo "chart_version=$chart_version" >> "$GITHUB_OUTPUT"
@@ -210,5 +226,6 @@ jobs:
           tag: ${{ github.ref_name }}
           skipIfReleaseExists: true
           generateReleaseNotes: true
+          prerelease: ${{ needs.release-helm-chart.outputs.is_beta == 'true' }}
           artifacts: dist/*.tgz
           artifactErrorsFailBuild: true

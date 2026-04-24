@@ -1,8 +1,10 @@
 package auths
 
 import (
+	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"justscan-backend/config"
 	"justscan-backend/functions/auth"
@@ -10,6 +12,29 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+func resolveLegacyOIDCProviderName(ctx context.Context, hintedProvider string) string {
+	hintedProvider = strings.TrimSpace(hintedProvider)
+	if hintedProvider != "" {
+		if _, err := auth.GetProviderEntry(ctx, hintedProvider); err == nil {
+			return hintedProvider
+		}
+	}
+
+	providers, err := auth.ListEnabledProviders(ctx)
+	if err == nil {
+		if len(providers) == 1 {
+			return providers[0].Name
+		}
+		for _, provider := range providers {
+			if provider.Name == "default" {
+				return provider.Name
+			}
+		}
+	}
+
+	return "default"
+}
 
 // OIDCLogin initiates the OIDC authorization code flow.
 func OIDCLogin(c *gin.Context) {
@@ -27,6 +52,17 @@ func OIDCLogin(c *gin.Context) {
 	// Store state in a short-lived (10 min), httponly, SameSite=Lax cookie.
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("oidc_state", state, 600, "/", "", false, true)
+
+	providerName := resolveLegacyOIDCProviderName(c.Request.Context(), "")
+	if providerName != "" {
+		c.SetCookie("oidc_provider", providerName, 600, "/", "", false, true)
+		if entry, err := auth.GetProviderEntry(c.Request.Context(), providerName); err == nil && entry != nil {
+			providerOAuth2Cfg := entry.GetOAuth2Config()
+			authURL := providerOAuth2Cfg.AuthCodeURL(state)
+			c.Redirect(http.StatusFound, authURL)
+			return
+		}
+	}
 
 	oauth2Cfg := auth.GetOIDCOAuth2Config()
 	authURL := oauth2Cfg.AuthCodeURL(state)

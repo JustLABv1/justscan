@@ -16,12 +16,21 @@ type Suppression struct {
 	Status        string     `bun:"status,type:text,notnull" json:"status"`
 	Justification string     `bun:"justification,type:text,default:''" json:"justification"`
 	UserID        uuid.UUID  `bun:"user_id,type:uuid,notnull" json:"user_id"`
+	OwnerType     string     `bun:"owner_type,type:text,notnull,default:'user'" json:"owner_type"`
+	OwnerUserID   *uuid.UUID `bun:"owner_user_id,type:uuid" json:"owner_user_id,omitempty"`
+	OwnerOrgID    *uuid.UUID `bun:"owner_org_id,type:uuid" json:"owner_org_id,omitempty"`
 	ExpiresAt     *time.Time `bun:"expires_at,type:timestamptz" json:"expires_at"`
 	CreatedAt     time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	UpdatedAt     time.Time  `bun:"updated_at,type:timestamptz" json:"updated_at"`
 
 	// Populated on join
-	Username string `bun:"-" json:"username,omitempty"`
+	Username       string   `bun:"-" json:"username,omitempty"`
+	Source         string   `bun:"-" json:"source,omitempty"`
+	Sources        []string `bun:"-" json:"sources,omitempty"`
+	ReadOnly       bool     `bun:"-" json:"read_only,omitempty"`
+	XrayRuleID     string   `bun:"-" json:"xray_rule_id,omitempty"`
+	XrayPolicyName string   `bun:"-" json:"xray_policy_name,omitempty"`
+	XrayWatchName  string   `bun:"-" json:"xray_watch_name,omitempty"`
 }
 
 // Suppression status constants
@@ -29,4 +38,5 @@ const (
 	SuppressionAccepted      = "accepted"
 	SuppressionWontFix       = "wont_fix"
 	SuppressionFalsePositive = "false_positive"
+	SuppressionXrayIgnore    = "xray_ignore"
 )

@@ -30,6 +30,9 @@ scanner:
   grype_path: grype
   enable_grype: false
   timeout: 600
+  command_timeout_seconds: 7200
+  progress_heartbeat_seconds: 30
+  stale_timeout_seconds: 7200
   concurrency: 2
   db_max_age_hours: 7
   enable_osv_java_augmentation: true

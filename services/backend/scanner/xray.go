@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"justscan-backend/compliance"
+	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/notifications"
 	"justscan-backend/pkg/models"
 
@@ -27,21 +28,23 @@ import (
 const xrayDataSource = "JFrog Xray"
 
 const xrayRequestTimeout = 90 * time.Second
+const registryRequestTimeout = 5 * time.Minute
 const xraySummaryPollInterval = 10 * time.Second
 const xrayMissingArtifactWindow = 2 * time.Minute
-const xraySummaryWaitWindow = 15 * time.Minute
 const xrayBlockedSummaryWaitWindow = 45 * time.Second
 const registryWarmupRetryInterval = 10 * time.Second
-const registryWarmupWaitWindow = 10 * time.Minute
 
 type xrayClient struct {
-	baseURL       string
-	registryURL   string
-	artifactoryID string
-	authType      string
-	username      string
-	secret        string
-	httpClient    *http.Client
+	baseURL            string
+	registryURL        string
+	artifactoryID      string
+	authType           string
+	username           string
+	secret             string
+	httpClient         *http.Client
+	registryHTTPClient *http.Client
+	db                 *bun.DB
+	registryID         *uuid.UUID
 }
 
 type RegistryXrayTestClient struct {
@@ -164,6 +167,15 @@ type xrayViolationsResponse struct {
 	Violations []xrayViolationRecord `json:"violations,omitempty"`
 }
 
+type xrayIgnoreRule struct {
+	RuleID        string
+	PolicyName    string
+	WatchName     string
+	Justification string
+	ExpiresAt     *time.Time
+	Raw           models.JSONObject
+}
+
 type xrayViolationRecord struct {
 	ID              string                `json:"violation_id,omitempty"`
 	IssueID         string                `json:"issue_id,omitempty"`
@@ -187,6 +199,13 @@ type xrayViolationPolicy struct {
 type xrayViolationLookupTarget struct {
 	Repository string
 	Path       string
+}
+
+type xrayArtifactPathCandidate struct {
+	Repository   string
+	Path         string
+	RepoPath     string
+	ArtifactPath string
 }
 
 func (e *registryHTTPError) Error() string {
@@ -225,10 +244,11 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		return fmt.Errorf("failed to load registry for xray scan: %w", err)
 	}
 
-	client, err := newXrayClient(registry)
+	client, err := newXrayClient(registry, db, scan.RegistryID)
 	if err != nil {
 		return err
 	}
+	ctx = xrayScanContext(ctx, scan.ID, scan.RegistryID)
 
 	repoKey, artifactName, imageTag, err := xrayImageParts(scan.ImageName, scan.ImageTag, registry)
 	if err != nil {
@@ -236,9 +256,11 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 
 	imageRepoPath := repoKey + "/" + artifactName
-	artifactRepoPath := artifactName + "/" + imageTag + "/manifest.json"
-	repoPath := imageRepoPath + "/" + imageTag + "/manifest.json"
-	artifactPath := client.artifactoryID + "/" + repoPath
+	manifestFilename := client.resolveManifestFilename(ctx, imageRepoPath, imageTag)
+	artifactCandidates := buildXrayArtifactPathCandidates(client.artifactoryID, repoKey, artifactName, imageTag, manifestFilename, "")
+	artifactRepoPath := artifactCandidates[0].Path
+	repoPath := artifactCandidates[0].RepoPath
+	artifactPath := artifactCandidates[0].ArtifactPath
 	if imageConfig, configErr := client.imageConfigMetadata(ctx, imageRepoPath, imageTag, scan.Platform); configErr != nil {
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to load image config metadata from Artifactory: %v", configErr))
 	} else if len(imageConfig) > 0 {
@@ -265,6 +287,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to resolve image digest before starting the Xray flow: %v", resolveErr))
 	} else if resolvedDigest != "" {
 		scan.ImageDigest = resolvedDigest
+		artifactCandidates = buildXrayArtifactPathCandidates(client.artifactoryID, repoKey, artifactName, imageTag, manifestFilename, resolvedDigest)
 		if _, err := db.NewUpdate().Model(scan).
 			Column("image_digest").
 			Where("id = ?", scan.ID).
@@ -336,6 +359,16 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 				log.Warnf("Failed to persist Xray SBOM components for blocked scan %s: %v", scan.ID, err)
 			}
 
+			if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, repoPath, artifactPath); err != nil {
+				log.Warnf("Failed to persist Xray ignore-rule snapshots for blocked scan %s: %v", scan.ID, err)
+				recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIgnoreRuleSyncError(err))
+			}
+			if suppressedCount, err := effectivesuppressions.RecalculateSuppressedCount(ctx, db, scan); err != nil {
+				log.Warnf("Failed to recalculate suppressed count for blocked scan %s: %v", scan.ID, err)
+			} else {
+				scan.SuppressedCount = suppressedCount
+			}
+
 			return errors.New(normalizedMessage)
 		}
 		return fmt.Errorf("failed to warm image into artifactory cache: %w", err)
@@ -352,7 +385,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	if err := client.scanNow(ctx, repoPath); err != nil {
 		// Scan Artifact can still succeed for already-indexed images.
 		// Keep going so Xray-backed scans remain usable across setups.
-		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray index request returned a non-fatal response for %s: %v", repoPath, err))
+		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIndexError(repoPath, err))
 	}
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "queued", models.ScanStepQueuedInXray); err != nil {
@@ -367,7 +400,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 			return err
 		}
 		log.Warnf("Xray scanArtifact returned a non-fatal error for scan %s (%s); continuing to poll artifact summary: %v", scan.ID, componentID, err)
-		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray scanArtifact returned a non-fatal response; continuing to poll the artifact summary anyway: %v", err))
+		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayScanArtifactError(componentID, err))
 	}
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "waiting_for_xray", models.ScanStepWaitingForXray); err != nil {
@@ -377,10 +410,13 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	scan.CurrentStep = models.ScanStepWaitingForXray
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Polling Xray for the artifact summary at %s.", artifactPath))
 
-	summary, err := client.pollArtifactSummary(ctx, artifactPath)
+	summary, resolvedArtifact, err := client.pollArtifactSummary(ctx, artifactCandidates)
 	if err != nil {
 		return err
 	}
+	artifactRepoPath = resolvedArtifact.Path
+	repoPath = resolvedArtifact.RepoPath
+	artifactPath = resolvedArtifact.ArtifactPath
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "importing", models.ScanStepImportingResults); err != nil {
 		return err
@@ -394,7 +430,16 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 	if err := persistXraySBOMComponents(ctx, db, scan, client, artifactPath, repoPath); err != nil {
 		log.Warnf("Failed to persist Xray SBOM components for scan %s (non-fatal): %v", scan.ID, err)
-		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray SBOM import did not complete: %v", err))
+		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXraySBOMImportError(err))
+	}
+	if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, repoPath, artifactPath); err != nil {
+		log.Warnf("Failed to persist Xray ignore-rule snapshots for scan %s (non-fatal): %v", scan.ID, err)
+		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIgnoreRuleSyncError(err))
+	}
+	if suppressedCount, err := effectivesuppressions.RecalculateSuppressedCount(ctx, db, scan); err != nil {
+		log.Warnf("Failed to recalculate suppressed count for scan %s: %v", scan.ID, err)
+	} else {
+		scan.SuppressedCount = suppressedCount
 	}
 
 	completedAt := time.Now()
@@ -404,7 +449,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	scan.CurrentStep = models.ScanStepCompleted
 
 	if _, err := db.NewUpdate().Model(scan).
-		Column("status", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "external_scan_id", "external_status", "image_config", "architecture", "os_family", "os_name").
+		Column("status", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "suppressed_count", "external_scan_id", "external_status", "image_config", "architecture", "os_family", "os_name").
 		Where("id = ?", scan.ID).
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to mark xray scan as completed: %w", err)
@@ -450,7 +495,7 @@ func EnsureScanImageDigest(ctx context.Context, db *bun.DB, scan *models.Scan) (
 		return "", fmt.Errorf("failed to load registry for xray digest resolution: %w", err)
 	}
 
-	client, err := newXrayClient(registry)
+	client, err := newXrayClient(registry, nil, nil)
 	if err != nil {
 		return "", err
 	}
@@ -490,7 +535,7 @@ func (c *xrayClient) resolveImageDigest(ctx context.Context, imageRepoPath, refe
 	return digest, nil
 }
 
-func newXrayClient(registry *models.Registry) (*xrayClient, error) {
+func newXrayClient(registry *models.Registry, db *bun.DB, registryID *uuid.UUID) (*xrayClient, error) {
 	secret, err := decryptRegistrySecret(registry)
 	if err != nil {
 		return nil, err
@@ -511,18 +556,21 @@ func newXrayClient(registry *models.Registry) (*xrayClient, error) {
 	}
 
 	return &xrayClient{
-		baseURL:       baseURL,
-		registryURL:   strings.TrimRight(strings.TrimSpace(registry.URL), "/"),
-		artifactoryID: artifactoryID,
-		authType:      registry.AuthType,
-		username:      registry.Username,
-		secret:        secret,
-		httpClient:    &http.Client{Timeout: xrayRequestTimeout},
+		baseURL:            baseURL,
+		registryURL:        strings.TrimRight(strings.TrimSpace(registry.URL), "/"),
+		artifactoryID:      artifactoryID,
+		authType:           registry.AuthType,
+		username:           registry.Username,
+		secret:             secret,
+		httpClient:         &http.Client{Timeout: xrayRequestTimeout},
+		registryHTTPClient: &http.Client{Timeout: registryRequestTimeout},
+		db:                 db,
+		registryID:         registryID,
 	}, nil
 }
 
 func NewRegistryXrayTestClient(registry *models.Registry) (*RegistryXrayTestClient, error) {
-	client, err := newXrayClient(registry)
+	client, err := newXrayClient(registry, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -564,15 +612,21 @@ func (c *xrayClient) artifactSummary(ctx context.Context, artifactPath string) (
 }
 
 func (c *xrayClient) exportComponentCycloneDX(ctx context.Context, componentName string, candidatePaths ...string) (*TrivySBOMOutput, string, error) {
-	trimmedPaths := make([]string, 0, len(candidatePaths)+1)
+	trimmedPaths := make([]string, 0, len(candidatePaths))
 	seen := make(map[string]bool)
-	for _, candidate := range append(candidatePaths, "") {
+	for _, candidate := range candidatePaths {
 		path := strings.TrimSpace(candidate)
+		if path == "" {
+			continue
+		}
 		if seen[path] {
 			continue
 		}
 		seen[path] = true
 		trimmedPaths = append(trimmedPaths, path)
+	}
+	if len(trimmedPaths) == 0 {
+		trimmedPaths = append(trimmedPaths, "")
 	}
 
 	var lastErr error
@@ -611,7 +665,8 @@ func (c *xrayClient) exportComponentCycloneDX(ctx context.Context, componentName
 }
 
 func (c *xrayClient) warmImageInArtifactory(ctx context.Context, imageRepoPath, tag, platform string) error {
-	deadline := time.Now().Add(registryWarmupWaitWindow)
+	waitWindow := registryWarmupWaitWindow()
+	deadline := time.Now().Add(waitWindow)
 	var lastErr error
 
 	for {
@@ -627,7 +682,7 @@ func (c *xrayClient) warmImageInArtifactory(ctx context.Context, imageRepoPath, 
 
 		lastErr = err
 		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out after %s warming the artifactory cache: %w", registryWarmupWaitWindow, lastErr)
+			return fmt.Errorf("timed out after %s warming the artifactory cache: %w", waitWindow, lastErr)
 		}
 
 		log.Warnf("Artifactory cache warm-up for %s:%s hit a transient error; retrying in %s: %v", imageRepoPath, tag, registryWarmupRetryInterval, err)
@@ -710,6 +765,21 @@ func (c *xrayClient) fetchRegistryManifest(ctx context.Context, imageRepoPath, r
 	}
 
 	return &manifest, manifest.MediaType, strings.TrimSpace(response.Header.Get("Docker-Content-Digest")), nil
+}
+
+// resolveManifestFilename returns "list.manifest.json" when the given
+// reference resolves to a manifest list (multi-arch image) and
+// "manifest.json" for single-platform images. Errors fall back to
+// "manifest.json" so callers are not blocked on a non-fatal probe.
+func (c *xrayClient) resolveManifestFilename(ctx context.Context, imageRepoPath, reference string) string {
+	manifest, mediaType, _, err := c.fetchRegistryManifest(ctx, imageRepoPath, reference)
+	if err != nil {
+		return "manifest.json"
+	}
+	if isRegistryManifestIndex(mediaType, manifest) {
+		return "list.manifest.json"
+	}
+	return "manifest.json"
 }
 
 func (c *xrayClient) resolveImageManifest(ctx context.Context, imageRepoPath, reference, platform string) (*registryManifest, string, error) {
@@ -795,57 +865,97 @@ func (c *xrayClient) warmBlob(ctx context.Context, imageRepoPath, digest string,
 	return nil
 }
 
-func (c *xrayClient) pollArtifactSummary(ctx context.Context, artifactPath string) (*xraySummaryResponse, error) {
-	return c.pollArtifactSummaryWithin(ctx, artifactPath, xraySummaryWaitWindow)
+func (c *xrayClient) pollArtifactSummary(ctx context.Context, candidates []xrayArtifactPathCandidate) (*xraySummaryResponse, xrayArtifactPathCandidate, error) {
+	return c.pollArtifactSummaryWithin(ctx, candidates, xraySummaryWaitWindow())
 }
 
-func (c *xrayClient) pollArtifactSummaryWithin(ctx context.Context, artifactPath string, waitWindow time.Duration) (*xraySummaryResponse, error) {
+func (c *xrayClient) pollArtifactSummaryWithin(ctx context.Context, candidates []xrayArtifactPathCandidate, waitWindow time.Duration) (*xraySummaryResponse, xrayArtifactPathCandidate, error) {
+	candidates = dedupeXrayArtifactPathCandidates(candidates)
+	if len(candidates) == 0 {
+		return nil, xrayArtifactPathCandidate{}, fmt.Errorf("missing xray artifact summary path")
+	}
+
 	deadline := time.Now().Add(waitWindow)
 	var missingArtifactSince time.Time
+	var missingDetails []string
 	for {
-		summary, err := c.artifactSummary(ctx, artifactPath)
-		if err == nil {
-			if hasMissingXraySummaryError(summary) {
-				if missingArtifactSince.IsZero() {
-					missingArtifactSince = time.Now()
+		allCandidatesMissing := true
+		var availableSummary *xraySummaryResponse
+		var availableCandidate xrayArtifactPathCandidate
+		missingDetails = missingDetails[:0]
+		for _, candidate := range candidates {
+			summary, err := c.artifactSummary(ctx, candidate.ArtifactPath)
+			if err == nil {
+				if hasMissingXraySummaryError(summary) {
+					missingDetails = append(missingDetails, fmt.Sprintf("%s: %s", candidate.ArtifactPath, formatXraySummaryErrors(summary.Errors)))
+					continue
 				}
-				if time.Since(missingArtifactSince) >= xrayMissingArtifactWindow {
-					return nil, fmt.Errorf("xray did not expose artifact summary for %s within %s; the image may not exist in Artifactory/Xray yet (%s)", artifactPath, xrayMissingArtifactWindow, formatXraySummaryErrors(summary.Errors))
+				allCandidatesMissing = false
+				if len(summary.Artifacts) > 0 {
+					if xraySummaryIssueCount(summary) > 0 {
+						return summary, candidate, nil
+					}
+					if availableSummary == nil {
+						availableSummary = summary
+						availableCandidate = candidate
+					}
 				}
-			} else {
-				missingArtifactSince = time.Time{}
-			}
-			if len(summary.Artifacts) > 0 {
-				return summary, nil
-			}
-		} else {
-			var httpErr *xrayHTTPError
-			if !errors.As(err, &httpErr) || (httpErr.StatusCode != http.StatusNotFound && httpErr.StatusCode != http.StatusBadRequest) {
-				return nil, err
+				continue
 			}
 
+			if isRetriableXrayRequestError(err) {
+				allCandidatesMissing = false
+				continue
+			}
+
+			var httpErr *xrayHTTPError
+			if !errors.As(err, &httpErr) || (httpErr.StatusCode != http.StatusNotFound && httpErr.StatusCode != http.StatusBadRequest) {
+				return nil, xrayArtifactPathCandidate{}, err
+			}
+
+			detail := strings.TrimSpace(httpErr.Body)
+			if detail == "" {
+				detail = fmt.Sprintf("HTTP %d", httpErr.StatusCode)
+			}
+			missingDetails = append(missingDetails, fmt.Sprintf("%s: %s", candidate.ArtifactPath, detail))
+		}
+
+		if allCandidatesMissing {
 			if missingArtifactSince.IsZero() {
 				missingArtifactSince = time.Now()
 			}
 			if time.Since(missingArtifactSince) >= xrayMissingArtifactWindow {
-				detail := strings.TrimSpace(httpErr.Body)
-				if detail == "" {
-					detail = fmt.Sprintf("HTTP %d", httpErr.StatusCode)
-				}
-				return nil, fmt.Errorf("xray did not expose artifact summary for %s within %s; the image may not exist in Artifactory/Xray yet (%s)", artifactPath, xrayMissingArtifactWindow, detail)
+				return nil, xrayArtifactPathCandidate{}, fmt.Errorf("xray did not expose artifact summary for any candidate path within %s; the image may not exist in Artifactory/Xray yet (%s)", xrayMissingArtifactWindow, strings.Join(missingDetails, "; "))
+			}
+		} else {
+			missingArtifactSince = time.Time{}
+			if availableSummary != nil {
+				return availableSummary, availableCandidate, nil
 			}
 		}
 
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("timed out after %s waiting for xray results for %s", waitWindow, artifactPath)
+			return nil, xrayArtifactPathCandidate{}, fmt.Errorf("timed out after %s waiting for xray results for %s", waitWindow, joinXrayArtifactPaths(candidates))
 		}
 
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, xrayArtifactPathCandidate{}, ctx.Err()
 		case <-time.After(xraySummaryPollInterval):
 		}
 	}
+}
+
+func xraySummaryIssueCount(summary *xraySummaryResponse) int {
+	if summary == nil {
+		return 0
+	}
+
+	total := 0
+	for _, artifact := range summary.Artifacts {
+		total += len(artifact.Issues)
+	}
+	return total
 }
 
 func (c *xrayClient) bestEffortBlockedArtifactSummary(ctx context.Context, targets []xrayViolationLookupTarget) (*xraySummaryResponse, string, error) {
@@ -863,6 +973,10 @@ func (c *xrayClient) bestEffortBlockedArtifactSummary(ctx context.Context, targe
 					continue
 				}
 				return summary, artifactPath, nil
+			}
+
+			if isRetriableXrayRequestError(err) {
+				continue
 			}
 
 			var httpErr *xrayHTTPError
@@ -947,8 +1061,11 @@ func (c *xrayClient) doRawJSON(ctx context.Context, method, path string, body an
 	}
 	applyXrayAuth(req, c.authType, c.username, c.secret)
 
+	start := time.Now()
 	resp, err := c.httpClient.Do(req)
+	elapsed := time.Since(start)
 	if err != nil {
+		c.logXRayRequest(ctx, method, path, 0, elapsed, err)
 		return nil, fmt.Errorf("xray request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -960,11 +1077,56 @@ func (c *xrayClient) doRawJSON(ctx context.Context, method, path string, body an
 
 	for _, allowed := range allowedStatus {
 		if resp.StatusCode == allowed {
+			c.logXRayRequest(ctx, method, path, resp.StatusCode, elapsed, nil)
 			return responseBody, nil
 		}
 	}
 
-	return nil, &xrayHTTPError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(string(responseBody))}
+	httpErr := &xrayHTTPError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(string(responseBody))}
+	c.logXRayRequest(ctx, method, path, resp.StatusCode, elapsed, httpErr)
+	return nil, httpErr
+}
+
+// logXRayRequest persists a single xRay HTTP call to xray_request_logs. It is
+// always fire-and-forget so it never blocks or fails the caller.
+func (c *xrayClient) logXRayRequest(ctx context.Context, method, endpoint string, statusCode int, duration time.Duration, callErr error) {
+	if c.db == nil {
+		return
+	}
+
+	durationMs := int(duration.Milliseconds())
+
+	scanID := xrayScanIDFromContext(ctx)
+	registryID := xrayRegistryIDFromContext(ctx)
+	if registryID == nil {
+		registryID = c.registryID
+	}
+
+	var errMsg *string
+	if callErr != nil {
+		s := callErr.Error()
+		errMsg = &s
+		if statusCode == 0 {
+			statusCode = -1 // network error sentinel
+		}
+	}
+
+	entry := &models.XRayRequestLog{
+		ScanID:     scanID,
+		RegistryID: registryID,
+		Method:     method,
+		Endpoint:   endpoint,
+		StatusCode: statusCode,
+		DurationMs: durationMs,
+		Error:      errMsg,
+	}
+
+	db := c.db
+	go func() {
+		if _, err := db.NewInsert().Model(entry).Exec(context.Background()); err != nil {
+			log.Debugf("xray_log: failed to record xray request: %v", err)
+		}
+	}()
 }
 
 func (c *xrayClient) doRegistryRequest(ctx context.Context, method, path string, accept []string) (*http.Response, error) {
@@ -981,7 +1143,15 @@ func (c *xrayClient) doRegistryRequest(ctx context.Context, method, path string,
 	}
 	applyXrayAuth(req, c.authType, c.username, c.secret)
 
-	resp, err := c.httpClient.Do(req)
+	client := c.registryHTTPClient
+	if client == nil {
+		client = c.httpClient
+	}
+	if client == nil {
+		client = &http.Client{Timeout: registryRequestTimeout}
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("registry request failed: %w", err)
 	}
@@ -1033,6 +1203,347 @@ func (c *xrayClient) getViolations(ctx context.Context, targets []xrayViolationL
 		return nil, err
 	}
 	return &response, nil
+}
+
+func (c *xrayClient) getIgnoreRules(ctx context.Context, vulnerabilityID string, artifactPaths []string, artifactName, artifactVersion string) ([]xrayIgnoreRule, error) {
+	filterKey, filterValue, ok := xrayIgnoreRuleVulnerabilityFilter(vulnerabilityID)
+	if !ok {
+		return nil, nil
+	}
+
+	candidatePaths := make([]string, 0, len(artifactPaths))
+	seenPaths := make(map[string]bool)
+	for _, artifactPath := range artifactPaths {
+		trimmed := strings.TrimSpace(artifactPath)
+		if trimmed == "" || seenPaths[trimmed] {
+			continue
+		}
+		seenPaths[trimmed] = true
+		candidatePaths = append(candidatePaths, trimmed)
+	}
+	if len(candidatePaths) == 0 {
+		candidatePaths = append(candidatePaths, "")
+	}
+
+	for _, artifactPath := range candidatePaths {
+		params := url.Values{}
+		params.Set(filterKey, filterValue)
+		if artifactPath != "" {
+			params.Set("artifact_path", artifactPath)
+		}
+		if trimmedName := strings.TrimSpace(artifactName); trimmedName != "" {
+			params.Set("artifact_name", trimmedName)
+		}
+		if trimmedVersion := strings.TrimPrefix(strings.TrimSpace(artifactVersion), ":"); trimmedVersion != "" {
+			params.Set("artifact_version", trimmedVersion)
+		}
+		params.Set("page_num", "1")
+		params.Set("num_of_rows", "25")
+		params.Set("order_by", "created")
+		params.Set("direction", "desc")
+
+		endpoint := "/xray/api/v1/ignore_rules?" + params.Encode()
+		var raw any
+		if _, err := c.doJSON(ctx, http.MethodGet, endpoint, nil, &raw, http.StatusOK); err != nil {
+			var httpErr *xrayHTTPError
+			if errors.As(err, &httpErr) {
+				switch httpErr.StatusCode {
+				case http.StatusNotFound, http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusMethodNotAllowed:
+					return nil, err
+				}
+			}
+			return nil, err
+		}
+
+		rules := extractXrayIgnoreRules(raw)
+		if len(rules) > 0 {
+			return rules, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func xrayIgnoreRuleVulnerabilityFilter(vulnerabilityID string) (string, string, bool) {
+	trimmed := strings.TrimSpace(vulnerabilityID)
+	if trimmed == "" {
+		return "", "", false
+	}
+
+	upper := strings.ToUpper(trimmed)
+	if strings.HasPrefix(upper, "CVE-") {
+		return "cve", trimmed, true
+	}
+	if strings.HasPrefix(upper, "XRAY-") {
+		return "vulnerability", trimmed, true
+	}
+
+	return "", "", false
+}
+
+func persistXrayIgnoreRuleSnapshots(ctx context.Context, db *bun.DB, scan *models.Scan, client *xrayClient, artifactPaths ...string) error {
+	if scan == nil || client == nil {
+		return nil
+	}
+
+	var rows []struct {
+		VulnID string `bun:"vuln_id"`
+	}
+	if err := db.NewSelect().Model((*models.Vulnerability)(nil)).
+		ColumnExpr("DISTINCT vuln_id").
+		Where("scan_id = ?", scan.ID).
+		Scan(ctx, &rows); err != nil {
+		return fmt.Errorf("failed to load vulnerabilities for xray suppression snapshot: %w", err)
+	}
+
+	artifactName := lastPathSegment(scan.ImageName)
+	artifactVersion := strings.TrimPrefix(scan.ImageTag, ":")
+	results := make([]models.XraySuppression, 0, len(rows))
+	successfulLookups := 0
+	lookupErrors := 0
+	var firstLookupErr error
+	now := time.Now()
+
+	for _, row := range rows {
+		vulnID := strings.TrimSpace(row.VulnID)
+		if vulnID == "" {
+			continue
+		}
+
+		rules, err := client.getIgnoreRules(ctx, vulnID, artifactPaths, artifactName, artifactVersion)
+		if err != nil {
+			if shouldTreatIgnoreRuleLookupAsUnavailable(err) {
+				recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIgnoreRuleSyncError(err))
+				return nil
+			}
+			lookupErrors += 1
+			if firstLookupErr == nil {
+				firstLookupErr = err
+			}
+			if successfulLookups == 0 && lookupErrors >= 5 {
+				return fmt.Errorf("aborted xray ignore-rule sync after %d lookup failures: %w", lookupErrors, firstLookupErr)
+			}
+			continue
+		}
+		successfulLookups += 1
+		if len(rules) == 0 {
+			continue
+		}
+
+		rule := rules[0]
+		ruleID := strings.TrimSpace(rule.RuleID)
+		if ruleID == "" {
+			ruleID = fallbackXrayIgnoreRuleID(vulnID, rule.PolicyName, rule.WatchName)
+		}
+
+		results = append(results, models.XraySuppression{
+			ScanID:        scan.ID,
+			ImageDigest:   scan.ImageDigest,
+			VulnID:        vulnID,
+			RuleID:        ruleID,
+			PolicyName:    strings.TrimSpace(rule.PolicyName),
+			WatchName:     strings.TrimSpace(rule.WatchName),
+			Justification: strings.TrimSpace(rule.Justification),
+			ArtifactPath:  firstNonEmpty(artifactPaths...),
+			ExpiresAt:     rule.ExpiresAt,
+			Raw:           rule.Raw,
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		})
+	}
+
+	if successfulLookups == 0 && lookupErrors > 0 {
+		return fmt.Errorf("failed to fetch xray ignore rules after %d lookup errors: %w", lookupErrors, firstLookupErr)
+	}
+
+	if _, err := db.NewDelete().Model((*models.XraySuppression)(nil)).Where("scan_id = ?", scan.ID).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to clear xray suppression snapshots: %w", err)
+	}
+
+	if len(results) == 0 {
+		return nil
+	}
+
+	if _, err := db.NewInsert().Model(&results).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to persist xray suppression snapshots: %w", err)
+	}
+
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Resolved %d Xray ignore-rule suppressions.", len(results)))
+	return nil
+}
+
+func shouldTreatIgnoreRuleLookupAsUnavailable(err error) bool {
+	var httpErr *xrayHTTPError
+	if !errors.As(err, &httpErr) {
+		return false
+	}
+
+	switch httpErr.StatusCode {
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusMethodNotAllowed:
+		return true
+	default:
+		return false
+	}
+}
+
+func describeNonFatalXrayIgnoreRuleSyncError(err error) string {
+	var httpErr *xrayHTTPError
+	if errors.As(err, &httpErr) {
+		switch httpErr.StatusCode {
+		case http.StatusBadRequest:
+			return "Xray returned vulnerability results, but its optional ignore-rule lookup rejected the query parameters. Ignore-rule suppressions were skipped for this scan."
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return "Xray returned vulnerability results, but the configured credentials do not have permission to read ignore rules. Ignore-rule suppressions were skipped for this scan."
+		case http.StatusNotFound, http.StatusMethodNotAllowed:
+			return "Xray returned vulnerability results, but this instance does not expose the ignore-rule lookup API. Ignore-rule suppressions were skipped for this scan."
+		}
+	}
+
+	return fmt.Sprintf("Xray returned vulnerability results, but the optional ignore-rule lookup did not complete: %v", err)
+}
+
+func extractXrayIgnoreRules(payload any) []xrayIgnoreRule {
+	objects := collectXrayIgnoreRuleObjects(payload)
+	results := make([]xrayIgnoreRule, 0, len(objects))
+	for _, object := range objects {
+		ruleID := firstNonEmpty(
+			findStringValue(object, "external_id"),
+			findStringValue(object, "rule_id"),
+			findStringValue(object, "id"),
+		)
+		policyName := firstNonEmpty(
+			findStringValue(object, "policy_name"),
+			findStringValue(object, "policy"),
+		)
+		watchName := firstNonEmpty(
+			findStringValue(object, "watch_name"),
+			findStringValue(object, "watch"),
+		)
+		justification := firstNonEmpty(
+			findStringValue(object, "notes"),
+			findStringValue(object, "note"),
+			findStringValue(object, "reason"),
+			findStringValue(object, "description"),
+			findStringValue(object, "summary"),
+		)
+		if ruleID == "" && policyName == "" && watchName == "" && justification == "" {
+			continue
+		}
+		results = append(results, xrayIgnoreRule{
+			RuleID:        ruleID,
+			PolicyName:    policyName,
+			WatchName:     watchName,
+			Justification: justification,
+			ExpiresAt:     findTimeValue(object, "expires_at", "expiresAt", "expiration_date", "expiry_date"),
+			Raw:           object,
+		})
+	}
+	return results
+}
+
+func collectXrayIgnoreRuleObjects(payload any) []models.JSONObject {
+	switch typed := payload.(type) {
+	case []any:
+		results := make([]models.JSONObject, 0, len(typed))
+		for _, item := range typed {
+			results = append(results, collectXrayIgnoreRuleObjects(item)...)
+		}
+		return results
+	case map[string]any:
+		object := toJSONObject(typed)
+		for _, key := range []string{"ignore_rules", "data", "results", "items", "rules"} {
+			if nested, ok := typed[key]; ok {
+				results := collectXrayIgnoreRuleObjects(nested)
+				if len(results) > 0 {
+					return results
+				}
+			}
+		}
+		return []models.JSONObject{object}
+	default:
+		return nil
+	}
+}
+
+func toJSONObject(value map[string]any) models.JSONObject {
+	result := make(models.JSONObject, len(value))
+	for key, item := range value {
+		result[key] = item
+	}
+	return result
+}
+
+func findStringValue(value any, targetKey string) string {
+	switch typed := value.(type) {
+	case models.JSONObject:
+		for key, item := range typed {
+			if strings.EqualFold(strings.TrimSpace(key), targetKey) {
+				if text := strings.TrimSpace(fmt.Sprint(item)); text != "" && text != "<nil>" {
+					return text
+				}
+			}
+			if nested := findStringValue(item, targetKey); nested != "" {
+				return nested
+			}
+		}
+	case map[string]any:
+		for key, item := range typed {
+			if strings.EqualFold(strings.TrimSpace(key), targetKey) {
+				if text := strings.TrimSpace(fmt.Sprint(item)); text != "" && text != "<nil>" {
+					return text
+				}
+			}
+			if nested := findStringValue(item, targetKey); nested != "" {
+				return nested
+			}
+		}
+	case []any:
+		for _, item := range typed {
+			if nested := findStringValue(item, targetKey); nested != "" {
+				return nested
+			}
+		}
+	}
+	return ""
+}
+
+func findTimeValue(value any, keys ...string) *time.Time {
+	for _, key := range keys {
+		if raw := findStringValue(value, key); raw != "" {
+			for _, layout := range []string{time.RFC3339, time.RFC3339Nano, "2006-01-02T15:04:05.000Z07:00", "2006-01-02 15:04:05"} {
+				parsed, err := time.Parse(layout, raw)
+				if err == nil {
+					return &parsed
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func fallbackXrayIgnoreRuleID(vulnID, policyName, watchName string) string {
+	parts := []string{strings.TrimSpace(vulnID), strings.TrimSpace(policyName), strings.TrimSpace(watchName)}
+	filtered := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part != "" {
+			filtered = append(filtered, part)
+		}
+	}
+	if len(filtered) == 0 {
+		return "xray-ignore"
+	}
+	return strings.Join(filtered, ":")
+}
+
+func lastPathSegment(value string) string {
+	trimmed := strings.Trim(strings.TrimSpace(value), "/")
+	if trimmed == "" {
+		return ""
+	}
+	if idx := strings.LastIndex(trimmed, "/"); idx >= 0 {
+		return trimmed[idx+1:]
+	}
+	return trimmed
 }
 
 func (c *xrayClient) contextualAnalysis(ctx context.Context, vulnerabilityID, componentID, sourceComponentID, artifactPath string) (models.JSONObject, error) {
@@ -1154,6 +1665,90 @@ func blockedArtifactSummaryPaths(artifactoryID string, targets []xrayViolationLo
 		paths = append(paths, artifactPath)
 	}
 	return paths
+}
+
+func buildXrayArtifactPathCandidates(artifactoryID, repository, artifactName, reference, manifestFilename, resolvedDigest string) []xrayArtifactPathCandidate {
+	results := make([]xrayArtifactPathCandidate, 0, 4)
+	addCandidate := func(repo, path, filename string) {
+		path = strings.Trim(strings.TrimSpace(path), "/")
+		filename = strings.TrimSpace(filename)
+		repo = strings.Trim(strings.TrimSpace(repo), "/")
+		if repo == "" || path == "" || filename == "" {
+			return
+		}
+		candidate := xrayArtifactPathCandidate{
+			Repository: repo,
+			Path:       path + "/" + filename,
+		}
+		candidate.RepoPath = repo + "/" + candidate.Path
+		candidate.ArtifactPath = strings.Trim(strings.TrimSpace(artifactoryID), "/")
+		if candidate.ArtifactPath != "" {
+			candidate.ArtifactPath += "/"
+		}
+		candidate.ArtifactPath += candidate.RepoPath
+		results = append(results, candidate)
+	}
+
+	repositories := xrayRepositoryCandidates(repository)
+	artifactPath := strings.Trim(artifactName, "/") + "/" + strings.TrimPrefix(strings.TrimSpace(reference), ":")
+	digestReference := xrayDigestArtifactReference(resolvedDigest)
+	for _, repo := range repositories {
+		addCandidate(repo, artifactPath, manifestFilename)
+		if digestReference != "" {
+			addCandidate(repo, strings.Trim(artifactName, "/")+"/"+digestReference, "manifest.json")
+		}
+	}
+
+	return dedupeXrayArtifactPathCandidates(results)
+}
+
+func xrayRepositoryCandidates(repository string) []string {
+	repository = strings.Trim(strings.TrimSpace(repository), "/")
+	if repository == "" {
+		return nil
+	}
+
+	results := []string{repository}
+	if !strings.HasSuffix(repository, "-cache") {
+		results = append(results, repository+"-cache")
+	}
+	return results
+}
+
+func xrayDigestArtifactReference(digest string) string {
+	trimmed := strings.TrimSpace(digest)
+	if trimmed == "" {
+		return ""
+	}
+	parts := strings.SplitN(trimmed, ":", 2)
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return ""
+	}
+	return strings.TrimSpace(parts[0]) + "__" + strings.TrimSpace(parts[1])
+}
+
+func dedupeXrayArtifactPathCandidates(candidates []xrayArtifactPathCandidate) []xrayArtifactPathCandidate {
+	results := make([]xrayArtifactPathCandidate, 0, len(candidates))
+	seen := make(map[string]bool)
+	for _, candidate := range candidates {
+		artifactPath := strings.TrimSpace(candidate.ArtifactPath)
+		if artifactPath == "" || seen[artifactPath] {
+			continue
+		}
+		seen[artifactPath] = true
+		results = append(results, candidate)
+	}
+	return results
+}
+
+func joinXrayArtifactPaths(candidates []xrayArtifactPathCandidate) string {
+	paths := make([]string, 0, len(candidates))
+	for _, candidate := range dedupeXrayArtifactPathCandidates(candidates) {
+		if artifactPath := strings.TrimSpace(candidate.ArtifactPath); artifactPath != "" {
+			paths = append(paths, artifactPath)
+		}
+	}
+	return strings.Join(paths, ", ")
 }
 
 func normalizeXrayDownloadBlockedError(err error) (string, bool) {
@@ -1406,9 +2001,11 @@ func xrayArtifactPaths(imageName, imageTag string, registry *models.Registry, ar
 		return "", "", err
 	}
 
-	repoPath := repo + "/" + artifactName + "/" + tag + "/manifest.json"
-	artifactPath := artifactoryID + "/" + repoPath
-	return repoPath, artifactPath, nil
+	candidates := buildXrayArtifactPathCandidates(artifactoryID, repo, artifactName, tag, "manifest.json", "")
+	if len(candidates) == 0 {
+		return "", "", fmt.Errorf("failed to build xray artifact path for %s:%s", imageName, imageTag)
+	}
+	return candidates[0].RepoPath, candidates[0].ArtifactPath, nil
 }
 
 func updateXrayMetadata(ctx context.Context, db *bun.DB, scanID uuid.UUID, externalScanID, externalStatus, currentStep string) error {
@@ -1966,17 +2563,7 @@ func cycloneDXKBReferences(vulnerability TrivySBOMVulnerability) []models.KBRef 
 }
 
 func isRetriableXrayScanArtifactError(err error) bool {
-	if errors.Is(err, context.DeadlineExceeded) {
-		return true
-	}
-
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() {
-		return true
-	}
-
-	normalizedErr := strings.ToLower(err.Error())
-	if strings.Contains(normalizedErr, "client.timeout exceeded") || strings.Contains(normalizedErr, "context deadline exceeded") {
+	if isRetriableXrayRequestError(err) {
 		return true
 	}
 
@@ -1997,6 +2584,82 @@ func isRetriableXrayScanArtifactError(err error) bool {
 	return false
 }
 
+func isRetriableXrayRequestError(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+
+	normalizedErr := strings.ToLower(err.Error())
+	if strings.Contains(normalizedErr, "client.timeout exceeded") || strings.Contains(normalizedErr, "context deadline exceeded") {
+		return true
+	}
+
+	var httpErr *xrayHTTPError
+	if !errors.As(err, &httpErr) {
+		return false
+	}
+
+	switch httpErr.StatusCode {
+	case http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func describeNonFatalXrayIndexError(repoPath string, err error) string {
+	var httpErr *xrayHTTPError
+	if errors.As(err, &httpErr) {
+		switch httpErr.StatusCode {
+		case http.StatusForbidden, http.StatusUnauthorized:
+			return fmt.Sprintf("Xray skipped the optional index request for %s because the configured credentials do not have re-index permissions. Continuing with the existing artifact state.", repoPath)
+		case http.StatusConflict:
+			return fmt.Sprintf("Xray reported that %s is already being indexed. Continuing to wait for the artifact summary.", repoPath)
+		}
+	}
+
+	return fmt.Sprintf("Xray index request returned a non-fatal response for %s. Continuing anyway: %v", repoPath, err)
+}
+
+func describeNonFatalXrayScanArtifactError(componentID string, err error) string {
+	var httpErr *xrayHTTPError
+	if errors.As(err, &httpErr) {
+		body := strings.ToLower(strings.TrimSpace(httpErr.Body))
+		if httpErr.StatusCode == http.StatusInternalServerError && strings.Contains(body, "failed to scan component") {
+			return fmt.Sprintf("Xray did not accept the explicit scanArtifact request for %s, but the artifact summary endpoint can still return results. Continuing to poll Xray.", componentID)
+		}
+		if httpErr.StatusCode == http.StatusConflict {
+			return fmt.Sprintf("Xray reported that %s is already queued or scanning. Continuing to poll the artifact summary.", componentID)
+		}
+	}
+
+	return fmt.Sprintf("Xray scanArtifact returned a non-fatal response for %s. Continuing to poll the artifact summary: %v", componentID, err)
+}
+
+func describeNonFatalXraySBOMImportError(err error) string {
+	var httpErr *xrayHTTPError
+	if errors.As(err, &httpErr) {
+		body := strings.ToLower(strings.TrimSpace(httpErr.Body))
+		switch httpErr.StatusCode {
+		case http.StatusBadRequest:
+			if strings.Contains(body, "one parameter or more are missing") {
+				return "Xray returned vulnerability results, but its optional component export endpoint rejected the SBOM request. Vulnerability findings were imported; SBOM components were skipped."
+			}
+		case http.StatusForbidden, http.StatusUnauthorized:
+			return "Xray returned vulnerability results, but the configured credentials do not have permission to export SBOM component details. Vulnerability findings were imported; SBOM components were skipped."
+		case http.StatusNotFound:
+			return "Xray returned vulnerability results, but it did not expose a component export for this artifact. Vulnerability findings were imported; SBOM components were skipped."
+		}
+	}
+
+	return fmt.Sprintf("Xray returned vulnerability results, but the optional SBOM component import did not complete: %v", err)
+}
+
 func shouldWarnBlockedReindexError(err error) bool {
 	var httpErr *xrayHTTPError
 	if !errors.As(err, &httpErr) {
@@ -2015,6 +2678,10 @@ func isRetriableRegistryWarmupError(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
+	// Unexpected EOF during blob streaming is a transient connection drop.
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
 
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
@@ -2022,7 +2689,11 @@ func isRetriableRegistryWarmupError(err error) bool {
 	}
 
 	normalizedErr := strings.ToLower(err.Error())
-	if strings.Contains(normalizedErr, "client.timeout exceeded") || strings.Contains(normalizedErr, "context deadline exceeded") {
+	if strings.Contains(normalizedErr, "client.timeout exceeded") ||
+		strings.Contains(normalizedErr, "context deadline exceeded") ||
+		strings.Contains(normalizedErr, "unexpected eof") ||
+		strings.Contains(normalizedErr, "connection reset by peer") ||
+		strings.Contains(normalizedErr, "connection refused") {
 		return true
 	}
 

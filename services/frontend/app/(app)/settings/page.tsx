@@ -1,8 +1,10 @@
 'use client';
+import { FormField } from '@/components/ui/form-field';
 import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { changePassword, getAuthSnapshot, getUserDetails, setUser, updateUserDetails, User } from '@/lib/api';
 import { fullDate } from '@/lib/time';
-import { Clock01Icon, Key01Icon, Shield01Icon, UserAccountIcon } from 'hugeicons-react';
+import { ApiIcon, Clock01Icon, Key01Icon, Shield01Icon, UserAccountIcon } from 'hugeicons-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -231,42 +233,36 @@ export default function SettingsPage() {
         ) : (
           <form onSubmit={handleChangePassword} className="space-y-4">
             {pwMsg && <Alert message={pwMsg.text} type={pwMsg.type} />}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Current Password</label>
-              <input
-                type="password"
-                className={inputCls}
-                value={currentPw}
-                onChange={e => setCurrentPw(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-            </div>
+            <FormField
+              autoComplete="current-password"
+              label="Current Password"
+              name="current-password"
+              onChange={e => setCurrentPw(e.target.value)}
+              required
+              type="password"
+              value={currentPw}
+            />
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">New Password</label>
-                <input
-                  type="password"
-                  className={inputCls}
-                  value={newPw}
-                  onChange={e => setNewPw(e.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Confirm New Password</label>
-                <input
-                  type="password"
-                  className={inputCls}
-                  value={confirmPw}
-                  onChange={e => setConfirmPw(e.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                />
-              </div>
+              <FormField
+                autoComplete="new-password"
+                label="New Password"
+                minLength={8}
+                name="new-password"
+                onChange={e => setNewPw(e.target.value)}
+                required
+                type="password"
+                value={newPw}
+              />
+              <FormField
+                autoComplete="new-password"
+                label="Confirm New Password"
+                minLength={8}
+                name="confirm-new-password"
+                onChange={e => setConfirmPw(e.target.value)}
+                required
+                type="password"
+                value={confirmPw}
+              />
             </div>
             <div className="flex justify-end pt-1">
               <button
@@ -280,6 +276,16 @@ export default function SettingsPage() {
             </div>
           </form>
         )}
+      </Section>
+
+      <Section title="API Tokens" description="Create and manage personal access tokens for use in CI/CD pipelines, scripts, and external tools.">
+        <Link
+          href="/settings/tokens"
+          className="btn-secondary inline-flex items-center gap-2"
+        >
+          <ApiIcon size={15} />
+          Manage API Tokens
+        </Link>
       </Section>
     </div>
   );

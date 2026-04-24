@@ -35,9 +35,11 @@ func DispatchScan(_ context.Context, db *bun.DB, scan *models.Scan, envVars []st
 		scan.ExternalStatus = "queued"
 		scan.CurrentStep = models.ScanStepQueued
 		if scan.ID != uuid.Nil {
+			now := time.Now()
 			if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
 				Set("external_status = ?", scan.ExternalStatus).
 				Set("current_step = ?", scan.CurrentStep).
+				Set("last_progress_at = ?", now).
 				Where("id = ?", scan.ID).
 				Exec(context.Background()); err != nil {
 				return fmt.Errorf("failed to persist external status for scan %s: %w", scan.ID, err)
@@ -56,6 +58,7 @@ func MarkScanFailed(ctx context.Context, db *bun.DB, scanID uuid.UUID, message s
 		Set("status = ?", models.ScanStatusFailed).
 		Set("error_message = ?", message).
 		Set("completed_at = ?", completedAt).
+		Set("last_progress_at = ?", completedAt).
 		Where("id = ?", scanID).
 		Exec(ctx)
 	if err != nil {

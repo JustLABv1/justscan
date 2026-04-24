@@ -58,7 +58,7 @@ func CreateManualFinding(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		_, userID, _, ok := LoadAuthorizedScan(c, db, scanID)
+		_, userID, _, ok := LoadAuthorizedScanForWrite(c, db, scanID)
 		if !ok {
 			return
 		}
@@ -101,7 +101,7 @@ func UpdateManualFinding(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
+		if _, _, _, ok := LoadAuthorizedScanForWrite(c, db, scanID); !ok {
 			return
 		}
 
@@ -146,7 +146,7 @@ func DeleteManualFinding(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
+		if _, _, _, ok := LoadAuthorizedScanForWrite(c, db, scanID); !ok {
 			return
 		}
 

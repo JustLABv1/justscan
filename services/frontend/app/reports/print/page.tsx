@@ -12,7 +12,7 @@ interface Vulnerability {
   id: string; vuln_id: string; pkg_name: string; installed_version: string;
   fixed_version: string; severity: string; title: string; description: string;
   cvss_score: number; references: string[];
-  suppression?: { status: string; justification: string; username?: string } | null;
+  suppression?: { status: string; justification: string; username?: string; source?: string; xray_policy_name?: string; xray_watch_name?: string } | null;
   comments?: Comment[];
 }
 interface Scan {
@@ -601,21 +601,22 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
               <tr style={{ background: '#f9fafb' }}>
-                {['CVE ID', 'Package', 'Severity', 'Status', 'Justification'].map(h => (
+                {['CVE ID', 'Package', 'Severity', 'Status', 'Source', 'Justification'].map(h => (
                   <th key={h} style={{ padding: '5px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600, color: '#6b7280' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {suppressedVulns.map(v => {
-                const statusLabel: Record<string, string> = { accepted: 'Accepted', wont_fix: "Won't Fix", false_positive: 'False Positive' };
+                const statusLabel: Record<string, string> = { accepted: 'Accepted', wont_fix: "Won't Fix", false_positive: 'False Positive', xray_ignore: 'Xray Ignore' };
                 return (
                   <tr key={v.id} style={{ color: '#6b7280' }}>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace' }}>{v.vuln_id}</td>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.pkg_name}</td>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.severity}</td>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.suppression ? (statusLabel[v.suppression.status] ?? v.suppression.status) : '—'}</td>
-                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{v.suppression?.justification || '—'}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.suppression?.source ?? 'local'}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{[v.suppression?.justification, v.suppression?.xray_policy_name, v.suppression?.xray_watch_name].filter(Boolean).join(' · ') || '—'}</td>
                   </tr>
                 );
               })}
@@ -717,10 +718,12 @@ function PrintReport() {
           .print\\:hidden { display: none !important; }
         }
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; background: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; }
+        html, body, #__next { margin: 0; padding: 0; min-height: 100%; background: #fff !important; color: #111827; color-scheme: light; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
       `}</style>
 
-      <div style={{ width: '100%', maxWidth: '178mm', margin: '0 auto', padding: '24px 0 32px' }}>
+      <div style={{ minHeight: '100vh', width: '100%', background: '#fff', color: '#111827' }}>
+        <div style={{ width: '100%', maxWidth: '178mm', margin: '0 auto', padding: '24px 0 32px' }}>
 
         {/* Report header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: 20, marginBottom: 28 }}>
@@ -799,6 +802,7 @@ function PrintReport() {
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12, marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9ca3af' }}>
           <span>JustScan Security Report</span>
           <span>{data.map(d => `${d.scan.image_name}:${d.scan.image_tag}`).join(', ')}</span>
+        </div>
         </div>
       </div>
     </>

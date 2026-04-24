@@ -22,9 +22,14 @@ func Auth(router *gin.RouterGroup, db *bun.DB) {
 			auths.CheckUserTaken(c, db)
 		})
 
-		// OIDC endpoints
+		// OIDC endpoints (legacy single-provider – kept for backwards compatibility)
 		auth.GET("/oidc/available", auths.OIDCAvailable)
 		auth.GET("/oidc/login", middlewares.AuthRegisterRateLimit(), auths.OIDCLogin)
 		auth.GET("/oidc/callback", auths.OIDCCallback(db))
+
+		// Multi-provider OIDC endpoints
+		auth.GET("/oidc/providers", auths.OIDCProviders)
+		auth.GET("/oidc/:provider/login", middlewares.AuthRegisterRateLimit(), auths.OIDCLoginForProvider)
+		auth.GET("/oidc/:provider/callback", auths.OIDCCallbackMulti(db))
 	}
 }

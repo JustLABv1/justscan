@@ -20,11 +20,15 @@ type Registry struct {
 	Username          string     `bun:"username,type:text,default:''" json:"-"`
 	Password          string     `bun:"password,type:text,default:''" json:"-"`
 	CreatedByID       uuid.UUID  `bun:"created_by_id,type:uuid,notnull" json:"created_by_id"`
+	OwnerType         string     `bun:"owner_type,type:text,notnull,default:'user'" json:"owner_type"`
+	OwnerUserID       *uuid.UUID `bun:"owner_user_id,type:uuid" json:"owner_user_id,omitempty"`
+	OwnerOrgID        *uuid.UUID `bun:"owner_org_id,type:uuid" json:"owner_org_id,omitempty"`
 	CreatedAt         time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	UpdatedAt         time.Time  `bun:"updated_at,type:timestamptz" json:"updated_at"`
 	HealthStatus      string     `bun:"health_status,type:text,default:'unknown'" json:"health_status"`
 	HealthMessage     string     `bun:"health_message,type:text,default:''" json:"health_message"`
 	LastHealthCheckAt *time.Time `bun:"last_health_check_at,type:timestamptz" json:"last_health_check_at"`
+	IsDefault         bool       `bun:"is_default,type:bool,notnull,default:false" json:"is_default"`
 }
 
 // Registry auth types

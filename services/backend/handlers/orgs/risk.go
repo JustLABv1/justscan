@@ -3,6 +3,7 @@ package orgs
 import (
 	"net/http"
 
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +18,9 @@ func GetRiskScore(db *bun.DB) gin.HandlerFunc {
 		orgID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
+			return
+		}
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleViewer); !ok {
 			return
 		}
 

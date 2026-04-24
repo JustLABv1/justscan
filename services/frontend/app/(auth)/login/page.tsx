@@ -2,7 +2,7 @@
 import { AuthCard } from '@/components/auth-card';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { getOIDCAvailability, login, setToken, setUser } from '@/lib/api';
+import { getOIDCAvailability, listOIDCProviders, login, OIDCProvider, setToken, setUser } from '@/lib/api';
 import { Button, Form } from '@heroui/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -16,21 +16,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [oidcEnabled, setOidcEnabled] = useState(false);
   const [localAuthEnabled, setLocalAuthEnabled] = useState(true);
+  const [oidcProviders, setOidcProviders] = useState<OIDCProvider[]>([]);
   const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
 
   useEffect(() => {
-    getOIDCAvailability()
-      .then((res) => {
-        setOidcEnabled(res.oidc_enabled);
-        setLocalAuthEnabled(res.local_auth_enabled);
-      })
-      .catch(() => {
-        // If the endpoint fails, fall back to showing local auth
-        setLocalAuthEnabled(true);
-      })
-      .finally(() => setAvailabilityLoaded(true));
+    Promise.allSettled([
+      getOIDCAvailability(),
+      listOIDCProviders(),
+    ]).then(([availability, providers]) => {
+      if (availability.status === 'fulfilled') {
+        setLocalAuthEnabled(availability.value.local_auth_enabled);
+      }
+      if (providers.status === 'fulfilled') {
+        setOidcProviders(providers.value);
+      }
+    }).finally(() => setAvailabilityLoaded(true));
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -52,6 +53,8 @@ export default function LoginPage() {
       </div>
     );
   }
+
+  const hasOIDC = oidcProviders.length > 0;
 
   return (
     <AuthCard
@@ -99,7 +102,7 @@ export default function LoginPage() {
         </Form>
       ) : null}
 
-      {oidcEnabled ? (
+      {hasOIDC ? (
         <>
           {localAuthEnabled ? (
             <div className="flex items-center gap-3">
@@ -108,24 +111,37 @@ export default function LoginPage() {
               <div className="flex-1 h-px" style={{ background: 'rgba(167,139,250,0.15)' }} />
             </div>
           ) : null}
-          <a
-            href={`${API}/api/v1/auth/oidc/login`}
-            className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98]"
-            style={{
-              background: 'rgba(124,58,237,0.12)',
-              border: '1px solid rgba(124,58,237,0.3)',
-              color: 'var(--text-primary)',
-            }}
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-            Login with SSO
-          </a>
+          <div className="space-y-2">
+            {oidcProviders.map((provider) => (
+              <a
+                key={provider.name}
+                href={`${API}/api/v1/auth/oidc/${encodeURIComponent(provider.name)}/login`}
+                className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98]"
+                style={{
+                  background: provider.button_color ? `${provider.button_color}1a` : 'rgba(124,58,237,0.12)',
+                  border: `1px solid ${provider.button_color ? `${provider.button_color}4d` : 'rgba(124,58,237,0.3)'}`,
+                  color: 'var(--text-primary)',
+                }}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                {provider.display_name}
+              </a>
+            ))}
+          </div>
         </>
       ) : null}
 
-      {!localAuthEnabled && oidcEnabled ? (
+      {!localAuthEnabled && !hasOIDC ? (
+        <FormAlert
+          description="No login methods are currently configured. Please contact your administrator."
+          status="accent"
+          title="No sign-in methods available"
+        />
+      ) : null}
+
+      {!localAuthEnabled && hasOIDC ? (
         <FormAlert
           description="Local auth is disabled for this installation. Use your configured single sign-on provider to continue."
           status="accent"
@@ -135,3 +151,4 @@ export default function LoginPage() {
     </AuthCard>
   );
 }
+

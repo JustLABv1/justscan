@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -39,14 +40,9 @@ func ExportScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Load suppressions
-		var suppressions []models.Suppression
-		if scan.ImageDigest != "" {
-			db.NewSelect().Model(&suppressions).Where("image_digest = ?", scan.ImageDigest).Scan(ctx) //nolint:errcheck
-		}
-		suppMap := make(map[string]models.Suppression)
-		for _, s := range suppressions {
-			suppMap[s.VulnID] = s
+		if _, err := effectivesuppressions.ApplyEffectiveSuppressions(ctx, db, scan, vulns); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve suppressions"})
+			return
 		}
 
 		filename := fmt.Sprintf("justscan-%s-%s-%s",
@@ -58,6 +54,10 @@ func ExportScan(db *bun.DB) gin.HandlerFunc {
 				models.Vulnerability
 				SuppressionStatus string `json:"suppression_status,omitempty"`
 				Justification     string `json:"justification,omitempty"`
+				SuppressionSource string `json:"suppression_source,omitempty"`
+				ReadOnly          bool   `json:"suppression_read_only,omitempty"`
+				XrayPolicyName    string `json:"xray_policy_name,omitempty"`
+				XrayWatchName     string `json:"xray_watch_name,omitempty"`
 			}
 			type JSONExport struct {
 				Scan            *models.Scan `json:"scan"`
@@ -67,9 +67,13 @@ func ExportScan(db *bun.DB) gin.HandlerFunc {
 			rows := make([]ExportRow, len(vulns))
 			for i, v := range vulns {
 				row := ExportRow{Vulnerability: v}
-				if s, ok := suppMap[v.VulnID]; ok {
-					row.SuppressionStatus = s.Status
-					row.Justification = s.Justification
+				if v.Suppression != nil {
+					row.SuppressionStatus = v.Suppression.Status
+					row.Justification = v.Suppression.Justification
+					row.SuppressionSource = v.Suppression.Source
+					row.ReadOnly = v.Suppression.ReadOnly
+					row.XrayPolicyName = v.Suppression.XrayPolicyName
+					row.XrayWatchName = v.Suppression.XrayWatchName
 				}
 				rows[i] = row
 			}
@@ -82,17 +86,23 @@ func ExportScan(db *bun.DB) gin.HandlerFunc {
 			c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.csv"`, filename))
 			c.Header("Content-Type", "text/csv")
 			w := csv.NewWriter(c.Writer)
-			w.Write([]string{"CVE ID", "Severity", "Package", "Installed Version", "Fixed Version", "CVSS Score", "Title", "Suppression Status", "Justification"}) //nolint:errcheck
+			w.Write([]string{"CVE ID", "Severity", "Package", "Installed Version", "Fixed Version", "CVSS Score", "Title", "Suppression Status", "Suppression Source", "Justification", "Xray Policy", "Xray Watch"}) //nolint:errcheck
 			for _, v := range vulns {
 				suppStatus := ""
+				suppSource := ""
 				justification := ""
-				if s, ok := suppMap[v.VulnID]; ok {
-					suppStatus = s.Status
-					justification = s.Justification
+				xrayPolicy := ""
+				xrayWatch := ""
+				if v.Suppression != nil {
+					suppStatus = v.Suppression.Status
+					suppSource = v.Suppression.Source
+					justification = v.Suppression.Justification
+					xrayPolicy = v.Suppression.XrayPolicyName
+					xrayWatch = v.Suppression.XrayWatchName
 				}
 				w.Write([]string{ //nolint:errcheck
 					v.VulnID, v.Severity, v.PkgName, v.InstalledVersion, v.FixedVersion,
-					fmt.Sprintf("%.1f", v.CVSSScore), v.Title, suppStatus, justification,
+					fmt.Sprintf("%.1f", v.CVSSScore), v.Title, suppStatus, suppSource, justification, xrayPolicy, xrayWatch,
 				})
 			}
 			w.Flush()

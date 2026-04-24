@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	authfuncs "justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -15,9 +15,8 @@ import (
 
 func ListScans(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, isAdmin, err := authfuncs.ResolveUserAccess(c.GetHeader("Authorization"), db)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
+		if !ok {
 			return
 		}
 
@@ -36,10 +35,8 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 			OrderExpr("created_at DESC").
 			Limit(limit).
 			Offset(offset)
-
-		if !isAdmin {
-			q = q.Where("user_id = ?", userID)
-		}
+		q = authz.ApplyOwnershipVisibility(q, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		q = authz.ApplyWorkspaceScope(c, q, "scan", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 
 		// Filters
 		if status := c.Query("status"); status != "" {

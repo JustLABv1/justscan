@@ -32,7 +32,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & Push Backend
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: services/backend
           file: services/backend/Dockerfile
@@ -43,7 +43,7 @@ jobs:
           cache-to: type=gha,scope=backend,mode=max
 
       - name: Build & Push Frontend
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: services/frontend
           file: services/frontend/Dockerfile
@@ -56,7 +56,7 @@ jobs:
           cache-to: type=gha,scope=frontend,mode=max
 
       - name: Build & Push Combined
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile

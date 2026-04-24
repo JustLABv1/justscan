@@ -48,7 +48,7 @@ jobs:
             type=raw,value=backend-beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=backend-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: services/backend
           file: services/backend/Dockerfile
@@ -85,7 +85,7 @@ jobs:
             type=raw,value=frontend-beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=frontend-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: services/frontend
           file: services/frontend/Dockerfile
@@ -124,7 +124,7 @@ jobs:
             type=raw,value=beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile

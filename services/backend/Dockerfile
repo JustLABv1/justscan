@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.23
 FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
 FROM anchore/grype:latest AS grype-bin
 

@@ -21,7 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const version string = "1.6.0"
+const version string = "1.6.1-beta.1"
 
 var (
 	configFile = kingpin.Flag("config", "Config file").Short('c').Default("/etc/justscan/config.yaml").String()

@@ -1,12 +1,21 @@
-FROM node:24-alpine AS base
+FROM node:25-alpine AS base
 
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
+FROM base AS platform
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable pnpm && pnpm install --frozen-lockfile
 
-FROM base AS builder
+# Install pnpm using the secret mount for CA trust
+RUN npm install -g pnpm
+
+FROM platform AS deps
+WORKDIR /app
+
+RUN apk add --no-cache libc6-compat
+
+COPY package.json pnpm-lock.yaml ./
+
+RUN pnpm install --frozen-lockfile
+
+FROM platform AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -15,7 +24,7 @@ ARG NEXT_PUBLIC_API_URL=""
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN corepack enable pnpm && pnpm run build
+RUN pnpm run build
 
 FROM base AS runner
 WORKDIR /app

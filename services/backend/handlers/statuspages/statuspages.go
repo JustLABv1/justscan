@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
+	"justscan-backend/functions/blockedpolicy"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -40,6 +42,7 @@ type statusPagePayload struct {
 	Slug            string                    `json:"slug"`
 	Description     string                    `json:"description"`
 	Visibility      string                    `json:"visibility" binding:"required"`
+	OrgID           string                    `json:"org_id"`
 	IncludeAllTags  bool                      `json:"include_all_tags"`
 	ImagePatterns   []string                  `json:"image_patterns"`
 	StaleAfterHours int                       `json:"stale_after_hours"`
@@ -48,53 +51,55 @@ type statusPagePayload struct {
 }
 
 type StatusPageItem struct {
-	ImageName             string     `json:"image_name"`
-	ImageTag              string     `json:"image_tag"`
-	LatestScanID          string     `json:"latest_scan_id"`
-	ScanStatus            string     `json:"scan_status"`
-	ExternalStatus        string     `json:"external_status,omitempty"`
-	ScanProvider          string     `json:"scan_provider,omitempty"`
-	CurrentStep           string     `json:"current_step,omitempty"`
-	StartedAt             *time.Time `json:"started_at,omitempty"`
-	Status                string     `json:"status"`
-	ErrorMessage          string     `json:"error_message,omitempty"`
-	CriticalCount         int        `json:"critical_count"`
-	HighCount             int        `json:"high_count"`
-	MediumCount           int        `json:"medium_count"`
-	LowCount              int        `json:"low_count"`
-	PreviousScanID        *string    `json:"previous_scan_id,omitempty"`
-	PreviousCriticalCount *int       `json:"previous_critical_count,omitempty"`
-	PreviousHighCount     *int       `json:"previous_high_count,omitempty"`
-	PreviousMediumCount   *int       `json:"previous_medium_count,omitempty"`
-	PreviousLowCount      *int       `json:"previous_low_count,omitempty"`
-	FreshnessHours        int64      `json:"freshness_hours"`
-	ObservedAt            time.Time  `json:"observed_at"`
-	PreviousScanAt        *time.Time `json:"previous_scan_at,omitempty"`
-	DisplayOrder          int        `json:"display_order"`
-	DeltaCriticalCount    *int       `json:"delta_critical_count,omitempty"`
-	DeltaHighCount        *int       `json:"delta_high_count,omitempty"`
-	DeltaMediumCount      *int       `json:"delta_medium_count,omitempty"`
-	DeltaLowCount         *int       `json:"delta_low_count,omitempty"`
+	ImageName             string                       `json:"image_name"`
+	ImageTag              string                       `json:"image_tag"`
+	LatestScanID          string                       `json:"latest_scan_id"`
+	ScanStatus            string                       `json:"scan_status"`
+	ExternalStatus        string                       `json:"external_status,omitempty"`
+	ScanProvider          string                       `json:"scan_provider,omitempty"`
+	CurrentStep           string                       `json:"current_step,omitempty"`
+	StartedAt             *time.Time                   `json:"started_at,omitempty"`
+	Status                string                       `json:"status"`
+	ErrorMessage          string                       `json:"error_message,omitempty"`
+	BlockedPolicyDetails  *models.BlockedPolicyDetails `json:"blocked_policy_details,omitempty"`
+	CriticalCount         int                          `json:"critical_count"`
+	HighCount             int                          `json:"high_count"`
+	MediumCount           int                          `json:"medium_count"`
+	LowCount              int                          `json:"low_count"`
+	PreviousScanID        *string                      `json:"previous_scan_id,omitempty"`
+	PreviousCriticalCount *int                         `json:"previous_critical_count,omitempty"`
+	PreviousHighCount     *int                         `json:"previous_high_count,omitempty"`
+	PreviousMediumCount   *int                         `json:"previous_medium_count,omitempty"`
+	PreviousLowCount      *int                         `json:"previous_low_count,omitempty"`
+	FreshnessHours        int64                        `json:"freshness_hours"`
+	ObservedAt            time.Time                    `json:"observed_at"`
+	PreviousScanAt        *time.Time                   `json:"previous_scan_at,omitempty"`
+	DisplayOrder          int                          `json:"display_order"`
+	DeltaCriticalCount    *int                         `json:"delta_critical_count,omitempty"`
+	DeltaHighCount        *int                         `json:"delta_high_count,omitempty"`
+	DeltaMediumCount      *int                         `json:"delta_medium_count,omitempty"`
+	DeltaLowCount         *int                         `json:"delta_low_count,omitempty"`
 }
 
 type statusPageScanSummary struct {
-	ScanID         string     `json:"scan_id"`
-	ImageName      string     `json:"image_name"`
-	ImageTag       string     `json:"image_tag"`
-	ScanStatus     string     `json:"scan_status"`
-	ExternalStatus string     `json:"external_status,omitempty"`
-	ScanProvider   string     `json:"scan_provider,omitempty"`
-	CurrentStep    string     `json:"current_step,omitempty"`
-	ErrorMessage   string     `json:"error_message,omitempty"`
-	CriticalCount  int        `json:"critical_count"`
-	HighCount      int        `json:"high_count"`
-	MediumCount    int        `json:"medium_count"`
-	LowCount       int        `json:"low_count"`
-	StartedAt      *time.Time `json:"started_at,omitempty"`
-	CompletedAt    *time.Time `json:"completed_at,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
-	ObservedAt     time.Time  `json:"observed_at"`
-	IsLatest       bool       `json:"is_latest"`
+	ScanID               string                       `json:"scan_id"`
+	ImageName            string                       `json:"image_name"`
+	ImageTag             string                       `json:"image_tag"`
+	ScanStatus           string                       `json:"scan_status"`
+	ExternalStatus       string                       `json:"external_status,omitempty"`
+	ScanProvider         string                       `json:"scan_provider,omitempty"`
+	CurrentStep          string                       `json:"current_step,omitempty"`
+	ErrorMessage         string                       `json:"error_message,omitempty"`
+	BlockedPolicyDetails *models.BlockedPolicyDetails `json:"blocked_policy_details,omitempty"`
+	CriticalCount        int                          `json:"critical_count"`
+	HighCount            int                          `json:"high_count"`
+	MediumCount          int                          `json:"medium_count"`
+	LowCount             int                          `json:"low_count"`
+	StartedAt            *time.Time                   `json:"started_at,omitempty"`
+	CompletedAt          *time.Time                   `json:"completed_at,omitempty"`
+	CreatedAt            time.Time                    `json:"created_at"`
+	ObservedAt           time.Time                    `json:"observed_at"`
+	IsLatest             bool                         `json:"is_latest"`
 }
 
 type statusPageResponse struct {
@@ -111,7 +116,7 @@ type statusPageResponse struct {
 
 func ListStatusPages(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, isAdmin, ok := requireAuthContext(c, db)
+		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
 		if !ok {
 			return
 		}
@@ -119,8 +124,9 @@ func ListStatusPages(db *bun.DB) gin.HandlerFunc {
 		var pages []models.StatusPage
 		q := db.NewSelect().Model(&pages).OrderExpr("updated_at DESC")
 		if !isAdmin {
-			q = q.Where("owner_user_id = ?", userID)
+			q = authz.ApplyOwnershipVisibility(q, "status_page", "", "owner_user_id", "owner_org_id", "org_status_pages", "status_page_id", userID, isAdmin, accessibleOrgIDs)
 		}
+		q = authz.ApplyWorkspaceScope(c, q, "status_page", "owner_user_id", "owner_org_id", "org_status_pages", "status_page_id", userID)
 		if err := q.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list status pages"})
 			return
@@ -148,10 +154,22 @@ func CreateStatusPage(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		if orgID, hasOrg, ok := parseStatusPageMutationOrg(c, db, body.OrgID); !ok {
+			return
+		} else if hasOrg {
+			page.OwnerType = models.OwnerTypeOrg
+			page.OwnerUserID = nil
+			page.OwnerOrgID = &orgID
+		}
 
 		err = db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
 			if _, err := tx.NewInsert().Model(page).Exec(ctx); err != nil {
 				return err
+			}
+			if page.OwnerOrgID != nil {
+				if err := ensureOrgStatusPageLink(ctx, tx, *page.OwnerOrgID, page.ID); err != nil {
+					return err
+				}
 			}
 			if len(targets) > 0 {
 				if _, err := tx.NewInsert().Model(&targets).Exec(ctx); err != nil {
@@ -179,7 +197,7 @@ func CreateStatusPage(db *bun.DB) gin.HandlerFunc {
 
 func GetStatusPage(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		page, _, err := loadManagedPage(c, db)
+		page, err := loadAuthorizedPage(c, db)
 		if err != nil {
 			return
 		}
@@ -196,7 +214,7 @@ func GetStatusPage(db *bun.DB) gin.HandlerFunc {
 
 func UpdateStatusPage(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		page, userID, err := loadManagedPage(c, db)
+		page, userID, _, err := loadManagedPage(c, db)
 		if err != nil {
 			return
 		}
@@ -264,7 +282,7 @@ func UpdateStatusPage(db *bun.DB) gin.HandlerFunc {
 
 func DeleteStatusPage(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		page, _, err := loadManagedPage(c, db)
+		page, _, _, err := loadManagedPage(c, db)
 		if err != nil {
 			return
 		}
@@ -275,6 +293,110 @@ func DeleteStatusPage(db *bun.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
+	}
+}
+
+type statusPageShare struct {
+	OrgID          uuid.UUID `bun:"org_id" json:"org_id"`
+	OrgName        string    `bun:"org_name" json:"org_name"`
+	OrgDescription string    `bun:"org_description" json:"org_description"`
+	IsOwner        bool      `bun:"-" json:"is_owner"`
+}
+
+func ListStatusPageShares(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		page, _, _, err := loadManagedPage(c, db)
+		if err != nil {
+			return
+		}
+
+		var shares []statusPageShare
+		if err := db.NewSelect().
+			TableExpr("org_status_pages AS org_status_page").
+			ColumnExpr("o.id AS org_id").
+			ColumnExpr("o.name AS org_name").
+			ColumnExpr("o.description AS org_description").
+			Join("JOIN orgs AS o ON o.id = org_status_page.org_id").
+			Where("org_status_page.status_page_id = ?", page.ID).
+			OrderExpr("o.name ASC").
+			Scan(c.Request.Context(), &shares); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list status page shares"})
+			return
+		}
+
+		for index := range shares {
+			shares[index].IsOwner = page.OwnerOrgID != nil && shares[index].OrgID == *page.OwnerOrgID
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": shares})
+	}
+}
+
+func ShareStatusPage(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		page, _, isAdmin, err := loadManagedPage(c, db)
+		if err != nil {
+			return
+		}
+
+		var body struct {
+			OrgID string `json:"org_id" binding:"required"`
+		}
+		if bindErr := c.ShouldBindJSON(&body); bindErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
+			return
+		}
+
+		targetOrgID, parseErr := uuid.Parse(body.OrgID)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+			return
+		}
+		if page.OwnerOrgID != nil && *page.OwnerOrgID == targetOrgID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "resource is already owned by that organization"})
+			return
+		}
+		if !isAdmin {
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, targetOrgID, models.OrgRoleEditor); !ok {
+				return
+			}
+		}
+
+		if err := ensureOrgStatusPageLink(c.Request.Context(), db, targetOrgID, page.ID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to share status page"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{"result": "shared"})
+	}
+}
+
+func UnshareStatusPage(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		page, _, _, err := loadManagedPage(c, db)
+		if err != nil {
+			return
+		}
+
+		targetOrgID, parseErr := uuid.Parse(c.Param("orgId"))
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+			return
+		}
+		if page.OwnerOrgID != nil && *page.OwnerOrgID == targetOrgID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot remove the owner organization"})
+			return
+		}
+
+		if _, err := db.NewDelete().Model((*models.OrgStatusPage)(nil)).
+			Where("org_id = ?", targetOrgID).
+			Where("status_page_id = ?", page.ID).
+			Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke status page share"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"result": "unshared"})
 	}
 }
 
@@ -314,8 +436,12 @@ func ViewStatusPageScanBySlug(db *bun.DB) gin.HandlerFunc {
 			c.JSON(status, gin.H{"error": err.Error()})
 			return
 		}
+		if err := blockedpolicy.AttachScanDetails(c.Request.Context(), db, scan); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load blocked policy details"})
+			return
+		}
 
-		latestScanID, _ := latestTrackedScanID(c.Request.Context(), db, page.OwnerUserID, scan.ImageName, scan.ImageTag)
+		latestScanID, _ := latestTrackedScanID(c.Request.Context(), db, page, scan.ImageName, scan.ImageTag)
 		c.JSON(http.StatusOK, buildStatusPageScanSummary(scan, latestScanID))
 	}
 }
@@ -341,20 +467,24 @@ func ViewStatusPageScanHistoryBySlug(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var scans []models.Scan
-		if err := db.NewSelect().
+		historyQuery := db.NewSelect().
 			Model(&scans).
-			Where("user_id = ?", page.OwnerUserID).
 			Where("image_name = ?", scan.ImageName).
 			Where("image_tag = ?", scan.ImageTag).
 			OrderExpr("created_at DESC").
-			Limit(10).
-			Scan(c.Request.Context()); err != nil {
+			Limit(10)
+		historyQuery = applyStatusPageScanScopeQuery(historyQuery, page, "scan")
+		if err := historyQuery.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan history"})
 			return
 		}
 
 		items := make([]statusPageScanSummary, 0, len(scans))
 		for i := range scans {
+			if err := blockedpolicy.AttachScanDetails(c.Request.Context(), db, &scans[i]); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load blocked policy details"})
+				return
+			}
 			items = append(items, buildStatusPageScanSummary(&scans[i], scans[0].ID))
 		}
 
@@ -473,34 +603,64 @@ func ViewStatusPageItemVulnerabilitiesBySlug(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
-func loadManagedPage(c *gin.Context, db *bun.DB) (*models.StatusPage, uuid.UUID, error) {
+func loadManagedPage(c *gin.Context, db *bun.DB) (*models.StatusPage, uuid.UUID, bool, error) {
 	userID, isAdmin, ok := requireAuthContext(c, db)
 	if !ok {
-		return nil, uuid.Nil, fmt.Errorf("unauthorized")
+		return nil, uuid.Nil, false, fmt.Errorf("unauthorized")
 	}
 
 	pageID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status page ID"})
-		return nil, uuid.Nil, err
+		return nil, uuid.Nil, false, err
 	}
 
 	page := &models.StatusPage{}
-	q := db.NewSelect().Model(page).Where("id = ?", pageID)
-	if !isAdmin {
-		q = q.Where("owner_user_id = ?", userID)
-	}
-	if err := q.Scan(c.Request.Context()); err != nil {
+	if err := db.NewSelect().Model(page).Where("id = ?", pageID).Scan(c.Request.Context()); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "status page not found"})
-		return nil, uuid.Nil, err
+		return nil, uuid.Nil, false, err
+	}
+	if !canManageStatusPage(c.Request.Context(), db, page, userID, isAdmin) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return nil, uuid.Nil, false, fmt.Errorf("forbidden")
 	}
 
 	if err := hydratePageRelations(c, db, page, false); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load status page"})
-		return nil, uuid.Nil, err
+		return nil, uuid.Nil, false, err
 	}
 
-	return page, userID, nil
+	return page, userID, isAdmin, nil
+}
+
+func loadAuthorizedPage(c *gin.Context, db *bun.DB) (*models.StatusPage, error) {
+	userID, isAdmin, ok := requireAuthContext(c, db)
+	if !ok {
+		return nil, fmt.Errorf("unauthorized")
+	}
+
+	pageID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status page ID"})
+		return nil, err
+	}
+
+	page := &models.StatusPage{}
+	if err := db.NewSelect().Model(page).Where("id = ?", pageID).Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "status page not found"})
+		return nil, err
+	}
+	if !canReadStatusPageRecord(c.Request.Context(), db, page, userID, isAdmin) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "status page not found"})
+		return nil, fmt.Errorf("not found")
+	}
+
+	if err := hydratePageRelations(c, db, page, false); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load status page"})
+		return nil, err
+	}
+
+	return page, nil
 }
 
 func loadViewablePageBySlug(c *gin.Context, db *bun.DB) (*models.StatusPage, bool) {
@@ -556,7 +716,7 @@ func loadStatusPageItems(c *gin.Context, db *bun.DB, page *models.StatusPage) ([
 		}
 	}
 
-	args := []any{page.OwnerUserID}
+	scopeWhere, args := statusPageScanScopeWhere(page, "s")
 	query := `
 WITH ranked AS (
     SELECT
@@ -578,7 +738,7 @@ WITH ranked AS (
         s.completed_at,
         ROW_NUMBER() OVER (PARTITION BY s.image_name, s.image_tag ORDER BY s.created_at DESC) AS rn
     FROM scans s
-    WHERE s.user_id = ?
+	WHERE ` + scopeWhere + `
 ),
 latest AS (
     SELECT * FROM ranked WHERE rn = 1
@@ -680,6 +840,15 @@ ORDER BY l.image_name ASC, l.image_tag ASC`
 		if errorMessage.Valid {
 			item.ErrorMessage = errorMessage.String
 		}
+		if item.ExternalStatus == models.ScanExternalStatusBlockedByXrayPolicy {
+			if scanID, err := uuid.Parse(item.LatestScanID); err == nil {
+				details, detailErr := blockedpolicy.BuildDetails(c.Request.Context(), db, scanID, item.ExternalStatus, item.ErrorMessage)
+				if detailErr != nil {
+					return nil, detailErr
+				}
+				item.BlockedPolicyDetails = details
+			}
+		}
 
 		item.FreshnessHours = int64(now.Sub(item.ObservedAt).Hours())
 		item.Status = deriveStatus(page.StaleAfterHours, item)
@@ -776,9 +945,6 @@ func deriveStatus(staleAfterHours int, item StatusPageItem) string {
 	if staleAfterHours > 0 && item.FreshnessHours >= int64(staleAfterHours) {
 		return "stale"
 	}
-	if item.CriticalCount > 0 || item.HighCount > 0 {
-		return "degraded"
-	}
 	return "healthy"
 }
 
@@ -793,11 +959,11 @@ func loadTrackedScanForPage(c *gin.Context, db *bun.DB, page *models.StatusPage,
 	}
 
 	scan := &models.Scan{}
-	if err := db.NewSelect().
+	query := db.NewSelect().
 		Model(scan).
-		Where("id = ?", scanID).
-		Where("user_id = ?", page.OwnerUserID).
-		Scan(c.Request.Context()); err != nil {
+		Where("id = ?", scanID)
+	query = applyStatusPageScanScopeQuery(query, page, "scan")
+	if err := query.Scan(c.Request.Context()); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("scan not found")
 		}
@@ -834,17 +1000,17 @@ func statusPageIncludesImage(page *models.StatusPage, imageName, imageTag string
 	return matchesStatusPagePatterns(compiledPatterns, imageName, imageTag), nil
 }
 
-func latestTrackedScanID(ctx context.Context, db *bun.DB, ownerUserID uuid.UUID, imageName, imageTag string) (uuid.UUID, error) {
+func latestTrackedScanID(ctx context.Context, db *bun.DB, page *models.StatusPage, imageName, imageTag string) (uuid.UUID, error) {
 	var latestID uuid.UUID
-	if err := db.NewSelect().
+	query := db.NewSelect().
 		Model((*models.Scan)(nil)).
 		Column("id").
-		Where("user_id = ?", ownerUserID).
 		Where("image_name = ?", imageName).
 		Where("image_tag = ?", imageTag).
 		OrderExpr("created_at DESC").
-		Limit(1).
-		Scan(ctx, &latestID); err != nil {
+		Limit(1)
+	query = applyStatusPageScanScopeQuery(query, page, "scan")
+	if err := query.Scan(ctx, &latestID); err != nil {
 		return uuid.Nil, err
 	}
 	return latestID, nil
@@ -857,23 +1023,24 @@ func buildStatusPageScanSummary(scan *models.Scan, latestScanID uuid.UUID) statu
 	}
 
 	return statusPageScanSummary{
-		ScanID:         scan.ID.String(),
-		ImageName:      scan.ImageName,
-		ImageTag:       scan.ImageTag,
-		ScanStatus:     scan.Status,
-		ExternalStatus: scan.ExternalStatus,
-		ScanProvider:   scan.ScanProvider,
-		CurrentStep:    scan.CurrentStep,
-		ErrorMessage:   scan.ErrorMessage,
-		CriticalCount:  scan.CriticalCount,
-		HighCount:      scan.HighCount,
-		MediumCount:    scan.MediumCount,
-		LowCount:       scan.LowCount,
-		StartedAt:      scan.StartedAt,
-		CompletedAt:    scan.CompletedAt,
-		CreatedAt:      scan.CreatedAt,
-		ObservedAt:     observedAt,
-		IsLatest:       latestScanID != uuid.Nil && scan.ID == latestScanID,
+		ScanID:               scan.ID.String(),
+		ImageName:            scan.ImageName,
+		ImageTag:             scan.ImageTag,
+		ScanStatus:           scan.Status,
+		ExternalStatus:       scan.ExternalStatus,
+		ScanProvider:         scan.ScanProvider,
+		CurrentStep:          scan.CurrentStep,
+		ErrorMessage:         scan.ErrorMessage,
+		BlockedPolicyDetails: scan.BlockedPolicyDetails,
+		CriticalCount:        scan.CriticalCount,
+		HighCount:            scan.HighCount,
+		MediumCount:          scan.MediumCount,
+		LowCount:             scan.LowCount,
+		StartedAt:            scan.StartedAt,
+		CompletedAt:          scan.CompletedAt,
+		CreatedAt:            scan.CreatedAt,
+		ObservedAt:           observedAt,
+		IsLatest:             latestScanID != uuid.Nil && scan.ID == latestScanID,
 	}
 }
 
@@ -917,7 +1084,8 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 		IncludeAllTags:  body.IncludeAllTags,
 		ImagePatterns:   imagePatterns,
 		StaleAfterHours: staleAfterHours,
-		OwnerUserID:     userID,
+		OwnerType:       models.OwnerTypeUser,
+		OwnerUserID:     &userID,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -1040,6 +1208,95 @@ func statusPageItemLess(left, right StatusPageItem) bool {
 	return left.ImageName < right.ImageName
 }
 
+func parseStatusPageMutationOrg(c *gin.Context, db *bun.DB, rawOrgID string) (uuid.UUID, bool, bool) {
+	rawOrgID = strings.TrimSpace(rawOrgID)
+	if rawOrgID == "" {
+		return uuid.Nil, false, true
+	}
+
+	orgID, err := uuid.Parse(rawOrgID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+		return uuid.Nil, false, false
+	}
+	if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleEditor); !ok {
+		return uuid.Nil, false, false
+	}
+
+	return orgID, true, true
+}
+
+func ensureOrgStatusPageLink(ctx context.Context, db bun.IDB, orgID, pageID uuid.UUID) error {
+	_, err := db.NewInsert().Model(&models.OrgStatusPage{OrgID: orgID, StatusPageID: pageID}).On("CONFLICT DO NOTHING").Exec(ctx)
+	return err
+}
+
+func canManageStatusPage(ctx context.Context, db *bun.DB, page *models.StatusPage, userID uuid.UUID, isAdmin bool) bool {
+	if page == nil {
+		return false
+	}
+	if isAdmin {
+		return true
+	}
+	if page.OwnerType == models.OwnerTypeUser && page.OwnerUserID != nil && *page.OwnerUserID == userID {
+		return true
+	}
+	if page.OwnerOrgID == nil {
+		return false
+	}
+	roles, err := authz.LoadUserOrgRoles(ctx, db, userID)
+	if err != nil {
+		return false
+	}
+	return authz.HasOrgRoleAtLeast(roles, *page.OwnerOrgID, models.OrgRoleEditor)
+}
+
+func canReadStatusPageRecord(ctx context.Context, db *bun.DB, page *models.StatusPage, userID uuid.UUID, isAdmin bool) bool {
+	if page == nil {
+		return false
+	}
+	if isAdmin {
+		return true
+	}
+	if page.OwnerType == models.OwnerTypeUser && page.OwnerUserID != nil && *page.OwnerUserID == userID {
+		return true
+	}
+
+	accessibleOrgIDs, err := authz.ListAccessibleOrgIDs(ctx, db, userID, false)
+	if err != nil || len(accessibleOrgIDs) == 0 {
+		return false
+	}
+	if page.OwnerOrgID != nil {
+		for _, orgID := range accessibleOrgIDs {
+			if orgID == *page.OwnerOrgID {
+				return true
+			}
+		}
+	}
+	shared, err := db.NewSelect().
+		TableExpr("org_status_pages").
+		Where("status_page_id = ?", page.ID).
+		Where("org_id IN (?)", bun.In(accessibleOrgIDs)).
+		Exists(ctx)
+	return err == nil && shared
+}
+
+func applyStatusPageScanScopeQuery(query *bun.SelectQuery, page *models.StatusPage, alias string) *bun.SelectQuery {
+	whereClause, args := statusPageScanScopeWhere(page, alias)
+	return query.Where(whereClause, args...)
+}
+
+func statusPageScanScopeWhere(page *models.StatusPage, alias string) (string, []any) {
+	if page.OwnerType == models.OwnerTypeOrg && page.OwnerOrgID != nil {
+		return fmt.Sprintf("(%s.owner_org_id = ? OR EXISTS (SELECT 1 FROM org_scans os WHERE os.scan_id = %s.id AND os.org_id = ?))", alias, alias), []any{*page.OwnerOrgID, *page.OwnerOrgID}
+	}
+	ownerUserID := uuid.Nil
+	if page.OwnerUserID != nil {
+		ownerUserID = *page.OwnerUserID
+	}
+	return fmt.Sprintf("(%s.owner_user_id = ? OR %s.user_id = ?)", alias, alias), []any{ownerUserID, ownerUserID}
+}
+
 func requireAuthContext(c *gin.Context, db *bun.DB) (uuid.UUID, bool, bool) {
 	userID, isAdmin, err := auth.ResolveUserAccess(c.GetHeader("Authorization"), db)
 	if err != nil {
@@ -1065,7 +1322,7 @@ func canViewStatusPage(c *gin.Context, db *bun.DB, page *models.StatusPage) bool
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required to view this status page"})
 			return false
 		}
-		if isAdmin || userID == page.OwnerUserID {
+		if canReadStatusPageRecord(c.Request.Context(), db, page, userID, isAdmin) {
 			return true
 		}
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})

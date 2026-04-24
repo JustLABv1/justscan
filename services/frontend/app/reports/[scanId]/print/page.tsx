@@ -22,7 +22,7 @@ interface Vulnerability {
   description: string;
   cvss_score: number;
   references: string[];
-  suppression?: { status: string; justification: string; username?: string } | null;
+  suppression?: { status: string; justification: string; username?: string; source?: string; xray_policy_name?: string; xray_watch_name?: string } | null;
   comments?: Comment[];
 }
 
@@ -396,11 +396,13 @@ export default function PrintReportPage() {
           .no-break { page-break-inside: avoid; }
         }
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; color: #111; background: #fff; }
+        html, body, #__next { margin: 0; padding: 0; min-height: 100%; background: #fff !important; color: #111827; color-scheme: light; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; }
         h1, h2, h3 { margin: 0; }
       `}</style>
 
-      <div style={{ maxWidth: '210mm', margin: '0 auto', padding: '32px 40px', background: '#fff' }}>
+      <div style={{ minHeight: '100vh', width: '100%', background: '#fff', color: '#111827' }}>
+        <div style={{ maxWidth: '210mm', margin: '0 auto', padding: '32px 40px', background: '#fff' }}>
 
         {/* Header */}
         <div style={{ borderBottom: '3px solid #111', paddingBottom: '20px', marginBottom: '28px' }}>
@@ -596,19 +598,21 @@ export default function PrintReportPage() {
                   <th style={{ padding: '6px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600 }}>Package</th>
                   <th style={{ padding: '6px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600 }}>Severity</th>
                   <th style={{ padding: '6px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600 }}>Status</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600 }}>Source</th>
                   <th style={{ padding: '6px 8px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600 }}>Justification</th>
                 </tr>
               </thead>
               <tbody>
                 {suppressedVulns.map((v) => {
-                  const statusLabel: Record<string, string> = { accepted: 'Accepted', wont_fix: "Won't Fix", false_positive: 'False Positive' };
+                  const statusLabel: Record<string, string> = { accepted: 'Accepted', wont_fix: "Won't Fix", false_positive: 'False Positive', xray_ignore: 'Xray Ignore' };
                   return (
                     <tr key={v.id} style={{ borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
                       <td style={{ padding: '5px 8px', fontFamily: 'monospace', border: '1px solid #e5e7eb' }}>{v.vuln_id}</td>
                       <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.pkg_name}</td>
                       <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.severity}</td>
                       <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.suppression ? (statusLabel[v.suppression.status] ?? v.suppression.status) : '—'}</td>
-                      <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{v.suppression?.justification || '—'}</td>
+                      <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.suppression?.source ?? 'local'}</td>
+                      <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{[v.suppression?.justification, v.suppression?.xray_policy_name, v.suppression?.xray_watch_name].filter(Boolean).join(' · ') || '—'}</td>
                     </tr>
                   );
                 })}
@@ -621,6 +625,7 @@ export default function PrintReportPage() {
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '14px', marginTop: '16px', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#9ca3af' }}>
           <span>JustScan Security Report · {imageRef}</span>
           <span>Scan ID: {scan.id}</span>
+        </div>
         </div>
       </div>
     </>

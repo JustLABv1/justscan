@@ -3,7 +3,7 @@ package registries
 import (
 	"net/http"
 
-	"justscan-backend/pkg/models"
+	"justscan-backend/functions/authz"
 	"justscan-backend/scanner"
 
 	"github.com/gin-gonic/gin"
@@ -21,9 +21,8 @@ func TestRegistry(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		registry := &models.Registry{}
-		if err := db.NewSelect().Model(registry).Where("id = ?", registryID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "registry not found"})
+		registry, _, _, ok := authz.LoadAuthorizedRegistry(c, db, registryID)
+		if !ok {
 			return
 		}
 		if err := scanner.ValidateProviderSelection(registry.ScanProvider); err != nil {

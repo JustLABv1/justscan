@@ -24,6 +24,7 @@ export default function OIDCCallbackPage() {
     }
 
     if (!token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError('No authentication token received. Please try again.');
       return;
     }

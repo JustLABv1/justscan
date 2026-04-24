@@ -1,4 +1,5 @@
 'use client';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import { search, SearchImageResult, SearchScanResult, SearchVulnResult } from '@/lib/api';
 import { Cancel01Icon, Search01Icon, Shield01Icon, ShieldKeyIcon, TaskDone02Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
@@ -18,6 +19,8 @@ type ResultItem =
   | { kind: 'vuln';  data: SearchVulnResult  };
 
 export function SearchModal({ onClose }: { onClose: () => void }) {
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [images, setImages] = useState<SearchImageResult[]>([]);
@@ -64,6 +67,11 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (query.trim().length < 2) return;
+    void doSearch(query);
+  }, [doSearch, query, scopeKey]);
 
   function handleChange(val: string) {
     setQuery(val);
@@ -166,14 +174,14 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
           {/* Results */}
           <div id="search-results" role="listbox" aria-label="Search results">
             {query.trim().length < 2 && (
-              <p className="px-4 py-6 text-center text-xs text-zinc-500">
+              <p className="px-4 py-6 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
                 Type at least 2 characters to search
               </p>
             )}
 
             {showEmpty && (
-              <p className="px-4 py-6 text-center text-xs text-zinc-500">
-                No results for <span className="font-semibold text-zinc-400">&ldquo;{query}&rdquo;</span>
+              <p className="px-4 py-6 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+                No results for <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>&ldquo;{query}&rdquo;</span>
               </p>
             )}
 
@@ -183,7 +191,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 {/* Images group */}
                 {images.length > 0 && (
                   <div>
-                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
                       Images
                     </p>
                     {images.map((img, i) => {
@@ -206,7 +214,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                           >
                             <Shield01Icon size={14} color="#a78bfa" />
                           </div>
-                          <span className="flex-1 font-mono text-sm text-zinc-200 truncate">{img.image_name}</span>
+                          <span className="flex-1 font-mono text-sm truncate" style={{ color: 'var(--text-primary)' }}>{img.image_name}</span>
                           <span
                             className="text-[10px] font-mono px-1.5 py-0.5 rounded-md shrink-0"
                             style={{ color: 'var(--text-muted)', background: 'var(--row-divider)', border: '1px solid var(--glass-border)' }}
@@ -221,7 +229,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
                 {scans.length > 0 && (
                   <div className={images.length > 0 ? 'mt-1' : ''}>
-                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
                       Scans
                     </p>
                     {scans.map((scan, i) => {
@@ -245,8 +253,8 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                             <TaskDone02Icon size={14} color="#60a5fa" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-mono text-sm text-zinc-200 truncate">{scan.image_name}:{scan.image_tag}</p>
-                            <p className="text-[11px] text-zinc-500 truncate">
+                            <p className="font-mono text-sm truncate" style={{ color: 'var(--text-primary)' }}>{scan.image_name}:{scan.image_tag}</p>
+                            <p className="text-[11px] truncate" style={{ color: 'var(--text-secondary)' }}>
                               {scan.status} · {scan.critical_count} critical · {scan.high_count} high
                             </p>
                           </div>
@@ -259,7 +267,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 {/* Vulns group */}
                 {vulns.length > 0 && (
                   <div className={images.length > 0 || scans.length > 0 ? 'mt-1' : ''}>
-                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
                       CVEs &amp; Packages
                     </p>
                     {vulns.map((v, i) => {
@@ -285,7 +293,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-mono text-sm truncate" style={{ color: sevColor }}>{v.vuln_id}</p>
-                            <p className="text-[11px] text-zinc-500 truncate">{v.pkg_name}</p>
+                            <p className="text-[11px] truncate" style={{ color: 'var(--text-secondary)' }}>{v.pkg_name}</p>
                           </div>
                           <span
                             className="text-[10px] font-mono px-1.5 py-0.5 rounded-md shrink-0"
@@ -304,8 +312,8 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
             {/* Footer hint */}
             {hasResults && (
               <div
-                className="flex items-center gap-3 px-4 py-2 text-[10px] text-zinc-600"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
+                className="flex items-center gap-3 px-4 py-2 text-[10px]"
+                style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)' }}
               >
                 <span><kbd className="font-mono">↑↓</kbd> navigate</span>
                 <span><kbd className="font-mono">↵</kbd> open</span>

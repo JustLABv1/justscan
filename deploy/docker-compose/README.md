@@ -150,7 +150,10 @@ All backend settings live here — edit this file directly. Key settings to revi
 |---|---|
 | `allow_origins` | CORS allowed origins — **must match your frontend URL** |
 | `scanner.concurrency` | Number of parallel Trivy scan workers (default: 2) |
-| `scanner.timeout` | Per-scan timeout in seconds (default: 600) |
+| `scanner.timeout` | Legacy fallback for the local scanner command timeout in seconds (default: 600) |
+| `scanner.command_timeout_seconds` | Local scanner command timeout in seconds (default: 7200) |
+| `scanner.progress_heartbeat_seconds` | How often active scans refresh their liveness timestamp (default: 30) |
+| `scanner.stale_timeout_seconds` | Fail a scan only after this many seconds without progress (default: 7200) |
 | `vuln_kb.nvd_api_key` | Optional NVD API key for faster CVE enrichment |
 | `log_level` | `debug`, `info`, `warn`, or `error` |
 

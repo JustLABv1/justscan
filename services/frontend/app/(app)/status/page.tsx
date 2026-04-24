@@ -2,22 +2,32 @@
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { OwnershipBadge } from '@/components/ui/badges';
 import { fieldLabelClassName, heroFieldClassName, heroSelectTriggerClassName, heroTextAreaClassName } from '@/components/ui/form-styles';
+import { useOrgDirectory } from '@/hooks/use-org-name-map';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import {
     createStatusPage,
     deleteStatusPage,
     getStatusPage,
+    getTokenType,
+    getUser,
+    getWorkScope,
     listStatusPages,
+    listStatusPageShares,
     listStatusPageTargetOptions,
+    ResourceShare,
+    shareStatusPage,
     StatusPage,
     StatusPagePayload,
     StatusPageTarget,
     StatusPageTargetOption,
+    unshareStatusPage,
     updateStatusPage,
 } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
-import { Button, Card, Input, Label, ListBox, Select, Switch, TextArea, useOverlayState } from '@heroui/react';
-import { Delete01Icon, EyeIcon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
+import { Button, Card, Input, Label, ListBox, Modal, Select, Switch, TextArea, useOverlayState } from '@heroui/react';
+import { Delete01Icon, EyeIcon, PencilEdit01Icon, PlusSignIcon, Shield01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -69,6 +79,9 @@ function describeScope(page: StatusPage) {
 }
 
 export default function StatusPagesPage() {
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
+  const { orgs, orgNamesById } = useOrgDirectory();
   const [pages, setPages] = useState<StatusPage[]>([]);
   const [targetOptions, setTargetOptions] = useState<StatusPageTargetOption[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
@@ -89,9 +102,19 @@ export default function StatusPagesPage() {
   const [updateTitle, setUpdateTitle] = useState('');
   const [updateBody, setUpdateBody] = useState('');
   const [updateLevel, setUpdateLevel] = useState<(typeof updateLevelOptions)[number]>('info');
+  const [shareTarget, setShareTarget] = useState<StatusPage | null>(null);
+  const [shares, setShares] = useState<ResourceShare[]>([]);
+  const [shareOrgId, setShareOrgId] = useState('');
+  const [shareError, setShareError] = useState('');
+  const [shareSaving, setShareSaving] = useState(false);
+  const [sharesLoading, setSharesLoading] = useState(false);
   const modal = useOverlayState();
+  const shareModal = useOverlayState();
   const toast = useToast();
   const { confirm, dialog } = useConfirmDialog();
+  const isPlatformAdmin = getTokenType() === 'admin';
+  const currentUserId = getUser()?.id as string | undefined;
+  const manageableOrgIds = new Set(orgs.filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin').map((org) => org.id));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -107,7 +130,7 @@ export default function StatusPagesPage() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, scopeKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,7 +157,7 @@ export default function StatusPagesPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scopeKey]);
 
   useEffect(() => {
     if (!modal.isOpen) {
@@ -229,6 +252,70 @@ export default function StatusPagesPage() {
 
   const scopeIsValid = includeAllTags || selectedTargets.length > 0 || imagePatterns.length > 0;
 
+  function canManageStatusPage(page: StatusPage) {
+    if (isPlatformAdmin) return true;
+    if (page.owner_type === 'org' && page.owner_org_id) {
+      return manageableOrgIds.has(page.owner_org_id);
+    }
+    return !page.owner_user_id || page.owner_user_id === currentUserId;
+  }
+
+  async function loadShares(pageId: string) {
+    setSharesLoading(true);
+    setShareError('');
+    try {
+      setShares(await listStatusPageShares(pageId));
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to load access grants');
+    } finally {
+      setSharesLoading(false);
+    }
+  }
+
+  function openShareModal(page: StatusPage) {
+    setShareTarget(page);
+    setShareOrgId('');
+    setShareError('');
+    setShares([]);
+    shareModal.open();
+    void loadShares(page.id);
+  }
+
+  async function handleGrantShare() {
+    if (!shareTarget || !shareOrgId) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await shareStatusPage(shareTarget.id, shareOrgId);
+      toast.success('Status page access granted');
+      setShareOrgId('');
+      await loadShares(shareTarget.id);
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to grant access');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
+  async function handleRevokeShare(orgId: string) {
+    if (!shareTarget) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await unshareStatusPage(shareTarget.id, orgId);
+      toast.success('Status page access revoked');
+      await loadShares(shareTarget.id);
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to revoke access');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
+  const availableShareTargets = shareTarget
+    ? orgs.filter((org) => (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id && !shares.some((share) => share.org_id === org.id))
+    : [];
+
   function resetForm() {
     setEditing(null);
     setName('');
@@ -303,6 +390,10 @@ export default function StatusPagesPage() {
       slug: slug || undefined,
       description,
       visibility,
+      ...(editing ? {} : (() => {
+        const currentScope = getWorkScope();
+        return currentScope.kind === 'org' ? { org_id: currentScope.orgId } : {};
+      })()),
       include_all_tags: includeAllTags,
       image_patterns: imagePatterns,
       stale_after_hours: Number(staleAfterHours) || 72,
@@ -386,6 +477,9 @@ export default function StatusPagesPage() {
                     <div>
                       <p className="font-medium text-zinc-800 dark:text-zinc-100">{page.name}</p>
                       <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">{page.description || 'No description'}</p>
+                      <div className="mt-1.5">
+                        <OwnershipBadge ownerType={page.owner_type} ownerOrgId={page.owner_org_id} orgNamesById={orgNamesById} />
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -406,12 +500,19 @@ export default function StatusPagesPage() {
                       <Link href={`/status/${page.slug}`} target="_blank" className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1.5" title="Open page">
                         <EyeIcon size={15} />
                       </Link>
-                      <button onClick={() => openEdit(page)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit" type="button">
-                        <PencilEdit01Icon size={15} />
-                      </button>
-                      <button onClick={() => handleDelete(page.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1.5" title="Delete" type="button">
-                        <Delete01Icon size={15} />
-                      </button>
+                      {canManageStatusPage(page) && (
+                        <>
+                          <button onClick={() => openShareModal(page)} className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1.5" title="Manage access" type="button">
+                            <Shield01Icon size={15} />
+                          </button>
+                          <button onClick={() => openEdit(page)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit" type="button">
+                            <PencilEdit01Icon size={15} />
+                          </button>
+                          <button onClick={() => handleDelete(page.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1.5" title="Delete" type="button">
+                            <Delete01Icon size={15} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -814,6 +915,93 @@ export default function StatusPagesPage() {
           </div>
         </div>
       )}
+      <Modal state={shareModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Status Page Access</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5 space-y-4">
+                {shareError && (
+                  <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+                    {shareError}
+                  </div>
+                )}
+                {shareTarget ? (
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{shareTarget.name}</p>
+                    <p className="mt-1 text-xs text-zinc-500 font-mono">/status/{shareTarget.slug}</p>
+                    <div className="mt-2">
+                      <OwnershipBadge ownerType={shareTarget.owner_type} ownerOrgId={shareTarget.owner_org_id} orgNamesById={orgNamesById} />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Current access</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Organizations listed here can open and manage this status page.</p>
+                  </div>
+                  {sharesLoading ? (
+                    <div className="flex justify-center py-6">
+                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                    </div>
+                  ) : shares.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {shares.map((share) => (
+                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
+                            <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>
+                          </div>
+                          {share.is_owner ? (
+                            <span className="text-xs font-medium text-zinc-500">Locked</span>
+                          ) : (
+                            <button type="button" onClick={() => { void handleRevokeShare(share.org_id); }} disabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50">
+                              <Delete01Icon size={15} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Grant access</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Share this status page with another organization you manage.</p>
+                  </div>
+                  {availableShareTargets.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
+                  ) : (
+                    <div className="flex gap-2">
+                      <select
+                        className={`${heroFieldClassName} flex-1`}
+                        value={shareOrgId}
+                        onChange={(event) => setShareOrgId(event.target.value)}
+                      >
+                        <option value="">Select an organization</option>
+                        {availableShareTargets.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
+                      </select>
+                      <Button type="button" onPress={() => { void handleGrantShare(); }} isDisabled={!shareOrgId || shareSaving} className="btn-primary">
+                        Grant
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <Button className="btn-secondary" onPress={shareModal.close}>Close</Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
       {dialog}
     </div>
   );

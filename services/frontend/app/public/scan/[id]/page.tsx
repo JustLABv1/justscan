@@ -1,12 +1,14 @@
 'use client';
 import { Logo } from '@/components/logo';
+import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type { Scan, Vulnerability } from '@/lib/api';
 import { getPublicScan, getPublicVulnerabilityContextAnalysis, getToken, listPublicVulnerabilities, reScanPublic } from '@/lib/api';
 import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
-import { ListBox, Select, useOverlayState } from '@heroui/react';
+import { Button, ListBox, Select, useOverlayState } from '@heroui/react';
+import { ArrowLeft01Icon, CpuIcon, FileExportIcon, Refresh01Icon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -231,42 +233,6 @@ export default function PublicScanResultPage() {
         </Link>
 
         <div className="flex items-center gap-2">
-          {scan?.helm_scan_run_id && (
-            <Link
-              href={`/public/scan/helm/runs/${scan.helm_scan_run_id}`}
-              className="btn-secondary"
-            >
-              Helm run →
-            </Link>
-          )}
-          {(scan?.status === 'completed' || isBlockedByXrayPolicy) && (
-            <Link
-              href={`/reports/print?scans=${id}`}
-              target="_blank"
-              className="btn-secondary inline-flex items-center gap-1.5"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              Export
-            </Link>
-          )}
-          {(scan?.status === 'completed' || scan?.status === 'failed') && (
-            <button
-              onClick={handleRescan}
-              disabled={reScanning}
-              className="btn-primary inline-flex items-center gap-1.5"
-            >
-              {reScanning
-                ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
-                : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
-                  </svg>
-                )}
-              Re-scan
-            </button>
-          )}
           <ThemeToggle />
           {isLoggedIn ? (
             <Link href="/scans"
@@ -288,36 +254,56 @@ export default function PublicScanResultPage() {
           </div>
         )}
 
-        {/* Scan header */}
-        <div>
-          <Link href="/public/scan/image" className="inline-flex items-center gap-1.5 text-sm transition-colors mb-3"
-            style={{ color: 'var(--text-muted)' }}
-            onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            New scan
-          </Link>
-          {scan?.helm_scan_run_id && (
-            <Link
-              href={`/public/scan/helm/runs/${scan.helm_scan_run_id}`}
-              className="inline-flex items-center gap-1.5 text-sm transition-colors mb-3 ml-3"
-              style={{ color: 'var(--text-muted)' }}
-              onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-              Back to Helm run
-            </Link>
+        <ScanDetailHeader
+          navigation={(
+            <>
+              <Button className="btn-secondary" onPress={() => router.push('/public/scan/image')} variant="secondary">
+                <ArrowLeft01Icon size={15} />
+                New scan
+              </Button>
+              {scan?.helm_scan_run_id && (
+                <Button
+                  className="btn-secondary"
+                  onPress={() => router.push(`/public/scan/helm/runs/${scan.helm_scan_run_id}`)}
+                  variant="secondary"
+                >
+                  <ArrowLeft01Icon size={15} />
+                  Back to Helm run
+                </Button>
+              )}
+            </>
           )}
-          <h1 className="text-xl font-bold font-mono break-all" style={{ color: 'var(--text-primary)' }}>{imageName}</h1>
-          {scan?.image_digest && <p className="text-xs font-mono mt-1 break-all" style={{ color: 'var(--text-faint)' }}>{scan.image_digest}</p>}
-          {scan?.architecture && (
+          title={imageName}
+          subtitle={scan?.image_digest ? <span>{scan.image_digest}</span> : undefined}
+          meta={scan?.architecture ? (
             <p className="text-xs mt-1 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="2" y1="15" x2="4" y2="15"/><line x1="20" y1="15" x2="22" y2="15"/></svg>
+              <CpuIcon size={12} />
               {scan.architecture} · {scan.os_family} {scan.os_name}
             </p>
+          ) : undefined}
+          actions={(
+            <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Public scan actions">
+              {(scan?.status === 'completed' || isBlockedByXrayPolicy) && (
+                <Button
+                  className="btn-secondary"
+                  onPress={() => window.open(`/reports/print?scans=${id}`, '_blank', 'noopener,noreferrer')}
+                  variant="secondary"
+                >
+                  <FileExportIcon size={15} />
+                  Export
+                </Button>
+              )}
+              {(scan?.status === 'completed' || scan?.status === 'failed') && (
+                <Button className="btn-primary" isDisabled={reScanning} onPress={handleRescan} variant="primary">
+                  {reScanning
+                    ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+                    : <Refresh01Icon size={15} />}
+                  Re-scan
+                </Button>
+              )}
+            </div>
           )}
-        </div>
+        />
 
         {isScanning && (
           <ScanningAnimation
@@ -331,21 +317,23 @@ export default function PublicScanResultPage() {
         )}
 
         {showResultTabs && (
-          <div className="segmented-control w-fit">
-            {([
-              { id: 'overview', label: showRecoveredOverview ? 'Overview' : 'Status' },
-              { id: 'timeline', label: scan?.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
-            ] as { id: ResultTab; label: string }[]).map(({ id, label }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className="segmented-control-item"
-                data-active={activeTab === id ? 'true' : 'false'}
-                type="button"
-              >
-                {label}
-              </button>
-            ))}
+          <div className="w-full overflow-x-auto pb-1">
+            <div className="segmented-control min-w-max">
+              {([
+                { id: 'overview', label: showRecoveredOverview ? 'Overview' : 'Status' },
+                { id: 'timeline', label: scan?.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
+              ] as { id: ResultTab; label: string }[]).map(({ id, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className="segmented-control-item"
+                  data-active={activeTab === id ? 'true' : 'false'}
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -428,12 +416,12 @@ export default function PublicScanResultPage() {
 
             {/* Vulnerabilities */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="space-y-3">
                 <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
                   Vulnerabilities
                   {vulnTotal > 0 && <span className="text-sm font-normal ml-2" style={{ color: 'var(--text-muted)' }}>{vulnTotal} found</span>}
                 </h2>
-                <div className="flex flex-wrap gap-2 items-center">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                   <Select selectedKey={severityFilter || '__all__'} onSelectionChange={k => { setSeverityFilter(String(k === '__all__' ? '' : k)); setPage(1); }}>
                     <Select.Trigger className={selectTriggerCls}>
                       <Select.Value />
@@ -449,41 +437,46 @@ export default function PublicScanResultPage() {
                       </ListBox>
                     </Select.Popover>
                   </Select>
-                  <input
-                    type="text"
-                    value={pkgInput}
-                    onChange={e => setPkgInput(e.target.value)}
-                    placeholder="Package…"
-                    className={inputCls}
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    max={10}
-                    step={0.1}
-                    value={minCvssInput}
-                    onChange={e => {
-                      setMinCvssInput(e.target.value);
-                      const v = parseFloat(e.target.value);
-                      setMinCvss(isNaN(v) ? 0 : v);
-                      setPage(1);
-                    }}
-                    placeholder="Min CVSS"
-                    className={inputCls}
-                    style={{ width: 100 }}
-                  />
-                  <button
-                    onClick={() => { setHasFix(!hasFix); setPage(1); }}
-                    className={hasFix ? 'btn-primary' : 'btn-secondary'}
-                  >
-                    Has Fix
-                  </button>
+                  <div className="flex w-full flex-col gap-2 md:flex-row md:items-end xl:w-auto xl:justify-end">
+                    <input
+                      type="text"
+                      value={pkgInput}
+                      onChange={e => setPkgInput(e.target.value)}
+                      placeholder="Package…"
+                      className={`${inputCls} min-w-[220px] flex-1 md:min-w-[280px] xl:w-[320px] xl:flex-none`}
+                    />
+                    <div className="flex shrink-0 flex-col gap-1.5">
+                      <label className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>Min CVSS</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        value={minCvssInput}
+                        onChange={e => {
+                          setMinCvssInput(e.target.value);
+                          const v = parseFloat(e.target.value);
+                          setMinCvss(isNaN(v) ? 0 : v);
+                          setPage(1);
+                        }}
+                        placeholder="0"
+                        className={`${inputCls} w-full min-w-[5.5rem] md:w-24`}
+                      />
+                    </div>
+                    <button
+                      onClick={() => { setHasFix(!hasFix); setPage(1); }}
+                      className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full shrink-0 md:w-auto`}
+                    >
+                      Has Fix
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {/* Table */}
               <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[920px] text-sm">
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
                       {([
@@ -551,6 +544,7 @@ export default function PublicScanResultPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
 
               {totalPages > 1 && (

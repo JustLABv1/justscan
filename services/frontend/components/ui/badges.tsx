@@ -1,5 +1,8 @@
 'use client';
 
+import { useWorkScope } from '@/hooks/use-work-scope';
+import type { OwnerType } from '@/lib/api';
+
 // ── StatusBadge ────────────────────────────────────────────────────────
 const STATUS_ALIASES: Record<string, string> = {
   warming_artifactory_cache: 'warming_cache',
@@ -111,6 +114,73 @@ export function SourceBadge({ source }: { source?: string }) {
       style={style}
       title={source || (isOSV ? 'OSV supplemental finding' : isXray ? 'JFrog Xray finding' : 'Scanner finding')}
     >
+      {label}
+    </span>
+  );
+}
+
+export function SuppressionSourceBadge({ source }: { source?: string }) {
+  const normalized = (source ?? 'local').trim().toLowerCase();
+  const label = normalized === 'xray' ? 'Xray' : normalized === 'mixed' ? 'Mixed' : 'Local';
+  const style = normalized === 'xray'
+    ? { background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.22)' }
+    : normalized === 'mixed'
+      ? { background: 'rgba(236,72,153,0.12)', color: '#f472b6', border: '1px solid rgba(236,72,153,0.22)' }
+      : { background: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.22)' };
+
+  return (
+    <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0" style={style} title={`Suppression source: ${label}`}>
+      {label}
+    </span>
+  );
+}
+
+const OWNERSHIP_CONFIG: Record<'user' | 'org' | 'system', { color: string; bg: string; border: string }> = {
+  user: { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.22)' },
+  org: { color: '#a78bfa', bg: 'rgba(124,58,237,0.12)', border: 'rgba(124,58,237,0.22)' },
+  system: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.22)' },
+};
+
+export function OwnershipBadge({
+  ownerType,
+  ownerOrgId,
+  orgNamesById,
+  className = '',
+}: {
+  ownerType?: OwnerType;
+  ownerOrgId?: string | null;
+  orgNamesById?: Record<string, string>;
+  className?: string;
+}) {
+  const workScope = useWorkScope();
+  const resolvedType = ownerType === 'org' || ownerType === 'system' ? ownerType : 'user';
+  const cfg = OWNERSHIP_CONFIG[resolvedType];
+  const orgName = ownerOrgId ? orgNamesById?.[ownerOrgId] : undefined;
+  const isSharedIntoCurrentOrg = workScope.kind === 'org' && resolvedType === 'user';
+  const label = isSharedIntoCurrentOrg
+    ? 'Shared'
+    : resolvedType === 'org'
+      ? orgName ? `Org: ${orgName}` : 'Org workspace'
+      : resolvedType === 'system'
+        ? 'System'
+        : 'Personal';
+  const title = isSharedIntoCurrentOrg
+    ? workScope.orgName
+      ? `Shared item. You are viewing it in ${workScope.orgName}, but ownership stays with the original workspace.`
+      : 'Shared item. You are viewing it in the current organization workspace, but ownership stays with the original workspace.'
+    : resolvedType === 'org'
+      ? orgName ? `Organization-owned item. ${orgName} controls access based on member role.` : 'Organization-owned item. Access is controlled by the owning organization workspace.'
+      : resolvedType === 'system'
+        ? 'System-owned item. It is provided globally by JustScan.'
+        : 'Personal item. It belongs to your personal workspace.';
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${className}`.trim()}
+      style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}
+      title={title}
+    >
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" aria-hidden />
       {label}
     </span>
   );

@@ -1,12 +1,15 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
+import { useOrgDirectory } from '@/hooks/use-org-name-map';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-    createWatchlistItem, deleteWatchlistItem, getDefaultScannerCapabilities, listRegistriesWithCapabilities, listWatchlist,
-    RegistryWithHealth, ScannerCapabilities, triggerWatchlistScan, updateWatchlistItem, WatchlistItem,
+    createWatchlistItem, deleteWatchlistItem, getDefaultScannerCapabilities, getTokenType, getWorkScope, listRegistriesWithCapabilities, listWatchlist, listWatchlistShares,
+    RegistryWithHealth, ResourceShare, ScannerCapabilities, shareWatchlistItem, triggerWatchlistScan, unshareWatchlistItem, updateWatchlistItem, WatchlistItem,
 } from '@/lib/api';
 import { cronToHuman, type HourCyclePreference } from '@/lib/cron';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -26,6 +29,9 @@ function getBrowserTimezone() {
 }
 
 export default function WatchlistPage() {
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
+  const { orgs, orgNamesById } = useOrgDirectory();
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
   const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
@@ -42,9 +48,18 @@ export default function WatchlistPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [triggering, setTriggering] = useState('');
+  const [shareTarget, setShareTarget] = useState<WatchlistItem | null>(null);
+  const [shares, setShares] = useState<ResourceShare[]>([]);
+  const [sharesLoading, setSharesLoading] = useState(false);
+  const [shareError, setShareError] = useState('');
+  const [shareOrgId, setShareOrgId] = useState('');
+  const [shareSaving, setShareSaving] = useState(false);
   const modal = useOverlayState();
+  const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
+  const isPlatformAdmin = getTokenType() === 'admin';
+  const manageableOrgIds = new Set(orgs.filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin').map((org) => org.id));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,17 +74,20 @@ export default function WatchlistPage() {
       .then((response) => {
         setRegistries(response.data);
         setCapabilities(response.capabilities);
+        const defaultReg = response.data.find((registry) => registry.is_default);
+        if (defaultReg) setRegistryId((prev) => prev || defaultReg.id);
       })
       .catch(() => {});
-  }, [load]);
+  }, [load, scopeKey]);
 
   const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
   const registryOptions = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy || registry.id === registryId);
   const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
+  const defaultRegistryId = registries.find((registry) => registry.is_default)?.id ?? '';
 
   function openCreate() {
     setEditing(null); setImageName(''); setImageTag('latest'); setSchedule('0 2 * * *');
-    setTimezone(getBrowserTimezone()); setEnabled(true); setRegistryId(''); setFormError(''); modal.open();
+    setTimezone(getBrowserTimezone()); setEnabled(true); setRegistryId(defaultRegistryId); setFormError(''); modal.open();
   }
   function openEdit(item: WatchlistItem) {
     setEditing(item); setImageName(item.image_name); setImageTag(item.image_tag);
@@ -83,7 +101,16 @@ export default function WatchlistPage() {
         setFormError('No Artifactory Xray registry is configured yet.');
         return;
       }
-      const data = { image_name: imageName, image_tag: imageTag, schedule, timezone, enabled, ...(registryId ? { registry_id: registryId } : {}) };
+      const currentScope = getWorkScope();
+      const data = {
+        image_name: imageName,
+        image_tag: imageTag,
+        schedule,
+        timezone,
+        enabled,
+        registry_id: registryId || null,
+        ...(currentScope.kind === 'org' ? { org_id: currentScope.orgId } : {}),
+      };
       if (editing) { await updateWatchlistItem(editing.id, data); toast.success('Watchlist item updated'); }
       else { await createWatchlistItem(data); toast.success('Added to watchlist'); }
       modal.close(); await load();
@@ -107,6 +134,70 @@ export default function WatchlistPage() {
     try { await triggerWatchlistScan(id); toast.success('Scan triggered'); } catch { /* ignore */ }
     finally { setTriggering(''); load(); }
   }
+
+  function canManageAccess(item: WatchlistItem) {
+    if (isPlatformAdmin) return true;
+    if (item.owner_type === 'org' && item.owner_org_id) {
+      return manageableOrgIds.has(item.owner_org_id);
+    }
+    return true;
+  }
+
+  async function loadShares(itemId: string) {
+    setSharesLoading(true);
+    setShareError('');
+    try {
+      setShares(await listWatchlistShares(itemId));
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to load access grants');
+    } finally {
+      setSharesLoading(false);
+    }
+  }
+
+  function openShareModal(item: WatchlistItem) {
+    setShareTarget(item);
+    setShares([]);
+    setShareOrgId('');
+    setShareError('');
+    shareModal.open();
+    void loadShares(item.id);
+  }
+
+  async function handleGrantShare() {
+    if (!shareTarget || !shareOrgId) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await shareWatchlistItem(shareTarget.id, shareOrgId);
+      toast.success('Watchlist access granted');
+      setShareOrgId('');
+      await loadShares(shareTarget.id);
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to grant access');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
+  async function handleRevokeShare(orgId: string) {
+    if (!shareTarget) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await unshareWatchlistItem(shareTarget.id, orgId);
+      toast.success('Watchlist access revoked');
+      await loadShares(shareTarget.id);
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to revoke access');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
+  const availableShareTargets = shareTarget
+    ? orgs.filter((org) => (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id && !shares.some((share) => share.org_id === org.id))
+    : [];
 
   const schedulePreview = cronToHuman(schedule, { timezone, hourCycle });
 
@@ -197,7 +288,12 @@ export default function WatchlistPage() {
                   <tr key={item.id} style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                    <td className="px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-200">{item.image_name}:{item.image_tag}</td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-1">
+                        <p className="font-mono text-xs text-zinc-700 dark:text-zinc-200">{item.image_name}:{item.image_tag}</p>
+                        <OwnershipBadge ownerType={item.owner_type} ownerOrgId={item.owner_org_id} orgNamesById={orgNamesById} />
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 text-xs" style={{ color: 'rgba(167,139,250,0.8)' }} title={item.schedule}>
                         <Clock01Icon size={12} color="rgba(113,113,122,0.7)" className="shrink-0" />
@@ -234,6 +330,11 @@ export default function WatchlistPage() {
                         <button onClick={() => openEdit(item)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit">
                           <PencilEdit01Icon size={15} />
                         </button>
+                        {canManageAccess(item) && (
+                          <button onClick={() => openShareModal(item)} className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1.5" title="Manage access">
+                            <EyeIcon size={15} />
+                          </button>
+                        )}
                         <button onClick={() => handleDelete(item.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1.5" title="Delete">
                           <Delete01Icon size={15} />
                         </button>
@@ -340,6 +441,90 @@ export default function WatchlistPage() {
                   {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Add'}
                 </button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+      <Modal state={shareModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Watchlist Access</Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="px-6 py-5 space-y-4">
+                {shareError ? (
+                  <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+                    {shareError}
+                  </div>
+                ) : null}
+                {shareTarget ? (
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <p className="font-mono text-sm font-medium text-zinc-800 dark:text-zinc-100">{shareTarget.image_name}:{shareTarget.image_tag}</p>
+                    <div className="mt-2">
+                      <OwnershipBadge ownerType={shareTarget.owner_type} ownerOrgId={shareTarget.owner_org_id} orgNamesById={orgNamesById} />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Current access</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Organizations listed here can trigger or manage this watchlist item.</p>
+                  </div>
+                  {sharesLoading ? (
+                    <div className="flex justify-center py-6">
+                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                    </div>
+                  ) : shares.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {shares.map((share) => (
+                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
+                            <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>
+                          </div>
+                          {share.is_owner ? (
+                            <span className="text-xs font-medium text-zinc-500">Locked</span>
+                          ) : (
+                            <button type="button" onClick={() => { void handleRevokeShare(share.org_id); }} disabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50">
+                              <Delete01Icon size={15} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Grant access</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Share this watchlist item with another organization you manage.</p>
+                  </div>
+                  {availableShareTargets.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
+                  ) : (
+                    <div className="flex gap-2">
+                      <select className={inputCls + ' flex-1'} value={shareOrgId} onChange={(event) => setShareOrgId(event.target.value)}>
+                        <option value="">Select an organization</option>
+                        {availableShareTargets.map((org) => (
+                          <option key={org.id} value={org.id}>{org.name}</option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => { void handleGrantShare(); }} disabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60">
+                        Grant
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </Modal.Body>
+              <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={shareModal.close} className="btn-secondary" type="button">Close</button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

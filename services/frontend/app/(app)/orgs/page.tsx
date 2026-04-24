@@ -1,30 +1,41 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
-import { createOrg, deleteOrg, listOrgs, Org } from '@/lib/api';
+import { acceptOrgInvite, createOrg, declineOrgInvite, deleteOrg, getUser, listMyOrgInvites, listOrgs, Org, OrgInvite } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
-import { ArrowRight01Icon, Building04Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
+import { ArrowRight01Icon, Building04Icon, Delete01Icon, PlusSignIcon, UserAdd01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 interface OrgWithCount extends Org { policy_count: number }
 
 export default function OrgsPage() {
+  const currentUser = getUser() as { role?: string } | null;
+  const isSystemAdmin = currentUser?.role === 'admin';
   const [orgs, setOrgs] = useState<OrgWithCount[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<OrgInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [inviteActionId, setInviteActionId] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const toast = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setOrgs((await listOrgs()) as OrgWithCount[]); }
+    try {
+      const [nextOrgs, nextInvites] = await Promise.all([listOrgs(), listMyOrgInvites()]);
+      setOrgs(nextOrgs as OrgWithCount[]);
+      setPendingInvites(nextInvites);
+    }
     catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load organizations'); }
     finally { setLoading(false); }
   }, []);
@@ -51,6 +62,34 @@ export default function OrgsPage() {
     await deleteOrg(id).catch(() => {}); load();
   }
 
+  async function handleAcceptInvite(invite: OrgInvite) {
+    setInviteActionId(invite.id);
+    setInviteError('');
+    try {
+      const result = await acceptOrgInvite(invite.id);
+      toast.success(`Joined ${result.org_name || invite.org_name || 'organization'} as ${result.role}`);
+      await load();
+    } catch (err: unknown) {
+      setInviteError(err instanceof Error ? err.message : 'Failed to accept organization invite');
+    } finally {
+      setInviteActionId(null);
+    }
+  }
+
+  async function handleDeclineInvite(invite: OrgInvite) {
+    setInviteActionId(invite.id);
+    setInviteError('');
+    try {
+      await declineOrgInvite(invite.id);
+      toast.success(`Declined invite to ${invite.org_name || 'organization'}`);
+      await load();
+    } catch (err: unknown) {
+      setInviteError(err instanceof Error ? err.message : 'Failed to decline organization invite');
+    } finally {
+      setInviteActionId(null);
+    }
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
       <div className="flex items-center justify-between">
@@ -67,6 +106,72 @@ export default function OrgsPage() {
       </div>
 
       {error ? <FormAlert description={error} title="Organization loading failed" /> : null}
+      {inviteError ? <FormAlert description={inviteError} title="Invite action failed" /> : null}
+
+      {pendingInvites.length > 0 && (
+        <section className="glass-panel rounded-2xl p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.22)' }}>
+              <UserAdd01Icon size={20} color="#f59e0b" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Pending Invites</h2>
+              <p className="text-sm text-zinc-500">Review organization invitations tied to your account email.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            {pendingInvites.map((invite) => {
+              const busy = inviteActionId === invite.id;
+              return (
+                <div key={invite.id} className="rounded-2xl p-4 space-y-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-white truncate">{invite.org_name || 'Organization'}</p>
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+                          style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.22)', color: '#a78bfa' }}>
+                          {invite.role}
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-500 mt-1">Invited by {invite.invited_by_username || invite.invited_by_email || 'a teammate'}</p>
+                    </div>
+                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium text-zinc-500"
+                      style={{ background: 'var(--row-divider)' }}>
+                      Expires {new Date(invite.expires_at).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  {invite.org_description && (
+                    <p className="text-sm text-zinc-600 dark:text-zinc-300">{invite.org_description}</p>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="btn-primary inline-flex items-center gap-2"
+                      disabled={busy}
+                      onClick={() => { void handleAcceptInvite(invite); }}
+                      type="button"
+                    >
+                      {busy && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                      Accept
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      disabled={busy}
+                      onClick={() => { void handleDeclineInvite(invite); }}
+                      type="button"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {loading ? (
         <div className="flex justify-center items-center h-48">
@@ -115,12 +220,14 @@ export default function OrgsPage() {
                   className="flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors">
                   View details <ArrowRight01Icon size={13} />
                 </Link>
-                <RowActionsMenu
-                  label={`Open actions menu for ${org.name}`}
-                  items={[
-                    { id: 'delete', label: 'Delete organization', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(org.id, org.name); } },
-                  ]}
-                />
+                {(isSystemAdmin || org.current_user_role === 'owner') ? (
+                  <RowActionsMenu
+                    label={`Open actions menu for ${org.name}`}
+                    items={[
+                      { id: 'delete', label: 'Delete organization', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(org.id, org.name); } },
+                    ]}
+                  />
+                ) : null}
               </div>
             </div>
           ))}

@@ -1,14 +1,17 @@
 FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
 
-FROM node:24.7-alpine AS base
+FROM node:25-alpine AS base
 
 # Stage 1: Build the frontend
-FROM node:24.7-alpine AS frontend-builder
-RUN apk add --no-cache libc6-compat
+FROM node:25-alpine AS frontend-builder
 WORKDIR /app/frontend
+
+RUN npm install -g pnpm
+RUN apk add --no-cache libc6-compat
+
 COPY services/frontend/package.json services/frontend/pnpm-lock.yaml ./
-RUN corepack enable pnpm && pnpm --version
 RUN pnpm install
+
 COPY services/frontend/ ./
 
 ARG NEXT_PUBLIC_API_URL=""
@@ -18,7 +21,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm run build
 
 # Stage 2: Build the backend
-FROM golang:1.25-alpine AS backend-builder
+FROM golang:1.26-alpine AS backend-builder
 WORKDIR /app/backend
 COPY services/backend/go.mod services/backend/go.sum ./
 RUN go mod download
@@ -33,7 +36,8 @@ WORKDIR /app
 RUN apk update && apk add --no-cache \
     ca-certificates \
     tini \
-    postgresql-client
+    postgresql-client \
+    tzdata
 
 COPY --from=trivy-bin /usr/local/bin/trivy /usr/local/bin/trivy
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh

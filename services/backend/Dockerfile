@@ -2,7 +2,7 @@
 FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
 FROM anchore/grype:latest AS grype-bin
 
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 
 WORKDIR /app/backend
@@ -15,14 +15,14 @@ COPY . .
 
 RUN go build -o justscan-backend
 
-FROM alpine:3.22 AS runner
+FROM alpine:3.23 AS runner
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 WORKDIR /app
 
 ARG INCLUDE_TRIVY=true
 ARG INCLUDE_GRYPE=true
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates tzdata
 
 RUN --mount=type=bind,from=trivy-bin,source=/usr/local/bin/trivy,target=/tmp/trivy,ro \
     --mount=type=bind,from=grype-bin,source=/grype,target=/tmp/grype,ro \

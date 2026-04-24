@@ -24,7 +24,9 @@ type StatusPage struct {
 	IncludeAllTags  bool               `bun:"include_all_tags,type:boolean,notnull,default:false" json:"include_all_tags"`
 	ImagePatterns   StringList         `bun:"image_patterns,type:jsonb,notnull,default:'[]'" json:"image_patterns"`
 	StaleAfterHours int                `bun:"stale_after_hours,type:int,notnull,default:72" json:"stale_after_hours"`
-	OwnerUserID     uuid.UUID          `bun:"owner_user_id,type:uuid,notnull" json:"owner_user_id"`
+	OwnerType       string             `bun:"owner_type,type:text,notnull,default:'user'" json:"owner_type"`
+	OwnerUserID     *uuid.UUID         `bun:"owner_user_id,type:uuid" json:"owner_user_id,omitempty"`
+	OwnerOrgID      *uuid.UUID         `bun:"owner_org_id,type:uuid" json:"owner_org_id,omitempty"`
 	CreatedAt       time.Time          `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	UpdatedAt       time.Time          `bun:"updated_at,type:timestamptz" json:"updated_at"`
 	Targets         []StatusPageTarget `bun:"rel:has-many,join:id=page_id" json:"targets,omitempty"`

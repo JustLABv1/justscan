@@ -12,6 +12,16 @@ import (
 func Auth(router *gin.RouterGroup, db *bun.DB) {
 	auth := router.Group("/auth")
 	{
+		auth.Use(func(c *gin.Context) {
+			c.Set("db", db)
+			c.Next()
+		})
+
+		auth.GET("/setup/status", auths.SetupStatus(db))
+		auth.GET("/setup/session", auths.SetupSessionStatus(db))
+		auth.POST("/setup/session", auths.StartSetupSession(db))
+		auth.POST("/setup/initial-admin", auths.CreateInitialAdmin(db))
+
 		auth.POST("/login", func(c *gin.Context) {
 			tokens.GenerateTokenUser(db, c)
 		})

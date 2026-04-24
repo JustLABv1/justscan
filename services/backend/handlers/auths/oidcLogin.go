@@ -11,6 +11,7 @@ import (
 	"justscan-backend/functions/httperror"
 
 	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 )
 
 func resolveLegacyOIDCProviderName(ctx context.Context, hintedProvider string) string {
@@ -38,6 +39,15 @@ func resolveLegacyOIDCProviderName(ctx context.Context, hintedProvider string) s
 
 // OIDCLogin initiates the OIDC authorization code flow.
 func OIDCLogin(c *gin.Context) {
+	dbValue, exists := c.Get("db")
+	if exists {
+		if db, ok := dbValue.(*bun.DB); ok {
+			if !requireCompletedSetup(c, db) {
+				return
+			}
+		}
+	}
+
 	if !config.Config.OIDC.Enabled {
 		httperror.StatusNotFound(c, "OIDC is not enabled", errors.New("oidc not enabled"))
 		return

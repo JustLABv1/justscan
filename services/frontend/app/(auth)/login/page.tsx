@@ -2,7 +2,7 @@
 import { AuthCard } from '@/components/auth-card';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { getOIDCAvailability, listOIDCProviders, login, OIDCProvider, setToken, setUser } from '@/lib/api';
+import { getOIDCAvailability, getSetupStatus, listOIDCProviders, login, OIDCProvider, setToken, setUser } from '@/lib/api';
 import { Button, Form } from '@heroui/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -19,12 +19,19 @@ export default function LoginPage() {
   const [localAuthEnabled, setLocalAuthEnabled] = useState(true);
   const [oidcProviders, setOidcProviders] = useState<OIDCProvider[]>([]);
   const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
+  const [setupRedirecting, setSetupRedirecting] = useState(false);
 
   useEffect(() => {
     Promise.allSettled([
+      getSetupStatus(),
       getOIDCAvailability(),
       listOIDCProviders(),
-    ]).then(([availability, providers]) => {
+    ]).then(([setupStatus, availability, providers]) => {
+      if (setupStatus.status === 'fulfilled' && setupStatus.value.setup_required) {
+        setSetupRedirecting(true);
+        router.replace('/setup');
+        return;
+      }
       if (availability.status === 'fulfilled') {
         setLocalAuthEnabled(availability.value.local_auth_enabled);
       }
@@ -32,7 +39,7 @@ export default function LoginPage() {
         setOidcProviders(providers.value);
       }
     }).finally(() => setAvailabilityLoaded(true));
-  }, []);
+  }, [router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,7 +53,7 @@ export default function LoginPage() {
     } finally { setLoading(false); }
   }
 
-  if (!availabilityLoaded) {
+  if (!availabilityLoaded || setupRedirecting) {
     return (
       <div className="flex items-center justify-center h-32">
         <div className="w-6 h-6 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />

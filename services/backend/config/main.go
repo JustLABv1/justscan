@@ -29,11 +29,16 @@ type RestfulConf struct {
 	Database     DatabaseConf   `mapstructure:"database" validate:"required"`
 	JWT          JWTConf        `mapstructure:"jwt" validate:"required"`
 	AllowOrigins []string       `mapstructure:"allow_origins"`
+	Setup        SetupConf      `mapstructure:"setup"`
 	Scanner      ScannerConf    `mapstructure:"scanner"`
 	Encryption   EncryptionConf `mapstructure:"encryption"`
 	VulnKB       VulnKBConf     `mapstructure:"vuln_kb"`
 	OIDC         OIDCConf       `mapstructure:"oidc"`
 	LocalAuth    LocalAuthConf  `mapstructure:"local_auth"`
+}
+
+type SetupConf struct {
+	Token string `mapstructure:"token"`
 }
 
 type OIDCConf struct {
@@ -120,6 +125,7 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"database.name":                        "BACKEND_DATABASE_NAME",
 		"database.user":                        "BACKEND_DATABASE_USER",
 		"database.password":                    "BACKEND_DATABASE_PASSWORD",
+		"setup.token":                          "BACKEND_SETUP_TOKEN",
 		"scanner.enable_trivy":                 "BACKEND_SCANNER_ENABLE_TRIVY",
 		"scanner.trivy_path":                   "BACKEND_SCANNER_TRIVY_PATH",
 		"scanner.grype_path":                   "BACKEND_SCANNER_GRYPE_PATH",

@@ -49,6 +49,22 @@ export async function publicReq<T>(method: string, path: string, body?: unknown)
   return response.json();
 }
 
+export async function credentialedPublicReq<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`${API}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error ?? response.statusText);
+  }
+
+  return response.json();
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);

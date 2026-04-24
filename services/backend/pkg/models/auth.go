@@ -18,3 +18,8 @@ type JWTBridgeClaim struct {
 	Type     string    `json:"type"`
 	jwt.RegisteredClaims
 }
+
+type SetupSessionClaim struct {
+	Type string `json:"type"`
+	jwt.RegisteredClaims
+}

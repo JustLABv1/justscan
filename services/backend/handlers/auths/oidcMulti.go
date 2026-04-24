@@ -7,6 +7,7 @@ import (
 	"justscan-backend/functions/httperror"
 
 	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 )
 
 // OIDCProviders returns the list of enabled OIDC providers for the login page.
@@ -31,6 +32,15 @@ func OIDCProviders(c *gin.Context) {
 
 // OIDCLoginForProvider initiates the OIDC authorization code flow for the named provider.
 func OIDCLoginForProvider(c *gin.Context) {
+	dbValue, exists := c.Get("db")
+	if exists {
+		if db, ok := dbValue.(*bun.DB); ok {
+			if !requireCompletedSetup(c, db) {
+				return
+			}
+		}
+	}
+
 	providerName := c.Param("provider")
 
 	entry, err := auth.GetProviderEntry(c.Request.Context(), providerName)

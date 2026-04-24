@@ -51,7 +51,7 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 	db.SetConnMaxIdleTime(2 * time.Minute)
 
 	// Create a new migrator
-	migrator := migrate.NewMigrator(db, migrations.Migrations)
+	migrator := migrate.NewMigrator(db, migrations.Migrations, migrate.WithMarkAppliedOnSuccess(true))
 
 	// Run migrations
 	ctx := context.Background()
@@ -66,7 +66,7 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 		log.Fatal(err)
 	}
 
-	group, err := migrator.Migrate(ctx)
+	group, err := migrateInNumericOrder(ctx, migrator)
 	if unlockErr := migrator.Unlock(ctx); unlockErr != nil {
 		log.Errorf("Failed to release migration lock: %v", unlockErr)
 	}

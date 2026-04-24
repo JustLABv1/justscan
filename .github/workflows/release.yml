@@ -199,7 +199,7 @@ jobs:
       - name: Push chart to GHCR
         run: helm push "dist/${{ env.HELM_CHART }}-${{ steps.vars.outputs.chart_version }}.tgz" "oci://${{ env.HELM_REGISTRY }}"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: helm-chart
           path: dist/${{ env.HELM_CHART }}-${{ steps.vars.outputs.chart_version }}.tgz
@@ -215,7 +215,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: helm-chart
           path: dist

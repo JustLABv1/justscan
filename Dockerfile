@@ -1,9 +1,9 @@
 FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
 
-FROM node:25-alpine AS base
+FROM node:25.9.0-alpine AS base
 
 # Stage 1: Build the frontend
-FROM node:25-alpine AS frontend-builder
+FROM node:25.9.0-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 RUN npm install -g pnpm

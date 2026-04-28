@@ -1,6 +1,6 @@
 # JustScan — Docker Compose Deployment
 
-Deploys JustScan as three containers: **PostgreSQL**, **backend** (Go + Trivy), and **frontend** (Next.js).
+Deploys JustScan as three containers: **PostgreSQL**, **backend** (Go; Trivy-enabled by default), and **frontend** (Next.js).
 
 ## Prerequisites
 
@@ -23,6 +23,7 @@ Edit `.env`:
 |---|---|
 | `POSTGRES_PASSWORD` | Database password — must also be set in `backend-config.yaml` |
 | `JUSTSCAN_VERSION` | Image tag to deploy, e.g. `v1.2.3` (default: `latest`) |
+| `JUSTSCAN_BACKEND_IMAGE_PREFIX` | Backend image prefix. Use `backend-minimal` for Artifactory Xray-only deployments (default: `backend`) |
 
 ### 2. Configure the backend
 
@@ -90,6 +91,25 @@ backend:
 
 Then set it in `.env` or your shell before starting the stack.
 
+### 2b. Optional: use the Artifactory Xray-only backend image
+
+When every registry is configured with the `artifactory_xray` scan provider, the backend does not need local Trivy or Grype binaries. Use the minimal backend image to avoid shipping those scanners:
+
+```env
+JUSTSCAN_BACKEND_IMAGE_PREFIX=backend-minimal
+JUSTSCAN_VERSION=v1.2.3
+```
+
+Also disable local scanner support in `backend-config.yaml`:
+
+```yaml
+scanner:
+  enable_trivy: false
+  enable_grype: false
+```
+
+Keep using the default `backend` image if any registry should still run local Trivy scans.
+
 ### 3. Build and start
 
 ```bash
@@ -138,6 +158,7 @@ docker compose up -d frontend
 |---|---|---|---|
 | `POSTGRES_PASSWORD` | Yes | — | PostgreSQL password (must match `backend-config.yaml`) |
 | `JUSTSCAN_VERSION` | No | `latest` | Image tag to pull, e.g. `v1.2.3` |
+| `JUSTSCAN_BACKEND_IMAGE_PREFIX` | No | `backend` | Backend image prefix. Set to `backend-minimal` for Artifactory Xray-only deployments |
 | `NEXT_PUBLIC_API_URL` | No* | `http://localhost:8080` | Backend URL seen by the browser — only used when building locally |
 | `BACKEND_PORT` | No | `8080` | Host port for the backend |
 | `FRONTEND_PORT` | No | `3000` | Host port for the frontend |
@@ -149,6 +170,8 @@ All backend settings live here — edit this file directly. Key settings to revi
 | Setting | Description |
 |---|---|
 | `allow_origins` | CORS allowed origins — **must match your frontend URL** |
+| `scanner.enable_trivy` | Enable local Trivy scans. Set to `false` when using the `backend-minimal` image |
+| `scanner.enable_grype` | Enable Grype augmentation for local Trivy scans. Must stay `false` with the `backend-minimal` image |
 | `scanner.concurrency` | Number of parallel Trivy scan workers (default: 2) |
 | `scanner.timeout` | Legacy fallback for the local scanner command timeout in seconds (default: 600) |
 | `scanner.command_timeout_seconds` | Local scanner command timeout in seconds (default: 7200) |

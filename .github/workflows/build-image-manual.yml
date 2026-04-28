@@ -42,6 +42,18 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
 
+      - name: Build & Push Backend Minimal
+        uses: docker/build-push-action@v7
+        with:
+          context: services/backend
+          file: services/backend/Dockerfile
+          target: runner-minimal
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:backend-minimal-${{ github.event.inputs.branch }}
+          cache-from: type=gha,scope=backend-minimal
+          cache-to: type=gha,scope=backend-minimal,mode=max
+
       - name: Build & Push Frontend
         uses: docker/build-push-action@v7
         with:

@@ -25,6 +25,8 @@ allow_origins:
   - "http://localhost:3000"
 
 scanner:
+  # Set enable_trivy and enable_grype to false when using the backend-minimal image
+  # for Artifactory Xray-only deployments.
   enable_trivy: true
   trivy_path: trivy
   grype_path: grype

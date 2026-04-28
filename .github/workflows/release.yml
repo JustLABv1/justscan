@@ -48,6 +48,15 @@ jobs:
             type=raw,value=backend-beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=backend-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
+      - uses: docker/metadata-action@v6
+        id: meta-minimal
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},prefix=backend-minimal-
+            type=raw,value=backend-minimal-beta,enable=${{ contains(github.ref_name, '-beta.') }}
+            type=raw,value=backend-minimal-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
+
       - uses: docker/build-push-action@v7
         with:
           context: services/backend
@@ -57,6 +66,17 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: services/backend
+          file: services/backend/Dockerfile
+          target: runner-minimal
+          push: true
+          tags: ${{ steps.meta-minimal.outputs.tags }}
+          labels: ${{ steps.meta-minimal.outputs.labels }}
+          cache-from: type=gha,scope=backend-minimal
+          cache-to: type=gha,scope=backend-minimal,mode=max
 
   build-frontend:
     name: Build & Push Frontend

@@ -8,13 +8,14 @@ import (
 	"regexp"
 	"strings"
 
-	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/chart"
-	"helm.sh/helm/v3/pkg/chart/loader"
-	"helm.sh/helm/v3/pkg/chartutil"
-	"helm.sh/helm/v3/pkg/cli"
-	"helm.sh/helm/v3/pkg/engine"
-	helmregistry "helm.sh/helm/v3/pkg/registry"
+	"helm.sh/helm/v4/pkg/action"
+	chart "helm.sh/helm/v4/pkg/chart/v2"
+	chartcommon "helm.sh/helm/v4/pkg/chart/common"
+	chartutil "helm.sh/helm/v4/pkg/chart/common/util"
+	"helm.sh/helm/v4/pkg/chart/v2/loader"
+	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/engine"
+	helmregistry "helm.sh/helm/v4/pkg/registry"
 
 	log "github.com/sirupsen/logrus"
 	"sigs.k8s.io/yaml"
@@ -90,7 +91,7 @@ func ExtractHelmImages(_ context.Context, chartURL, chartName, chartVersion stri
 	settings.RepositoryCache = filepath.Join(tmpDir, "cache")
 	settings.RepositoryConfig = filepath.Join(tmpDir, "repositories.yaml")
 
-	pull := action.NewPullWithOpts(action.WithConfig(cfg))
+	pull := action.NewPull(action.WithConfig(cfg))
 	pull.Settings = settings
 	pull.Untar = true
 	pull.DestDir = tmpDir
@@ -258,7 +259,7 @@ func stringValue(value interface{}) string {
 // which are common in charts that validate specific value configurations.
 func renderChart(chrt *chart.Chart) (map[string]string, error) {
 	// Build capability/values context that satisfies most charts
-	vals, err := chartutil.ToRenderValues(chrt, chrt.Values, chartutil.ReleaseOptions{
+	vals, err := chartutil.ToRenderValues(chrt, chrt.Values, chartcommon.ReleaseOptions{
 		Name:      "release",
 		Namespace: "default",
 	}, nil)

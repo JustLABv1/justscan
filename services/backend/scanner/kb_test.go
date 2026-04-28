@@ -41,7 +41,7 @@ func TestUpsertKBEntriesExecutesUpsertForKBRows(t *testing.T) {
 	}}
 
 	returnedAt := time.Date(2026, time.April, 13, 12, 0, 0, 0, time.UTC)
-	mock.ExpectQuery(`SELECT .* FROM "vuln_kb" WHERE \(vuln_id IN \('CVE-2026-1234'\)\)`).WillReturnRows(
+	mock.ExpectQuery(`SELECT .* FROM "vuln_kb"(?: AS "vuln_kb_entry")? WHERE \(vuln_id IN \('CVE-2026-1234'\)\)`).WillReturnRows(
 		sqlmock.NewRows([]string{"vuln_id", "description", "severity", "cvss_vector", "cvss_score", "published_date", "modified_date", "references", "exploit_available", "fetched_at"}),
 	)
 	mock.ExpectQuery(`INSERT INTO "vuln_kb".*description = EXCLUDED\.description.*severity = EXCLUDED\.severity.*cvss_score = EXCLUDED\.cvss_score.*published_date = EXCLUDED\.published_date.*exploit_available = EXCLUDED\.exploit_available.*fetched_at = EXCLUDED\.fetched_at`).WillReturnRows(
@@ -74,7 +74,7 @@ func TestPrepareKBEntriesForUpsertMergesExistingRows(t *testing.T) {
 		References:  []models.KBRef{{URL: "https://example.com/new", Source: "Xray"}},
 	}}
 
-	mock.ExpectQuery(`SELECT .* FROM "vuln_kb" WHERE \(vuln_id IN \('CVE-2026-9999'\)\)`).WillReturnRows(
+	mock.ExpectQuery(`SELECT .* FROM "vuln_kb"(?: AS "vuln_kb_entry")? WHERE \(vuln_id IN \('CVE-2026-9999'\)\)`).WillReturnRows(
 		sqlmock.NewRows([]string{"vuln_id", "description", "severity", "cvss_vector", "cvss_score", "published_date", "modified_date", "references", "exploit_available", "fetched_at"}).
 			AddRow("CVE-2026-9999", "Existing KB description", models.SeverityMedium, "CVSS:3.1/old", 6.1, publishedAt, modifiedAt, `[{"url":"https://example.com/existing","source":"NVD"}]`, true, fetchedAt.Add(-time.Hour)),
 	)

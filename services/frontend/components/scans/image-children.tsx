@@ -151,7 +151,7 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
 
   return (
     <tr>
-      <td colSpan={10} className="p-0">
+      <td colSpan={9} className="p-0">
         <div className="mx-4 mb-3 rounded-xl overflow-hidden" style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)' }}>
           {loading ? (
             <div className="flex justify-center py-6">
@@ -160,23 +160,24 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
           ) : scans.length === 0 ? (
             <div className="py-5 text-center text-xs text-zinc-500">No scans yet.</div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                  <th className="w-8 px-3 py-2" scope="col" />
-                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Tag</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Status</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Ownership</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Tags</th>
-                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }} scope="col"><abbr title="Critical">C</abbr></th>
-                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }} scope="col"><abbr title="High">H</abbr></th>
-                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }} scope="col"><abbr title="Medium">M</abbr></th>
-                  <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }} scope="col"><abbr title="Low">L</abbr></th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Date</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
+            <div className="overflow-x-auto overscroll-x-contain">
+              <table className="w-full min-w-[900px] text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                    <th className="w-8 px-3 py-2" scope="col" />
+                    <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Tag</th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Status</th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Ownership</th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider" scope="col">Tags</th>
+                    <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }} scope="col"><abbr title="Critical">C</abbr></th>
+                    <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }} scope="col"><abbr title="High">H</abbr></th>
+                    <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }} scope="col"><abbr title="Medium">M</abbr></th>
+                    <th className="text-center px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }} scope="col"><abbr title="Low">L</abbr></th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-2" />
+                  </tr>
+                </thead>
+                <tbody>
                 {scans.map((scan, index) => (
                   <tr
                     key={scan.id}
@@ -229,8 +230,9 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           )}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-2" style={{ borderTop: '1px solid var(--row-divider)' }}>

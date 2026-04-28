@@ -10,6 +10,7 @@ import (
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
+	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
@@ -87,19 +88,21 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 			return
 		}
 		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(itemCopy.ImageName, itemCopy.ImageTag, registry)
-		scan := &models.Scan{
-			ImageName:    normalizedImageName,
-			ImageTag:     normalizedImageTag,
-			RegistryID:   itemCopy.RegistryID,
-			ScanProvider: provider,
-			Status:       models.ScanStatusPending,
-			UserID:       &itemCopy.UserID,
-			CreatedAt:    time.Now(),
-		}
+		scan := newScheduledScan(itemCopy, normalizedImageName, normalizedImageTag, provider, itemCopy.RegistryID, time.Now())
 		if registry != nil {
 			scan.RegistryID = &registry.ID
 		}
-		if _, err := db.NewInsert().Model(scan).Exec(context.Background()); err != nil {
+		if err := db.RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
+			if _, err := tx.NewInsert().Model(scan).Exec(ctx); err != nil {
+				return err
+			}
+			if scan.OwnerOrgID != nil {
+				if err := ensureOrgScanLink(ctx, tx, *scan.OwnerOrgID, scan.ID); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
 			log.Errorf("scheduler: failed to create scan for %s: %v", itemCopy.ImageName, err)
 			return
 		}
@@ -124,6 +127,43 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 	scheduleMu.Lock()
 	scheduledEntries[item.ID.String()] = entryID
 	scheduleMu.Unlock()
+}
+
+func newScheduledScan(item models.WatchlistItem, imageName string, imageTag string, provider string, registryID *uuid.UUID, createdAt time.Time) *models.Scan {
+	ownerType := item.OwnerType
+	if ownerType != models.OwnerTypeOrg && ownerType != models.OwnerTypeUser {
+		ownerType = models.OwnerTypeUser
+	}
+	ownerUserID := item.OwnerUserID
+	ownerOrgID := item.OwnerOrgID
+	if ownerType == models.OwnerTypeOrg && ownerOrgID == nil {
+		ownerType = models.OwnerTypeUser
+	}
+	if ownerType == models.OwnerTypeUser && ownerUserID == nil {
+		ownerUserID = &item.UserID
+	}
+	if ownerType == models.OwnerTypeOrg {
+		ownerUserID = nil
+	}
+
+	return &models.Scan{
+		ImageName:    imageName,
+		ImageTag:     imageTag,
+		RegistryID:   registryID,
+		ScanProvider: provider,
+		CurrentStep:  models.ScanStepQueued,
+		Status:       models.ScanStatusPending,
+		UserID:       &item.UserID,
+		OwnerType:    ownerType,
+		OwnerUserID:  ownerUserID,
+		OwnerOrgID:   ownerOrgID,
+		CreatedAt:    createdAt,
+	}
+}
+
+func ensureOrgScanLink(ctx context.Context, db bun.IDB, orgID uuid.UUID, scanID uuid.UUID) error {
+	_, err := db.NewInsert().Model(&models.OrgScan{OrgID: orgID, ScanID: scanID}).On("CONFLICT DO NOTHING").Exec(ctx)
+	return err
 }
 
 func SyncWatchlistItem(db *bun.DB, item models.WatchlistItem) {

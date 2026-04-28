@@ -1,7 +1,4 @@
 # syntax=docker/dockerfile:1.23
-FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
-FROM anchore/grype:latest AS grype-bin
-
 FROM golang:1.26-alpine AS builder
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 
@@ -15,19 +12,12 @@ COPY . .
 
 RUN go build -o justscan-backend
 
-FROM alpine:3.23 AS runner
+FROM alpine:3.23 AS runtime-base
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 WORKDIR /app
 
-ARG INCLUDE_TRIVY=true
-ARG INCLUDE_GRYPE=true
-
 RUN apk add --no-cache ca-certificates tzdata
 
-RUN --mount=type=bind,from=trivy-bin,source=/usr/local/bin/trivy,target=/tmp/trivy,ro \
-    --mount=type=bind,from=grype-bin,source=/grype,target=/tmp/grype,ro \
-    if [ "$INCLUDE_TRIVY" = "true" ]; then install -m 0755 /tmp/trivy /usr/local/bin/trivy; fi \
-    && if [ "$INCLUDE_TRIVY" = "true" ] && [ "$INCLUDE_GRYPE" = "true" ]; then install -m 0755 /tmp/grype /usr/local/bin/grype; fi
 COPY --from=builder /app/backend/justscan-backend /app/
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
@@ -44,8 +34,6 @@ RUN chmod +x /app/docker-entrypoint.sh
 
 RUN chown -R justscan:justscan /app
 
-ENV TRIVY_CACHE_DIR=/app/data/trivy-cache
-
 VOLUME [ "/etc/justscan", "/app/data" ]
 
 EXPOSE 8080
@@ -55,3 +43,27 @@ USER justscan
 ENTRYPOINT [ "/app/docker-entrypoint.sh" ]
 
 CMD [ "/app/justscan-backend", "--config", "/etc/justscan/config.yaml" ]
+
+FROM runtime-base AS runner-minimal
+
+ENV BACKEND_SCANNER_ENABLE_TRIVY=false
+ENV BACKEND_SCANNER_ENABLE_GRYPE=false
+
+FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
+FROM anchore/grype:latest AS grype-bin
+
+FROM runtime-base AS runner
+
+USER root
+
+ARG INCLUDE_TRIVY=true
+ARG INCLUDE_GRYPE=true
+
+RUN --mount=type=bind,from=trivy-bin,source=/usr/local/bin/trivy,target=/tmp/trivy,ro \
+    --mount=type=bind,from=grype-bin,source=/grype,target=/tmp/grype,ro \
+    if [ "$INCLUDE_TRIVY" = "true" ]; then install -m 0755 /tmp/trivy /usr/local/bin/trivy; fi \
+    && if [ "$INCLUDE_TRIVY" = "true" ] && [ "$INCLUDE_GRYPE" = "true" ]; then install -m 0755 /tmp/grype /usr/local/bin/grype; fi
+
+ENV TRIVY_CACHE_DIR=/app/data/trivy-cache
+
+USER justscan

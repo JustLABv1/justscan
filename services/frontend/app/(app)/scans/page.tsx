@@ -85,6 +85,35 @@ function mergeUniqueStringLists(...groups: string[][]) {
   return merged;
 }
 
+function splitImageReference(imageName: string) {
+  const segments = imageName.split('/');
+  const firstSegment = segments[0] ?? '';
+  const hasRegistryHost = segments.length > 1 && (firstSegment.includes('.') || firstSegment.includes(':') || firstSegment === 'localhost');
+
+  if (!hasRegistryHost) {
+    return { registryHost: '', repositoryPath: imageName };
+  }
+
+  return { registryHost: firstSegment, repositoryPath: segments.slice(1).join('/') };
+}
+
+function ImageReferenceLabel({ imageName }: { imageName: string }) {
+  const { registryHost, repositoryPath } = splitImageReference(imageName);
+
+  return (
+    <div className="min-w-0 max-w-full" title={imageName}>
+      <span className="block font-mono text-sm font-medium leading-5 text-zinc-800 break-all dark:text-zinc-200">
+        {repositoryPath}
+      </span>
+      {registryHost ? (
+        <span className="mt-0.5 block font-mono text-[11px] leading-4 text-zinc-500 break-all dark:text-zinc-500">
+          {registryHost}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function MobileSevStat({ label, count, tone }: { label: string; count: number; tone: string }) {
   return (
     <div className="rounded-xl px-3 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
@@ -549,7 +578,7 @@ export default function ScansPage() {
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate font-mono text-sm font-medium text-zinc-800 dark:text-zinc-200">{img.image_name}</p>
+                          <ImageReferenceLabel imageName={img.image_name} />
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <span className="font-mono text-xs text-zinc-400">:{img.latest_tag}</span>
                             <StatusBadge status={img.latest_status} externalStatus={img.latest_external_status} />
@@ -621,21 +650,22 @@ export default function ScansPage() {
 
       {/* Tree table */}
       <div className="hidden md:block glass-panel rounded-2xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-              <th className="w-8 px-3 py-3" />
-              <th className="w-8 px-3 py-3" />
-              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Metadata</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Latest</th>
-              <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }}>C</th>
-              <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }}>H</th>
-              <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }}>M</th>
-              <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }}>L</th>
-            </tr>
-          </thead>
-          <tbody>
+        <div className="overflow-x-auto overscroll-x-contain">
+          <table className="w-full min-w-[980px] text-sm">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                <th className="w-8 px-3 py-3" />
+                <th className="w-8 px-3 py-3" />
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Metadata</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Latest</th>
+                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }}>C</th>
+                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }}>H</th>
+                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }}>M</th>
+                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }}>L</th>
+              </tr>
+            </thead>
+            <tbody>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => <ImageRowSkeleton key={i} />)
             ) : images.length === 0 ? (
@@ -695,9 +725,7 @@ export default function ScansPage() {
 
                     {/* Image name + meta */}
                     <td className="px-4 py-3.5">
-                      <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200 text-sm block truncate max-w-[400px]">
-                        {img.image_name}
-                      </span>
+                      <ImageReferenceLabel imageName={img.image_name} />
                       <div className="flex items-center gap-2 mt-1.5">
                         <span className="font-mono text-xs text-zinc-400">:{img.latest_tag}</span>
                         <StatusBadge status={img.latest_status} externalStatus={img.latest_external_status} />
@@ -765,8 +793,9 @@ export default function ScansPage() {
                 </Fragment>
               );
             })}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Pagination */}

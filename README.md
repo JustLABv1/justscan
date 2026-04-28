@@ -1,6 +1,6 @@
 # JustScan
 
-A self-hosted Docker image vulnerability scanner powered by [Trivy](https://github.com/aquasecurity/trivy).
+A self-hosted Docker image vulnerability scanner powered by [Trivy](https://github.com/aquasecurity/trivy) or Artifactory Xray.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ A self-hosted Docker image vulnerability scanner powered by [Trivy](https://gith
 - Go 1.22+
 - Node.js 20+ / pnpm
 - PostgreSQL 15+
-- [Trivy](https://trivy.dev/latest/getting-started/installation/) installed and on `$PATH`
+- [Trivy](https://trivy.dev/latest/getting-started/installation/) installed and on `$PATH` for local Trivy scans
 
 ### 1. Database
 
@@ -84,7 +84,10 @@ If you plan to use OIDC, configure it before first login using the section below
 | `port` | HTTP listen port | `8080` |
 | `log_level` | Log verbosity: `debug`, `info`, `warn`, `error` | `info` |
 | `allow_origins` | CORS allowed origins (list) | `["http://localhost:3000"]` |
+| `scanner.enable_trivy` | Enable local Trivy scans. Set to `false` for Artifactory Xray-only deployments | `true` |
 | `scanner.trivy_path` | Path to Trivy binary | `trivy` |
+| `scanner.enable_grype` | Enable Grype augmentation for local Trivy scans | `false` |
+| `scanner.grype_path` | Path to Grype binary | `grype` |
 | `scanner.timeout` | Legacy fallback for the local scanner command timeout in seconds | `600` |
 | `scanner.command_timeout_seconds` | Local scanner command timeout in seconds for Trivy, Grype, and SBOM execution | `7200` |
 | `scanner.progress_heartbeat_seconds` | How often long-running scans refresh their liveness timestamp while work is still active | `30` |
@@ -276,7 +279,9 @@ docker compose up -d
 
 The compose file starts PostgreSQL, the backend, and the frontend together.
 
-When running from the published Docker images, JustScan now refreshes Trivy's vulnerability DB and Java DB on container startup and again before scans whenever the cached DBs exceed `scanner.db_max_age_hours`. The cache is stored under `/app/data/trivy-cache`, so it survives container restarts when `/app/data` is persisted.
+When running from the default Trivy-enabled Docker images, JustScan refreshes Trivy's vulnerability DB and Java DB on container startup and again before scans whenever the cached DBs exceed `scanner.db_max_age_hours`. The cache is stored under `/app/data/trivy-cache`, so it survives container restarts when `/app/data` is persisted.
+
+For Artifactory Xray-only deployments, use the scannerless backend image by setting `JUSTSCAN_BACKEND_IMAGE_PREFIX=backend-minimal` and setting `scanner.enable_trivy: false` plus `scanner.enable_grype: false` in `deploy/docker-compose/backend-config.yaml`. Keep the default `backend` image if any registry should run local Trivy scans.
 
 JustScan can also augment Java findings for Maven packages using the free OSV API. To avoid unnecessary outbound calls and stay within public-service limits, package/version query results are cached locally in the database and refreshed using the same cache window configured by `vuln_kb.cache_days`.
 
@@ -317,6 +322,10 @@ ingress:
         - scan.example.com
 
 backend:
+  image:
+    # Leave empty to use backend-<chart appVersion>.
+    # Use backend-minimal-1.2.3 for Artifactory Xray-only deployments.
+    tag: ""
   secrets:
     jwtSecret: "replace-with-a-long-random-secret"
     encryptionKey: "replace-with-32-random-characters"
@@ -379,6 +388,7 @@ helm install justscan deploy/helm/justscan \
 ### Helm chart behavior and required values
 
 - Released chart packages automatically default `backend.image.tag` to `backend-<chart appVersion>` and `frontend.image.tag` to `frontend-<chart appVersion>`. Override either tag only if you need to pin a different image.
+- For Artifactory Xray-only deployments, set `backend.image.tag` to `backend-minimal-<version>` and set `backend.config.scanner.enableTrivy=false` plus `backend.config.scanner.enableGrype=false`.
 - `backend.secrets.jwtSecret` is required for all non-trivial deployments.
 - `backend.secrets.encryptionKey` should be a random 32-character string. It is used to encrypt registry credentials at rest.
 - `postgresql.auth.password` is required when `postgresql.enabled=true`.
@@ -395,7 +405,7 @@ Important values exposed by the chart include:
 
 - `imagePullSecrets` for private image or chart pulls from GHCR
 - `nameOverride`, `fullnameOverride`, and `serviceAccount.name` for release naming and service account control
-- `backend.config.scanner.trivyPath`, `backend.config.scanner.grypePath`, `backend.config.scanner.enableGrype`, `backend.config.scanner.timeout`, `backend.config.scanner.commandTimeoutSeconds`, `backend.config.scanner.progressHeartbeatSeconds`, `backend.config.scanner.staleTimeoutSeconds`, `backend.config.scanner.concurrency`, `backend.config.scanner.dbMaxAgeHours`, and `backend.config.scanner.enableOsvJavaAugmentation`
+- `backend.config.scanner.enableTrivy`, `backend.config.scanner.trivyPath`, `backend.config.scanner.grypePath`, `backend.config.scanner.enableGrype`, `backend.config.scanner.timeout`, `backend.config.scanner.commandTimeoutSeconds`, `backend.config.scanner.progressHeartbeatSeconds`, `backend.config.scanner.staleTimeoutSeconds`, `backend.config.scanner.concurrency`, `backend.config.scanner.dbMaxAgeHours`, and `backend.config.scanner.enableOsvJavaAugmentation`
 - `backend.config.oidc.debug`, `backend.config.oidc.adminGroups`, `backend.config.oidc.adminRoles`, `backend.config.oidc.groupsClaim`, and `backend.config.oidc.rolesClaim`
 - `backend.customCAs.configMapName`, `backend.customCAs.secretName`, and `backend.customCAs.bundlePath` for custom trust anchors used by OIDC and other outbound TLS calls
 - `backend.persistence.existingClaim`, `backend.persistence.size`, and `backend.persistence.storageClass`
@@ -462,6 +472,7 @@ helm show values oci://ghcr.io/justlabv1/charts/justscan --version 1.2.3
 **Check:**
 - `trivy` is installed and accessible at the path configured in `scanner.trivy_path`
 - Run `trivy --version` to verify
+- If you are using the `backend-minimal` image, use registries configured for Artifactory Xray and keep local Trivy scanning disabled
 
 ---
 

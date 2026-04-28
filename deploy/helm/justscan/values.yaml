@@ -14,6 +14,8 @@ backend:
   image:
     repository: ghcr.io/justlabv1/justscan
     # When empty, the chart defaults to backend-<Chart.appVersion>.
+    # For Artifactory Xray-only deployments, set this to backend-minimal-<version>
+    # and set backend.config.scanner.enableTrivy=false and enableGrype=false.
     tag: ""
     pullPolicy: IfNotPresent
 
@@ -53,6 +55,7 @@ backend:
       driver: postgres
 
     scanner:
+      # Set enableTrivy and enableGrype to false when using a backend-minimal image.
       enableTrivy: true
       trivyPath: trivy
       grypePath: grype

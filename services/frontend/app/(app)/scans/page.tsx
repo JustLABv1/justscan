@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, joinClassNames, nativeFieldClassName } from '@/components/ui/form-styles';
+import { PageHeader } from '@/components/ui/page-header';
 import { ImageRowSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useOrgNameMap } from '@/hooks/use-org-name-map';
@@ -657,29 +658,29 @@ export default function ScansPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
-      {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Scans</h1>
-          {total > 0 && <p className="text-sm text-zinc-500 mt-0.5">{total} image{total !== 1 ? 's' : ''}</p>}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/scans/compare"
-            className="btn-secondary flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
-          >
-            <GitCompareIcon size={15} />
-            Compare
-          </Link>
-          <button
-            onClick={openCreateModal}
-            className="btn-primary flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
-          >
-            <PlusSignIcon size={15} />
-            New Scan
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Scan operations"
+        title="Scans"
+        description={total > 0 ? `${total} image${total !== 1 ? 's' : ''}` : 'Search images, compare runs, and start new scans.'}
+        actions={(
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/scans/compare"
+              className="btn-secondary flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
+            >
+              <GitCompareIcon size={15} />
+              Compare
+            </Link>
+            <button
+              onClick={openCreateModal}
+              className="btn-primary flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
+            >
+              <PlusSignIcon size={15} />
+              New Scan
+            </button>
+          </div>
+        )}
+      />
 
       {/* Search bar */}
       <div className="glass-panel rounded-2xl p-4">

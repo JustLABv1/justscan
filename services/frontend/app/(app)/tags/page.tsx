@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -150,18 +151,19 @@ export default function TagsPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Tags</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Organize your scans with color-coded labels</p>
-        </div>
+    <PageHeader
+      eyebrow="Organization"
+      title="Tags"
+      description="Organize your scans with color-coded labels."
+      actions={
         <button
           onClick={openCreate}
           className="btn-primary inline-flex items-center gap-2"
         >
           <PlusSignIcon size={15} /> New Tag
         </button>
-      </div>
+      }
+    />
 
       {error ? <FormAlert description={error} title="Tag loading failed" /> : null}
 

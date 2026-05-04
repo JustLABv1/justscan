@@ -1,5 +1,10 @@
-import { InsightsTab } from '../_components/advanced-tabs';
+import { AdminShell } from '../_components/admin-shell';
+import { InsightsTab } from '../_components/legacy-admin-page';
 
 export default function AdminInsightsPage() {
-	return <InsightsTab />;
+	return (
+		<AdminShell>
+			<InsightsTab />
+		</AdminShell>
+	);
 }

@@ -1,30 +1,30 @@
 'use client';
 
-import { clearToken, clearUser, getUser, getWorkScope, listMyOrgInvites, listOrgs, Org, setWorkScope, WorkScope } from '@/lib/api';
 import { WorkspaceOnboarding } from '@/components/workspace-onboarding';
+import { clearToken, clearUser, getUser, getWorkScope, listMyOrgInvites, listOrgs, Org, setWorkScope, WorkScope } from '@/lib/api';
 import { Button, Drawer, Dropdown, Header, Label, Separator, useOverlayState } from '@heroui/react';
 import {
-    AiContentGenerator01Icon,
-    ArrowDown01Icon,
-    ArrowLeft01Icon,
-    ArrowRight01Icon,
-    Building04Icon,
-    DashboardSquare01Icon,
-    EyeIcon,
-    FileExportIcon,
-    GridTableIcon,
-    Logout02Icon,
-    Menu01Icon,
-    Moon02Icon,
-    PackageIcon,
-    PlusSignIcon,
-    Search01Icon,
-    ServerStack01Icon,
-    Settings01Icon,
-    Shield01Icon,
-    ShieldKeyIcon,
-    Sun01Icon,
-    Tag01Icon,
+  AiContentGenerator01Icon,
+  ArrowDown01Icon,
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  Building04Icon,
+  DashboardSquare01Icon,
+  EyeIcon,
+  FileExportIcon,
+  GridTableIcon,
+  Logout02Icon,
+  Menu01Icon,
+  Moon02Icon,
+  PackageIcon,
+  PlusSignIcon,
+  Search01Icon,
+  ServerStack01Icon,
+  Settings01Icon,
+  Shield01Icon,
+  ShieldKeyIcon,
+  Sun01Icon,
+  Tag01Icon,
 } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -74,41 +74,6 @@ interface AppShellProps {
   initialUser: { id?: string; username?: string; email?: string; role?: string } | null;
 }
 
-function WorkspaceScopeHelp({
-  open,
-  currentScopeLabel,
-  onDismiss,
-  onToggle,
-}: {
-  open: boolean;
-  currentScopeLabel: string;
-  onDismiss: () => void;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <button
-        type="button"
-        className="w-full rounded-xl px-3 py-2 text-left text-xs font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
-        style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
-        onClick={onToggle}
-      >
-        What changes with workspace?
-      </button>
-      {open && (
-        <div className="rounded-xl px-3 py-3 text-xs leading-5 text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-          <p className="font-medium text-zinc-800 dark:text-zinc-100">Current view: {currentScopeLabel}</p>
-          <p className="mt-2">Switch workspace to change the dashboard and lists you are viewing.</p>
-          <p className="mt-1">Scans, registries, tags, suppressions, and watchlist items belong to a workspace. Shared items can appear here without changing their original owner.</p>
-          <button type="button" className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500 transition-colors hover:text-zinc-800 dark:hover:text-zinc-100" onClick={onDismiss}>
-            Hide
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + '/');
 }
@@ -125,7 +90,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const [orgsReady, setOrgsReady] = useState(false);
   const [pendingInviteCount, setPendingInviteCount] = useState(0);
   const [workScope, setWorkScopeState] = useState<WorkScope>(() => getWorkScope());
-  const [workspaceHelpOpen, setWorkspaceHelpOpen] = useState(false);
   const [onboardingStatus, setOnboardingStatus] = useState<'checking' | 'show' | 'done'>('checking');
   const mobileNav = useOverlayState();
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
@@ -261,7 +225,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     markWorkspaceOnboardingSeen(currentUser);
     setWorkScopeState(nextScope);
     setWorkScope(nextScope);
-    setWorkspaceHelpOpen(true);
     setOnboardingStatus('done');
     router.replace('/dashboard');
   }
@@ -280,6 +243,10 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const isDark = resolvedTheme === 'dark';
   const themeToggleTitle = !mounted ? 'Toggle theme' : isDark ? 'Switch to light mode' : 'Switch to dark mode';
   const scopeLabel = workScope.kind === 'org' ? workScope.orgName ?? 'Organization' : 'Personal workspace';
+  const workspaceTitle = `Workspace: ${scopeLabel}`;
+  const workspaceMarkerStyle = workScope.kind === 'org'
+    ? { background: 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)', boxShadow: '0 0 0 1px rgba(255,255,255,0.65)' }
+    : { background: 'rgba(113,113,122,0.72)', boxShadow: '0 0 0 1px rgba(255,255,255,0.5)' };
   const navigationGroups = [
     ...navGroups,
     ...(user?.role === 'admin'
@@ -362,51 +329,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
           </div>
 
           <div className="px-2 pt-3 pb-2 space-y-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-            {!collapsed && (
-              <>
-                <Dropdown>
-                  <Dropdown.Trigger className="w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all duration-150 outline-none text-left"
-                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
-                    onMouseEnter={(event: any) => (event.currentTarget.style.borderColor = 'rgba(167,139,250,0.3)')}
-                    onMouseLeave={(event: any) => (event.currentTarget.style.borderColor = 'var(--glass-border)')}
-                  >
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
-                      <span className="text-[12px] font-medium text-zinc-700 dark:text-zinc-200 truncate mt-0.5">{scopeLabel}</span>
-                    </div>
-                    <ArrowDown01Icon size={14} className="text-zinc-500 shrink-0 ml-2" />
-                  </Dropdown.Trigger>
-                  <Dropdown.Popover className="min-w-[200px]" placement="bottom start">
-                    <Dropdown.Menu
-                      onAction={(key) => handleScopeChange(key as string)}
-                      selectionMode="single"
-                      selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
-                    >
-                      <Dropdown.Item id="personal" textValue="Personal workspace">
-                        <Label>Personal workspace</Label>
-                      </Dropdown.Item>
-                      {orgs.length > 0 && (
-                        <Dropdown.Section>
-                          <Header>Organizations</Header>
-                          {orgs.map((org) => (
-                            <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
-                              <Label>{org.name}</Label>
-                            </Dropdown.Item>
-                          ))}
-                        </Dropdown.Section>
-                      )}
-                    </Dropdown.Menu>
-                  </Dropdown.Popover>
-                </Dropdown>
-                <WorkspaceScopeHelp
-                  open={workspaceHelpOpen}
-                  currentScopeLabel={scopeLabel}
-                  onDismiss={() => setWorkspaceHelpOpen(false)}
-                  onToggle={() => setWorkspaceHelpOpen((current) => !current)}
-                />
-              </>
-            )}
-
             <button
               onClick={() => setSearchOpen(true)}
               title="Search (⌘K)"
@@ -519,25 +441,68 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             ))}
           </nav>
 
-          <div className="shrink-0 px-2 pb-3 pt-2 space-y-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-            <button
-              onClick={toggleCollapsed}
-              className={`w-full flex items-center justify-center h-9 rounded-xl transition-all duration-150 text-zinc-400 hover:text-zinc-700 dark:text-zinc-600 dark:hover:text-zinc-300`}
-              onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
-              onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {collapsed ? <ArrowRight01Icon size={14} /> : <ArrowLeft01Icon size={14} />}
-            </button>
+          <div className="shrink-0 px-2 pb-3 pt-2 space-y-1.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+            <Dropdown>
+              <Dropdown.Trigger
+                className={`w-full flex items-center rounded-xl transition-all duration-150 outline-none ${collapsed ? 'justify-center py-2' : 'gap-2.5 px-2 py-2.5'}`}
+                style={{ background: 'transparent' }}
+                aria-label={workspaceTitle}
+                onMouseEnter={(event: any) => (event.currentTarget.style.background = 'var(--row-hover)')}
+                onMouseLeave={(event: any) => (event.currentTarget.style.background = 'transparent')}
+              >
+                <div className="relative shrink-0" title={collapsed ? workspaceTitle : undefined}>
+                  <div
+                    className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
+                    style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.12)' }}
+                  >
+                    <GridTableIcon size={16} />
+                  </div>
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full" style={workspaceMarkerStyle} />
+                </div>
+                {!collapsed && (
+                  <>
+                    <div className="flex min-w-0 flex-1 flex-col justify-center pr-1 text-left">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
+                      <p className="mt-0.5 truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{scopeLabel}</p>
+                    </div>
+                    <ArrowDown01Icon size={14} className="shrink-0 text-zinc-500" />
+                  </>
+                )}
+              </Dropdown.Trigger>
+
+              <Dropdown.Popover className="min-w-[220px]" placement={collapsed ? 'right bottom' : 'top start'}>
+                <Dropdown.Menu
+                  onAction={(key) => handleScopeChange(key as string)}
+                  selectionMode="single"
+                  selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
+                >
+                  <Dropdown.Item id="personal" textValue="Personal workspace">
+                    <Label>Personal workspace</Label>
+                  </Dropdown.Item>
+                  {orgs.length > 0 && (
+                    <Dropdown.Section>
+                      <Header>Organizations</Header>
+                      {orgs.map((org) => (
+                        <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
+                          <Label>{org.name}</Label>
+                        </Dropdown.Item>
+                      ))}
+                    </Dropdown.Section>
+                  )}
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
 
             <Dropdown>
               <Dropdown.Trigger className={`w-full flex items-center ${collapsed ? 'justify-center' : 'gap-2.5 px-2'} py-2 rounded-xl transition-all duration-150 outline-none`}
                 style={{ background: 'transparent' }}
+                aria-label={collapsed ? (user?.username ?? user?.email ?? 'User menu') : 'Open user menu'}
                 onMouseEnter={(event: any) => (event.currentTarget.style.background = 'var(--row-hover)')}
                 onMouseLeave={(event: any) => (event.currentTarget.style.background = 'transparent')}
               >
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
+                  title={collapsed ? (user?.username ?? user?.email ?? 'User menu') : undefined}
                   style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
                 >
                   {initials}
@@ -588,6 +553,17 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 </Dropdown.Menu>
               </Dropdown.Popover>
             </Dropdown>
+
+            <button
+              onClick={toggleCollapsed}
+              className="w-full flex items-center justify-center h-8 rounded-xl transition-all duration-150 text-zinc-400 hover:text-zinc-700 dark:text-zinc-600 dark:hover:text-zinc-300"
+              onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
+              onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {collapsed ? <ArrowRight01Icon size={14} /> : <ArrowLeft01Icon size={14} />}
+            </button>
           </div>
         </aside>
 
@@ -639,9 +615,20 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                           <Dropdown.Trigger className="w-full flex items-center justify-between rounded-xl px-3 py-3 text-sm transition-all duration-150 outline-none text-left"
                             style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
                           >
-                            <div className="flex flex-col min-w-0 flex-1">
-                              <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
-                              <span className="text-[12px] font-medium text-zinc-700 dark:text-zinc-200 mt-0.5 truncate">{scopeLabel}</span>
+                            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                              <div className="relative shrink-0">
+                                <div
+                                  className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
+                                  style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.12)' }}
+                                >
+                                  <GridTableIcon size={16} />
+                                </div>
+                                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full" style={workspaceMarkerStyle} />
+                              </div>
+                              <div className="flex flex-col min-w-0 flex-1">
+                                <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
+                                <span className="mt-0.5 truncate text-[12px] font-medium text-zinc-700 dark:text-zinc-200">{scopeLabel}</span>
+                              </div>
                             </div>
                             <ArrowDown01Icon size={16} className="text-zinc-500 shrink-0 ml-2" />
                           </Dropdown.Trigger>
@@ -667,12 +654,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                             </Dropdown.Menu>
                           </Dropdown.Popover>
                         </Dropdown>
-                        <WorkspaceScopeHelp
-                          open={workspaceHelpOpen}
-                          currentScopeLabel={scopeLabel}
-                          onDismiss={() => setWorkspaceHelpOpen(false)}
-                          onToggle={() => setWorkspaceHelpOpen((current) => !current)}
-                        />
 
                         {pendingInviteCount > 0 && (
                           <Link

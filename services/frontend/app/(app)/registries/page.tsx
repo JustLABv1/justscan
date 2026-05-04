@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -219,11 +220,11 @@ export default function RegistriesPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Registries</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Configure private Docker registries and choose the scan provider per registry.</p>
-        </div>
+    <PageHeader
+      eyebrow="Registry management"
+      title="Registries"
+      description="Configure private Docker registries and choose the scan provider per registry."
+      actions={
         <button
           onClick={openCreate}
           className="btn-primary inline-flex items-center gap-2"
@@ -231,7 +232,8 @@ export default function RegistriesPage() {
         >
           <PlusSignIcon size={15} /> Add Registry
         </button>
-      </div>
+      }
+    />
 
       {error ? <FormAlert description={error} title="Registry loading failed" /> : null}
 

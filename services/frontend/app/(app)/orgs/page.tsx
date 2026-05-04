@@ -3,6 +3,7 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
+import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { acceptOrgInvite, createOrg, declineOrgInvite, deleteOrg, getUser, listMyOrgInvites, listOrgs, Org, OrgInvite } from '@/lib/api';
 import { Modal, useOverlayState } from '@heroui/react';
@@ -92,18 +93,19 @@ export default function OrgsPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Organizations</h1>
-          {orgs.length > 0 && <p className="text-sm text-zinc-500 mt-0.5">{orgs.length} organization{orgs.length !== 1 ? 's' : ''}</p>}
-        </div>
+    <PageHeader
+      eyebrow="Workspace management"
+      title="Organizations"
+      description={orgs.length > 0 ? `${orgs.length} organization${orgs.length !== 1 ? 's' : ''}` : 'Manage organization workspaces, members, and invites.'}
+      actions={
         <button
           onClick={modal.open}
           className="btn-primary inline-flex items-center gap-2"
         >
           <PlusSignIcon size={15} /> New Organization
         </button>
-      </div>
+      }
+    />
 
       {error ? <FormAlert description={error} title="Organization loading failed" /> : null}
       {inviteError ? <FormAlert description={inviteError} title="Invite action failed" /> : null}

@@ -1,6 +1,8 @@
 'use client';
 import { StatusBadge } from '@/components/ui/badges';
+import { PageHeader } from '@/components/ui/page-header';
 import { ChartSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
+import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -644,54 +646,63 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-4 max-w-7xl mx-auto">
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Dashboard</h1>
-          <p className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>
-            {new Date().toLocaleDateString('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          </p>
-        </div>
-        <Link
-          href="/scans"
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
-          style={{ background: '#7c3aed' }}
-        >
-          <Add01Icon size={14} />
-          New Scan
-        </Link>
-      </div>
+      <PageHeader
+        eyebrow="Operations overview"
+        title="Dashboard"
+        description={new Date().toLocaleDateString('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        actions={(
+          <Link
+            href="/scans"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
+            style={{ background: '#7c3aed' }}
+          >
+            <Add01Icon size={14} />
+            New Scan
+          </Link>
+        )}
+      />
 
       {/* ── Stat strip ── */}
       <div className="overflow-x-auto rounded-xl" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(180px, 1fr))' }}>
-          <div className="px-5 py-4" style={{ borderRight: '1px solid var(--glass-border)' }}>
-            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Total Scans</p>
-            <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight" style={{ color: 'var(--text-primary)' }}>{stats.total_scans.toLocaleString()}</p>
-            <p className="mt-1.5 text-[11px] flex items-center gap-1.5" style={{ color: activeQueueCount > 0 ? '#60a5fa' : 'var(--text-faint)' }}>
-              {activeQueueCount > 0 && <span className="h-1.5 w-1.5 rounded-full inline-block shrink-0 animate-pulse" style={{ background: '#60a5fa' }} />}
-              {activeQueueCount > 0 ? `${activeQueueCount} running` : 'none running'}
-            </p>
-          </div>
-          <div className="px-5 py-4" style={{ borderRight: '1px solid var(--glass-border)' }}>
-            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Completed</p>
-            <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight" style={{ color: 'var(--text-primary)' }}>{completedCount.toLocaleString()}</p>
-            <p className="mt-1.5 text-[11px]" style={{ color: 'var(--text-faint)' }}>{successRate}% success rate</p>
-          </div>
-          <div className="px-5 py-4" style={{ borderRight: '1px solid var(--glass-border)' }}>
-            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Needs Attention</p>
-            <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight" style={{ color: needsAttentionTotal > 0 ? '#f87171' : 'var(--text-primary)' }}>{needsAttentionTotal}</p>
-            <p className="mt-1.5 text-[11px] flex items-center gap-2">
-              {failedCount > 0 && <span style={{ color: '#f87171' }}>{failedCount} failed</span>}
-              {blockedPolicyCount > 0 && <span style={{ color: '#fb923c' }}>{blockedPolicyCount} blocked</span>}
-              {needsAttentionTotal === 0 && <span style={{ color: 'var(--text-faint)' }}>all clear</span>}
-            </p>
-          </div>
-          <div className="px-5 py-4">
-            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Watchlist</p>
-            <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight" style={{ color: 'var(--text-primary)' }}>{stats.watchlist_count.toLocaleString()}</p>
-            <p className="mt-1.5 text-[11px]" style={{ color: 'var(--text-faint)' }}>{startedTodayCount} started today</p>
-          </div>
+          <StatCard
+            label="Total Scans"
+            value={stats.total_scans.toLocaleString()}
+            hint={<span className="flex items-center gap-1.5">{activeQueueCount > 0 && <span className="h-1.5 w-1.5 rounded-full inline-block shrink-0 animate-pulse" style={{ background: '#60a5fa' }} />} {activeQueueCount > 0 ? `${activeQueueCount} running` : 'none running'}</span>}
+            className="rounded-none px-5 py-4"
+            style={{ borderRight: '1px solid var(--glass-border)' }}
+            valueStyle={{ color: 'var(--text-primary)' }}
+            hintStyle={{ color: activeQueueCount > 0 ? '#60a5fa' : 'var(--text-faint)' }}
+          />
+          <StatCard
+            label="Completed"
+            value={completedCount.toLocaleString()}
+            hint={`${successRate}% success rate`}
+            className="rounded-none px-5 py-4"
+            style={{ borderRight: '1px solid var(--glass-border)' }}
+            valueStyle={{ color: 'var(--text-primary)' }}
+          />
+          <StatCard
+            label="Needs Attention"
+            value={needsAttentionTotal}
+            hint={
+              <span className="flex items-center gap-2">
+                {failedCount > 0 && <span style={{ color: '#f87171' }}>{failedCount} failed</span>}
+                {blockedPolicyCount > 0 && <span style={{ color: '#fb923c' }}>{blockedPolicyCount} blocked</span>}
+                {needsAttentionTotal === 0 && <span style={{ color: 'var(--text-faint)' }}>all clear</span>}
+              </span>
+            }
+            className="rounded-none px-5 py-4"
+            style={{ borderRight: '1px solid var(--glass-border)' }}
+            valueStyle={{ color: needsAttentionTotal > 0 ? '#f87171' : 'var(--text-primary)' }}
+          />
+          <StatCard
+            label="Watchlist"
+            value={stats.watchlist_count.toLocaleString()}
+            hint={`${startedTodayCount} started today`}
+            className="rounded-none px-5 py-4"
+            valueStyle={{ color: 'var(--text-primary)' }}
+          />
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { useToast } from '@/components/toast';
 import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { PageHeader } from '@/components/ui/page-header';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -203,11 +204,11 @@ export default function WatchlistPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Watchlist</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Auto-scan images on a schedule</p>
-        </div>
+    <PageHeader
+      eyebrow="Scheduled scans"
+      title="Watchlist"
+      description="Auto-scan images on a schedule."
+      actions={
         <div className="flex items-center gap-3 flex-wrap">
           <div className="segmented-control">
             {[
@@ -234,7 +235,8 @@ export default function WatchlistPage() {
             <PlusSignIcon size={15} /> Add Image
           </button>
         </div>
-      </div>
+      }
+    />
 
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm"

@@ -10,6 +10,7 @@ import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { PageHeader } from '@/components/ui/page-header';
 import {
     assignScanToOrg,
     createOrgInvite,
@@ -34,8 +35,8 @@ import {
     removeScanFromOrg,
     revokeOrgInvite,
     Scan,
-    TrendPoint,
     transferOrgOwnership,
+    TrendPoint,
     updateOrg,
     updateOrgMemberRole,
     updatePolicy,
@@ -47,7 +48,7 @@ import {
     Delete01Icon,
     PlusSignIcon,
 } from 'hugeicons-react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 const inputCls = nativeFieldClassName;
@@ -80,6 +81,7 @@ type OrgTabId = (typeof ORG_TABS)[number]['id'];
 export default function OrgDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const currentUser = getUser() as { role?: string } | null;
   const isSystemAdmin = currentUser?.role === 'admin';
 
@@ -164,6 +166,18 @@ export default function OrgDetailPage() {
     getComplianceTrend(id).then(setTrend).catch(() => {});
     getOrgRiskScore(id).then(setRiskScore).catch(() => {});
   }, [load, loadMembers, loadOrgScans, id]);
+
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    const match = ORG_TABS.find((tab) => tab.id === requestedTab);
+    if (match && match.id !== activeTab) {
+      setActiveTab(match.id);
+      return;
+    }
+    if (!requestedTab && activeTab !== 'overview') {
+      setActiveTab('overview');
+    }
+  }, [activeTab, searchParams]);
 
   function openInviteModal() {
     setInviteEmail('');
@@ -385,22 +399,39 @@ export default function OrgDetailPage() {
     const nextIndex = event.key === 'ArrowRight'
       ? (index + 1) % ORG_TABS.length
       : (index - 1 + ORG_TABS.length) % ORG_TABS.length;
-    setActiveTab(ORG_TABS[nextIndex].id);
+    handleTabChange(ORG_TABS[nextIndex].id);
+  }
+
+  function handleTabChange(nextTab: OrgTabId) {
+    setActiveTab(nextTab);
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextTab === 'overview') {
+      params.delete('tab');
+    } else {
+      params.set('tab', nextTab);
+    }
+    const query = params.toString();
+    router.replace(query ? `/orgs/${id}?${query}` : `/orgs/${id}`, { scroll: false });
   }
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div>
-        <button
-          onClick={() => router.back()}
-          className="btn-secondary inline-flex items-center gap-1.5 mb-3"
-        >
-          <ArrowLeft01Icon size={15} />
-          Back to organizations
-        </button>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">{org.name}</h1>
-        {org.description && <p className="text-sm text-zinc-500 mt-1">{org.description}</p>}
-      </div>
+      <PageHeader
+        breadcrumbs={[{ label: 'Organizations', href: '/orgs' }, { label: org.name }]}
+        eyebrow="Organization workspace"
+        title={org.name}
+        description={org.description || 'Manage organization risk, policies, members, and assigned assets.'}
+        actions={
+          <button
+            onClick={() => router.back()}
+            className="btn-secondary inline-flex items-center gap-1.5"
+            type="button"
+          >
+            <ArrowLeft01Icon size={15} />
+            Back to organizations
+          </button>
+        }
+      />
 
       <div className="glass-panel rounded-2xl p-1.5" role="tablist" aria-label="Organization sections">
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-1">
@@ -414,7 +445,7 @@ export default function OrgDetailPage() {
                 aria-controls={`${tab.id}-panel`}
                 aria-selected={active}
                 className="rounded-xl px-4 py-3 text-left transition-all duration-150"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 onKeyDown={(event) => handleTabKeyDown(event, index)}
                 type="button"
                 style={active

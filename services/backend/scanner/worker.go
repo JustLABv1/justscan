@@ -58,6 +58,12 @@ func InitWorker(db *bun.DB) {
 
 	jobQueue = make(chan ScanJob, 64)
 
+	if recovered, err := recoverInterruptedScans(context.Background(), db, time.Now()); err != nil {
+		log.Warnf("Scanner startup recovery failed: %v", err)
+	} else if recovered > 0 {
+		log.Warnf("Scanner startup marked %d interrupted scans as failed", recovered)
+	}
+
 	for i := 0; i < concurrency; i++ {
 		cacheDir := workerCacheDir(i)
 		if TrivyEnabled() {

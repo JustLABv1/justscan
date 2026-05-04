@@ -123,6 +123,7 @@ func newMockBunDB(t *testing.T) (*bun.DB, sqlmock.Sqlmock, func()) {
 		t.Fatalf("failed to create sqlmock database: %v", err)
 	}
 	db := bun.NewDB(sqldb, pgdialect.New())
+	db.RegisterModel((*models.ScanTag)(nil))
 	cleanup := func() {
 		_ = db.Close()
 		_ = sqldb.Close()

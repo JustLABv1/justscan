@@ -175,6 +175,60 @@ func startScanStaleWatchdog(db *bun.DB) {
 	}()
 }
 
+func recoverInterruptedScans(ctx context.Context, db *bun.DB, now time.Time) (int, error) {
+	if db == nil {
+		return 0, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	var scans []models.Scan
+	if err := db.NewSelect().Model(&scans).
+		Column("id", "scan_provider", "external_status", "current_step", "status", "last_progress_at").
+		Where("status IN (?)", bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
+		Scan(ctx); err != nil {
+		return 0, fmt.Errorf("failed to query interrupted scans: %w", err)
+	}
+
+	recovered := 0
+	for i := range scans {
+		scan := &scans[i]
+		message := interruptedScanFailureMessage(scan)
+		scan.Status = models.ScanStatusFailed
+		scan.CurrentStep = models.ScanStepFailed
+		scan.ErrorMessage = message
+		scan.LastProgressAt = &now
+		scan.CompletedAt = &now
+
+		columns := []string{"status", "current_step", "error_message", "completed_at", "last_progress_at"}
+		if scan.ScanProvider == models.ScanProviderArtifactoryXray {
+			if !preserveXrayExternalStatusOnFailure(scan.ExternalStatus) {
+				scan.ExternalStatus = models.ScanStatusFailed
+			}
+			columns = append(columns, "external_status")
+		}
+
+		if _, err := db.NewUpdate().Model(scan).
+			Column(columns...).
+			Where("id = ?", scan.ID).
+			Exec(ctx); err != nil {
+			return recovered, fmt.Errorf("failed to mark interrupted scan %s as failed: %w", scan.ID, err)
+		}
+		recovered++
+	}
+
+	return recovered, nil
+}
+
+func interruptedScanFailureMessage(scan *models.Scan) string {
+	step := models.ScanStepQueued
+	if scan != nil && strings.TrimSpace(scan.CurrentStep) != "" {
+		step = scan.CurrentStep
+	}
+	return fmt.Sprintf("scan interrupted because the backend restarted while in %s", strings.ReplaceAll(step, "_", " "))
+}
+
 func failStaleScans(ctx context.Context, db *bun.DB, now time.Time, staleTimeout time.Duration) error {
 	if db == nil || staleTimeout <= 0 {
 		return nil

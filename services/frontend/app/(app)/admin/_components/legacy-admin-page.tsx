@@ -1864,7 +1864,7 @@ const SEVERITY_OPTIONS: Array<{ value: NotificationChannel['min_severity']; labe
   { value: 'CRITICAL', label: 'Critical only' },
 ];
 
-function NotificationsTab() {
+export function NotificationsTab() {
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2399,7 +2399,7 @@ const STATUS_COLORS: Record<string, { bg: string; color: string; border: string 
   failed:    { bg: 'rgba(239,68,68,0.1)',  color: '#f87171', border: 'rgba(239,68,68,0.2)'  },
 };
 
-function ScansTab() {
+export function ScansTab() {
   const [scans, setScans] = useState<AdminScan[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -2932,7 +2932,7 @@ function statusColor(code: number): React.CSSProperties {
   return { color: '#a1a1aa' };
 }
 
-function InsightsTab() {
+export function InsightsTab() {
   const [section, setSection] = useState<'api' | 'xray'>('api');
 
   // ── API request logs ──────────────────────────────────────────────
@@ -3451,7 +3451,7 @@ function InsightsTab() {
 }
 
 // ── Identity Providers Tab ─────────────────────────────────────────────────────
-function IdentityProvidersTab() {
+export function IdentityProvidersTab() {
   const [providers, setProviders] = useState<OIDCProviderAdmin[]>([]);
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [loading, setLoading] = useState(true);
@@ -4681,7 +4681,7 @@ function IdentityProvidersTab() {
 }
 
 // ── Global Registries Tab ──────────────────────────────────────────────────────
-function GlobalRegistriesTab() {
+export function GlobalRegistriesTab() {
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
   const [capabilities, setCapabilities] = useState<ScannerCapabilities>({ enable_trivy: true, enable_grype: true, providers: [] });
   const [loading, setLoading] = useState(true);

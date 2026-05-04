@@ -1,5 +1,10 @@
-import { NotificationsTab } from '../_components/advanced-tabs';
+import { AdminShell } from '../_components/admin-shell';
+import { NotificationsTab } from '../_components/legacy-admin-page';
 
 export default function AdminNotificationsPage() {
-	return <NotificationsTab />;
+	return (
+		<AdminShell>
+			<NotificationsTab />
+		</AdminShell>
+	);
 }

@@ -4,6 +4,7 @@ import { useToast } from '@/components/toast';
 import { OwnershipBadge, SuppressionSourceBadge } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
 import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { PageHeader } from '@/components/ui/page-header';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { deleteSuppressionById, getTokenType, listAllSuppressions, listSuppressionShares, ResourceShare, shareSuppression, Suppression, unshareSuppression } from '@/lib/api';
@@ -159,47 +160,43 @@ export default function SuppressionsPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight flex items-center gap-2">
-            <SecurityLockIcon size={22} className="text-violet-500" />
-            Suppressions
-          </h1>
-          <p className="text-sm text-zinc-500 mt-0.5">
-            {total > 0 ? `${total} active suppression${total !== 1 ? 's' : ''}` : 'Manage vulnerability suppressions across all images'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <input
-            className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input w-48"
-            placeholder="Search CVE ID…"
-            value={searchQuery}
-            onChange={e => {
-              const v = e.target.value;
-              setSearchQuery(v);
-              if (debounceRef.current) clearTimeout(debounceRef.current);
-              debounceRef.current = setTimeout(() => { setPage(1); load(1, statusFilter, v); }, 300);
-            }}
-          />
-          <Select selectedKey={statusFilter || '__all__'} onSelectionChange={k => { const v = String(k === '__all__' ? '' : k); setStatusFilter(v); setPage(1); load(1, v, searchQuery); }}
-            className="w-44"
-          >
-            <Select.Trigger className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input">
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="__all__">All Statuses</ListBox.Item>
-                <ListBox.Item id="accepted">Accepted Risk</ListBox.Item>
-                <ListBox.Item id="wont_fix">Won&apos;t Fix</ListBox.Item>
-                <ListBox.Item id="false_positive">False Positive</ListBox.Item>
-                <ListBox.Item id="xray_ignore">Xray Ignore</ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Security workflow"
+        title="Suppressions"
+        description={total > 0 ? `${total} active suppression${total !== 1 ? 's' : ''}` : 'Manage vulnerability suppressions across all images.'}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input w-48"
+              placeholder="Search CVE ID…"
+              value={searchQuery}
+              onChange={e => {
+                const v = e.target.value;
+                setSearchQuery(v);
+                if (debounceRef.current) clearTimeout(debounceRef.current);
+                debounceRef.current = setTimeout(() => { setPage(1); load(1, statusFilter, v); }, 300);
+              }}
+            />
+            <Select selectedKey={statusFilter || '__all__'} onSelectionChange={k => { const v = String(k === '__all__' ? '' : k); setStatusFilter(v); setPage(1); load(1, v, searchQuery); }}
+              className="w-44"
+            >
+              <Select.Trigger className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input">
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="__all__">All Statuses</ListBox.Item>
+                  <ListBox.Item id="accepted">Accepted Risk</ListBox.Item>
+                  <ListBox.Item id="wont_fix">Won&apos;t Fix</ListBox.Item>
+                  <ListBox.Item id="false_positive">False Positive</ListBox.Item>
+                  <ListBox.Item id="xray_ignore">Xray Ignore</ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+        }
+      />
 
       {error && (
         <FormAlert description={error} title="Suppressions loading failed" />

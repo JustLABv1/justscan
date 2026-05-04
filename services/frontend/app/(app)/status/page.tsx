@@ -4,6 +4,7 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge } from '@/components/ui/badges';
 import { fieldLabelClassName, heroFieldClassName, heroSelectTriggerClassName, heroTextAreaClassName } from '@/components/ui/form-styles';
+import { PageHeader } from '@/components/ui/page-header';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
@@ -423,18 +424,19 @@ export default function StatusPagesPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Status Pages</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Publish current image-tag health internally or externally.</p>
-        </div>
+    <PageHeader
+      eyebrow="Sharing"
+      title="Status Pages"
+      description="Publish current image-tag health internally or externally."
+      actions={
         <Button
           onPress={openCreate}
           className="btn-primary"
         >
           <PlusSignIcon size={15} /> New Status Page
         </Button>
-      </div>
+      }
+    />
 
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm"

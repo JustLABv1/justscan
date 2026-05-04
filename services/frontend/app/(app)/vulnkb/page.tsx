@@ -1,5 +1,6 @@
 'use client';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { PageHeader } from '@/components/ui/page-header';
 import { getKBEntry, listKBEntries, VulnKBEntry } from '@/lib/api';
 import { Label, ListBox, Select, Switch } from '@heroui/react';
 import { InformationCircleIcon, Shield01Icon } from 'hugeicons-react';
@@ -185,15 +186,11 @@ export default function VulnKBPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight flex items-center gap-2">
-            <Shield01Icon size={22} className="text-violet-500" />
-            Vulnerability Knowledge Base
-          </h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Enriched CVE data from NVD, GHSA, OSV, and other sources via Trivy</p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Security intelligence"
+        title="Vulnerability Knowledge Base"
+        description="Enriched CVE data from NVD, GHSA, OSV, and other sources via Trivy."
+      />
 
       {/* Filters */}
       <div className="glass-panel rounded-2xl p-4 space-y-3">

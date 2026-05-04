@@ -5,6 +5,7 @@ import { OwnershipBadge, SeverityBadge, SourceBadge, StatusBadge, SuppressionSou
 import { FormAlert } from '@/components/ui/form-alert';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
+import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import type { ComplianceResult, Org, ResourceShare, SBOMComponent, Scan, Suppression, Tag, Vulnerability } from '@/lib/api';
@@ -45,7 +46,7 @@ import { Button, Calendar, DateField, DatePicker, Dropdown, Label, ListBox, Moda
 import type { DateValue } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
 import { ArrowLeft01Icon, Cancel01Icon, Comment01Icon, CpuIcon, Delete01Icon, Delete02Icon, FileExportIcon, GitCompareIcon, MoreVerticalIcon, Refresh01Icon, Share01Icon, Shield01Icon, ShieldKeyIcon } from 'hugeicons-react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { ScannerDatabaseCard, ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
 
@@ -168,9 +169,15 @@ function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
 
 const LIMIT = 25;
 
+function isScanTab(value: string | null): value is ScanTab {
+  return value === 'vulns' || value === 'policy' || value === 'sbom' || value === 'details' || value === 'timeline';
+}
+
 export default function ScanDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const toast = useToast();
   const [scan, setScan] = useState<Scan | null>(null);
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
@@ -300,12 +307,38 @@ export default function ScanDetailPage() {
     if (!scan || defaultTabInitializedRef.current) return;
     if (scan.status === 'pending' || scan.status === 'running') return;
 
+    const requestedTab = searchParams.get('tab');
+    if (isScanTab(requestedTab) && (requestedTab !== 'policy' || blockedPolicyDetails)) {
+      setActiveTab(requestedTab);
+      defaultTabInitializedRef.current = true;
+      return;
+    }
+
     if (scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails) {
       setActiveTab('policy');
     }
 
     defaultTabInitializedRef.current = true;
-  }, [blockedPolicyDetails, scan]);
+  }, [blockedPolicyDetails, scan, searchParams]);
+
+  useEffect(() => {
+    if (!scan || scan.status === 'pending' || scan.status === 'running') return;
+    if (!defaultTabInitializedRef.current) return;
+
+    const requestedTab = searchParams.get('tab');
+    const nextTab = activeTab === 'vulns' ? null : activeTab;
+    if (requestedTab === nextTab || (!requestedTab && !nextTab)) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextTab) {
+      params.set('tab', nextTab);
+    } else {
+      params.delete('tab');
+    }
+
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [activeTab, pathname, router, scan, searchParams]);
 
   useEffect(() => {
     if (!vulnerabilityDetailsModal.isOpen) {
@@ -718,6 +751,15 @@ export default function ScanDetailPage() {
       {/* Header */}
       <ScanDetailHeader
         badges={<OwnershipBadge ownerType={scan.owner_type} ownerOrgId={scan.owner_org_id} orgNamesById={orgNamesById} />}
+        breadcrumbs={(
+          <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
+            <button type="button" onClick={() => router.push('/scans')} className="transition-colors hover:text-zinc-900 dark:hover:text-white" style={{ color: 'var(--text-faint)' }}>
+              Scans
+            </button>
+            <span style={{ color: 'var(--text-faint)' }}>/</span>
+            <span aria-current="page" style={{ color: 'var(--text-primary)' }}>Scan details</span>
+          </nav>
+        )}
         navigation={(
           <Button className="btn-secondary" onPress={() => router.back()} variant="secondary">
             <ArrowLeft01Icon size={15} />
@@ -922,20 +964,22 @@ export default function ScanDetailPage() {
       {/* Status + severity cards */}
       {scan.status !== 'pending' && scan.status !== 'running' && (
         <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
-          <div className="glass-panel rounded-xl p-4 col-span-1">
-            <p className="text-xs text-zinc-500 mb-2">Status</p>
-            <StatusBadge status={scan.status} externalStatus={scan.external_status} />
-            {scan.external_status && scan.scan_provider === 'artifactory_xray' && (
-              <p className="text-[11px] text-zinc-500 mt-2">
-                External state: {scan.external_status.replace(/_/g, ' ')}
-              </p>
-            )}
-          </div>
+          <StatCard
+            label="Status"
+            value={<StatusBadge status={scan.status} externalStatus={scan.external_status} />}
+            hint={scan.external_status && scan.scan_provider === 'artifactory_xray'
+              ? `External state: ${scan.external_status.replace(/_/g, ' ')}`
+              : undefined}
+            className="glass-panel rounded-xl col-span-1"
+          />
           {sevCards.map(({ label, count, color, border }) => (
-          <div key={label} className={`glass-panel rounded-xl border ${border} p-4`}>
-            <p className="text-xs text-zinc-500 mb-1">{label}</p>
-            <p className={`text-2xl font-bold ${color}`}>{count ?? 0}</p>
-          </div>
+          <StatCard
+            key={label}
+            label={label}
+            value={count ?? 0}
+            className={`glass-panel rounded-xl border ${border}`}
+            valueClassName={`text-2xl font-bold ${color}`}
+          />
           ))}
         </div>
       )}

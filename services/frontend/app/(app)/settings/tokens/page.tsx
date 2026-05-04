@@ -1,18 +1,21 @@
 'use client';
+
+import type { CSSProperties, ReactNode } from 'react';
+
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { StatCard } from '@/components/ui/stat-card';
 import { createUserToken, listUserTokens, PersonalToken, revokeUserToken } from '@/lib/api';
 import { fullDate, timeAgo, timeUntil } from '@/lib/time';
 import { Modal, useOverlayState } from '@heroui/react';
 import {
-    ArrowLeft01Icon,
+    Clock01Icon,
     Copy01Icon,
     Delete01Icon,
     Key01Icon,
     PlusSignIcon,
 } from 'hugeicons-react';
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
 const EXPIRY_OPTIONS = [
@@ -22,6 +25,74 @@ const EXPIRY_OPTIONS = [
   { label: '1 year', value: 365 * 24 * 60 * 60 },
   { label: 'No expiry', value: 0 },
 ];
+
+const panelStyle: CSSProperties = {
+  background: 'var(--glass-bg)',
+  border: '1px solid var(--glass-border)',
+  boxShadow: 'var(--glass-shadow)',
+};
+
+function SectionCard({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-[28px] p-6 md:p-7 space-y-5" style={panelStyle}>
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em]" style={{ color: 'var(--text-faint)' }}>
+          {eyebrow}
+        </p>
+        <h2 className="mt-2 text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">{title}</h2>
+        <p className="mt-1.5 text-sm leading-6 text-zinc-500">{description}</p>
+      </div>
+      <div className="pt-5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function InlineAlert({ message, tone = 'warn' }: { message: string; tone?: 'warn' | 'danger' }) {
+  return (
+    <div
+      className="rounded-2xl px-4 py-3 text-sm"
+      style={tone === 'danger'
+        ? { background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }
+        : { background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#fbbf24' }}
+    >
+      {message}
+    </div>
+  );
+}
+
+function DetailRow({ label, value, mono = false }: { label: string; value: ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-2xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+      <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">{label}</span>
+      <span className={`text-right text-sm text-zinc-800 dark:text-zinc-100 ${mono ? 'font-mono break-all' : ''}`.trim()}>{value}</span>
+    </div>
+  );
+}
+
+function TokensLoadingState() {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_360px]">
+        <div className="skeleton h-[320px] rounded-[28px]" />
+        <div className="skeleton h-[320px] rounded-[28px]" />
+      </div>
+      <div className="skeleton h-[340px] rounded-[28px]" />
+      <div className="skeleton h-44 rounded-[28px]" />
+    </div>
+  );
+}
 
 function TokenStatusBadge({ token }: { token: PersonalToken }) {
   const now = new Date();
@@ -264,115 +335,203 @@ export default function TokensPage() {
     }
   }
 
+  const now = new Date();
+  const activeTokens = tokens.filter(token => {
+    if (token.disabled) return false;
+    const expiresAt = new Date(token.expires_at);
+    const isNoExpiry = expiresAt.getFullYear() - now.getFullYear() >= 4;
+    return isNoExpiry || expiresAt >= now;
+  });
+  const revokedTokens = tokens.filter(token => token.disabled).length;
+  const expiringSoon = tokens.filter(token => {
+    if (token.disabled) return false;
+    const expiresAt = new Date(token.expires_at);
+    const isNoExpiry = expiresAt.getFullYear() - now.getFullYear() >= 4;
+    if (isNoExpiry || expiresAt < now) return false;
+    return expiresAt.getTime() - now.getTime() <= 30 * 24 * 60 * 60 * 1000;
+  }).length;
+
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    <div className="space-y-6">
       {confirmDialog}
 
-      <div>
-        <Link href="/settings" className="btn-secondary inline-flex items-center gap-1.5 mb-3">
-          <ArrowLeft01Icon size={15} />
-          Back to Settings
-        </Link>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">API Tokens</h1>
-            <p className="text-sm text-zinc-500 mt-0.5">
-              Personal access tokens let you authenticate with the JustScan API — use them in CI/CD pipelines, scripts, or local tools.
-            </p>
+      {loading ? <TokensLoadingState /> : (
+        <>
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_360px]">
+            <SectionCard
+              eyebrow="Developer access"
+              title="Token workspace"
+              description="Create and manage personal access tokens for CI/CD pipelines, scripts, and local tools without mixing automation credentials into the rest of account settings."
+            >
+              <div className="grid gap-6">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <StatCard
+                    label="Total tokens"
+                    value={tokens.length}
+                    hint="All tokens ever issued for this account."
+                    icon={<Key01Icon size={16} />}
+                    className="rounded-[24px]"
+                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                    valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
+                  />
+                  <StatCard
+                    label="Active now"
+                    value={activeTokens.length}
+                    hint="Usable tokens that are not revoked or expired."
+                    icon={<Key01Icon size={16} />}
+                    className="rounded-[24px]"
+                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                    valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
+                  />
+                  <StatCard
+                    label="Expiring soon"
+                    value={expiringSoon}
+                    hint="Tokens that expire within the next 30 days."
+                    icon={<Clock01Icon size={16} />}
+                    className="rounded-[24px]"
+                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                    valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
+                  />
+                  <StatCard
+                    label="Revoked"
+                    value={revokedTokens}
+                    hint="Disabled tokens retained for audit visibility."
+                    icon={<Delete01Icon size={16} />}
+                    className="rounded-[24px]"
+                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                    valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
+                  />
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
+                  <div className="space-y-3 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">What tokens are for</p>
+                      <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                        Use personal access tokens when a script, CI runner, or local tool needs to call the JustScan API without using an interactive browser session.
+                      </p>
+                    </div>
+                    <DetailRow label="Scope" value="Personal account access" />
+                    <DetailRow label="Transport" value="Bearer token in the Authorization header" />
+                    <DetailRow label="Revocation" value="Immediate for all consumers" />
+                  </div>
+
+                  <div className="space-y-4 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-white">Issue a new token</p>
+                      <p className="mt-1.5 text-sm leading-6 text-zinc-500">
+                        Create a token only for a concrete automation use case, then store it in your secret manager right away.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => createModal.open()}
+                      className="btn-primary inline-flex items-center gap-2"
+                    >
+                      <PlusSignIcon size={15} />
+                      New Token
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              eyebrow="Operational guidance"
+              title="Use tokens carefully"
+              description="Treat every token like a password. Create the minimum needed, prefer expirations, and revoke credentials as soon as an automation flow no longer needs them."
+            >
+              <div className="space-y-3">
+                <DetailRow label="Best practice" value="Use one token per system or pipeline" />
+                <DetailRow label="Rotation" value={expiringSoon > 0 ? `${expiringSoon} token${expiringSoon === 1 ? '' : 's'} need attention soon` : 'No token needs near-term rotation'} />
+                <DetailRow label="Cleanup" value={revokedTokens > 0 ? `${revokedTokens} revoked token${revokedTokens === 1 ? '' : 's'} retained for history` : 'No revoked tokens on record'} />
+              </div>
+            </SectionCard>
           </div>
-          <button
-            type="button"
-            onClick={() => createModal.open()}
-            className="btn-primary shrink-0 inline-flex items-center gap-2"
+
+          <SectionCard
+            eyebrow="Issued credentials"
+            title="Token inventory"
+            description="Review active, expired, and revoked tokens in one list. Revoke any credential that no longer belongs to a live automation path."
           >
-            <PlusSignIcon size={15} />
-            New Token
-          </button>
-        </div>
-      </div>
+            {tokens.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-[24px] px-6 py-14 text-center gap-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                  style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.15)' }}>
+                  <Key01Icon size={24} color="#a78bfa" />
+                </div>
+                <div>
+                  <p className="font-semibold text-zinc-900 dark:text-white">No tokens issued yet</p>
+                  <p className="text-sm text-zinc-500 mt-1 max-w-md">
+                    Create a token when an external system needs API access. Keep one token per integration so rotation and revocation stay easy to reason about.
+                  </p>
+                </div>
+                <button type="button" onClick={() => createModal.open()} className="btn-primary inline-flex items-center gap-2">
+                  <PlusSignIcon size={14} />
+                  Create your first token
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-[24px]" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <div className="hidden md:grid md:grid-cols-[minmax(220px,1.4fr)_160px_180px_140px_72px]" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                  <div className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</div>
+                  <div className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Created</div>
+                  <div className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Expiry</div>
+                  <div className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</div>
+                  <div className="px-4 py-3" />
+                </div>
 
-      <div className="glass-panel rounded-2xl overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center items-center h-32">
-            <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
-          </div>
-        ) : tokens.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-14 px-6 text-center gap-3">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
-              style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.15)' }}>
-              <Key01Icon size={22} color="#a78bfa" />
-            </div>
-            <div>
-              <p className="font-semibold text-zinc-900 dark:text-white">No tokens yet</p>
-              <p className="text-sm text-zinc-500 mt-1 max-w-xs">
-                Create a token to authenticate API requests from CI/CD pipelines, scripts, or external tools.
-              </p>
-            </div>
-            <button type="button" onClick={() => createModal.open()} className="btn-primary inline-flex items-center gap-2">
-              <PlusSignIcon size={14} />
-              Create your first token
-            </button>
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Created</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Expiry</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {tokens.map((token, idx) => (
-                <tr
-                  key={token.id}
-                  style={idx < tokens.length - 1 ? { borderBottom: '1px solid var(--border-subtle)' } : undefined}
-                  className="transition-colors hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30"
-                >
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-zinc-900 dark:text-white">{token.description}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-zinc-500">{timeAgo(token.created_at)}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <TokenExpiry token={token} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <TokenStatusBadge token={token} />
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {!token.disabled && (
-                      <button
-                        type="button"
-                        onClick={() => void handleRevoke(token)}
-                        className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                        title="Revoke token"
-                      >
-                        <Delete01Icon size={15} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+                <div>
+                  {tokens.map((token, idx) => (
+                    <div
+                      key={token.id}
+                      className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(220px,1.4fr)_160px_180px_140px_72px] md:items-center"
+                      style={idx < tokens.length - 1 ? { borderBottom: '1px solid var(--border-subtle)' } : undefined}
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-zinc-900 dark:text-white break-words">{token.description}</p>
+                        <p className="mt-1 text-xs text-zinc-500 md:hidden">Created {timeAgo(token.created_at)}</p>
+                      </div>
+                      <div className="text-sm text-zinc-500 hidden md:block">{timeAgo(token.created_at)}</div>
+                      <div className="text-sm text-zinc-500"><TokenExpiry token={token} /></div>
+                      <div><TokenStatusBadge token={token} /></div>
+                      <div className="flex justify-end">
+                        {!token.disabled ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleRevoke(token)}
+                            className="p-2 rounded-xl text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                            title="Revoke token"
+                          >
+                            <Delete01Icon size={15} />
+                          </button>
+                        ) : <span />}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </SectionCard>
 
-      <div className="glass-panel rounded-2xl p-5 space-y-3">
-        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Using tokens in CI/CD</h3>
-        <p className="text-xs text-zinc-500">Set the token as the <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">Authorization</code> header in your pipeline:</p>
-        <pre className="text-xs font-mono p-3 rounded-xl overflow-x-auto"
-          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>
+          <SectionCard
+            eyebrow="Developer handoff"
+            title="Using tokens in CI/CD"
+            description="Set the token as a bearer credential in the Authorization header. Store it in your CI secret store rather than hard-coding it into pipeline files."
+          >
+            <div className="space-y-4">
+              <InlineAlert message="A newly created token is shown only once. Copy it immediately and move it into a secret manager before closing the reveal dialog." />
+              <pre className="text-xs font-mono p-4 rounded-[24px] overflow-x-auto"
+                style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>
 {`curl -X POST https://justscan.example.com/api/v1/scans \\
   -H "Authorization: Bearer <your-token>" \\
   -H "Content-Type: application/json" \\
   -d '{"image": "registry.example.com/my-app:latest"}'`}
-        </pre>
-      </div>
+              </pre>
+            </div>
+          </SectionCard>
+        </>
+      )}
 
       <CreateTokenDialog state={createModal} onCreated={handleCreated} />
       <TokenRevealDialog state={revealModal} rawToken={rawToken} />

@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import { PageHeader } from '@/components/ui/page-header';
+
 import { ADMIN_AREAS, ADMIN_GETTING_STARTED_STEPS, getAdminAreaForTab, getAdminTabMeta, resolveAdminTab } from './admin-tabs';
 
 export function AdminChrome() {
@@ -13,19 +15,18 @@ export function AdminChrome() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Admin Control Plane</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">System administration</h1>
-          <p className="mt-1.5 max-w-3xl text-sm text-zinc-500">Move from Home into the right admin area, then choose the exact page you need inside that area.</p>
-        </div>
-
-        <div className="rounded-2xl px-4 py-3 min-w-[220px]" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">You are here</p>
-          <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-white">{activeArea.label}</p>
-          <p className="mt-1 text-xs text-zinc-500">{activeMeta.label} · {activeMeta.blurb}</p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Admin Control Plane"
+        title="System administration"
+        description="Move from Home into the right admin area, then choose the exact page you need inside that area."
+        actions={(
+          <div className="rounded-2xl px-4 py-3 min-w-[220px]" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">You are here</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-white">{activeArea.label}</p>
+            <p className="mt-1 text-xs text-zinc-500">{activeMeta.label} · {activeMeta.blurb}</p>
+          </div>
+        )}
+      />
 
       <nav aria-label="Admin areas" className="rounded-2xl p-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
         <div className="grid gap-2 lg:grid-cols-5 sm:grid-cols-2">

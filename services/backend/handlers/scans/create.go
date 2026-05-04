@@ -18,20 +18,22 @@ import (
 )
 
 type CreateScanRequest struct {
-	Image      string   `json:"image" binding:"required"`
-	Tag        string   `json:"tag" binding:"required"`
-	Platform   string   `json:"platform"`
-	RegistryID string   `json:"registry_id"`
-	OrgID      string   `json:"org_id"`
-	TagIDs     []string `json:"tag_ids"`
+	Image          string   `json:"image" binding:"required"`
+	Tag            string   `json:"tag" binding:"required"`
+	Platform       string   `json:"platform"`
+	RegistryID     string   `json:"registry_id"`
+	XrayRepository string   `json:"xray_repository"`
+	OrgID          string   `json:"org_id"`
+	TagIDs         []string `json:"tag_ids"`
 }
 
 type CreateScansRequest struct {
-	Images     []string `json:"images" binding:"required,min=1"`
-	Platform   string   `json:"platform"`
-	RegistryID string   `json:"registry_id"`
-	OrgID      string   `json:"org_id"`
-	TagIDs     []string `json:"tag_ids"`
+	Images         []string `json:"images" binding:"required,min=1"`
+	Platform       string   `json:"platform"`
+	RegistryID     string   `json:"registry_id"`
+	XrayRepository string   `json:"xray_repository"`
+	OrgID          string   `json:"org_id"`
+	TagIDs         []string `json:"tag_ids"`
 }
 
 func CreateScan(db *bun.DB) gin.HandlerFunc {
@@ -82,7 +84,7 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(req.Image, req.Tag, registry)
+		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTargetWithXrayRepository(req.Image, req.Tag, registry, req.XrayRepository)
 
 		scan := &models.Scan{
 			ImageName:    normalizedImageName,
@@ -213,7 +215,7 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				return
 			}
 
-			normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(imageName, imageTag, registry)
+			normalizedImageName, normalizedImageTag := scanner.NormalizeScanTargetWithXrayRepository(imageName, imageTag, registry, req.XrayRepository)
 			scan := models.Scan{
 				ImageName:    normalizedImageName,
 				ImageTag:     normalizedImageTag,

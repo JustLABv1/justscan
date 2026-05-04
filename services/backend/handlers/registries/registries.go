@@ -10,6 +10,7 @@ import (
 	"justscan-backend/pkg/crypto"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -56,6 +57,7 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 			URL               string `json:"url" binding:"required"`
 			XrayURL           string `json:"xray_url"`
 			XrayArtifactoryID string `json:"xray_artifactory_id"`
+			XrayRepository    string `json:"xray_repository"`
 			OrgID             string `json:"org_id"`
 			AuthType          string `json:"auth_type" binding:"omitempty,oneof=basic token aws_ecr none"`
 			ScanProvider      string `json:"scan_provider" binding:"omitempty,oneof=trivy artifactory_xray"`
@@ -105,6 +107,7 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 			URL:               body.URL,
 			XrayURL:           body.XrayURL,
 			XrayArtifactoryID: body.XrayArtifactoryID,
+			XrayRepository:    strings.Trim(strings.TrimSpace(body.XrayRepository), "/"),
 			AuthType:          body.AuthType,
 			ScanProvider:      body.ScanProvider,
 			Username:          body.Username,
@@ -147,6 +150,7 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 			URL               string `json:"url"`
 			XrayURL           string `json:"xray_url"`
 			XrayArtifactoryID string `json:"xray_artifactory_id"`
+			XrayRepository    string `json:"xray_repository"`
 			AuthType          string `json:"auth_type"`
 			ScanProvider      string `json:"scan_provider"`
 			Username          string `json:"username"`
@@ -172,6 +176,9 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 		if body.XrayArtifactoryID != "" {
 			registry.XrayArtifactoryID = body.XrayArtifactoryID
 		}
+		if body.XrayRepository != "" || registry.ScanProvider == models.ScanProviderArtifactoryXray {
+			registry.XrayRepository = strings.Trim(strings.TrimSpace(body.XrayRepository), "/")
+		}
 		if body.AuthType != "" {
 			registry.AuthType = body.AuthType
 		}
@@ -181,6 +188,11 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 		if err := scanner.ValidateRegistryProviderSelection(registry.ScanProvider); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+		if registry.ScanProvider != models.ScanProviderArtifactoryXray {
+			registry.XrayURL = ""
+			registry.XrayArtifactoryID = "default"
+			registry.XrayRepository = ""
 		}
 		if body.Username != "" {
 			registry.Username = body.Username
@@ -196,7 +208,7 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 		}
 		registry.UpdatedAt = time.Now()
 		if _, err := db.NewUpdate().Model(registry).
-			Column("name", "url", "xray_url", "xray_artifactory_id", "auth_type", "scan_provider", "username", "password", "updated_at").
+			Column("name", "url", "xray_url", "xray_artifactory_id", "xray_repository", "auth_type", "scan_provider", "username", "password", "updated_at").
 			Where("id = ?", registryID).
 			Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update registry"})

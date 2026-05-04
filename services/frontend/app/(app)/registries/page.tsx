@@ -65,6 +65,7 @@ export default function RegistriesPage() {
   const [url, setUrl] = useState('');
   const [xrayUrl, setXrayUrl] = useState('');
   const [xrayArtifactoryId, setXrayArtifactoryId] = useState('default');
+  const [xrayRepository, setXrayRepository] = useState('');
   const [authType, setAuthType] = useState<'none' | 'basic' | 'token' | 'aws_ecr'>('none');
   const [scanProvider, setScanProvider] = useState<'trivy' | 'artifactory_xray'>('trivy');
   const [username, setUsername] = useState('');
@@ -99,11 +100,11 @@ export default function RegistriesPage() {
   useEffect(() => { load(); }, [load, scopeKey]);
 
   function openCreate() {
-    setEditing(null); setName(''); setUrl(''); setXrayUrl(''); setXrayArtifactoryId('default'); setAuthType('none'); setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray'); setUsername(''); setPassword(''); setFormError('');
+    setEditing(null); setName(''); setUrl(''); setXrayUrl(''); setXrayArtifactoryId('default'); setXrayRepository(''); setAuthType('none'); setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray'); setUsername(''); setPassword(''); setFormError('');
     modal.open();
   }
   function openEdit(r: RegistryWithHealth) {
-    setEditing(r); setName(r.name); setUrl(r.url); setXrayUrl(r.xray_url ?? ''); setXrayArtifactoryId(r.xray_artifactory_id ?? 'default'); setAuthType(r.auth_type ?? 'none'); setScanProvider(r.scan_provider ?? 'trivy'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
+    setEditing(r); setName(r.name); setUrl(r.url); setXrayUrl(r.xray_url ?? ''); setXrayArtifactoryId(r.xray_artifactory_id ?? 'default'); setXrayRepository(r.xray_repository ?? ''); setAuthType(r.auth_type ?? 'none'); setScanProvider(r.scan_provider ?? 'trivy'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
     modal.open();
   }
   async function handleSubmit(e: React.FormEvent) {
@@ -115,6 +116,7 @@ export default function RegistriesPage() {
         url,
         xray_url: scanProvider === 'artifactory_xray' ? xrayUrl || undefined : undefined,
         xray_artifactory_id: scanProvider === 'artifactory_xray' ? xrayArtifactoryId || 'default' : undefined,
+        xray_repository: scanProvider === 'artifactory_xray' ? xrayRepository.trim() || undefined : undefined,
         auth_type: authType,
         scan_provider: scanProvider,
         username,
@@ -385,6 +387,14 @@ export default function RegistriesPage() {
                         onChange={(e) => setXrayArtifactoryId(e.target.value)}
                         placeholder="default"
                         value={xrayArtifactoryId}
+                      />
+                      <FormField
+                        className="font-mono"
+                        description="Optional default Docker repo key for this registry, for example docker-remote. JustScan will prepend it for Xray scans when users enter Docker Hub-style image names."
+                        label="Default Artifactory Repo"
+                        onChange={(e) => setXrayRepository(e.target.value)}
+                        placeholder="docker-remote"
+                        value={xrayRepository}
                       />
                     </>
                   )}

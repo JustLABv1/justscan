@@ -51,6 +51,13 @@ type RegistryXrayTestClient struct {
 	client *xrayClient
 }
 
+type ArtifactoryRepository struct {
+	Key         string `json:"key"`
+	PackageType string `json:"package_type,omitempty"`
+	Class       string `json:"class,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 type xrayHTTPError struct {
 	StatusCode int
 	Body       string
@@ -581,9 +588,50 @@ func (c *RegistryXrayTestClient) Ping(ctx context.Context) error {
 	return c.client.ping(ctx)
 }
 
+func (c *RegistryXrayTestClient) ListDockerRepositories(ctx context.Context) ([]ArtifactoryRepository, error) {
+	return c.client.listDockerRepositories(ctx)
+}
+
 func (c *xrayClient) ping(ctx context.Context) error {
 	_, err := c.doJSON(ctx, http.MethodGet, "/xray/api/v1/system/ping", nil, nil, http.StatusOK)
 	return err
+}
+
+func (c *xrayClient) listDockerRepositories(ctx context.Context) ([]ArtifactoryRepository, error) {
+	type artifactoryRepositoryResponse struct {
+		Key         string `json:"key"`
+		PackageType string `json:"packageType"`
+		Class       string `json:"rclass"`
+		Description string `json:"description"`
+	}
+
+	var payload []artifactoryRepositoryResponse
+	body, err := c.doRawJSON(ctx, http.MethodGet, "/artifactory/api/repositories?packageType=docker", nil, "application/json", http.StatusOK)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("failed to parse artifactory repositories: %w", err)
+	}
+
+	repositories := make([]ArtifactoryRepository, 0, len(payload))
+	for _, entry := range payload {
+		if !strings.EqualFold(strings.TrimSpace(entry.PackageType), "docker") {
+			continue
+		}
+		key := strings.Trim(strings.TrimSpace(entry.Key), "/")
+		if key == "" {
+			continue
+		}
+		repositories = append(repositories, ArtifactoryRepository{
+			Key:         key,
+			PackageType: strings.TrimSpace(entry.PackageType),
+			Class:       strings.TrimSpace(entry.Class),
+			Description: strings.TrimSpace(entry.Description),
+		})
+	}
+
+	return repositories, nil
 }
 
 func (c *xrayClient) scanNow(ctx context.Context, repoPath string) error {

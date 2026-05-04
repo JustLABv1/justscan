@@ -109,13 +109,20 @@ func normalizeRegistryHost(url string) string {
 // NormalizeScanTarget trims user input, removes accidental leading/trailing
 // separators, and qualifies unqualified image names when a registry is chosen.
 func NormalizeScanTarget(imageName, imageTag string, registry *models.Registry) (string, string) {
+	return NormalizeScanTargetWithXrayRepository(imageName, imageTag, registry, "")
+}
+
+// NormalizeScanTargetWithXrayRepository applies the same normalization as
+// NormalizeScanTarget plus an optional Xray repository override used for
+// Artifactory-backed scans.
+func NormalizeScanTargetWithXrayRepository(imageName, imageTag string, registry *models.Registry, xrayRepository string) (string, string) {
 	trimmedName := strings.TrimSpace(imageName)
 	trimmedName = strings.TrimSuffix(trimmedName, ":")
 	trimmedTag := strings.TrimSpace(imageTag)
 	trimmedTag = strings.TrimPrefix(trimmedTag, ":")
 
 	if registry != nil {
-		trimmedName = QualifyImageNameForRegistry(trimmedName, registry)
+		trimmedName = QualifyImageNameForRegistryWithXrayRepository(trimmedName, registry, xrayRepository)
 	}
 
 	return trimmedName, trimmedTag
@@ -124,14 +131,56 @@ func NormalizeScanTarget(imageName, imageTag string, registry *models.Registry) 
 // QualifyImageNameForRegistry prefixes an image with the selected registry host
 // when the image name is not already fully qualified.
 func QualifyImageNameForRegistry(imageName string, registry *models.Registry) string {
+	return QualifyImageNameForRegistryWithXrayRepository(imageName, registry, "")
+}
+
+func QualifyImageNameForRegistryWithXrayRepository(imageName string, registry *models.Registry, xrayRepository string) string {
 	trimmedName := strings.TrimSpace(imageName)
 	if trimmedName == "" || registry == nil {
 		return trimmedName
 	}
+
+	host := normalizeRegistryHost(registry.URL)
+	prefix := ""
+	remainder := strings.TrimPrefix(strings.Trim(trimmedName, "/"), "/")
+	if hasRegistryHost(trimmedName) {
+		if host == "" || !strings.HasPrefix(trimmedName, host+"/") {
+			return trimmedName
+		}
+		prefix = host + "/"
+		remainder = strings.TrimPrefix(trimmedName, prefix)
+	}
+
+	remainder = qualifyXrayRepositoryPath(remainder, effectiveXrayRepository(registry, xrayRepository))
+	if prefix != "" {
+		return prefix + remainder
+	}
 	if hasRegistryHost(trimmedName) {
 		return trimmedName
 	}
-	return normalizeRegistryHost(registry.URL) + "/" + strings.TrimPrefix(trimmedName, "/")
+	return host + "/" + remainder
+}
+
+func effectiveXrayRepository(registry *models.Registry, xrayRepository string) string {
+	if registry == nil || registry.ScanProvider != models.ScanProviderArtifactoryXray {
+		return ""
+	}
+	if trimmed := strings.Trim(strings.TrimSpace(xrayRepository), "/"); trimmed != "" {
+		return trimmed
+	}
+	return strings.Trim(strings.TrimSpace(registry.XrayRepository), "/")
+}
+
+func qualifyXrayRepositoryPath(imagePath, xrayRepository string) string {
+	trimmedPath := strings.Trim(strings.TrimSpace(imagePath), "/")
+	if trimmedPath == "" {
+		return trimmedPath
+	}
+	trimmedRepo := strings.Trim(strings.TrimSpace(xrayRepository), "/")
+	if trimmedRepo == "" || trimmedPath == trimmedRepo || strings.HasPrefix(trimmedPath, trimmedRepo+"/") {
+		return trimmedPath
+	}
+	return trimmedRepo + "/" + trimmedPath
 }
 
 func hasRegistryHost(imageName string) bool {

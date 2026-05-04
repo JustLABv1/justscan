@@ -9,6 +9,7 @@ export interface Registry {
   url: string;
   xray_url?: string;
   xray_artifactory_id?: string;
+  xray_repository?: string;
   auth_type: 'none' | 'basic' | 'token' | 'aws_ecr';
   scan_provider: ScanProvider;
   username: string;
@@ -159,6 +160,13 @@ export interface RegistryWithHealth extends Registry {
 export interface RegistryListResponse {
   data: RegistryWithHealth[];
   capabilities?: ScannerCapabilities;
+}
+
+export interface ArtifactoryRepository {
+  key: string;
+  package_type?: string;
+  class?: string;
+  description?: string;
 }
 
 export interface PublicSettings {

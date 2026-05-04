@@ -25,11 +25,11 @@ export const listScanImages = (page = 1, limit = 30, image?: string, status?: st
 export const getScan = (id: string) =>
   req<Scan>('GET', `/api/v1/scans/${id}`);
 
-export const createScan = (imageName: string, imageTag: string, registryId?: string, tagIds?: string[], platform?: string, orgId?: string) =>
-  req<Scan>('POST', '/api/v1/scans/', { image: imageName, tag: imageTag, registry_id: registryId, tag_ids: tagIds, platform, org_id: orgId });
+export const createScan = (imageName: string, imageTag: string, registryId?: string, tagIds?: string[], platform?: string, orgId?: string, xrayRepository?: string) =>
+  req<Scan>('POST', '/api/v1/scans/', { image: imageName, tag: imageTag, registry_id: registryId, tag_ids: tagIds, platform, org_id: orgId, xray_repository: xrayRepository });
 
-export const createScans = (images: string[], registryId?: string, tagIds?: string[], platform?: string, orgId?: string) =>
-  req<{ scans: Scan[] }>('POST', '/api/v1/scans/batch', { images, registry_id: registryId, tag_ids: tagIds, platform, org_id: orgId });
+export const createScans = (images: string[], registryId?: string, tagIds?: string[], platform?: string, orgId?: string, xrayRepository?: string) =>
+  req<{ scans: Scan[] }>('POST', '/api/v1/scans/batch', { images, registry_id: registryId, tag_ids: tagIds, platform, org_id: orgId, xray_repository: xrayRepository });
 
 export const deleteScan = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/scans/${id}`);

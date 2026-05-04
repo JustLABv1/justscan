@@ -15,6 +15,7 @@ type Registry struct {
 	URL               string     `bun:"url,type:text,notnull" json:"url"`
 	XrayURL           string     `bun:"xray_url,type:text,default:''" json:"xray_url"`
 	XrayArtifactoryID string     `bun:"xray_artifactory_id,type:text,notnull,default:'default'" json:"xray_artifactory_id"`
+	XrayRepository    string     `bun:"xray_repository,type:text,notnull,default:''" json:"xray_repository,omitempty"`
 	AuthType          string     `bun:"auth_type,type:text,notnull,default:'basic'" json:"auth_type"`
 	ScanProvider      string     `bun:"scan_provider,type:text,notnull,default:'trivy'" json:"scan_provider"`
 	Username          string     `bun:"username,type:text,default:''" json:"-"`

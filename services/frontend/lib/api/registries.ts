@@ -1,7 +1,7 @@
 import { req } from './core';
 import { appendScope } from './scope';
 import type { ResourceShare } from './types/orgs';
-import type { Registry, RegistryListResponse, ScannerCapabilities, ScanProvider } from './types/registries';
+import type { ArtifactoryRepository, Registry, RegistryListResponse, ScannerCapabilities, ScanProvider } from './types/registries';
 
 export function getDefaultScannerCapabilities(): ScannerCapabilities {
   return {
@@ -65,3 +65,6 @@ export const getDefaultRegistry = () =>
 
 export const testRegistry = (id: string) =>
   req<{ health_status: string; health_message: string; last_health_check_at: string }>('POST', `/api/v1/registries/${id}/test`);
+
+export const listArtifactoryRepositories = (id: string) =>
+  req<{ data: ArtifactoryRepository[] }>('GET', `/api/v1/registries/${id}/artifactory-repositories`).then((result) => result.data ?? []);

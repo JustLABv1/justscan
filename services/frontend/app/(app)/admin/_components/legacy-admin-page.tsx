@@ -4,90 +4,90 @@ import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
-  addTagToScan,
-  adminCreateGlobalRegistry,
-  adminCreateGroupMapping,
-  adminCreateOIDCRoleOverride,
-  adminCreateOIDCProvider,
-  adminDeleteGlobalRegistry,
-  adminDeleteGroupMapping,
-  adminDeleteOIDCRoleOverride,
-  adminDeleteOIDCProvider,
-  adminListGlobalRegistries,
-  adminListGroupMappings,
-  adminListOIDCRoleOverrides,
-  adminListOIDCProviders,
-  adminPreviewOIDCClaimSync,
-  AdminScan,
-  adminSetDefaultRegistry,
-  AdminToken,
-  adminUnsetDefaultRegistry,
-  adminUpdateGroupMapping,
-  adminUpdateAuthSettings,
-  adminUpdateOIDCRoleOverride,
-  adminUpdateGlobalRegistry,
-  adminUpdateOIDCProvider,
-  adminUpdateScannerSettings,
-  AdminUser,
-  APIRequestLog,
-  APIRequestLogFilters,
-  APIUsageStats,
-  AuditLog,
-  AuditLogFilters,
-  AutoTagRule,
-  cancelScan,
-  createAdminUser,
-  createAutoTagRule,
-  createNotificationChannel,
-  createShare,
-  deleteAdminToken,
-  deleteAdminUser,
-  deleteAutoTagRule,
-  deleteNotificationChannel,
-  deleteShare,
-  disableAdminUser,
-  getAdminSettings,
-  getAPIUsageStats,
-  getXRayUsageStats,
-  getScannerHealth,
-  listAdminScans,
-  listAdminTokens,
-  listAdminUsers,
-  listAPIRequestLogs,
-  listAuditLogs,
-  listAutoTagRules,
-  listNotificationChannels,
-  listNotificationDeliveries,
-  listOrgs,
-  listTags,
-  listXRayRequestLogs,
-  NotificationChannel,
-  NotificationDelivery,
-  OIDCClaimSyncPreview,
-  OIDCGroupMapping,
-  OIDCOrgRoleOverride,
-  OIDCProviderAdmin,
-  Org,
-  Registry,
-  RegistryWithHealth,
-  reScan,
-  ScannerCapabilities,
-  ScannerHealth,
-  ScannerSettings,
-  setPublicScanEnabled,
-  Tag,
-  testNotificationChannel,
-  updateAdminToken,
-  updateAdminUser,
-  updateAPILogRetention,
-  updateAutoTagRule,
-  updateNotificationChannel,
-  updateRateLimit,
-  updateRegisterRateLimit,
-  updateXRayLogRetention,
-  XRayRequestLog,
-  XRayRequestLogFilters,
-  XRayUsageStats,
+    addTagToScan,
+    adminCreateGlobalRegistry,
+    adminCreateGroupMapping,
+    adminCreateOIDCProvider,
+    adminCreateOIDCRoleOverride,
+    adminDeleteGlobalRegistry,
+    adminDeleteGroupMapping,
+    adminDeleteOIDCProvider,
+    adminDeleteOIDCRoleOverride,
+    adminListGlobalRegistries,
+    adminListGroupMappings,
+    adminListOIDCProviders,
+    adminListOIDCRoleOverrides,
+    adminPreviewOIDCClaimSync,
+    AdminScan,
+    adminSetDefaultRegistry,
+    AdminToken,
+    adminUnsetDefaultRegistry,
+    adminUpdateAuthSettings,
+    adminUpdateGlobalRegistry,
+    adminUpdateGroupMapping,
+    adminUpdateOIDCProvider,
+    adminUpdateOIDCRoleOverride,
+    adminUpdateScannerSettings,
+    AdminUser,
+    APIRequestLog,
+    APIRequestLogFilters,
+    APIUsageStats,
+    AuditLog,
+    AuditLogFilters,
+    AutoTagRule,
+    cancelScan,
+    createAdminUser,
+    createAutoTagRule,
+    createNotificationChannel,
+    createShare,
+    deleteAdminToken,
+    deleteAdminUser,
+    deleteAutoTagRule,
+    deleteNotificationChannel,
+    deleteShare,
+    disableAdminUser,
+    getAdminSettings,
+    getAPIUsageStats,
+    getScannerHealth,
+    getXRayUsageStats,
+    listAdminScans,
+    listAdminTokens,
+    listAdminUsers,
+    listAPIRequestLogs,
+    listAuditLogs,
+    listAutoTagRules,
+    listNotificationChannels,
+    listNotificationDeliveries,
+    listOrgs,
+    listTags,
+    listXRayRequestLogs,
+    NotificationChannel,
+    NotificationDelivery,
+    OIDCClaimSyncPreview,
+    OIDCGroupMapping,
+    OIDCOrgRoleOverride,
+    OIDCProviderAdmin,
+    Org,
+    Registry,
+    RegistryWithHealth,
+    reScan,
+    ScannerCapabilities,
+    ScannerHealth,
+    ScannerSettings,
+    setPublicScanEnabled,
+    Tag,
+    testNotificationChannel,
+    updateAdminToken,
+    updateAdminUser,
+    updateAPILogRetention,
+    updateAutoTagRule,
+    updateNotificationChannel,
+    updateRateLimit,
+    updateRegisterRateLimit,
+    updateXRayLogRetention,
+    XRayRequestLog,
+    XRayRequestLogFilters,
+    XRayUsageStats,
 } from '@/lib/api';
 import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -4691,6 +4691,7 @@ function GlobalRegistriesTab() {
   const [url, setUrl] = useState('');
   const [xrayUrl, setXrayUrl] = useState('');
   const [xrayArtifactoryId, setXrayArtifactoryId] = useState('default');
+  const [xrayRepository, setXrayRepository] = useState('');
   const [authType, setAuthType] = useState<'none' | 'basic' | 'token' | 'aws_ecr'>('none');
   const [scanProvider, setScanProvider] = useState<'trivy' | 'artifactory_xray'>('trivy');
   const [username, setUsername] = useState('');
@@ -4724,6 +4725,7 @@ function GlobalRegistriesTab() {
     setUrl(registry?.url ?? '');
     setXrayUrl(registry?.xray_url ?? '');
     setXrayArtifactoryId(registry?.xray_artifactory_id ?? 'default');
+    setXrayRepository(registry?.xray_repository ?? '');
     setAuthType(registry?.auth_type ?? 'none');
     setScanProvider(registry?.scan_provider ?? (capabilities.enable_trivy ? 'trivy' : 'artifactory_xray'));
     setUsername('');
@@ -4751,6 +4753,7 @@ function GlobalRegistriesTab() {
         url: url.trim(),
         xray_url: scanProvider === 'artifactory_xray' ? xrayUrl.trim() || undefined : undefined,
         xray_artifactory_id: scanProvider === 'artifactory_xray' ? xrayArtifactoryId.trim() || 'default' : undefined,
+        xray_repository: scanProvider === 'artifactory_xray' ? xrayRepository.trim() || undefined : undefined,
         auth_type: authType,
         scan_provider: scanProvider,
         ...(!editingRegistry || username.trim() ? { username: username.trim() } : {}),
@@ -4919,7 +4922,7 @@ function GlobalRegistriesTab() {
                     </div>
                   </div>
                   {scanProvider === 'artifactory_xray' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1.5">
                         <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Xray URL</label>
                         <input className={inputCls} value={xrayUrl} onChange={(event) => setXrayUrl(event.target.value)} placeholder="https://xray.example.com" />
@@ -4927,6 +4930,11 @@ function GlobalRegistriesTab() {
                       <div className="space-y-1.5">
                         <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Artifactory ID</label>
                         <input className={inputCls} value={xrayArtifactoryId} onChange={(event) => setXrayArtifactoryId(event.target.value)} placeholder="default" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Default Artifactory Repo</label>
+                        <input className={inputCls} value={xrayRepository} onChange={(event) => setXrayRepository(event.target.value)} placeholder="docker-remote" />
+                        <p className="text-xs text-zinc-500">Optional repo key used to prepend Docker Hub-style image names for Xray scans.</p>
                       </div>
                     </div>
                   ) : null}

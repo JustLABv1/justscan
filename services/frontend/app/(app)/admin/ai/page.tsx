@@ -1,27 +1,39 @@
 'use client';
 
-import { Button } from '@heroui/react';
-import { useMemo, useState } from 'react';
-
 import { useToast } from '@/components/toast';
-import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { FormField } from '@/components/ui/form-field';
+import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import {
-  adminCreateAIProvider,
-  adminDeleteAIProvider,
-  adminListAIProviders,
-  adminListAISupportedProviders,
-  adminTestAIProvider,
-  adminUpdateAIProvider,
-  adminUpdateAISettings,
-  getAdminAISettings,
-  type AIProviderAdmin,
-  type AISettings,
-  type AISupportedProvider,
+    adminCreateAIProvider,
+    adminDeleteAIProvider,
+    adminListAIProviders,
+    adminListAISupportedProviders,
+    adminTestAIProvider,
+    adminUpdateAIProvider,
+    adminUpdateAISettings,
+    getAdminAISettings,
+    type AIProviderAdmin,
+    type AISettings,
+    type AISupportedProvider,
 } from '@/lib/api';
-import { useEffect } from 'react';
+import {
+    AlertDialog,
+    Button,
+    Card,
+    Dropdown,
+    Label,
+    ListBox,
+    Modal,
+    Select,
+    Switch,
+    Table,
+    useOverlayState,
+} from '@heroui/react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+
 import { AdminShell } from '../_components/admin-shell';
 
-const inputCls = nativeFieldClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
 
 type ProviderFormState = {
   providerKey: string;
@@ -43,7 +55,7 @@ type ProviderFormState = {
   temperature: string;
 };
 
-const emptyForm: ProviderFormState = {
+const baseFormDefaults: ProviderFormState = {
   providerKey: '',
   providerType: 'openai-compatible',
   label: '',
@@ -63,9 +75,23 @@ const emptyForm: ProviderFormState = {
   temperature: '0.2',
 };
 
+function buildEmptyForm(supportedProviders: AISupportedProvider[]): ProviderFormState {
+  const fallbackType = supportedProviders.some((provider) => provider.type === baseFormDefaults.providerType)
+    ? baseFormDefaults.providerType
+    : supportedProviders[0]?.type ?? baseFormDefaults.providerType;
+  const meta = supportedProviders.find((provider) => provider.type === fallbackType);
+
+  return {
+    ...baseFormDefaults,
+    providerType: fallbackType,
+    baseUrl: meta?.defaultUrl ?? '',
+    chatModel: meta?.defaultModel ?? '',
+  };
+}
+
 function toFormState(provider?: AIProviderAdmin): ProviderFormState {
   if (!provider) {
-    return emptyForm;
+    return { ...baseFormDefaults };
   }
 
   return {
@@ -89,19 +115,87 @@ function toFormState(provider?: AIProviderAdmin): ProviderFormState {
   };
 }
 
+function toneStyle(tone: 'success' | 'danger' | 'neutral' | 'accent') {
+  switch (tone) {
+    case 'success':
+      return {
+        background: 'rgba(34,197,94,0.12)',
+        border: '1px solid rgba(34,197,94,0.22)',
+        color: '#86efac',
+      };
+    case 'danger':
+      return {
+        background: 'rgba(239,68,68,0.12)',
+        border: '1px solid rgba(239,68,68,0.22)',
+        color: '#fca5a5',
+      };
+    case 'accent':
+      return {
+        background: 'rgba(124,58,237,0.12)',
+        border: '1px solid rgba(124,58,237,0.22)',
+        color: '#c4b5fd',
+      };
+    default:
+      return {
+        background: 'rgba(113,113,122,0.12)',
+        border: '1px solid rgba(113,113,122,0.2)',
+        color: 'var(--text-secondary)',
+      };
+  }
+}
+
+function SurfaceCard({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <Card className={`glass-panel overflow-hidden rounded-[28px] ${className}`.trim()}>
+      {children}
+    </Card>
+  );
+}
+
+function StatusPill({ tone, children }: { tone: 'success' | 'danger' | 'neutral' | 'accent'; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold" style={toneStyle(tone)}>
+      {children}
+    </span>
+  );
+}
+
+function ProviderBadges({ provider }: { provider: AIProviderAdmin }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {provider.isDefault ? <StatusPill tone="accent">Default</StatusPill> : null}
+      {provider.enabled ? <StatusPill tone="success">Enabled</StatusPill> : <StatusPill tone="danger">Disabled</StatusPill>}
+      {provider.tokenConfigured ? <StatusPill tone="neutral">Token configured</StatusPill> : <StatusPill tone="danger">Token missing</StatusPill>}
+    </div>
+  );
+}
+
+function formatEndpoint(value: string) {
+  if (!value) {
+    return 'No base URL set';
+  }
+
+  return value.replace(/^https?:\/\//, '');
+}
+
 export default function AdminAIPage() {
   const toast = useToast();
+  const modal = useOverlayState();
+
   const [settings, setSettings] = useState<AISettings | null>(null);
   const [providers, setProviders] = useState<AIProviderAdmin[]>([]);
   const [supportedProviders, setSupportedProviders] = useState<AISupportedProvider[]>([]);
-  const [selectedKey, setSelectedKey] = useState<string>('');
-  const [form, setForm] = useState<ProviderFormState>(emptyForm);
+  const [editingProviderKey, setEditingProviderKey] = useState<string | null>(null);
+  const [providerPendingDelete, setProviderPendingDelete] = useState<AIProviderAdmin | null>(null);
+  const [form, setForm] = useState<ProviderFormState>(baseFormDefaults);
+  const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
   const [savingSetting, setSavingSetting] = useState<'enabled' | 'allowAnonymous' | ''>('');
   const [testingKey, setTestingKey] = useState('');
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const [nextSettings, nextProviders, nextSupported] = await Promise.all([
@@ -112,42 +206,90 @@ export default function AdminAIPage() {
       setSettings(nextSettings);
       setProviders(nextProviders);
       setSupportedProviders(nextSupported);
-      setSelectedKey((current) => (current && nextProviders.some((provider) => provider.providerKey === current) ? current : ''));
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to load AI settings');
     } finally {
       setLoading(false);
     }
-  }
+  }, [toast]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
-  const selectedProvider = useMemo(
-    () => providers.find((provider) => provider.providerKey === selectedKey) ?? null,
-    [providers, selectedKey],
+  const editingProvider = useMemo(
+    () => (editingProviderKey ? providers.find((provider) => provider.providerKey === editingProviderKey) ?? null : null),
+    [editingProviderKey, providers],
   );
 
-  useEffect(() => {
-    setForm(toFormState(selectedProvider ?? undefined));
-  }, [selectedProvider]);
+  const providerTypeMeta = useMemo(
+    () => supportedProviders.find((provider) => provider.type === form.providerType) ?? null,
+    [form.providerType, supportedProviders],
+  );
+
+  const defaultProvider = useMemo(
+    () => providers.find((provider) => provider.isDefault) ?? null,
+    [providers],
+  );
+
+  const sortedProviders = useMemo(
+    () => [...providers].sort((left, right) => {
+      if (left.isDefault !== right.isDefault) {
+        return left.isDefault ? -1 : 1;
+      }
+      if (left.enabled !== right.enabled) {
+        return left.enabled ? -1 : 1;
+      }
+      return left.label.localeCompare(right.label);
+    }),
+    [providers],
+  );
+
+  function openCreateModal() {
+    setEditingProviderKey(null);
+    setForm(buildEmptyForm(supportedProviders));
+    setFormError('');
+    modal.open();
+  }
+
+  function openEditModal(provider: AIProviderAdmin) {
+    setEditingProviderKey(provider.providerKey);
+    setForm(toFormState(provider));
+    setFormError('');
+    modal.open();
+  }
+
+  function resetForm() {
+    setFormError('');
+    if (editingProvider) {
+      setForm(toFormState(editingProvider));
+      return;
+    }
+    setForm(buildEmptyForm(supportedProviders));
+  }
 
   async function handleSave() {
+    if (!form.providerKey.trim()) {
+      setFormError('Provider key is required.');
+      return;
+    }
+
     setSaving(true);
+    setFormError('');
+
     try {
       const payload = {
-        providerKey: form.providerKey,
+        providerKey: form.providerKey.trim(),
         providerType: form.providerType,
-        label: form.label,
-        baseUrl: form.baseUrl,
-        apiPath: form.apiPath,
-        apiVersion: form.apiVersion,
-        region: form.region,
-        organization: form.organization,
+        label: form.label.trim(),
+        baseUrl: form.baseUrl.trim(),
+        apiPath: form.apiPath.trim(),
+        apiVersion: form.apiVersion.trim(),
+        region: form.region.trim(),
+        organization: form.organization.trim(),
         token: form.token,
-        chatModel: form.chatModel,
-        embeddingModel: form.embeddingModel,
+        chatModel: form.chatModel.trim(),
+        embeddingModel: form.embeddingModel.trim(),
         enabled: form.enabled,
         isDefault: form.isDefault,
         timeoutSeconds: Number(form.timeoutSeconds || 0),
@@ -156,39 +298,46 @@ export default function AdminAIPage() {
         temperature: Number(form.temperature || 0),
       };
 
-      if (selectedProvider) {
-        await adminUpdateAIProvider(selectedProvider.providerKey, payload);
+      if (editingProviderKey) {
+        await adminUpdateAIProvider(editingProviderKey, payload);
         toast.success('AI provider updated');
       } else {
         await adminCreateAIProvider(payload);
         toast.success('AI provider created');
       }
+
+      modal.close();
+      setEditingProviderKey(null);
+      setForm(buildEmptyForm(supportedProviders));
       await load();
-      if (!selectedProvider) {
-        setSelectedKey(form.providerKey);
-      }
-      setForm((current) => ({ ...current, token: '' }));
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save AI provider');
+      const message = error instanceof Error ? error.message : 'Failed to save AI provider';
+      setFormError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleDelete(key: string) {
-    if (!window.confirm(`Delete AI provider ${key}?`)) {
+  async function handleConfirmDelete() {
+    if (!providerPendingDelete) {
       return;
     }
+
+    setDeletePending(true);
     try {
-      await adminDeleteAIProvider(key);
+      await adminDeleteAIProvider(providerPendingDelete.providerKey);
       toast.success('AI provider deleted');
-      if (selectedKey === key) {
-        setSelectedKey('');
-        setForm(emptyForm);
+      if (editingProviderKey === providerPendingDelete.providerKey) {
+        modal.close();
+        setEditingProviderKey(null);
       }
+      setProviderPendingDelete(null);
       await load();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete AI provider');
+    } finally {
+      setDeletePending(false);
     }
   }
 
@@ -217,255 +366,596 @@ export default function AdminAIPage() {
     }
   }
 
-  const providerTypeMeta = supportedProviders.find((provider) => provider.type === form.providerType);
-  const defaultProvider = providers.find((provider) => provider.isDefault) ?? null;
+  function handleProviderTypeChange(nextType: string) {
+    const nextMeta = supportedProviders.find((provider) => provider.type === nextType);
+    setForm((current) => ({
+      ...current,
+      providerType: nextType,
+      baseUrl: nextMeta?.defaultUrl ?? current.baseUrl,
+      chatModel: nextMeta?.defaultModel ?? current.chatModel,
+    }));
+  }
+
+  const inventoryDescription = loading
+    ? 'Loading configured providers...'
+    : providers.length === 0
+      ? 'No provider is configured yet. Create your first provider to enable assistant traffic.'
+      : `${providers.length} provider${providers.length === 1 ? '' : 's'} configured.`;
 
   return (
     <AdminShell>
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,420px)]">
-        <section className="glass-panel rounded-[28px] p-6 space-y-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Provider connectivity</h2>
-              <p className="mt-1 text-sm text-zinc-500">Configure LLM providers, validate credentials, and choose the default runtime used by the assistant.</p>
-            </div>
-            <Button className="btn-secondary" onPress={() => { setSelectedKey(''); setForm(emptyForm); }} variant="secondary">
-              New provider
-            </Button>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-4 rounded-[28px] border px-5 py-5 sm:px-6" style={{ borderColor: 'var(--glass-border)', background: 'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))' }}>
+          <div className="max-w-3xl space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>Provider Control</p>
+            <h2 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Manage AI providers without the permanent editor</h2>
+            <p className="text-sm leading-6" style={{ color: 'var(--text-faint)' }}>
+              Configure global AI availability, review configured runtimes, and create or edit providers in a contained modal workflow.
+            </p>
           </div>
+          <Button className="btn-primary" onPress={openCreateModal} variant="primary">
+            New provider
+          </Button>
+        </div>
 
-          <div className="grid gap-3 lg:grid-cols-2">
-            <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <SurfaceCard>
+            <div className="space-y-4 px-5 py-5">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Assistant availability</p>
-                  <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-white">{settings?.enabled ? 'AI is enabled' : 'AI is disabled'}</p>
-                  <p className="mt-1 text-xs text-zinc-500">When disabled, the assistant page and chat APIs reject requests immediately.</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>Assistant availability</p>
+                  <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{settings?.enabled ? 'AI is enabled' : 'AI is disabled'}</p>
+                  <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-faint)' }}>When off, the assistant UI and chat APIs reject requests immediately.</p>
                 </div>
-                <Button
-                  className={settings?.enabled ? 'btn-danger' : 'btn-secondary'}
+                <StatusPill tone={settings?.enabled ? 'success' : 'danger'}>
+                  {settings?.enabled ? 'On' : 'Off'}
+                </StatusPill>
+              </div>
+              <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                <Switch
                   isDisabled={!settings || savingSetting !== ''}
-                  onPress={() => {
+                  isSelected={settings?.enabled ?? false}
+                  onChange={(nextSelected) => {
                     if (!settings) {
                       return;
                     }
-                    void handleUpdateSettings({ enabled: !settings.enabled }, 'enabled');
+                    void handleUpdateSettings({ enabled: nextSelected }, 'enabled');
                   }}
-                  style={{ alignSelf: 'flex-start' }}
-                  variant="secondary"
                 >
-                  {savingSetting === 'enabled' ? 'Saving…' : settings?.enabled ? 'Disable AI' : 'Enable AI'}
-                </Button>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <Switch.Content>
+                    <Label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      {savingSetting === 'enabled' ? 'Saving availability...' : 'Allow assistant requests'}
+                    </Label>
+                  </Switch.Content>
+                </Switch>
               </div>
             </div>
+          </SurfaceCard>
 
-            <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <SurfaceCard>
+            <div className="space-y-4 px-5 py-5">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Anonymous AI</p>
-                  <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-white">{settings?.allowAnonymous ? 'Anonymous access allowed' : 'Anonymous access blocked'}</p>
-                  <p className="mt-1 text-xs text-zinc-500">Controls whether future unauthenticated AI entry points may use the configured providers.</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>Anonymous access</p>
+                  <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {settings?.allowAnonymous ? 'Anonymous access allowed' : 'Anonymous access blocked'}
+                  </p>
+                  <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-faint)' }}>Controls whether unauthenticated AI entry points may use configured providers.</p>
                 </div>
-                <Button
-                  className={settings?.allowAnonymous ? 'btn-danger' : 'btn-secondary'}
+                <StatusPill tone={settings?.allowAnonymous ? 'accent' : 'neutral'}>
+                  {settings?.allowAnonymous ? 'Allowed' : 'Blocked'}
+                </StatusPill>
+              </div>
+              <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                <Switch
                   isDisabled={!settings || savingSetting !== ''}
-                  onPress={() => {
+                  isSelected={settings?.allowAnonymous ?? false}
+                  onChange={(nextSelected) => {
                     if (!settings) {
                       return;
                     }
-                    void handleUpdateSettings({ allowAnonymous: !settings.allowAnonymous }, 'allowAnonymous');
+                    void handleUpdateSettings({ allowAnonymous: nextSelected }, 'allowAnonymous');
                   }}
-                  style={{ alignSelf: 'flex-start' }}
-                  variant="secondary"
                 >
-                  {savingSetting === 'allowAnonymous' ? 'Saving…' : settings?.allowAnonymous ? 'Disable anonymous AI' : 'Enable anonymous AI'}
-                </Button>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <Switch.Content>
+                    <Label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      {savingSetting === 'allowAnonymous' ? 'Saving policy...' : 'Permit anonymous provider usage'}
+                    </Label>
+                  </Switch.Content>
+                </Switch>
               </div>
             </div>
-          </div>
+          </SurfaceCard>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              { label: 'Configured providers', value: String(providers.length) },
-              { label: 'Supported runtimes', value: String(supportedProviders.length) },
-              { label: 'Default provider', value: defaultProvider?.label ?? 'None' },
-              { label: 'Selected provider', value: selectedProvider?.label ?? 'New provider' },
-            ].map((item) => (
-              <div key={item.label} className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{item.label}</p>
-                <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-white">{item.value}</p>
+          <SurfaceCard>
+            <div className="flex h-full flex-col justify-between px-5 py-5">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>Default provider</p>
+                <p className="mt-3 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{defaultProvider?.label ?? 'None configured'}</p>
+                <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-faint)' }}>
+                  {defaultProvider ? `${defaultProvider.providerType} · ${defaultProvider.chatModel || 'No chat model'}` : 'The assistant uses the default provider when no explicit provider key is chosen.'}
+                </p>
               </div>
-            ))}
-          </div>
+              <div className="mt-4">
+                {defaultProvider ? <ProviderBadges provider={defaultProvider} /> : <StatusPill tone="neutral">Awaiting configuration</StatusPill>}
+              </div>
+            </div>
+          </SurfaceCard>
 
-          <div className="flex flex-wrap gap-2">
-            {supportedProviders.map((provider) => (
-              <span key={provider.type} className="rounded-full border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--glass-border)', background: 'var(--app-bg)', color: 'var(--text-secondary)' }}>
-                {provider.label}
-              </span>
-            ))}
-          </div>
+          <SurfaceCard>
+            <div className="flex h-full flex-col justify-between px-5 py-5">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>Inventory</p>
+                <p className="mt-3 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{providers.length}</p>
+                <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-faint)' }}>
+                  {supportedProviders.length} supported runtime{supportedProviders.length === 1 ? '' : 's'} exposed for provider setup.
+                </p>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <StatusPill tone="neutral">{providers.filter((provider) => provider.enabled).length} enabled</StatusPill>
+                <StatusPill tone="neutral">{providers.filter((provider) => provider.tokenConfigured).length} with tokens</StatusPill>
+              </div>
+            </div>
+          </SurfaceCard>
+        </div>
 
-          <div className="space-y-3">
+        <SurfaceCard>
+          <div className="space-y-5 px-5 py-5 sm:px-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Configured providers</h3>
+                <p className="mt-1 text-sm" style={{ color: 'var(--text-faint)' }}>{inventoryDescription}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {supportedProviders.slice(0, 4).map((provider) => (
+                  <StatusPill key={provider.type} tone="neutral">{provider.label}</StatusPill>
+                ))}
+              </div>
+            </div>
+
             {loading ? (
-              <div className="rounded-2xl border px-4 py-6 text-sm text-zinc-500" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-                Loading AI providers…
+              <div className="rounded-2xl border px-4 py-10 text-sm" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)', color: 'var(--text-faint)' }}>
+                Loading AI providers...
               </div>
-            ) : providers.length === 0 ? (
-              <div className="rounded-2xl border px-4 py-6 text-sm text-zinc-500" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-                No provider configured yet.
-              </div>
-            ) : providers.map((provider) => (
-              <div key={provider.providerKey} className="rounded-2xl border p-4" style={{ borderColor: selectedKey === provider.providerKey ? 'rgba(124,58,237,0.35)' : 'var(--glass-border)', background: 'var(--row-hover)' }}>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <button type="button" className="min-w-0 text-left" onClick={() => setSelectedKey(provider.providerKey)}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">{provider.label}</h3>
-                      {provider.isDefault ? <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[11px] font-semibold text-violet-300">Default</span> : null}
-                      {!provider.enabled ? <span className="rounded-full bg-zinc-500/10 px-2 py-0.5 text-[11px] font-semibold text-zinc-400">Disabled</span> : null}
-                    </div>
-                    <p className="mt-1 text-xs text-zinc-500">{provider.providerType} · {provider.chatModel || 'No model'}</p>
-                    <p className="mt-1 text-xs text-zinc-500 break-all">{provider.baseUrl || 'No base URL set'}</p>
-                  </button>
-                  <div className="flex flex-wrap gap-2">
-                    <Button className="btn-secondary" isDisabled={testingKey === provider.providerKey} onPress={() => handleTest(provider.providerKey)} variant="secondary">
-                      {testingKey === provider.providerKey ? 'Testing…' : 'Test'}
-                    </Button>
-                    <Button className="btn-danger" onPress={() => handleDelete(provider.providerKey)} variant="secondary">
-                      Delete
-                    </Button>
-                  </div>
+            ) : sortedProviders.length === 0 ? (
+              <div className="rounded-3xl border px-5 py-10 text-center" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>No provider configured yet</p>
+                <p className="mx-auto mt-2 max-w-2xl text-sm leading-6" style={{ color: 'var(--text-faint)' }}>
+                  Create your first provider to validate credentials, choose a default runtime, and unblock assistant traffic.
+                </p>
+                <div className="mt-5">
+                  <Button className="btn-primary" onPress={openCreateModal} variant="primary">
+                    Create provider
+                  </Button>
                 </div>
               </div>
-            ))}
+            ) : (
+              <>
+                <div className="hidden md:block">
+                  <Table variant="secondary">
+                    <Table.ScrollContainer>
+                      <Table.Content aria-label="Configured AI providers" className="min-w-[920px]">
+                        <Table.Header>
+                          <Table.Column isRowHeader>Provider</Table.Column>
+                          <Table.Column>Runtime</Table.Column>
+                          <Table.Column>Endpoint</Table.Column>
+                          <Table.Column>Status</Table.Column>
+                          <Table.Column>Actions</Table.Column>
+                        </Table.Header>
+                        <Table.Body>
+                          {sortedProviders.map((provider) => (
+                            <Table.Row key={provider.providerKey}>
+                              <Table.Cell>
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>{provider.label}</p>
+                                    {provider.isDefault ? <StatusPill tone="accent">Default</StatusPill> : null}
+                                  </div>
+                                  <p className="font-mono text-xs" style={{ color: 'var(--text-faint)' }}>{provider.providerKey}</p>
+                                </div>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <div className="space-y-1 text-sm">
+                                  <p style={{ color: 'var(--text-primary)' }}>{provider.providerType}</p>
+                                  <p className="text-xs" style={{ color: 'var(--text-faint)' }}>{provider.chatModel || 'No chat model set'}</p>
+                                </div>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <div className="max-w-[260px] space-y-1 text-sm">
+                                  <p className="truncate" style={{ color: 'var(--text-primary)' }}>{formatEndpoint(provider.baseUrl)}</p>
+                                  <p className="text-xs truncate" style={{ color: 'var(--text-faint)' }}>{provider.apiPath || provider.apiVersion || 'Default API path and version'}</p>
+                                </div>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <ProviderBadges provider={provider} />
+                              </Table.Cell>
+                              <Table.Cell>
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    className="btn-secondary whitespace-nowrap"
+                                    isDisabled={Boolean(testingKey)}
+                                    onPress={() => handleTest(provider.providerKey)}
+                                    variant="secondary"
+                                  >
+                                    {testingKey === provider.providerKey ? 'Testing...' : 'Test'}
+                                  </Button>
+                                  <Dropdown>
+                                    <Dropdown.Trigger className="btn-secondary inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium outline-none">
+                                      Actions
+                                    </Dropdown.Trigger>
+                                    <Dropdown.Popover className="min-w-[180px]" placement="bottom end">
+                                      <Dropdown.Menu onAction={(key) => {
+                                        if (key === 'edit') {
+                                          openEditModal(provider);
+                                        }
+                                        if (key === 'delete') {
+                                          setProviderPendingDelete(provider);
+                                        }
+                                      }}>
+                                        <Dropdown.Item id="edit" textValue="Edit provider">
+                                          <Label>Edit provider</Label>
+                                        </Dropdown.Item>
+                                        <Dropdown.Item id="delete" textValue="Delete provider" className="text-danger">
+                                          <Label className="text-danger">Delete provider</Label>
+                                        </Dropdown.Item>
+                                      </Dropdown.Menu>
+                                    </Dropdown.Popover>
+                                  </Dropdown>
+                                </div>
+                              </Table.Cell>
+                            </Table.Row>
+                          ))}
+                        </Table.Body>
+                      </Table.Content>
+                    </Table.ScrollContainer>
+                  </Table>
+                </div>
+
+                <div className="space-y-3 md:hidden">
+                  {sortedProviders.map((provider) => (
+                    <div key={provider.providerKey} className="rounded-3xl border px-4 py-4" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{provider.label}</p>
+                            {provider.isDefault ? <StatusPill tone="accent">Default</StatusPill> : null}
+                          </div>
+                          <p className="font-mono text-xs" style={{ color: 'var(--text-faint)' }}>{provider.providerKey}</p>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>Runtime</p>
+                            <p className="mt-1 text-sm" style={{ color: 'var(--text-primary)' }}>{provider.providerType}</p>
+                            <p className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>{provider.chatModel || 'No chat model set'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>Endpoint</p>
+                            <p className="mt-1 text-sm break-all" style={{ color: 'var(--text-primary)' }}>{provider.baseUrl || 'No base URL set'}</p>
+                            <p className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>{provider.apiPath || provider.apiVersion || 'Default API path and version'}</p>
+                          </div>
+                        </div>
+
+                        <ProviderBadges provider={provider} />
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            className="btn-secondary flex-1"
+                            isDisabled={Boolean(testingKey)}
+                            onPress={() => handleTest(provider.providerKey)}
+                            variant="secondary"
+                          >
+                            {testingKey === provider.providerKey ? 'Testing...' : 'Test provider'}
+                          </Button>
+                          <Dropdown>
+                            <Dropdown.Trigger className="btn-secondary inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium outline-none">
+                              Actions
+                            </Dropdown.Trigger>
+                            <Dropdown.Popover className="min-w-[180px]" placement="bottom end">
+                              <Dropdown.Menu onAction={(key) => {
+                                if (key === 'edit') {
+                                  openEditModal(provider);
+                                }
+                                if (key === 'delete') {
+                                  setProviderPendingDelete(provider);
+                                }
+                              }}>
+                                <Dropdown.Item id="edit" textValue="Edit provider">
+                                  <Label>Edit provider</Label>
+                                </Dropdown.Item>
+                                <Dropdown.Item id="delete" textValue="Delete provider" className="text-danger">
+                                  <Label className="text-danger">Delete provider</Label>
+                                </Dropdown.Item>
+                              </Dropdown.Menu>
+                            </Dropdown.Popover>
+                          </Dropdown>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-        </section>
+        </SurfaceCard>
 
-        <section className="glass-panel rounded-[28px] p-6 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">{selectedProvider ? 'Edit provider' : 'Create provider'}</h2>
-            <p className="mt-1 text-sm text-zinc-500">Use a stable provider key. The assistant page uses the default provider when no explicit key is chosen.</p>
-          </div>
-
-          <label className="space-y-1.5 block">
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Provider key</span>
-            <input className={inputCls} disabled={Boolean(selectedProvider)} value={form.providerKey} onChange={(event) => setForm((current) => ({ ...current, providerKey: event.target.value }))} placeholder="primary-openai" />
-          </label>
-
-          <label className="space-y-1.5 block">
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Provider type</span>
-            <select
-              className={inputCls}
-              disabled={Boolean(selectedProvider)}
-              value={form.providerType}
-              onChange={(event) => {
-                const nextType = event.target.value;
-                const nextMeta = supportedProviders.find((provider) => provider.type === nextType);
-                setForm((current) => ({
-                  ...current,
-                  providerType: nextType,
-                  baseUrl: nextMeta?.defaultUrl ?? current.baseUrl,
-                  chatModel: nextMeta?.defaultModel ?? current.chatModel,
-                }));
-              }}
-            >
+        <SurfaceCard>
+          <div className="space-y-4 px-5 py-5 sm:px-6">
+            <div>
+              <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Supported runtimes</h3>
+              <p className="mt-1 text-sm" style={{ color: 'var(--text-faint)' }}>Available provider types and their seeded defaults for new configurations.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
               {supportedProviders.map((provider) => (
-                <option key={provider.type} value={provider.type}>{provider.label}</option>
+                <div key={provider.type} className="rounded-full border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--glass-border)', background: 'var(--app-bg)', color: 'var(--text-secondary)' }}>
+                  {provider.label}
+                </div>
               ))}
-            </select>
-          </label>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1.5 block">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Label</span>
-              <input className={inputCls} value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} placeholder="Primary OpenAI" />
-            </label>
-            <label className="space-y-1.5 block">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Chat model</span>
-              <input className={inputCls} value={form.chatModel} onChange={(event) => setForm((current) => ({ ...current, chatModel: event.target.value }))} placeholder={providerTypeMeta?.defaultModel ?? 'gpt-4o-mini'} />
-            </label>
+            </div>
           </div>
+        </SurfaceCard>
 
-          <label className="space-y-1.5 block">
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Base URL</span>
-            <input className={inputCls} value={form.baseUrl} onChange={(event) => setForm((current) => ({ ...current, baseUrl: event.target.value }))} placeholder={providerTypeMeta?.defaultUrl ?? 'https://api.openai.com/v1'} />
-          </label>
+        <Modal state={modal}>
+          <Modal.Backdrop isDismissable variant="blur">
+            <Modal.Container placement="center" size="lg">
+              <Modal.Dialog className="glass-modal overflow-hidden rounded-3xl">
+                <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                  <Modal.Heading className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {editingProviderKey ? 'Edit provider' : 'Create provider'}
+                  </Modal.Heading>
+                  <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                </Modal.Header>
+                <Modal.Body className="max-h-[calc(100dvh-12rem)] overflow-y-auto px-6 py-5">
+                  <form
+                    id="ai-provider-form"
+                    className="space-y-5"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleSave();
+                    }}
+                  >
+                    {formError ? (
+                      <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#fca5a5' }}>
+                        {formError}
+                      </div>
+                    ) : null}
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1.5 block">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">API path</span>
-              <input className={inputCls} value={form.apiPath} onChange={(event) => setForm((current) => ({ ...current, apiPath: event.target.value }))} placeholder="Optional override" />
-            </label>
-            <label className="space-y-1.5 block">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">API version</span>
-              <input className={inputCls} value={form.apiVersion} onChange={(event) => setForm((current) => ({ ...current, apiVersion: event.target.value }))} placeholder="Optional" />
-            </label>
-          </div>
+                    <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Identity</h4>
+                        <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-faint)' }}>Provider identity is stable and controls how the assistant references this runtime.</p>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <FormField
+                          description="Use a stable key because assistant settings and runtime references depend on it."
+                          disabled={Boolean(editingProviderKey)}
+                          label="Provider key"
+                          placeholder="primary-openai"
+                          required
+                          value={form.providerKey}
+                          onChange={(event) => setForm((current) => ({ ...current, providerKey: event.target.value }))}
+                        />
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1.5 block">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Region</span>
-              <input className={inputCls} value={form.region} onChange={(event) => setForm((current) => ({ ...current, region: event.target.value }))} placeholder="Optional" />
-            </label>
-            <label className="space-y-1.5 block">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Organization</span>
-              <input className={inputCls} value={form.organization} onChange={(event) => setForm((current) => ({ ...current, organization: event.target.value }))} placeholder="Optional" />
-            </label>
-          </div>
+                        <Select
+                          className="w-full"
+                          isDisabled={Boolean(editingProviderKey)}
+                          placeholder="Select a provider type"
+                          selectedKey={form.providerType}
+                          onSelectionChange={(key) => handleProviderTypeChange(String(key))}
+                        >
+                          <Label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Provider type</Label>
+                          <Select.Trigger className={selectTriggerCls}>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {supportedProviders.map((provider) => (
+                                <ListBox.Item id={provider.type} key={provider.type} textValue={provider.label}>
+                                  {provider.label}
+                                  <ListBox.ItemIndicator />
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
 
-          <label className="space-y-1.5 block">
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">API token</span>
-            <input className={inputCls} type="password" value={form.token} onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))} placeholder={selectedProvider?.tokenConfigured ? 'Leave blank to keep current token' : 'Paste provider token'} />
-          </label>
+                        <FormField
+                          label="Label"
+                          placeholder="Primary OpenAI"
+                          value={form.label}
+                          onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))}
+                        />
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1.5 block">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Embedding model</span>
-              <input className={inputCls} value={form.embeddingModel} onChange={(event) => setForm((current) => ({ ...current, embeddingModel: event.target.value }))} placeholder="Optional" />
-            </label>
-            <label className="space-y-1.5 block">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Temperature</span>
-              <input className={inputCls} type="number" step="0.1" min="0" max="2" value={form.temperature} onChange={(event) => setForm((current) => ({ ...current, temperature: event.target.value }))} />
-            </label>
-          </div>
+                        <FormField
+                          description="Seeded from the selected provider type when available."
+                          label="Chat model"
+                          placeholder={providerTypeMeta?.defaultModel ?? 'gpt-4o-mini'}
+                          value={form.chatModel}
+                          onChange={(event) => setForm((current) => ({ ...current, chatModel: event.target.value }))}
+                        />
+                      </div>
+                    </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="space-y-1.5 block">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Timeout</span>
-              <input className={inputCls} type="number" min="1" value={form.timeoutSeconds} onChange={(event) => setForm((current) => ({ ...current, timeoutSeconds: event.target.value }))} />
-            </label>
-            <label className="space-y-1.5 block">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Context tokens</span>
-              <input className={inputCls} type="number" min="1" value={form.maxContextTokens} onChange={(event) => setForm((current) => ({ ...current, maxContextTokens: event.target.value }))} />
-            </label>
-            <label className="space-y-1.5 block">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Output tokens</span>
-              <input className={inputCls} type="number" min="1" value={form.maxOutputTokens} onChange={(event) => setForm((current) => ({ ...current, maxOutputTokens: event.target.value }))} />
-            </label>
-          </div>
+                    <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Endpoint and authentication</h4>
+                        <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-faint)' }}>Provide the runtime endpoint and secret material used to reach this model provider.</p>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <FormField
+                          containerClassName="md:col-span-2"
+                          label="Base URL"
+                          placeholder={providerTypeMeta?.defaultUrl ?? 'https://api.openai.com/v1'}
+                          value={form.baseUrl}
+                          onChange={(event) => setForm((current) => ({ ...current, baseUrl: event.target.value }))}
+                        />
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="flex items-center gap-3 rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-              <input checked={form.enabled} onChange={(event) => setForm((current) => ({ ...current, enabled: event.target.checked }))} type="checkbox" />
-              <span className="text-sm text-zinc-700 dark:text-zinc-200">Provider enabled</span>
-            </label>
-            <label className="flex items-center gap-3 rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-              <input checked={form.isDefault} onChange={(event) => setForm((current) => ({ ...current, isDefault: event.target.checked }))} type="checkbox" />
-              <span className="text-sm text-zinc-700 dark:text-zinc-200">Use as default provider</span>
-            </label>
-          </div>
+                        <FormField
+                          label="API path"
+                          placeholder="Optional override"
+                          value={form.apiPath}
+                          onChange={(event) => setForm((current) => ({ ...current, apiPath: event.target.value }))}
+                        />
 
-          <div className="flex flex-wrap gap-2">
-            <Button className="btn-primary" isDisabled={saving || !form.providerKey.trim()} onPress={handleSave} variant="primary">
-              {saving ? 'Saving…' : selectedProvider ? 'Save changes' : 'Create provider'}
-            </Button>
-            {selectedProvider ? (
-              <Button className="btn-secondary" onPress={() => setForm(toFormState(selectedProvider))} variant="secondary">
-                Reset
-              </Button>
-            ) : null}
-          </div>
-        </section>
+                        <FormField
+                          label="API version"
+                          placeholder="Optional"
+                          value={form.apiVersion}
+                          onChange={(event) => setForm((current) => ({ ...current, apiVersion: event.target.value }))}
+                        />
+
+                        <FormField
+                          label="Region"
+                          placeholder="Optional"
+                          value={form.region}
+                          onChange={(event) => setForm((current) => ({ ...current, region: event.target.value }))}
+                        />
+
+                        <FormField
+                          label="Organization"
+                          placeholder="Optional"
+                          value={form.organization}
+                          onChange={(event) => setForm((current) => ({ ...current, organization: event.target.value }))}
+                        />
+
+                        <FormField
+                          containerClassName="md:col-span-2"
+                          description={editingProvider?.tokenConfigured ? 'Leave blank to keep the current token.' : 'Paste the provider token used for assistant requests.'}
+                          label="API token"
+                          placeholder={editingProvider?.tokenConfigured ? 'Current token is already configured' : 'Paste provider token'}
+                          type="password"
+                          value={form.token}
+                          onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Models and runtime tuning</h4>
+                        <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-faint)' }}>Set model defaults and the runtime safety rails used by the assistant.</p>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        <FormField
+                          label="Embedding model"
+                          placeholder="Optional"
+                          value={form.embeddingModel}
+                          onChange={(event) => setForm((current) => ({ ...current, embeddingModel: event.target.value }))}
+                        />
+                        <FormField
+                          label="Temperature"
+                          max="2"
+                          min="0"
+                          step="0.1"
+                          type="number"
+                          value={form.temperature}
+                          onChange={(event) => setForm((current) => ({ ...current, temperature: event.target.value }))}
+                        />
+                        <FormField
+                          label="Timeout seconds"
+                          min="1"
+                          type="number"
+                          value={form.timeoutSeconds}
+                          onChange={(event) => setForm((current) => ({ ...current, timeoutSeconds: event.target.value }))}
+                        />
+                        <FormField
+                          label="Context tokens"
+                          min="1"
+                          type="number"
+                          value={form.maxContextTokens}
+                          onChange={(event) => setForm((current) => ({ ...current, maxContextTokens: event.target.value }))}
+                        />
+                        <FormField
+                          label="Output tokens"
+                          min="1"
+                          type="number"
+                          value={form.maxOutputTokens}
+                          onChange={(event) => setForm((current) => ({ ...current, maxOutputTokens: event.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Provider state</h4>
+                        <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-faint)' }}>Set whether this provider can receive traffic and whether it becomes the assistant default.</p>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--app-bg)' }}>
+                          <Switch isSelected={form.enabled} onChange={(nextSelected) => setForm((current) => ({ ...current, enabled: nextSelected }))}>
+                            <Switch.Control>
+                              <Switch.Thumb />
+                            </Switch.Control>
+                            <Switch.Content>
+                              <Label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Provider enabled</Label>
+                            </Switch.Content>
+                          </Switch>
+                        </div>
+                        <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--app-bg)' }}>
+                          <Switch isSelected={form.isDefault} onChange={(nextSelected) => setForm((current) => ({ ...current, isDefault: nextSelected }))}>
+                            <Switch.Control>
+                              <Switch.Thumb />
+                            </Switch.Control>
+                            <Switch.Content>
+                              <Label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Use as default provider</Label>
+                            </Switch.Content>
+                          </Switch>
+                        </div>
+                      </div>
+                    </div>
+                  </form>
+                </Modal.Body>
+                <Modal.Footer className="flex flex-wrap justify-end gap-2 px-6 py-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                  <Button className="btn-secondary" onPress={() => { resetForm(); }} variant="secondary">
+                    Reset
+                  </Button>
+                  <Button className="btn-secondary" onPress={() => { modal.close(); }} variant="secondary">
+                    Cancel
+                  </Button>
+                  <Button className="btn-primary" form="ai-provider-form" isDisabled={saving || !form.providerKey.trim()} type="submit" variant="primary">
+                    {saving ? 'Saving...' : editingProviderKey ? 'Save changes' : 'Create provider'}
+                  </Button>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
+
+        <AlertDialog isOpen={Boolean(providerPendingDelete)} onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setProviderPendingDelete(null);
+          }
+        }}>
+          <AlertDialog.Backdrop variant="blur">
+            <AlertDialog.Container placement="center">
+              <AlertDialog.Dialog className="glass-modal overflow-hidden rounded-3xl sm:max-w-[420px]">
+                <AlertDialog.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <AlertDialog.Header>
+                  <AlertDialog.Icon status="danger" />
+                  <AlertDialog.Heading>Delete provider?</AlertDialog.Heading>
+                </AlertDialog.Header>
+                <AlertDialog.Body>
+                  <p className="text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
+                    This removes <strong>{providerPendingDelete?.label ?? 'this provider'}</strong> and its runtime configuration from the admin inventory.
+                  </p>
+                </AlertDialog.Body>
+                <AlertDialog.Footer>
+                  <Button slot="close" variant="tertiary">Cancel</Button>
+                  <Button isDisabled={deletePending} onPress={() => { void handleConfirmDelete(); }} variant="danger">
+                    {deletePending ? 'Deleting...' : 'Delete provider'}
+                  </Button>
+                </AlertDialog.Footer>
+              </AlertDialog.Dialog>
+            </AlertDialog.Container>
+          </AlertDialog.Backdrop>
+        </AlertDialog>
       </div>
     </AdminShell>
   );

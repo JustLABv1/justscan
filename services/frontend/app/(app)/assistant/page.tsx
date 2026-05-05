@@ -1,42 +1,42 @@
 'use client';
 
-import { Button, Drawer, useOverlayState } from '@heroui/react';
+import { AlertDialog, Button, Drawer, ListBox, Select, useOverlayState } from '@heroui/react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useToast } from '@/components/toast';
-import { heroTextAreaClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { heroSelectTriggerClassName, heroTextAreaClassName } from '@/components/ui/form-styles';
 import {
-    createAIConversation,
-    createScans,
-    deleteAIConversation,
-    getAIConversation,
-    getAISettings,
-    getScan,
-    getVulnerabilityContextAnalysis,
-    getWorkScope,
-    listAIConversations,
-    listAIProviders,
-    listArtifactoryRepositories,
-    listRegistriesWithCapabilities,
-    listVulnerabilities,
-    reScan,
-    sendAIConversationMessage,
-    type AIConversation,
-    type AIMessageSource,
-    type AIProviderSummary,
-    type AISettings,
-    type AIToolCall,
-    type RegistryWithHealth,
-    type Scan,
-    type Vulnerability
+  createAIConversation,
+  createScans,
+  deleteAIConversation,
+  getAIConversation,
+  getAISettings,
+  getScan,
+  getVulnerabilityContextAnalysis,
+  getWorkScope,
+  listAIConversations,
+  listAIProviders,
+  listArtifactoryRepositories,
+  listRegistriesWithCapabilities,
+  listVulnerabilities,
+  reScan,
+  sendAIConversationMessage,
+  type AIConversation,
+  type AIMessageSource,
+  type AIProviderSummary,
+  type AISettings,
+  type AIToolCall,
+  type RegistryWithHealth,
+  type Scan,
+  type Vulnerability
 } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 
-const inputCls = nativeFieldClassName;
 const textAreaCls = heroTextAreaClassName;
+const selectTriggerCls = `${heroSelectTriggerClassName} min-h-10 py-2.5 text-sm`;
 
 type ScopeContext = {
   title: string;
@@ -87,6 +87,7 @@ export default function AssistantPage() {
   const [providerKey, setProviderKey] = useState('');
   const [conversations, setConversations] = useState<AIConversation[]>([]);
   const [conversation, setConversation] = useState<AIConversation | null>(null);
+  const [conversationPendingDelete, setConversationPendingDelete] = useState<AIConversation | null>(null);
   const [scopeContext, setScopeContext] = useState<ScopeContext | null>(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -250,9 +251,6 @@ export default function AssistantPage() {
   }
 
   async function handleDeleteConversation(id: string) {
-    if (!window.confirm('Delete this conversation?')) {
-      return;
-    }
     try {
       await deleteAIConversation(id);
       toast.success('Conversation deleted');
@@ -343,6 +341,7 @@ export default function AssistantPage() {
   const scopeDescription = scopeContext?.description ?? 'General JustScan routes and workflows.';
   const conversationLabel = conversation?.title?.trim() || 'New conversation';
   const hasMeaningfulContext = scopeType !== 'global' || Boolean(scopeRef);
+  const providerSelectedKey = providerKey || providers[0]?.key || '__none__';
   const conversationItems = loading ? (
     <div className="rounded-2xl border px-4 py-5 text-sm text-zinc-500" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
       Loading conversations…
@@ -352,16 +351,30 @@ export default function AssistantPage() {
       No conversations yet for this scope.
     </div>
   ) : conversations.map((item) => (
-    <div key={item.id} className="rounded-2xl border p-3 transition-colors" style={{ borderColor: conversation?.id === item.id ? 'rgba(124,58,237,0.35)' : 'var(--glass-border)', background: 'var(--row-hover)' }}>
+    <div key={item.id} className="rounded-[22px] border p-3 transition-colors" style={{ borderColor: conversation?.id === item.id ? 'rgba(124,58,237,0.42)' : 'var(--glass-border)', background: conversation?.id === item.id ? 'rgba(124,58,237,0.12)' : 'var(--row-hover)' }}>
       <button type="button" className="w-full text-left" onClick={() => {
         conversationsDrawer.close();
         void handleOpenConversation(item.id);
       }}>
-        <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{item.title}</p>
-        <p className="mt-1 text-xs text-zinc-500">Updated {timeAgo(item.updatedAt)}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{item.title}</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-500">Updated {timeAgo(item.updatedAt)}</p>
+          </div>
+          {conversation?.id === item.id ? (
+            <span className="inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ borderColor: 'rgba(124,58,237,0.25)', background: 'rgba(124,58,237,0.12)', color: '#c4b5fd' }}>
+              Open
+            </span>
+          ) : null}
+        </div>
       </button>
-      <div className="mt-3 flex justify-end">
-        <button className="text-xs font-medium text-rose-300 hover:text-rose-200" onClick={() => void handleDeleteConversation(item.id)} type="button">
+      <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3" style={{ borderColor: 'var(--glass-border)' }}>
+        <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Conversation</p>
+        <button
+          className="text-xs font-medium text-rose-300 transition-colors hover:text-rose-200"
+          onClick={() => setConversationPendingDelete(item)}
+          type="button"
+        >
           Delete
         </button>
       </div>
@@ -416,6 +429,45 @@ export default function AssistantPage() {
         </aside>
 
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <AlertDialog isOpen={Boolean(conversationPendingDelete)} onOpenChange={(isOpen) => {
+            if (!isOpen) {
+              setConversationPendingDelete(null);
+            }
+          }}>
+            <AlertDialog.Backdrop variant="blur">
+              <AlertDialog.Container placement="center">
+                <AlertDialog.Dialog className="glass-modal overflow-hidden rounded-3xl sm:max-w-[420px]">
+                  <AlertDialog.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                  <AlertDialog.Header>
+                    <AlertDialog.Icon status="danger" />
+                    <AlertDialog.Heading>Delete conversation?</AlertDialog.Heading>
+                  </AlertDialog.Header>
+                  <AlertDialog.Body>
+                    <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                      This removes <strong>{conversationPendingDelete?.title ?? 'this conversation'}</strong> and its message history from this scope.
+                    </p>
+                  </AlertDialog.Body>
+                  <AlertDialog.Footer>
+                    <Button slot="close" variant="tertiary">Cancel</Button>
+                    <Button
+                      onPress={() => {
+                        if (!conversationPendingDelete) {
+                          return;
+                        }
+                        void handleDeleteConversation(conversationPendingDelete.id);
+                        setConversationPendingDelete(null);
+                      }}
+                      slot="close"
+                      variant="danger"
+                    >
+                      Delete
+                    </Button>
+                  </AlertDialog.Footer>
+                </AlertDialog.Dialog>
+              </AlertDialog.Container>
+            </AlertDialog.Backdrop>
+          </AlertDialog>
+
           <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 md:px-5" style={{ borderColor: 'var(--glass-border)' }}>
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <div className="lg:hidden">
@@ -431,14 +483,31 @@ export default function AssistantPage() {
               </div>
             </div>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 rounded-2xl border px-3 py-2" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-                <span className="text-xs font-medium uppercase tracking-[0.16em]" style={{ color: 'var(--text-faint)' }}>Provider</span>
-                <select className={`${inputCls} min-w-[8.5rem] border-0 bg-transparent px-0 py-0 text-sm shadow-none`} value={providerKey} onChange={(event) => setProviderKey(event.target.value)}>
-                  {providers.map((provider) => (
-                    <option key={provider.key} value={provider.key}>{provider.label}</option>
-                  ))}
-                </select>
-              </label>
+              <div className="min-w-[10rem]">
+                <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--text-faint)' }}>Provider</p>
+                <Select
+                  aria-label="Select AI provider"
+                  selectedKey={providerSelectedKey}
+                  onSelectionChange={(key) => setProviderKey(String(key === '__none__' ? '' : key))}
+                >
+                  <Select.Trigger className={selectTriggerCls}>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {providers.map((provider) => (
+                        <ListBox.Item id={provider.key} key={provider.key} textValue={provider.label}>
+                          <div className="flex flex-col">
+                            <span>{provider.label}</span>
+                            <span className="text-xs text-zinc-500">{provider.default ? 'Default provider' : provider.key}</span>
+                          </div>
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </div>
               <Link className="btn-secondary" href="/scans?new=1">New scan</Link>
             </div>
           </div>

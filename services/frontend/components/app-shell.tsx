@@ -2,34 +2,34 @@
 
 import { WorkspaceOnboarding } from '@/components/workspace-onboarding';
 import { clearToken, clearUser, getUser, getWorkScope, listMyOrgInvites, listOrgs, Org, setWorkScope, WorkScope } from '@/lib/api';
-import { Button, Drawer, Dropdown, Header, Label, Separator, useOverlayState } from '@heroui/react';
+import { Button, Drawer, Dropdown, Header, Label, Separator, Tooltip, useOverlayState } from '@heroui/react';
 import {
-    AiContentGenerator01Icon,
-    ArrowDown01Icon,
-    ArrowLeft01Icon,
-    ArrowRight01Icon,
-    Building04Icon,
-    DashboardSquare01Icon,
-    EyeIcon,
-    FileExportIcon,
-    GridTableIcon,
-    Logout02Icon,
-    Menu01Icon,
-    Moon02Icon,
-    PackageIcon,
-    PlusSignIcon,
-    Search01Icon,
-    ServerStack01Icon,
-    Settings01Icon,
-    Shield01Icon,
-    ShieldKeyIcon,
-    Sun01Icon,
-    Tag01Icon,
+  AiContentGenerator01Icon,
+  ArrowDown01Icon,
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  Building04Icon,
+  DashboardSquare01Icon,
+  EyeIcon,
+  FileExportIcon,
+  GridTableIcon,
+  Logout02Icon,
+  Menu01Icon,
+  Moon02Icon,
+  PackageIcon,
+  PlusSignIcon,
+  Search01Icon,
+  ServerStack01Icon,
+  Settings01Icon,
+  Shield01Icon,
+  ShieldKeyIcon,
+  Sun01Icon,
+  Tag01Icon,
 } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { AdminSidebarTree } from '@/components/admin-sidebar-tree';
 import { Logo } from '@/components/logo';
@@ -95,6 +95,9 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const [onboardingStatus, setOnboardingStatus] = useState<'checking' | 'show' | 'done'>('checking');
   const mobileNav = useOverlayState();
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
+  const [hoveredNavPopover, setHoveredNavPopover] = useState<string | null>(null);
+  const [hoveredNavPopoverAnchor, setHoveredNavPopoverAnchor] = useState<{ top: number; left: number } | null>(null);
+  const navPopoverCloseTimer = useRef<number | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -104,6 +107,17 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   useEffect(() => {
     mobileNav.close();
   }, [mobileNav, pathname]);
+
+  useEffect(() => {
+    setHoveredNavPopover(null);
+    setHoveredNavPopoverAnchor(null);
+  }, [pathname]);
+
+  useEffect(() => () => {
+    if (navPopoverCloseTimer.current !== null) {
+      window.clearTimeout(navPopoverCloseTimer.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (localStorage.getItem('sidebar_collapsed') === 'true') {
@@ -247,7 +261,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const scopeLabel = workScope.kind === 'org' ? workScope.orgName ?? 'Organization' : 'Personal workspace';
   const workspaceTitle = `Workspace: ${scopeLabel}`;
   const isAdminRoute = Boolean(user?.role === 'admin' && isActiveRoute(pathname, '/admin'));
-  const desktopCollapsed = collapsed && !isAdminRoute;
+  const desktopCollapsed = collapsed;
   const workspaceMarkerStyle = workScope.kind === 'org'
     ? { background: 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)', boxShadow: '0 0 0 1px rgba(255,255,255,0.65)' }
     : { background: 'rgba(113,113,122,0.72)', boxShadow: '0 0 0 1px rgba(255,255,255,0.5)' };
@@ -264,6 +278,30 @@ export function AppShell({ children, initialUser }: AppShellProps) {
           ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
           : []),
       ];
+
+  function cancelNavPopoverClose() {
+    if (navPopoverCloseTimer.current !== null) {
+      window.clearTimeout(navPopoverCloseTimer.current);
+      navPopoverCloseTimer.current = null;
+    }
+  }
+
+  function openAnchoredNavPopover(key: string, rect: DOMRect) {
+    cancelNavPopoverClose();
+    setHoveredNavPopover(key);
+    setHoveredNavPopoverAnchor({
+      top: Math.max(12, rect.top - 8),
+      left: rect.right,
+    });
+  }
+
+  function scheduleNavPopoverClose() {
+    cancelNavPopoverClose();
+    navPopoverCloseTimer.current = window.setTimeout(() => {
+      setHoveredNavPopover(null);
+      setHoveredNavPopoverAnchor(null);
+    }, 220);
+  }
 
   if (onboardingStatus === 'checking') {
     return (
@@ -409,10 +447,86 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                   {items.map(({ href, label: itemLabel, Icon }) => {
                     const showAdminTree = href === '/admin';
                     const active = isActiveRoute(pathname, href);
+                    const popoverKey = `desktop:${href}`;
 
-                    if (showAdminTree) {
+                    if (showAdminTree && !desktopCollapsed) {
+                      return <AdminSidebarTree key="admin-tree-desktop" showLabel={false} />;
+                    }
+
+                    if (desktopCollapsed && showAdminTree) {
                       return (
-                        <AdminSidebarTree key="admin-tree-desktop" showLabel={false} />
+                        <Link
+                          key={href}
+                          href={href}
+                          aria-label={itemLabel}
+                          onMouseEnter={(event) => openAnchoredNavPopover(popoverKey, event.currentTarget.getBoundingClientRect())}
+                          onMouseLeave={scheduleNavPopoverClose}
+                          className={`relative flex w-full items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                          style={active ? {
+                            background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                            boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
+                          } : undefined}
+                        >
+                          {!active && (
+                            <span
+                              className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                              style={{ background: 'var(--row-hover)' }}
+                            />
+                          )}
+                          {active ? (
+                            <span
+                              className="absolute left-0 inset-y-2 w-0.5 rounded-full"
+                              style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
+                            />
+                          ) : null}
+                          <Icon size={18} className="shrink-0 relative z-10" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
+                        </Link>
+                      );
+                    }
+
+                    if (desktopCollapsed) {
+                      return (
+                        <Tooltip key={href} delay={0}>
+                          <Link
+                            href={href}
+                            aria-label={itemLabel}
+                            className={`relative flex w-full items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                            style={active ? {
+                              background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                              boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
+                            } : undefined}
+                          >
+                            {!active && (
+                              <span
+                                className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                                style={{ background: 'var(--row-hover)' }}
+                              />
+                            )}
+                            {active ? (
+                              <span
+                                className="absolute left-0 inset-y-2 w-0.5 rounded-full"
+                                style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
+                              />
+                            ) : null}
+                            <Icon size={18} className="shrink-0 relative z-10" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
+                          </Link>
+                          <Tooltip.Content className="w-[220px]" offset={10} placement="right" showArrow>
+                            <Tooltip.Arrow />
+                            <div
+                              className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-zinc-800 dark:text-zinc-100"
+                              style={{ background: 'var(--row-hover)' }}
+                            >
+                              <Icon size={18} className="shrink-0" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
+                              <span className="flex-1">{itemLabel}</span>
+                              {href === '/orgs' && pendingInviteCount > 0 ? (
+                                <span className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
+                                  style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
+                                  {pendingInviteCount}
+                                </span>
+                              ) : null}
+                            </div>
+                          </Tooltip.Content>
+                        </Tooltip>
                       );
                     }
 
@@ -420,7 +534,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                       <Link
                         key={href}
                         href={href}
-                        title={desktopCollapsed ? itemLabel : undefined}
                         className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
                         style={active ? {
                           background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
@@ -459,6 +572,30 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               </div>
             ))}
           </nav>
+
+          {desktopCollapsed && hoveredNavPopover === 'desktop:/admin' && hoveredNavPopoverAnchor ? (
+            <div
+              className="fixed z-[70] hidden pl-2 md:block"
+              style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
+              onMouseEnter={cancelNavPopoverClose}
+              onMouseLeave={scheduleNavPopoverClose}
+            >
+              <div
+                className="glass-modal w-[320px] rounded-[24px] p-3"
+                style={{ borderColor: 'var(--modal-border)' }}
+              >
+                <div className="space-y-2">
+                  <p className="px-1 text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>
+                    Admin
+                  </p>
+                  <AdminSidebarTree condensed showLabel={false} showRoot={false} onNavigate={() => {
+                    setHoveredNavPopover(null);
+                    setHoveredNavPopoverAnchor(null);
+                  }} />
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <div className="shrink-0 px-2 pb-3 pt-2 space-y-1.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
             <Dropdown>
@@ -575,16 +712,15 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
             <button
               onClick={toggleCollapsed}
-              className={`w-full flex items-center justify-center h-8 rounded-xl transition-all duration-150 text-zinc-400 hover:text-zinc-700 dark:text-zinc-600 dark:hover:text-zinc-300 ${isAdminRoute ? 'cursor-not-allowed opacity-50' : ''}`}
+              className="w-full flex items-center justify-center h-8 rounded-xl transition-all duration-150 text-zinc-400 hover:text-zinc-700 dark:text-zinc-600 dark:hover:text-zinc-300"
               onMouseEnter={(event) => {
-                if (!isAdminRoute) event.currentTarget.style.background = 'var(--row-hover)';
+                event.currentTarget.style.background = 'var(--row-hover)';
               }}
               onMouseLeave={(event) => {
                 event.currentTarget.style.background = 'transparent';
               }}
-              title={isAdminRoute ? 'Sidebar stays expanded on admin routes' : desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-label={isAdminRoute ? 'Sidebar stays expanded on admin routes' : desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              disabled={isAdminRoute}
+              title={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
               {desktopCollapsed ? <ArrowRight01Icon size={14} /> : <ArrowLeft01Icon size={14} />}
             </button>

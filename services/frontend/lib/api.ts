@@ -1,4 +1,5 @@
 export * from './api/admin';
+export * from './api/ai';
 export * from './api/auth';
 export * from './api/auth-store';
 export * from './api/comments';
@@ -17,6 +18,7 @@ export * from './api/suppressions';
 export * from './api/tags';
 export * from './api/tokens';
 export * from './api/types/admin';
+export * from './api/types/ai';
 export * from './api/types/common';
 export * from './api/types/dashboard';
 export * from './api/types/helm';

@@ -29,11 +29,20 @@ type RestfulConf struct {
 	Database     DatabaseConf   `mapstructure:"database" validate:"required"`
 	JWT          JWTConf        `mapstructure:"jwt" validate:"required"`
 	AllowOrigins []string       `mapstructure:"allow_origins"`
+	AI           AIConf         `mapstructure:"ai"`
 	Scanner      ScannerConf    `mapstructure:"scanner"`
 	Encryption   EncryptionConf `mapstructure:"encryption"`
 	VulnKB       VulnKBConf     `mapstructure:"vuln_kb"`
 	OIDC         OIDCConf       `mapstructure:"oidc"`
 	LocalAuth    LocalAuthConf  `mapstructure:"local_auth"`
+}
+
+type AIConf struct {
+	Enabled               bool   `mapstructure:"enabled"`
+	AllowAnonymous        bool   `mapstructure:"allow_anonymous"`
+	DefaultProviderKey    string `mapstructure:"default_provider_key"`
+	DefaultTimeoutSeconds int    `mapstructure:"default_timeout_seconds"`
+	MaxContextResults     int    `mapstructure:"max_context_results"`
 }
 
 type OIDCConf struct {
@@ -120,6 +129,11 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"database.name":                        "BACKEND_DATABASE_NAME",
 		"database.user":                        "BACKEND_DATABASE_USER",
 		"database.password":                    "BACKEND_DATABASE_PASSWORD",
+		"ai.enabled":                           "BACKEND_AI_ENABLED",
+		"ai.allow_anonymous":                   "BACKEND_AI_ALLOW_ANONYMOUS",
+		"ai.default_provider_key":              "BACKEND_AI_DEFAULT_PROVIDER_KEY",
+		"ai.default_timeout_seconds":           "BACKEND_AI_DEFAULT_TIMEOUT_SECONDS",
+		"ai.max_context_results":               "BACKEND_AI_MAX_CONTEXT_RESULTS",
 		"scanner.enable_trivy":                 "BACKEND_SCANNER_ENABLE_TRIVY",
 		"scanner.trivy_path":                   "BACKEND_SCANNER_TRIVY_PATH",
 		"scanner.grype_path":                   "BACKEND_SCANNER_GRYPE_PATH",
@@ -213,6 +227,12 @@ func (cm *ConfigurationManager) setDefaults(config *RestfulConf) {
 	}
 	if config.Database.Password == "" {
 		config.Database.Password = "postgres"
+	}
+	if config.AI.DefaultTimeoutSeconds == 0 {
+		config.AI.DefaultTimeoutSeconds = 30
+	}
+	if config.AI.MaxContextResults == 0 {
+		config.AI.MaxContextResults = 8
 	}
 	config.Scanner.EnableTrivy = true
 	if config.Scanner.Timeout == 0 {

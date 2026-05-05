@@ -1,6 +1,6 @@
 export type AdminArea = 'home' | 'operations' | 'access' | 'integrations' | 'governance';
 
-export type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans' | 'insights' | 'identity' | 'registries';
+export type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans' | 'insights' | 'identity' | 'registries' | 'ai';
 
 export interface AdminTabMeta {
   value: AdminTab;
@@ -35,6 +35,7 @@ export const ADMIN_TABS: AdminTabMeta[] = [
   { value: 'identity', label: 'Identity Providers', href: '/admin/identity', blurb: 'OIDC login and group mapping.', area: 'access' },
   { value: 'notifications', label: 'Notifications', href: '/admin/notifications', blurb: 'Outbound routing and deliveries.', area: 'integrations' },
   { value: 'registries', label: 'Global Registries', href: '/admin/registries', blurb: 'Shared registry defaults.', area: 'integrations' },
+  { value: 'ai', label: 'AI', href: '/admin/ai', blurb: 'Provider connectivity and assistant defaults.', area: 'integrations' },
   { value: 'audit', label: 'Audit Log', href: '/admin/audit', blurb: 'Administrative change history.', area: 'governance' },
   { value: 'settings', label: 'Settings', href: '/admin/settings', blurb: 'System-wide policies and controls.', area: 'governance' },
 ];
@@ -76,7 +77,7 @@ export const ADMIN_AREAS: AdminAreaMeta[] = [
     label: 'Integrations',
     href: '/admin/notifications',
     description: 'Delivery channels and shared registries.',
-    tabs: [tabMeta('notifications'), tabMeta('registries')],
+    tabs: [tabMeta('notifications'), tabMeta('registries'), tabMeta('ai')],
   },
   {
     value: 'governance',

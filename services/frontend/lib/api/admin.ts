@@ -1,6 +1,7 @@
 import { req } from './core';
 import { getDefaultScannerCapabilities } from './registries';
 import type { APIRequestLog, APIRequestLogFilters, APIUsageStats, AdminDashboard, AdminToken, AdminUser, AuditLog, AuditLogFilters, NotificationChannel, NotificationDelivery, XRayRequestLog, XRayRequestLogFilters, XRayUsageStats } from './types/admin';
+import type { AIProviderAdmin, AIProviderTestResult, AISettings, AISupportedProvider } from './types/ai';
 import type { AutoTagRule, OIDCClaimSyncPreview, OIDCGroupMapping, OIDCOrgRoleOverride, OIDCProviderAdmin, Registry, RegistryListResponse, ScannerSettings } from './types/registries';
 import type { AdminScan } from './types/scans';
 
@@ -69,6 +70,30 @@ export const adminSetDefaultRegistry = (id: string) =>
 
 export const adminUnsetDefaultRegistry = (id: string) =>
   req<{ id: string; is_default: boolean }>('PUT', `/api/v1/admin/registries/${id}/unset-default`);
+
+export const getAdminAISettings = () =>
+  req<AISettings>('GET', '/api/v1/admin/ai/settings');
+
+export const adminUpdateAISettings = (data: Partial<Pick<AISettings, 'enabled' | 'allowAnonymous'>>) =>
+  req<AISettings>('PUT', '/api/v1/admin/ai/settings', data);
+
+export const adminListAIProviders = () =>
+  req<{ providers: AIProviderAdmin[] }>('GET', '/api/v1/admin/ai/providers').then((result) => result.providers ?? []);
+
+export const adminListAISupportedProviders = () =>
+  req<{ providers: AISupportedProvider[] }>('GET', '/api/v1/admin/ai/providers/supported').then((result) => result.providers ?? []);
+
+export const adminCreateAIProvider = (data: Record<string, unknown>) =>
+  req<AIProviderAdmin>('POST', '/api/v1/admin/ai/providers', data);
+
+export const adminUpdateAIProvider = (key: string, data: Record<string, unknown>) =>
+  req<AIProviderAdmin>('PUT', `/api/v1/admin/ai/providers/${encodeURIComponent(key)}`, data);
+
+export const adminDeleteAIProvider = (key: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/admin/ai/providers/${encodeURIComponent(key)}`);
+
+export const adminTestAIProvider = (key: string) =>
+  req<AIProviderTestResult>('POST', `/api/v1/admin/ai/providers/${encodeURIComponent(key)}/test`);
 
 export const getAdminSettings = () =>
   req<Record<string, string>>('GET', '/api/v1/admin/settings');

@@ -111,6 +111,31 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.PUT("/settings/auth", func(c *gin.Context) {
 			admins.UpdateAuthSettings(c, db)
 		})
+		// AI settings and providers
+		admin.GET("/ai/settings", func(c *gin.Context) {
+			admins.GetAISettings(c)
+		})
+		admin.PUT("/ai/settings", func(c *gin.Context) {
+			admins.UpdateAISettings(c, db)
+		})
+		admin.GET("/ai/providers", func(c *gin.Context) {
+			admins.ListAIProviders(c, db)
+		})
+		admin.POST("/ai/providers", func(c *gin.Context) {
+			admins.CreateAIProvider(c, db)
+		})
+		admin.GET("/ai/providers/supported", func(c *gin.Context) {
+			admins.ListAISupportedProviders(c)
+		})
+		admin.PUT("/ai/providers/:key", func(c *gin.Context) {
+			admins.UpdateAIProvider(c, db)
+		})
+		admin.DELETE("/ai/providers/:key", func(c *gin.Context) {
+			admins.DeleteAIProvider(c, db)
+		})
+		admin.POST("/ai/providers/:key/test", func(c *gin.Context) {
+			admins.TestAIProvider(c, db)
+		})
 		// OIDC provider management
 		admin.GET("/oidc-providers", func(c *gin.Context) {
 			admins.ListOIDCProviders(c, db)

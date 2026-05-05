@@ -816,6 +816,9 @@ export default function ScanDetailPage() {
                 : <Refresh01Icon size={15} />}
               Re-scan
             </Button>
+            <Button className="btn-secondary" onPress={() => router.push(`/assistant?scopeType=scan&scopeRef=${encodeURIComponent(scan.id)}`)} variant="secondary">
+              Ask AI
+            </Button>
             {canManageScanAccess() && (
               <Button className="btn-secondary" onPress={openScanAccessModal} variant="secondary">
                 <Shield01Icon size={15} />

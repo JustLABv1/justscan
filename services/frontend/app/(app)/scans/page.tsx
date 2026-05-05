@@ -13,31 +13,31 @@ import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useOrgNameMap } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-  ArtifactoryRepository,
-  cancelScan,
-  createScans,
-  deleteScan,
-  getDefaultScannerCapabilities,
-  getWorkScope,
-  ImageSummary,
-  listArtifactoryRepositories,
-  listRegistriesWithCapabilities,
-  listScanImages,
-  listTags,
-  RegistryWithHealth,
-  ScannerCapabilities,
-  Tag
+    ArtifactoryRepository,
+    cancelScan,
+    createScans,
+    deleteScan,
+    getDefaultScannerCapabilities,
+    getWorkScope,
+    ImageSummary,
+    listArtifactoryRepositories,
+    listRegistriesWithCapabilities,
+    listScanImages,
+    listTags,
+    RegistryWithHealth,
+    ScannerCapabilities,
+    Tag
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Autocomplete, Checkbox, ListBox, Modal, Popover, SearchField, Select, useFilter, useOverlayState } from '@heroui/react';
 import {
-  ArrowDown01Icon,
-  ArrowRight01Icon,
-  Cancel01Icon,
-  FilterIcon,
-  GitCompareIcon,
-  PlusSignIcon,
-  Shield01Icon,
+    ArrowDown01Icon,
+    ArrowRight01Icon,
+    Cancel01Icon,
+    FilterIcon,
+    GitCompareIcon,
+    PlusSignIcon,
+    Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';

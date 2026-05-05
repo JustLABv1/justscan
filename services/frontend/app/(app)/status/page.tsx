@@ -578,7 +578,7 @@ export default function StatusPagesPage() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <Select selectedKey={visibility} onSelectionChange={key => setVisibility(String(key) as StatusPage['visibility'])} className="w-full" placeholder="Select visibility">
+                    <Select value={visibility} onChange={value => setVisibility(String(value) as StatusPage['visibility'])} className="w-full" placeholder="Select visibility">
                       <Label className={fieldLabelCls}>Visibility</Label>
                       <Select.Trigger className={selectTriggerCls}>
                         <Select.Value />
@@ -880,7 +880,7 @@ export default function StatusPagesPage() {
                       <Label className={fieldLabelCls}>Active Banner Title</Label>
                       <Input className={fieldCls} value={updateTitle} onChange={event => setUpdateTitle(event.target.value)} placeholder="Database refresh in progress" />
                     </div>
-                    <Select selectedKey={updateLevel} onSelectionChange={key => setUpdateLevel(String(key) as (typeof updateLevelOptions)[number])} className="w-full" placeholder="Select a banner level">
+                    <Select value={updateLevel} onChange={value => setUpdateLevel(String(value) as (typeof updateLevelOptions)[number])} className="w-full" placeholder="Select a banner level">
                       <Label className={fieldLabelCls}>Banner Level</Label>
                       <Select.Trigger className={selectTriggerCls}>
                         <Select.Value />

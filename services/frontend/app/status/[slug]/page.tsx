@@ -1034,7 +1034,7 @@ function StatusItemVulnerabilityModal({
                 />
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Select selectedKey={severityFilter || '__all__'} onSelectionChange={key => { setSeverityFilter(String(key === '__all__' ? '' : key)); setPage(1); }} className="w-full min-w-[180px] sm:w-auto" aria-label="Filter vulnerabilities by severity">
+                  <Select value={severityFilter || '__all__'} onChange={value => { setSeverityFilter(String(value === '__all__' ? '' : value ?? '')); setPage(1); }} className="w-full min-w-[180px] sm:w-auto" aria-label="Filter vulnerabilities by severity">
                     <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
                       <Select.Value />
                       <Select.Indicator />
@@ -1951,7 +1951,7 @@ export default function PublicStatusPage() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Sort</p>
-                      <Select selectedKey={sortBy} onSelectionChange={key => setSortBy(String(key) as SortKey)} className="w-full" aria-label="Sort image tags">
+                      <Select value={sortBy} onChange={value => setSortBy(String(value) as SortKey)} className="w-full" aria-label="Sort image tags">
                         <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
                           <Select.Value />
                           <Select.Indicator />
@@ -1971,7 +1971,7 @@ export default function PublicStatusPage() {
 
                     <div className="space-y-1.5">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Layout</p>
-                      <Select selectedKey={layout} onSelectionChange={key => setLayout(String(key) as LayoutKey)} className="w-full" aria-label="Change status page layout">
+                      <Select value={layout} onChange={value => setLayout(String(value) as LayoutKey)} className="w-full" aria-label="Change status page layout">
                         <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
                           <Select.Value />
                           <Select.Indicator />

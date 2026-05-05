@@ -717,8 +717,8 @@ export default function AssistantPage() {
                 <div className="min-w-[10rem]">
                   <Select
                     aria-label="Select AI provider"
-                    selectedKey={providerSelectedKey}
-                    onSelectionChange={(key) => setProviderKey(String(key === '__none__' ? '' : key))}
+                    value={providerSelectedKey}
+                    onChange={(value) => setProviderKey(String(value === '__none__' ? '' : value ?? ''))}
                   >
                     <Select.Trigger className={`${selectTriggerCls} min-w-[10rem]`}>
                       <Select.Value />

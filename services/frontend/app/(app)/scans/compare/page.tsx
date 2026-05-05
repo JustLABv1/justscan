@@ -84,7 +84,7 @@ function ScanSelector({
   return (
     <div className="space-y-1.5 flex-1">
       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">{label}</label>
-      <Select selectedKey={value || '__none__'} onSelectionChange={k => onChange(String(k === '__none__' ? '' : k))}>
+      <Select value={value || '__none__'} onChange={nextValue => onChange(String(nextValue === '__none__' ? '' : nextValue ?? ''))}>
         <Select.Trigger className={selectTriggerCls}>
           <Select.Value />
           <Select.Indicator />

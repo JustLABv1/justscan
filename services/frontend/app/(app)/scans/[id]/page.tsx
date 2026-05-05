@@ -1122,7 +1122,7 @@ export default function ScanDetailPage() {
               placeholder="Filter by name…"
               className={`${inputCls} min-w-0 md:flex-1`}
             />
-            <Select selectedKey={sbomTypeFilter || '__all__'} onSelectionChange={k => { setSbomTypeFilter(String(k === '__all__' ? '' : k)); setSbomLoaded(false); }} className="min-w-0 md:w-56 md:flex-none">
+            <Select value={sbomTypeFilter || '__all__'} onChange={value => { setSbomTypeFilter(String(value === '__all__' ? '' : value ?? '')); setSbomLoaded(false); }} className="min-w-0 md:w-56 md:flex-none">
               <Select.Trigger className={selectTriggerCls}>
                 <Select.Value />
                 <Select.Indicator />
@@ -1434,7 +1434,7 @@ export default function ScanDetailPage() {
                               )}
                               {!(v.suppression?.read_only || v.suppression?.source === 'xray') ? (
                               <div className="flex gap-2 items-center flex-wrap">
-                                <Select selectedKey={suppressStatus} onSelectionChange={k => setSuppressStatus(k as Suppression['status'])}>
+                                <Select value={suppressStatus} onChange={value => setSuppressStatus(value as Suppression['status'])}>
                                   <Select.Trigger className={selectTriggerCls}>
                                     <Select.Value />
                                     <Select.Indicator />

@@ -746,8 +746,8 @@ export default function AdminAIPage() {
                           className="w-full"
                           isDisabled={Boolean(editingProviderKey)}
                           placeholder="Select a provider type"
-                          selectedKey={form.providerType}
-                          onSelectionChange={(key) => handleProviderTypeChange(String(key))}
+                          value={form.providerType}
+                          onChange={(value) => handleProviderTypeChange(String(value))}
                         >
                           <Label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Provider type</Label>
                           <Select.Trigger className={selectTriggerCls}>

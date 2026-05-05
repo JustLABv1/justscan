@@ -379,8 +379,8 @@ export default function HelmPage() {
             <div className="flex items-center gap-2 min-w-[260px]">
               <label className="text-xs text-zinc-500 whitespace-nowrap">Registry</label>
               <Select
-                selectedKey={registryId || '__auto__'}
-                onSelectionChange={(key) => setRegistryId(String(key === '__auto__' ? '' : key))}
+                value={registryId || '__auto__'}
+                onChange={(value) => setRegistryId(String(value === '__auto__' ? '' : value ?? ''))}
               >
                 <Select.Trigger className={selectTriggerCls}>
                   <Select.Value />
@@ -408,8 +408,8 @@ export default function HelmPage() {
             <div className="flex items-center gap-2 min-w-[200px]">
               <label className="text-xs text-zinc-500 whitespace-nowrap">Platform</label>
               <Select
-                selectedKey={platform || '__auto__'}
-                onSelectionChange={(key) => setPlatform(String(key === '__auto__' ? '' : key))}
+                value={platform || '__auto__'}
+                onChange={(value) => setPlatform(String(value === '__auto__' ? '' : value ?? ''))}
               >
                 <Select.Trigger className={selectTriggerCls}>
                   <Select.Value />

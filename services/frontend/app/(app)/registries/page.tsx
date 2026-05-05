@@ -349,7 +349,7 @@ export default function RegistriesPage() {
                   <FormField className="font-mono" label="URL" onChange={(e) => setUrl(e.target.value)} placeholder="https://registry.example.com" required value={url} />
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Scan Provider</label>
-                    <Select selectedKey={scanProvider} onSelectionChange={k => setScanProvider(k as 'trivy' | 'artifactory_xray')}>
+                    <Select value={scanProvider} onChange={value => setScanProvider(value as 'trivy' | 'artifactory_xray')}>
                       <Select.Trigger className={inputCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><ServerStack01Icon size={15} /></span>
@@ -402,7 +402,7 @@ export default function RegistriesPage() {
                   )}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Auth Type</label>
-                    <Select selectedKey={authType} onSelectionChange={k => setAuthType(k as 'none' | 'basic' | 'token' | 'aws_ecr')}>
+                    <Select value={authType} onChange={value => setAuthType(value as 'none' | 'basic' | 'token' | 'aws_ecr')}>
                       <Select.Trigger className={inputCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>

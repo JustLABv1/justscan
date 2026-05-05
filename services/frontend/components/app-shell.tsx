@@ -29,8 +29,9 @@ import {
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { AdminSidebarTree } from '@/components/admin-sidebar-tree';
 import { Logo } from '@/components/logo';
 import { SearchModal } from '@/components/search';
 import { ToastProvider } from '@/components/toast';
@@ -41,6 +42,7 @@ const navGroups = [
     label: 'Primary',
     items: [
       { href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon },
+      { href: '/assistant', label: 'Assistant', Icon: AiContentGenerator01Icon },
       { href: '/scans', label: 'Scans', Icon: Shield01Icon },
     ],
   },
@@ -93,6 +95,9 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const [onboardingStatus, setOnboardingStatus] = useState<'checking' | 'show' | 'done'>('checking');
   const mobileNav = useOverlayState();
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
+  const [hoveredNavPopover, setHoveredNavPopover] = useState<string | null>(null);
+  const [hoveredNavPopoverAnchor, setHoveredNavPopoverAnchor] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const navPopoverCloseTimer = useRef<number | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -102,6 +107,17 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   useEffect(() => {
     mobileNav.close();
   }, [mobileNav, pathname]);
+
+  useEffect(() => {
+    setHoveredNavPopover(null);
+    setHoveredNavPopoverAnchor(null);
+  }, [pathname]);
+
+  useEffect(() => () => {
+    if (navPopoverCloseTimer.current !== null) {
+      window.clearTimeout(navPopoverCloseTimer.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (localStorage.getItem('sidebar_collapsed') === 'true') {
@@ -244,15 +260,55 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const themeToggleTitle = !mounted ? 'Toggle theme' : isDark ? 'Switch to light mode' : 'Switch to dark mode';
   const scopeLabel = workScope.kind === 'org' ? workScope.orgName ?? 'Organization' : 'Personal workspace';
   const workspaceTitle = `Workspace: ${scopeLabel}`;
+  const isAdminRoute = Boolean(user?.role === 'admin' && isActiveRoute(pathname, '/admin'));
+  const desktopCollapsed = collapsed;
   const workspaceMarkerStyle = workScope.kind === 'org'
     ? { background: 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)', boxShadow: '0 0 0 1px rgba(255,255,255,0.65)' }
     : { background: 'rgba(113,113,122,0.72)', boxShadow: '0 0 0 1px rgba(255,255,255,0.5)' };
-  const navigationGroups = [
-    ...navGroups,
-    ...(user?.role === 'admin'
-      ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
-      : []),
-  ];
+  const navigationGroups = isAdminRoute
+    ? [
+        ...navGroups,
+        ...(user?.role === 'admin'
+          ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
+          : []),
+      ]
+    : [
+        ...navGroups,
+        ...(user?.role === 'admin'
+          ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
+          : []),
+      ];
+  const hoveredNavHref = hoveredNavPopover?.startsWith('desktop:') ? hoveredNavPopover.slice('desktop:'.length) : null;
+  const hoveredLeafNavItem = hoveredNavHref
+    ? navigationGroups.flatMap((group) => group.items).find((item) => item.href === hoveredNavHref && item.href !== '/admin')
+    : null;
+
+  function cancelNavPopoverClose() {
+    if (navPopoverCloseTimer.current !== null) {
+      window.clearTimeout(navPopoverCloseTimer.current);
+      navPopoverCloseTimer.current = null;
+    }
+  }
+
+  function openAnchoredNavPopover(key: string, rect: DOMRect) {
+    cancelNavPopoverClose();
+    const top = Math.max(12, rect.top - 8);
+    const maxHeight = Math.max(240, window.innerHeight - top - 16);
+    setHoveredNavPopover(key);
+    setHoveredNavPopoverAnchor({
+      top,
+      left: rect.right,
+      maxHeight,
+    });
+  }
+
+  function scheduleNavPopoverClose() {
+    cancelNavPopoverClose();
+    navPopoverCloseTimer.current = window.setTimeout(() => {
+      setHoveredNavPopover(null);
+      setHoveredNavPopoverAnchor(null);
+    }, 220);
+  }
 
   if (onboardingStatus === 'checking') {
     return (
@@ -297,7 +353,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
       <div className="flex h-dvh app-bg overflow-hidden">
         <aside
           className={`relative hidden md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out sidebar-glass ${
-            collapsed ? 'w-[68px]' : 'w-60'
+            desktopCollapsed ? 'w-[68px]' : 'w-72'
           }`}
         >
           <div
@@ -322,7 +378,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             </div>
             <span
               className="ml-3 font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300"
-              style={{ maxWidth: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1, color: 'var(--text-primary)' }}
+              style={{ maxWidth: desktopCollapsed ? 0 : 120, opacity: desktopCollapsed ? 0 : 1, color: 'var(--text-primary)' }}
             >
               JustScan
             </span>
@@ -333,7 +389,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               onClick={() => setSearchOpen(true)}
               title="Search (⌘K)"
               aria-label="Open search"
-              className={`w-full flex items-center rounded-xl px-3 py-2.5 text-sm transition-all duration-150 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 ${collapsed ? 'justify-center' : 'gap-2.5'}`}
+              className={`w-full flex items-center rounded-xl px-3 py-2.5 text-sm transition-all duration-150 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 ${desktopCollapsed ? 'justify-center' : 'gap-2.5'}`}
               style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
               onMouseEnter={(event) => (event.currentTarget.style.borderColor = 'rgba(167,139,250,0.3)')}
               onMouseLeave={(event) => (event.currentTarget.style.borderColor = 'var(--glass-border)')}
@@ -341,11 +397,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               <Search01Icon size={15} className="shrink-0" />
               <span
                 className="flex-1 text-left overflow-hidden transition-all duration-300 text-xs"
-                style={{ maxWidth: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1 }}
+                style={{ maxWidth: desktopCollapsed ? 0 : 120, opacity: desktopCollapsed ? 0 : 1 }}
               >
                 Search…
               </span>
-              {!collapsed && (
+              {!desktopCollapsed && (
                 <kbd className="text-[9px] font-mono px-1 py-0.5 rounded text-zinc-500"
                   style={{ background: 'var(--row-divider)', border: '1px solid var(--glass-border)' }}>
                   ⌘K
@@ -355,19 +411,19 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
             <Link
               href="/scans?new=1"
-              title={collapsed ? 'New Scan' : undefined}
-              className={`w-full flex items-center rounded-xl transition-all duration-150 btn-primary-sm py-2.5 ${collapsed ? 'justify-center px-2' : 'gap-2 px-3'}`}
+              title={desktopCollapsed ? 'New Scan' : undefined}
+              className={`w-full flex items-center rounded-xl transition-all duration-150 btn-primary-sm py-2.5 ${desktopCollapsed ? 'justify-center px-2' : 'gap-2 px-3'}`}
             >
               <PlusSignIcon size={14} className="shrink-0" />
               <span
                 className="overflow-hidden transition-all duration-300"
-                style={{ maxWidth: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1 }}
+                style={{ maxWidth: desktopCollapsed ? 0 : 120, opacity: desktopCollapsed ? 0 : 1 }}
               >
                 New Scan
               </span>
             </Link>
 
-            {!collapsed && pendingInviteCount > 0 && (
+            {!desktopCollapsed && pendingInviteCount > 0 && (
               <Link
                 href="/orgs"
                 className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all duration-150 text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
@@ -390,22 +446,90 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               <div key={label} className="mb-1">
                 <div
                   className="nav-section-label transition-all duration-300 overflow-hidden"
-                  style={{ maxHeight: collapsed ? 0 : 28, opacity: collapsed ? 0 : 1, paddingTop: collapsed ? 0 : undefined, paddingBottom: collapsed ? 0 : undefined }}
+                  style={{ maxHeight: desktopCollapsed ? 0 : 28, opacity: desktopCollapsed ? 0 : 1, paddingTop: desktopCollapsed ? 0 : undefined, paddingBottom: desktopCollapsed ? 0 : undefined }}
                 >
                   {label}
                 </div>
                 <div className="space-y-0.5">
                   {items.map(({ href, label: itemLabel, Icon }) => {
+                    const showAdminTree = href === '/admin';
                     const active = isActiveRoute(pathname, href);
+                    const popoverKey = `desktop:${href}`;
+
+                    if (showAdminTree && !desktopCollapsed) {
+                      return <AdminSidebarTree key="admin-tree-desktop" showLabel={false} />;
+                    }
+
+                    if (desktopCollapsed && showAdminTree) {
+                      return (
+                        <Link
+                          key={href}
+                          href={href}
+                          aria-label={itemLabel}
+                          onMouseEnter={(event) => openAnchoredNavPopover(popoverKey, event.currentTarget.getBoundingClientRect())}
+                          onMouseLeave={scheduleNavPopoverClose}
+                          className={`relative flex w-full items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                          style={active ? {
+                            background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                            boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
+                          } : undefined}
+                        >
+                          {!active && (
+                            <span
+                              className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                              style={{ background: 'var(--row-hover)' }}
+                            />
+                          )}
+                          {active ? (
+                            <span
+                              className="absolute left-0 inset-y-2 w-0.5 rounded-full"
+                              style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
+                            />
+                          ) : null}
+                          <Icon size={18} className="shrink-0 relative z-10" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
+                        </Link>
+                      );
+                    }
+
+                    if (desktopCollapsed) {
+                      return (
+                        <Link
+                          key={href}
+                          href={href}
+                          aria-label={itemLabel}
+                          onMouseEnter={(event) => openAnchoredNavPopover(popoverKey, event.currentTarget.getBoundingClientRect())}
+                          onMouseLeave={scheduleNavPopoverClose}
+                          className={`relative flex w-full items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                          style={active ? {
+                            background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                            boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
+                          } : undefined}
+                        >
+                          {!active && (
+                            <span
+                              className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                              style={{ background: 'var(--row-hover)' }}
+                            />
+                          )}
+                          {active ? (
+                            <span
+                              className="absolute left-0 inset-y-2 w-0.5 rounded-full"
+                              style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
+                            />
+                          ) : null}
+                          <Icon size={18} className="shrink-0 relative z-10" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
+                        </Link>
+                      );
+                    }
+
                     return (
                       <Link
                         key={href}
                         href={href}
-                        title={collapsed ? itemLabel : undefined}
-                        className={`relative flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-200' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                        className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
                         style={active ? {
                           background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.2), 0 2px 8px rgba(124,58,237,0.08)',
+                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
                         } : undefined}
                       >
                         {!active && (
@@ -420,14 +544,14 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                             style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
                           />
                         )}
-                        <Icon size={18} className="shrink-0 relative z-10" />
+                        <Icon size={18} className="shrink-0 relative z-10" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
                         <span
-                          className="overflow-hidden transition-all duration-300 relative z-10"
-                          style={{ maxWidth: collapsed ? 0 : 160, opacity: collapsed ? 0 : 1 }}
+                          className="flex-1 overflow-hidden transition-all duration-300 relative z-10"
+                          style={{ maxWidth: desktopCollapsed ? 0 : 160, opacity: desktopCollapsed ? 0 : 1 }}
                         >
                           {itemLabel}
                         </span>
-                        {href === '/orgs' && pendingInviteCount > 0 && !collapsed && (
+                        {href === '/orgs' && pendingInviteCount > 0 && !desktopCollapsed && (
                           <span className="relative z-10 ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
                             style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
                             {pendingInviteCount}
@@ -441,16 +565,60 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             ))}
           </nav>
 
+          {desktopCollapsed && hoveredNavPopover === 'desktop:/admin' && hoveredNavPopoverAnchor ? (
+            <div
+              className="fixed z-[70] hidden pl-2 md:block"
+              style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
+              onMouseEnter={cancelNavPopoverClose}
+              onMouseLeave={scheduleNavPopoverClose}
+            >
+              <div
+                className="glass-modal w-[320px] overflow-hidden rounded-[24px] p-3"
+                style={{ borderColor: 'var(--modal-border)', maxHeight: hoveredNavPopoverAnchor.maxHeight }}
+              >
+                <div className="space-y-2 overflow-y-auto pr-1" style={{ maxHeight: hoveredNavPopoverAnchor.maxHeight - 32 }}>
+                  <p className="px-1 text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>
+                    Admin
+                  </p>
+                  <AdminSidebarTree condensed showLabel={false} showRoot={false} onNavigate={() => {
+                    setHoveredNavPopover(null);
+                    setHoveredNavPopoverAnchor(null);
+                  }} />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {desktopCollapsed && hoveredLeafNavItem && hoveredNavPopoverAnchor ? (
+            <div
+              className="pointer-events-none fixed z-[70] hidden pl-2 md:block"
+              style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
+            >
+              <div className="glass-modal w-[220px] rounded-[20px] px-3 py-3" style={{ borderColor: 'var(--modal-border)' }}>
+                <div className="flex items-center gap-3 text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                  <hoveredLeafNavItem.Icon size={18} className="shrink-0" style={{ color: isActiveRoute(pathname, hoveredLeafNavItem.href) ? '#a78bfa' : 'var(--text-faint)' }} />
+                  <span className="flex-1">{hoveredLeafNavItem.label}</span>
+                  {hoveredLeafNavItem.href === '/orgs' && pendingInviteCount > 0 ? (
+                    <span className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
+                      style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
+                      {pendingInviteCount}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="shrink-0 px-2 pb-3 pt-2 space-y-1.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
             <Dropdown>
               <Dropdown.Trigger
-                className={`w-full flex items-center rounded-xl transition-all duration-150 outline-none ${collapsed ? 'justify-center py-2' : 'gap-2.5 px-2 py-2.5'}`}
+                className={`w-full flex items-center rounded-xl transition-all duration-150 outline-none ${desktopCollapsed ? 'justify-center py-2' : 'gap-2.5 px-2 py-2.5'}`}
                 style={{ background: 'transparent' }}
                 aria-label={workspaceTitle}
                 onMouseEnter={(event: any) => (event.currentTarget.style.background = 'var(--row-hover)')}
                 onMouseLeave={(event: any) => (event.currentTarget.style.background = 'transparent')}
               >
-                <div className="relative shrink-0" title={collapsed ? workspaceTitle : undefined}>
+                <div className="relative shrink-0" title={desktopCollapsed ? workspaceTitle : undefined}>
                   <div
                     className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
                     style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.12)' }}
@@ -459,7 +627,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                   </div>
                   <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full" style={workspaceMarkerStyle} />
                 </div>
-                {!collapsed && (
+                {!desktopCollapsed && (
                   <>
                     <div className="flex min-w-0 flex-1 flex-col justify-center pr-1 text-left">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
@@ -470,7 +638,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 )}
               </Dropdown.Trigger>
 
-              <Dropdown.Popover className="min-w-[220px]" placement={collapsed ? 'right bottom' : 'top start'}>
+              <Dropdown.Popover className="min-w-[220px]" placement={desktopCollapsed ? 'right bottom' : 'top start'}>
                 <Dropdown.Menu
                   onAction={(key) => handleScopeChange(key as string)}
                   selectionMode="single"
@@ -494,20 +662,20 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             </Dropdown>
 
             <Dropdown>
-              <Dropdown.Trigger className={`w-full flex items-center ${collapsed ? 'justify-center' : 'gap-2.5 px-2'} py-2 rounded-xl transition-all duration-150 outline-none`}
+              <Dropdown.Trigger className={`w-full flex items-center ${desktopCollapsed ? 'justify-center' : 'gap-2.5 px-2'} py-2 rounded-xl transition-all duration-150 outline-none`}
                 style={{ background: 'transparent' }}
-                aria-label={collapsed ? (user?.username ?? user?.email ?? 'User menu') : 'Open user menu'}
+                aria-label={desktopCollapsed ? (user?.username ?? user?.email ?? 'User menu') : 'Open user menu'}
                 onMouseEnter={(event: any) => (event.currentTarget.style.background = 'var(--row-hover)')}
                 onMouseLeave={(event: any) => (event.currentTarget.style.background = 'transparent')}
               >
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
-                  title={collapsed ? (user?.username ?? user?.email ?? 'User menu') : undefined}
+                  title={desktopCollapsed ? (user?.username ?? user?.email ?? 'User menu') : undefined}
                   style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
                 >
                   {initials}
                 </div>
-                {!collapsed && (
+                {!desktopCollapsed && (
                    <div className="flex-1 flex flex-col justify-center min-w-0 pl-1.5 pr-1">
                      <div className="flex items-center justify-between w-full">
                        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200 truncate">{user?.username ?? user?.email ?? 'User'}</p>
@@ -557,12 +725,16 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             <button
               onClick={toggleCollapsed}
               className="w-full flex items-center justify-center h-8 rounded-xl transition-all duration-150 text-zinc-400 hover:text-zinc-700 dark:text-zinc-600 dark:hover:text-zinc-300"
-              onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
-              onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              onMouseEnter={(event) => {
+                event.currentTarget.style.background = 'var(--row-hover)';
+              }}
+              onMouseLeave={(event) => {
+                event.currentTarget.style.background = 'transparent';
+              }}
+              title={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              {collapsed ? <ArrowRight01Icon size={14} /> : <ArrowLeft01Icon size={14} />}
+              {desktopCollapsed ? <ArrowRight01Icon size={14} /> : <ArrowLeft01Icon size={14} />}
             </button>
           </div>
         </aside>
@@ -680,24 +852,30 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                             </p>
                             <div className="space-y-1">
                               {items.map(({ href, label: itemLabel, Icon }) => {
+                                const showAdminTree = href === '/admin';
                                 const active = isActiveRoute(pathname, href);
+
+                                if (showAdminTree) {
+                                  return <AdminSidebarTree key="admin-tree-mobile" condensed onNavigate={() => mobileNav.close()} showLabel={false} />;
+                                }
+
                                 return (
                                   <Link
                                     key={href}
                                     href={href}
                                     className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all ${
-                                      active ? 'text-violet-600 dark:text-violet-200' : 'text-zinc-700 dark:text-zinc-300'
+                                      active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-700 dark:text-zinc-300'
                                     }`}
                                     onClick={() => mobileNav.close()}
                                     style={active
                                       ? {
                                           background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.2), 0 2px 8px rgba(124,58,237,0.08)',
+                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
                                         }
                                       : { background: 'var(--row-hover)' }}
                                   >
-                                    <Icon size={18} className="shrink-0" />
-                                    <span>{itemLabel}</span>
+                                    <Icon size={18} className="shrink-0" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
+                                    <span className="flex-1">{itemLabel}</span>
                                     {href === '/orgs' && pendingInviteCount > 0 && (
                                       <span className="ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
                                         style={{ background: 'rgba(245, 158, 11, 0.16)' }}>

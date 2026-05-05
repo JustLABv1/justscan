@@ -9,29 +9,29 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { FormField } from '@/components/ui/form-field';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
-    adminUpdateAuthSettings,
-    adminUpdateScannerSettings,
-    createAdminUser,
-    createAutoTagRule,
-    deleteAdminToken,
-    deleteAdminUser,
-    deleteAutoTagRule,
-    disableAdminUser,
-    getAdminSettings,
-    listAdminScans,
-    listAdminTokens,
-    listAdminUsers,
-    listAuditLogs,
-    listAutoTagRules,
-    listNotificationChannels,
-    setPublicScanEnabled,
-    updateAdminToken,
-    updateAdminUser,
-    updateAPILogRetention,
-    updateAutoTagRule,
-    updateRateLimit,
-    updateRegisterRateLimit,
-    updateXRayLogRetention,
+  adminUpdateAuthSettings,
+  adminUpdateScannerSettings,
+  createAdminUser,
+  createAutoTagRule,
+  deleteAdminToken,
+  deleteAdminUser,
+  deleteAutoTagRule,
+  disableAdminUser,
+  getAdminSettings,
+  listAdminScans,
+  listAdminTokens,
+  listAdminUsers,
+  listAuditLogs,
+  listAutoTagRules,
+  listNotificationChannels,
+  setPublicScanEnabled,
+  updateAdminToken,
+  updateAdminUser,
+  updateAPILogRetention,
+  updateAutoTagRule,
+  updateRateLimit,
+  updateRegisterRateLimit,
+  updateXRayLogRetention,
 } from '@/lib/api/admin';
 import { getScannerHealth } from '@/lib/api/dashboard';
 import { listTags } from '@/lib/api/tags';
@@ -923,7 +923,7 @@ export function UsersTab() {
                   ) : null}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
-                    <Select selectedKey={formRole} onSelectionChange={(key) => setFormRole(String(key))}>
+                    <Select value={formRole} onChange={(value) => setFormRole(String(value))}>
                       <Select.Trigger className={selectTriggerCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>
@@ -1357,7 +1357,7 @@ export function AutoTagsTab() {
                     {tags.length === 0 ? (
                       <p className="text-sm text-zinc-500">No tags available. Create tags first.</p>
                     ) : (
-                      <Select selectedKey={formTagId} onSelectionChange={(key) => setFormTagId(String(key))} isRequired>
+                      <Select value={formTagId} onChange={(value) => setFormTagId(String(value))} isRequired>
                         <Select.Trigger className={selectTriggerCls}>
                           <div className="flex items-center gap-2 min-w-0 flex-1">
                             <span className="text-zinc-400 shrink-0"><Tag01Icon size={15} /></span>

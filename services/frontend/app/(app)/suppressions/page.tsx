@@ -177,7 +177,7 @@ export default function SuppressionsPage() {
                 debounceRef.current = setTimeout(() => { setPage(1); load(1, statusFilter, v); }, 300);
               }}
             />
-            <Select selectedKey={statusFilter || '__all__'} onSelectionChange={k => { const v = String(k === '__all__' ? '' : k); setStatusFilter(v); setPage(1); load(1, v, searchQuery); }}
+            <Select value={statusFilter || '__all__'} onChange={value => { const v = String(value === '__all__' ? '' : value ?? ''); setStatusFilter(v); setPage(1); load(1, v, searchQuery); }}
               className="w-44"
             >
               <Select.Trigger className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input">

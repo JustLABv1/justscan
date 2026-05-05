@@ -211,8 +211,8 @@ export default function VulnKBPage() {
           <div className="min-w-44">
             <label className="text-xs font-medium text-zinc-500 mb-1.5 block">Severity</label>
             <Select
-              selectedKey={severity}
-              onSelectionChange={k => setSeverity(String(k ?? ''))}
+              value={severity}
+              onChange={value => setSeverity(String(value ?? ''))}
               className="w-full"
               placeholder="All Severities"
             >
@@ -237,8 +237,8 @@ export default function VulnKBPage() {
           <div className="min-w-44">
             <label className="text-xs font-medium text-zinc-500 mb-1.5 block">Min CVSS</label>
             <Select
-              selectedKey={minCvss}
-              onSelectionChange={k => setMinCvss(String(k ?? '0'))}
+              value={minCvss}
+              onChange={value => setMinCvss(String(value ?? '0'))}
               className="w-full"
               placeholder="Any CVSS"
             >
@@ -263,8 +263,8 @@ export default function VulnKBPage() {
           <div className="min-w-40">
             <label className="text-xs font-medium text-zinc-500 mb-1.5 block">Published</label>
             <Select
-              selectedKey={publishedRange}
-              onSelectionChange={k => setPublishedRange(String(k ?? ''))}
+              value={publishedRange}
+              onChange={value => setPublishedRange(String(value ?? ''))}
               className="w-full"
               placeholder="Any Time"
             >

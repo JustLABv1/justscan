@@ -422,7 +422,7 @@ export default function PublicScanResultPage() {
                   {vulnTotal > 0 && <span className="text-sm font-normal ml-2" style={{ color: 'var(--text-muted)' }}>{vulnTotal} found</span>}
                 </h2>
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                  <Select selectedKey={severityFilter || '__all__'} onSelectionChange={k => { setSeverityFilter(String(k === '__all__' ? '' : k)); setPage(1); }}>
+                  <Select value={severityFilter || '__all__'} onChange={value => { setSeverityFilter(String(value === '__all__' ? '' : value ?? '')); setPage(1); }}>
                     <Select.Trigger className={selectTriggerCls}>
                       <Select.Value />
                       <Select.Indicator />

@@ -13,31 +13,31 @@ import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useOrgNameMap } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-  ArtifactoryRepository,
-  cancelScan,
-  createScans,
-  deleteScan,
-  getDefaultScannerCapabilities,
-  getWorkScope,
-  ImageSummary,
-  listArtifactoryRepositories,
-  listRegistriesWithCapabilities,
-  listScanImages,
-  listTags,
-  RegistryWithHealth,
-  ScannerCapabilities,
-  Tag
+    ArtifactoryRepository,
+    cancelScan,
+    createScans,
+    deleteScan,
+    getDefaultScannerCapabilities,
+    getWorkScope,
+    ImageSummary,
+    listArtifactoryRepositories,
+    listRegistriesWithCapabilities,
+    listScanImages,
+    listTags,
+    RegistryWithHealth,
+    ScannerCapabilities,
+    Tag
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Autocomplete, Checkbox, ListBox, Modal, Popover, SearchField, Select, useFilter, useOverlayState } from '@heroui/react';
 import {
-  ArrowDown01Icon,
-  ArrowRight01Icon,
-  Cancel01Icon,
-  FilterIcon,
-  GitCompareIcon,
-  PlusSignIcon,
-  Shield01Icon,
+    ArrowDown01Icon,
+    ArrowRight01Icon,
+    Cancel01Icon,
+    FilterIcon,
+    GitCompareIcon,
+    PlusSignIcon,
+    Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -696,7 +696,7 @@ export default function ScansPage() {
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Latest State</label>
-            <Select selectedKey={statusFilter || '__all__'} onSelectionChange={key => handleStatusFilterChange(String(key === '__all__' ? '' : key))} className="min-w-0">
+            <Select value={statusFilter || '__all__'} onChange={value => handleStatusFilterChange(String(value === '__all__' ? '' : value ?? ''))} className="min-w-0">
               <Select.Trigger className={selectTriggerCls}>
                 <Select.Value />
                 <Select.Indicator />
@@ -1179,7 +1179,7 @@ export default function ScansPage() {
                       {scanSource === 'private_registry' ? (
                         <div className="space-y-1.5 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                           <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Private registry</label>
-                          <Select selectedKey={registryId || '__none__'} onSelectionChange={key => setRegistryId(String(key === '__none__' ? '' : key))}>
+                          <Select value={registryId || '__none__'} onChange={value => setRegistryId(String(value === '__none__' ? '' : value ?? ''))}>
                             <Select.Trigger className={selectTriggerCls}>
                               <Select.Value />
                               <Select.Indicator />
@@ -1202,7 +1202,7 @@ export default function ScansPage() {
                         <div className="space-y-4">
                           <div className="space-y-1.5 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                             <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Artifactory registry</label>
-                            <Select selectedKey={registryId || '__none__'} onSelectionChange={key => setRegistryId(String(key === '__none__' ? '' : key))}>
+                            <Select value={registryId || '__none__'} onChange={value => setRegistryId(String(value === '__none__' ? '' : value ?? ''))}>
                               <Select.Trigger className={selectTriggerCls}>
                                 <Select.Value />
                                 <Select.Indicator />
@@ -1382,7 +1382,7 @@ export default function ScansPage() {
                               <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                                 Platform <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span>
                               </label>
-                              <Select selectedKey={platform || '__auto__'} onSelectionChange={k => setPlatform(String(k === '__auto__' ? '' : k))}>
+                              <Select value={platform || '__auto__'} onChange={value => setPlatform(String(value === '__auto__' ? '' : value ?? ''))}>
                                 <Select.Trigger className={selectTriggerCls}>
                                   <Select.Value />
                                   <Select.Indicator />

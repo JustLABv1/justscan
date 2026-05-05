@@ -559,8 +559,8 @@ export default function OrgDetailPage() {
                       <div key={idx} className="rounded-xl p-3 space-y-3"
                         style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                         <div className="flex items-center justify-between gap-2">
-                          <Select selectedKey={rule.type} onSelectionChange={k => {
-                              const newType = k as PolicyRule['type'];
+                          <Select value={rule.type} onChange={value => {
+                              const newType = value as PolicyRule['type'];
                               setPolicyRules((prev) =>
                                 prev.map((r, i) => (i === idx ? { type: newType } : r))
                               );
@@ -604,7 +604,7 @@ export default function OrgDetailPage() {
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
                               <label className="text-xs text-zinc-500">Severity</label>
-                              <Select selectedKey={rule.severity ?? 'CRITICAL'} onSelectionChange={k => setRuleField(idx, 'severity', String(k))}>
+                              <Select value={rule.severity ?? 'CRITICAL'} onChange={value => setRuleField(idx, 'severity', String(value))}>
                                 <Select.Trigger className={selectTriggerCls}>
                                   <Select.Value />
                                   <Select.Indicator />
@@ -643,7 +643,7 @@ export default function OrgDetailPage() {
                         {rule.type === 'require_fix' && (
                           <div className="space-y-1">
                             <label className="text-xs text-zinc-500">Require fix for severity</label>
-                            <Select selectedKey={rule.severity ?? 'CRITICAL'} onSelectionChange={k => setRuleField(idx, 'severity', String(k))}>
+                            <Select value={rule.severity ?? 'CRITICAL'} onChange={value => setRuleField(idx, 'severity', String(value))}>
                               <Select.Trigger className={selectTriggerCls}>
                                 <Select.Value />
                                 <Select.Indicator />

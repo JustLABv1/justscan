@@ -4,90 +4,90 @@ import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
-    addTagToScan,
-    adminCreateGlobalRegistry,
-    adminCreateGroupMapping,
-    adminCreateOIDCProvider,
-    adminCreateOIDCRoleOverride,
-    adminDeleteGlobalRegistry,
-    adminDeleteGroupMapping,
-    adminDeleteOIDCProvider,
-    adminDeleteOIDCRoleOverride,
-    adminListGlobalRegistries,
-    adminListGroupMappings,
-    adminListOIDCProviders,
-    adminListOIDCRoleOverrides,
-    adminPreviewOIDCClaimSync,
-    AdminScan,
-    adminSetDefaultRegistry,
-    AdminToken,
-    adminUnsetDefaultRegistry,
-    adminUpdateAuthSettings,
-    adminUpdateGlobalRegistry,
-    adminUpdateGroupMapping,
-    adminUpdateOIDCProvider,
-    adminUpdateOIDCRoleOverride,
-    adminUpdateScannerSettings,
-    AdminUser,
-    APIRequestLog,
-    APIRequestLogFilters,
-    APIUsageStats,
-    AuditLog,
-    AuditLogFilters,
-    AutoTagRule,
-    cancelScan,
-    createAdminUser,
-    createAutoTagRule,
-    createNotificationChannel,
-    createShare,
-    deleteAdminToken,
-    deleteAdminUser,
-    deleteAutoTagRule,
-    deleteNotificationChannel,
-    deleteShare,
-    disableAdminUser,
-    getAdminSettings,
-    getAPIUsageStats,
-    getScannerHealth,
-    getXRayUsageStats,
-    listAdminScans,
-    listAdminTokens,
-    listAdminUsers,
-    listAPIRequestLogs,
-    listAuditLogs,
-    listAutoTagRules,
-    listNotificationChannels,
-    listNotificationDeliveries,
-    listOrgs,
-    listTags,
-    listXRayRequestLogs,
-    NotificationChannel,
-    NotificationDelivery,
-    OIDCClaimSyncPreview,
-    OIDCGroupMapping,
-    OIDCOrgRoleOverride,
-    OIDCProviderAdmin,
-    Org,
-    Registry,
-    RegistryWithHealth,
-    reScan,
-    ScannerCapabilities,
-    ScannerHealth,
-    ScannerSettings,
-    setPublicScanEnabled,
-    Tag,
-    testNotificationChannel,
-    updateAdminToken,
-    updateAdminUser,
-    updateAPILogRetention,
-    updateAutoTagRule,
-    updateNotificationChannel,
-    updateRateLimit,
-    updateRegisterRateLimit,
-    updateXRayLogRetention,
-    XRayRequestLog,
-    XRayRequestLogFilters,
-    XRayUsageStats,
+  addTagToScan,
+  adminCreateGlobalRegistry,
+  adminCreateGroupMapping,
+  adminCreateOIDCProvider,
+  adminCreateOIDCRoleOverride,
+  adminDeleteGlobalRegistry,
+  adminDeleteGroupMapping,
+  adminDeleteOIDCProvider,
+  adminDeleteOIDCRoleOverride,
+  adminListGlobalRegistries,
+  adminListGroupMappings,
+  adminListOIDCProviders,
+  adminListOIDCRoleOverrides,
+  adminPreviewOIDCClaimSync,
+  AdminScan,
+  adminSetDefaultRegistry,
+  AdminToken,
+  adminUnsetDefaultRegistry,
+  adminUpdateAuthSettings,
+  adminUpdateGlobalRegistry,
+  adminUpdateGroupMapping,
+  adminUpdateOIDCProvider,
+  adminUpdateOIDCRoleOverride,
+  adminUpdateScannerSettings,
+  AdminUser,
+  APIRequestLog,
+  APIRequestLogFilters,
+  APIUsageStats,
+  AuditLog,
+  AuditLogFilters,
+  AutoTagRule,
+  cancelScan,
+  createAdminUser,
+  createAutoTagRule,
+  createNotificationChannel,
+  createShare,
+  deleteAdminToken,
+  deleteAdminUser,
+  deleteAutoTagRule,
+  deleteNotificationChannel,
+  deleteShare,
+  disableAdminUser,
+  getAdminSettings,
+  getAPIUsageStats,
+  getScannerHealth,
+  getXRayUsageStats,
+  listAdminScans,
+  listAdminTokens,
+  listAdminUsers,
+  listAPIRequestLogs,
+  listAuditLogs,
+  listAutoTagRules,
+  listNotificationChannels,
+  listNotificationDeliveries,
+  listOrgs,
+  listTags,
+  listXRayRequestLogs,
+  NotificationChannel,
+  NotificationDelivery,
+  OIDCClaimSyncPreview,
+  OIDCGroupMapping,
+  OIDCOrgRoleOverride,
+  OIDCProviderAdmin,
+  Org,
+  Registry,
+  RegistryWithHealth,
+  reScan,
+  ScannerCapabilities,
+  ScannerHealth,
+  ScannerSettings,
+  setPublicScanEnabled,
+  Tag,
+  testNotificationChannel,
+  updateAdminToken,
+  updateAdminUser,
+  updateAPILogRetention,
+  updateAutoTagRule,
+  updateNotificationChannel,
+  updateRateLimit,
+  updateRegisterRateLimit,
+  updateXRayLogRetention,
+  XRayRequestLog,
+  XRayRequestLogFilters,
+  XRayUsageStats,
 } from '@/lib/api';
 import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -1194,7 +1194,7 @@ function UsersTab() {
                   ) : null}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
-                    <Select selectedKey={formRole} onSelectionChange={k => setFormRole(String(k))}>
+                    <Select value={formRole} onChange={value => setFormRole(String(value))}>
                       <Select.Trigger className={selectTriggerCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>
@@ -1621,7 +1621,7 @@ function AutoTagsTab() {
                     {tags.length === 0 ? (
                       <p className="text-sm text-zinc-500">No tags available. Create tags first.</p>
                     ) : (
-                      <Select selectedKey={formTagId} onSelectionChange={k => setFormTagId(String(k))} isRequired>
+                      <Select value={formTagId} onChange={value => setFormTagId(String(value))} isRequired>
                         <Select.Trigger className={selectTriggerCls}>
                           <div className="flex items-center gap-2 min-w-0 flex-1">
                             <span className="text-zinc-400 shrink-0"><Tag01Icon size={15} /></span>
@@ -2216,7 +2216,7 @@ export function NotificationsTab() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Type</label>
-                    <Select selectedKey={formType} onSelectionChange={k => setFormType(k as typeof formType)}>
+                    <Select value={formType} onChange={value => setFormType(value as typeof formType)}>
                       <Select.Trigger className={selectTriggerCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><Notification01Icon size={15} /></span>
@@ -2347,7 +2347,7 @@ export function NotificationsTab() {
 
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Minimum Severity</label>
-                    <Select selectedKey={formMinSeverity || '__any__'} onSelectionChange={(key) => setFormMinSeverity(key === '__any__' ? '' : key as NotificationChannel['min_severity'])}>
+                    <Select value={formMinSeverity || '__any__'} onChange={(value) => setFormMinSeverity(value === '__any__' ? '' : value as NotificationChannel['min_severity'])}>
                       <Select.Trigger className={selectTriggerCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>
@@ -2606,7 +2606,7 @@ export function ScansTab() {
               onChange={e => handleOwnerChange(e.target.value)}
             />
           </div>
-          <Select selectedKey={statusFilter || '__all__'} onSelectionChange={key => handleStatusChange(key === '__all__' ? '' : String(key))} className="w-full" placeholder="Filter by status">
+          <Select value={statusFilter || '__all__'} onChange={value => handleStatusChange(value === '__all__' ? '' : String(value))} className="w-full" placeholder="Filter by status">
             <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Status</Label>
             <Select.Trigger className={selectTriggerCls}>
               <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -2885,7 +2885,7 @@ export function ScansTab() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Tag</label>
-                    <Select selectedKey={selectedTagId} onSelectionChange={(key) => setSelectedTagId(String(key))}>
+                    <Select value={selectedTagId} onChange={(value) => setSelectedTagId(String(value))}>
                       <Select.Trigger className={selectTriggerCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><Tag01Icon size={15} /></span>

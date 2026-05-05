@@ -405,7 +405,7 @@ export default function WatchlistPage() {
                   {registryOptions.length > 0 && (
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Registry <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span></label>
-                      <Select selectedKey={registryId} onSelectionChange={k => setRegistryId(String(k === '__none__' ? '' : k))}>
+                      <Select value={registryId || '__none__'} onChange={value => setRegistryId(String(value === '__none__' ? '' : value ?? ''))}>
                         <Select.Trigger className={selectTriggerCls}>
                           <Select.Value />
                           <Select.Indicator />

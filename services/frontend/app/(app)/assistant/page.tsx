@@ -36,7 +36,7 @@ import {
 } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 
-const selectTriggerCls = `${heroSelectTriggerClassName} min-h-10 py-2.5 text-sm`;
+const selectTriggerCls = `${heroSelectTriggerClassName.replace('rounded-xl', 'rounded-2xl')} min-h-10 py-2.5 text-sm`;
 const composerInputCls = 'glass-input min-h-11 max-h-48 w-full rounded-2xl px-4 py-3 text-sm resize-none overflow-hidden';
 
 type ScopeContext = {
@@ -119,6 +119,8 @@ function AnimatedAssistantOrb({ className = '' }: { className?: string }) {
   return (
     <div aria-hidden="true" className={`assistant-orb ${className}`.trim()}>
       <div className="assistant-orb__halo" />
+      <div className="assistant-orb__charge assistant-orb__charge--outer" />
+      <div className="assistant-orb__charge assistant-orb__charge--inner" />
       <div className="assistant-orb__ring" />
       <div className="assistant-orb__core" />
     </div>
@@ -718,7 +720,7 @@ export default function AssistantPage() {
                     selectedKey={providerSelectedKey}
                     onSelectionChange={(key) => setProviderKey(String(key === '__none__' ? '' : key))}
                   >
-                    <Select.Trigger className={`${selectTriggerCls} min-w-[10rem] rounded-2xl`}>
+                    <Select.Trigger className={`${selectTriggerCls} min-w-[10rem]`}>
                       <Select.Value />
                       <Select.Indicator />
                     </Select.Trigger>

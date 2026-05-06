@@ -16,6 +16,7 @@ type statsResult struct {
 	TotalScans     int              `json:"total_scans"`
 	StatusCounts   map[string]int   `json:"status_counts"`
 	SeverityTotals map[string]int   `json:"severity_totals"`
+	AttentionScans []models.Scan    `json:"attention_scans"`
 	RecentScans    []models.Scan    `json:"recent_scans"`
 	TopImages      []topImage       `json:"top_images"`
 	WatchlistCount int              `json:"watchlist_count"`
@@ -33,6 +34,8 @@ type topImage struct {
 	ImageName string `json:"image_name"`
 	Count     int    `json:"count"`
 }
+
+const dashboardAttentionScanLimit = 25
 
 func GetStats(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -100,6 +103,19 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		result.SeverityTotals["medium"] = sev.Medium
 		result.SeverityTotals["low"] = sev.Low
 		result.SeverityTotals["unknown"] = sev.Unknown
+
+		// Attention scans back the dashboard triage list and are broader than the
+		// compact recent-scans list.
+		attentionQuery := db.NewSelect().Model(&result.AttentionScans).
+			Where("(status = ? OR status IN (?))", models.ScanStatusFailed, bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
+			OrderExpr("created_at DESC").
+			Limit(dashboardAttentionScanLimit)
+		attentionQuery = authz.ApplyOwnershipVisibility(attentionQuery, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		attentionQuery = authz.ApplyWorkspaceScope(c, attentionQuery, "scan", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
+		attentionQuery.Scan(ctx) //nolint:errcheck
+		if result.AttentionScans == nil {
+			result.AttentionScans = []models.Scan{}
+		}
 
 		// Recent scans
 		recentQuery := db.NewSelect().Model(&result.RecentScans).

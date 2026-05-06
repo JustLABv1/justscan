@@ -230,6 +230,7 @@ func UpdateStatusPage(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		rebindStatusPageRelations(page.ID, targets, updates)
 
 		page.Name = updated.Name
 		page.Slug = updated.Slug
@@ -277,6 +278,15 @@ func UpdateStatusPage(db *bun.DB) gin.HandlerFunc {
 		page.Targets = targets
 		page.Updates = updates
 		c.JSON(http.StatusOK, page)
+	}
+}
+
+func rebindStatusPageRelations(pageID uuid.UUID, targets []models.StatusPageTarget, updates []models.StatusPageUpdate) {
+	for index := range targets {
+		targets[index].PageID = pageID
+	}
+	for index := range updates {
+		updates[index].PageID = pageID
 	}
 }
 
@@ -1123,9 +1133,7 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 	updates := make([]models.StatusPageUpdate, 0, len(body.Updates))
 	for _, update := range body.Updates {
 		title := strings.TrimSpace(update.Title)
-		if title == "" {
-			return nil, nil, nil, fmt.Errorf("each update requires a title")
-		}
+		body := strings.TrimSpace(update.Body)
 		level := strings.TrimSpace(strings.ToLower(update.Level))
 		if level == "" {
 			level = "info"
@@ -1133,11 +1141,17 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 		if level != "info" && level != "maintenance" && level != "incident" {
 			return nil, nil, nil, fmt.Errorf("update level must be 'info', 'maintenance', or 'incident'")
 		}
+		if title == "" && body == "" {
+			continue
+		}
+		if title == "" {
+			title = defaultStatusPageUpdateTitle(level)
+		}
 		updates = append(updates, models.StatusPageUpdate{
 			ID:              uuid.New(),
 			PageID:          pageID,
 			Title:           title,
-			Body:            strings.TrimSpace(update.Body),
+			Body:            body,
 			Level:           level,
 			ActiveFrom:      update.ActiveFrom,
 			ActiveUntil:     update.ActiveUntil,
@@ -1148,6 +1162,17 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 	}
 
 	return page, targets, updates, nil
+}
+
+func defaultStatusPageUpdateTitle(level string) string {
+	switch level {
+	case "incident":
+		return "Incident Notice"
+	case "maintenance":
+		return "Maintenance Notice"
+	default:
+		return "Status Update"
+	}
 }
 
 func normalizeStatusPagePatterns(patterns []string) (models.StringList, error) {

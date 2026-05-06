@@ -17,7 +17,7 @@ const AUTO_REFRESH_MS = 30000;
 const VULN_PAGE_SIZE = 25;
 const STATUS_SELECT_TRIGGER_CLS = 'glass-input min-h-11 rounded-full px-3 text-sm';
 const STATUS_INPUT_CLS = 'glass-input min-h-11 rounded-xl px-3 text-sm outline-none';
-const STATUS_RAIL_SEGMENTS = 90;
+const RECENT_SCAN_SEGMENTS = 12;
 const STATUS_PRIORITY: Record<string, number> = {
   failed: 0,
   blocked_by_xray_policy: 1,
@@ -48,6 +48,7 @@ const SEV = {
 
 const STATUS_COLOR: Record<string, string> = {
   healthy: '#22c55e',
+  completed: '#22c55e',
   stale: '#eab308',
   failed: '#ef4444',
   blocked_by_xray_policy: '#f59e0b',
@@ -427,14 +428,6 @@ function StateChip({
   );
 }
 
-function formatProviderName(provider?: string) {
-  const normalized = (provider ?? '').trim().toLowerCase();
-  if (!normalized) return 'Scanner';
-  if (normalized === 'xray') return 'JFrog Xray';
-  if (normalized === 'trivy') return 'Trivy';
-  return normalized.split(/[_\s-]+/).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
-}
-
 function getServiceTone(item: StatusPageItem) {
   const operationalStatus = getPresentationStatus(item);
   const exposureStatus = getExposureStatus(item, operationalStatus);
@@ -445,8 +438,6 @@ function getServiceTone(item: StatusPageItem) {
       label: 'Scanning',
       detail: item.current_step ? formatStatusLabel(item.current_step) : 'Scan in progress',
       color: STATUS_COLOR[operationalStatus] ?? STATUS_COLOR.running,
-      trailCount: 6,
-      baseColor: '#dbeafe',
     };
   }
 
@@ -455,8 +446,6 @@ function getServiceTone(item: StatusPageItem) {
       label: 'Issue Detected',
       detail: compactErrorSummary(item.error_message) || 'Latest scan failed',
       color: STATUS_COLOR.failed,
-      trailCount: 10,
-      baseColor: '#fee2e2',
     };
   }
 
@@ -465,8 +454,6 @@ function getServiceTone(item: StatusPageItem) {
       label: 'Policy Blocked',
       detail: 'Xray blocked the latest snapshot',
       color: STATUS_COLOR.blocked_by_xray_policy,
-      trailCount: 8,
-      baseColor: '#fef3c7',
     };
   }
 
@@ -475,8 +462,6 @@ function getServiceTone(item: StatusPageItem) {
       label: 'Stale Snapshot',
       detail: `Observed ${timeAgo(item.observed_at)}`,
       color: STATUS_COLOR.stale,
-      trailCount: 8,
-      baseColor: '#fef3c7',
     };
   }
 
@@ -485,8 +470,6 @@ function getServiceTone(item: StatusPageItem) {
       label: 'Findings Present',
       detail: `${totalFindings.toLocaleString()} findings in the latest scan`,
       color: EXPOSURE_COLOR.high_risk,
-      trailCount: 6,
-      baseColor: '#dcfce7',
     };
   }
 
@@ -495,8 +478,6 @@ function getServiceTone(item: StatusPageItem) {
       label: 'Findings Present',
       detail: `${totalFindings.toLocaleString()} findings in the latest scan`,
       color: EXPOSURE_COLOR.findings_present,
-      trailCount: 4,
-      baseColor: '#dcfce7',
     };
   }
 
@@ -504,33 +485,194 @@ function getServiceTone(item: StatusPageItem) {
     label: 'Operational',
     detail: 'No known issues in the latest snapshot',
     color: STATUS_COLOR.healthy,
-    trailCount: STATUS_RAIL_SEGMENTS,
-    baseColor: '#dcfce7',
   };
-}
-
-function buildStatusRail(item: StatusPageItem) {
-  const tone = getServiceTone(item);
-  const activeStart = Math.max(0, STATUS_RAIL_SEGMENTS - tone.trailCount);
-
-  return Array.from({ length: STATUS_RAIL_SEGMENTS }, (_, index) => ({
-    color: index >= activeStart ? tone.color : tone.baseColor,
-    opacity: index >= activeStart ? 1 : tone.trailCount === STATUS_RAIL_SEGMENTS ? 1 : 0.55,
-  }));
 }
 
 function StatusBoardBadge({ label, color }: { label: string; color: string }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[13px] font-medium" style={{ color }}>
+    <span
+      className="inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-full px-3 py-1 text-[13px] font-medium"
+      style={{ color }}
+    >
       <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
       {label}
     </span>
   );
 }
 
+function getStatusUpdateTone(level?: string) {
+  switch (level) {
+    case 'incident':
+      return {
+        label: 'Incident',
+        color: '#dc2626',
+        background: 'rgba(220,38,38,0.08)',
+        border: 'rgba(220,38,38,0.22)',
+        strongBackground: 'rgba(220,38,38,0.12)',
+      };
+    case 'maintenance':
+      return {
+        label: 'Maintenance',
+        color: '#b45309',
+        background: 'rgba(180,83,9,0.08)',
+        border: 'rgba(180,83,9,0.22)',
+        strongBackground: 'rgba(180,83,9,0.12)',
+      };
+    default:
+      return {
+        label: 'Update',
+        color: '#2563eb',
+        background: 'rgba(37,99,235,0.08)',
+        border: 'rgba(37,99,235,0.22)',
+        strongBackground: 'rgba(37,99,235,0.12)',
+      };
+  }
+}
+
 function formatScanHistoryOptionLabel(scan: StatusPageScanSummary) {
   const effectiveStatus = getEffectiveScanStatus(scan.scan_status, scan.external_status);
   return `${scan.is_latest ? 'Latest' : 'Previous'} · ${formatStatusLabel(effectiveStatus)} · ${timeAgo(scan.observed_at)}`;
+}
+
+async function listStatusPageScanHistoryWithRetry(slug: string, scanId: string, attempts = 3) {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await listStatusPageScanHistory(slug, scanId);
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+function buildFallbackScanSummary(item: StatusPageItem): StatusPageScanSummary {
+  return {
+    scan_id: item.latest_scan_id,
+    image_name: item.image_name,
+    image_tag: item.image_tag,
+    scan_status: item.scan_status,
+    external_status: item.external_status,
+    scan_provider: item.scan_provider,
+    current_step: item.current_step,
+    error_message: item.error_message,
+    blocked_policy_details: item.blocked_policy_details,
+    critical_count: item.critical_count,
+    high_count: item.high_count,
+    medium_count: item.medium_count,
+    low_count: item.low_count,
+    started_at: item.started_at,
+    completed_at: item.observed_at,
+    created_at: item.started_at ?? item.observed_at,
+    observed_at: item.observed_at,
+    is_latest: true,
+  };
+}
+
+function getRecentScanStripScans(item: StatusPageItem, scans?: StatusPageScanSummary[]) {
+  const source = scans && scans.length > 0 ? scans : [buildFallbackScanSummary(item)];
+  return [...source]
+    .sort((left, right) => new Date(left.observed_at).getTime() - new Date(right.observed_at).getTime())
+    .slice(-RECENT_SCAN_SEGMENTS);
+}
+
+function RecentScanStrip({
+  slug,
+  item,
+  scans,
+  onHistoryLoaded,
+}: {
+  slug: string;
+  item: StatusPageItem;
+  scans?: StatusPageScanSummary[];
+  onHistoryLoaded?: (scanId: string, scans: StatusPageScanSummary[]) => void;
+}) {
+  const [localScans, setLocalScans] = useState<StatusPageScanSummary[] | undefined>(scans);
+  const [localLoading, setLocalLoading] = useState(false);
+
+  useEffect(() => {
+    setLocalScans(scans);
+  }, [scans]);
+
+  useEffect(() => {
+    if (scans !== undefined || !item.latest_scan_id) {
+      return;
+    }
+
+    let cancelled = false;
+    setLocalLoading(true);
+
+    listStatusPageScanHistoryWithRetry(slug, item.latest_scan_id)
+      .then((history) => {
+        if (cancelled) return;
+        setLocalScans(history);
+        onHistoryLoaded?.(item.latest_scan_id, history);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLocalScans([]);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLocalLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [item.latest_scan_id, onHistoryLoaded, scans, slug]);
+
+  const tone = getServiceTone(item);
+  const effectiveScans = localScans ?? scans;
+  const recentScans = getRecentScanStripScans(item, effectiveScans);
+  const latestScan = recentScans[recentScans.length - 1] ?? buildFallbackScanSummary(item);
+  const leadingPlaceholders = Math.max(0, RECENT_SCAN_SEGMENTS - recentScans.length);
+  const latestLabel = localLoading
+    ? 'Loading older scans'
+    : recentScans.length === 1
+      ? 'Single recorded scan'
+      : `${recentScans.length} recent scans`;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-1.5 overflow-hidden" aria-label="Recent scan history">
+        {Array.from({ length: leadingPlaceholders }, (_, index) => (
+          <span
+            key={`${item.latest_scan_id}:empty:${index}`}
+            className="h-10 flex-1 rounded-[3px]"
+            style={{ background: 'var(--row-hover)' }}
+            aria-hidden="true"
+          />
+        ))}
+        {recentScans.map((scan) => {
+          const status = getEffectiveScanStatus(scan.scan_status, scan.external_status);
+          const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
+          return (
+            <span
+              key={scan.scan_id}
+              className="h-10 flex-1 rounded-[3px]"
+              style={{ background: color, opacity: scan.is_latest ? 1 : 0.84 }}
+              title={formatScanHistoryOptionLabel(scan)}
+              aria-label={formatScanHistoryOptionLabel(scan)}
+            />
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-4 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+        <span>Older scans</span>
+        <span className="h-px flex-1" style={{ background: 'var(--border-subtle)' }} />
+        <span style={{ color: tone.color }}>{latestLabel}</span>
+        <span className="h-px flex-1" style={{ background: 'var(--border-subtle)' }} />
+        <span>{timeAgo(latestScan.observed_at)}</span>
+      </div>
+    </div>
+  );
 }
 
 function ScanTimeline({
@@ -634,11 +776,13 @@ function StatusItemVulnerabilityModal({
   item,
   state,
   onClose,
+  onHistoryLoaded,
 }: {
   slug: string;
   item: StatusPageItem | null;
   state: ReturnType<typeof useOverlayState>;
   onClose: () => void;
+  onHistoryLoaded?: (scanId: string, scans: StatusPageScanSummary[]) => void;
 }) {
   const [history, setHistory] = useState<StatusPageScanSummary[]>([]);
   const [selectedScanId, setSelectedScanId] = useState(() => item?.latest_scan_id ?? '');
@@ -724,6 +868,9 @@ function StatusItemVulnerabilityModal({
             : [];
 
         setHistory(scans);
+        if (item?.latest_scan_id && scans.length > 0) {
+          onHistoryLoaded?.(item.latest_scan_id, scans);
+        }
         setHistoryResponseKey(requestKey);
         setSelectedScanId((current) => (
           scans.find((scan) => scan.scan_id === current)?.scan_id
@@ -1142,38 +1289,24 @@ function StatusItemVulnerabilityModal({
   );
 }
 
-function StatusRail({ item }: { item: StatusPageItem }) {
-  const segments = buildStatusRail(item);
+function StatusBoardRow({
+  slug,
+  item,
+  scans,
+  onOpen,
+  onHistoryLoaded,
+}: {
+  slug: string;
+  item: StatusPageItem;
+  scans?: StatusPageScanSummary[];
+  onOpen: (item: StatusPageItem) => void;
+  onHistoryLoaded?: (scanId: string, scans: StatusPageScanSummary[]) => void;
+}) {
   const tone = getServiceTone(item);
-
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-10 gap-1.5 sm:grid-cols-[repeat(30,minmax(0,1fr))]">
-        {segments.map((segment, index) => (
-          <span
-            key={`${item.image_name}:${item.image_tag}:segment:${index}`}
-            className="h-10 rounded-[2px]"
-            style={{ background: segment.color, opacity: segment.opacity }}
-            aria-hidden="true"
-          />
-        ))}
-      </div>
-      <div className="flex items-center gap-4 text-[12px]" style={{ color: 'var(--text-muted)' }}>
-        <span>90d window</span>
-        <span className="h-px flex-1" style={{ background: 'var(--border-subtle)' }} />
-        <span style={{ color: tone.color }}>{tone.detail}</span>
-        <span className="h-px flex-1" style={{ background: 'var(--border-subtle)' }} />
-        <span>Now</span>
-      </div>
-    </div>
-  );
-}
-
-function StatusBoardRow({ item, onOpen }: { item: StatusPageItem; onOpen: (item: StatusPageItem) => void }) {
-  const tone = getServiceTone(item);
-  const operationalStatus = getPresentationStatus(item);
-  const exposureStatus = getExposureStatus(item, operationalStatus);
   const totalFindings = getFindingTotal(item);
+  const meta = totalFindings > 0
+    ? `${item.image_tag} · ${totalFindings.toLocaleString()} findings`
+    : `${item.image_tag} · Updated ${timeAgo(item.observed_at)}`;
 
   return (
     <button
@@ -1185,53 +1318,20 @@ function StatusBoardRow({ item, onOpen }: { item: StatusPageItem; onOpen: (item:
       <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-lg font-semibold tracking-[-0.01em]" style={{ color: 'var(--text-primary)' }}>
-                {item.image_name}
-              </h3>
-              <TagBadge tag={item.image_tag} />
-            </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]" style={{ color: 'var(--text-secondary)' }}>
-              <span>{totalFindings > 0 ? `${totalFindings.toLocaleString()} findings` : 'No findings'}</span>
-              <span>•</span>
-              <span>Observed {timeAgo(item.observed_at)}</span>
-              <span>•</span>
-              <span>Freshness {item.freshness_hours}h</span>
-              <span>•</span>
-              <span>{formatProviderName(item.scan_provider)}</span>
-            </div>
+            <h3 className="text-lg font-semibold tracking-[-0.01em]" style={{ color: 'var(--text-primary)' }}>
+              {item.image_name}
+            </h3>
+            <p className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{meta}</p>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <div className="flex shrink-0 items-center justify-end gap-2">
             <StatusBoardBadge label={tone.label} color={tone.color} />
-            <StateChip label="Operational" value={getOperationalStatusLabel(operationalStatus)} color={STATUS_COLOR[operationalStatus] ?? STATUS_COLOR.pending} />
-            <StateChip label="Exposure" value={formatExposureStatusLabel(exposureStatus)} color={EXPOSURE_COLOR[exposureStatus]} />
           </div>
         </div>
 
-        <StatusRail item={item} />
+        <RecentScanStrip slug={slug} item={item} scans={scans} onHistoryLoaded={onHistoryLoaded} />
       </div>
     </button>
-  );
-}
-
-function ProviderStatusRow({
-  label,
-  tone,
-  count,
-}: {
-  label: string;
-  tone: ReturnType<typeof getServiceTone>;
-  count: number;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-3">
-      <div>
-        <p className="text-base font-medium" style={{ color: 'var(--text-primary)' }}>{label}</p>
-        <p className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{count} tracked tag{count === 1 ? '' : 's'}</p>
-      </div>
-      <StatusBoardBadge label={tone.label} color={tone.color} />
-    </div>
   );
 }
 
@@ -1244,6 +1344,7 @@ export default function PublicStatusPage() {
   const [needsAuth, setNeedsAuth] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
   const [activeItem, setActiveItem] = useState<StatusPageItem | null>(null);
+  const [rowScanHistory, setRowScanHistory] = useState<Record<string, StatusPageScanSummary[]>>({});
   const mountedRef = useRef(true);
   const vulnerabilityModal = useOverlayState();
   const refreshClock = useTicker(1000);
@@ -1255,6 +1356,19 @@ export default function PublicStatusPage() {
 
   function closeItemDetails() {
     vulnerabilityModal.close();
+  }
+
+  function syncRowHistory(scanId: string, scans: StatusPageScanSummary[]) {
+    setRowScanHistory((current) => {
+      const existing = current[scanId];
+      if (existing && existing.length >= scans.length) {
+        return current;
+      }
+      return {
+        ...current,
+        [scanId]: scans,
+      };
+    });
   }
 
   const load = useCallback(async (showLoader: boolean) => {
@@ -1343,25 +1457,6 @@ export default function PublicStatusPage() {
     ));
   }, [data]);
 
-  const providerSummary = useMemo(() => {
-    const groups = new Map<string, StatusPageItem[]>();
-
-    for (const item of data?.items ?? []) {
-      const key = formatProviderName(item.scan_provider);
-      const existing = groups.get(key) ?? [];
-      existing.push(item);
-      groups.set(key, existing);
-    }
-
-    return [...groups.entries()]
-      .map(([label, items]) => ({
-        label,
-        count: items.length,
-        tone: getServiceTone([...items].sort(compareItemsByPriority)[0]),
-      }))
-      .sort((left, right) => left.label.localeCompare(right.label));
-  }, [data]);
-
   const latestObservedAt = useMemo(() => {
     return trackedItems.reduce<string | null>((latest, item) => {
       if (!latest) return item.observed_at;
@@ -1407,6 +1502,8 @@ export default function PublicStatusPage() {
   }
 
   const recentUpdates = data.page.updates?.slice(0, 3) ?? [];
+  const latestUpdate = recentUpdates[0] ?? null;
+  const olderUpdates = recentUpdates.slice(1);
   const operationalIssueCount = (summary.operations.failed ?? 0) + (summary.operations.blocked_by_xray_policy ?? 0) + (summary.operations.stale ?? 0);
   const exposedCount = (summary.exposure.high_risk ?? 0) + (summary.exposure.findings_present ?? 0);
   const runningCount = summary.operations.running ?? 0;
@@ -1460,39 +1557,34 @@ export default function PublicStatusPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                  <StatusBoardBadge label={pageTone.label} color={pageTone.color} />
-                  <span className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                    {trackedItems.length} service{trackedItems.length === 1 ? '' : 's'}
-                  </span>
-                  <span className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                    Snapshot {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
-                  </span>
-                </div>
-
                 {data.page.description ? (
                   <p className="max-w-3xl text-[15px] leading-7" style={{ color: 'var(--text-secondary)' }}>{data.page.description}</p>
                 ) : null}
 
-                <p className="max-w-3xl text-[14px] leading-6" style={{ color: 'var(--text-secondary)' }}>{pageTone.description}</p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                  <StatusBoardBadge label={pageTone.label} color={pageTone.color} />
+                  <p className="min-w-0 flex-1 text-[14px] leading-6" style={{ color: 'var(--text-secondary)' }}>{pageTone.description}</p>
+                </div>
               </div>
 
               <div className="flex shrink-0 flex-col items-start gap-3 lg:items-end">
-                <div className="text-[13px] leading-6" style={{ color: 'var(--text-secondary)' }}>
-                  <p>Operational: <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{healthyCount}</span> healthy</p>
-                  <p>Findings: <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{exposedCount}</span> exposed</p>
-                  <p>Refresh: <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{refreshing ? 'Refreshing now' : `${secondsRemaining}s`}</span></p>
-                </div>
                 <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full px-3 py-1.5 text-[12px] font-medium capitalize" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                    {data.page.visibility}
+                  <span className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                    Snapshot {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
                   </span>
                   <span className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                    Stale after {data.page.stale_after_hours}h
+                    {trackedItems.length} service{trackedItems.length === 1 ? '' : 's'}
+                  </span>
+                  <span className="rounded-full px-3 py-1.5 text-[12px] font-medium capitalize" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                    {data.page.visibility}
                   </span>
                   <Button size="sm" isPending={refreshing} onPress={() => void load(false)} className="rounded-full px-4 text-sm font-semibold">
                     {refreshing ? 'Refreshing...' : 'Refresh now'}
                   </Button>
+                </div>
+                <div className="text-right text-[13px] leading-6" style={{ color: 'var(--text-secondary)' }}>
+                  <p>{healthyCount} healthy, {operationalIssueCount} issues, {exposedCount} exposed</p>
+                  <p>{refreshing ? 'Refreshing now' : `Auto refresh in ${secondsRemaining}s`} · Stale after {data.page.stale_after_hours}h</p>
                 </div>
               </div>
             </div>
@@ -1506,11 +1598,89 @@ export default function PublicStatusPage() {
               boxShadow: '0 24px 55px rgba(15,23,42,0.05)',
             }}
           >
+            <div className="px-6 py-6 sm:px-8">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Notifications</p>
+                  <h2 className="mt-1 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Recent status messages</h2>
+                </div>
+                <span className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{recentUpdates.length} shown</span>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                {latestUpdate ? (() => {
+                  const tone = getStatusUpdateTone(latestUpdate.level);
+
+                  return (
+                    <div
+                      className="rounded-[28px] border px-5 py-5 sm:px-6"
+                      style={{
+                        background: `linear-gradient(135deg, ${tone.background}, color-mix(in srgb, var(--status-card-bg) 92%, white))`,
+                        borderColor: tone.border,
+                        boxShadow: `0 18px 38px color-mix(in srgb, ${tone.color} 12%, transparent)`,
+                      }}
+                    >
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 space-y-3">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span
+                              className="inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1 text-[12px] font-semibold"
+                              style={{
+                                background: tone.strongBackground,
+                                border: `1px solid ${tone.border}`,
+                                color: tone.color,
+                              }}
+                            >
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ background: tone.color }} />
+                              {tone.label}
+                            </span>
+                            <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{latestUpdate.title}</p>
+                          </div>
+                          <p className="max-w-3xl text-[15px] leading-7" style={{ color: 'var(--text-primary)' }}>{latestUpdate.body}</p>
+                        </div>
+                        <span className="shrink-0 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                          {latestUpdate.created_at ? timeAgo(latestUpdate.created_at) : 'Recently updated'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <div className="rounded-2xl border border-dashed px-4 py-5 text-sm" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                    No incident or maintenance updates are published for this page.
+                  </div>
+                )}
+
+                {olderUpdates.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>Earlier messages</p>
+                    <div className="space-y-4">
+                      {olderUpdates.map((update, index) => {
+                        const tone = getStatusUpdateTone(update.level);
+
+                        return (
+                          <div key={`${update.title}:${update.created_at ?? index}`} className="flex flex-col gap-2 border-b pb-4 last:border-b-0 last:pb-0" style={{ borderColor: 'var(--border-subtle)' }}>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <StatusBoardBadge label={tone.label} color={tone.color} />
+                                <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{update.title}</p>
+                              </div>
+                              <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>{update.created_at ? timeAgo(update.created_at) : 'Recently updated'}</span>
+                            </div>
+                            <p className="text-[14px] leading-6" style={{ color: 'var(--text-secondary)' }}>{update.body}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="border-b px-6 py-6 sm:px-8" style={{ borderColor: 'var(--border-subtle)' }}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Monitored Services</p>
-                  <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em]" style={{ color: 'var(--text-primary)' }}>Current status across tracked image tags</h2>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Hosted Pages</p>
+                  <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em]" style={{ color: 'var(--text-primary)' }}>Current status across tracked services</h2>
                 </div>
                 <div className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>
                   <span>{operationalIssueCount} issue{operationalIssueCount === 1 ? '' : 's'}</span>
@@ -1521,7 +1691,7 @@ export default function PublicStatusPage() {
                 </div>
               </div>
               <p className="mt-3 max-w-3xl text-[13px] leading-6" style={{ color: 'var(--text-secondary)' }}>
-                The 90-slot rail mirrors the attached uptime-board style, but it highlights the latest known snapshot across the monitoring window. Historical uptime percentages are not stored yet.
+                Each block represents one actual recorded scan, ordered from older scans on the left to the latest scan on the right.
               </p>
             </div>
 
@@ -1529,7 +1699,13 @@ export default function PublicStatusPage() {
               <div>
                 {trackedItems.map((item, index) => (
                   <div key={`${item.image_name}:${item.image_tag}`} style={{ borderTop: index > 0 ? '1px solid var(--border-subtle)' : undefined }}>
-                    <StatusBoardRow item={item} onOpen={openItemDetails} />
+                    <StatusBoardRow
+                      slug={slug}
+                      item={item}
+                      scans={rowScanHistory[item.latest_scan_id]}
+                      onOpen={openItemDetails}
+                      onHistoryLoaded={syncRowHistory}
+                    />
                   </div>
                 ))}
               </div>
@@ -1541,63 +1717,6 @@ export default function PublicStatusPage() {
                 </p>
               </div>
             )}
-
-            <div className="border-t px-6 py-6 sm:px-8" style={{ borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Notifications</p>
-                  <h2 className="mt-1 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Latest updates</h2>
-                </div>
-                <span className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{recentUpdates.length} shown</span>
-              </div>
-
-              <div className="mt-4 space-y-4">
-                {recentUpdates.length > 0 ? recentUpdates.map((update, index) => {
-                  const tone = update.level === 'incident'
-                    ? { color: '#dc2626', label: 'Incident' }
-                    : update.level === 'maintenance'
-                      ? { color: '#b45309', label: 'Maintenance' }
-                      : { color: '#2563eb', label: 'Update' };
-
-                  return (
-                    <div key={`${update.title}:${update.created_at ?? index}`} className="flex flex-col gap-2 border-b pb-4 last:border-b-0 last:pb-0" style={{ borderColor: 'var(--border-subtle)' }}>
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <StatusBoardBadge label={tone.label} color={tone.color} />
-                          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{update.title}</p>
-                        </div>
-                        <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>{update.created_at ? timeAgo(update.created_at) : 'Recently updated'}</span>
-                      </div>
-                      <p className="text-[14px] leading-6" style={{ color: 'var(--text-secondary)' }}>{update.body}</p>
-                    </div>
-                  );
-                }) : (
-                  <div className="rounded-2xl border border-dashed px-4 py-5 text-sm" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                    No incident or maintenance updates are published for this page.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="border-t px-6 py-6 sm:px-8" style={{ borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Third Party Components</p>
-                  <h2 className="mt-1 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Scan provider health</h2>
-                </div>
-                <span className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{providerSummary.length} provider{providerSummary.length === 1 ? '' : 's'}</span>
-              </div>
-
-              <div className="mt-4 divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
-                {providerSummary.length > 0 ? providerSummary.map((provider) => (
-                  <ProviderStatusRow key={provider.label} label={provider.label} tone={provider.tone} count={provider.count} />
-                )) : (
-                  <div className="py-3 text-[14px]" style={{ color: 'var(--text-secondary)' }}>
-                    Provider status will appear once tracked scans report a provider.
-                  </div>
-                )}
-              </div>
-            </div>
           </section>
         </div>
       </main>
@@ -1609,6 +1728,7 @@ export default function PublicStatusPage() {
           item={activeItem}
           state={vulnerabilityModal}
           onClose={closeItemDetails}
+          onHistoryLoaded={syncRowHistory}
         />
       )}
     </div>

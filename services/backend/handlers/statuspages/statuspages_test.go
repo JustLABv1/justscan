@@ -91,3 +91,45 @@ func TestDeriveStatusKeepsCompletedScanOperationallyHealthyDespiteFindings(t *te
 		t.Fatalf("expected healthy operational status for completed scan with findings, got %q", status)
 	}
 }
+
+func TestRebindStatusPageRelationsUsesExistingPageID(t *testing.T) {
+	userID := uuid.New()
+	existingPageID := uuid.New()
+
+	_, targets, updates, err := buildStatusPageModels(statusPagePayload{
+		Name:           "Production",
+		Visibility:     models.StatusPageVisibilityPublic,
+		IncludeAllTags: false,
+		Targets: []statusPageTargetPayload{{
+			ImageName:    "ghcr.io/acme/api",
+			ImageTag:     "prod",
+			DisplayOrder: 1,
+		}},
+		Updates: []statusPageUpdatePayload{{
+			Title: "Maintenance window",
+			Body:  "Registry credentials are being rotated.",
+			Level: "maintenance",
+		}},
+	}, userID)
+	if err != nil {
+		t.Fatalf("buildStatusPageModels returned error: %v", err)
+	}
+	if len(targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(targets))
+	}
+	if len(updates) != 1 {
+		t.Fatalf("expected 1 update, got %d", len(updates))
+	}
+	if targets[0].PageID == existingPageID || updates[0].PageID == existingPageID {
+		t.Fatal("expected buildStatusPageModels to use a fresh page ID before rebinding")
+	}
+
+	rebindStatusPageRelations(existingPageID, targets, updates)
+
+	if targets[0].PageID != existingPageID {
+		t.Fatalf("expected target page_id %s, got %s", existingPageID, targets[0].PageID)
+	}
+	if updates[0].PageID != existingPageID {
+		t.Fatalf("expected update page_id %s, got %s", existingPageID, updates[0].PageID)
+	}
+}

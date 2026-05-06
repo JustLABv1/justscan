@@ -386,6 +386,9 @@ export default function StatusPagesPage() {
     setSaving(true);
     setFormError('');
 
+    const trimmedUpdateTitle = updateTitle.trim();
+    const trimmedUpdateBody = updateBody.trim();
+
     const payload: StatusPagePayload = {
       name,
       slug: slug || undefined,
@@ -399,8 +402,8 @@ export default function StatusPagesPage() {
       image_patterns: imagePatterns,
       stale_after_hours: Number(staleAfterHours) || 72,
       targets: selectedTargets,
-      updates: updateTitle.trim()
-        ? [{ title: updateTitle.trim(), body: updateBody.trim(), level: updateLevel }]
+      updates: trimmedUpdateTitle || trimmedUpdateBody
+        ? [{ title: trimmedUpdateTitle, body: trimmedUpdateBody, level: updateLevel }]
         : [],
     };
 
@@ -877,7 +880,7 @@ export default function StatusPagesPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                     <div className="space-y-1.5">
-                      <Label className={fieldLabelCls}>Active Banner Title</Label>
+                      <Label className={fieldLabelCls}>Active Banner Title (optional)</Label>
                       <Input className={fieldCls} value={updateTitle} onChange={event => setUpdateTitle(event.target.value)} placeholder="Database refresh in progress" />
                     </div>
                     <Select value={updateLevel} onChange={value => setUpdateLevel(String(value) as (typeof updateLevelOptions)[number])} className="w-full" placeholder="Select a banner level">

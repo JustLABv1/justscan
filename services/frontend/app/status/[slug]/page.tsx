@@ -15,11 +15,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const AUTO_REFRESH_MS = 30000;
 const VULN_PAGE_SIZE = 25;
-const STATUS_LAYOUT_STORAGE_KEY = 'justscan_status_page_layout';
-const STATUS_FILTER_STORAGE_KEY = 'justscan_status_page_filter';
-const STATUS_SORT_STORAGE_KEY = 'justscan_status_page_sort';
 const STATUS_SELECT_TRIGGER_CLS = 'glass-input min-h-11 rounded-full px-3 text-sm';
 const STATUS_INPUT_CLS = 'glass-input min-h-11 rounded-xl px-3 text-sm outline-none';
+const RECENT_SCAN_SEGMENTS = 12;
 const STATUS_PRIORITY: Record<string, number> = {
   failed: 0,
   blocked_by_xray_policy: 1,
@@ -33,27 +31,6 @@ const STATUS_PRIORITY: Record<string, number> = {
   healthy: 6,
   cancelled: 7,
 };
-const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'failed', label: 'Failed' },
-  { key: 'blocked_by_xray_policy', label: 'Blocked' },
-  { key: 'running', label: 'Running' },
-  { key: 'exposed', label: 'Exposed' },
-  { key: 'stale', label: 'Stale' },
-  { key: 'clear', label: 'Clear' },
-] as const;
-const SORT_OPTIONS = [
-  { key: 'display', label: 'Configured order' },
-  { key: 'worst', label: 'Worst first' },
-  { key: 'stale', label: 'Stalest first' },
-  { key: 'latest', label: 'Newest scan' },
-] as const;
-const LAYOUT_OPTIONS = [
-  { key: 'detailed', label: 'Detailed' },
-  { key: 'compact', label: 'Compact' },
-  { key: 'grid', label: 'Grid' },
-  { key: 'table', label: 'Table' },
-] as const;
 const VULN_SEVERITY_OPTIONS = [
   { key: '__all__', label: 'All severities' },
   { key: 'CRITICAL', label: 'Critical' },
@@ -71,6 +48,7 @@ const SEV = {
 
 const STATUS_COLOR: Record<string, string> = {
   healthy: '#22c55e',
+  completed: '#22c55e',
   stale: '#eab308',
   failed: '#ef4444',
   blocked_by_xray_policy: '#f59e0b',
@@ -98,9 +76,6 @@ const EXPOSURE_COLOR: Record<string, string> = {
   clear: '#22c55e',
 };
 
-type FilterKey = (typeof FILTERS)[number]['key'];
-type SortKey = (typeof SORT_OPTIONS)[number]['key'];
-type LayoutKey = (typeof LAYOUT_OPTIONS)[number]['key'];
 type VulnerabilitySortKey = 'vuln_id' | 'pkg_name' | 'installed_version' | 'fixed_version' | 'severity' | 'cvss_score';
 type ExposureStatus = 'high_risk' | 'findings_present' | 'unknown' | 'clear';
 
@@ -408,51 +383,6 @@ function RunningScanVisualization({
   );
 }
 
-function SeverityBar({ item }: { item: StatusPageItem }) {
-  const total = getFindingTotal(item);
-  if (total === 0) {
-    return (
-      <div className="flex items-center gap-3">
-        <div className="h-2 flex-1 rounded-full" style={{ background: 'var(--status-bar-track)' }} />
-        <span className="min-w-[82px] text-right text-[12px] font-medium tabular-nums text-zinc-500">0 findings</span>
-      </div>
-    );
-  }
-  const segments = [
-    { key: 'critical', count: item.critical_count, color: SEV.critical },
-    { key: 'high', count: item.high_count, color: SEV.high },
-    { key: 'medium', count: item.medium_count, color: SEV.medium },
-    { key: 'low', count: item.low_count, color: SEV.low },
-  ].filter(s => s.count > 0);
-
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex h-2 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--status-bar-track)' }}>
-        {segments.map(s => (
-          <div
-            key={s.key}
-            className="h-full transition-all duration-700"
-            style={{ width: `${(s.count / total) * 100}%`, background: s.color }}
-          />
-        ))}
-      </div>
-      <span className="min-w-[82px] text-right text-[12px] font-medium tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-        {total.toLocaleString()} findings
-      </span>
-    </div>
-  );
-}
-
-function Delta({ value }: { value?: number }) {
-  if (!value) return null;
-  const up = value > 0;
-  return (
-    <span className={`text-[11px] font-semibold tabular-nums ${up ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-      {up ? `+${value}` : value}
-    </span>
-  );
-}
-
 function StatusDot({ status }: { status: string }) {
   const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
   return (
@@ -498,125 +428,251 @@ function StateChip({
   );
 }
 
-function SeverityStat({
-  label,
-  value,
-  delta,
-  color,
-}: {
-  label: string;
-  value: number;
-  delta?: number;
-  color: string;
-}) {
-  return (
-    <div className="rounded-2xl px-3.5 py-3 min-w-[110px]"
-      style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">{label}</p>
-      <div className="mt-2 flex items-end justify-between gap-3">
-        <span className="text-2xl font-semibold tabular-nums leading-none" style={{ color }}>{value}</span>
-        <Delta value={delta} />
-      </div>
-    </div>
-  );
-}
-
-function FilterChip({
-  label,
-  count,
-  active,
-  onClick,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      size="sm"
-      variant={active ? 'primary' : 'secondary'}
-      onPress={onClick}
-      className="rounded-full px-3.5 text-sm font-medium"
-      style={active ? undefined : { color: 'var(--text-secondary)' }}
-    >
-      <span>{label}</span>
-      <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums"
-        style={{
-          background: active ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.05)',
-          color: active ? '#ffffff' : 'var(--text-secondary)',
-        }}>
-        {count}
-      </span>
-    </Button>
-  );
-}
-
-function CompactStatusRow({
-  item,
-  onOpen,
-}: {
-  item: StatusPageItem;
-  onOpen: (item: StatusPageItem) => void;
-}) {
-  const status = getPresentationStatus(item);
-  const effectiveScanStatus = getEffectiveScanStatus(item.scan_status, item.external_status);
-  const exposureStatus = getExposureStatus(item, status);
-  const accent = getPrimaryAccent(status, exposureStatus);
+function getServiceTone(item: StatusPageItem) {
+  const operationalStatus = getPresentationStatus(item);
+  const exposureStatus = getExposureStatus(item, operationalStatus);
   const totalFindings = getFindingTotal(item);
-  const blockedPolicyDetails = getBlockedPolicyDetails(item.external_status, item.blocked_policy_details, item.error_message);
-  const note = buildItemNote(item, blockedPolicyDetails);
-  const isRunning = ACTIVE_SCAN_STATUSES.has(effectiveScanStatus);
 
+  if (ACTIVE_SCAN_STATUSES.has(operationalStatus)) {
+    return {
+      label: 'Scanning',
+      detail: item.current_step ? formatStatusLabel(item.current_step) : 'Scan in progress',
+      color: STATUS_COLOR[operationalStatus] ?? STATUS_COLOR.running,
+    };
+  }
+
+  if (operationalStatus === 'failed') {
+    return {
+      label: 'Issue Detected',
+      detail: compactErrorSummary(item.error_message) || 'Latest scan failed',
+      color: STATUS_COLOR.failed,
+    };
+  }
+
+  if (operationalStatus === 'blocked_by_xray_policy') {
+    return {
+      label: 'Policy Blocked',
+      detail: 'Xray blocked the latest snapshot',
+      color: STATUS_COLOR.blocked_by_xray_policy,
+    };
+  }
+
+  if (operationalStatus === 'stale') {
+    return {
+      label: 'Stale Snapshot',
+      detail: `Observed ${timeAgo(item.observed_at)}`,
+      color: STATUS_COLOR.stale,
+    };
+  }
+
+  if (exposureStatus === 'high_risk') {
+    return {
+      label: 'Findings Present',
+      detail: `${totalFindings.toLocaleString()} findings in the latest scan`,
+      color: EXPOSURE_COLOR.high_risk,
+    };
+  }
+
+  if (exposureStatus === 'findings_present') {
+    return {
+      label: 'Findings Present',
+      detail: `${totalFindings.toLocaleString()} findings in the latest scan`,
+      color: EXPOSURE_COLOR.findings_present,
+    };
+  }
+
+  return {
+    label: 'Operational',
+    detail: 'No known issues in the latest snapshot',
+    color: STATUS_COLOR.healthy,
+  };
+}
+
+function StatusBoardBadge({ label, color }: { label: string; color: string }) {
   return (
-    <button
-      type="button"
-      className="group relative w-full overflow-hidden rounded-[20px] border px-4 py-3 text-left transition-colors hover:border-zinc-300/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60"
-      style={{
-        background: status === 'healthy'
-          ? 'var(--status-card-bg)'
-          : `color-mix(in srgb, ${accent} 7%, var(--status-card-bg))`,
-        borderColor: status === 'healthy'
-          ? 'var(--status-card-border)'
-          : `color-mix(in srgb, ${accent} 18%, var(--status-card-border))`,
-      }}
-      aria-label={`Open details for ${item.image_name}:${item.image_tag}`}
-      onClick={() => onOpen(item)}
+    <span
+      className="inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-full px-3 py-1 text-[13px] font-medium"
+      style={{ color }}
     >
-      <div className="absolute inset-y-0 left-0 w-1 rounded-full" style={{ background: accent }} />
-      <div className="min-w-0 space-y-2 pl-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <StateChip label="Operational" value={getOperationalStatusLabel(status)} color={STATUS_COLOR[status] ?? STATUS_COLOR.pending} />
-          <StateChip label="Exposure" value={formatExposureStatusLabel(exposureStatus)} color={EXPOSURE_COLOR[exposureStatus]} />
-          <TagBadge tag={item.image_tag} />
-          {isRunning ? (
-            <span
-              className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-              style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}
-            >
-              {formatStatusLabel(item.current_step || effectiveScanStatus)}
-            </span>
-          ) : null}
-        </div>
-        <p className="truncate font-mono text-[14px] font-medium sm:text-[15px]" style={{ color: 'var(--text-primary)' }}>
-          {item.image_name}
-        </p>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-          <span className="tabular-nums">{totalFindings > 0 ? `${totalFindings.toLocaleString()} findings` : 'No findings'}</span>
-          <span>·</span>
-          <span className="tabular-nums">Freshness {item.freshness_hours}h</span>
-          <span>·</span>
-          <span>Observed {timeAgo(item.observed_at)}</span>
-          {note && totalFindings > 0 ? <><span>·</span><span>{note}</span></> : null}
-        </div>
-      </div>
-    </button>
+      <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+      {label}
+    </span>
   );
+}
+
+function getStatusUpdateTone(level?: string) {
+  switch (level) {
+    case 'incident':
+      return {
+        label: 'Incident',
+        color: '#dc2626',
+        background: 'rgba(220,38,38,0.08)',
+        border: 'rgba(220,38,38,0.22)',
+        strongBackground: 'rgba(220,38,38,0.12)',
+      };
+    case 'maintenance':
+      return {
+        label: 'Maintenance',
+        color: '#b45309',
+        background: 'rgba(180,83,9,0.08)',
+        border: 'rgba(180,83,9,0.22)',
+        strongBackground: 'rgba(180,83,9,0.12)',
+      };
+    default:
+      return {
+        label: 'Update',
+        color: '#2563eb',
+        background: 'rgba(37,99,235,0.08)',
+        border: 'rgba(37,99,235,0.22)',
+        strongBackground: 'rgba(37,99,235,0.12)',
+      };
+  }
 }
 
 function formatScanHistoryOptionLabel(scan: StatusPageScanSummary) {
   const effectiveStatus = getEffectiveScanStatus(scan.scan_status, scan.external_status);
   return `${scan.is_latest ? 'Latest' : 'Previous'} · ${formatStatusLabel(effectiveStatus)} · ${timeAgo(scan.observed_at)}`;
+}
+
+async function listStatusPageScanHistoryWithRetry(slug: string, scanId: string, attempts = 3) {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await listStatusPageScanHistory(slug, scanId);
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+function buildFallbackScanSummary(item: StatusPageItem): StatusPageScanSummary {
+  return {
+    scan_id: item.latest_scan_id,
+    image_name: item.image_name,
+    image_tag: item.image_tag,
+    scan_status: item.scan_status,
+    external_status: item.external_status,
+    scan_provider: item.scan_provider,
+    current_step: item.current_step,
+    error_message: item.error_message,
+    blocked_policy_details: item.blocked_policy_details,
+    critical_count: item.critical_count,
+    high_count: item.high_count,
+    medium_count: item.medium_count,
+    low_count: item.low_count,
+    started_at: item.started_at,
+    completed_at: item.observed_at,
+    created_at: item.started_at ?? item.observed_at,
+    observed_at: item.observed_at,
+    is_latest: true,
+  };
+}
+
+function getRecentScanStripScans(item: StatusPageItem, scans?: StatusPageScanSummary[]) {
+  const source = scans && scans.length > 0 ? scans : [buildFallbackScanSummary(item)];
+  return [...source]
+    .sort((left, right) => new Date(left.observed_at).getTime() - new Date(right.observed_at).getTime())
+    .slice(-RECENT_SCAN_SEGMENTS);
+}
+
+function RecentScanStrip({
+  slug,
+  item,
+  scans,
+  onHistoryLoaded,
+}: {
+  slug: string;
+  item: StatusPageItem;
+  scans?: StatusPageScanSummary[];
+  onHistoryLoaded?: (scanId: string, scans: StatusPageScanSummary[]) => void;
+}) {
+  const [localScans, setLocalScans] = useState<StatusPageScanSummary[] | undefined>(scans);
+  const [localLoading, setLocalLoading] = useState(false);
+
+  useEffect(() => {
+    setLocalScans(scans);
+  }, [scans]);
+
+  useEffect(() => {
+    if (scans !== undefined || !item.latest_scan_id) {
+      return;
+    }
+
+    let cancelled = false;
+    setLocalLoading(true);
+
+    listStatusPageScanHistoryWithRetry(slug, item.latest_scan_id)
+      .then((history) => {
+        if (cancelled) return;
+        setLocalScans(history);
+        onHistoryLoaded?.(item.latest_scan_id, history);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLocalScans([]);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLocalLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [item.latest_scan_id, onHistoryLoaded, scans, slug]);
+
+  const tone = getServiceTone(item);
+  const effectiveScans = localScans ?? scans;
+  const recentScans = getRecentScanStripScans(item, effectiveScans);
+  const latestScan = recentScans[recentScans.length - 1] ?? buildFallbackScanSummary(item);
+  const leadingPlaceholders = Math.max(0, RECENT_SCAN_SEGMENTS - recentScans.length);
+  const latestLabel = localLoading
+    ? 'Loading older scans'
+    : recentScans.length === 1
+      ? 'Single recorded scan'
+      : `${recentScans.length} recent scans`;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-1.5 overflow-hidden" aria-label="Recent scan history">
+        {Array.from({ length: leadingPlaceholders }, (_, index) => (
+          <span
+            key={`${item.latest_scan_id}:empty:${index}`}
+            className="h-10 flex-1 rounded-[3px]"
+            style={{ background: 'var(--row-hover)' }}
+            aria-hidden="true"
+          />
+        ))}
+        {recentScans.map((scan) => {
+          const status = getEffectiveScanStatus(scan.scan_status, scan.external_status);
+          const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
+          return (
+            <span
+              key={scan.scan_id}
+              className="h-10 flex-1 rounded-[3px]"
+              style={{ background: color, opacity: scan.is_latest ? 1 : 0.84 }}
+              title={formatScanHistoryOptionLabel(scan)}
+              aria-label={formatScanHistoryOptionLabel(scan)}
+            />
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-4 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+        <span>Older scans</span>
+        <span className="h-px flex-1" style={{ background: 'var(--border-subtle)' }} />
+        <span style={{ color: tone.color }}>{latestLabel}</span>
+        <span className="h-px flex-1" style={{ background: 'var(--border-subtle)' }} />
+        <span>{timeAgo(latestScan.observed_at)}</span>
+      </div>
+    </div>
+  );
 }
 
 function ScanTimeline({
@@ -720,11 +776,13 @@ function StatusItemVulnerabilityModal({
   item,
   state,
   onClose,
+  onHistoryLoaded,
 }: {
   slug: string;
   item: StatusPageItem | null;
   state: ReturnType<typeof useOverlayState>;
   onClose: () => void;
+  onHistoryLoaded?: (scanId: string, scans: StatusPageScanSummary[]) => void;
 }) {
   const [history, setHistory] = useState<StatusPageScanSummary[]>([]);
   const [selectedScanId, setSelectedScanId] = useState(() => item?.latest_scan_id ?? '');
@@ -810,6 +868,9 @@ function StatusItemVulnerabilityModal({
             : [];
 
         setHistory(scans);
+        if (item?.latest_scan_id && scans.length > 0) {
+          onHistoryLoaded?.(item.latest_scan_id, scans);
+        }
         setHistoryResponseKey(requestKey);
         setSelectedScanId((current) => (
           scans.find((scan) => scan.scan_id === current)?.scan_id
@@ -1228,363 +1289,49 @@ function StatusItemVulnerabilityModal({
   );
 }
 
-function ItemCard({
+function StatusBoardRow({
+  slug,
   item,
-  index,
-  layout,
+  scans,
   onOpen,
+  onHistoryLoaded,
 }: {
+  slug: string;
   item: StatusPageItem;
-  index: number;
-  layout: LayoutKey;
+  scans?: StatusPageScanSummary[];
   onOpen: (item: StatusPageItem) => void;
+  onHistoryLoaded?: (scanId: string, scans: StatusPageScanSummary[]) => void;
 }) {
-  const effectiveScanStatus = getEffectiveScanStatus(item.scan_status, item.external_status);
-  const cardStatus = getPresentationStatus(item);
-  const exposureStatus = getExposureStatus(item, cardStatus);
-  const color = getPrimaryAccent(cardStatus, exposureStatus);
+  const tone = getServiceTone(item);
   const totalFindings = getFindingTotal(item);
-  const blockedPolicyDetails = getBlockedPolicyDetails(item.external_status, item.blocked_policy_details, item.error_message);
-  const itemNote = buildItemNote(item, blockedPolicyDetails);
-  const isRunning = ACTIVE_SCAN_STATUSES.has(effectiveScanStatus);
-  const isCompact = layout === 'compact';
-  const isDense = layout === 'compact' || layout === 'grid';
-  const isGrid = layout === 'grid';
-  const severityStats = [
-    { label: 'Critical', value: item.critical_count, delta: item.delta_critical_count, color: SEV.critical },
-    { label: 'High', value: item.high_count, delta: item.delta_high_count, color: SEV.high },
-    { label: 'Medium', value: item.medium_count, delta: item.delta_medium_count, color: SEV.medium },
-    { label: 'Low', value: item.low_count, delta: item.delta_low_count, color: SEV.low },
-  ].filter(metric => metric.value > 0);
-  const canOpen = Boolean(item.latest_scan_id);
-  const content = (
-    <>
-      <div className="absolute inset-y-0 left-0 w-1 rounded-full" style={{ background: color }} />
+  const meta = totalFindings > 0
+    ? `${item.image_tag} · ${totalFindings.toLocaleString()} findings`
+    : `${item.image_tag} · Updated ${timeAgo(item.observed_at)}`;
 
-      <div className={`${isDense ? 'px-4 py-4 md:px-5 md:py-5 space-y-3' : 'px-5 py-5 md:px-6 md:py-6 space-y-4'}`}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <StateChip label="Operational" value={getOperationalStatusLabel(cardStatus)} color={STATUS_COLOR[cardStatus] ?? STATUS_COLOR.pending} />
-              <StateChip label="Exposure" value={formatExposureStatusLabel(exposureStatus)} color={EXPOSURE_COLOR[exposureStatus]} />
-              <span className="rounded-full px-2.5 py-1 text-[12px] font-medium"
-                style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                Freshness {item.freshness_hours}h
-              </span>
-              <span className="rounded-full px-2.5 py-1 text-[12px] font-medium"
-                style={{
-                  color: totalFindings > 0 ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  background: totalFindings > 0 ? 'rgba(239,68,68,0.08)' : 'var(--status-pill-bg)',
-                  border: totalFindings > 0 ? '1px solid rgba(239,68,68,0.16)' : '1px solid var(--status-pill-border)',
-                }}>
-                {totalFindings > 0 ? `${totalFindings.toLocaleString()} findings` : 'No active findings'}
-              </span>
-            </div>
-            <p className={`font-mono font-medium break-all leading-relaxed ${isDense ? 'text-[14px]' : 'text-[15px] sm:text-base'}`} style={{ color: 'var(--text-primary)' }}>
+  return (
+    <button
+      type="button"
+      className="w-full px-6 py-6 text-left transition-colors hover:bg-black/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60 sm:px-8"
+      aria-label={`Open details for ${item.image_name}:${item.image_tag}`}
+      onClick={() => onOpen(item)}
+    >
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-2">
+            <h3 className="text-lg font-semibold tracking-[-0.01em]" style={{ color: 'var(--text-primary)' }}>
               {item.image_name}
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <TagBadge tag={item.image_tag} />
-              {item.previous_scan_id && (
-                <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                  style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                  {item.previous_scan_at ? 'Has previous snapshot' : 'Snapshot tracked'}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-zinc-500">
-              <span>Observed {timeAgo(item.observed_at)}</span>
-              <span>·</span>
-              <span className="capitalize">Scan {formatStatusLabel(effectiveScanStatus)}</span>
-              {item.previous_scan_at && (
-                <>
-                  <span>·</span>
-                  <span>Prev {timeAgo(item.previous_scan_at)}</span>
-                </>
-              )}
-            </div>
+            </h3>
+            <p className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{meta}</p>
+          </div>
+
+          <div className="flex shrink-0 items-center justify-end gap-2">
+            <StatusBoardBadge label={tone.label} color={tone.color} />
           </div>
         </div>
 
-        {isRunning && !isCompact && (
-          <RunningScanVisualization
-            provider={item.scan_provider}
-            currentStep={item.current_step}
-            status={item.scan_status}
-            externalStatus={item.external_status}
-            startedAt={item.started_at}
-            compact
-          />
-        )}
-
-        {!isCompact && <SeverityBar item={item} />}
-
-        {isCompact ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {severityStats.length > 0 ? severityStats.map(metric => (
-              <span
-                key={metric.label}
-                className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                style={{
-                  color: metric.color,
-                  background: 'var(--status-pill-bg)',
-                  border: '1px solid var(--status-pill-border)',
-                }}
-              >
-                {metric.label} {metric.value}
-              </span>
-            )) : (
-              <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                No active findings
-              </span>
-            )}
-          </div>
-        ) : isDense ? (
-          <div className="flex flex-wrap gap-2">
-            {severityStats.length > 0 ? severityStats.map(metric => (
-              <span
-                key={metric.label}
-                className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                style={{
-                  color: metric.color,
-                  background: 'var(--status-pill-bg)',
-                  border: '1px solid var(--status-pill-border)',
-                }}
-              >
-                {metric.label} {metric.value}
-                {metric.delta ? ` (${metric.delta > 0 ? `+${metric.delta}` : metric.delta})` : ''}
-              </span>
-            )) : (
-              <div className="rounded-2xl px-3 py-2 text-[12px] leading-5"
-                style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)', color: 'var(--text-secondary)' }}>
-                No active findings in the latest completed scan.
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-2.5">
-            {severityStats.length > 0 ? severityStats.map(metric => (
-              <SeverityStat
-                key={metric.label}
-                label={metric.label}
-                value={metric.value}
-                delta={metric.delta}
-                color={metric.color}
-              />
-            )) : (
-              <div className="rounded-2xl px-4 py-3 text-[13px] leading-6"
-                style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)', color: 'var(--text-secondary)' }}>
-                No active findings. This tag is currently clear in the latest completed scan.
-              </div>
-            )}
-          </div>
-        )}
-
-        {isCompact ? (
-          <div className="rounded-xl border px-3 py-2.5" style={{ borderColor: blockedPolicyDetails ? 'rgba(245,158,11,0.22)' : item.error_message ? 'rgba(239,68,68,0.2)' : 'var(--status-card-border)', background: blockedPolicyDetails ? 'rgba(245,158,11,0.08)' : item.error_message ? 'rgba(239,68,68,0.05)' : 'var(--status-card-bg)' }}>
-            <p className="text-[12px] leading-5" style={{ color: blockedPolicyDetails ? 'var(--text-primary)' : item.error_message ? 'var(--text-secondary)' : 'var(--text-secondary)' }}>
-              {itemNote}
-            </p>
-          </div>
-        ) : blockedPolicyDetails ? (
-          <div className={`rounded-xl border ${isDense ? 'px-3 py-2.5' : 'px-4 py-3'}`} style={{ borderColor: 'rgba(245,158,11,0.22)', background: 'rgba(245,158,11,0.08)' }}>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: '#b45309' }}>Xray policy violation</p>
-            <p className={`leading-6 ${isDense ? 'text-[12px]' : 'text-[13px]'}`} style={{ color: 'var(--text-primary)' }}>{blockedPolicyDetails.summary}</p>
-            {blockedPolicyDetails.blockingPolicies.length > 0 && !isGrid && (
-              <p className="mt-2 text-[12px] leading-5" style={{ color: 'var(--text-secondary)' }}>
-                Blocking policies: {isDense ? compactBlockedPolicyList(blockedPolicyDetails.blockingPolicies, 2) : blockedPolicyDetails.blockingPolicies.join(', ')}
-              </p>
-            )}
-            {blockedPolicyDetails.matchedWatches.length > 0 && !isGrid && (
-              <p className="mt-2 text-[12px] leading-5" style={{ color: 'var(--text-secondary)' }}>
-                {summarizeWatchCoverage(blockedPolicyDetails)}
-              </p>
-            )}
-            {blockedPolicyDetails.totalViolations && isDense && (
-              <p className="mt-2 text-[11px] font-semibold" style={{ color: '#b45309' }}>
-                {blockedPolicyDetails.totalViolations} violations detected
-              </p>
-            )}
-          </div>
-        ) : item.error_message ? (
-          <div className={`rounded-xl border border-red-500/20 bg-red-500/5 ${isDense ? 'px-3 py-2.5' : 'px-4 py-3'}`}>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-red-500 dark:text-red-400">Scan Error</p>
-            {isDense ? (
-              <p className="line-clamp-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-red-700/80 dark:text-red-300/80">
-                {item.error_message}
-              </p>
-            ) : (
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-red-700/80 dark:text-red-300/80">
-                {item.error_message}
-              </pre>
-            )}
-          </div>
-        ) : null}
-
-        {canOpen && (
-          <div className={`flex items-center justify-between border-t text-[12px] ${isDense ? 'pt-2' : 'pt-3'}`} style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
-            <span>{isCompact ? 'Open scan details.' : isDense ? 'Open details and previous scans.' : 'Open image details to inspect CVEs, Xray policy violations, and previous scans.'}</span>
-            <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Open</span>
-          </div>
-        )}
+        <RecentScanStrip slug={slug} item={item} scans={scans} onHistoryLoaded={onHistoryLoaded} />
       </div>
-    </>
-  );
-
-  if (canOpen) {
-    return (
-      <button
-        type="button"
-        className={`status-item-enter status-card relative w-full overflow-hidden text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60 ${isDense ? 'rounded-2xl' : 'rounded-3xl'}`}
-        style={{
-          background: 'var(--status-card-bg)',
-          border: '1px solid var(--status-card-border)',
-          animationDelay: `${index * 60}ms`,
-          cursor: 'pointer',
-        }}
-        aria-label={`Open details for ${item.image_name}:${item.image_tag}`}
-        onClick={() => onOpen(item)}
-      >
-        {content}
-      </button>
-    );
-  }
-
-  return (
-    <div
-      className={`status-item-enter status-card relative overflow-hidden ${isDense ? 'rounded-2xl' : 'rounded-3xl'}`}
-      style={{
-        background: 'var(--status-card-bg)',
-        border: '1px solid var(--status-card-border)',
-        animationDelay: `${index * 60}ms`,
-      }}
-    >
-      {content}
-    </div>
-  );
-}
-
-function RefreshBar({ lastLoadedAt }: { lastLoadedAt: number | null }) {
-  const now = useTicker(1000);
-  const { progress } = getRefreshCadence(lastLoadedAt, now);
-
-  return (
-    <div className="fixed top-0 left-0 right-0 z-50 h-[2px]" style={{ background: 'var(--status-bar-track)' }}>
-      <div
-        className="h-full transition-all duration-1000 ease-linear"
-        style={{ width: `${progress}%`, background: 'linear-gradient(90deg, #7c3aed, #a78bfa)' }}
-      />
-    </div>
-  );
-}
-
-function SnapshotStatusChips({ snapshotAt, lastLoadedAt, refreshing }: { snapshotAt: string; lastLoadedAt: number | null; refreshing: boolean }) {
-  useTicker(30000);
-  const refreshClock = useTicker(1000);
-  const { secondsRemaining } = getRefreshCadence(lastLoadedAt, refreshClock);
-
-  return (
-    <>
-      <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-        Snapshot {timeAgo(snapshotAt)}
-      </span>
-      <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-        <span className={`h-2.5 w-2.5 rounded-full ${refreshing ? 'animate-pulse' : ''}`} style={{ background: refreshing ? STATUS_COLOR.running : STATUS_COLOR.healthy }} />
-        {refreshing ? 'Refreshing now' : `Auto refresh in ${secondsRemaining}s`}
-      </span>
-    </>
-  );
-}
-
-function StatusTable({ items, onOpen }: { items: StatusPageItem[]; onOpen: (item: StatusPageItem) => void }) {
-  return (
-    <div className="overflow-hidden rounded-[28px]" style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[980px] text-sm">
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-              {['Image', 'Tag', 'Signals', 'Findings', 'Snapshot', 'Details', ''].map((label) => (
-                <th
-                  key={label || 'open'}
-                  className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.14em]"
-                  style={{ color: 'var(--text-faint)' }}
-                >
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, index) => {
-              const cardStatus = getPresentationStatus(item);
-              const exposureStatus = getExposureStatus(item, cardStatus);
-              const blockedPolicyDetails = getBlockedPolicyDetails(item.external_status, item.blocked_policy_details, item.error_message);
-              const totalFindings = getFindingTotal(item);
-              return (
-                <tr
-                  key={`${item.image_name}:${item.image_tag}`}
-                  style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
-                  onMouseEnter={event => (event.currentTarget.style.background = 'var(--row-hover)')}
-                  onMouseLeave={event => (event.currentTarget.style.background = 'transparent')}
-                >
-                  <td className="px-4 py-3 align-top">
-                    <div className="max-w-[360px] space-y-1">
-                      <button
-                        type="button"
-                        className="font-mono text-[13px] leading-5 break-all text-left transition-colors hover:text-violet-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60"
-                        style={{ color: 'var(--text-primary)' }}
-                        aria-label={`Open details for ${item.image_name}:${item.image_tag}`}
-                        onClick={() => onOpen(item)}
-                      >
-                        {item.image_name}
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <TagBadge tag={item.image_tag} />
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <div className="flex max-w-[220px] flex-wrap gap-2">
-                      <StateChip label="Operational" value={getOperationalStatusLabel(cardStatus)} color={STATUS_COLOR[cardStatus] ?? STATUS_COLOR.pending} />
-                      <StateChip label="Exposure" value={formatExposureStatusLabel(exposureStatus)} color={EXPOSURE_COLOR[exposureStatus]} />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <div className="space-y-1">
-                      <p className="text-[13px] font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>{totalFindings.toLocaleString()}</p>
-                      <p className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>{buildItemNote(item, blockedPolicyDetails)}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <div className="space-y-1 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                      <p>Observed {timeAgo(item.observed_at)}</p>
-                      <p>Freshness {item.freshness_hours}h</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <div className="max-w-[260px] text-[12px] leading-5" style={{ color: 'var(--text-secondary)' }}>
-                      {blockedPolicyDetails ? blockedPolicyDetails.summary : item.error_message ? compactErrorSummary(item.error_message) : 'View scan history, findings, and Xray details.'}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 align-top text-right">
-                    <button
-                      type="button"
-                      className="rounded-full px-3 py-1.5 text-[12px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60"
-                      style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}
-                      onClick={() => onOpen(item)}
-                    >
-                      Open
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    </button>
   );
 }
 
@@ -1596,13 +1343,11 @@ export default function PublicStatusPage() {
   const [error, setError] = useState('');
   const [needsAuth, setNeedsAuth] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
-  const [filter, setFilter] = useState<FilterKey>('all');
-  const [sortBy, setSortBy] = useState<SortKey>('worst');
-  const [layout, setLayout] = useState<LayoutKey>('compact');
-  const [preferencesReady, setPreferencesReady] = useState(false);
   const [activeItem, setActiveItem] = useState<StatusPageItem | null>(null);
+  const [rowScanHistory, setRowScanHistory] = useState<Record<string, StatusPageScanSummary[]>>({});
   const mountedRef = useRef(true);
   const vulnerabilityModal = useOverlayState();
+  const refreshClock = useTicker(1000);
 
   function openItemDetails(item: StatusPageItem) {
     setActiveItem(item);
@@ -1611,6 +1356,19 @@ export default function PublicStatusPage() {
 
   function closeItemDetails() {
     vulnerabilityModal.close();
+  }
+
+  function syncRowHistory(scanId: string, scans: StatusPageScanSummary[]) {
+    setRowScanHistory((current) => {
+      const existing = current[scanId];
+      if (existing && existing.length >= scans.length) {
+        return current;
+      }
+      return {
+        ...current,
+        [scanId]: scans,
+      };
+    });
   }
 
   const load = useCallback(async (showLoader: boolean) => {
@@ -1647,35 +1405,6 @@ export default function PublicStatusPage() {
       mountedRef.current = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = window.localStorage.getItem(STATUS_LAYOUT_STORAGE_KEY);
-    const storedFilter = window.localStorage.getItem(STATUS_FILTER_STORAGE_KEY);
-    const storedSort = window.localStorage.getItem(STATUS_SORT_STORAGE_KEY);
-    if (stored === 'detailed' || stored === 'compact' || stored === 'grid' || stored === 'table') {
-      setLayout(stored);
-    }
-    const migratedFilter = storedFilter === 'degraded'
-      ? 'exposed'
-      : storedFilter === 'healthy'
-        ? 'clear'
-        : storedFilter;
-    if (migratedFilter === 'all' || migratedFilter === 'failed' || migratedFilter === 'blocked_by_xray_policy' || migratedFilter === 'running' || migratedFilter === 'exposed' || migratedFilter === 'stale' || migratedFilter === 'clear') {
-      setFilter(migratedFilter);
-    }
-    if (storedSort === 'display' || storedSort === 'worst' || storedSort === 'stale' || storedSort === 'latest') {
-      setSortBy(storedSort);
-    }
-    setPreferencesReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !preferencesReady) return;
-    window.localStorage.setItem(STATUS_LAYOUT_STORAGE_KEY, layout);
-    window.localStorage.setItem(STATUS_FILTER_STORAGE_KEY, filter);
-    window.localStorage.setItem(STATUS_SORT_STORAGE_KEY, sortBy);
-  }, [filter, layout, preferencesReady, sortBy]);
 
   useEffect(() => {
     void load(true);
@@ -1719,70 +1448,21 @@ export default function PublicStatusPage() {
     );
   }, [data]);
 
-  const filterCounts = useMemo(
-    () => ({
-      all: data?.items.length ?? 0,
-      failed: data?.items.filter(item => getPresentationStatus(item) === 'failed').length ?? 0,
-      blocked_by_xray_policy: data?.items.filter(item => getPresentationStatus(item) === 'blocked_by_xray_policy').length ?? 0,
-      running: data?.items.filter(item => ACTIVE_SCAN_STATUSES.has(getPresentationStatus(item))).length ?? 0,
-      exposed: data?.items.filter(item => isExposedStatus(getExposureStatus(item, getPresentationStatus(item)))).length ?? 0,
-      stale: data?.items.filter(item => getPresentationStatus(item) === 'stale').length ?? 0,
-      clear: data?.items.filter(item => isClearStatus(item, getPresentationStatus(item))).length ?? 0,
-    }),
-    [data],
-  );
+  const trackedItems = useMemo(() => {
+    return [...(data?.items ?? [])].sort((left, right) => (
+      compareItemsByPriority(left, right)
+      || left.display_order - right.display_order
+      || left.image_name.localeCompare(right.image_name)
+      || left.image_tag.localeCompare(right.image_tag)
+    ));
+  }, [data]);
 
-  const visibleItems = useMemo(() => {
-    const items = [...(data?.items ?? [])];
-    const filtered = filter === 'all'
-      ? items
-      : items.filter(item => {
-        const presentationStatus = getPresentationStatus(item);
-
-        if (filter === 'running') {
-          return ACTIVE_SCAN_STATUSES.has(presentationStatus);
-        }
-
-        if (filter === 'exposed') {
-          return isExposedStatus(getExposureStatus(item, presentationStatus));
-        }
-
-        if (filter === 'clear') {
-          return isClearStatus(item, presentationStatus);
-        }
-
-        return presentationStatus === filter;
-      });
-
-    filtered.sort((left, right) => {
-      if (sortBy === 'worst') {
-        return compareItemsByPriority(left, right);
-      }
-
-      if (sortBy === 'stale') {
-        return (
-          right.freshness_hours - left.freshness_hours
-          || getStatusRank(getPresentationStatus(left)) - getStatusRank(getPresentationStatus(right))
-          || right.critical_count - left.critical_count
-        );
-      }
-
-      if (sortBy === 'latest') {
-        return (
-          new Date(right.observed_at).getTime() - new Date(left.observed_at).getTime()
-          || getStatusRank(getPresentationStatus(left)) - getStatusRank(getPresentationStatus(right))
-        );
-      }
-
-      return (
-        left.display_order - right.display_order
-        || left.image_name.localeCompare(right.image_name)
-        || left.image_tag.localeCompare(right.image_tag)
-      );
-    });
-
-    return filtered;
-  }, [data, filter, sortBy]);
+  const latestObservedAt = useMemo(() => {
+    return trackedItems.reduce<string | null>((latest, item) => {
+      if (!latest) return item.observed_at;
+      return new Date(item.observed_at).getTime() > new Date(latest).getTime() ? item.observed_at : latest;
+    }, null);
+  }, [trackedItems]);
 
   if (loading && !data) {
     return (
@@ -1821,306 +1501,224 @@ export default function PublicStatusPage() {
     );
   }
 
-  const activeUpdate = data.page.updates?.[0];
   const recentUpdates = data.page.updates?.slice(0, 3) ?? [];
+  const latestUpdate = recentUpdates[0] ?? null;
+  const olderUpdates = recentUpdates.slice(1);
   const operationalIssueCount = (summary.operations.failed ?? 0) + (summary.operations.blocked_by_xray_policy ?? 0) + (summary.operations.stale ?? 0);
   const exposedCount = (summary.exposure.high_risk ?? 0) + (summary.exposure.findings_present ?? 0);
-  const clearCount = summary.exposure.clear ?? 0;
-  const headlineTone = activeUpdate?.level === 'incident'
-    ? { background: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.18)', accent: '#dc2626', label: 'Incident' }
-    : activeUpdate?.level === 'maintenance'
-      ? { background: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.18)', accent: '#b45309', label: 'Maintenance' }
-      : operationalIssueCount > 0
-        ? { background: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.18)', accent: '#c2410c', label: 'Attention' }
-        : { background: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.18)', accent: '#15803d', label: 'Operational' };
-  const headlineTitle = activeUpdate
-    ? activeUpdate.title
-    : operationalIssueCount > 0
-      ? `${operationalIssueCount} tracked tag${operationalIssueCount === 1 ? '' : 's'} have operational issues`
-      : exposedCount > 0
-        ? `${exposedCount} tracked tag${exposedCount === 1 ? '' : 's'} have active findings`
-        : 'Operations healthy, exposure clear';
-  const headlineBody = activeUpdate?.body
-    || (operationalIssueCount > 0
-      ? `${summary.operations.failed ?? 0} failed, ${summary.operations.blocked_by_xray_policy ?? 0} blocked, and ${summary.operations.stale ?? 0} stale tag${operationalIssueCount === 1 ? '' : 's'} currently need operational follow-up.`
-      : exposedCount > 0
-        ? `${summary.exposure.high_risk ?? 0} tag${(summary.exposure.high_risk ?? 0) === 1 ? '' : 's'} are high risk and ${summary.exposure.findings_present ?? 0} have lower-severity findings. Pullability and scan freshness stay separate from security exposure in this view.`
-      : filterCounts.running > 0
-        ? `${filterCounts.running} scan${filterCounts.running === 1 ? '' : 's'} are still processing in the background, but no tracked tags currently have operational issues or known findings.`
-        : 'All tracked tags are operational in the latest snapshot and currently clear of known findings.');
-  const compactRows = layout === 'compact' ? visibleItems : [];
+  const runningCount = summary.operations.running ?? 0;
+  const healthyCount = trackedItems.length - operationalIssueCount;
+  const { secondsRemaining } = getRefreshCadence(lastLoadedAt, refreshClock);
+  const pageTone = operationalIssueCount > 0
+    ? {
+        label: 'Investigating Issues',
+        color: STATUS_COLOR.failed,
+        description: `${summary.operations.failed ?? 0} failed, ${summary.operations.blocked_by_xray_policy ?? 0} policy blocked, and ${summary.operations.stale ?? 0} stale snapshot${operationalIssueCount === 1 ? '' : 's'} currently need attention.`,
+      }
+    : exposedCount > 0
+      ? {
+          label: 'Operational With Findings',
+          color: EXPOSURE_COLOR.findings_present,
+          description: `${summary.exposure.high_risk ?? 0} high-risk and ${summary.exposure.findings_present ?? 0} lower-severity finding set${exposedCount === 1 ? '' : 's'} are present in the latest scans.`,
+        }
+      : runningCount > 0
+        ? {
+            label: 'Operational, Scans Active',
+            color: STATUS_COLOR.running,
+            description: `${runningCount} scan${runningCount === 1 ? '' : 's'} are still processing, but there are no current operational failures on tracked services.`,
+          }
+        : {
+            label: 'All Systems Operational',
+            color: STATUS_COLOR.healthy,
+            description: 'Every tracked service is healthy in the latest snapshot and no known findings are currently present.',
+          };
 
   return (
     <div className="min-h-screen app-bg">
-      <RefreshBar lastLoadedAt={lastLoadedAt} />
-      <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 sm:py-8 xl:px-10">
-        <section className="space-y-4">
-          <div
-            className="rounded-[24px] px-5 py-4 sm:px-6"
-            style={{ background: 'var(--glass-bg)', border: '1px solid var(--status-header-border)', boxShadow: 'var(--glass-shadow)' }}
+      <main className="mx-auto w-full max-w-[1180px] px-4 py-8 sm:px-6 sm:py-10">
+        <div className="mx-auto max-w-[1040px] space-y-6">
+          <section
+            className="rounded-[30px] border px-6 py-6 sm:px-8"
+            style={{
+              background: 'color-mix(in srgb, var(--status-card-bg) 96%, white)',
+              borderColor: 'color-mix(in srgb, var(--status-card-border) 82%, rgba(15,23,42,0.04))',
+              boxShadow: '0 28px 70px rgba(15,23,42,0.06)',
+            }}
           >
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0 space-y-2.5">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 space-y-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
-                    <Logo size={16} className="text-white" />
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={{ background: 'linear-gradient(135deg,#0f172a,#334155)' }}>
+                    <Logo size={18} className="text-white" />
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">JustScan status</p>
-                    <h1 className="truncate text-xl font-semibold leading-tight sm:text-2xl" style={{ color: 'var(--text-primary)' }}>{data.page.name}</h1>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Status</p>
+                    <h1 className="text-2xl font-semibold tracking-[-0.02em] sm:text-[30px]" style={{ color: 'var(--text-primary)' }}>{data.page.name}</h1>
                   </div>
-                  <span
-                    className="rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
-                    style={{ background: headlineTone.background, border: `1px solid ${headlineTone.border}`, color: headlineTone.accent }}
-                  >
-                    {headlineTone.label}
-                  </span>
                 </div>
+
                 {data.page.description ? (
-                  <p className="max-w-4xl text-[14px] leading-6 text-zinc-500 dark:text-zinc-300">{data.page.description}</p>
+                  <p className="max-w-3xl text-[15px] leading-7" style={{ color: 'var(--text-secondary)' }}>{data.page.description}</p>
                 ) : null}
-                <div className="flex flex-wrap gap-2 text-sm">
-                  <span className="rounded-full px-3 py-1.5" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                    {summary.total} tracked tags
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                  <StatusBoardBadge label={pageTone.label} color={pageTone.color} />
+                  <p className="min-w-0 flex-1 text-[14px] leading-6" style={{ color: 'var(--text-secondary)' }}>{pageTone.description}</p>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 flex-col items-start gap-3 lg:items-end">
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                    Snapshot {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
                   </span>
-                  <span className="rounded-full px-3 py-1.5" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                    {operationalIssueCount > 0 ? `${operationalIssueCount} operational issues` : 'Operations healthy'}
+                  <span className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                    {trackedItems.length} service{trackedItems.length === 1 ? '' : 's'}
                   </span>
-                  <span className="rounded-full px-3 py-1.5" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                    {exposedCount > 0 ? `${exposedCount} exposed` : `${clearCount} clear`}
-                  </span>
-                  <span className="rounded-full px-3 py-1.5" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                    {filterCounts.running} scanning
-                  </span>
-                  <span className="rounded-full px-3 py-1.5 capitalize" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                  <span className="rounded-full px-3 py-1.5 text-[12px] font-medium capitalize" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
                     {data.page.visibility}
                   </span>
+                  <Button size="sm" isPending={refreshing} onPress={() => void load(false)} className="rounded-full px-4 text-sm font-semibold">
+                    {refreshing ? 'Refreshing...' : 'Refresh now'}
+                  </Button>
+                </div>
+                <div className="text-right text-[13px] leading-6" style={{ color: 'var(--text-secondary)' }}>
+                  <p>{healthyCount} healthy, {operationalIssueCount} issues, {exposedCount} exposed</p>
+                  <p>{refreshing ? 'Refreshing now' : `Auto refresh in ${secondsRemaining}s`} · Stale after {data.page.stale_after_hours}h</p>
                 </div>
               </div>
-
-              <div className="flex flex-wrap items-center gap-2 xl:justify-end xl:pt-1">
-                <SnapshotStatusChips snapshotAt={data.now} lastLoadedAt={lastLoadedAt} refreshing={refreshing} />
-                <Button size="sm" isPending={refreshing} onPress={() => void load(false)} className="rounded-full px-4 text-sm font-semibold">
-                  {refreshing ? 'Refreshing...' : 'Refresh now'}
-                </Button>
-              </div>
             </div>
-
-            <details className="mt-3 rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--status-card-border)', background: 'var(--status-card-bg)' }}>
-              <summary className="cursor-pointer list-none text-[12px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Page details</summary>
-              <div className="mt-3 flex flex-wrap gap-2 text-sm">
-                <span className="rounded-full px-3 py-1.5" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                  Stale after {data.page.stale_after_hours}h
-                </span>
-              </div>
-            </details>
-          </div>
+          </section>
 
           <section
-            className="rounded-[24px] border px-5 py-4 sm:px-6"
-            style={{ background: headlineTone.background, borderColor: headlineTone.border }}
+            className="overflow-hidden rounded-[30px] border"
+            style={{
+              background: 'color-mix(in srgb, var(--status-card-bg) 98%, white)',
+              borderColor: 'color-mix(in srgb, var(--status-card-border) 88%, rgba(15,23,42,0.04))',
+              boxShadow: '0 24px 55px rgba(15,23,42,0.05)',
+            }}
           >
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: headlineTone.accent }}>{headlineTone.label}</p>
-                <h2 className="mt-1 text-lg font-semibold sm:text-xl" style={{ color: 'var(--text-primary)' }}>{headlineTitle}</h2>
-                <p className="mt-2 max-w-4xl text-[14px] leading-6" style={{ color: 'var(--text-secondary)' }}>{headlineBody}</p>
+            <div className="px-6 py-6 sm:px-8">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Notifications</p>
+                  <h2 className="mt-1 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Recent status messages</h2>
+                </div>
+                <span className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{recentUpdates.length} shown</span>
               </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                <span className="rounded-full px-3 py-1.5 text-[12px] font-semibold" style={getTintedChipStyle(headlineTone.accent)}>
-                  {operationalIssueCount > 0 ? `${operationalIssueCount} operational` : exposedCount > 0 ? `${exposedCount} exposed` : 'No impact'}
-                </span>
-                <span className="rounded-full px-3 py-1.5 text-[12px] font-semibold" style={getTintedChipStyle(headlineTone.accent)}>
-                  {filterCounts.running} scanning
-                </span>
+
+              <div className="mt-4 space-y-4">
+                {latestUpdate ? (() => {
+                  const tone = getStatusUpdateTone(latestUpdate.level);
+
+                  return (
+                    <div
+                      className="rounded-[28px] border px-5 py-5 sm:px-6"
+                      style={{
+                        background: `linear-gradient(135deg, ${tone.background}, color-mix(in srgb, var(--status-card-bg) 92%, white))`,
+                        borderColor: tone.border,
+                        boxShadow: `0 18px 38px color-mix(in srgb, ${tone.color} 12%, transparent)`,
+                      }}
+                    >
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 space-y-3">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span
+                              className="inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1 text-[12px] font-semibold"
+                              style={{
+                                background: tone.strongBackground,
+                                border: `1px solid ${tone.border}`,
+                                color: tone.color,
+                              }}
+                            >
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ background: tone.color }} />
+                              {tone.label}
+                            </span>
+                            <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{latestUpdate.title}</p>
+                          </div>
+                          <p className="max-w-3xl text-[15px] leading-7" style={{ color: 'var(--text-primary)' }}>{latestUpdate.body}</p>
+                        </div>
+                        <span className="shrink-0 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                          {latestUpdate.created_at ? timeAgo(latestUpdate.created_at) : 'Recently updated'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <div className="rounded-2xl border border-dashed px-4 py-5 text-sm" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                    No incident or maintenance updates are published for this page.
+                  </div>
+                )}
+
+                {olderUpdates.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>Earlier messages</p>
+                    <div className="space-y-4">
+                      {olderUpdates.map((update, index) => {
+                        const tone = getStatusUpdateTone(update.level);
+
+                        return (
+                          <div key={`${update.title}:${update.created_at ?? index}`} className="flex flex-col gap-2 border-b pb-4 last:border-b-0 last:pb-0" style={{ borderColor: 'var(--border-subtle)' }}>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <StatusBoardBadge label={tone.label} color={tone.color} />
+                                <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{update.title}</p>
+                              </div>
+                              <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>{update.created_at ? timeAgo(update.created_at) : 'Recently updated'}</span>
+                            </div>
+                            <p className="text-[14px] leading-6" style={{ color: 'var(--text-secondary)' }}>{update.body}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          </section>
 
-          <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
-            <div className="space-y-3">
+            <div className="border-b px-6 py-6 sm:px-8" style={{ borderColor: 'var(--border-subtle)' }}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Hosted Pages</p>
+                  <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em]" style={{ color: 'var(--text-primary)' }}>Current status across tracked services</h2>
+                </div>
+                <div className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>
+                  <span>{operationalIssueCount} issue{operationalIssueCount === 1 ? '' : 's'}</span>
+                  <span className="mx-2">•</span>
+                  <span>{runningCount} scanning</span>
+                  <span className="mx-2">•</span>
+                  <span>{summary.findings.toLocaleString()} findings</span>
+                </div>
+              </div>
+              <p className="mt-3 max-w-3xl text-[13px] leading-6" style={{ color: 'var(--text-secondary)' }}>
+                Each block represents one actual recorded scan, ordered from older scans on the left to the latest scan on the right.
+              </p>
+            </div>
+
+            {trackedItems.length > 0 ? (
               <div>
-                <h2 className="text-[12px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Components</h2>
-                <p className="mt-1 text-[14px] leading-6 text-zinc-500">
-                  Each row now carries two signals: operational state and security exposure. Snapshot context stays attached to the list instead of dropping below it.
+                {trackedItems.map((item, index) => (
+                  <div key={`${item.image_name}:${item.image_tag}`} style={{ borderTop: index > 0 ? '1px solid var(--border-subtle)' : undefined }}>
+                    <StatusBoardRow
+                      slug={slug}
+                      item={item}
+                      scans={rowScanHistory[item.latest_scan_id]}
+                      onOpen={openItemDetails}
+                      onHistoryLoaded={syncRowHistory}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="px-6 py-14 text-center sm:px-8">
+                <p className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>No services are currently tracked</p>
+                <p className="mt-2 text-[14px] leading-6" style={{ color: 'var(--text-secondary)' }}>
+                  Add image tags to this status page to populate the public board.
                 </p>
               </div>
-
-              <div className="rounded-[24px] border px-4 py-4 sm:px-5" style={{ background: 'var(--status-card-bg)', borderColor: 'var(--status-card-border)' }}>
-                <div className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Sort</p>
-                      <Select value={sortBy} onChange={value => setSortBy(String(value) as SortKey)} className="w-full" aria-label="Sort image tags">
-                        <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
-                          <Select.Value />
-                          <Select.Indicator />
-                        </Select.Trigger>
-                        <Select.Popover>
-                          <ListBox>
-                            {SORT_OPTIONS.map(option => (
-                              <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
-                                {option.label}
-                                <ListBox.ItemIndicator />
-                              </ListBox.Item>
-                            ))}
-                          </ListBox>
-                        </Select.Popover>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Layout</p>
-                      <Select value={layout} onChange={value => setLayout(String(value) as LayoutKey)} className="w-full" aria-label="Change status page layout">
-                        <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
-                          <Select.Value />
-                          <Select.Indicator />
-                        </Select.Trigger>
-                        <Select.Popover>
-                          <ListBox>
-                            {LAYOUT_OPTIONS.map(option => (
-                              <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
-                                {option.label}
-                                <ListBox.ItemIndicator />
-                              </ListBox.Item>
-                            ))}
-                          </ListBox>
-                        </Select.Popover>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                  {FILTERS.map(option => (
-                    <FilterChip
-                      key={option.key}
-                      label={option.label}
-                      count={filterCounts[option.key]}
-                      active={filter === option.key}
-                      onClick={() => setFilter(option.key)}
-                    />
-                  ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Current view</p>
-                  <p className="mt-1 text-[13px] leading-6" style={{ color: 'var(--text-secondary)' }}>
-                    {layout === 'compact'
-                      ? 'Compact rows stay optimized for public browsing, with drill-down details inside the modal.'
-                      : `Showing the ${LAYOUT_OPTIONS.find((option) => option.key === layout)?.label ?? layout} layout.`}
-                  </p>
-                </div>
-                <div className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
-                  {visibleItems.length} visible
-                </div>
-              </div>
-
-              {visibleItems.length > 0 ? (
-                layout === 'compact' ? (
-                  <div className="space-y-2">
-                    {compactRows.map((item) => (
-                      <CompactStatusRow key={`${item.image_name}:${item.image_tag}`} item={item} onOpen={openItemDetails} />
-                    ))}
-                  </div>
-                ) : layout === 'table' ? (
-                  <StatusTable items={visibleItems} onOpen={openItemDetails} />
-                ) : (
-                  <div className={layout === 'grid' ? 'grid gap-3 md:grid-cols-2 2xl:grid-cols-3' : 'space-y-3'}>
-                    {visibleItems.map((item, index) => (
-                      <ItemCard key={`${item.image_name}:${item.image_tag}`} item={item} index={index} layout={layout} onOpen={openItemDetails} />
-                    ))}
-                  </div>
-                )
-              ) : (
-                <div className="rounded-[28px] px-6 py-12 text-center"
-                  style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
-                  <p className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>No image tags match this view</p>
-                  <p className="mt-2 text-[14px] leading-6 text-zinc-500">
-                    Try a different filter or sort order to bring the relevant tags back into view.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <aside className="space-y-4 xl:sticky xl:top-6">
-              <div className="rounded-[24px] px-5 py-4" style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Snapshot</p>
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between rounded-xl px-3 py-2" style={{ background: 'var(--row-hover)' }}>
-                    <span className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Operational issues</span>
-                    <span className="text-[13px] font-semibold tabular-nums" style={{ color: operationalIssueCount > 0 ? SEV.high : 'var(--text-primary)' }}>{operationalIssueCount}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl px-3 py-2" style={{ background: 'var(--row-hover)' }}>
-                    <span className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Exposed tags</span>
-                    <span className="text-[13px] font-semibold tabular-nums" style={{ color: exposedCount > 0 ? SEV.high : 'var(--text-primary)' }}>{exposedCount} <span className="text-[11px] font-normal" style={{ color: 'var(--text-muted)' }}>/ {clearCount} clear</span></span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl px-3 py-2" style={{ background: 'var(--row-hover)' }}>
-                    <span className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Total findings</span>
-                    <span className="text-[13px] font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>{summary.findings.toLocaleString()} <span className="text-[11px] font-normal" style={{ color: 'var(--text-muted)' }}>{summary.critical + summary.high} high+</span></span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl px-3 py-2" style={{ background: 'var(--row-hover)' }}>
-                    <span className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Scanning</span>
-                    <span className="text-[13px] font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>{filterCounts.running}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl px-3 py-2" style={{ background: 'var(--row-hover)' }}>
-                    <span className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Failed</span>
-                    <span className="text-[13px] font-semibold tabular-nums" style={{ color: (summary.operations.failed ?? 0) > 0 ? SEV.critical : 'var(--text-primary)' }}>{summary.operations.failed ?? 0}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl px-3 py-2" style={{ background: 'var(--row-hover)' }}>
-                    <span className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Blocked</span>
-                    <span className="text-[13px] font-semibold tabular-nums" style={{ color: (summary.operations.blocked_by_xray_policy ?? 0) > 0 ? SEV.high : 'var(--text-primary)' }}>{summary.operations.blocked_by_xray_policy ?? 0}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-[24px] px-5 py-4 sm:px-6" style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Recent updates</p>
-                    <h2 className="mt-1 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Incident and maintenance history</h2>
-                  </div>
-                  <span className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>{recentUpdates.length} shown</span>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {recentUpdates.length > 0 ? recentUpdates.map((update, index) => {
-                    const tone = update.level === 'incident'
-                      ? { background: 'rgba(239,68,68,0.05)', border: 'rgba(239,68,68,0.16)', accent: '#dc2626' }
-                      : update.level === 'maintenance'
-                        ? { background: 'rgba(245,158,11,0.05)', border: 'rgba(245,158,11,0.16)', accent: '#b45309' }
-                        : { background: 'rgba(59,130,246,0.05)', border: 'rgba(59,130,246,0.16)', accent: '#2563eb' };
-
-                    return (
-                      <div
-                        key={`${update.title}:${update.created_at ?? index}`}
-                        className="rounded-2xl px-4 py-3"
-                        style={{ background: tone.background, border: `1px solid ${tone.border}` }}
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{update.title}</p>
-                          <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]" style={getTintedChipStyle(tone.accent)}>
-                            {update.level}
-                          </span>
-                        </div>
-                        <p className="mt-2 text-[13px] leading-6" style={{ color: 'var(--text-secondary)' }}>{update.body}</p>
-                      </div>
-                    );
-                  }) : (
-                    <div className="rounded-2xl px-4 py-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                      <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>No recent status posts</p>
-                      <p className="mt-1 text-[13px] leading-6" style={{ color: 'var(--text-secondary)' }}>
-                        This page currently has no published incident or maintenance updates.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </aside>
+            )}
           </section>
-        </section>
+        </div>
       </main>
 
       {activeItem && vulnerabilityModal.isOpen && (
@@ -2130,6 +1728,7 @@ export default function PublicStatusPage() {
           item={activeItem}
           state={vulnerabilityModal}
           onClose={closeItemDetails}
+          onHistoryLoaded={syncRowHistory}
         />
       )}
     </div>

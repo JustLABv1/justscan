@@ -14,7 +14,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/viper v1.21.0
-	github.com/swaggo/files v1.0.1
+	github.com/swaggo/files/v2 v2.0.2
 	github.com/swaggo/files/v2 v2.0.2
 	github.com/swaggo/gin-swagger v1.6.1
 	github.com/uptrace/bun v1.2.18
@@ -23,7 +23,7 @@ require (
 	github.com/uptrace/bun/extra/bunotel v1.2.18
 	golang.org/x/crypto v0.50.0
 	golang.org/x/oauth2 v0.36.0
-	helm.sh/helm/v3 v3.20.2
+	helm.sh/helm/v4 v4.1.4
 	helm.sh/helm/v4 v4.1.4
 	sigs.k8s.io/yaml v1.6.0
 )

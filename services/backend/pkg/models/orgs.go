@@ -36,14 +36,15 @@ func (s *StringList) Scan(v interface{}) error {
 type Org struct {
 	bun.BaseModel `bun:"table:orgs"`
 
-	ID              uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
-	Name            string     `bun:"name,type:text,notnull,unique" json:"name"`
-	Description     string     `bun:"description,type:text,default:''" json:"description"`
-	ImagePatterns   StringList `bun:"image_patterns,type:jsonb,default:'[]'" json:"image_patterns"`
-	CreatedByID     uuid.UUID  `bun:"created_by_id,type:uuid,notnull" json:"created_by_id"`
-	CreatedAt       time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
-	UpdatedAt       time.Time  `bun:"updated_at,type:timestamptz" json:"updated_at"`
-	CurrentUserRole string     `bun:"-" json:"current_user_role,omitempty"`
+	ID                        uuid.UUID                  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	Name                      string                     `bun:"name,type:text,notnull,unique" json:"name"`
+	Description               string                     `bun:"description,type:text,default:''" json:"description"`
+	ImagePatterns             StringList                 `bun:"image_patterns,type:jsonb,default:'[]'" json:"image_patterns"`
+	CreatedByID               uuid.UUID                  `bun:"created_by_id,type:uuid,notnull" json:"created_by_id"`
+	CreatedAt                 time.Time                  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+	UpdatedAt                 time.Time                  `bun:"updated_at,type:timestamptz" json:"updated_at"`
+	CurrentUserRole           string                     `bun:"-" json:"current_user_role,omitempty"`
+	VulnerabilityViewSettings *VulnerabilityViewSettings `bun:"-" json:"vulnerability_view_settings,omitempty"`
 
 	Policies []OrgPolicy `bun:"rel:has-many,join:id=org_id" json:"policies,omitempty"`
 }

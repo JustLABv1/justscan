@@ -1,6 +1,6 @@
 import { req } from './core';
 import { notifyOrgMembershipChanged } from './scope';
-import type { AuditEntry, ComplianceResult, Org, OrgInvite, OrgMember, OrgPolicy, OrgRiskScore, OrgRole, PolicyRule, TrendPoint } from './types/orgs';
+import type { AuditEntry, ComplianceResult, Org, OrgInvite, OrgMember, OrgPolicy, OrgRiskScore, OrgRole, PolicyRule, TrendPoint, VulnerabilityViewSettings } from './types/orgs';
 import type { Scan } from './types/scans';
 
 export const listOrgs = () =>
@@ -17,6 +17,9 @@ export const getOrg = (id: string) =>
 
 export const updateOrg = (id: string, data: Partial<Org>) =>
   req<Org>('PUT', `/api/v1/orgs/${id}`, data);
+
+export const updateOrgVulnerabilityViewSettings = (id: string, settings: VulnerabilityViewSettings) =>
+  req<{ settings: VulnerabilityViewSettings }>('PUT', `/api/v1/orgs/${id}/vulnerability-view`, settings);
 
 export const deleteOrg = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/orgs/${id}`).then((result) => {

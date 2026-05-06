@@ -7,6 +7,7 @@ import (
 
 	"justscan-backend/compliance"
 	"justscan-backend/functions/authz"
+	"justscan-backend/functions/vulnerabilityview"
 	scanhandlers "justscan-backend/handlers/scans"
 	"justscan-backend/pkg/models"
 
@@ -121,6 +122,8 @@ func CreateOrg(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		org.CurrentUserRole = models.OrgRoleOwner
+		settings := vulnerabilityview.DefaultSettings()
+		org.VulnerabilityViewSettings = &settings
 		c.JSON(http.StatusCreated, org)
 	}
 }
@@ -143,6 +146,10 @@ func GetOrg(db *bun.DB) gin.HandlerFunc {
 		var policies []models.OrgPolicy
 		db.NewSelect().Model(&policies).Where("org_id = ?", orgID).OrderExpr("created_at ASC").Scan(c.Request.Context()) //nolint:errcheck
 		org.Policies = policies
+		if err := attachOrgVulnerabilityViewSettings(c.Request.Context(), db, org); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load vulnerability view settings"})
+			return
+		}
 
 		c.JSON(http.StatusOK, org)
 	}
@@ -185,6 +192,10 @@ func UpdateOrg(db *bun.DB) gin.HandlerFunc {
 
 		if _, err := db.NewUpdate().Model(org).Column("name", "description", "image_patterns", "updated_at").Where("id = ?", orgID).Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update organization"})
+			return
+		}
+		if err := attachOrgVulnerabilityViewSettings(c.Request.Context(), db, org); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load vulnerability view settings"})
 			return
 		}
 		c.JSON(http.StatusOK, org)

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	effectivesuppressions "justscan-backend/functions/suppressions"
+	"justscan-backend/functions/vulnerabilityview"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -48,29 +49,7 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 			}
 		}
 
-		// Sorting
-		allowedCols := map[string]string{
-			"vuln_id":           "vuln_id",
-			"pkg_name":          "pkg_name",
-			"severity":          "CASE severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 WHEN 'LOW' THEN 4 ELSE 5 END",
-			"cvss_score":        "cvss_score",
-			"installed_version": "installed_version",
-			"fixed_version":     "fixed_version",
-		}
-		sortCol := "severity"
-		sortDir := "asc"
-		if s := c.Query("sort_by"); s != "" {
-			if _, ok := allowedCols[s]; ok {
-				sortCol = s
-			}
-		}
-		if d := c.Query("sort_dir"); d == "desc" {
-			sortDir = "desc"
-		}
-		orderExpr := allowedCols[sortCol] + " " + sortDir
-		if sortCol != "vuln_id" {
-			orderExpr += ", vuln_id asc"
-		}
+		orderExpr := vulnerabilityview.OrderExpr(c.Query("sort_by"), c.Query("sort_dir"))
 
 		var vulns []models.Vulnerability
 		q := db.NewSelect().Model(&vulns).

@@ -16,6 +16,27 @@ export interface OrgPolicy {
 
 export type OrgRole = 'owner' | 'admin' | 'editor' | 'viewer';
 
+export type VulnerabilityViewSortBy = 'vuln_id' | 'pkg_name' | 'severity' | 'cvss_score' | 'installed_version' | 'fixed_version';
+export type VulnerabilityViewSortDir = 'asc' | 'desc';
+export type VulnerabilityViewSeverity = '' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN';
+
+export interface VulnerabilityViewSettings {
+  sort_by: VulnerabilityViewSortBy;
+  sort_dir: VulnerabilityViewSortDir;
+  severity: VulnerabilityViewSeverity;
+  min_cvss: number;
+  has_fix: boolean;
+}
+
+export interface VulnerabilityViewPreferenceResponse {
+  settings: VulnerabilityViewSettings;
+  source: 'system' | 'org' | 'user';
+  scope_type: 'personal' | 'org';
+  scope_ref: string;
+  has_user_override: boolean;
+  org_settings?: VulnerabilityViewSettings;
+}
+
 export interface Org {
   id: string;
   name: string;
@@ -25,6 +46,7 @@ export interface Org {
   created_at: string;
   updated_at: string;
   current_user_role?: OrgRole;
+  vulnerability_view_settings?: VulnerabilityViewSettings;
   policies?: OrgPolicy[];
 }
 

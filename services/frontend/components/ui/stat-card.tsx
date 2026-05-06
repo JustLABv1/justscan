@@ -12,6 +12,7 @@ interface StatCardProps {
   valueClassName?: string;
   valueStyle?: CSSProperties;
   hintStyle?: CSSProperties;
+  inline?: boolean;
 }
 
 function joinClassNames(...classes: Array<string | undefined | false>) {
@@ -28,7 +29,35 @@ export function StatCard({
   valueClassName,
   valueStyle,
   hintStyle,
+  inline,
 }: StatCardProps) {
+  if (inline) {
+    return (
+      <div className={joinClassNames('rounded-2xl px-3.5 py-3', className)} style={style}>
+        <div className="flex min-h-9 items-center justify-between gap-3">
+          {icon ? (
+            <div className="flex min-w-0 items-center gap-2 text-zinc-600 dark:text-zinc-300">
+              {icon}
+              <span className="truncate text-xs font-medium">{label}</span>
+            </div>
+          ) : (
+            <p className="min-w-0 truncate text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+              {label}
+            </p>
+          )}
+          <div className={joinClassNames('shrink-0 text-right', valueClassName ?? 'text-xl font-semibold tabular-nums')} style={valueStyle}>
+            {value}
+          </div>
+        </div>
+        {hint ? (
+          <div className="mt-1.5 truncate text-[11px]" style={hintStyle ?? { color: 'var(--text-faint)' }}>
+            {hint}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className={joinClassNames('rounded-2xl p-4', className)} style={style}>
       {icon ? (

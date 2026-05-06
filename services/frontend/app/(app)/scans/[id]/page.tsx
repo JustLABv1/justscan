@@ -8,7 +8,7 @@ import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
-import type { ComplianceResult, Org, ResourceShare, SBOMComponent, Scan, Suppression, Tag, Vulnerability } from '@/lib/api';
+import type { ComplianceResult, Org, ResourceShare, SBOMComponent, Scan, Suppression, Tag, Vulnerability, VulnerabilityViewPreferenceResponse, VulnerabilityViewSettings } from '@/lib/api';
 import {
     addTagToScan,
     assignScanToOrg,
@@ -21,6 +21,7 @@ import {
     getScan,
     getScanCompliance,
     getScanSBOM,
+    getScanVulnerabilityViewSettings,
     getTokenType,
     getUser,
     getVulnerabilityContextAnalysis,
@@ -36,6 +37,8 @@ import {
     removeTagFromScan,
     reScan,
     revokeScanOrgAccess,
+    resetScanVulnerabilityViewPreference,
+    saveScanVulnerabilityViewPreference,
     shareSuppression,
     unshareSuppression,
     upsertSuppression,
@@ -54,6 +57,40 @@ const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
 
 type ScanTab = 'vulns' | 'policy' | 'sbom' | 'details' | 'timeline';
+
+const DEFAULT_VULNERABILITY_VIEW_SETTINGS: VulnerabilityViewSettings = {
+  sort_by: 'severity',
+  sort_dir: 'asc',
+  severity: '',
+  min_cvss: 0,
+  has_fix: false,
+};
+
+const VULNERABILITY_SORT_LABELS: Record<VulnerabilityViewSettings['sort_by'], string> = {
+  vuln_id: 'CVE ID',
+  pkg_name: 'Package',
+  severity: 'Severity',
+  cvss_score: 'CVSS',
+  installed_version: 'Installed',
+  fixed_version: 'Fixed In',
+};
+
+function vulnerabilityViewSummary(settings: VulnerabilityViewSettings) {
+  const filters = [
+    settings.severity ? settings.severity : 'All severities',
+    settings.min_cvss > 0 ? `CVSS >= ${settings.min_cvss}` : '',
+    settings.has_fix ? 'Has fix' : '',
+  ].filter(Boolean);
+  return `${VULNERABILITY_SORT_LABELS[settings.sort_by]} ${settings.sort_dir === 'desc' ? 'descending' : 'ascending'} | ${filters.join(' | ')}`;
+}
+
+function vulnerabilityViewSettingsEqual(a: VulnerabilityViewSettings, b: VulnerabilityViewSettings) {
+  return a.sort_by === b.sort_by
+    && a.sort_dir === b.sort_dir
+    && a.severity === b.severity
+    && a.min_cvss === b.min_cvss
+    && a.has_fix === b.has_fix;
+}
 
 function DetailBlock({ label, value, mono = false }: { label: string; value?: string; mono?: boolean }) {
   if (!value) return null;
@@ -192,15 +229,16 @@ export default function ScanDetailPage() {
   const [sbomNameInput, setSbomNameInput] = useState('');
   const [sbomTypeFilter, setSbomTypeFilter] = useState('');
   const sbomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [severityFilter, setSeverityFilter] = useState<string>(() =>
-    typeof window !== 'undefined' ? (localStorage.getItem('scan_severity_filter') ?? '') : ''
-  );
+  const [severityFilter, setSeverityFilter] = useState<VulnerabilityViewSettings['severity']>('');
   const [pkgFilter, setPkgFilter] = useState('');
   const [pkgInput, setPkgInput] = useState('');
   const [minCvss, setMinCvss] = useState(0);
   const [hasFix, setHasFix] = useState(false);
-  const [sortBy, setSortBy] = useState('severity');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [sortBy, setSortBy] = useState<VulnerabilityViewSettings['sort_by']>('severity');
+  const [sortDir, setSortDir] = useState<VulnerabilityViewSettings['sort_dir']>('asc');
+  const [viewSettingsReady, setViewSettingsReady] = useState(false);
+  const [viewPreference, setViewPreference] = useState<VulnerabilityViewPreferenceResponse | null>(null);
+  const [viewPreferenceSaving, setViewPreferenceSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [vulnLoading, setVulnLoading] = useState(false);
   const [error, setError] = useState('');
@@ -224,6 +262,7 @@ export default function ScanDetailPage() {
   const loadVersionRef = useRef(0);
   const loadScanInFlightRef = useRef<Promise<Scan> | null>(null);
   const defaultTabInitializedRef = useRef(false);
+  const vulnerabilityViewInitializedRef = useRef(false);
 
   const [suppressStatus, setSuppressStatus] = useState<Suppression['status']>('accepted');
   const [suppressJustification, setSuppressJustification] = useState('');
@@ -250,6 +289,20 @@ export default function ScanDetailPage() {
   const scanStatus = scan?.status;
   const blockedPolicyDetails = getBlockedPolicyDetails(scan?.external_status, scan?.blocked_policy_details, scan?.error_message);
   const hasPolicyTab = Boolean(blockedPolicyDetails);
+  const currentVulnerabilityViewSettings: VulnerabilityViewSettings = {
+    sort_by: sortBy,
+    sort_dir: sortDir,
+    severity: severityFilter,
+    min_cvss: minCvss,
+    has_fix: hasFix,
+  };
+  const effectiveVulnerabilityViewSettings = viewPreference?.settings ?? DEFAULT_VULNERABILITY_VIEW_SETTINGS;
+  const vulnerabilityViewHasChanges = viewSettingsReady && !vulnerabilityViewSettingsEqual(currentVulnerabilityViewSettings, effectiveVulnerabilityViewSettings);
+  const vulnerabilityViewSourceLabel = viewPreference?.has_user_override
+    ? 'My saved default'
+    : viewPreference?.source === 'org'
+      ? 'Organization default'
+      : 'System default';
 
   const loadScan = useCallback(async () => {
     if (loadScanInFlightRef.current) {
@@ -272,6 +325,30 @@ export default function ScanDetailPage() {
 
     loadScanInFlightRef.current = request;
     return request;
+  }, [id]);
+
+  const applyVulnerabilityViewPreference = useCallback((preference: VulnerabilityViewPreferenceResponse) => {
+    setViewPreference(preference);
+    setSeverityFilter(preference.settings.severity);
+    setMinCvss(preference.settings.min_cvss);
+    setHasFix(preference.settings.has_fix);
+    setSortBy(preference.settings.sort_by);
+    setSortDir(preference.settings.sort_dir);
+    setPage(1);
+  }, []);
+
+  useEffect(() => {
+    defaultTabInitializedRef.current = false;
+    vulnerabilityViewInitializedRef.current = false;
+    setActiveTab('vulns');
+    setViewSettingsReady(false);
+    setViewPreference(null);
+    setSeverityFilter('');
+    setMinCvss(0);
+    setHasFix(false);
+    setSortBy('severity');
+    setSortDir('asc');
+    setPage(1);
   }, [id]);
 
   // Initial load
@@ -314,12 +391,44 @@ export default function ScanDetailPage() {
       return;
     }
 
-    if (scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails) {
-      setActiveTab('policy');
-    }
-
     defaultTabInitializedRef.current = true;
   }, [blockedPolicyDetails, scan, searchParams]);
+
+  useEffect(() => {
+    if (!scan) return;
+    if (scan.status === 'pending' || scan.status === 'running') {
+      setViewSettingsReady(true);
+      return;
+    }
+    if (vulnerabilityViewInitializedRef.current) return;
+
+    let cancelled = false;
+    setViewSettingsReady(false);
+    getScanVulnerabilityViewSettings(id)
+      .then((preference) => {
+        if (cancelled) return;
+        applyVulnerabilityViewPreference(preference);
+        vulnerabilityViewInitializedRef.current = true;
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setViewPreference({
+          settings: DEFAULT_VULNERABILITY_VIEW_SETTINGS,
+          source: 'system',
+          scope_type: 'personal',
+          scope_ref: '',
+          has_user_override: false,
+        });
+        vulnerabilityViewInitializedRef.current = true;
+      })
+      .finally(() => {
+        if (!cancelled) setViewSettingsReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyVulnerabilityViewPreference, id, scan?.id, scan?.status]);
 
   useEffect(() => {
     if (!scan || scan.status === 'pending' || scan.status === 'running') return;
@@ -345,11 +454,6 @@ export default function ScanDetailPage() {
       setSelectedVulnerability(null);
     }
   }, [vulnerabilityDetailsModal.isOpen]);
-
-  // Persist severity filter
-  useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('scan_severity_filter', severityFilter);
-  }, [severityFilter]);
 
   // Reset suppress form when expanded vuln changes
   useEffect(() => {
@@ -399,7 +503,7 @@ export default function ScanDetailPage() {
   }, [sbomNameFilter, sbomTypeFilter]);
 
   function loadVulns() {
-    if (!scan || scan.status === 'pending' || scan.status === 'running') return;
+    if (!scan || scan.status === 'pending' || scan.status === 'running' || !viewSettingsReady) return;
     setVulnLoading(true);
     listVulnerabilities(
       id, page, LIMIT,
@@ -418,7 +522,35 @@ export default function ScanDetailPage() {
   useEffect(() => {
     loadVulns();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, scan, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir]);
+  }, [id, scan, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir, viewSettingsReady]);
+
+  async function saveVulnerabilityViewPreference() {
+    if (!viewSettingsReady) return;
+    setViewPreferenceSaving(true);
+    try {
+      const preference = await saveScanVulnerabilityViewPreference(id, currentVulnerabilityViewSettings);
+      applyVulnerabilityViewPreference(preference);
+      toast.success('Default vulnerability view saved');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save vulnerability view preference');
+    } finally {
+      setViewPreferenceSaving(false);
+    }
+  }
+
+  async function resetVulnerabilityViewPreference() {
+    if (!viewSettingsReady) return;
+    setViewPreferenceSaving(true);
+    try {
+      const preference = await resetScanVulnerabilityViewPreference(id);
+      applyVulnerabilityViewPreference(preference);
+      toast.success('Default vulnerability view reset');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reset vulnerability view preference');
+    } finally {
+      setViewPreferenceSaving(false);
+    }
+  }
 
   async function toggleTag(tag: Tag) {
     if (!scan) return;
@@ -966,23 +1098,25 @@ export default function ScanDetailPage() {
 
       {/* Status + severity cards */}
       {scan.status !== 'pending' && scan.status !== 'running' && (
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <StatCard
             label="Status"
             value={<StatusBadge status={scan.status} externalStatus={scan.external_status} />}
             hint={scan.external_status && scan.scan_provider === 'artifactory_xray'
               ? `External state: ${scan.external_status.replace(/_/g, ' ')}`
               : undefined}
-            className="glass-panel rounded-xl col-span-1"
+            className="glass-panel col-span-2 rounded-xl md:col-span-1"
+            inline
           />
           {sevCards.map(({ label, count, color, border }) => (
-          <StatCard
-            key={label}
-            label={label}
-            value={count ?? 0}
-            className={`glass-panel rounded-xl border ${border}`}
-            valueClassName={`text-2xl font-bold ${color}`}
-          />
+            <StatCard
+              key={label}
+              label={label}
+              value={count ?? 0}
+              className={`glass-panel rounded-xl border ${border}`}
+              valueClassName={`text-xl font-semibold tabular-nums ${color}`}
+              inline
+            />
           ))}
         </div>
       )}
@@ -1186,13 +1320,13 @@ export default function ScanDetailPage() {
         </div>
       )}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'vulns' && <div className="space-y-4">
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
             Vulnerabilities
             {vulnTotal > 0 && <span className="text-sm font-normal text-zinc-500 ml-2">{vulnTotal} found</span>}
           </h2>
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div className="w-full overflow-x-auto pb-1 xl:w-auto">
+          <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
+            <div className="w-full overflow-x-auto pb-1 lg:w-auto lg:max-w-full lg:shrink-0 lg:pb-0">
               <div className="segmented-control min-w-max">
                 {([
                   { id: '',         label: 'All',      count: (scan.critical_count ?? 0) + (scan.high_count ?? 0) + (scan.medium_count ?? 0) + (scan.low_count ?? 0) },
@@ -1200,7 +1334,7 @@ export default function ScanDetailPage() {
                   { id: 'HIGH',     label: 'High',     count: scan.high_count     ?? 0, color: 'rgba(249,115,22,0.15)', activeColor: '#fb923c', border: 'rgba(249,115,22,0.3)' },
                   { id: 'MEDIUM',   label: 'Medium',   count: scan.medium_count   ?? 0, color: 'rgba(234,179,8,0.15)',  activeColor: '#facc15', border: 'rgba(234,179,8,0.3)'  },
                   { id: 'LOW',      label: 'Low',      count: scan.low_count      ?? 0, color: 'rgba(59,130,246,0.15)', activeColor: '#60a5fa', border: 'rgba(59,130,246,0.3)' },
-                ] as { id: string; label: string; count: number; color?: string; activeColor?: string; border?: string }[]).map(({ id, label, count, color, activeColor, border }) => {
+                ] as { id: VulnerabilityViewSettings['severity']; label: string; count: number; color?: string; activeColor?: string; border?: string }[]).map(({ id, label, count, color, activeColor, border }) => {
                   const active = severityFilter === id;
                   return (
                     <button
@@ -1224,37 +1358,64 @@ export default function ScanDetailPage() {
                 })}
               </div>
             </div>
-            <div className="flex w-full flex-col gap-2 md:flex-row md:items-end xl:w-auto xl:justify-end">
+            <div className="flex w-full flex-col gap-2 md:flex-row md:items-center lg:w-auto lg:min-w-0 lg:flex-1 lg:justify-end">
               <input
                 type="text"
                 value={pkgInput}
                 onChange={(e) => setPkgInput(e.target.value)}
-                placeholder="Package…"
-                className={`${inputCls} min-w-[220px] flex-1 md:min-w-[280px] xl:w-[320px] xl:flex-none`}
+                placeholder="Package..."
+                className={`${inputCls} min-w-[220px] flex-1 md:min-w-[280px] lg:max-w-[360px]`}
               />
-              <div className="flex shrink-0 flex-col gap-1.5">
-                <label className="text-xs text-zinc-500 whitespace-nowrap">Min CVSS</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={10}
-                  step={0.1}
-                  value={minCvss || ''}
-                  placeholder="0"
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    setMinCvss(!isNaN(val) ? val : 0);
-                    setPage(1);
-                  }}
-                  className={`${inputCls} w-full min-w-[5.5rem] md:w-24`}
-                />
-              </div>
+              <input
+                type="number"
+                min={0}
+                max={10}
+                step={0.1}
+                value={minCvss || ''}
+                placeholder="Min CVSS"
+                aria-label="Minimum CVSS"
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setMinCvss(!isNaN(val) ? val : 0);
+                  setPage(1);
+                }}
+                className={`${inputCls} w-full min-w-[7rem] shrink-0 md:w-28`}
+              />
               <button
                 onClick={() => { setHasFix(!hasFix); setPage(1); }}
                 className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full shrink-0 md:w-auto`}
                 type="button"
               >
                 Has Fix
+              </button>
+            </div>
+          </div>
+          <div
+            className="flex flex-col gap-2 rounded-xl px-3 py-2 md:flex-row md:items-center md:justify-between"
+            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+          >
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{vulnerabilityViewSourceLabel}</p>
+              <p className="text-[11px] text-zinc-500">
+                {viewSettingsReady ? vulnerabilityViewSummary(currentVulnerabilityViewSettings) : 'Loading default view...'}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <button
+                className="btn-secondary"
+                disabled={!viewSettingsReady || viewPreferenceSaving || !vulnerabilityViewHasChanges}
+                onClick={() => void saveVulnerabilityViewPreference()}
+                type="button"
+              >
+                {viewPreferenceSaving && vulnerabilityViewHasChanges ? 'Saving...' : 'Save as my default'}
+              </button>
+              <button
+                className="btn-secondary"
+                disabled={!viewSettingsReady || viewPreferenceSaving || !viewPreference?.has_user_override}
+                onClick={() => void resetVulnerabilityViewPreference()}
+                type="button"
+              >
+                Reset default
               </button>
             </div>
           </div>
@@ -1272,8 +1433,7 @@ export default function ScanDetailPage() {
                     { label: 'Fixed In',   key: 'fixed_version',     align: 'left'  },
                     { label: 'Severity',   key: 'severity',          align: 'left'  },
                     { label: 'CVSS',       key: 'cvss_score',        align: 'right' },
-                    { label: 'First Seen', key: 'first_seen_at',     align: 'left'  },
-                  ] as { label: string; key: string; align: 'left' | 'right' }[]).map(({ label, key, align }) => {
+                  ] as { label: string; key: VulnerabilityViewSettings['sort_by']; align: 'left' | 'right' }[]).map(({ label, key, align }) => {
                     const active = sortBy === key;
                     return (
                       <th
@@ -1299,6 +1459,7 @@ export default function ScanDetailPage() {
                       </th>
                     );
                   })}
+                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(113,113,122,0.8)' }}>First Seen</th>
                   <th className="text-right px-4 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(113,113,122,0.8)' }}>Notes</th>
                 </tr>
               </thead>

@@ -1,6 +1,6 @@
 import { req } from './core';
 import { appendScope } from './scope';
-import type { ResourceShare } from './types/orgs';
+import type { ResourceShare, VulnerabilityViewPreferenceResponse, VulnerabilityViewSettings } from './types/orgs';
 import type { BulkDeleteScansResponse, ImageSummary, SBOMComponent, Scan, ScanComparison, ScanShareResponse, ScanTrendPoint, SharedScanRescanResponse, Vulnerability, VulnerabilityContextAnalysis } from './types/scans';
 
 export const listScans = (page = 1, limit = 20, image?: string, status?: string, exact?: boolean, helmOnly?: boolean, helmChart?: string) => {
@@ -54,6 +54,22 @@ export const listVulnerabilities = (
   if (sortDir) params.set('sort_dir', sortDir);
   return req<{ data: Vulnerability[]; total: number }>('GET', `/api/v1/scans/${scanId}/vulnerabilities?${params}`);
 };
+
+const vulnerabilityViewQuery = () => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const query = params.toString();
+  return query ? `?${query}` : '';
+};
+
+export const getScanVulnerabilityViewSettings = (scanId: string) =>
+  req<VulnerabilityViewPreferenceResponse>('GET', `/api/v1/scans/${scanId}/vulnerability-view${vulnerabilityViewQuery()}`);
+
+export const saveScanVulnerabilityViewPreference = (scanId: string, settings: VulnerabilityViewSettings) =>
+  req<VulnerabilityViewPreferenceResponse>('PUT', `/api/v1/scans/${scanId}/vulnerability-view${vulnerabilityViewQuery()}`, settings);
+
+export const resetScanVulnerabilityViewPreference = (scanId: string) =>
+  req<VulnerabilityViewPreferenceResponse>('DELETE', `/api/v1/scans/${scanId}/vulnerability-view${vulnerabilityViewQuery()}`);
 
 export const getVulnerabilityContextAnalysis = (scanId: string, vulnerabilityId: string) =>
   req<VulnerabilityContextAnalysis>('GET', `/api/v1/scans/${scanId}/vulnerabilities/${vulnerabilityId}/analysis`);

@@ -19,6 +19,7 @@ func Orgs(router *gin.RouterGroup, db *bun.DB) {
 		r.POST("/", orgs.CreateOrg(db))
 		r.GET("/:id", orgs.GetOrg(db))
 		r.PUT("/:id", orgs.UpdateOrg(db))
+		r.PUT("/:id/vulnerability-view", orgs.UpdateVulnerabilityViewSettings(db))
 		r.DELETE("/:id", orgs.DeleteOrg(db))
 		r.GET("/:id/members", orgs.ListMembers(db))
 		r.PATCH("/:id/members/:userId", orgs.UpdateMemberRole(db))

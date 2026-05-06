@@ -38,8 +38,10 @@ import {
     transferOrgOwnership,
     TrendPoint,
     updateOrg,
+    updateOrgVulnerabilityViewSettings,
     updateOrgMemberRole,
     updatePolicy,
+    VulnerabilityViewSettings,
 } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
@@ -63,6 +65,14 @@ const RULE_TYPE_LABELS: Record<string, string> = {
 };
 
 const SEV_OPTIONS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+
+const DEFAULT_VULNERABILITY_VIEW_SETTINGS: VulnerabilityViewSettings = {
+  sort_by: 'severity',
+  sort_dir: 'asc',
+  severity: '',
+  min_cvss: 0,
+  has_fix: false,
+};
 
 function emptyRule(): PolicyRule {
   return { type: 'max_cvss', value: 7 };
@@ -93,6 +103,8 @@ export default function OrgDetailPage() {
   const [riskScore, setRiskScore] = useState<OrgRiskScore | null>(null);
   const [activeTab, setActiveTab] = useState<OrgTabId>('overview');
   const [newPattern, setNewPattern] = useState('');
+  const [vulnerabilityViewSettings, setVulnerabilityViewSettings] = useState<VulnerabilityViewSettings>(DEFAULT_VULNERABILITY_VIEW_SETTINGS);
+  const [vulnerabilityViewSaving, setVulnerabilityViewSaving] = useState(false);
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [invites, setInvites] = useState<OrgInvite[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
@@ -119,6 +131,7 @@ export default function OrgDetailPage() {
   const currentOrgRole = org?.current_user_role;
   const canManageMembers = isSystemAdmin || currentOrgRole === 'owner' || currentOrgRole === 'admin';
   const canEditRoles = isSystemAdmin || currentOrgRole === 'owner';
+  const canManageOrgSettings = canManageMembers;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -166,6 +179,16 @@ export default function OrgDetailPage() {
     getComplianceTrend(id).then(setTrend).catch(() => {});
     getOrgRiskScore(id).then(setRiskScore).catch(() => {});
   }, [load, loadMembers, loadOrgScans, id]);
+
+  useEffect(() => {
+    setVulnerabilityViewSettings(org?.vulnerability_view_settings ?? DEFAULT_VULNERABILITY_VIEW_SETTINGS);
+  }, [
+    org?.vulnerability_view_settings?.sort_by,
+    org?.vulnerability_view_settings?.sort_dir,
+    org?.vulnerability_view_settings?.severity,
+    org?.vulnerability_view_settings?.min_cvss,
+    org?.vulnerability_view_settings?.has_fix,
+  ]);
 
   useEffect(() => {
     const requestedTab = searchParams.get('tab');
@@ -372,6 +395,21 @@ export default function OrgDetailPage() {
     if (updated) setOrg(updated);
   }
 
+  async function saveVulnerabilityViewSettings() {
+    if (!org || !canManageOrgSettings) return;
+    setVulnerabilityViewSaving(true);
+    try {
+      const result = await updateOrgVulnerabilityViewSettings(id, vulnerabilityViewSettings);
+      setVulnerabilityViewSettings(result.settings);
+      setOrg({ ...org, vulnerability_view_settings: result.settings });
+      toast.success('Vulnerability view defaults saved');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save vulnerability view defaults');
+    } finally {
+      setVulnerabilityViewSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -469,10 +507,15 @@ export default function OrgDetailPage() {
           <OrgAutomationTab
             org={org}
             inputClassName={inputCls}
+            canManageOrgSettings={canManageOrgSettings}
             newPattern={newPattern}
+            vulnerabilityViewSettings={vulnerabilityViewSettings}
+            vulnerabilityViewSaving={vulnerabilityViewSaving}
             onPatternChange={setNewPattern}
             onAddPattern={() => void addPattern()}
             onRemovePattern={(pattern) => void removePattern(pattern)}
+            onVulnerabilityViewSettingsChange={setVulnerabilityViewSettings}
+            onSaveVulnerabilityViewSettings={() => void saveVulnerabilityViewSettings()}
             onCreatePolicy={openCreatePolicy}
             onEditPolicy={openEditPolicy}
             onDeletePolicy={(policyId) => void handleDeletePolicy(policyId)}

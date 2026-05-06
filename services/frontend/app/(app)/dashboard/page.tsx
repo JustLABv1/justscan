@@ -8,7 +8,8 @@ import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashbo
 import { fullDate, timeAgo } from '@/lib/time';
 import { Activity01Icon, Add01Icon } from 'hugeicons-react';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 // ── severity config ──────────────────────────────────────────────────
 const SEV = [
@@ -76,6 +77,33 @@ function buildScansHref(filters?: { status?: string; image?: string }): string {
   return query ? `/scans?${query}` : '/scans';
 }
 
+function formatChartDate(date: string, options?: Intl.DateTimeFormatOptions): string {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString('en', options ?? { month: 'short', day: 'numeric' });
+}
+
+function buildTrendSeries(
+  trends: DashboardTrendPoint[],
+  days: number,
+  selectValue: (point: DashboardTrendPoint) => number,
+): { date: string; value: number }[] {
+  const result: { date: string; value: number }[] = [];
+  const valuesByDate = new Map(trends.map((point) => [point.date, selectValue(point)]));
+  const now = new Date();
+
+  for (let index = days - 1; index >= 0; index--) {
+    const date = new Date(now);
+    date.setUTCDate(date.getUTCDate() - index);
+    const key = date.toISOString().slice(0, 10);
+    result.push({ date: key, value: valuesByDate.get(key) ?? 0 });
+  }
+
+  return result;
+}
+
+function sumAvgFindings(point: DashboardVulnTrendPoint): number {
+  return point.critical + point.high + point.medium + point.low + point.unknown;
+}
+
 function RecentScanRow({ scan }: { scan: Scan }) {
 	const eventTime = scan.started_at ?? scan.created_at;
   return (
@@ -124,99 +152,103 @@ function RecentScanRow({ scan }: { scan: Scan }) {
 }
 
 // ── Mini Sparkline ────────────────────────────────────────────────────
-function MiniSparkline({ data, color, id }: { data: { date: string; value: number }[]; color: string; id: string }) {
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [W, setW] = useState(200);
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver(([entry]) => setW(entry!.contentRect.width));
-    ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
+function MiniSparkline({
+  data,
+  color,
+  id,
+  compact = false,
+  valueLabel = 'events',
+  showArea = true,
+}: {
+  data: { date: string; value: number }[];
+  color: string;
+  id: string;
+  compact?: boolean;
+  valueLabel?: string;
+  showArea?: boolean;
+}) {
   if (data.length < 2) return null;
 
-  const H = 176, SPARK_TOP = 28, PAD = 8;
-  const sparkH = H - SPARK_TOP;
-  const values = data.map(d => d.value);
-  const max = Math.max(...values, 5); // Ensure at least 5 for a healthy curve even if all 0s
-  const baselineY = H - PAD;
-
-  const pts = data.map((_, i) => [
-    (i / (data.length - 1)) * W,
-    baselineY - ((values[i]! / max) * (sparkH - PAD * 2)),
-  ] as [number, number]);
-
-  let path = `M${pts[0]![0].toFixed(1)},${pts[0]![1].toFixed(1)}`;
-  for (let i = 1; i < pts.length; i++) {
-    const cpx = ((pts[i - 1]![0] + pts[i]![0]) / 2).toFixed(1);
-    path += ` C${cpx},${pts[i - 1]![1].toFixed(1)} ${cpx},${pts[i]![1].toFixed(1)} ${pts[i]![0].toFixed(1)},${pts[i]![1].toFixed(1)}`;
-  }
-
-  const last = pts[pts.length - 1]!;
-  const gradId = `sg-${id}`;
-
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - r.left) / r.width) * W;
-    setHoverIdx(Math.max(0, Math.min(data.length - 1, Math.round((x / W) * (data.length - 1)))));
-  };
-
-  const hp = hoverIdx !== null ? pts[hoverIdx] : null;
-  const hd = hoverIdx !== null ? data[hoverIdx] : null;
+  const gradientId = `sg-${id}`;
 
   return (
-    <div ref={containerRef} className="h-full min-h-[176px] w-full">
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="h-full w-full cursor-crosshair"
-      aria-hidden
-      onMouseMove={handleMouseMove}
-      onMouseLeave={() => setHoverIdx(null)}
-    >
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
+    <div className={compact ? 'h-8 w-18 shrink-0' : 'h-full min-h-[208px] w-full'}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart
+          data={data}
+          margin={compact ? { top: 1, right: 0, left: 0, bottom: 1 } : { top: 12, right: 8, left: 0, bottom: 0 }}
+        >
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={compact ? 0.18 : 0.24} />
+              <stop offset="100%" stopColor={color} stopOpacity="0" />
+            </linearGradient>
+          </defs>
 
-      <path d={`${path} L${W},${H} L0,${H} Z`} fill={`url(#${gradId})`} />
-      <line x1={0} x2={W} y1={baselineY} y2={baselineY} stroke={color} strokeOpacity="0.12" strokeWidth="1" />
-      <path d={path} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-        style={{ filter: `drop-shadow(0 0 2px ${color}88)` }} />
+          {!compact && (
+            <CartesianGrid vertical={false} stroke="rgba(161,161,170,0.16)" strokeDasharray="4 4" />
+          )}
 
-      {hp && hd ? (
-        <>
-          <line x1={hp[0]} x2={hp[0]} y1={SPARK_TOP} y2={baselineY}
-            stroke={color} strokeOpacity="0.25" strokeWidth="1" strokeDasharray="2 3" />
-          <circle cx={hp[0]} cy={hp[1]} r="3" fill={color}
-            style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
-          {(() => {
-            const dateStr = new Date(hd.date).toLocaleDateString('en', { month: 'short', day: 'numeric' });
-            const pillW = 96;
-            const pillH = 22;
-            const pillX = Math.max(1, Math.min(W - pillW - 1, hp[0] - pillW / 2));
-            return (
-              <g>
-                <rect x={pillX} y={1.5} width={pillW} height={pillH} rx={6}
-                  fill="rgba(24,24,27,0.94)" stroke={color} strokeOpacity={0.6} strokeWidth={1}
-                  style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.4))' }} />
-                <text x={pillX + 10} y={15} fontSize={11} fontWeight="700" fill={color} fontFamily="ui-monospace,monospace">
-                  {hd.value}
-                </text>
-                <text x={pillX + pillW - 8} y={15.5} textAnchor="end" fontSize={10} fill="rgba(255,255,255,0.7)" fontFamily="ui-sans-serif,system-ui">
-                  {dateStr}
-                </text>
-              </g>
-            );
-          })()}
-        </>
-      ) : (
-        <circle cx={last[0]} cy={last[1]} r="2.5" fill={color}
-          style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
-      )}
-    </svg>
+          {!compact && (
+            <XAxis
+              dataKey="date"
+              axisLine={false}
+              tickLine={false}
+              minTickGap={28}
+              tick={{ fontSize: 10, fill: 'rgba(113,113,122,0.78)' }}
+              tickFormatter={(value: string) => formatChartDate(value)}
+            />
+          )}
+
+          {!compact && (
+            <Tooltip
+              cursor={{ stroke: color, strokeOpacity: 0.18, strokeDasharray: '3 3' }}
+              content={({ active, payload }) => {
+                const point = payload?.[0]?.payload as { date: string; value: number } | undefined;
+                if (!active || !point) return null;
+
+                return (
+                  <div
+                    className="rounded-xl px-3 py-2"
+                    style={{
+                      background: 'rgba(10,10,15,0.94)',
+                      border: `1px solid ${color}44`,
+                      boxShadow: '0 12px 28px rgba(0,0,0,0.28)',
+                    }}
+                  >
+                    <p className="text-[10px] uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.46)' }}>
+                      {formatChartDate(point.date)}
+                    </p>
+                    <p className="mt-1 text-xs font-semibold tabular-nums" style={{ color }}>
+                      {point.value.toLocaleString()} {valueLabel}
+                    </p>
+                  </div>
+                );
+              }}
+            />
+          )}
+
+          {showArea && (
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke="none"
+              fill={`url(#${gradientId})`}
+              isAnimationActive={false}
+            />
+          )}
+
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke={color}
+            strokeWidth={compact ? 2 : 2.25}
+            dot={false}
+            isAnimationActive={false}
+            activeDot={compact ? false : { r: 4, fill: color, stroke: '#fff', strokeWidth: 1.5 }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -226,6 +258,7 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
 
 // Stack order: low at bottom, critical at top (most severe is most visible)
 const STACK = [
+  { key: 'unknown'  as const, label: 'Unknown',  color: '#a1a1aa', opacity: 0.72 },
   { key: 'low'      as const, label: 'Low',      color: '#60a5fa', opacity: 0.82 },
   { key: 'medium'   as const, label: 'Medium',   color: '#fbbf24', opacity: 0.85 },
   { key: 'high'     as const, label: 'High',     color: '#fb923c', opacity: 0.88 },
@@ -270,56 +303,14 @@ function VulnTrendChart({ data, period, onPeriod }: {
   period: number;
   onPeriod: (d: number) => void;
 }) {
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [W, setW] = useState(600);
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver(([entry]) => setW(entry!.contentRect.width));
-    ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
-
   const filled = fillDates(data, period);
-  const hasData = filled.some(d => d.critical + d.high + d.medium + d.low > 0);
-
-  // SVG layout
-  const H = 160;
-  const PAD_L = 42, PAD_R = 8, PAD_T = 10, PAD_B = 26;
-  const chartW = W - PAD_L - PAD_R;
-  const chartH = H - PAD_T - PAD_B;
-
-  // Y scale
-  const stackMax = Math.max(...filled.map(d => d.critical + d.high + d.medium + d.low), 1);
-  const ticks = niceTicks(stackMax);
-  const topTick = ticks[ticks.length - 1]!;
-
-  function yVal(v: number) {
-    return PAD_T + chartH - (v / topTick) * chartH;
-  }
-
-  // Bar dimensions
-  const n = filled.length;
-  const barSlot = chartW / n;
-  const barW = Math.min(28, barSlot * 0.68);
-
-  function barX(i: number) {
-    return PAD_L + (i + 0.5) * barSlot - barW / 2;
-  }
-
-  // Hover detection: convert SVG x to bar index
-  function svgXtoIdx(svgX: number) {
-    const rel = svgX - PAD_L;
-    return Math.max(0, Math.min(n - 1, Math.floor(rel / barSlot)));
-  }
-
-  // X-axis labels: show at most 7, evenly distributed
-  const xLabelStep = Math.max(1, Math.ceil(n / 7));
-  const xLabelIndices = new Set<number>();
-  for (let i = 0; i < n; i += xLabelStep) xLabelIndices.add(i);
-  xLabelIndices.add(n - 1);
-
-  const hoverPoint = hoverIdx !== null ? filled[hoverIdx] : null;
+  const hasData = filled.some((point) => sumAvgFindings(point) > 0);
+  const hasUnknownFindings = filled.some((point) => point.unknown > 0);
+  const series = hasUnknownFindings ? STACK : STACK.filter(({ key }) => key !== 'unknown');
+  const chartData = filled.map((point) => ({ ...point, total: sumAvgFindings(point) }));
+  const latestActivePoint = [...chartData].reverse().find((point) => point.total > 0) ?? null;
+  const peakAverage = Math.max(...chartData.map((point) => point.total), 0);
+  const ticks = niceTicks(peakAverage);
   const PERIODS = [7, 14, 30] as const;
 
   return (
@@ -328,7 +319,7 @@ function VulnTrendChart({ data, period, onPeriod }: {
         style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.2), transparent)' }} />
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: 'rgba(124,58,237,0.2)', boxShadow: '0 0 14px rgba(124,58,237,0.3)' }}>
@@ -337,6 +328,11 @@ function VulnTrendChart({ data, period, onPeriod }: {
           <div>
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Avg. Findings per Scan</h2>
             <p className="text-xs text-zinc-500 mt-0.5">Average vulnerabilities per finalized scan, by day</p>
+            <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+              {latestActivePoint
+                ? <><span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>{latestActivePoint.total}</span> on {formatChartDate(latestActivePoint.date)}</>
+                : `No finalized scans in the last ${period} days`}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -359,7 +355,7 @@ function VulnTrendChart({ data, period, onPeriod }: {
 
       {/* Legend */}
       <div className="flex items-center gap-4 mb-3 flex-wrap">
-        {[...STACK].reverse().map(({ key, label, color }) => (
+        {[...series].reverse().map(({ key, label, color }) => (
           <span key={key} className="flex items-center gap-1.5 text-xs" style={{ color }}>
             <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: color }} />
             {label}
@@ -367,158 +363,109 @@ function VulnTrendChart({ data, period, onPeriod }: {
         ))}
       </div>
 
-      <div ref={containerRef} className="w-full">
+      <div className="w-full">
       {!hasData ? (
         <div className="flex items-center justify-center text-sm text-zinc-500 py-10">
           No finalized scans in this period
         </div>
       ) : (
-        <svg
-          viewBox={`0 0 ${W} ${H}`}
-          className="w-full cursor-crosshair select-none"
-          style={{ height: H }}
-          aria-label={`Average vulnerabilities per scan — last ${period} days`}
-          onMouseMove={e => {
-            const r = e.currentTarget.getBoundingClientRect();
-            const svgX = ((e.clientX - r.left) / r.width) * W;
-            setHoverIdx(svgXtoIdx(svgX));
-          }}
-          onMouseLeave={() => setHoverIdx(null)}
-        >
-          {/* Y-axis gridlines + labels */}
-          {ticks.map(t => {
-            const y = yVal(t);
-            const isBase = t === 0;
-            return (
-              <g key={t}>
-                <line
-                  x1={PAD_L} x2={W - PAD_R} y1={y} y2={y}
-                  stroke="var(--row-divider)"
-                  strokeWidth={isBase ? 1 : 0.5}
-                  strokeDasharray={isBase ? undefined : '4 4'}
-                />
-                <text
-                  x={PAD_L - 5} y={y + 3.5}
-                  textAnchor="end" fontSize={8}
-                  fill="rgba(113,113,122,0.75)"
-                  fontFamily="ui-sans-serif,system-ui"
-                >
-                  {fmtTick(t)}
-                </text>
-              </g>
-            );
-          })}
+        <div className="h-[220px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+              <CartesianGrid vertical={false} stroke="rgba(161,161,170,0.16)" strokeDasharray="4 4" />
+              <XAxis
+                dataKey="date"
+                axisLine={false}
+                tickLine={false}
+                minTickGap={28}
+                tick={{ fontSize: 10, fill: 'rgba(113,113,122,0.78)' }}
+                tickFormatter={(value: string) => formatChartDate(value)}
+              />
+              <YAxis
+                allowDecimals={false}
+                axisLine={false}
+                tickLine={false}
+                ticks={ticks}
+                width={36}
+                tick={{ fontSize: 10, fill: 'rgba(113,113,122,0.78)' }}
+                tickFormatter={(value: number) => fmtTick(value)}
+              />
+              <Tooltip
+                cursor={{ stroke: '#a78bfa', strokeOpacity: 0.22, strokeDasharray: '3 3' }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length || typeof label !== 'string') return null;
 
-          {/* Stacked bars */}
-          {filled.map((d, i) => {
-            const isHovered = hoverIdx === i;
-            let baseline = PAD_T + chartH; // start at bottom
+                  const total = payload.reduce((sum, entry) => sum + Number(entry.value ?? 0), 0);
 
-            return (
-              <g key={d.date}>
-                {/* Hover highlight background */}
-                {isHovered && (
-                  <rect
-                    x={PAD_L + i * barSlot} y={PAD_T}
-                    width={barSlot} height={chartH}
-                    fill="rgba(167,139,250,0.06)"
-                  />
-                )}
-
-                {/* Bar segments, bottom → top */}
-                {STACK.map(({ key, color, opacity }) => {
-                  const val = d[key];
-                  if (val <= 0) return null;
-                  const segH = (val / topTick) * chartH;
-                  const y = baseline - segH;
-                  baseline = y;
                   return (
-                    <rect
-                      key={key}
-                      x={barX(i)} y={y}
-                      width={barW} height={segH}
-                      fill={color} fillOpacity={isHovered ? 1 : opacity}
-                      rx={i === 0 || val === d[key] ? 1 : 0}
-                    />
+                    <div
+                      className="rounded-xl px-3 py-2.5"
+                      style={{
+                        background: 'rgba(10,10,15,0.94)',
+                        border: '1px solid rgba(167,139,250,0.24)',
+                        boxShadow: '0 14px 30px rgba(0,0,0,0.3)',
+                      }}
+                    >
+                      <p className="text-[10px] uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.46)' }}>
+                        {formatChartDate(label)}
+                      </p>
+                      {total === 0 ? (
+                        <p className="mt-1 text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>No finalized scans</p>
+                      ) : (
+                        <>
+                          <div className="mt-2 space-y-1.5">
+                            {[...series].reverse().map(({ key, label: seriesLabel, color: seriesColor }) => {
+                              const entry = payload.find((item) => item.dataKey === key);
+                              const value = Number(entry?.value ?? 0);
+                              if (value === 0) return null;
+
+                              return (
+                                <div key={key} className="flex items-center justify-between gap-3 text-[11px]">
+                                  <span className="flex items-center gap-1.5" style={{ color: seriesColor }}>
+                                    <span className="h-2 w-2 rounded-full" style={{ background: seriesColor }} />
+                                    {seriesLabel}
+                                  </span>
+                                  <span className="tabular-nums" style={{ color: 'rgba(255,255,255,0.88)' }}>{value}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-2 flex items-center justify-between border-t pt-2 text-[11px]" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.52)' }}>Total avg</span>
+                            <span className="font-semibold tabular-nums" style={{ color: '#fff' }}>{total}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   );
-                })}
+                }}
+              />
 
-                {/* Top rounded cap on hovered bar */}
-                {isHovered && (() => {
-                  const total = d.critical + d.high + d.medium + d.low;
-                  if (total === 0) return null;
-                  const topY = PAD_T + chartH - (total / topTick) * chartH;
-                  return <rect x={barX(i)} y={topY} width={barW} height={2} rx={1} fill="rgba(255,255,255,0.4)" />;
-                })()}
-              </g>
-            );
-          })}
-
-          {/* X-axis date labels */}
-          {filled.map((d, i) => {
-            if (!xLabelIndices.has(i)) return null;
-            const dateStr = new Date(d.date + 'T12:00:00Z').toLocaleDateString('en', { month: 'short', day: 'numeric' });
-            return (
-              <text
-                key={d.date}
-                x={PAD_L + (i + 0.5) * barSlot}
-                y={H - 5}
-                textAnchor="middle" fontSize={8}
-                fill="rgba(113,113,122,0.7)"
-                fontFamily="ui-sans-serif,system-ui"
-              >
-                {dateStr}
-              </text>
-            );
-          })}
-
-          {/* Hover tooltip */}
-          {hoverIdx !== null && hoverPoint && (() => {
-            const total = hoverPoint.critical + hoverPoint.high + hoverPoint.medium + hoverPoint.low;
-            const dateStr = new Date(hoverPoint.date + 'T12:00:00Z').toLocaleDateString('en', { month: 'short', day: 'numeric' });
-            const tipW = 122, tipH = total === 0 ? 36 : 94;
-            const tipX = Math.max(PAD_L + 2, Math.min(W - PAD_R - tipW - 2, PAD_L + (hoverIdx + 0.5) * barSlot - tipW / 2));
-            const tipY = PAD_T + 2;
-
-            return (
-              <g>
-                <rect x={tipX} y={tipY} width={tipW} height={tipH} rx={5}
-                  fill="rgba(10,10,15,0.9)" stroke="rgba(167,139,250,0.25)" strokeWidth="0.75" />
-                {/* Date */}
-                <text x={tipX + 10} y={tipY + 14} fontSize={9} fontWeight="600"
-                  fill="rgba(255,255,255,0.55)" fontFamily="ui-sans-serif,system-ui">
-                  {dateStr}
-                </text>
-                {total === 0 ? (
-                  <text x={tipX + 10} y={tipY + 27} fontSize={9} fill="rgba(113,113,122,0.8)" fontFamily="ui-sans-serif,system-ui">
-                    No scans
-                  </text>
-                ) : (
-                  <>
-                    {[...STACK].reverse().map(({ key, label, color }, li) => (
-                      <g key={key}>
-                        <rect x={tipX + 10} y={tipY + 21 + li * 14} width={6} height={6} rx={1.5} fill={color} />
-                        <text x={tipX + 20} y={tipY + 28 + li * 14} fontSize={9} fill={color} fontFamily="ui-monospace,monospace">
-                          {label}: {hoverPoint[key]}
-                        </text>
-                      </g>
-                    ))}
-                    {/* Total */}
-                    <line x1={tipX + 10} x2={tipX + tipW - 10}
-                      y1={tipY + 78} y2={tipY + 78}
-                      stroke="rgba(255,255,255,0.1)" strokeWidth="0.5" />
-                    <text x={tipX + 10} y={tipY + 89} fontSize={9} fontWeight="600"
-                      fill="rgba(255,255,255,0.45)" fontFamily="ui-monospace,monospace">
-                      Total: {total}
-                    </text>
-                  </>
-                )}
-              </g>
-            );
-          })()}
-        </svg>
+              {series.map(({ key, color, opacity }) => (
+                <Area
+                  key={key}
+                  type="monotone"
+                  dataKey={key}
+                  stackId="avg-findings"
+                  stroke={color}
+                  fill={color}
+                  fillOpacity={opacity}
+                  dot={false}
+                  isAnimationActive={false}
+                  activeDot={{ r: 4, fill: color, stroke: '#fff', strokeWidth: 1.5 }}
+                />
+              ))}
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
       )}
       </div>
+
+      {hasData && (
+        <p className="mt-3 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+          Peak daily average in this window: <span className="tabular-nums" style={{ color: 'var(--text-secondary)' }}>{peakAverage}</span>
+        </p>
+      )}
     </div>
   );
 }
@@ -539,19 +486,9 @@ export default function DashboardPage() {
   const currentUser = getUser() as { role?: string } | null;
   const isAdmin = currentUser?.role === 'admin' || getTokenType() === 'admin';
 
-  const sparkTrends = useMemo(() => {
-    // Fill gaps for the last 30 days to ensure we show 0 when no scans were performed
-    const result: { date: string; value: number }[] = [];
-    const map = new Map(trends.map(t => [t.date, t.total]));
-    const now = new Date();
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(now);
-      d.setUTCDate(d.getUTCDate() - i);
-      const key = d.toISOString().slice(0, 10);
-      result.push({ date: key, value: map.get(key) ?? 0 });
-    }
-    return result;
-  }, [trends]);
+  const scanVolumeTrend = useMemo(() => buildTrendSeries(trends, 30, (point) => point.total), [trends]);
+  const completedTrend = useMemo(() => buildTrendSeries(trends, 14, (point) => point.completed), [trends]);
+  const attentionTrend = useMemo(() => buildTrendSeries(trends, 14, (point) => point.failed), [trends]);
 
   useEffect(() => {
     const healthPromise = isAdmin
@@ -622,15 +559,20 @@ export default function DashboardPage() {
   const totalVulns = Object.values(stats.severity_totals).reduce((a, b) => a + b, 0);
   const todayKey = new Date().toISOString().slice(0, 10);
   const startedTodayCount = [...trends].reverse().find((point) => point.date === todayKey)?.total ?? 0;
-  const failedCount = stats.status_counts['failed'] ?? 0;
+  const failedStatusCount = stats.status_counts['failed'] ?? 0;
   const activeQueueCount = (stats.status_counts['running'] ?? 0) + (stats.status_counts['pending'] ?? 0);
   const blockedPolicyCount = stats.operations?.blocked_policy_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
+  const genericFailedCount = Math.max(0, failedStatusCount - blockedPolicyCount);
   const activeXrayCount = stats.operations?.active_xray_count ?? 0;
   const completedCount = stats.status_counts['completed'] ?? 0;
-  const needsAttentionTotal = failedCount + blockedPolicyCount;
+  const needsAttentionTotal = genericFailedCount + blockedPolicyCount;
   const successRate = stats.total_scans > 0 ? Math.round((completedCount / stats.total_scans) * 100) : 0;
+  const recentWindowAverage = scanVolumeTrend.reduce((sum, point) => sum + point.value, 0) / Math.max(scanVolumeTrend.length, 1);
+  const recentCompletedTotal = completedTrend.reduce((sum, point) => sum + point.value, 0);
+  const attentionPeak = Math.max(...attentionTrend.map((point) => point.value), 0);
+  const attentionScans = stats.attention_scans ?? stats.recent_scans ?? [];
 
-  const allAttentionScans = (stats.recent_scans ?? []).filter((scan) => {
+  const allAttentionScans = attentionScans.filter((scan) => {
     const isFailed = scan.status === 'failed';
     const isBlocked = scan.external_status === 'blocked_by_xray_policy';
     const isRunning = scan.status === 'running' || scan.status === 'pending';
@@ -639,8 +581,15 @@ export default function DashboardPage() {
     if (attentionFilter === 'running') return isRunning;
     return isFailed || isBlocked;
   });
-  const displayedAttentionScans = allAttentionScans.slice(0, 7);
-  const moreAttentionCount = allAttentionScans.length - displayedAttentionScans.length;
+  const totalAttentionForFilter = attentionFilter === 'failed'
+    ? genericFailedCount
+    : attentionFilter === 'blocked'
+      ? blockedPolicyCount
+      : attentionFilter === 'running'
+        ? activeQueueCount
+        : needsAttentionTotal;
+  const displayedAttentionScans = allAttentionScans.slice(0, 5);
+  const moreAttentionCount = Math.max(0, totalAttentionForFilter - displayedAttentionScans.length);
   const triageHref = attentionFilter === 'running' ? buildScansHref({ status: 'running' }) : buildScansHref({ status: 'failed' });
 
   return (
@@ -667,34 +616,70 @@ export default function DashboardPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(180px, 1fr))' }}>
           <StatCard
             label="Total Scans"
-            value={stats.total_scans.toLocaleString()}
+            value={(
+              <div className="flex w-full items-end justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-2xl font-bold tabular-nums tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                    {stats.total_scans.toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                    {recentWindowAverage >= 10 ? recentWindowAverage.toFixed(0) : recentWindowAverage.toFixed(1)} avg/day
+                  </p>
+                </div>
+                <MiniSparkline data={scanVolumeTrend.slice(-14)} color="#a78bfa" id="stat-total-scans" compact showArea={false} valueLabel="scans" />
+              </div>
+            )}
             hint={<span className="flex items-center gap-1.5">{activeQueueCount > 0 && <span className="h-1.5 w-1.5 rounded-full inline-block shrink-0 animate-pulse" style={{ background: '#60a5fa' }} />} {activeQueueCount > 0 ? `${activeQueueCount} running` : 'none running'}</span>}
             className="rounded-none px-5 py-4"
             style={{ borderRight: '1px solid var(--glass-border)' }}
-            valueStyle={{ color: 'var(--text-primary)' }}
+            valueClassName=""
             hintStyle={{ color: activeQueueCount > 0 ? '#60a5fa' : 'var(--text-faint)' }}
           />
           <StatCard
             label="Completed"
-            value={completedCount.toLocaleString()}
+            value={(
+              <div className="flex w-full items-end justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-2xl font-bold tabular-nums tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                    {completedCount.toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                    {recentCompletedTotal.toLocaleString()} in last 14d
+                  </p>
+                </div>
+                <MiniSparkline data={completedTrend} color="#34d399" id="stat-completed" compact showArea={false} valueLabel="completed" />
+              </div>
+            )}
             hint={`${successRate}% success rate`}
             className="rounded-none px-5 py-4"
             style={{ borderRight: '1px solid var(--glass-border)' }}
-            valueStyle={{ color: 'var(--text-primary)' }}
+            valueClassName=""
           />
           <StatCard
             label="Needs Attention"
-            value={needsAttentionTotal}
+            value={(
+              <div className="flex w-full items-end justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-2xl font-bold tabular-nums tracking-tight" style={{ color: needsAttentionTotal > 0 ? '#f87171' : 'var(--text-primary)' }}>
+                    {needsAttentionTotal}
+                  </p>
+                  <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                    {attentionPeak.toLocaleString()} peak failed/day in last 14d
+                  </p>
+                </div>
+                <MiniSparkline data={attentionTrend} color="#f87171" id="stat-attention" compact showArea={false} valueLabel="failed" />
+              </div>
+            )}
             hint={
               <span className="flex items-center gap-2">
-                {failedCount > 0 && <span style={{ color: '#f87171' }}>{failedCount} failed</span>}
+                {genericFailedCount > 0 && <span style={{ color: '#f87171' }}>{genericFailedCount} failed</span>}
                 {blockedPolicyCount > 0 && <span style={{ color: '#fb923c' }}>{blockedPolicyCount} blocked</span>}
                 {needsAttentionTotal === 0 && <span style={{ color: 'var(--text-faint)' }}>all clear</span>}
               </span>
             }
             className="rounded-none px-5 py-4"
             style={{ borderRight: '1px solid var(--glass-border)' }}
-            valueStyle={{ color: needsAttentionTotal > 0 ? '#f87171' : 'var(--text-primary)' }}
+            valueClassName=""
           />
           <StatCard
             label="Watchlist"
@@ -707,7 +692,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Zone 2: Action + Context ── */}
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
 
         {/* Needs Attention */}
         <div className="rounded-2xl p-5" style={glassCard()}>
@@ -735,7 +720,7 @@ export default function DashboardPage() {
           <div className="flex flex-wrap items-center gap-2 mb-4">
             {([
               { key: 'all' as const,     label: 'All',           count: needsAttentionTotal, activeBg: 'rgba(124,58,237,0.12)', activeBorder: 'rgba(124,58,237,0.3)',  activeColor: '#a78bfa' },
-              { key: 'failed' as const,  label: 'Failed',        count: failedCount,         activeBg: 'rgba(239,68,68,0.1)',   activeBorder: 'rgba(239,68,68,0.3)',   activeColor: '#f87171' },
+              { key: 'failed' as const,  label: 'Failed',        count: genericFailedCount,  activeBg: 'rgba(239,68,68,0.1)',   activeBorder: 'rgba(239,68,68,0.3)',   activeColor: '#f87171' },
               { key: 'blocked' as const, label: 'Policy blocked', count: blockedPolicyCount,  activeBg: 'rgba(249,115,22,0.1)',  activeBorder: 'rgba(249,115,22,0.3)',  activeColor: '#fb923c' },
               { key: 'running' as const, label: 'Running',       count: activeQueueCount,    activeBg: 'rgba(59,130,246,0.1)',  activeBorder: 'rgba(59,130,246,0.3)',  activeColor: '#60a5fa' },
             ] as const).map(({ key, label, count, activeBg, activeBorder, activeColor }) => {
@@ -764,9 +749,14 @@ export default function DashboardPage() {
               {attentionFilter === 'all' ? 'No failed or blocked scans.' : `No ${attentionFilter === 'blocked' ? 'policy-blocked' : attentionFilter} scans.`}
             </p>
           ) : (
-            <div className="space-y-0.5 -mx-1">
-              {displayedAttentionScans.map((scan) => <RecentScanRow key={scan.id} scan={scan} />)}
-            </div>
+            <>
+              <div className="mb-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                Showing latest {displayedAttentionScans.length} of {totalAttentionForFilter}
+              </div>
+              <div className="max-h-[308px] space-y-0.5 overflow-y-auto pr-1 -mx-1">
+                {displayedAttentionScans.map((scan) => <RecentScanRow key={scan.id} scan={scan} />)}
+              </div>
+            </>
           )}
 
           {moreAttentionCount > 0 && (
@@ -872,10 +862,16 @@ export default function DashboardPage() {
         <div className="grid gap-3 lg:grid-cols-2">
           {/* Scan volume */}
           <div className="flex min-h-[280px] flex-col rounded-2xl p-5" style={glassCard()}>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Scan Volume</h2>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>Total scans per day — last 30 days</p>
+                <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                  <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                    {scanVolumeTrend.reduce((sum, point) => sum + point.value, 0).toLocaleString()}
+                  </span>{' '}
+                  total over 30 days
+                </p>
               </div>
               <Link
                 href="/scans"
@@ -887,8 +883,8 @@ export default function DashboardPage() {
                 View all →
               </Link>
             </div>
-            {sparkTrends.length >= 2
-              ? <div className="flex-1"><MiniSparkline data={sparkTrends} color="#a78bfa" id="scan-volume" /></div>
+            {scanVolumeTrend.length >= 2
+              ? <div className="flex-1"><MiniSparkline data={scanVolumeTrend} color="#a78bfa" id="scan-volume" valueLabel="scans" /></div>
               : <div className="flex items-center justify-center py-8 text-sm" style={{ color: 'var(--text-faint)' }}>No trend data yet</div>
             }
           </div>

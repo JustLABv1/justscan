@@ -4,6 +4,7 @@ export interface DashboardStats {
   total_scans: number;
   status_counts: Record<string, number>;
   severity_totals: Record<string, number>;
+  attention_scans: Scan[] | null;
   recent_scans: Scan[] | null;
   top_images: { image_name: string; count: number }[] | null;
   watchlist_count: number;

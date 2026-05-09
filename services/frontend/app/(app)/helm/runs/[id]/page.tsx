@@ -43,7 +43,7 @@ function StatusBadge({ status }: { status: string }) {
       className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap"
       style={{ color: state.color, background: state.bg, border: `1px solid ${state.border}` }}
     >
-      <span className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`} />
+      <span className={`size-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`} />
       {state.label ?? status}
     </span>
   );
@@ -375,7 +375,7 @@ export default function HelmRunDetailPage() {
 
       {loading && (
         <div className="glass-panel rounded-2xl px-6 py-10 flex items-center justify-center gap-3 text-zinc-400 text-sm">
-          <span className="w-4 h-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
+          <span className="size-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
           Loading Helm run…
         </div>
       )}

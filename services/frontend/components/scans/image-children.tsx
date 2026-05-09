@@ -56,7 +56,7 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)' }}>
         {loading ? (
           <div className="flex justify-center py-6">
-            <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+            <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
           </div>
         ) : scans.length === 0 ? (
           <div className="py-5 text-center text-xs text-zinc-500">No scans yet.</div>
@@ -155,7 +155,7 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
         <div className="mx-4 mb-3 rounded-xl overflow-hidden" style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)' }}>
           {loading ? (
             <div className="flex justify-center py-6">
-              <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+              <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
             </div>
           ) : scans.length === 0 ? (
             <div className="py-5 text-center text-xs text-zinc-500">No scans yet.</div>
@@ -187,7 +187,7 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
                     onMouseEnter={(event) => (event.currentTarget.style.background = 'rgba(124,58,237,0.06)')}
                     onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
                   >
-                    <td className="px-3 py-3" onClick={(event) => event.stopPropagation()}>
+                    <td className="p-3" onClick={(event) => event.stopPropagation()}>
                       <Checkbox isSelected={selectedScans.has(scan.id)} onChange={(checked: boolean) => onSelectScan(scan.id, checked)}>
                         <Checkbox.Control className="border border-zinc-500/50 data-[selected=true]:border-violet-500 data-[selected=true]:bg-violet-600">
                           <Checkbox.Indicator />
@@ -211,10 +211,10 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
                         ))}
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-center"><SevCount count={scan.critical_count} level="critical" /></td>
-                    <td className="px-3 py-3 text-center"><SevCount count={scan.high_count} level="high" /></td>
-                    <td className="px-3 py-3 text-center"><SevCount count={scan.medium_count} level="medium" /></td>
-                    <td className="px-3 py-3 text-center"><SevCount count={scan.low_count} level="low" /></td>
+                    <td className="p-3 text-center"><SevCount count={scan.critical_count} level="critical" /></td>
+                    <td className="p-3 text-center"><SevCount count={scan.high_count} level="high" /></td>
+                    <td className="p-3 text-center"><SevCount count={scan.medium_count} level="medium" /></td>
+                    <td className="p-3 text-center"><SevCount count={scan.low_count} level="low" /></td>
                     <td className="px-4 py-3 text-xs text-zinc-500 whitespace-nowrap" title={fullDate(scan.created_at)}>{timeAgo(scan.created_at)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 justify-end">

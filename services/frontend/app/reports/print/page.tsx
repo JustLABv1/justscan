@@ -80,14 +80,14 @@ const SEV_COLORS: Record<string, { bg: string; text: string; light: string }> = 
 const SEVS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
 
 function fmt(iso: string | null) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function SevBadge({ s }: { s: string }) {
   const c = SEV_COLORS[s] ?? SEV_COLORS.UNKNOWN;
   return (
-    <span style={{ background: c.bg, color: c.text, fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+    <span style={{ background: c.bg, color: c.text, fontSize: '12px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
       {s}
     </span>
   );
@@ -223,12 +223,12 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
     <div className="print:hidden" style={{ position: 'fixed', top: 16, right: 16, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px', minWidth: 200, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', zIndex: 10, fontSize: 13 }}>
       <p style={{ fontWeight: 700, color: '#111827', marginBottom: 12 }}>Filters</p>
 
-      <p style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Min CVSS</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Min CVSS</p>
       <input type="number" min={0} max={10} step={0.1} value={f.minCvss || ''} placeholder="0.0"
         onChange={e => onChange({ ...f, minCvss: parseFloat(e.target.value) || 0 })}
         style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 6, padding: '4px 8px', fontSize: 13, marginBottom: 12, boxSizing: 'border-box' }} />
 
-      <p style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Severity</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Severity</p>
       {SEVS.map(s => (
         <label key={s} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer' }}>
           <input type="checkbox" checked={f.severities.length === 0 || f.severities.includes(s)}
@@ -248,7 +248,7 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
 
       <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
 
-      <p style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Show</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Show</p>
       {([['showDescription', 'Descriptions'], ['showReferences', 'References'], ['showComments', 'Comments'], ['showSuppressed', 'Suppressed']] as [keyof Filters, string][]).map(([k, label]) => (
         <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer' }}>
           <input type="checkbox" checked={f[k] as boolean} onChange={e => onChange({ ...f, [k]: e.target.checked })} />
@@ -257,7 +257,7 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
       ))}
 
       <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
-      <p style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Scan Details</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Scan Details</p>
       {([['showScanId', 'Scan ID'], ['showStarted', 'Started'], ['showCompleted', 'Completed'], ['showTrivyVersion', 'Scanner Versions']] as [keyof Filters, string][]).map(([k, label]) => (
         <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer' }}>
           <input type="checkbox" checked={f[k] as boolean} onChange={e => onChange({ ...f, [k]: e.target.checked })} />
@@ -339,19 +339,19 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
       <div style={{ display: 'flex', borderLeft: `5px solid ${accentColor}`, paddingLeft: 16, marginBottom: 20, alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: '#111827', margin: '0 0 2px', wordBreak: 'break-all' }}>{imageRef}</p>
-          {scan.image_digest && <p style={{ fontFamily: 'monospace', fontSize: 10, color: '#9ca3af', margin: '0 0 6px', wordBreak: 'break-all' }}>{scan.image_digest}</p>}
+          {scan.image_digest && <p style={{ fontFamily: 'monospace', fontSize: 12, color: '#9ca3af', margin: '0 0 6px', wordBreak: 'break-all' }}>{scan.image_digest}</p>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {scan.critical_count > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fef2f2', padding: '2px 7px', borderRadius: 4, border: '1px solid #fca5a5' }}>C: {scan.critical_count}</span>}
-            {scan.high_count > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#ea580c', background: '#fff7ed', padding: '2px 7px', borderRadius: 4, border: '1px solid #fed7aa' }}>H: {scan.high_count}</span>}
-            {scan.medium_count > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#d97706', background: '#fffbeb', padding: '2px 7px', borderRadius: 4, border: '1px solid #fde68a' }}>M: {scan.medium_count}</span>}
-            {scan.low_count > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', background: '#eff6ff', padding: '2px 7px', borderRadius: 4, border: '1px solid #bfdbfe' }}>L: {scan.low_count}</span>}
+            {scan.critical_count > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', background: '#fef2f2', padding: '2px 7px', borderRadius: 4, border: '1px solid #fca5a5' }}>C: {scan.critical_count}</span>}
+            {scan.high_count > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: '#ea580c', background: '#fff7ed', padding: '2px 7px', borderRadius: 4, border: '1px solid #fed7aa' }}>H: {scan.high_count}</span>}
+            {scan.medium_count > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: '#d97706', background: '#fffbeb', padding: '2px 7px', borderRadius: 4, border: '1px solid #fde68a' }}>M: {scan.medium_count}</span>}
+            {scan.low_count > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: '#2563eb', background: '#eff6ff', padding: '2px 7px', borderRadius: 4, border: '1px solid #bfdbfe' }}>L: {scan.low_count}</span>}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, marginLeft: 16, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 999, background: statusColors.background, color: statusColors.color, border: `1px solid ${statusColors.border ?? statusColors.background}` }}>
+          <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 999, background: statusColors.background, color: statusColors.color, border: `1px solid ${statusColors.border ?? statusColors.background}` }}>
             {formatStatusLabel(displayStatus)}
           </span>
-          {scan.architecture && <span style={{ fontSize: 10, color: '#6b7280' }}>{scan.architecture} · {scan.os_family}</span>}
+          {scan.architecture && <span style={{ fontSize: 12, color: '#6b7280' }}>{scan.architecture} · {scan.os_family}</span>}
         </div>
       </div>
 
@@ -362,7 +362,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
             ...(filters.showScanId ? [['Scan ID', scan.id, true] as [string, string, boolean]] : []),
             ...(filters.showStarted ? [['Started', fmt(scan.started_at), false] as [string, string, boolean]] : []),
             ...(filters.showCompleted ? [['Completed', fmt(scan.completed_at), false] as [string, string, boolean]] : []),
-            ...(filters.showTrivyVersion ? [['Scanner Versions', [scan.trivy_version ? `Trivy ${scan.trivy_version}` : '', scan.grype_version ? `Grype ${scan.grype_version}` : ''].filter(Boolean).join(' · ') || '—', false] as [string, string, boolean]] : []),
+            ...(filters.showTrivyVersion ? [['Scanner Versions', [scan.trivy_version ? `Trivy ${scan.trivy_version}` : '', scan.grype_version ? `Grype ${scan.grype_version}` : ''].filter(Boolean).join(' · ') || '-', false] as [string, string, boolean]] : []),
             ...(scan.helm_chart ? [['Helm Chart', scan.helm_chart, true] as [string, string, boolean]] : []),
             ...(scan.helm_source_path ? [['Helm Source', scan.helm_source_path, false] as [string, string, boolean]] : []),
             ...(scan.os_family ? [['OS', `${scan.os_family} ${scan.os_name}`.trim(), false] as [string, string, boolean]] : []),
@@ -375,7 +375,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
               <td style={{ padding: '5px 12px', color: '#111827', fontFamily: mono ? 'monospace' : 'inherit', fontSize: mono ? 10 : 12, wordBreak: 'break-all', borderBottom: '1px solid #e5e7eb' }}>{value}</td>
             </tr>
           ))}
-          {/* Registry / Location — editable, hidden on print if empty */}
+          {/* Registry / Location - editable, hidden on print if empty */}
           <tr>
             <td style={{ padding: '5px 12px', fontWeight: 600, color: '#374151', background: '#f9fafb', width: 140, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>Registry / Location</td>
             <td style={{ padding: '3px 8px', borderBottom: '1px solid #e5e7eb' }}>
@@ -388,7 +388,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
                   placeholder="e.g. registry.example.com/myapp"
                   style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 4, padding: '3px 6px', fontSize: 12, boxSizing: 'border-box', color: '#374151' }}
                 />
-                {savingLocation && <span style={{ fontSize: 10, color: '#9ca3af', marginLeft: 4 }}>Saving…</span>}
+                {savingLocation && <span style={{ fontSize: 12, color: '#9ca3af', marginLeft: 4 }}>Saving…</span>}
               </span>
               {imageLocation && <span className="hidden print:inline" style={{ fontSize: 12, color: '#111827' }}>{imageLocation}</span>}
             </td>
@@ -396,9 +396,9 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
         </tbody>
       </table>
 
-      {/* Custom fields editor — screen only */}
+      {/* Custom fields editor - screen only */}
       <div className="print:hidden" style={{ marginBottom: 16, padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#f9fafb' }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Add Custom Info Field</p>
+        <p style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Add Custom Info Field</p>
         {customFields.map((cf, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <span style={{ flex: 1, fontSize: 12, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><strong>{cf.label}:</strong> {cf.value}</span>
@@ -446,7 +446,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
           <thead>
             <tr style={{ background: '#f9fafb' }}>
               {['CVE ID', 'Package', 'Installed', 'Fixed In', 'Severity', 'CVSS'].map(h => (
-                <th key={h} style={{ padding: '7px 10px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600, color: '#374151', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                <th key={h} style={{ padding: '7px 10px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600, color: '#374151', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -454,32 +454,32 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
             {activeVulns.map((v, vi) => (
               <>
                 <tr key={v.id} style={{ background: vi % 2 === 0 ? '#fff' : '#fafafa' }}>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 11, color: '#7c3aed', fontWeight: 600 }}>{v.vuln_id || '—'}</td>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 11 }}>{v.pkg_name}</td>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{v.installed_version}</td>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 11, color: '#15803d', fontWeight: v.fixed_version ? 600 : 400 }}>{v.fixed_version || '—'}</td>
+                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#7c3aed', fontWeight: 600 }}>{v.vuln_id || '-'}</td>
+                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12 }}>{v.pkg_name}</td>
+                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#6b7280' }}>{v.installed_version}</td>
+                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#15803d', fontWeight: v.fixed_version ? 600 : 400 }}>{v.fixed_version || '-'}</td>
                   <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb' }}><SevBadge s={v.severity} /></td>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 11, textAlign: 'right', fontWeight: v.cvss_score >= 7 ? 700 : 400, color: v.cvss_score >= 9 ? '#dc2626' : v.cvss_score >= 7 ? '#ea580c' : '#374151' }}>
-                    {v.cvss_score ? v.cvss_score.toFixed(1) : '—'}
+                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, textAlign: 'right', fontWeight: v.cvss_score >= 7 ? 700 : 400, color: v.cvss_score >= 9 ? '#dc2626' : v.cvss_score >= 7 ? '#ea580c' : '#374151' }}>
+                    {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
                   </td>
                 </tr>
                 {(filters.showDescription && v.description) && (
                   <tr key={`${v.id}-desc`} style={{ background: vi % 2 === 0 ? '#fafafa' : '#f5f5f5' }}>
-                    <td colSpan={6} style={{ padding: '4px 10px 8px 20px', border: '1px solid #e5e7eb', fontSize: 11, color: '#4b5563', lineHeight: 1.5, borderTop: 'none' }}>
-                      {v.title && <strong style={{ color: '#111827' }}>{v.title} — </strong>}
+                    <td colSpan={6} style={{ padding: '4px 10px 8px 20px', border: '1px solid #e5e7eb', fontSize: 12, color: '#4b5563', lineHeight: 1.5, borderTop: 'none' }}>
+                      {v.title && <strong style={{ color: '#111827' }}>{v.title} - </strong>}
                       {v.description.length > 400 ? v.description.slice(0, 400) + '…' : v.description}
                       {filters.showReferences && v.references?.length > 0 && (
-                        <span style={{ color: '#7c3aed', marginLeft: 8, fontSize: 10 }}>{v.references.slice(0, 2).join(' · ')}</span>
+                        <span style={{ color: '#7c3aed', marginLeft: 8, fontSize: 12 }}>{v.references.slice(0, 2).join(' · ')}</span>
                       )}
                       {filters.showComments && v.comments && v.comments.length > 0 && (
                         <div style={{ marginTop: '6px' }}>
                           {v.comments.map(c => (
                             <div key={c.id} style={{ marginTop: '4px', background: '#fffbeb', border: '1px solid #fde68a', borderLeft: '3px solid #f59e0b', borderRadius: '3px', padding: '6px 8px' }}>
-                              <p style={{ margin: '0 0 2px', fontSize: '10px', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              <p style={{ margin: '0 0 2px', fontSize: '12px', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                                 Analyst Note
-                                {c.username && <span style={{ fontWeight: 400, marginLeft: '5px', textTransform: 'none', letterSpacing: 0 }}>— {c.username}</span>}
+                                {c.username && <span style={{ fontWeight: 400, marginLeft: '5px', textTransform: 'none', letterSpacing: 0 }}>- {c.username}</span>}
                               </p>
-                              <p style={{ margin: 0, fontSize: '11px', color: '#78350f', lineHeight: 1.5 }}>{c.content}</p>
+                              <p style={{ margin: 0, fontSize: '12px', color: '#78350f', lineHeight: 1.5 }}>{c.content}</p>
                             </div>
                           ))}
                         </div>
@@ -510,12 +510,12 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
                 <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 12 }}>{f.vuln_id}</span>
                 <SevBadge s={f.severity} />
-                <span style={{ display: 'inline-block', background: '#ede9fe', color: '#6d28d9', fontSize: '0.65rem', fontWeight: 700, padding: '2px 6px', borderRadius: 3, letterSpacing: '0.05em' }}>MANUAL</span>
-                {f.cvss_score > 0 && <span style={{ fontSize: 11, color: '#555', fontWeight: 600 }}>CVSS {f.cvss_score.toFixed(1)}</span>}
+                <span style={{ display: 'inline-block', background: '#ede9fe', color: '#6d28d9', fontSize: '0.75rem', fontWeight: 700, padding: '2px 6px', borderRadius: 3, letterSpacing: '0.05em' }}>MANUAL</span>
+                {f.cvss_score > 0 && <span style={{ fontSize: 12, color: '#555', fontWeight: 600 }}>CVSS {f.cvss_score.toFixed(1)}</span>}
               </div>
               {f.title && <p style={{ margin: '0 0 3px', fontWeight: 600, fontSize: 12 }}>{f.title}</p>}
               {f.pkg_name && (
-                <p style={{ margin: 0, fontSize: 11, color: '#444' }}>
+                <p style={{ margin: 0, fontSize: 12, color: '#444' }}>
                   <span style={{ fontWeight: 600 }}>{f.pkg_name}</span>{' '}
                   {f.installed_version && <span style={{ color: '#dc2626' }}>{f.installed_version}</span>}
                   {f.fixed_version && <> → <span style={{ color: '#16a34a' }}>fix: {f.fixed_version}</span></>}
@@ -523,8 +523,8 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
               )}
               {f.justification && (
                 <div style={{ marginTop: 6, background: '#ede9fe', border: '1px solid #c4b5fd', borderLeft: '3px solid #7c3aed', borderRadius: 3, padding: '6px 8px' }}>
-                  <p style={{ margin: '0 0 2px', fontSize: 10, fontWeight: 700, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Justification</p>
-                  <p style={{ margin: 0, fontSize: 11, color: '#4c1d95', lineHeight: 1.5 }}>{f.justification}</p>
+                  <p style={{ margin: '0 0 2px', fontSize: 12, fontWeight: 700, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Justification</p>
+                  <p style={{ margin: 0, fontSize: 12, color: '#4c1d95', lineHeight: 1.5 }}>{f.justification}</p>
                 </div>
               )}
             </div>
@@ -544,7 +544,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
           <div style={{ marginTop: 10, border: '1px solid #e5e7eb', borderRadius: 8, padding: '14px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', background: '#fafafa' }}>
             {([['vuln_id', 'CVE ID *'], ['pkg_name', 'Package'], ['installed_version', 'Installed Version'], ['title', 'Title']] as [keyof ManualFinding, string][]).map(([field, label]) => (
               <div key={field}>
-                <p style={{ fontSize: 10, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>{label}</p>
+                <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>{label}</p>
                 <input
                   type="text"
                   value={(newFinding as Record<string, string | number>)[field] as string ?? ''}
@@ -554,7 +554,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
               </div>
             ))}
             <div>
-              <p style={{ fontSize: 10, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>Severity</p>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>Severity</p>
               <select
                 value={newFinding.severity ?? 'HIGH'}
                 onChange={e => setNewFinding(f => ({ ...f, severity: e.target.value }))}
@@ -564,7 +564,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
               </select>
             </div>
             <div>
-              <p style={{ fontSize: 10, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>CVSS Score</p>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>CVSS Score</p>
               <input
                 type="number" min={0} max={10} step={0.1}
                 value={newFinding.cvss_score ?? 0}
@@ -573,7 +573,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
               />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <p style={{ fontSize: 10, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>Justification — Why is this CVE accepted / not a risk?</p>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>Justification - Why is this CVE accepted / not a risk?</p>
               <textarea
                 value={newFinding.justification ?? ''}
                 onChange={e => setNewFinding(f => ({ ...f, justification: e.target.value }))}
@@ -598,7 +598,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
       {suppressedVulns.length > 0 && (
         <div style={{ marginBottom: 20 }}>
           <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 8 }}>Suppressed ({suppressedVulns.length})</p>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#f9fafb' }}>
                 {['CVE ID', 'Package', 'Severity', 'Status', 'Source', 'Justification'].map(h => (
@@ -614,9 +614,9 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace' }}>{v.vuln_id}</td>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.pkg_name}</td>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.severity}</td>
-                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.suppression ? (statusLabel[v.suppression.status] ?? v.suppression.status) : '—'}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.suppression ? (statusLabel[v.suppression.status] ?? v.suppression.status) : '-'}</td>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.suppression?.source ?? 'local'}</td>
-                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{[v.suppression?.justification, v.suppression?.xray_policy_name, v.suppression?.xray_watch_name].filter(Boolean).join(' · ') || '—'}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{[v.suppression?.justification, v.suppression?.xray_policy_name, v.suppression?.xray_watch_name].filter(Boolean).join(' · ') || '-'}</td>
                   </tr>
                 );
               })}
@@ -733,7 +733,7 @@ function PrintReport() {
               Generated {new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </p>
             {resolvedHelmChart && (
-              <p style={{ fontFamily: 'monospace', fontSize: 11, color: '#6b7280', margin: '8px 0 0', wordBreak: 'break-all' }}>
+              <p style={{ fontFamily: 'monospace', fontSize: 12, color: '#6b7280', margin: '8px 0 0', wordBreak: 'break-all' }}>
                 Chart: {resolvedHelmChart}
               </p>
             )}
@@ -763,14 +763,14 @@ function PrintReport() {
               <thead>
                 <tr style={{ background: '#f9fafb' }}>
                   {['Image', 'Status', 'Critical', 'High', 'Medium', 'Low'].map(h => (
-                    <th key={h} style={{ padding: '7px 10px', textAlign: h === 'Image' ? 'left' : 'center', border: '1px solid #e5e7eb', fontWeight: 600, color: '#374151', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                    <th key={h} style={{ padding: '7px 10px', textAlign: h === 'Image' ? 'left' : 'center', border: '1px solid #e5e7eb', fontWeight: 600, color: '#374151', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {data.map(({ scan }) => (
                   <tr key={scan.id}>
-                    <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 11, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
+                    <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
                       <a href={`#scan-${scan.id}`} style={{ color: '#7c3aed', textDecoration: 'none', wordBreak: 'break-all', overflowWrap: 'anywhere' }}>{scan.image_name}:{scan.image_tag}</a>
                     </td>
                     <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', textAlign: 'center' }}>
@@ -778,7 +778,7 @@ function PrintReport() {
                         const displayStatus = reportStatus(scan);
                         const statusColors = statusChipColors(displayStatus);
                         return (
-                          <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: statusColors.background, color: statusColors.color }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: statusColors.background, color: statusColors.color }}>
                             {formatStatusLabel(displayStatus)}
                           </span>
                         );
@@ -799,7 +799,7 @@ function PrintReport() {
         {data.map((d, i) => <ScanSection key={d.scan.id} data={d} filters={filters} isFirst={i === 0} />)}
 
         {/* Footer */}
-        <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12, marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9ca3af' }}>
+        <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12, marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9ca3af' }}>
           <span>JustScan Security Report</span>
           <span>{data.map(d => `${d.scan.image_name}:${d.scan.image_tag}`).join(', ')}</span>
         </div>

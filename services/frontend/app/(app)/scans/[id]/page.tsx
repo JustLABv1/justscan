@@ -559,10 +559,16 @@ export default function ScanDetailPage() {
     try {
       if (has) {
         await removeTagFromScan(id, tag.id);
-        setScan({ ...scan, tags: (scan.tags ?? []).filter((t) => t.id !== tag.id) });
+        setScan((prev) => {
+          if (!prev) return prev;
+          return { ...prev, tags: (prev.tags ?? []).filter((t) => t.id !== tag.id) };
+        });
       } else {
         await addTagToScan(id, tag.id);
-        setScan({ ...scan, tags: [...(scan.tags ?? []), tag] });
+        setScan((prev) => {
+          if (!prev) return prev;
+          return { ...prev, tags: [...(prev.tags ?? []), tag] };
+        });
       }
     } catch { /* ignore */ } finally {
       setTagLoading('');
@@ -932,7 +938,7 @@ export default function ScanDetailPage() {
                 variant="secondary"
               >
                 {cancelling
-                  ? <span className="w-3.5 h-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
+                  ? <span className="size-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
                   : <Cancel01Icon size={15} />}
                 Cancel
               </Button>
@@ -944,7 +950,7 @@ export default function ScanDetailPage() {
               variant="primary"
             >
               {reScanning
-                ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+                ? <span className="size-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
                 : <Refresh01Icon size={15} />}
               Re-scan
             </Button>
@@ -962,7 +968,7 @@ export default function ScanDetailPage() {
                 <Dropdown.Trigger>
                   <Button
                     aria-label="Open scan actions"
-                    className="btn-icon-subtle h-10 w-10"
+                    className="btn-icon-subtle size-10"
                     isIconOnly
                     style={shareOpen ? { color: '#a78bfa', borderColor: 'rgba(167,139,250,0.25)' } : undefined}
                     variant="secondary"
@@ -1123,7 +1129,7 @@ export default function ScanDetailPage() {
 
     {/* Scanner info moved to Details tab */}
 
-      {/* Error banner — shown when scan failed */}
+      {/* Error banner - shown when scan failed */}
       {scan.status === 'failed' && scan.error_message && (
         <div
           className="rounded-xl px-4 py-3 flex items-start gap-3"
@@ -1287,7 +1293,7 @@ export default function ScanDetailPage() {
                   {sbomLoading ? (
                     <tr><td colSpan={5} className="py-12 text-center">
                       <div className="flex justify-center">
-                        <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                        <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                       </div>
                     </td></tr>
                   ) : sbomComponents.length === 0 ? (
@@ -1302,15 +1308,15 @@ export default function ScanDetailPage() {
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
                       <td className="px-4 py-2.5 font-mono text-xs text-zinc-700 dark:text-zinc-200">{c.name}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{c.version || '—'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{c.version || '-'}</td>
                       <td className="px-4 py-2.5">
                         <span className="text-xs px-1.5 py-0.5 rounded font-medium"
                           style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
                           {c.type}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-xs text-zinc-500">{c.license || '—'}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-zinc-400 max-w-xs truncate" title={c.package_url}>{c.package_url || '—'}</td>
+                      <td className="px-4 py-2.5 text-xs text-zinc-500">{c.license || '-'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-zinc-400 max-w-xs truncate" title={c.package_url}>{c.package_url || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1468,7 +1474,7 @@ export default function ScanDetailPage() {
                   <tr>
                     <td colSpan={8} className="py-12 text-center">
                       <div className="flex justify-center">
-                        <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                        <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                       </div>
                     </td>
                   </tr>
@@ -1509,18 +1515,18 @@ export default function ScanDetailPage() {
                           )}
                           {v.suppression && <SuppressionSourceBadge source={v.suppression.source} />}
                         </div>
-                      ) : <span className="text-zinc-400 dark:text-zinc-600">—</span>}
+                      ) : <span className="text-zinc-400 dark:text-zinc-600">-</span>}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">{v.pkg_name}</td>
                     <td className="px-4 py-3 font-mono text-xs text-zinc-500">{v.installed_version}</td>
                     <td className="px-4 py-3 font-mono text-xs text-emerald-500">
-                      {v.fixed_version || <span className="text-zinc-400 dark:text-zinc-700">—</span>}
+                      {v.fixed_version || <span className="text-zinc-400 dark:text-zinc-700">-</span>}
                     </td>
                     <td className="px-4 py-3">
                       <SeverityBadge severity={v.severity} />
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-xs text-zinc-500">
-                      {v.cvss_score ? v.cvss_score.toFixed(1) : '—'}
+                      {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
                     </td>
                     <td className="px-4 py-3">
                       <FirstSeenBadge firstSeenAt={v.first_seen_at} />
@@ -1545,7 +1551,7 @@ export default function ScanDetailPage() {
                   </tr>
                   {expandedVuln === v.id && (
                     <tr>
-                      <td colSpan={8} className="px-4 py-4" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--row-hover)' }}>
+                      <td colSpan={8} className="p-4" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--row-hover)' }}>
                         <div className="space-y-4 max-w-3xl">
 
                           {/* Suppression section */}
@@ -1564,7 +1570,7 @@ export default function ScanDetailPage() {
                               {v.suppression && (
                                 <div className="rounded-lg px-3 py-2 space-y-1"
                                   style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)' }}>
-                                  <p className="text-xs text-zinc-400">{v.suppression.justification || '—'}</p>
+                                  <p className="text-xs text-zinc-400">{v.suppression.justification || '-'}</p>
                                   <div className="flex items-center gap-2 pt-1 flex-wrap">
                                     <SuppressionSourceBadge source={v.suppression.source} />
                                     <OwnershipBadge ownerType={v.suppression.owner_type} ownerOrgId={v.suppression.owner_org_id} orgNamesById={orgNamesById} />
@@ -1659,7 +1665,7 @@ export default function ScanDetailPage() {
                                   className="btn-warning inline-flex shrink-0 items-center gap-1.5"
                                   type="button"
                                 >
-                                  {suppressSaving && <span className="w-3 h-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />}
+                                  {suppressSaving && <span className="size-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />}
                                   {v.suppression ? 'Update' : 'Suppress'}
                                 </button>
                                 {v.suppression && (
@@ -1834,7 +1840,7 @@ export default function ScanDetailPage() {
               )}
 
               {imageEnv.length > 0 && (
-                <details className="glass-panel rounded-xl px-4 py-4">
+                <details className="glass-panel rounded-xl p-4">
                   <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                     Environment
                   </summary>
@@ -1845,7 +1851,7 @@ export default function ScanDetailPage() {
               )}
 
               {imageLabelEntries.length > 0 && (
-                <details className="glass-panel rounded-xl px-4 py-4">
+                <details className="glass-panel rounded-xl p-4">
                   <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                     Labels
                   </summary>
@@ -1853,14 +1859,14 @@ export default function ScanDetailPage() {
                     {imageLabelEntries.map(([key, value]) => (
                       <div key={key} className="rounded-xl p-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                         <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{key}</p>
-                        <p className="mt-2 break-all font-mono text-xs text-zinc-700 dark:text-zinc-300">{value || '—'}</p>
+                        <p className="mt-2 break-all font-mono text-xs text-zinc-700 dark:text-zinc-300">{value || '-'}</p>
                       </div>
                     ))}
                   </div>
                 </details>
               )}
 
-              <details className="glass-panel rounded-xl px-4 py-4">
+              <details className="glass-panel rounded-xl p-4">
                 <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                   Raw image config
                 </summary>
@@ -1873,7 +1879,7 @@ export default function ScanDetailPage() {
 
           {/* Tags */}
           {allTags.length > 0 && (
-            <div className="glass-panel rounded-xl px-4 py-4">
+            <div className="glass-panel rounded-xl p-4">
               <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>Tags</p>
               <div className="flex items-center gap-2 flex-wrap">
                 {allTags.map((tag) => {
@@ -1898,7 +1904,7 @@ export default function ScanDetailPage() {
 
           {/* Compliance */}
           {(allOrgs.length > 0 || compliance.length > 0) && (
-            <div className="glass-panel rounded-xl px-4 py-4">
+            <div className="glass-panel rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Compliance</p>
                 {compliance.length > 0 && (
@@ -1914,7 +1920,7 @@ export default function ScanDetailPage() {
               <div className="flex flex-wrap gap-2 mb-2">
                 {compliance.length === 0 ? (
                   <>
-                    <span className="text-xs text-zinc-500">No org assigned —</span>
+                    <span className="text-xs text-zinc-500">No org assigned -</span>
                     {allOrgs.map((org) => (
                       <button
                         key={org.id}
@@ -2019,7 +2025,7 @@ export default function ScanDetailPage() {
                   </div>
                   {scanOrgGrantsLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                     </div>
                   ) : scanOrgGrants.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>
@@ -2107,7 +2113,7 @@ export default function ScanDetailPage() {
                   </div>
                   {suppressionAccessLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                     </div>
                   ) : suppressionAccessShares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

@@ -241,7 +241,7 @@ export default function SettingsPage() {
                   disabled={profileSaving}
                   className="btn-primary inline-flex items-center gap-2 shrink-0"
                 >
-                  {profileSaving ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
+                  {profileSaving ? <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
                   Save Changes
                 </button>
               </div>
@@ -338,7 +338,7 @@ export default function SettingsPage() {
                     disabled={pwSaving}
                     className="btn-primary inline-flex items-center gap-2 shrink-0"
                   >
-                    {pwSaving ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
+                    {pwSaving ? <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
                     Change Password
                   </button>
                 </div>

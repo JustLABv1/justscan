@@ -185,7 +185,7 @@ function ScanWizardStep({ active, complete, index, label }: { active: boolean; c
     >
       <div className="flex items-center gap-3">
         <span
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
+          className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
           style={{
             background: complete || active ? 'rgba(124,58,237,0.18)' : 'rgba(148,163,184,0.12)',
             color: complete || active ? '#8b5cf6' : '#94a3b8',
@@ -238,7 +238,7 @@ function ScanSourceCard({
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{description}</p>
         </div>
         <span
-          className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
+          className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
           style={{
             background: selected ? 'rgba(124,58,237,0.18)' : 'rgba(148,163,184,0.12)',
             color: selected ? '#8b5cf6' : '#94a3b8',
@@ -949,7 +949,7 @@ export default function ScansPage() {
                       {availableTags.map(tag => (
                         <ListBox.Item key={tag.id} id={tag.id} className="px-3 py-1.5 text-sm rounded-lg cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2">
                           <span
-                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            className="size-2.5 rounded-full shrink-0"
                             style={{ background: tag.color }}
                           />
                           {tag.name}
@@ -980,7 +980,7 @@ export default function ScansPage() {
 
       {hasRecentWindow ? (
         <div className="glass-panel rounded-2xl overflow-hidden">
-          <div className="flex flex-col gap-2 border-b px-4 py-4 sm:flex-row sm:items-end sm:justify-between" style={{ borderColor: 'var(--glass-border)' }}>
+          <div className="flex flex-col gap-2 border-b p-4 sm:flex-row sm:items-end sm:justify-between" style={{ borderColor: 'var(--glass-border)' }}>
             <div>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Recent Activity</h2>
               <p className="mt-1 text-xs text-zinc-500">
@@ -1019,12 +1019,12 @@ export default function ScansPage() {
           Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="glass-panel rounded-2xl p-4 space-y-3">
               <div className="flex items-start gap-3">
-                <div className="w-4 h-4 rounded border border-zinc-400/50 mt-1" />
+                <div className="size-4 rounded border border-zinc-400/50 mt-1" />
                 <div className="flex-1 space-y-2">
                   <div className="h-4 w-40 rounded skeleton" />
                   <div className="h-3 w-28 rounded skeleton" />
                 </div>
-                <div className="h-8 w-8 rounded-lg skeleton" />
+                <div className="size-8 rounded-lg skeleton" />
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {Array.from({ length: 4 }).map((__, sevIndex) => <div key={sevIndex} className="h-14 rounded-xl skeleton" />)}
@@ -1091,7 +1091,7 @@ export default function ScansPage() {
                     </div>
                     <button
                       aria-label={isOpen ? `Collapse ${img.image_name}` : `Expand ${img.image_name}`}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all"
+                      className="flex size-9 shrink-0 items-center justify-center rounded-xl transition-all"
                       onClick={() => toggleExpand(img.image_name)}
                       style={{ background: isOpen ? 'rgba(124,58,237,0.12)' : 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
                       type="button"
@@ -1144,15 +1144,15 @@ export default function ScansPage() {
           <table className="w-full min-w-[980px] text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                <th className="w-8 px-3 py-3" />
-                <th className="w-8 px-3 py-3" />
+                <th className="w-8 p-3" />
+                <th className="w-8 p-3" />
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Metadata</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Latest</th>
-                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }}>C</th>
-                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }}>H</th>
-                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }}>M</th>
-                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }}>L</th>
+                <th className="text-center p-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }}>C</th>
+                <th className="text-center p-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }}>H</th>
+                <th className="text-center p-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }}>M</th>
+                <th className="text-center p-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }}>L</th>
               </tr>
             </thead>
             <tbody>
@@ -1182,7 +1182,7 @@ export default function ScansPage() {
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
                     {/* Checkbox for selecting image's latest scan */}
-                    <td className="px-3 py-3.5 w-8" onClick={e => e.stopPropagation()}>
+                    <td className="p-3.5 w-8" onClick={e => e.stopPropagation()}>
                       <Checkbox
                         isSelected={selectedScans.has(img.latest_scan_id)}
                         onChange={(checked: boolean) => {
@@ -1202,9 +1202,9 @@ export default function ScansPage() {
                         </Checkbox.Control>
                       </Checkbox>
                     </td>
-                    <td className="px-3 py-3.5 w-8">
+                    <td className="p-3.5 w-8">
                       <span
-                        className="flex items-center justify-center w-5 h-5 rounded-md transition-all duration-150"
+                        className="flex items-center justify-center size-5 rounded-md transition-all duration-150"
                         style={{ color: 'var(--text-muted)', background: isOpen ? 'rgba(124,58,237,0.12)' : undefined }}
                       >
                         {isOpen
@@ -1251,10 +1251,10 @@ export default function ScansPage() {
                     </td>
 
                     {/* Severity from latest scan */}
-                    <td className="px-3 py-3.5 text-center"><SevCount count={img.critical_count} level="critical" /></td>
-                    <td className="px-3 py-3.5 text-center"><SevCount count={img.high_count}    level="high"     /></td>
-                    <td className="px-3 py-3.5 text-center"><SevCount count={img.medium_count}  level="medium"   /></td>
-                    <td className="px-3 py-3.5 text-center"><SevCount count={img.low_count}     level="low"      /></td>
+                    <td className="p-3.5 text-center"><SevCount count={img.critical_count} level="critical" /></td>
+                    <td className="p-3.5 text-center"><SevCount count={img.high_count}    level="high"     /></td>
+                    <td className="p-3.5 text-center"><SevCount count={img.medium_count}  level="medium"   /></td>
+                    <td className="p-3.5 text-center"><SevCount count={img.low_count}     level="low"      /></td>
                   </tr>
 
                   {/* Expanded children */}
@@ -1465,7 +1465,7 @@ export default function ScansPage() {
                               </Autocomplete.Trigger>
                               <Autocomplete.Popover>
                                 <Autocomplete.Filter filter={contains}>
-                                  <SearchField autoFocus name="artifactory-repo-search" variant="secondary">
+                                  <SearchField name="artifactory-repo-search" variant="secondary">
                                     <SearchField.Group>
                                       <SearchField.SearchIcon />
                                       <SearchField.Input placeholder="Search Artifactory repos..." />
@@ -1544,7 +1544,7 @@ export default function ScansPage() {
                             <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Advanced options</p>
                             <p className="text-sm text-zinc-600 dark:text-zinc-300">Optional scan settings for multiple images or platform-specific artifacts.</p>
                           </div>
-                          <span className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200/50 text-zinc-500 dark:border-zinc-700/60 dark:text-zinc-300">
+                          <span className="mt-0.5 flex size-8 items-center justify-center rounded-full border border-zinc-200/50 text-zinc-500 dark:border-zinc-700/60 dark:text-zinc-300">
                             {advancedOptionsOpen ? <ArrowDown01Icon size={16} /> : <ArrowRight01Icon size={16} />}
                           </span>
                         </button>
@@ -1587,7 +1587,7 @@ export default function ScansPage() {
                                         <span className="min-w-0 break-all font-mono text-xs text-zinc-600 dark:text-zinc-300">{image}</span>
                                         <button
                                           aria-label={`Remove ${image}`}
-                                          className="btn-icon-subtle h-8 w-8 shrink-0 rounded-lg"
+                                          className="btn-icon-subtle size-8 shrink-0 rounded-lg"
                                           onClick={() => removeAdditionalImageEntry(image)}
                                           type="button"
                                         >
@@ -1737,7 +1737,7 @@ export default function ScansPage() {
                         type="submit" form="create-scan-form" disabled={creating || xrayOnlyWithoutRegistries}
                         className="btn-primary inline-flex items-center gap-2"
                       >
-                        {creating && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                        {creating && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                         Start Scan
                       </button>
                     )}

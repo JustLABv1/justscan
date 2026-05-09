@@ -54,7 +54,7 @@ function HelmChartRedirectContent() {
 
   return (
     <div className="p-6 flex items-center justify-center gap-3 text-zinc-400 text-sm">
-      <span className="w-4 h-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
+      <span className="size-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
       Resolving latest Helm run…
     </div>
   );
@@ -65,7 +65,7 @@ export default function HelmChartRedirectPage() {
     <Suspense
       fallback={
         <div className="p-6 flex items-center justify-center gap-3 text-zinc-400 text-sm">
-          <span className="w-4 h-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
+          <span className="size-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
           Resolving latest Helm run…
         </div>
       }

@@ -47,7 +47,7 @@ function HealthBadge({ status, message }: { status: string; message: string }) {
   } as Record<string, { color: string; bg: string; border: string; label: string }>)[status] ?? { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)', label: status };
   return (
     <span className="flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full" style={{color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`}} title={message}>
-      <span className="w-1.5 h-1.5 rounded-full" style={{background: cfg.color}} />
+      <span className="size-1.5 rounded-full" style={{background: cfg.color}} />
       {cfg.label}
     </span>
   );
@@ -301,7 +301,7 @@ export default function RegistriesPage() {
                       {AUTH_TYPE_LABEL[r.auth_type ?? 'none']}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">{r.username || <span className="text-zinc-400 dark:text-zinc-700">—</span>}</td>
+                  <td className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">{r.username || <span className="text-zinc-400 dark:text-zinc-700">-</span>}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1">
                       <HealthBadge status={r.health_status ?? 'unknown'} message={r.health_message ?? ''} />
@@ -444,7 +444,7 @@ export default function RegistriesPage() {
                   Cancel
                 </button>
                 <button type="submit" form="registry-form" disabled={saving} className="btn-primary disabled:opacity-60">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Add'}
                 </button>
               </Modal.Footer>
@@ -478,7 +478,7 @@ export default function RegistriesPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

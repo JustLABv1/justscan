@@ -367,14 +367,14 @@ function RunningScanVisualization({
           {[0, 1, 2].map((dot) => (
             <span key={`dot-${dot}`} className="absolute" style={{ left: `${12 + dot * 18}px`, top: `${13 + dot * 12}px` }}>
               <span
-                className="absolute inline-flex h-3 w-3 animate-ping rounded-full"
+                className="absolute inline-flex size-3 animate-ping rounded-full"
                 style={{ background: accent, opacity: 0.45, animationDelay: `${dot * 220}ms`, animationDuration: '1.8s' }}
               />
-              <span className="relative inline-flex h-3 w-3 rounded-full border border-white/50" style={{ background: accent }} />
+              <span className="relative inline-flex size-3 rounded-full border border-white/50" style={{ background: accent }} />
             </span>
           ))}
           <span
-            className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full border-2 animate-pulse"
+            className="absolute right-1 top-1/2 size-8 -translate-y-1/2 rounded-full border-2 animate-pulse"
             style={{ borderColor: accent, boxShadow: `0 0 0 4px ${accentSoft}` }}
           />
         </div>
@@ -392,11 +392,11 @@ function StatusDot({ status }: { status: string }) {
         background: 'var(--status-pill-bg)',
         border: '1px solid var(--status-pill-border)',
       }}>
-      <span className="relative flex h-2.5 w-2.5">
+      <span className="relative flex size-2.5">
         {(status === 'running' || status === 'pending') && (
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: color }} />
+          <span className="absolute inline-flex size-full animate-ping rounded-full opacity-60" style={{ background: color }} />
         )}
-        <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+        <span className="relative inline-flex size-2.5 rounded-full" style={{ background: color }} />
       </span>
       {formatStatusLabel(status)}
     </span>
@@ -421,7 +421,7 @@ function StateChip({
         color: 'var(--text-secondary)',
       }}
     >
-      <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+      <span className="size-2.5 rounded-full" style={{ background: color }} />
       <span className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--text-muted)' }}>{label}</span>
       <span style={{ color: 'var(--text-primary)' }}>{value}</span>
     </span>
@@ -494,7 +494,7 @@ function StatusBoardBadge({ label, color }: { label: string; color: string }) {
       className="inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-full px-3 py-1 text-[13px] font-medium"
       style={{ color }}
     >
-      <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+      <span className="size-2.5 rounded-full" style={{ background: color }} />
       {label}
     </span>
   );
@@ -576,8 +576,8 @@ function buildFallbackScanSummary(item: StatusPageItem): StatusPageScanSummary {
 
 function getRecentScanStripScans(item: StatusPageItem, scans?: StatusPageScanSummary[]) {
   const source = scans && scans.length > 0 ? scans : [buildFallbackScanSummary(item)];
-  return [...source]
-    .sort((left, right) => new Date(left.observed_at).getTime() - new Date(right.observed_at).getTime())
+  return source
+    .toSorted((left, right) => new Date(left.observed_at).getTime() - new Date(right.observed_at).getTime())
     .slice(-RECENT_SCAN_SEGMENTS);
 }
 
@@ -706,7 +706,7 @@ function ScanTimeline({
 
       {isLoading ? (
         <div className="flex h-10 items-center justify-center">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500" />
+          <div className="size-4 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500" />
         </div>
       ) : (
         <div className="flex items-center overflow-x-auto py-1" role="radiogroup" aria-label="Scan history timeline">
@@ -730,10 +730,10 @@ function ScanTimeline({
                   onClick={() => onSelect(scan.scan_id)}
                   onMouseEnter={() => setHoveredId(scan.scan_id)}
                   onMouseLeave={() => setHoveredId(null)}
-                  className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60"
+                  className="relative flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60"
                 >
                   <span
-                    className="relative flex h-4 w-4 shrink-0 items-center justify-center rounded-full transition-all duration-200"
+                    className="relative flex size-4 shrink-0 items-center justify-center rounded-full transition-all duration-200"
                     style={{
                       background: color,
                       boxShadow: isSelected
@@ -744,7 +744,7 @@ function ScanTimeline({
                   >
                     {scan.is_latest && (
                       <span
-                        className="absolute -right-[3px] -top-[3px] h-[7px] w-[7px] rounded-full"
+                        className="absolute -right-[3px] -top-[3px] size-[7px] rounded-full"
                         style={{ background: 'var(--status-card-bg)', border: `2px solid ${color}` }}
                       />
                     )}
@@ -756,13 +756,13 @@ function ScanTimeline({
         </div>
       )}
 
-      {/* Info strip — updates on hover, shows selected when not hovering */}
+      {/* Info strip - updates on hover, shows selected when not hovering */}
       {infoScan && (() => {
         const status = getEffectiveScanStatus(infoScan.scan_status, infoScan.external_status);
         const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
         return (
           <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
+            <span className="size-2 shrink-0 rounded-full" style={{ background: color }} />
             <span>{formatScanHistoryOptionLabel(infoScan)}</span>
           </div>
         );
@@ -977,7 +977,7 @@ function StatusItemVulnerabilityModal({
       <Modal.Backdrop>
         <Modal.Container size="lg" placement="center">
           <Modal.Dialog className="glass-modal overflow-hidden rounded-[28px] w-[min(1120px,calc(100vw-1.5rem))] max-w-none">
-            <Modal.Body className="px-0 py-0">
+            <Modal.Body className="p-0">
               <div className="border-b px-6 py-5" style={{ borderColor: 'var(--border-subtle)' }}>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-2">
@@ -1024,7 +1024,7 @@ function StatusItemVulnerabilityModal({
                 ) : null}
 
                 {blockedPolicyDetails && (
-                  <div className="rounded-3xl border px-4 py-4" style={{ borderColor: 'rgba(245,158,11,0.24)', background: 'rgba(245,158,11,0.08)' }}>
+                  <div className="rounded-3xl border p-4" style={{ borderColor: 'rgba(245,158,11,0.24)', background: 'rgba(245,158,11,0.08)' }}>
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: '#b45309' }}>Xray policy violation</p>
                       <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'rgba(245,158,11,0.24)', color: '#b45309' }}>
@@ -1195,7 +1195,7 @@ function StatusItemVulnerabilityModal({
                           <tr>
                             <td colSpan={6} className="py-12 text-center">
                               <div className="flex justify-center">
-                                <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500" />
+                                <div className="size-6 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500" />
                               </div>
                             </td>
                           </tr>
@@ -1233,16 +1233,16 @@ function StatusItemVulnerabilityModal({
                                     <p className="max-w-[280px] text-xs leading-5 text-zinc-500">{vuln.title}</p>
                                   )}
                                 </div>
-                              ) : <span style={{ color: 'var(--text-faint)' }}>—</span>}
+                              ) : <span style={{ color: 'var(--text-faint)' }}>-</span>}
                             </td>
                             <td className="px-4 py-3 font-mono text-xs align-top" style={{ color: 'var(--text-secondary)' }}>{vuln.pkg_name}</td>
-                            <td className="px-4 py-3 font-mono text-xs align-top" style={{ color: 'var(--text-muted)' }}>{vuln.installed_version || '—'}</td>
+                            <td className="px-4 py-3 font-mono text-xs align-top" style={{ color: 'var(--text-muted)' }}>{vuln.installed_version || '-'}</td>
                             <td className="px-4 py-3 font-mono text-xs align-top text-emerald-600 dark:text-emerald-500">
-                              {vuln.fixed_version || <span style={{ color: 'var(--text-faint)' }}>—</span>}
+                              {vuln.fixed_version || <span style={{ color: 'var(--text-faint)' }}>-</span>}
                             </td>
                             <td className="px-4 py-3 align-top"><SeverityBadge severity={vuln.severity} /></td>
                             <td className="px-4 py-3 font-mono text-xs align-top" style={{ color: 'var(--text-muted)' }}>
-                              {vuln.cvss_score ? vuln.cvss_score.toFixed(1) : '—'}
+                              {vuln.cvss_score ? vuln.cvss_score.toFixed(1) : '-'}
                             </td>
                           </tr>
                         ))}
@@ -1311,7 +1311,7 @@ function StatusBoardRow({
   return (
     <button
       type="button"
-      className="w-full px-6 py-6 text-left transition-colors hover:bg-black/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60 sm:px-8"
+      className="w-full p-6 text-left transition-colors hover:bg-black/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60 sm:px-8"
       aria-label={`Open details for ${item.image_name}:${item.image_tag}`}
       onClick={() => onOpen(item)}
     >
@@ -1449,7 +1449,7 @@ export default function PublicStatusPage() {
   }, [data]);
 
   const trackedItems = useMemo(() => {
-    return [...(data?.items ?? [])].sort((left, right) => (
+    return (data?.items ?? []).toSorted((left, right) => (
       compareItemsByPriority(left, right)
       || left.display_order - right.display_order
       || left.image_name.localeCompare(right.image_name)
@@ -1468,10 +1468,10 @@ export default function PublicStatusPage() {
     return (
       <div className="min-h-screen flex items-center justify-center app-bg">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
+          <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
             <Logo size={18} className="text-white" />
           </div>
-          <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       </div>
     );
@@ -1482,7 +1482,7 @@ export default function PublicStatusPage() {
       <div className="min-h-screen app-bg flex items-center justify-center px-6">
         <div className="rounded-2xl p-8 max-w-md text-center space-y-4"
           style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
-          <div className="w-11 h-11 rounded-2xl mx-auto flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
+          <div className="size-11 rounded-2xl mx-auto flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
             <Logo size={18} className="text-white" />
           </div>
           <div>
@@ -1538,7 +1538,7 @@ export default function PublicStatusPage() {
       <main className="mx-auto w-full max-w-[1180px] px-4 py-8 sm:px-6 sm:py-10">
         <div className="mx-auto max-w-[1040px] space-y-6">
           <section
-            className="rounded-[30px] border px-6 py-6 sm:px-8"
+            className="rounded-[30px] border p-6 sm:px-8"
             style={{
               background: 'color-mix(in srgb, var(--status-card-bg) 96%, white)',
               borderColor: 'color-mix(in srgb, var(--status-card-border) 82%, rgba(15,23,42,0.04))',
@@ -1548,7 +1548,7 @@ export default function PublicStatusPage() {
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 space-y-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style={{ background: 'linear-gradient(135deg,#0f172a,#334155)' }}>
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl" style={{ background: 'linear-gradient(135deg,#0f172a,#334155)' }}>
                     <Logo size={18} className="text-white" />
                   </div>
                   <div>
@@ -1598,7 +1598,7 @@ export default function PublicStatusPage() {
               boxShadow: '0 24px 55px rgba(15,23,42,0.05)',
             }}
           >
-            <div className="px-6 py-6 sm:px-8">
+            <div className="p-6 sm:px-8">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Notifications</p>
@@ -1613,7 +1613,7 @@ export default function PublicStatusPage() {
 
                   return (
                     <div
-                      className="rounded-[28px] border px-5 py-5 sm:px-6"
+                      className="rounded-[28px] border p-5 sm:px-6"
                       style={{
                         background: `linear-gradient(135deg, ${tone.background}, color-mix(in srgb, var(--status-card-bg) 92%, white))`,
                         borderColor: tone.border,
@@ -1631,7 +1631,7 @@ export default function PublicStatusPage() {
                                 color: tone.color,
                               }}
                             >
-                              <span className="h-2.5 w-2.5 rounded-full" style={{ background: tone.color }} />
+                              <span className="size-2.5 rounded-full" style={{ background: tone.color }} />
                               {tone.label}
                             </span>
                             <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{latestUpdate.title}</p>
@@ -1676,7 +1676,7 @@ export default function PublicStatusPage() {
               </div>
             </div>
 
-            <div className="border-b px-6 py-6 sm:px-8" style={{ borderColor: 'var(--border-subtle)' }}>
+            <div className="border-b p-6 sm:px-8" style={{ borderColor: 'var(--border-subtle)' }}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Hosted Pages</p>

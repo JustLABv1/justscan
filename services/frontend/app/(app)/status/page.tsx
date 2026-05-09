@@ -450,7 +450,7 @@ export default function StatusPagesPage() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : pages.length === 0 ? (
         <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3 text-center">
@@ -666,7 +666,7 @@ export default function StatusPagesPage() {
 
                       <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
                         {loadingOptions ? (
-                          <p className="px-4 py-4 text-sm text-zinc-500">Loading image tags…</p>
+                          <p className="p-4 text-sm text-zinc-500">Loading image tags…</p>
                         ) : filteredTargetOptions.length === 0 ? (
                           <p className="px-4 py-8 text-sm text-zinc-500">
                             {targetQuery.trim() ? 'No image tags match the current filter.' : 'No tracked image tags are available yet.'}
@@ -678,7 +678,7 @@ export default function StatusPagesPage() {
                               return (
                                 <label
                                   key={option.id}
-                                  className="flex items-start gap-3 px-3 py-3 cursor-pointer transition-colors"
+                                  className="flex items-start gap-3 p-3 cursor-pointer transition-colors"
                                   style={isSelected
                                     ? { background: 'rgba(124,58,237,0.09)' }
                                     : undefined}
@@ -688,7 +688,7 @@ export default function StatusPagesPage() {
                                       This ensures that when the input receives focus after a click,
                                       the browser's scroll-to-element moves to the exact spot the
                                       user already clicked — resulting in zero scroll movement. */}
-                                  <span className="relative mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors"
+                                  <span className="relative mt-1 flex size-4 shrink-0 items-center justify-center rounded border transition-colors"
                                     style={isSelected
                                       ? { borderColor: '#7c3aed', background: '#7c3aed' }
                                       : { borderColor: 'rgba(113,113,122,0.4)' }}
@@ -712,7 +712,7 @@ export default function StatusPagesPage() {
                                       }}
                                     />
                                     {isSelected && (
-                                      <svg className="h-3 w-3 text-white pointer-events-none" viewBox="0 0 12 12" fill="none">
+                                      <svg className="size-3 text-white pointer-events-none" viewBox="0 0 12 12" fill="none">
                                         <path d="M2.5 6l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                                       </svg>
                                     )}
@@ -776,14 +776,14 @@ export default function StatusPagesPage() {
                       <p className="text-xs leading-5 text-zinc-500">Use regex when the scope is tag-driven or too large to maintain manually. Invalid patterns block save.</p>
 
                       {invalidImagePatterns.length > 0 && (
-                        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-3 py-3 text-xs text-red-400">
+                        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-400">
                           {invalidImagePatterns.map(pattern => (
                             <p key={pattern.pattern} className="font-mono break-all">{pattern.pattern}: {pattern.error}</p>
                           ))}
                         </div>
                       )}
 
-                      <div className="rounded-2xl border px-3 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                      <div className="rounded-2xl border p-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Preview</p>
                           <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={exactSelectionBadgeStyle}>
@@ -821,7 +821,7 @@ export default function StatusPagesPage() {
 
                   {!includeAllTags && (
                     <div
-                      className="space-y-3 rounded-2xl border px-4 py-4 min-h-[8.5rem]"
+                      className="space-y-3 rounded-2xl border p-4 min-h-[8.5rem]"
                       style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)', overflowAnchor: 'none' }}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -913,7 +913,7 @@ export default function StatusPagesPage() {
                 <Button className="btn-secondary" onPress={modal.close}>Cancel</Button>
                 <Button type="submit" form="status-page-form" isDisabled={saving || invalidImagePatterns.length > 0 || !scopeIsValid}
                   className="btn-primary">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Create'}
                 </Button>
             </div>
@@ -951,7 +951,7 @@ export default function StatusPagesPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

@@ -54,13 +54,13 @@ function VulnTable({ vulns, emptyText }: { vulns: Vulnerability[]; emptyText: st
                   >
                     {v.vuln_id}
                   </a>
-                ) : <span className="text-zinc-400">—</span>}
+                ) : <span className="text-zinc-400">-</span>}
               </td>
               <td className="px-4 py-2.5 font-mono text-xs text-zinc-700 dark:text-zinc-300">{v.pkg_name}</td>
               <td className="px-4 py-2.5"><SevBadge sev={v.severity} /></td>
               <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{v.installed_version}</td>
               <td className="px-4 py-2.5 text-right font-mono text-xs text-zinc-500">
-                {v.cvss_score ? v.cvss_score.toFixed(1) : '—'}
+                {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
               </td>
             </tr>
           ))}
@@ -94,7 +94,7 @@ function ScanSelector({
             <ListBox.Item id="__none__">Select a scan…</ListBox.Item>
             {scans.map(s => (
               <ListBox.Item key={s.id} id={s.id}>
-                {s.image_name}:{s.image_tag} — {new Date(s.created_at).toLocaleDateString()} ({s.status})
+                {s.image_name}:{s.image_tag} - {new Date(s.created_at).toLocaleDateString()} ({s.status})
               </ListBox.Item>
             ))}
           </ListBox>
@@ -172,7 +172,7 @@ function ComparePageInner() {
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           {scansLoading ? (
             <div className="flex-1 flex items-center justify-center py-4">
-              <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+              <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
             </div>
           ) : (
             <>
@@ -187,7 +187,7 @@ function ComparePageInner() {
             className="btn-primary shrink-0 inline-flex items-center gap-2"
             type="button"
           >
-            {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            {loading && <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Compare
           </button>
         </div>
@@ -233,7 +233,7 @@ function ComparePageInner() {
                 +{result.summary.added_count}
               </span>
             </div>
-            <VulnTable vulns={result.added} emptyText="No new vulnerabilities — great!" />
+            <VulnTable vulns={result.added} emptyText="No new vulnerabilities - great!" />
           </div>
 
           {/* Removed */}
@@ -267,7 +267,7 @@ export default function ComparePage() {
   return (
     <Suspense fallback={
       <div className="flex items-center justify-center h-64">
-        <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
       </div>
     }>
       <ComparePageInner />

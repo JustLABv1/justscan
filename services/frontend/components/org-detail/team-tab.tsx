@@ -58,7 +58,7 @@ export function OrgTeamTab({
         <div className="glass-panel rounded-2xl overflow-hidden">
           {membersLoading ? (
             <div className="flex justify-center py-8">
-              <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+              <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
             </div>
           ) : members.length === 0 ? (
             <div className="px-6 py-8 text-sm text-zinc-500 text-center">No members found.</div>

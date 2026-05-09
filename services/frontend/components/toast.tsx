@@ -1,7 +1,7 @@
 'use client';
 import { ToastProvider as HeroUIToastProvider, toast as heroToast, toastQueue } from '@heroui/react';
 import type { ReactNode } from 'react';
-import { createContext, useCallback, useContext } from 'react';
+import { createContext, use, useCallback } from 'react';
 
 interface ToastContextValue {
   success: (message: string) => void;
@@ -44,7 +44,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 export function useToast(): ToastContextValue {
-  const ctx = useContext(ToastContext);
+  const ctx = use(ToastContext);
   if (!ctx) throw new Error('useToast must be used within ToastProvider');
   return ctx;
 }

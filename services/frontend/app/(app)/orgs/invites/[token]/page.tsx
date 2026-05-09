@@ -55,7 +55,7 @@ export default function AcceptOrgInvitePage() {
             </p>
             <div className="flex gap-3">
               <button className="btn-primary inline-flex items-center gap-2" disabled={loading} onClick={() => { void handleAccept(); }} type="button">
-                {loading && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                {loading && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 Accept invite
               </button>
               <Link href="/orgs" className="btn-secondary">Cancel</Link>

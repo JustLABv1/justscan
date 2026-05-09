@@ -55,12 +55,12 @@ function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
-  if (!mounted) return <div className="w-9 h-9" />;
+  if (!mounted) return <div className="size-9" />;
   const isDark = resolvedTheme === 'dark';
   return (
     <button
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
+      className="size-9 flex items-center justify-center rounded-xl transition-colors"
       style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
@@ -219,7 +219,7 @@ export default function SharedScanPage() {
         style={{ background: 'var(--app-bg)', borderBottom: '1px solid var(--border-subtle)' }}
       >
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 12px rgba(124,58,237,0.4)' }}>
+          <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 12px rgba(124,58,237,0.4)' }}>
             <Logo size={16} className="text-white" />
           </div>
           <span className="font-semibold text-[15px] tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</span>
@@ -286,7 +286,7 @@ export default function SharedScanPage() {
               {(scan?.status === 'completed' || scan?.status === 'failed') && (
                 <Button className="btn-primary" isDisabled={reScanning} onPress={handleRescan} variant="primary">
                   {reScanning
-                    ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+                    ? <span className="size-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
                     : <Refresh01Icon size={15} />}
                   Re-scan
                 </Button>
@@ -294,7 +294,7 @@ export default function SharedScanPage() {
               {scan?.status === 'completed' && isLoggedIn && (
                 <Button className="btn-secondary" isDisabled={comparingPrev} onPress={handleComparePrev} variant="secondary">
                   {comparingPrev
-                    ? <span className="w-3.5 h-3.5 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin" />
+                    ? <span className="size-3.5 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin" />
                     : <GitCompareIcon size={15} />}
                   Compare
                 </Button>
@@ -478,7 +478,7 @@ export default function SharedScanPage() {
                   <tbody>
                     {vulnLoading ? (
                       <tr><td colSpan={6} className="py-12 text-center">
-                        <div className="flex justify-center"><div className="w-6 h-6 rounded-full border-2 border-t-violet-500 animate-spin" style={{ borderColor: 'var(--border-subtle)', borderTopColor: '#7c3aed' }} /></div>
+                        <div className="flex justify-center"><div className="size-6 rounded-full border-2 border-t-violet-500 animate-spin" style={{ borderColor: 'var(--border-subtle)', borderTopColor: '#7c3aed' }} /></div>
                       </td></tr>
                     ) : vulns.length === 0 ? (
                       <tr><td colSpan={6} className="py-12 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
@@ -500,16 +500,16 @@ export default function SharedScanPage() {
                               </button>
                               <SourceBadge source={v.data_source} />
                             </div>
-                          ) : <span style={{ color: 'var(--text-faint)' }}>—</span>}
+                          ) : <span style={{ color: 'var(--text-faint)' }}>-</span>}
                         </td>
                         <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{v.pkg_name}</td>
                         <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{v.installed_version}</td>
                         <td className="px-4 py-3 font-mono text-xs text-emerald-600 dark:text-emerald-500">
-                          {v.fixed_version || <span style={{ color: 'var(--text-faint)' }}>—</span>}
+                          {v.fixed_version || <span style={{ color: 'var(--text-faint)' }}>-</span>}
                         </td>
                         <td className="px-4 py-3"><SeverityBadge severity={v.severity} /></td>
                         <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
-                          {v.cvss_score ? v.cvss_score.toFixed(1) : '—'}
+                          {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
                         </td>
                       </tr>
                     ))}

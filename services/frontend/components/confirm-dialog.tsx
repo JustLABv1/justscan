@@ -52,7 +52,7 @@ function ConfirmDialogUI({
             <Modal.Body className="px-6 pt-6 pb-2">
               <div className="flex flex-col items-center text-center gap-4">
                 <div
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+                  className="size-12 rounded-2xl flex items-center justify-center shrink-0"
                   style={{ background: iconBg, border: `1px solid ${iconBorder}` }}
                 >
                   <AlertCircleIcon size={22} color={iconColor} />

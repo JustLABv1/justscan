@@ -245,7 +245,7 @@ function VulnTrendChart({ data, period, onPeriod }: {
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+          <div className="size-9 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: 'rgba(124,58,237,0.2)', boxShadow: '0 0 14px rgba(124,58,237,0.3)' }}>
             <Activity01Icon size={17} color="#a78bfa" />
           </div>
@@ -281,7 +281,7 @@ function VulnTrendChart({ data, period, onPeriod }: {
       <div className="flex items-center gap-4 mb-3 flex-wrap">
         {[...series].reverse().map(({ key, label, color }) => (
           <span key={key} className="flex items-center gap-1.5 text-xs" style={{ color }}>
-            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: color }} />
+            <span className="size-2.5 rounded-sm inline-block" style={{ background: color }} />
             {label}
           </span>
         ))}
@@ -346,7 +346,7 @@ function VulnTrendChart({ data, period, onPeriod }: {
                               return (
                                 <div key={key} className="flex items-center justify-between gap-3 text-[11px]">
                                   <span className="flex items-center gap-1.5" style={{ color: seriesColor }}>
-                                    <span className="h-2 w-2 rounded-full" style={{ background: seriesColor }} />
+                                    <span className="size-2 rounded-full" style={{ background: seriesColor }} />
                                     {seriesLabel}
                                   </span>
                                   <span className="tabular-nums" style={{ color: 'rgba(255,255,255,0.88)' }}>{value}</span>
@@ -579,7 +579,7 @@ export default function DashboardPage() {
                 <MiniSparkline data={scanVolumeTrend.slice(-14)} color="#a78bfa" id="stat-total-scans" compact showArea={false} valueLabel="scans" />
               </div>
             )}
-            hint={<span className="flex items-center gap-1.5">{activeQueueCount > 0 && <span className="h-1.5 w-1.5 rounded-full inline-block shrink-0 animate-pulse" style={{ background: '#60a5fa' }} />} {activeQueueCount > 0 ? `${activeQueueCount} running` : 'none running'}</span>}
+            hint={<span className="flex items-center gap-1.5">{activeQueueCount > 0 && <span className="size-1.5 rounded-full inline-block shrink-0 animate-pulse" style={{ background: '#60a5fa' }} />} {activeQueueCount > 0 ? `${activeQueueCount} running` : 'none running'}</span>}
             className="rounded-none px-5 py-4"
             style={{ borderRight: '1px solid var(--glass-border)' }}
             valueClassName=""
@@ -843,7 +843,7 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-between text-[12px]">
                       <span style={{ color: 'var(--text-muted)' }}>Workers</span>
                       <span className="flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
-                        <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: '#34d399' }} />
+                        <span className="size-1.5 rounded-full shrink-0" style={{ background: '#34d399' }} />
                         {scannerHealth.healthy_workers} healthy{scannerHealth.stale_workers > 0 ? `, ${scannerHealth.stale_workers} stale` : ''}
                       </span>
                     </div>
@@ -874,7 +874,7 @@ export default function DashboardPage() {
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Scan Volume</h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>Total scans per day — last 30 days</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>Total scans per day - last 30 days</p>
                 <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
                   <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
                     {scanVolumeTrend.reduce((sum, point) => sum + point.value, 0).toLocaleString()}

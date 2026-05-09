@@ -4,6 +4,11 @@
  */
 export type HourCyclePreference = 'locale' | '12' | '24';
 
+const localeTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
 function formatScheduledTime(hour: string, minute: string, hourCycle: HourCyclePreference): string {
   const parsedHour = parseInt(hour, 10);
   const parsedMinute = parseInt(minute, 10);
@@ -21,10 +26,7 @@ function formatScheduledTime(hour: string, minute: string, hourCycle: HourCycleP
     return parsedMinute === 0 ? `${hour12}:00 ${period}` : `${hour12}:${String(parsedMinute).padStart(2, '0')} ${period}`;
   }
 
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(Date.UTC(2020, 0, 1, parsedHour, parsedMinute)));
+  return localeTimeFormatter.format(new Date(Date.UTC(2020, 0, 1, parsedHour, parsedMinute)));
 }
 
 function appendTimezone(text: string, timezone?: string): string {

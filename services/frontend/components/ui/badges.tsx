@@ -71,7 +71,7 @@ export function StatusBadge({ status, externalStatus }: { status: string; extern
       style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}` }}
     >
       <span
-        className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${effectiveStatus === 'warming_cache' ? 'animate-bounce' : effectiveStatus === 'running' || effectiveStatus === 'waiting_for_xray' || effectiveStatus === 'queued_in_xray' || effectiveStatus === 'indexing_artifact' ? 'animate-pulse' : ''}`}
+        className={`size-1.5 rounded-full bg-current shrink-0 ${effectiveStatus === 'warming_cache' ? 'animate-bounce' : effectiveStatus === 'running' || effectiveStatus === 'waiting_for_xray' || effectiveStatus === 'queued_in_xray' || effectiveStatus === 'indexing_artifact' ? 'animate-pulse' : ''}`}
         aria-hidden
       />
       {s.label ?? formatStatusLabel(effectiveStatus)}
@@ -180,7 +180,7 @@ export function OwnershipBadge({
       style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}
       title={title}
     >
-      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" aria-hidden />
+      <span className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden />
       {label}
     </span>
   );

@@ -23,8 +23,8 @@ export function OrgOverviewTab({ riskScore, trend }: OrgOverviewTabProps) {
             <p className="text-xs text-zinc-500 mt-0.5">Pass/fail evaluations over 30 days</p>
           </div>
           <div className="flex items-center gap-3 text-xs text-zinc-500">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500/70 inline-block" />Pass</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500/70 inline-block" />Fail</span>
+            <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-emerald-500/70 inline-block" />Pass</span>
+            <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-red-500/70 inline-block" />Fail</span>
           </div>
         </div>
         <TrendChart points={trend} />

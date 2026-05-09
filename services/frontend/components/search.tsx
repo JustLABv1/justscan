@@ -143,7 +143,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
           {/* Input row */}
           <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             {loading
-              ? <div className="w-4 h-4 rounded-full border-2 border-zinc-500 border-t-violet-400 animate-spin shrink-0" aria-label="Searching" />
+              ? <div className="size-4 rounded-full border-2 border-zinc-500 border-t-violet-400 animate-spin shrink-0" aria-label="Searching" />
               : <Search01Icon size={16} className="text-zinc-500 shrink-0" aria-hidden />
             }
             <input
@@ -209,7 +209,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                           onMouseEnter={() => setActiveIdx(globalIdx)}
                         >
                           <div
-                            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                            className="size-7 rounded-lg flex items-center justify-center shrink-0"
                             style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(167,139,250,0.15)' }}
                           >
                             <Shield01Icon size={14} color="#a78bfa" />
@@ -247,7 +247,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                           onMouseEnter={() => setActiveIdx(globalIdx)}
                         >
                           <div
-                            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                            className="size-7 rounded-lg flex items-center justify-center shrink-0"
                             style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(96,165,250,0.2)' }}
                           >
                             <TaskDone02Icon size={14} color="#60a5fa" />
@@ -286,7 +286,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                           onMouseEnter={() => setActiveIdx(globalIdx)}
                         >
                           <div
-                            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                            className="size-7 rounded-lg flex items-center justify-center shrink-0"
                             style={{ background: `${sevColor}1a`, border: `1px solid ${sevColor}30` }}
                           >
                             <ShieldKeyIcon size={14} color={sevColor} />

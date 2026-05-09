@@ -249,9 +249,9 @@ export default function PublicHelmScanPage() {
             100% { transform: translateY(100vh); opacity: 0; }
           }
         `}</style>
-        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full"
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 size-[600px] rounded-full"
           style={{ background: isDark ? 'radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 65%)' : 'radial-gradient(circle, rgba(124,58,237,0.08) 0%, transparent 65%)' }} />
-        <div className="absolute bottom-0 left-1/4 w-[400px] h-[400px] rounded-full"
+        <div className="absolute bottom-0 left-1/4 size-[400px] rounded-full"
           style={{ background: isDark ? 'radial-gradient(circle, rgba(109,40,217,0.1) 0%, transparent 65%)' : 'radial-gradient(circle, rgba(109,40,217,0.05) 0%, transparent 65%)' }} />
         <div className="absolute inset-0"
           style={{
@@ -275,7 +275,7 @@ export default function PublicHelmScanPage() {
       {/* Nav */}
       <header className="relative z-10 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+          <div className="size-8 rounded-xl flex items-center justify-center"
             style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 12px rgba(124,58,237,0.5)' }}>
             <Logo size={16} className="text-white" />
           </div>
@@ -293,7 +293,7 @@ export default function PublicHelmScanPage() {
           {mounted && (
             <button
               onClick={() => setTheme(isDark ? 'light' : 'dark')}
-              className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
+              className="size-9 flex items-center justify-center rounded-xl transition-colors"
               style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
             >
               {isDark ? (
@@ -320,7 +320,7 @@ export default function PublicHelmScanPage() {
           {/* Hero */}
           <div className="text-center space-y-3">
             <div className="flex justify-center">
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-[#a78bfa]"
+              <div className="size-14 rounded-2xl flex items-center justify-center text-[#a78bfa]"
                 style={{
                   background: isDark ? 'linear-gradient(135deg, rgba(124,58,237,0.25) 0%, rgba(109,40,217,0.12) 100%)' : 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(109,40,217,0.06) 100%)',
                   border: '1px solid rgba(167,139,250,0.25)',
@@ -350,7 +350,7 @@ export default function PublicHelmScanPage() {
             </div>
           </div>
 
-          {/* Step 1 — Chart URL form */}
+          {/* Step 1 - Chart URL form */}
           {(step === 'form' || step === 'extracting') && isDisabled && (
             <div className="rounded-2xl px-6 py-5 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
               <p className="text-red-500 dark:text-red-400 font-medium">Public Helm scanning is temporarily disabled</p>
@@ -371,14 +371,12 @@ export default function PublicHelmScanPage() {
                     </svg>
                   </div>
                   <input
-                    type="text"
                     value={chartUrl}
                     onChange={e => setChartUrl(e.target.value)}
                     placeholder="oci://ghcr.io/org/chart:1.0  or  https://charts.example.com"
                     disabled={step === 'extracting'}
                     className="flex-1 bg-transparent text-sm outline-none font-mono py-2.5"
                     style={{ color: 'var(--text-primary)', caretColor: '#7c3aed' }}
-                    autoFocus
                   />
                 </div>
               </div>
@@ -415,7 +413,7 @@ export default function PublicHelmScanPage() {
               {isOCI && (
                 <div>
                   <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                    Version / tag <span style={{ color: 'var(--text-faint)' }}>(optional — overrides tag in URL)</span>
+                    Version / tag <span style={{ color: 'var(--text-faint)' }}>(optional - overrides tag in URL)</span>
                   </label>
                   <input
                     type="text"
@@ -439,7 +437,7 @@ export default function PublicHelmScanPage() {
               >
                 {step === 'extracting' ? (
                   <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    <span className="size-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                     Extracting images…
                   </span>
                 ) : 'Extract images →'}
@@ -451,7 +449,7 @@ export default function PublicHelmScanPage() {
             </form>
           )}
 
-          {/* Helm scan history — shown only on form step */}
+          {/* Helm scan history - shown only on form step */}
           {(step === 'form' || step === 'extracting') && helmHistory.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
@@ -511,7 +509,7 @@ export default function PublicHelmScanPage() {
             </div>
           )}
 
-          {/* Step 2 — Review images */}
+          {/* Step 2 - Review images */}
           {(step === 'review' || step === 'scanning') && (
             <div className="space-y-4">
               {/* Chart info */}
@@ -585,7 +583,7 @@ export default function PublicHelmScanPage() {
                             </p>
                             <span className="text-[11px] font-mono px-1.5 py-0.5 rounded"
                               style={{ background: 'rgba(124,58,237,0.08)', color: '#7c3aed' }}>
-                              {parsed.tag || '—'}
+                              {parsed.tag || '-'}
                             </span>
                           </div>
                           {img.source_path && (
@@ -630,7 +628,7 @@ export default function PublicHelmScanPage() {
                 >
                   {step === 'scanning' ? (
                     <span className="flex items-center justify-center gap-2">
-                      <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      <span className="size-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                       Creating Helm run…
                     </span>
                   ) : `Scan ${selected.size} image${selected.size !== 1 ? 's' : ''} →`}

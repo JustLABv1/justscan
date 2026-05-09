@@ -1,6 +1,7 @@
 'use client';
 import { Logo } from '@/components/logo';
 import { setToken, setUser } from '@/lib/api';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -58,7 +59,7 @@ export default function OIDCCallbackPage() {
       <div className="space-y-6">
         <div className="text-center space-y-3">
           <div
-            className="inline-flex items-center justify-center w-14 h-14 rounded-2xl"
+            className="inline-flex items-center justify-center size-14 rounded-2xl"
             style={{
               background: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
               boxShadow: '0 0 32px rgba(124,58,237,0.5),inset 0 1px 0 rgba(255,255,255,0.2)',
@@ -76,7 +77,7 @@ export default function OIDCCallbackPage() {
             style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.22)', color: '#f87171' }}>
             {error}
           </div>
-          <a
+          <Link
             href="/login"
             className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold text-white flex items-center justify-center transition-all hover:opacity-90"
             style={{
@@ -85,7 +86,7 @@ export default function OIDCCallbackPage() {
             }}
           >
             Back to Login
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -94,7 +95,7 @@ export default function OIDCCallbackPage() {
   return (
     <div className="flex flex-col items-center justify-center gap-4">
       <div
-        className="inline-flex items-center justify-center w-14 h-14 rounded-2xl"
+        className="inline-flex items-center justify-center size-14 rounded-2xl"
         style={{
           background: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
           boxShadow: '0 0 32px rgba(124,58,237,0.5)',
@@ -102,7 +103,7 @@ export default function OIDCCallbackPage() {
       >
         <Logo size={26} className="text-white" />
       </div>
-      <div className="w-6 h-6 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
+      <div className="size-6 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
       <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Completing sign-in…</p>
     </div>
   );

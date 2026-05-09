@@ -5,18 +5,32 @@ type FormatOptions = {
   timeZone?: string;
 };
 
+const formatterCache = new Map<string, Intl.DateTimeFormat>();
+
 function hour12FromPreference(hourCycle?: HourCyclePreference): boolean | undefined {
   if (hourCycle === '12') return true;
   if (hourCycle === '24') return false;
   return undefined;
 }
 
-function formatLocaleDate(date: Date, options: Intl.DateTimeFormatOptions, formatOptions?: FormatOptions): string {
-  return new Intl.DateTimeFormat(undefined, {
+function getFormatter(options: Intl.DateTimeFormatOptions, formatOptions?: FormatOptions): Intl.DateTimeFormat {
+  const hour12 = hour12FromPreference(formatOptions?.hourCycle);
+  const timeZone = formatOptions?.timeZone;
+  const key = JSON.stringify({ options, hour12, timeZone });
+  const cached = formatterCache.get(key);
+  if (cached) return cached;
+
+  const formatter = new Intl.DateTimeFormat(undefined, {
     ...options,
-    hour12: hour12FromPreference(formatOptions?.hourCycle),
-    timeZone: formatOptions?.timeZone,
-  }).format(date);
+    hour12,
+    timeZone,
+  });
+  formatterCache.set(key, formatter);
+  return formatter;
+}
+
+function formatLocaleDate(date: Date, options: Intl.DateTimeFormatOptions, formatOptions?: FormatOptions): string {
+  return getFormatter(options, formatOptions).format(date);
 }
 
 /**

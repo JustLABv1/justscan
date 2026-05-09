@@ -303,14 +303,14 @@ export default function WatchlistPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-500 font-mono">{item.timezone || 'UTC'}</td>
-                    <td className="px-4 py-3 text-xs text-zinc-500">{reg?.name ?? <span className="text-zinc-400 dark:text-zinc-700">—</span>}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-500">{reg?.name ?? <span className="text-zinc-400 dark:text-zinc-700">-</span>}</td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full"
                         style={item.enabled
                           ? { color: '#34d399', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.22)' }
                           : { color: '#71717a', background: 'rgba(113,113,122,0.08)', border: '1px solid rgba(113,113,122,0.15)' }
                         }>
-                        <span className={`w-1.5 h-1.5 rounded-full bg-current ${item.enabled ? 'animate-pulse' : ''}`} />
+                        <span className={`size-1.5 rounded-full bg-current ${item.enabled ? 'animate-pulse' : ''}`} />
                         {item.enabled ? 'Active' : 'Disabled'}
                       </span>
                     </td>
@@ -326,7 +326,7 @@ export default function WatchlistPage() {
                         <button onClick={() => handleTrigger(item.id)} disabled={triggering === item.id}
                           className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 disabled:opacity-50 transition-colors p-1.5" title="Scan now">
                           {triggering === item.id
-                            ? <div className="w-3.5 h-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-400 rounded-full animate-spin" />
+                            ? <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-400 rounded-full animate-spin" />
                             : <PlayIcon size={15} />}
                         </button>
                         <button onClick={() => openEdit(item)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit">
@@ -431,7 +431,7 @@ export default function WatchlistPage() {
                       className="relative w-9 h-5 rounded-full transition-colors shrink-0"
                       style={{ background: enabled ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'var(--glass-border)' }}
                     >
-                      <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow ${enabled ? 'translate-x-4' : ''}`} />
+                      <div className={`absolute top-0.5 left-0.5 size-4 rounded-full bg-white transition-transform shadow ${enabled ? 'translate-x-4' : ''}`} />
                     </button>
                     <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Enabled</span>
                   </label>
@@ -440,7 +440,7 @@ export default function WatchlistPage() {
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <button onClick={modal.close} className="btn-secondary" type="button">Cancel</button>
                 <button type="submit" form="watchlist-form" disabled={saving || xrayOnlyWithoutRegistries} className="btn-primary disabled:opacity-60">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Add'}
                 </button>
               </Modal.Footer>
@@ -478,7 +478,7 @@ export default function WatchlistPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

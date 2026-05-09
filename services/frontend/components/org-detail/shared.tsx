@@ -33,7 +33,7 @@ export function StatusBadge({ status }: { status: string }) {
       className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full"
       style={{ color: palette.color, background: palette.bg, border: `1px solid ${palette.border}` }}
     >
-      <span className={`w-1.5 h-1.5 rounded-full bg-current ${status === 'running' ? 'animate-pulse' : ''}`} />
+      <span className={`size-1.5 rounded-full bg-current ${status === 'running' ? 'animate-pulse' : ''}`} />
       {status}
     </span>
   );
@@ -94,7 +94,7 @@ export function RiskOverviewCard({ riskScore }: { riskScore: OrgRiskScore | null
       <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Risk Overview</h2>
       <div className="flex items-center gap-6 flex-wrap">
         <div
-          className="flex flex-col items-center justify-center w-20 h-20 rounded-2xl"
+          className="flex flex-col items-center justify-center size-20 rounded-2xl"
           style={{ background: `${gradeColor}18`, border: `1px solid ${gradeColor}30` }}
         >
           <span className="text-4xl font-black" style={{ color: gradeColor }}>{riskScore.grade}</span>

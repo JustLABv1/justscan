@@ -129,11 +129,11 @@ function AnimatedAssistantOrb({ className = '' }: { className?: string }) {
 
 function MessageAvatar({ role }: { role: 'user' | 'assistant' }) {
   return role === 'assistant' ? (
-    <Avatar className="h-10 w-10 shrink-0 border border-white/10 shadow-[0_0_30px_rgba(96,165,250,0.22),0_0_70px_rgba(124,58,237,0.16)]" color="accent" size="md" variant="soft">
+    <Avatar className="size-10 shrink-0 border border-white/10 shadow-[0_0_30px_rgba(96,165,250,0.22),0_0_70px_rgba(124,58,237,0.16)]" color="accent" size="md" variant="soft">
       <Avatar.Fallback>AI</Avatar.Fallback>
     </Avatar>
   ) : (
-    <Avatar className="h-10 w-10 shrink-0 border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]" color="default" size="md" variant="soft">
+    <Avatar className="size-10 shrink-0 border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]" color="default" size="md" variant="soft">
       <Avatar.Fallback>ME</Avatar.Fallback>
     </Avatar>
   );
@@ -492,7 +492,7 @@ export default function AssistantPage() {
     if (loading) {
       return (
         <div className="rounded-2xl border px-4 py-5 text-sm text-zinc-500" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-          Loading conversations...
+          Loading conversations…
         </div>
       );
     }
@@ -506,7 +506,7 @@ export default function AssistantPage() {
     }
 
     return filteredConversations.map((item) => (
-      <div key={item.id} className="flex items-center gap-2 rounded-2xl border px-3 py-3 transition-colors" style={{ borderColor: conversation?.id === item.id ? 'rgba(124,58,237,0.42)' : 'var(--glass-border)', background: conversation?.id === item.id ? 'rgba(124,58,237,0.12)' : 'var(--row-hover)' }}>
+      <div key={item.id} className="flex items-center gap-2 rounded-2xl border p-3 transition-colors" style={{ borderColor: conversation?.id === item.id ? 'rgba(124,58,237,0.42)' : 'var(--glass-border)', background: conversation?.id === item.id ? 'rgba(124,58,237,0.12)' : 'var(--row-hover)' }}>
         <button
           type="button"
           className="min-w-0 flex-1 text-left"
@@ -540,10 +540,10 @@ export default function AssistantPage() {
 
   function renderUtilityRail() {
     return (
-      <div className="flex h-full min-h-0 flex-col px-5 py-5">
+      <div className="flex h-full min-h-0 flex-col p-5">
         <div className="space-y-4">
           <div className="flex items-center gap-3">
-            <AnimatedAssistantOrb className="h-7 w-7" />
+            <AnimatedAssistantOrb className="size-7" />
             <div className="min-w-0">
               <p className="truncate text-lg font-semibold text-zinc-950 dark:text-zinc-50">JustScan AI</p>
             </div>
@@ -567,7 +567,7 @@ export default function AssistantPage() {
 
         <div className="mt-8 flex-1 space-y-6 overflow-y-auto pr-1">
           {filteredStarterSections.length === 0 ? (
-            <div className="rounded-2xl border px-4 py-4 text-sm text-zinc-500" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+            <div className="rounded-2xl border p-4 text-sm text-zinc-500" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
               No prompt starters match this search.
             </div>
           ) : filteredStarterSections.map((section) => (
@@ -601,7 +601,7 @@ export default function AssistantPage() {
   }
 
   const composerPanel = (
-    <div className="assistant-composer overflow-hidden rounded-[32px] px-4 py-4 md:px-5 md:py-5">
+    <div className="assistant-composer overflow-hidden rounded-[32px] p-4 md:px-5 md:py-5">
         <div className="flex items-end gap-3">
         <TextArea
           ref={composerRef}
@@ -687,7 +687,7 @@ export default function AssistantPage() {
               <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1">
                 <button
                   type="button"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition-colors"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-2xl border transition-colors"
                   style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)', color: 'var(--text-secondary)' }}
                   onClick={() => startNewConversation()}
                 >
@@ -753,9 +753,9 @@ export default function AssistantPage() {
               </div>
             ) : (
               <>
-                <div className="relative flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-7">
-                  <div className="pointer-events-none absolute left-[8%] top-[12%] h-48 w-48 rounded-full blur-3xl" style={{ background: 'rgba(59,130,246,0.12)' }} />
-                  <div className="pointer-events-none absolute right-[10%] top-[28%] h-56 w-56 rounded-full blur-3xl" style={{ background: 'rgba(167,139,250,0.12)' }} />
+                <div className="relative flex-1 overflow-y-auto p-4 md:px-8 md:py-7">
+                  <div className="pointer-events-none absolute left-[8%] top-[12%] size-48 rounded-full blur-3xl" style={{ background: 'rgba(59,130,246,0.12)' }} />
+                  <div className="pointer-events-none absolute right-[10%] top-[28%] size-56 rounded-full blur-3xl" style={{ background: 'rgba(167,139,250,0.12)' }} />
                   <div className="mx-auto flex min-h-full w-full max-w-[78rem] flex-col">
                     {hasMessages ? (
                       <div className="mb-5 flex items-center gap-3 text-xs" style={{ color: 'var(--text-faint)' }}>
@@ -766,7 +766,7 @@ export default function AssistantPage() {
 
                     {!hasMessages ? (
                       <div className="flex min-h-full flex-1 flex-col items-center justify-center py-10 text-center">
-                        <AnimatedAssistantOrb className="mb-8 h-32 w-32" />
+                        <AnimatedAssistantOrb className="mb-8 size-32" />
                         <p className="text-sm font-medium tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>{greetingLabel}</p>
                         <h2 className="mt-4 max-w-3xl text-balance text-4xl font-semibold tracking-tight md:text-5xl" style={{ color: 'var(--text-primary)' }}>
                           {hasMeaningfulContext ? `How can I help with ${scopeLabel}?` : 'How can I assist with JustScan today?'}
@@ -794,9 +794,9 @@ export default function AssistantPage() {
                                   <div className="flex items-center gap-2 py-2 text-sm" style={{ color: 'var(--text-faint)' }}>
                                     <span>Thinking</span>
                                     <span className="flex gap-1">
-                                      <span className="h-2 w-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:0ms]" />
-                                      <span className="h-2 w-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:150ms]" />
-                                      <span className="h-2 w-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:300ms]" />
+                                      <span className="size-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:0ms]" />
+                                      <span className="size-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:150ms]" />
+                                      <span className="size-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:300ms]" />
                                     </span>
                                   </div>
                                 ) : (

@@ -24,13 +24,13 @@ function ThemeToggle() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
-  if (!mounted) return <div className="w-9 h-9" />;
+  if (!mounted) return <div className="size-9" />;
 
   const isDark = resolvedTheme === 'dark';
   return (
     <button
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
+      className="size-9 flex items-center justify-center rounded-xl transition-colors"
       style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
@@ -54,7 +54,7 @@ function StatusBadge({ status }: { status: string }) {
       className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap"
       style={{ color: state.color, background: state.bg, border: `1px solid ${state.border}` }}
     >
-      <span className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`} />
+      <span className={`size-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`} />
       {state.label ?? status}
     </span>
   );
@@ -227,7 +227,7 @@ export default function PublicHelmRunDetailPage() {
         style={{ background: 'var(--app-bg)', borderBottom: '1px solid var(--border-subtle)' }}
       >
         <Link href="/public/scan/helm" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 12px rgba(124,58,237,0.4)' }}>
+          <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 12px rgba(124,58,237,0.4)' }}>
             <Logo size={16} className="text-white" />
           </div>
           <span className="font-semibold text-[15px] tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</span>
@@ -323,7 +323,7 @@ export default function PublicHelmRunDetailPage() {
 
         {loading && (
           <div className="rounded-2xl px-6 py-10 flex items-center justify-center gap-3 text-sm" style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
-            <span className="w-4 h-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
+            <span className="size-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
             Loading Helm run…
           </div>
         )}

@@ -161,11 +161,11 @@ function ProductIntroAnimation() {
       `}</style>
 
       <div
-        className="pointer-events-none absolute left-[-8%] top-[-16%] h-64 w-64 rounded-full"
+        className="pointer-events-none absolute left-[-8%] top-[-16%] size-64 rounded-full"
         style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 72%)' }}
       />
       <div
-        className="pointer-events-none absolute bottom-[-14%] right-[-7%] h-72 w-72 rounded-full"
+        className="pointer-events-none absolute bottom-[-14%] right-[-7%] size-72 rounded-full"
         style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.16) 0%, transparent 72%)' }}
       />
       <div className="pointer-events-none absolute inset-x-16 bottom-6 h-16 rounded-full bg-violet-500/10 blur-3xl dark:bg-violet-500/15" />
@@ -183,7 +183,7 @@ function ProductIntroAnimation() {
             animationDelay: `${item.delay}s`,
           }}
         >
-          <span className="h-2.5 w-2.5 rounded-full" style={{ background: item.color }} aria-hidden />
+          <span className="size-2.5 rounded-full" style={{ background: item.color }} aria-hidden />
           <span className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-700">{item.label}</span>
         </div>
       ))}
@@ -293,7 +293,7 @@ export function WorkspaceOnboarding({
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{description}</p>
           </div>
           <span
-            className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
+            className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
             style={{
               background: selected ? 'rgba(124,58,237,0.2)' : 'rgba(148,163,184,0.12)',
               color: selected ? '#a78bfa' : '#94a3b8',
@@ -308,13 +308,13 @@ export function WorkspaceOnboarding({
   }
 
   return (
-    <div className="app-bg relative min-h-dvh overflow-hidden px-3 py-3 md:px-5 md:py-5">
+    <div className="app-bg relative min-h-dvh overflow-hidden p-3 md:px-5 md:py-5">
       <div
-        className="pointer-events-none absolute left-[-10%] top-[-8%] h-[32rem] w-[32rem] rounded-full"
+        className="pointer-events-none absolute left-[-10%] top-[-8%] size-[32rem] rounded-full"
         style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.16) 0%, transparent 72%)' }}
       />
       <div
-        className="pointer-events-none absolute bottom-[-18%] right-[-8%] h-[34rem] w-[34rem] rounded-full"
+        className="pointer-events-none absolute bottom-[-18%] right-[-8%] size-[34rem] rounded-full"
         style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.14) 0%, transparent 72%)' }}
       />
 
@@ -322,7 +322,7 @@ export function WorkspaceOnboarding({
         <header className="relative z-10 flex items-center justify-between gap-4 border-b px-5 py-4 md:px-8 md:py-5" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="flex items-center gap-3">
             <div
-              className="flex h-11 w-11 items-center justify-center rounded-2xl"
+              className="flex size-11 items-center justify-center rounded-2xl"
               style={{
                 background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
                 boxShadow: '0 0 20px rgba(124,58,237,0.28), inset 0 1px 0 rgba(255,255,255,0.18)',
@@ -446,7 +446,7 @@ export function WorkspaceOnboarding({
                     )
                   ) : (
                     <div className="rounded-[28px] p-6 text-sm leading-7 text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                      Checking your organization access...
+                      Checking your organization access…
                     </div>
                   )}
                 </div>

@@ -32,7 +32,7 @@ function SeverityBadge({ severity }: { severity: string }) {
       display: 'inline-block',
       padding: '2px 8px',
       borderRadius: '999px',
-      fontSize: '10px',
+      fontSize: '12px',
       fontWeight: 700,
       background: config.bg,
       color: config.fg,
@@ -211,7 +211,7 @@ function StatusReportContent() {
           <div style={{ borderLeft: '5px solid #7c3aed', paddingLeft: 16 }}>
             <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>JustScan Status Report</h1>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6b7280' }}>{pageName}</p>
-            <p style={{ margin: '8px 0 0', fontFamily: 'monospace', fontSize: 11, color: '#6b7280', wordBreak: 'break-all' }}>
+            <p style={{ margin: '8px 0 0', fontFamily: 'monospace', fontSize: 12, color: '#6b7280', wordBreak: 'break-all' }}>
               {scan.image_name}:{scan.image_tag}
             </p>
           </div>
@@ -220,7 +220,7 @@ function StatusReportContent() {
             <span style={{ background: '#ede9fe', color: '#6d28d9', fontWeight: 700, fontSize: 12, padding: '4px 12px', borderRadius: 999, border: '1px solid #c4b5fd' }}>
               {vulns.length.toLocaleString()} findings
             </span>
-            <span style={{ fontSize: 11, color: '#6b7280' }}>Generated {formatDate(new Date().toISOString())}</span>
+            <span style={{ fontSize: 12, color: '#6b7280' }}>Generated {formatDate(new Date().toISOString())}</span>
           </div>
         </div>
 
@@ -258,7 +258,7 @@ function StatusReportContent() {
           {filterSummary.length > 0 ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {filterSummary.map(part => (
-                <span key={part} style={{ background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 600 }}>{part}</span>
+                <span key={part} style={{ background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>{part}</span>
               ))}
             </div>
           ) : (
@@ -303,7 +303,7 @@ function StatusReportContent() {
               <thead>
                 <tr style={{ background: '#f9fafb' }}>
                   {['CVE ID', 'Package', 'Installed', 'Fixed In', 'Severity', 'CVSS'].map(header => (
-                    <th key={header} style={{ padding: '7px 10px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600, color: '#374151', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{header}</th>
+                    <th key={header} style={{ padding: '7px 10px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600, color: '#374151', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{header}</th>
                   ))}
                 </tr>
               </thead>
@@ -312,15 +312,15 @@ function StatusReportContent() {
                   <tr key={vuln.id} style={{ background: index % 2 === 0 ? '#fff' : '#fafafa' }}>
                     <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', verticalAlign: 'top' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <span style={{ color: '#7c3aed', fontFamily: 'monospace', fontSize: 11, fontWeight: 700 }}>{vuln.vuln_id || '—'}</span>
-                        {vuln.title && <span style={{ color: '#6b7280', fontSize: 11, lineHeight: 1.45 }}>{vuln.title}</span>}
+                        <span style={{ color: '#7c3aed', fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>{vuln.vuln_id || '—'}</span>
+                        {vuln.title && <span style={{ color: '#6b7280', fontSize: 12, lineHeight: 1.45 }}>{vuln.title}</span>}
                       </div>
                     </td>
-                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 11, verticalAlign: 'top' }}>{vuln.pkg_name}</td>
-                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 11, color: '#6b7280', verticalAlign: 'top' }}>{vuln.installed_version || '—'}</td>
-                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 11, color: '#15803d', verticalAlign: 'top' }}>{vuln.fixed_version || '—'}</td>
+                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, verticalAlign: 'top' }}>{vuln.pkg_name}</td>
+                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#6b7280', verticalAlign: 'top' }}>{vuln.installed_version || '—'}</td>
+                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#15803d', verticalAlign: 'top' }}>{vuln.fixed_version || '—'}</td>
                     <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', verticalAlign: 'top' }}><SeverityBadge severity={vuln.severity} /></td>
-                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 11, verticalAlign: 'top' }}>{vuln.cvss_score ? vuln.cvss_score.toFixed(1) : '—'}</td>
+                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, verticalAlign: 'top' }}>{vuln.cvss_score ? vuln.cvss_score.toFixed(1) : '—'}</td>
                   </tr>
                 ))}
               </tbody>

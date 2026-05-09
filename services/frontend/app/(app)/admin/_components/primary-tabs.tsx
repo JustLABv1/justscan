@@ -86,7 +86,7 @@ function ScannerHealthPanel() {
       {health && (
         <>
           {!health.local_scanner_enabled ? (
-            <div className="rounded-xl px-4 py-4 text-sm" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)' }}>
+            <div className="rounded-xl p-4 text-sm" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)' }}>
               <p className="font-medium text-zinc-800 dark:text-zinc-100">Local scanner is disabled.</p>
               <p className="mt-1 text-zinc-600 dark:text-zinc-400">{health.message || 'This backend instance is running without the built-in local scanner.'}</p>
               <p className="mt-2 text-xs text-zinc-500">Grype augmentation: {health.grype_enabled ? 'enabled' : 'disabled'}</p>
@@ -226,7 +226,7 @@ function ScannerSettingsPanel() {
         </div>
       </div>
       <button onClick={handleSave} disabled={saving} className="btn-primary inline-flex items-center gap-2" type="button">
-        {saving && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+        {saving && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
         Save Scanner Settings
       </button>
     </div>
@@ -273,7 +273,7 @@ function AuthSettingsPanel() {
         Enable local username/password authentication
       </label>
       <button onClick={handleSave} disabled={saving} className="btn-primary inline-flex items-center gap-2" type="button">
-        {saving && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+        {saving && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
         Save Auth Settings
       </button>
     </div>
@@ -415,15 +415,15 @@ export function SettingsTab() {
         <div>
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Public Scanning</h2>
           <p className="text-sm text-zinc-500 mt-0.5">
-            Allow unauthenticated users to scan Docker images at <a href="/scan" target="_blank" className="text-violet-500 hover:underline" rel="noreferrer">/scan</a>. Rate limited per IP and managed below.
+            Allow unauthenticated users to scan Docker images at <Link href="/scan" target="_blank" className="text-violet-500 hover:underline" rel="noreferrer">/scan</Link>. Rate limited per IP and managed below.
           </p>
         </div>
         {publicScanEnabled === null ? (
-          <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+          <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
         ) : (
           <div className="flex items-center justify-between gap-4 p-4 rounded-xl" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: publicScanEnabled ? 'rgba(124,58,237,0.15)' : 'rgba(113,113,122,0.1)', border: publicScanEnabled ? '1px solid rgba(167,139,250,0.3)' : '1px solid rgba(113,113,122,0.2)' }}>
+              <div className="size-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: publicScanEnabled ? 'rgba(124,58,237,0.15)' : 'rgba(113,113,122,0.1)', border: publicScanEnabled ? '1px solid rgba(167,139,250,0.3)' : '1px solid rgba(113,113,122,0.2)' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={publicScanEnabled ? '#a78bfa' : '#71717a'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                   {publicScanEnabled ? <polyline points="9 12 11 14 15 10" /> : <><line x1="9" y1="9" x2="15" y2="15" /><line x1="15" y1="9" x2="9" y2="15" /></>}
@@ -437,7 +437,7 @@ export function SettingsTab() {
               </div>
             </div>
             <button onClick={() => handleTogglePublicScan(!publicScanEnabled)} disabled={saving} className="shrink-0 px-4 py-2 text-sm font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed" style={publicScanEnabled ? { background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171' } : { background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }} type="button">
-              {saving ? <span className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-full border-2 border-current/30 border-t-current animate-spin" />Saving…</span> : publicScanEnabled ? 'Disable' : 'Enable'}
+              {saving ? <span className="flex items-center gap-2"><span className="size-3.5 rounded-full border-2 border-current/30 border-t-current animate-spin" />Saving…</span> : publicScanEnabled ? 'Disable' : 'Enable'}
             </button>
           </div>
         )}
@@ -452,7 +452,7 @@ export function SettingsTab() {
           <input type="number" min={1} max={1000} className={inputCls + ' max-w-[120px]'} value={rateLimitInput} onChange={(e) => setRateLimitInput(e.target.value)} />
           <span className="text-sm text-zinc-500">per IP / hour</span>
           <button onClick={handleSaveRateLimit} disabled={savingRl || rateLimitInput === String(rateLimit)} className="btn-primary inline-flex items-center gap-2" type="button">
-            {savingRl && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}Save
+            {savingRl && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}Save
           </button>
         </div>
       </div>
@@ -466,7 +466,7 @@ export function SettingsTab() {
           <input type="number" min={1} max={1000} className={inputCls + ' max-w-[120px]'} value={registerRateLimitInput} onChange={(e) => setRegisterRateLimitInput(e.target.value)} />
           <span className="text-sm text-zinc-500">registrations per IP / hour</span>
           <button onClick={handleSaveRegisterRateLimit} disabled={savingRegisterRl || registerRateLimitInput === String(registerRateLimit)} className="btn-primary inline-flex items-center gap-2" type="button">
-            {savingRegisterRl && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}Save
+            {savingRegisterRl && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}Save
           </button>
         </div>
       </div>
@@ -480,7 +480,7 @@ export function SettingsTab() {
           <input type="number" min={0} className={inputCls + ' max-w-[120px]'} value={apiLogRetentionInput} onChange={(e) => setApiLogRetentionInput(e.target.value)} />
           <span className="text-sm text-zinc-500">days (0 = forever)</span>
           <button onClick={handleSaveApiLogRetention} disabled={savingApiRetention || apiLogRetentionInput === String(apiLogRetention)} className="btn-primary inline-flex items-center gap-2" type="button">
-            {savingApiRetention && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}Save
+            {savingApiRetention && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}Save
           </button>
         </div>
       </div>
@@ -494,7 +494,7 @@ export function SettingsTab() {
           <input type="number" min={0} className={inputCls + ' max-w-[120px]'} value={xrayLogRetentionInput} onChange={(e) => setXrayLogRetentionInput(e.target.value)} />
           <span className="text-sm text-zinc-500">days (0 = forever)</span>
           <button onClick={handleSaveXrayLogRetention} disabled={savingXrayRetention || xrayLogRetentionInput === String(xrayLogRetention)} className="btn-primary inline-flex items-center gap-2" type="button">
-            {savingXrayRetention && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}Save
+            {savingXrayRetention && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}Save
           </button>
         </div>
       </div>
@@ -565,7 +565,7 @@ export function OverviewTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
       </div>
     );
   }
@@ -780,7 +780,7 @@ export function UsersTab() {
 
   if (loading) return (
     <div className="flex justify-center py-16">
-      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+      <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
     </div>
   );
 
@@ -956,7 +956,7 @@ export function UsersTab() {
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <button className="btn-secondary" onClick={modal.close} type="button">Cancel</button>
                 <button type="submit" form="user-form" disabled={saving} className="btn-primary inline-flex items-center gap-2">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isCreate ? 'Create' : 'Save'}
                 </button>
               </Modal.Footer>
@@ -1070,7 +1070,7 @@ export function TokensTab() {
 
   if (loading) return (
     <div className="flex justify-center py-16">
-      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+      <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
     </div>
   );
 
@@ -1165,7 +1165,7 @@ export function TokensTab() {
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <button className="btn-secondary" onClick={modal.close} type="button">Cancel</button>
                 <button type="submit" form="token-form" disabled={saving} className="btn-primary inline-flex items-center gap-2">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   Save
                 </button>
               </Modal.Footer>
@@ -1257,7 +1257,7 @@ export function AutoTagsTab() {
 
   if (loading) return (
     <div className="flex justify-center py-16">
-      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+      <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
     </div>
   );
 
@@ -1381,7 +1381,7 @@ export function AutoTagsTab() {
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <button className="btn-secondary" onClick={modal.close} type="button">Cancel</button>
                 <button type="submit" form="autotag-form" disabled={saving || tags.length === 0} className="btn-primary inline-flex items-center gap-2">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isCreate ? 'Create' : 'Save'}
                 </button>
               </Modal.Footer>
@@ -1511,13 +1511,13 @@ export function AuditLogTab() {
             <p>{total} total events</p>
             {loading ? (
               <span className="inline-flex items-center gap-2 text-xs text-zinc-400">
-                <span className="h-3.5 w-3.5 rounded-full border-2 border-zinc-300/60 border-t-violet-500 animate-spin" />
+                <span className="size-3.5 rounded-full border-2 border-zinc-300/60 border-t-violet-500 animate-spin" />
                 Refreshing…
               </span>
             ) : null}
           </div>
           <button onClick={handleExport} disabled={exporting || total === 0} className="btn-primary inline-flex items-center gap-2" type="button">
-            {exporting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            {exporting && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Export CSV
           </button>
         </div>
@@ -1533,7 +1533,7 @@ export function AuditLogTab() {
 
       {loading && logs.length === 0 ? (
         <div className="glass-panel rounded-2xl py-16 flex justify-center">
-          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : logs.length === 0 ? (
         <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">

@@ -18,8 +18,11 @@ function isActivePath(currentPath: string, href: string) {
 }
 
 export function PageTabs({ items, currentPath }: PageTabsProps) {
-  const activeItems = items.filter((item) => isActivePath(currentPath, item.href));
-  const activeHref = activeItems.sort((left, right) => right.href.length - left.href.length)[0]?.href;
+  const activeHref = items.reduce<string | undefined>((bestMatch, item) => {
+    if (!isActivePath(currentPath, item.href)) return bestMatch;
+    if (!bestMatch || item.href.length > bestMatch.length) return item.href;
+    return bestMatch;
+  }, undefined);
 
   return (
     <nav aria-label="Section navigation" className="glass-panel rounded-2xl p-1.5">

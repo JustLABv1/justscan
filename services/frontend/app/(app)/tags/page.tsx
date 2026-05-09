@@ -172,12 +172,12 @@ export default function TagsPage() {
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex items-center gap-4 px-4 py-3.5"
               style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}>
-              <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+              <Skeleton className="size-8 rounded-lg shrink-0" />
               <Skeleton className="h-4 w-28 rounded" />
               <div className="flex-1" />
               <Skeleton className="h-4 w-16 rounded" />
-              <Skeleton className="h-7 w-7 rounded-lg" />
-              <Skeleton className="h-7 w-7 rounded-lg" />
+              <Skeleton className="size-7 rounded-lg" />
+              <Skeleton className="size-7 rounded-lg" />
             </div>
           ))}
         </div>
@@ -199,7 +199,7 @@ export default function TagsPage() {
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
               <div
-                className="w-4 h-4 rounded-full shrink-0"
+                className="size-4 rounded-full shrink-0"
                 style={{ background: tag.color, boxShadow: `0 0 8px ${tag.color}88`, outline: `2px solid ${tag.color}40`, outlineOffset: 2 }}
               />
               <span
@@ -247,7 +247,7 @@ export default function TagsPage() {
                     <div className="flex flex-wrap gap-2">
                       {COLORS.map((c) => (
                         <button key={c} type="button" onClick={() => setColor(c)}
-                          className="w-7 h-7 rounded-full transition-all"
+                          className="size-7 rounded-full transition-all"
                           style={{
                             background: c,
                             boxShadow: color === c ? `0 0 10px ${c}99` : 'none',
@@ -257,10 +257,10 @@ export default function TagsPage() {
                           }} />
                       ))}
                       <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
-                        className="w-7 h-7 rounded-full cursor-pointer border-0 p-0 bg-transparent" title="Custom color" />
+                        className="size-7 rounded-full cursor-pointer border-0 p-0 bg-transparent" title="Custom color" />
                     </div>
                     <div className="flex items-center gap-2 pt-1">
-                      <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ background: color, boxShadow: `0 0 6px ${color}88` }} />
+                      <span className="size-3.5 rounded-full shrink-0" style={{ background: color, boxShadow: `0 0 6px ${color}88` }} />
                       <span className="text-xs font-mono text-zinc-500">{color}</span>
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium ml-1"
                         style={{ background: color + '22', color, border: `1px solid ${color}44` }}>
@@ -274,7 +274,7 @@ export default function TagsPage() {
                 <button onClick={modal.close} className="btn-secondary" type="button">Cancel</button>
                 <button type="submit" form="tag-form" disabled={saving}
                   className="btn-primary inline-flex items-center gap-2">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Create'}
                 </button>
               </Modal.Footer>
@@ -295,7 +295,7 @@ export default function TagsPage() {
                 {shareTarget ? (
                   <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                     <div className="flex items-center gap-3">
-                      <span className="w-4 h-4 rounded-full shrink-0" style={{ background: shareTarget.color, boxShadow: `0 0 8px ${shareTarget.color}88` }} />
+                      <span className="size-4 rounded-full shrink-0" style={{ background: shareTarget.color, boxShadow: `0 0 8px ${shareTarget.color}88` }} />
                       <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{shareTarget.name}</p>
                     </div>
                     <div className="mt-2">
@@ -311,7 +311,7 @@ export default function TagsPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

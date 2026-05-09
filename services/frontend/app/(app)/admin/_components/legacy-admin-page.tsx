@@ -18,9 +18,7 @@ import {
   adminListOIDCProviders,
   adminListOIDCRoleOverrides,
   adminPreviewOIDCClaimSync,
-  AdminScan,
   adminSetDefaultRegistry,
-  AdminToken,
   adminUnsetDefaultRegistry,
   adminUpdateAuthSettings,
   adminUpdateGlobalRegistry,
@@ -28,13 +26,6 @@ import {
   adminUpdateOIDCProvider,
   adminUpdateOIDCRoleOverride,
   adminUpdateScannerSettings,
-  AdminUser,
-  APIRequestLog,
-  APIRequestLogFilters,
-  APIUsageStats,
-  AuditLog,
-  AuditLogFilters,
-  AutoTagRule,
   cancelScan,
   createAdminUser,
   createAutoTagRule,
@@ -61,21 +52,8 @@ import {
   listOrgs,
   listTags,
   listXRayRequestLogs,
-  NotificationChannel,
-  NotificationDelivery,
-  OIDCClaimSyncPreview,
-  OIDCGroupMapping,
-  OIDCOrgRoleOverride,
-  OIDCProviderAdmin,
-  Org,
-  Registry,
-  RegistryWithHealth,
   reScan,
-  ScannerCapabilities,
-  ScannerHealth,
-  ScannerSettings,
   setPublicScanEnabled,
-  Tag,
   testNotificationChannel,
   updateAdminToken,
   updateAdminUser,
@@ -85,6 +63,30 @@ import {
   updateRateLimit,
   updateRegisterRateLimit,
   updateXRayLogRetention,
+} from '@/lib/api';
+import type {
+  AdminScan,
+  AdminToken,
+  AdminUser,
+  APIRequestLog,
+  APIRequestLogFilters,
+  APIUsageStats,
+  AuditLog,
+  AuditLogFilters,
+  AutoTagRule,
+  NotificationChannel,
+  NotificationDelivery,
+  OIDCClaimSyncPreview,
+  OIDCGroupMapping,
+  OIDCOrgRoleOverride,
+  OIDCProviderAdmin,
+  Org,
+  Registry,
+  RegistryWithHealth,
+  ScannerCapabilities,
+  ScannerHealth,
+  ScannerSettings,
+  Tag,
   XRayRequestLog,
   XRayRequestLogFilters,
   XRayUsageStats,
@@ -95,7 +97,7 @@ import { Input, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/r
 import { ArrowDown01Icon, ArrowRight01Icon, Delete01Icon, Notification01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon, Tag01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AdminChrome } from './admin-chrome';
 import { resolveAdminTab } from './admin-tabs';
 const inputCls = nativeFieldClassName;
@@ -228,7 +230,7 @@ function ScannerHealthPanel() {
       {health && (
         <>
           {!health.local_scanner_enabled ? (
-            <div className="rounded-xl px-4 py-4 text-sm" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)' }}>
+            <div className="rounded-xl p-4 text-sm" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)' }}>
               <p className="font-medium text-zinc-800 dark:text-zinc-100">Local scanner is disabled.</p>
               <p className="mt-1 text-zinc-600 dark:text-zinc-400">{health.message || 'This backend instance is running without the built-in local scanner.'}</p>
               <p className="mt-2 text-xs text-zinc-500">Grype augmentation: {health.grype_enabled ? 'enabled' : 'disabled'}</p>
@@ -440,12 +442,12 @@ function SettingsTab() {
         </div>
 
         {publicScanEnabled === null ? (
-          <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+          <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
         ) : (
           <div className="flex items-center justify-between gap-4 p-4 rounded-xl" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
             <div className="flex items-center gap-3">
               <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                className="size-10 rounded-xl flex items-center justify-center shrink-0"
                 style={{
                   background: publicScanEnabled ? 'rgba(124,58,237,0.15)' : 'rgba(113,113,122,0.1)',
                   border: publicScanEnabled ? '1px solid rgba(167,139,250,0.3)' : '1px solid rgba(113,113,122,0.2)',
@@ -485,7 +487,7 @@ function SettingsTab() {
             >
               {saving ? (
                 <span className="flex items-center gap-2">
-                  <span className="w-3.5 h-3.5 rounded-full border-2 border-current/30 border-t-current animate-spin" />
+                  <span className="size-3.5 rounded-full border-2 border-current/30 border-t-current animate-spin" />
                   Saving…
                 </span>
               ) : publicScanEnabled ? 'Disable' : 'Enable'}
@@ -514,7 +516,7 @@ function SettingsTab() {
             disabled={savingRl || rateLimitInput === String(rateLimit)}
             className="btn-primary inline-flex items-center gap-2"
           >
-            {savingRl && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            {savingRl && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Save
           </button>
         </div>
@@ -539,7 +541,7 @@ function SettingsTab() {
             disabled={savingRegisterRl || registerRateLimitInput === String(registerRateLimit)}
             className="btn-primary inline-flex items-center gap-2"
           >
-            {savingRegisterRl && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            {savingRegisterRl && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Save
           </button>
         </div>
@@ -566,7 +568,7 @@ function SettingsTab() {
             className="btn-primary inline-flex items-center gap-2"
             type="button"
           >
-            {savingApiRetention && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            {savingApiRetention && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Save
           </button>
         </div>
@@ -593,7 +595,7 @@ function SettingsTab() {
             className="btn-primary inline-flex items-center gap-2"
             type="button"
           >
-            {savingXrayRetention && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            {savingXrayRetention && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Save
           </button>
         </div>
@@ -676,7 +678,7 @@ function ScannerSettingsPanel() {
         </div>
       </div>
       <button onClick={handleSave} disabled={saving} className="btn-primary inline-flex items-center gap-2" type="button">
-        {saving && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+        {saving && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
         Save Scanner Settings
       </button>
     </div>
@@ -723,7 +725,7 @@ function AuthSettingsPanel() {
         Enable local username/password authentication
       </label>
       <button onClick={handleSave} disabled={saving} className="btn-primary inline-flex items-center gap-2" type="button">
-        {saving && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+        {saving && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
         Save Auth Settings
       </button>
     </div>
@@ -792,7 +794,7 @@ function OverviewTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
       </div>
     );
   }
@@ -1047,7 +1049,7 @@ function UsersTab() {
 
   if (loading) return (
     <div className="flex justify-center py-16">
-      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+      <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
     </div>
   );
 
@@ -1230,7 +1232,7 @@ function UsersTab() {
                 </button>
                 <button type="submit" form="user-form" disabled={saving}
                   className="btn-primary inline-flex items-center gap-2">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isCreate ? 'Create' : 'Save'}
                 </button>
               </Modal.Footer>
@@ -1344,7 +1346,7 @@ function TokensTab() {
 
   if (loading) return (
     <div className="flex justify-center py-16">
-      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+      <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
     </div>
   );
 
@@ -1441,7 +1443,7 @@ function TokensTab() {
                 </button>
                 <button type="submit" form="token-form" disabled={saving}
                   className="btn-primary inline-flex items-center gap-2">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   Save
                 </button>
               </Modal.Footer>
@@ -1512,7 +1514,7 @@ function AutoTagsTab() {
 
   if (loading) return (
     <div className="flex justify-center py-16">
-      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+      <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
     </div>
   );
 
@@ -1648,7 +1650,7 @@ function AutoTagsTab() {
                 </button>
                 <button type="submit" form="autotag-form" disabled={saving || tags.length === 0}
                   className="btn-primary inline-flex items-center gap-2">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isCreate ? 'Create' : 'Save'}
                 </button>
               </Modal.Footer>
@@ -1744,7 +1746,7 @@ function AuditLogTab() {
 
   if (loading) return (
     <div className="flex justify-center py-16">
-      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+      <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
     </div>
   );
 
@@ -1772,7 +1774,7 @@ function AuditLogTab() {
             className="btn-primary inline-flex items-center gap-2"
             type="button"
           >
-            {exporting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            {exporting && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Export CSV
           </button>
         </div>
@@ -2041,7 +2043,7 @@ export function NotificationsTab() {
 
   if (loading) return (
     <div className="flex justify-center py-16">
-      <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+      <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
     </div>
   );
 
@@ -2153,7 +2155,7 @@ export function NotificationsTab() {
 
                           {historyLoading ? (
                             <div className="flex justify-center py-4">
-                              <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                              <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                             </div>
                           ) : (deliveryHistory[ch.id] ?? []).length === 0 ? (
                             <p className="text-sm text-zinc-500">No deliveries recorded yet.</p>
@@ -2282,7 +2284,7 @@ export function NotificationsTab() {
                       </div>
                       <label className="flex items-center gap-2.5 cursor-pointer">
                         <input type="checkbox" checked={formSMTPTLS} onChange={e => setFormSMTPTLS(e.target.checked)}
-                          className="w-4 h-4 rounded accent-violet-500" />
+                          className="size-4 rounded accent-violet-500" />
                         <span className="text-sm text-zinc-600 dark:text-zinc-300">Use TLS (port 465)</span>
                       </label>
                     </>
@@ -2316,7 +2318,7 @@ export function NotificationsTab() {
                       {EVENT_OPTIONS.map(ev => (
                         <label key={ev.value} className="flex items-center gap-2.5 cursor-pointer">
                           <input type="checkbox" checked={formEvents.includes(ev.value)} onChange={() => toggleEvent(ev.value)}
-                            className="w-4 h-4 rounded accent-violet-500" />
+                            className="size-4 rounded accent-violet-500" />
                           <span className="text-sm text-zinc-600 dark:text-zinc-300">{ev.label}</span>
                         </label>
                       ))}
@@ -2331,7 +2333,7 @@ export function NotificationsTab() {
                       <div className="grid gap-2 rounded-xl p-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                         {orgs.map((org) => (
                           <label key={org.id} className="flex items-center gap-2.5 cursor-pointer">
-                            <input type="checkbox" checked={formOrgIds.includes(org.id)} onChange={() => toggleOrg(org.id)} className="w-4 h-4 rounded accent-violet-500" />
+                            <input type="checkbox" checked={formOrgIds.includes(org.id)} onChange={() => toggleOrg(org.id)} className="size-4 rounded accent-violet-500" />
                             <span className="text-sm text-zinc-600 dark:text-zinc-300">{org.name}</span>
                           </label>
                         ))}
@@ -2367,7 +2369,7 @@ export function NotificationsTab() {
 
                   <label className="flex items-center gap-2.5 cursor-pointer">
                     <input type="checkbox" checked={formEnabled} onChange={e => setFormEnabled(e.target.checked)}
-                      className="w-4 h-4 rounded accent-violet-500" />
+                      className="size-4 rounded accent-violet-500" />
                     <span className="text-sm text-zinc-600 dark:text-zinc-300">Enabled</span>
                   </label>
                 </form>
@@ -2378,7 +2380,7 @@ export function NotificationsTab() {
                 </button>
                 <button type="submit" form="notif-form" disabled={saving}
                   className="btn-primary inline-flex items-center gap-2">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isCreate ? 'Create' : 'Save'}
                 </button>
               </Modal.Footer>
@@ -2659,7 +2661,7 @@ export function ScansTab() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : groups.length === 0 ? (
         <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
@@ -2670,13 +2672,13 @@ export function ScansTab() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                <th className="w-8 px-3 py-3" />
+                <th className="w-8 p-3" />
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
-                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }}>C</th>
-                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }}>H</th>
-                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }}>M</th>
-                <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }}>L</th>
+                <th className="text-center p-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(239,68,68,0.7)' }}>C</th>
+                <th className="text-center p-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(249,115,22,0.7)' }}>H</th>
+                <th className="text-center p-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(234,179,8,0.7)' }}>M</th>
+                <th className="text-center p-3 text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(59,130,246,0.7)' }}>L</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Owner</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Share</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Date</th>
@@ -2698,9 +2700,9 @@ export function ScansTab() {
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
-                      <td className="px-3 py-3.5 w-8">
+                      <td className="p-3.5 w-8">
                         <span
-                          className="flex items-center justify-center w-5 h-5 rounded-md transition-all duration-150"
+                          className="flex items-center justify-center size-5 rounded-md transition-all duration-150"
                           style={{ color: 'var(--text-muted)', background: isOpen ? 'rgba(124,58,237,0.12)' : undefined }}
                         >
                           {isOpen
@@ -2731,10 +2733,10 @@ export function ScansTab() {
                           {latest.status}
                         </span>
                       </td>
-                      <td className="px-3 py-3.5 text-center font-mono text-xs text-red-400">{latest.critical_count || '—'}</td>
-                      <td className="px-3 py-3.5 text-center font-mono text-xs text-orange-400">{latest.high_count || '—'}</td>
-                      <td className="px-3 py-3.5 text-center font-mono text-xs text-yellow-400">{latest.medium_count || '—'}</td>
-                      <td className="px-3 py-3.5 text-center font-mono text-xs text-blue-400">{latest.low_count || '—'}</td>
+                      <td className="p-3.5 text-center font-mono text-xs text-red-400">{latest.critical_count || '—'}</td>
+                      <td className="p-3.5 text-center font-mono text-xs text-orange-400">{latest.high_count || '—'}</td>
+                      <td className="p-3.5 text-center font-mono text-xs text-yellow-400">{latest.medium_count || '—'}</td>
+                      <td className="p-3.5 text-center font-mono text-xs text-blue-400">{latest.low_count || '—'}</td>
                       <td className="px-4 py-3.5 text-sm text-zinc-500 max-w-[160px] truncate" title={latest.owner_email || '—'}>
                         {latest.owner_email ? latest.owner_email : <span className="italic text-zinc-400">anonymous</span>}
                       </td>
@@ -2910,7 +2912,7 @@ export function ScansTab() {
                 </button>
                 <button type="submit" form="tag-form" disabled={!selectedTagId || actionLoadingId === `${tagScan?.id}:tag`}
                   className="btn-primary inline-flex items-center gap-2">
-                  {actionLoadingId === `${tagScan?.id}:tag` && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {actionLoadingId === `${tagScan?.id}:tag` && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   Add Tag
                 </button>
               </Modal.Footer>
@@ -3218,7 +3220,7 @@ export function InsightsTab() {
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-zinc-500">{apiTotal.toLocaleString()} requests</p>
               <button onClick={handleApiExport} disabled={apiExporting || apiTotal === 0} className="btn-primary inline-flex items-center gap-2" type="button">
-                {apiExporting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                {apiExporting && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 Export CSV
               </button>
             </div>
@@ -3234,7 +3236,7 @@ export function InsightsTab() {
           {/* Table */}
           {apiLoading ? (
             <div className="flex justify-center py-12">
-              <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+              <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
             </div>
           ) : apiLogs.length === 0 ? (
             <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
@@ -3349,7 +3351,7 @@ export function InsightsTab() {
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-zinc-500">{xrayTotal.toLocaleString()} calls recorded</p>
               <button onClick={handleXrayExport} disabled={xrayExporting || xrayTotal === 0} className="btn-primary inline-flex items-center gap-2" type="button">
-                {xrayExporting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                {xrayExporting && <span className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 Export CSV
               </button>
             </div>
@@ -3365,7 +3367,7 @@ export function InsightsTab() {
           {/* Table */}
           {xrayLoading ? (
             <div className="flex justify-center py-12">
-              <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+              <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
             </div>
           ) : xrayLogs.length === 0 ? (
             <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
@@ -3916,7 +3918,7 @@ export function IdentityProvidersTab() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : providers.length === 0 ? (
         <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
@@ -3967,7 +3969,7 @@ export function IdentityProvidersTab() {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         {provider.button_color ? (
-                          <span className="w-2.5 h-2.5 rounded-full border border-white/30" style={{ background: provider.button_color }} />
+                          <span className="size-2.5 rounded-full border border-white/30" style={{ background: provider.button_color }} />
                         ) : null}
                         <span className="font-medium text-zinc-700 dark:text-zinc-200">{provider.display_name}</span>
                         {selectedProvider?.name === provider.name ? (
@@ -4158,7 +4160,7 @@ export function IdentityProvidersTab() {
               <textarea className={inputCls} rows={4} value={previewRolesInput} onChange={(event) => setPreviewRolesInput(event.target.value)} placeholder="realm-admin, editor" />
             </div>
             <button type="submit" disabled={claimSyncPreviewLoading} className="btn-primary inline-flex items-center gap-2 h-fit">
-              {claimSyncPreviewLoading && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              {claimSyncPreviewLoading && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
               Run Preview
             </button>
           </form>
@@ -4440,7 +4442,7 @@ export function IdentityProvidersTab() {
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <button className="btn-secondary" onClick={providerModal.close} type="button">Cancel</button>
                 <button type="submit" form="oidc-provider-form" disabled={providerSaving} className="btn-primary inline-flex items-center gap-2">
-                  {providerSaving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {providerSaving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editingProvider ? 'Save Provider' : 'Create Provider'}
                 </button>
               </Modal.Footer>
@@ -4563,7 +4565,7 @@ export function IdentityProvidersTab() {
                     </div>
                   ) : null}
                   {!mappingIsExclude && (mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg) ? (
-                    <div className="rounded-xl px-3 py-3 text-sm text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <div className="rounded-xl p-3 text-sm text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                       <div className="font-medium text-zinc-700 dark:text-zinc-200">Template preview</div>
                       <div className="mt-1 font-mono text-xs text-zinc-500">Example claim: {mappingPreview.claim}</div>
                       {mappingMatchType === 'prefix' ? (
@@ -4577,7 +4579,7 @@ export function IdentityProvidersTab() {
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <button className="btn-secondary" onClick={() => { setEditingMapping(null); mappingModal.close(); }} type="button">Cancel</button>
                 <button type="submit" form="oidc-mapping-form" disabled={mappingSaving} className="btn-primary inline-flex items-center gap-2">
-                  {mappingSaving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {mappingSaving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editingMapping ? 'Save Mapping' : 'Create Mapping'}
                 </button>
               </Modal.Footer>
@@ -4654,7 +4656,7 @@ export function IdentityProvidersTab() {
                     </div>
                   )}
                   {overrideTargetType === 'rendered_name' ? (
-                    <div className="rounded-xl px-3 py-3 text-sm text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <div className="rounded-xl p-3 text-sm text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
                       <div className="font-medium text-zinc-700 dark:text-zinc-200">Target preview</div>
                       <div className="mt-1 font-mono text-xs text-zinc-500">Example claim: {overridePreview.claim}</div>
                       {overrideMatchType === 'prefix' ? (
@@ -4668,7 +4670,7 @@ export function IdentityProvidersTab() {
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <button className="btn-secondary" onClick={() => { setEditingRoleOverride(null); roleOverrideModal.close(); }} type="button">Cancel</button>
                 <button type="submit" form="oidc-role-override-form" disabled={overrideSaving} className="btn-primary inline-flex items-center gap-2">
-                  {overrideSaving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {overrideSaving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editingRoleOverride ? 'Save Override' : 'Create Override'}
                 </button>
               </Modal.Footer>
@@ -4818,7 +4820,7 @@ export function GlobalRegistriesTab() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : registries.length === 0 ? (
         <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
@@ -4953,7 +4955,7 @@ export function GlobalRegistriesTab() {
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <button className="btn-secondary" onClick={modal.close} type="button">Cancel</button>
                 <button type="submit" form="global-registry-form" disabled={saving} className="btn-primary inline-flex items-center gap-2">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editingRegistry ? 'Save Registry' : 'Create Registry'}
                 </button>
               </Modal.Footer>

@@ -273,7 +273,7 @@ function formatDuration(durationMs: number): string {
 }
 
 function orderStepLogs(stepLogs?: ScanStepLog[] | null): ScanStepLog[] {
-	return [...(stepLogs ?? [])].sort((left, right) => left.position - right.position);
+	return (stepLogs ?? []).toSorted((left, right) => left.position - right.position);
 }
 
 function resolveStepLogEnd(stepLog: ScanStepLog, nextStep?: ScanStepLog, completedAt?: string | null): string | null {
@@ -592,9 +592,9 @@ export function ScanningAnimation({
 				<div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
 					<div className="min-w-0 flex-1 space-y-1.5">
 						<div className="flex items-center gap-3">
-							<span className="relative flex h-3 w-3">
+							<span className="relative flex size-3">
 								<span className="absolute inset-0 rounded-full" style={{ background: progress.accent, animation: 'stepPulse 1.6s ease-in-out infinite' }} />
-								<span className="relative h-3 w-3 rounded-full" style={{ background: progress.accent }} />
+								<span className="relative size-3 rounded-full" style={{ background: progress.accent }} />
 							</span>
 							<h3 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>{progress.title}</h3>
 						</div>
@@ -635,14 +635,14 @@ export function ScanningAnimation({
 								<li key={step.key} className={`flex items-center ${isLast ? '' : 'flex-1'}`}>
 									<div className="relative flex flex-col items-center">
 										<div
-											className="z-10 flex items-center justify-center w-7 h-7 rounded-full shadow-sm"
+											className="z-10 flex items-center justify-center size-7 rounded-full shadow-sm"
 											style={{
 												color: isActive || isComplete ? '#ffffff' : '#71717a',
 												background: isActive || isComplete ? nodeColor : 'var(--card-bg)',
 												border: `1px solid ${isActive || isComplete ? nodeColor : 'var(--glass-border)'}`,
 												boxShadow: isActive ? `0 0 14px ${progress.accentSoft}` : undefined,
 												transform: isActive ? 'scale(1.1)' : 'scale(1)',
-												transition: 'all 0.3s ease',
+												transition: 'transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, color 0.3s ease',
 											}}
 										>
 											{isComplete ? (
@@ -745,7 +745,7 @@ export function ScanStepTimeline({
 
 	return (
 		<div
-			className="glass-panel overflow-hidden rounded-[28px] px-5 py-5 md:px-6 md:py-6"
+			className="glass-panel overflow-hidden rounded-[28px] p-5 md:px-6 md:py-6"
 			style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}
 		>
 			<style>{`
@@ -824,7 +824,7 @@ export function ScanStepTimeline({
 					return (
 						<li
 							key={stepLog.id}
-							className="rounded-2xl px-4 py-4"
+							className="rounded-2xl p-4"
 							style={{
 								background: 'var(--card-bg)',
 								border: `1px solid ${isTerminal ? rowTone.border : 'var(--glass-border)'}`,
@@ -836,7 +836,7 @@ export function ScanStepTimeline({
 							<div className="flex gap-3">
 								<div className="relative flex shrink-0 flex-col items-center pt-0.5">
 									<span
-										className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white"
+										className="flex size-8 items-center justify-center rounded-full text-xs font-semibold text-white"
 										style={{ background: isTerminal ? rowTone.bubble : '#8b5cf6', boxShadow: isTerminal ? rowTone.glow : 'none' }}
 									>
 										{index + 1}
@@ -914,9 +914,9 @@ export function ScanStepTimeline({
 												</div>
 
 												{stepLog.output.length > 0 && (
-													<div className="rounded-2xl px-3 py-3" style={{ background: 'linear-gradient(180deg, rgba(124,58,237,0.05) 0%, rgba(124,58,237,0.02) 100%)', border: '1px solid rgba(124,58,237,0.14)' }}>
+													<div className="rounded-2xl p-3" style={{ background: 'linear-gradient(180deg, rgba(124,58,237,0.05) 0%, rgba(124,58,237,0.02) 100%)', border: '1px solid rgba(124,58,237,0.14)' }}>
 														<div className="mb-2 flex items-center gap-2">
-															<span className="h-2 w-2 rounded-full" style={{ background: '#a78bfa', animation: 'timelineGlow 1.7s ease-in-out infinite' }} />
+															<span className="size-2 rounded-full" style={{ background: '#a78bfa', animation: 'timelineGlow 1.7s ease-in-out infinite' }} />
 															<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Outputs</p>
 														</div>
 														<ul className="space-y-1.5">

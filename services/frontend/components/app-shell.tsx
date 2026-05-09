@@ -316,7 +316,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
         <div className="app-bg flex min-h-dvh items-center justify-center px-6 py-10">
           <div className="glass-panel flex w-full max-w-md flex-col items-center rounded-[28px] px-8 py-10 text-center">
             <div
-              className="flex h-12 w-12 items-center justify-center rounded-2xl"
+              className="flex size-12 items-center justify-center rounded-2xl"
               style={{
                 background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
                 boxShadow: '0 0 20px rgba(124,58,237,0.28), inset 0 1px 0 rgba(255,255,255,0.18)',
@@ -357,7 +357,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
           }`}
         >
           <div
-            className="absolute -top-10 -left-10 w-40 h-40 rounded-full pointer-events-none"
+            className="absolute -top-10 -left-10 size-40 rounded-full pointer-events-none"
             style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%)' }}
           />
           <div className="absolute inset-x-0 top-0 h-px pointer-events-none bg-gradient-to-r from-transparent via-violet-400/20 to-transparent" />
@@ -368,7 +368,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             style={{ borderBottom: '1px solid var(--border-subtle)' }}
           >
             <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+              className="size-8 rounded-xl flex items-center justify-center shrink-0"
               style={{
                 background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
                 boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
@@ -441,7 +441,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             )}
           </div>
 
-          <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2">
+          <nav className="flex-1 overflow-y-auto overflow-x-hidden p-2">
             {navigationGroups.map(({ label, items }) => (
               <div key={label} className="mb-1">
                 <div
@@ -594,7 +594,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               className="pointer-events-none fixed z-[70] hidden pl-2 md:block"
               style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
             >
-              <div className="glass-modal w-[220px] rounded-[20px] px-3 py-3" style={{ borderColor: 'var(--modal-border)' }}>
+              <div className="glass-modal w-[220px] rounded-[20px] p-3" style={{ borderColor: 'var(--modal-border)' }}>
                 <div className="flex items-center gap-3 text-sm font-medium text-zinc-800 dark:text-zinc-100">
                   <hoveredLeafNavItem.Icon size={18} className="shrink-0" style={{ color: isActiveRoute(pathname, hoveredLeafNavItem.href) ? '#a78bfa' : 'var(--text-faint)' }} />
                   <span className="flex-1">{hoveredLeafNavItem.label}</span>
@@ -612,7 +612,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
           <div className="shrink-0 px-2 pb-3 pt-2 space-y-1.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
             <Dropdown>
               <Dropdown.Trigger
-                className={`w-full flex items-center rounded-xl transition-all duration-150 outline-none ${desktopCollapsed ? 'justify-center py-2' : 'gap-2.5 px-2 py-2.5'}`}
+                className={`w-full flex items-center rounded-xl transition-all duration-150 outline-none ${desktopCollapsed ? 'justify-center py-2' : 'gap-2.5 p-2.5'}`}
                 style={{ background: 'transparent' }}
                 aria-label={workspaceTitle}
                 onMouseEnter={(event: any) => (event.currentTarget.style.background = 'var(--row-hover)')}
@@ -620,12 +620,12 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               >
                 <div className="relative shrink-0" title={desktopCollapsed ? workspaceTitle : undefined}>
                   <div
-                    className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
+                    className="flex size-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
                     style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.12)' }}
                   >
                     <GridTableIcon size={16} />
                   </div>
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full" style={workspaceMarkerStyle} />
+                  <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full" style={workspaceMarkerStyle} />
                 </div>
                 {!desktopCollapsed && (
                   <>
@@ -669,7 +669,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 onMouseLeave={(event: any) => (event.currentTarget.style.background = 'transparent')}
               >
                 <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
+                  className="size-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
                   title={desktopCollapsed ? (user?.username ?? user?.email ?? 'User menu') : undefined}
                   style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
                 >
@@ -701,7 +701,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                   <Dropdown.Item id="theme" textValue="Theme">
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-2">
-                        {mounted ? (isDark ? <Sun01Icon size={14} className="text-zinc-500" /> : <Moon02Icon size={14} className="text-zinc-500" />) : <span aria-hidden className="block h-[14px] w-[14px]" />}
+                        {mounted ? (isDark ? <Sun01Icon size={14} className="text-zinc-500" /> : <Moon02Icon size={14} className="text-zinc-500" />) : <span aria-hidden className="block size-[14px]" />}
                         <Label>Theme</Label>
                       </div>
                     </div>
@@ -757,12 +757,12 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 <Drawer.Content className="md:hidden" placement="left">
                   <Drawer.Dialog className="flex h-full w-[min(88vw,320px)] flex-col sidebar-glass">
                     <Drawer.Header
-                      className="flex items-center justify-between px-4 py-4"
+                      className="flex items-center justify-between p-4"
                       style={{ borderBottom: '1px solid var(--border-subtle)' }}
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                          className="size-9 rounded-xl flex items-center justify-center shrink-0"
                           style={{
                             background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
                             boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
@@ -784,18 +784,18 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                     <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
                       <div className="space-y-4">
                         <Dropdown>
-                          <Dropdown.Trigger className="w-full flex items-center justify-between rounded-xl px-3 py-3 text-sm transition-all duration-150 outline-none text-left"
+                          <Dropdown.Trigger className="w-full flex items-center justify-between rounded-xl p-3 text-sm transition-all duration-150 outline-none text-left"
                             style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
                           >
                             <div className="flex min-w-0 flex-1 items-center gap-2.5">
                               <div className="relative shrink-0">
                                 <div
-                                  className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
+                                  className="flex size-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
                                   style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.12)' }}
                                 >
                                   <GridTableIcon size={16} />
                                 </div>
-                                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full" style={workspaceMarkerStyle} />
+                                <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full" style={workspaceMarkerStyle} />
                               </div>
                               <div className="flex flex-col min-w-0 flex-1">
                                 <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
@@ -830,7 +830,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                         {pendingInviteCount > 0 && (
                           <Link
                             href="/orgs"
-                            className="flex items-center justify-between rounded-xl px-3 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
+                            className="flex items-center justify-between rounded-xl p-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
                             onClick={() => mobileNav.close()}
                             style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)' }}
                           >
@@ -863,7 +863,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                                   <Link
                                     key={href}
                                     href={href}
-                                    className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all ${
+                                    className={`flex items-center gap-3 rounded-xl p-3 text-sm font-medium transition-all ${
                                       active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-700 dark:text-zinc-300'
                                     }`}
                                     onClick={() => mobileNav.close()}
@@ -891,14 +891,14 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                       </div>
                     </Drawer.Body>
                     <Drawer.Footer
-                      className="flex flex-col gap-2 px-3 py-3"
+                      className="flex flex-col gap-2 p-3"
                       style={{ borderTop: '1px solid var(--border-subtle)' }}
                     >
                       <Dropdown>
                         <Dropdown.Trigger className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 outline-none text-left" style={{ background: 'var(--row-hover)' }}>
                           <div className="flex items-center gap-3 min-w-0 flex-1">
                             <div
-                              className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
+                              className="size-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
                               style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
                             >
                               {initials}
@@ -926,7 +926,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                             <Dropdown.Item key="theme" id="theme" textValue="Theme">
                               <div className="flex items-center justify-between w-full">
                                 <div className="flex items-center gap-2">
-                                  {mounted ? (isDark ? <Sun01Icon size={14} className="text-zinc-500" /> : <Moon02Icon size={14} className="text-zinc-500" />) : <span aria-hidden className="block h-[14px] w-[14px]" />}
+                                  {mounted ? (isDark ? <Sun01Icon size={14} className="text-zinc-500" /> : <Moon02Icon size={14} className="text-zinc-500" />) : <span aria-hidden className="block size-[14px]" />}
                                   <Label>Theme</Label>
                                 </div>
                               </div>
@@ -957,7 +957,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
             <Link className="flex items-center gap-2 min-w-0" href="/dashboard">
               <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                className="size-9 rounded-xl flex items-center justify-center shrink-0"
                 style={{
                   background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
                   boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',

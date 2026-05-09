@@ -84,7 +84,7 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
     <div ref={containerRef} className="h-full min-h-[176px] w-full">
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="h-full w-full cursor-crosshair"
+        className="size-full cursor-crosshair"
         aria-hidden
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHoverIdx(null)}
@@ -143,7 +143,7 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
           const total = point.critical + point.high + point.medium + point.low + point.unknown;
           return (
             <div key={point.date} className="flex min-w-0 flex-1 flex-col items-center gap-2" title={`${point.date}: ${total} avg findings`}>
-              <div className="flex h-full w-full flex-col justify-end overflow-hidden rounded-t-xl" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)' }}>
+              <div className="flex size-full flex-col justify-end overflow-hidden rounded-t-xl" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)' }}>
                 {SEVERITY_SERIES.map((severity) => {
                   const value = point[severity.key];
                   const height = total === 0 ? 0 : Math.max(6, (value / max) * 180);
@@ -159,7 +159,7 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
       <div className="flex flex-wrap gap-2">
         {SEVERITY_SERIES.map((severity) => (
           <span key={severity.key} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-            <span className="h-2 w-2 rounded-full" style={{ background: severity.color }} />
+            <span className="size-2 rounded-full" style={{ background: severity.color }} />
             {severity.label}
           </span>
         ))}

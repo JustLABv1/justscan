@@ -246,7 +246,6 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
                     required
                     minLength={2}
                     maxLength={128}
-                    autoFocus
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -257,7 +256,7 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
                         key={opt.value}
                         type="button"
                         onClick={() => setExpiresIn(opt.value)}
-                        className="rounded-lg px-2 py-2 text-xs font-medium transition-all"
+                        className="rounded-lg p-2 text-xs font-medium transition-all"
                         style={expiresIn === opt.value
                           ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(109,40,217,0.12) 100%)', border: '1px solid rgba(167,139,250,0.4)', color: '#a78bfa' }
                           : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }
@@ -278,7 +277,7 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
                 disabled={saving}
                 className="btn-primary inline-flex items-center gap-2"
               >
-                {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 Create Token
               </button>
             </Modal.Footer>
@@ -456,7 +455,7 @@ export default function TokensPage() {
           >
             {tokens.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-[24px] px-6 py-14 text-center gap-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                <div className="size-14 rounded-2xl flex items-center justify-center"
                   style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.15)' }}>
                   <Key01Icon size={24} color="#a78bfa" />
                 </div>
@@ -485,7 +484,7 @@ export default function TokensPage() {
                   {tokens.map((token, idx) => (
                     <div
                       key={token.id}
-                      className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(220px,1.4fr)_160px_180px_140px_72px] md:items-center"
+                      className="grid gap-3 p-4 md:grid-cols-[minmax(220px,1.4fr)_160px_180px_140px_72px] md:items-center"
                       style={idx < tokens.length - 1 ? { borderBottom: '1px solid var(--border-subtle)' } : undefined}
                     >
                       <div className="min-w-0">

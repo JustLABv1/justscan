@@ -31,7 +31,7 @@ function StatusBadge({ status }: { status: string }) {
       className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap"
       style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}` }}
     >
-      <span className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`} />
+      <span className={`size-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`} />
       {s.label ?? status}
     </span>
   );
@@ -64,12 +64,12 @@ function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
-  if (!mounted) return <div className="w-9 h-9" />;
+  if (!mounted) return <div className="size-9" />;
   const isDark = resolvedTheme === 'dark';
   return (
     <button
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
+      className="size-9 flex items-center justify-center rounded-xl transition-colors"
       style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
@@ -166,7 +166,7 @@ function HelmGroupContent() {
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
       <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-        <span className="w-4 h-4 rounded-full border-2 border-violet-400/30 border-t-violet-400 animate-spin" />
+        <span className="size-4 rounded-full border-2 border-violet-400/30 border-t-violet-400 animate-spin" />
         Loading helm chart scan…
       </div>
     </div>
@@ -396,7 +396,7 @@ export default function SharedHelmGroupPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
-        <span className="w-5 h-5 rounded-full border-2 border-violet-400/30 border-t-violet-400 animate-spin" />
+        <span className="size-5 rounded-full border-2 border-violet-400/30 border-t-violet-400 animate-spin" />
       </div>
     }>
       <HelmGroupContent />

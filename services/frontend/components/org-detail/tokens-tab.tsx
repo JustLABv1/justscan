@@ -165,7 +165,6 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                     required
                     minLength={2}
                     maxLength={128}
-                    autoFocus
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -176,7 +175,7 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                         key={opt.value}
                         type="button"
                         onClick={() => setExpiresIn(opt.value)}
-                        className="rounded-lg px-2 py-2 text-xs font-medium transition-all"
+                        className="rounded-lg p-2 text-xs font-medium transition-all"
                         style={expiresIn === opt.value
                           ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(109,40,217,0.12) 100%)', border: '1px solid rgba(167,139,250,0.4)', color: '#a78bfa' }
                           : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }
@@ -192,7 +191,7 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
             <Modal.Footer className="px-6 py-4 flex justify-end gap-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
               <button type="button" onClick={() => state.close()} className="btn-secondary">Cancel</button>
               <button type="submit" form="create-org-token-form" disabled={saving} className="btn-primary inline-flex items-center gap-2">
-                {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 Create Token
               </button>
             </Modal.Footer>
@@ -276,11 +275,11 @@ export function OrgTokensTab({ orgId, canManage }: OrgTokensTabProps) {
       <div className="glass-panel rounded-2xl overflow-hidden">
         {loading ? (
           <div className="flex justify-center py-8">
-            <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+            <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
           </div>
         ) : tokens.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-6 text-center gap-3">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
+            <div className="size-12 rounded-2xl flex items-center justify-center"
               style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.15)' }}>
               <Key01Icon size={22} color="#a78bfa" />
             </div>

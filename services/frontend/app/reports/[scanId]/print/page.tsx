@@ -90,7 +90,7 @@ const SEVERITY_COLORS: Record<string, string> = {
 };
 
 function formatDate(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return '-';
   return new Date(iso).toLocaleString('en-US', {
     year: 'numeric', month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
@@ -102,7 +102,7 @@ function SeverityBadge({ severity }: { severity: string }) {
   return (
     <span style={{
       display: 'inline-block', backgroundColor: color, color: '#fff',
-      fontSize: '0.7rem', fontWeight: 700, padding: '2px 6px',
+      fontSize: '0.75rem', fontWeight: 700, padding: '2px 6px',
       borderRadius: '3px', letterSpacing: '0.05em', whiteSpace: 'nowrap',
     }}>
       {severity}
@@ -273,7 +273,7 @@ export default function PrintReportPage() {
         </label>
 
         <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
-        <p style={{ fontSize: '11px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>Scan Details</p>
+        <p style={{ fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>Scan Details</p>
         {([['showScanId', 'Scan ID'], ['showStarted', 'Started'], ['showCompleted', 'Completed'], ['showTrivyVersion', 'Scanner Versions']] as [keyof ReportOpts, string][]).map(([k, label]) => (
           <label key={k} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#374151', cursor: 'pointer' }}>
             <input type="checkbox" checked={opts[k] as boolean} onChange={e => setOpts(o => ({ ...o, [k]: e.target.checked }))} />
@@ -282,10 +282,10 @@ export default function PrintReportPage() {
         ))}
 
         <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
-        <p style={{ fontSize: '11px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>Custom Info Fields</p>
+        <p style={{ fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>Custom Info Fields</p>
         {customFields.map((f, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px' }}>
-            <span style={{ flex: 1, fontSize: '11px', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><strong>{f.label}:</strong> {f.value}</span>
+            <span style={{ flex: 1, fontSize: '12px', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><strong>{f.label}:</strong> {f.value}</span>
             <button onClick={() => setCustomFields(prev => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: '13px', lineHeight: 1, flexShrink: 0 }}>×</button>
           </div>
         ))}
@@ -294,14 +294,14 @@ export default function PrintReportPage() {
           value={newCustomField.label}
           onChange={e => setNewCustomField(f => ({ ...f, label: e.target.value }))}
           placeholder="Label (e.g. Team)"
-          style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '3px 6px', fontSize: '11px', boxSizing: 'border-box', marginBottom: '3px' }}
+          style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '3px 6px', fontSize: '12px', boxSizing: 'border-box', marginBottom: '3px' }}
         />
         <input
           type="text"
           value={newCustomField.value}
           onChange={e => setNewCustomField(f => ({ ...f, value: e.target.value }))}
           placeholder="Value"
-          style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '3px 6px', fontSize: '11px', boxSizing: 'border-box', marginBottom: '4px' }}
+          style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '3px 6px', fontSize: '12px', boxSizing: 'border-box', marginBottom: '4px' }}
         />
         <button
           onClick={() => {
@@ -310,27 +310,27 @@ export default function PrintReportPage() {
             setNewCustomField({ label: '', value: '' });
           }}
           disabled={!newCustomField.label}
-          style={{ width: '100%', background: newCustomField.label ? '#374151' : '#e5e7eb', color: newCustomField.label ? '#fff' : '#9ca3af', border: 'none', borderRadius: '4px', padding: '5px 0', fontWeight: 700, fontSize: '11px', cursor: newCustomField.label ? 'pointer' : 'not-allowed' }}
+          style={{ width: '100%', background: newCustomField.label ? '#374151' : '#e5e7eb', color: newCustomField.label ? '#fff' : '#9ca3af', border: 'none', borderRadius: '4px', padding: '5px 0', fontWeight: 700, fontSize: '12px', cursor: newCustomField.label ? 'pointer' : 'not-allowed' }}
         >
           + Add Field
         </button>
 
         <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
-        <p style={{ fontSize: '11px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>Registry / Location</p>
+        <p style={{ fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>Registry / Location</p>
         <input
           type="text"
           value={imageLocation}
           onChange={e => setImageLocation(e.target.value)}
           onBlur={() => patchImageLocation(imageLocation)}
           placeholder="e.g. registry.example.com/app"
-          style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '4px 6px', fontSize: '11px', boxSizing: 'border-box', color: '#374151' }}
+          style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', boxSizing: 'border-box', color: '#374151' }}
         />
-        {savingLocation && <p style={{ fontSize: '10px', color: '#6b7280', margin: '2px 0 0' }}>Saving…</p>}
+        {savingLocation && <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0' }}>Saving…</p>}
 
         <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
         <button
           onClick={() => setShowAddFinding(f => !f)}
-          style={{ width: '100%', background: showAddFinding ? '#f3f4f6' : '#7c3aed', color: showAddFinding ? '#374151' : '#fff', border: 'none', borderRadius: '6px', padding: '6px 0', fontWeight: 700, fontSize: '11px', cursor: 'pointer' }}
+          style={{ width: '100%', background: showAddFinding ? '#f3f4f6' : '#7c3aed', color: showAddFinding ? '#374151' : '#fff', border: 'none', borderRadius: '6px', padding: '6px 0', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}
         >
           {showAddFinding ? '✕ Cancel' : '+ Add Manual CVE'}
         </button>
@@ -338,48 +338,48 @@ export default function PrintReportPage() {
           <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {[['vuln_id', 'CVE ID *', 'text'], ['pkg_name', 'Package', 'text'], ['installed_version', 'Version', 'text'], ['title', 'Title', 'text']].map(([field, label]) => (
               <div key={field}>
-                <p style={{ fontSize: '10px', color: '#6b7280', margin: '0 0 2px' }}>{label}</p>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 2px' }}>{label}</p>
                 <input
                   type="text"
                   value={(newFinding as Record<string, string | number>)[field] as string ?? ''}
                   onChange={e => setNewFinding(f => ({ ...f, [field]: e.target.value }))}
-                  style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '3px 5px', fontSize: '11px', boxSizing: 'border-box' }}
+                  style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '3px 5px', fontSize: '12px', boxSizing: 'border-box' }}
                 />
               </div>
             ))}
             <div>
-              <p style={{ fontSize: '10px', color: '#6b7280', margin: '0 0 2px' }}>Severity</p>
+              <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 2px' }}>Severity</p>
               <select
                 value={newFinding.severity ?? 'HIGH'}
                 onChange={e => setNewFinding(f => ({ ...f, severity: e.target.value }))}
-                style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '3px 5px', fontSize: '11px', boxSizing: 'border-box' }}
+                style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '3px 5px', fontSize: '12px', boxSizing: 'border-box' }}
               >
                 {['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'].map(s => <option key={s}>{s}</option>)}
               </select>
             </div>
             <div>
-              <p style={{ fontSize: '10px', color: '#6b7280', margin: '0 0 2px' }}>CVSS Score</p>
+              <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 2px' }}>CVSS Score</p>
               <input
                 type="number" min={0} max={10} step={0.1}
                 value={newFinding.cvss_score ?? 0}
                 onChange={e => setNewFinding(f => ({ ...f, cvss_score: parseFloat(e.target.value) || 0 }))}
-                style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '3px 5px', fontSize: '11px', boxSizing: 'border-box' }}
+                style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '3px 5px', fontSize: '12px', boxSizing: 'border-box' }}
               />
             </div>
             <div>
-              <p style={{ fontSize: '10px', color: '#6b7280', margin: '0 0 2px' }}>Justification *</p>
+              <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 2px' }}>Justification *</p>
               <textarea
                 value={newFinding.justification ?? ''}
                 onChange={e => setNewFinding(f => ({ ...f, justification: e.target.value }))}
                 rows={3}
                 placeholder="Why is this CVE accepted / not a risk?"
-                style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '3px 5px', fontSize: '11px', boxSizing: 'border-box', resize: 'vertical' }}
+                style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: '4px', padding: '3px 5px', fontSize: '12px', boxSizing: 'border-box', resize: 'vertical' }}
               />
             </div>
             <button
               onClick={submitManualFinding}
               disabled={!newFinding.vuln_id}
-              style={{ background: newFinding.vuln_id ? '#7c3aed' : '#e5e7eb', color: newFinding.vuln_id ? '#fff' : '#9ca3af', border: 'none', borderRadius: '6px', padding: '6px 0', fontWeight: 700, fontSize: '11px', cursor: newFinding.vuln_id ? 'pointer' : 'not-allowed', marginTop: '2px' }}
+              style={{ background: newFinding.vuln_id ? '#7c3aed' : '#e5e7eb', color: newFinding.vuln_id ? '#fff' : '#9ca3af', border: 'none', borderRadius: '6px', padding: '6px 0', fontWeight: 700, fontSize: '12px', cursor: newFinding.vuln_id ? 'pointer' : 'not-allowed', marginTop: '2px' }}
             >
               Save Finding
             </button>
@@ -409,7 +409,7 @@ export default function PrintReportPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <h1 style={{ fontSize: '24px', fontWeight: 800, letterSpacing: '-0.02em' }}>
-                JustScan — Security Report
+                JustScan - Security Report
               </h1>
               <p style={{ color: '#555', marginTop: '4px', fontSize: '13px' }}>
                 Generated {formatDate(new Date().toISOString())}
@@ -437,12 +437,12 @@ export default function PrintReportPage() {
             <tbody>
               {([
                 ['Image', imageRef],
-                ['Digest', scan.image_digest || '—'],
+                ['Digest', scan.image_digest || '-'],
                 ...(opts.showScanId ? [['Scan ID', scan.id]] : []),
                 ['Status', formatStatusLabel(displayStatus)],
                 ...(opts.showStarted ? [['Started', formatDate(scan.started_at)]] : []),
                 ...(opts.showCompleted ? [['Completed', formatDate(scan.completed_at)]] : []),
-                ...(opts.showTrivyVersion ? [['Scanner Versions', [scan.trivy_version ? `Trivy ${scan.trivy_version}` : '', scan.grype_version ? `Grype ${scan.grype_version}` : ''].filter(Boolean).join(' · ') || '—']] : []),
+                ...(opts.showTrivyVersion ? [['Scanner Versions', [scan.trivy_version ? `Trivy ${scan.trivy_version}` : '', scan.grype_version ? `Grype ${scan.grype_version}` : ''].filter(Boolean).join(' · ') || '-']] : []),
                 ...(imageLocation ? [['Registry / Location', imageLocation]] : []),
                 ...(scan.tags && scan.tags.length > 0 ? [['Tags', scan.tags.map((t) => t.name).join(', ')]] : []),
                 ...customFields.map(f => [f.label, f.value]),
@@ -505,7 +505,7 @@ export default function PrintReportPage() {
                       <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '13px' }}>{v.vuln_id}</span>
                       <SeverityBadge severity={v.severity} />
                       {opts.showCvss && v.cvss_score > 0 && (
-                        <span style={{ fontSize: '11px', color: '#555', fontWeight: 600 }}>CVSS {v.cvss_score.toFixed(1)}</span>
+                        <span style={{ fontSize: '12px', color: '#555', fontWeight: 600 }}>CVSS {v.cvss_score.toFixed(1)}</span>
                       )}
                     </div>
                     {v.title && <p style={{ margin: '0 0 4px', fontWeight: 600, fontSize: '13px' }}>{v.title}</p>}
@@ -515,12 +515,12 @@ export default function PrintReportPage() {
                       {v.fixed_version && <>{' → '}<span style={{ color: '#16a34a' }}>fix: {v.fixed_version}</span></>}
                     </p>
                     {opts.showDescription && v.description && (
-                      <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#555', lineHeight: 1.5 }}>
+                      <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#555', lineHeight: 1.5 }}>
                         {v.description.length > 350 ? v.description.slice(0, 350) + '…' : v.description}
                       </p>
                     )}
                     {opts.showReferences && v.references && v.references.length > 0 && (
-                      <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#2563eb' }}>
+                      <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#2563eb' }}>
                         {v.references.slice(0, 2).join(' · ')}
                       </p>
                     )}
@@ -528,9 +528,9 @@ export default function PrintReportPage() {
                       <div style={{ marginTop: '8px' }}>
                         {v.comments.map(c => (
                           <div key={c.id} style={{ marginTop: '6px', background: '#fffbeb', border: '1px solid #fde68a', borderLeft: '4px solid #f59e0b', borderRadius: '4px', padding: '8px 10px' }}>
-                            <p style={{ margin: '0 0 3px', fontSize: '10px', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            <p style={{ margin: '0 0 3px', fontSize: '12px', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                               Analyst Note
-                              {c.username && <span style={{ fontWeight: 400, marginLeft: '6px', textTransform: 'none', letterSpacing: 0 }}>— {c.username}</span>}
+                              {c.username && <span style={{ fontWeight: 400, marginLeft: '6px', textTransform: 'none', letterSpacing: 0 }}>- {c.username}</span>}
                             </p>
                             <p style={{ margin: 0, fontSize: '12px', color: '#78350f', lineHeight: 1.6 }}>{c.content}</p>
                           </div>
@@ -561,9 +561,9 @@ export default function PrintReportPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                   <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '13px' }}>{f.vuln_id}</span>
                   <SeverityBadge severity={f.severity} />
-                  <span style={{ display: 'inline-block', background: '#ede9fe', color: '#6d28d9', fontSize: '0.65rem', fontWeight: 700, padding: '2px 6px', borderRadius: '3px', letterSpacing: '0.05em' }}>MANUAL</span>
+                  <span style={{ display: 'inline-block', background: '#ede9fe', color: '#6d28d9', fontSize: '0.75rem', fontWeight: 700, padding: '2px 6px', borderRadius: '3px', letterSpacing: '0.05em' }}>MANUAL</span>
                   {opts.showCvss && f.cvss_score > 0 && (
-                    <span style={{ fontSize: '11px', color: '#555', fontWeight: 600 }}>CVSS {f.cvss_score.toFixed(1)}</span>
+                    <span style={{ fontSize: '12px', color: '#555', fontWeight: 600 }}>CVSS {f.cvss_score.toFixed(1)}</span>
                   )}
                 </div>
                 {f.title && <p style={{ margin: '0 0 4px', fontWeight: 600, fontSize: '13px' }}>{f.title}</p>}
@@ -576,7 +576,7 @@ export default function PrintReportPage() {
                 )}
                 {f.justification && (
                   <div style={{ marginTop: '8px', background: '#ede9fe', border: '1px solid #c4b5fd', borderLeft: '4px solid #7c3aed', borderRadius: '4px', padding: '8px 10px' }}>
-                    <p style={{ margin: '0 0 3px', fontSize: '10px', fontWeight: 700, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Justification</p>
+                    <p style={{ margin: '0 0 3px', fontSize: '12px', fontWeight: 700, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Justification</p>
                     <p style={{ margin: 0, fontSize: '12px', color: '#4c1d95', lineHeight: 1.6 }}>{f.justification}</p>
                   </div>
                 )}
@@ -610,9 +610,9 @@ export default function PrintReportPage() {
                       <td style={{ padding: '5px 8px', fontFamily: 'monospace', border: '1px solid #e5e7eb' }}>{v.vuln_id}</td>
                       <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.pkg_name}</td>
                       <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.severity}</td>
-                      <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.suppression ? (statusLabel[v.suppression.status] ?? v.suppression.status) : '—'}</td>
+                      <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.suppression ? (statusLabel[v.suppression.status] ?? v.suppression.status) : '-'}</td>
                       <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb' }}>{v.suppression?.source ?? 'local'}</td>
-                      <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{[v.suppression?.justification, v.suppression?.xray_policy_name, v.suppression?.xray_watch_name].filter(Boolean).join(' · ') || '—'}</td>
+                      <td style={{ padding: '5px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{[v.suppression?.justification, v.suppression?.xray_policy_name, v.suppression?.xray_watch_name].filter(Boolean).join(' · ') || '-'}</td>
                     </tr>
                   );
                 })}
@@ -622,7 +622,7 @@ export default function PrintReportPage() {
         )}
 
         {/* Footer */}
-        <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '14px', marginTop: '16px', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#9ca3af' }}>
+        <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '14px', marginTop: '16px', display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#9ca3af' }}>
           <span>JustScan Security Report · {imageRef}</span>
           <span>Scan ID: {scan.id}</span>
         </div>

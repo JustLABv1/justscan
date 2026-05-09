@@ -113,7 +113,7 @@ export default function OrgsPage() {
       {pendingInvites.length > 0 && (
         <section className="glass-panel rounded-2xl p-5 space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            <div className="size-10 rounded-xl flex items-center justify-center shrink-0"
               style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.22)' }}>
               <UserAdd01Icon size={20} color="#f59e0b" />
             </div>
@@ -156,7 +156,7 @@ export default function OrgsPage() {
                       onClick={() => { void handleAcceptInvite(invite); }}
                       type="button"
                     >
-                      {busy && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                      {busy && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                       Accept
                     </button>
                     <button
@@ -177,11 +177,11 @@ export default function OrgsPage() {
 
       {loading ? (
         <div className="flex justify-center items-center h-48">
-          <div className="w-7 h-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : orgs.length === 0 ? (
         <div className="glass-panel rounded-2xl py-20 flex flex-col items-center gap-3">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
+          <div className="size-14 rounded-2xl flex items-center justify-center"
             style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
             <Building04Icon size={28} color="rgba(167,139,250,0.6)" />
           </div>
@@ -202,7 +202,7 @@ export default function OrgsPage() {
                 style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)' }} />
 
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                <div className="size-10 rounded-xl flex items-center justify-center shrink-0"
                   style={{ background: 'rgba(124,58,237,0.2)', boxShadow: '0 0 14px rgba(124,58,237,0.3)', border: '1px solid rgba(167,139,250,0.15)' }}>
                   <Building04Icon size={19} color="#a78bfa" />
                 </div>
@@ -255,7 +255,7 @@ export default function OrgsPage() {
                 <button onClick={modal.close} className="btn-secondary" type="button">Cancel</button>
                 <button type="submit" form="create-org-form" disabled={creating}
                   className="btn-primary inline-flex items-center gap-2">
-                  {creating && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {creating && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   Create
                 </button>
               </Modal.Footer>

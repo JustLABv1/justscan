@@ -233,7 +233,7 @@ export default function AdminAIPage() {
   );
 
   const sortedProviders = useMemo(
-    () => [...providers].sort((left, right) => {
+    () => providers.toSorted((left, right) => {
       if (left.isDefault !== right.isDefault) {
         return left.isDefault ? -1 : 1;
       }
@@ -385,7 +385,7 @@ export default function AdminAIPage() {
   return (
     <AdminShell>
       <div className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4 rounded-[28px] border px-5 py-5 sm:px-6" style={{ borderColor: 'var(--glass-border)', background: 'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))' }}>
+        <div className="flex flex-wrap items-start justify-between gap-4 rounded-[28px] border p-5 sm:px-6" style={{ borderColor: 'var(--glass-border)', background: 'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))' }}>
           <div className="max-w-3xl space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>Provider Control</p>
             <h2 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Manage AI providers without the permanent editor</h2>
@@ -400,7 +400,7 @@ export default function AdminAIPage() {
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <SurfaceCard>
-            <div className="space-y-4 px-5 py-5">
+            <div className="space-y-4 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>Assistant availability</p>
@@ -436,7 +436,7 @@ export default function AdminAIPage() {
           </SurfaceCard>
 
           <SurfaceCard>
-            <div className="space-y-4 px-5 py-5">
+            <div className="space-y-4 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>Anonymous access</p>
@@ -474,7 +474,7 @@ export default function AdminAIPage() {
           </SurfaceCard>
 
           <SurfaceCard>
-            <div className="flex h-full flex-col justify-between px-5 py-5">
+            <div className="flex h-full flex-col justify-between p-5">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>Default provider</p>
                 <p className="mt-3 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{defaultProvider?.label ?? 'None configured'}</p>
@@ -489,7 +489,7 @@ export default function AdminAIPage() {
           </SurfaceCard>
 
           <SurfaceCard>
-            <div className="flex h-full flex-col justify-between px-5 py-5">
+            <div className="flex h-full flex-col justify-between p-5">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>Inventory</p>
                 <p className="mt-3 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{providers.length}</p>
@@ -506,7 +506,7 @@ export default function AdminAIPage() {
         </div>
 
         <SurfaceCard>
-          <div className="space-y-5 px-5 py-5 sm:px-6">
+          <div className="space-y-5 p-5 sm:px-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Configured providers</h3>
@@ -521,7 +521,7 @@ export default function AdminAIPage() {
 
             {loading ? (
               <div className="rounded-2xl border px-4 py-10 text-sm" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)', color: 'var(--text-faint)' }}>
-                Loading AI providers...
+                Loading AI providers…
               </div>
             ) : sortedProviders.length === 0 ? (
               <div className="rounded-3xl border px-5 py-10 text-center" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
@@ -619,7 +619,7 @@ export default function AdminAIPage() {
 
                 <div className="space-y-3 md:hidden">
                   {sortedProviders.map((provider) => (
-                    <div key={provider.providerKey} className="rounded-3xl border px-4 py-4" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                    <div key={provider.providerKey} className="rounded-3xl border p-4" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
                       <div className="space-y-4">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
@@ -686,7 +686,7 @@ export default function AdminAIPage() {
         </SurfaceCard>
 
         <SurfaceCard>
-          <div className="space-y-4 px-5 py-5 sm:px-6">
+          <div className="space-y-4 p-5 sm:px-6">
             <div>
               <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Supported runtimes</h3>
               <p className="mt-1 text-sm" style={{ color: 'var(--text-faint)' }}>Available provider types and their seeded defaults for new configurations.</p>
@@ -715,8 +715,7 @@ export default function AdminAIPage() {
                   <form
                     id="ai-provider-form"
                     className="space-y-5"
-                    onSubmit={(event) => {
-                      event.preventDefault();
+                    action={() => {
                       void handleSave();
                     }}
                   >

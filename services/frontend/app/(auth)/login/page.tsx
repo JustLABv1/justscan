@@ -49,7 +49,7 @@ export default function LoginPage() {
   if (!availabilityLoaded) {
     return (
       <div className="flex items-center justify-center h-32">
-        <div className="w-6 h-6 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
+        <div className="size-6 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
       </div>
     );
   }
@@ -123,7 +123,7 @@ export default function LoginPage() {
                   color: 'var(--text-primary)',
                 }}
               >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                 </svg>
                 {provider.display_name}

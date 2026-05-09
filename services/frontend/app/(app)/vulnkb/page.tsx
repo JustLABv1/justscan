@@ -30,7 +30,7 @@ function ScorePill({ score }: { score: number }) {
   const color = score >= 9 ? '#f87171' : score >= 7 ? '#fb923c' : score >= 4 ? '#facc15' : '#60a5fa';
   return (
     <span className="font-mono text-sm font-semibold" style={{ color }}>
-      {score ? score.toFixed(1) : '—'}
+      {score ? score.toFixed(1) : '-'}
     </span>
   );
 }
@@ -349,7 +349,7 @@ export default function VulnKBPage() {
               <tr>
                 <td colSpan={6} className="py-16 text-center">
                   <div className="flex justify-center">
-                    <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                    <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                   </div>
                 </td>
               </tr>
@@ -381,16 +381,16 @@ export default function VulnKBPage() {
                   <ScorePill score={e.cvss_score} />
                 </td>
                 <td className="px-4 py-3 text-xs text-zinc-500">
-                  {e.published_date ? new Date(e.published_date).toLocaleDateString() : '—'}
+                  {e.published_date ? new Date(e.published_date).toLocaleDateString() : '-'}
                 </td>
                 <td className="px-4 py-3 text-xs text-zinc-600 dark:text-zinc-400 max-w-xs">
-                  <span className="line-clamp-2">{e.description || '—'}</span>
+                  <span className="line-clamp-2">{e.description || '-'}</span>
                 </td>
                 <td className="px-4 py-3 text-center">
                   {e.exploit_available ? (
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ color: '#f87171', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.2)' }}>Yes</span>
                   ) : (
-                    <span className="text-xs text-zinc-400">—</span>
+                    <span className="text-xs text-zinc-400">-</span>
                   )}
                 </td>
               </tr>
@@ -425,7 +425,7 @@ export default function VulnKBPage() {
 
       <p className="text-xs text-zinc-400 flex items-center gap-1.5">
         <InformationCircleIcon size={13} />
-        The KB is populated automatically from scan data — sources include NVD, GHSA, OSV, Red Hat, Debian, and more.
+        The KB is populated automatically from scan data - sources include NVD, GHSA, OSV, Red Hat, Debian, and more.
       </p>
 
       {detail && <DetailPanel entry={detail} onClose={() => setDetail(null)} />}

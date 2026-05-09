@@ -463,7 +463,7 @@ export default function HelmPage() {
                 title={makePublic ? 'Result scans will be shared publicly' : 'Create public share links after queueing'}
               >
                 <span
-                  className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform"
+                  className="inline-block size-3.5 rounded-full bg-white shadow transition-transform"
                   style={{ transform: makePublic ? 'translateX(18px)' : 'translateX(2px)' }}
                 />
               </button>
@@ -613,7 +613,7 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
                     {run.chart_url.replace(/^oci:\/\//, '')}
                   </p>
                 </div>
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusDot(run.active_images > 0 ? 'running' : run.failed_images > 0 ? 'failed' : 'completed')}`} />
+                <span className={`size-2.5 rounded-full shrink-0 ${statusDot(run.active_images > 0 ? 'running' : run.failed_images > 0 ? 'failed' : 'completed')}`} />
               </div>
 
               <div className="flex items-center gap-2 mt-3 text-xs text-zinc-500 flex-wrap">
@@ -643,7 +643,7 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
 
 function RunMetric({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
-    <div className="rounded-xl px-2 py-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+    <div className="rounded-xl p-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
       <div className={`text-sm font-semibold ${value > 0 ? tone : 'text-zinc-400'}`}>{value}</div>
       <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
     </div>
@@ -663,7 +663,7 @@ function StepBar({ current }: { current: Step }) {
         <div key={step.key} className="flex items-center gap-2">
           <div className="flex items-center gap-2">
             <div
-              className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+              className="size-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
               style={{
                 background: index <= idx ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'var(--row-hover)',
                 color: index <= idx ? '#fff' : 'var(--text-muted)',

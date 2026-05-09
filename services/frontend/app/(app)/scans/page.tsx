@@ -1,6 +1,7 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { ImageChildren } from '@/components/scans/image-children';
+import { getRecentActivityBounds, RECENT_ACTIVITY_RANGE_OPTIONS, RecentActivityRange, RecentActivityRangePicker, RecentActivityRow } from '@/components/scans/recent-activity';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -8,36 +9,38 @@ import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, joinClassNames, nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
-import { ImageRowSkeleton } from '@/components/ui/skeleton';
+import { ImageRowSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useOrgNameMap } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-    ArtifactoryRepository,
-    cancelScan,
-    createScans,
-    deleteScan,
-    getDefaultScannerCapabilities,
-    getWorkScope,
-    ImageSummary,
-    listArtifactoryRepositories,
-    listRegistriesWithCapabilities,
-    listScanImages,
-    listTags,
-    RegistryWithHealth,
-    ScannerCapabilities,
-    Tag
+  ArtifactoryRepository,
+  cancelScan,
+  createScans,
+  deleteScan,
+  getDefaultScannerCapabilities,
+  getWorkScope,
+  ImageSummary,
+  listArtifactoryRepositories,
+  listRegistriesWithCapabilities,
+  listScanImages,
+  listScans,
+  listTags,
+  RegistryWithHealth,
+  Scan,
+  ScannerCapabilities,
+  Tag
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Autocomplete, Checkbox, ListBox, Modal, Popover, SearchField, Select, useFilter, useOverlayState } from '@heroui/react';
 import {
-    ArrowDown01Icon,
-    ArrowRight01Icon,
-    Cancel01Icon,
-    FilterIcon,
-    GitCompareIcon,
-    PlusSignIcon,
-    Shield01Icon,
+  ArrowDown01Icon,
+  ArrowRight01Icon,
+  Cancel01Icon,
+  FilterIcon,
+  GitCompareIcon,
+  PlusSignIcon,
+  Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -128,6 +131,9 @@ function MobileSevStat({ label, count, tone }: { label: string; count: number; t
 }
 
 type ScanSourceKind = 'public' | 'private_registry' | 'artifactory_xray';
+type ScansTimeRange = '' | RecentActivityRange;
+
+const DEFAULT_ACTIVITY_RANGE: RecentActivityRange = '24h';
 
 const SCAN_WIZARD_STEPS = [
   { id: 'source', label: 'Source' },
@@ -135,6 +141,37 @@ const SCAN_WIZARD_STEPS = [
   { id: 'details', label: 'Details' },
   { id: 'review', label: 'Review & start' },
 ] as const;
+
+function normalizeScansTimeRange(value?: string | null, legacyView?: string | null): ScansTimeRange {
+  if (value === '6h' || value === '24h' || value === '7d' || value === '30d') {
+    return value;
+  }
+
+  return legacyView === 'activity' ? DEFAULT_ACTIVITY_RANGE : '';
+}
+
+function buildScansRoute({
+  image,
+  status,
+  range,
+}: {
+  image?: string;
+  status?: string;
+  range?: ScansTimeRange;
+}) {
+  const params = new URLSearchParams();
+
+  if (image) params.set('image', image);
+
+  if (range) {
+    params.set('range', range);
+  } else if (status) {
+    params.set('status', status);
+  }
+
+  const query = params.toString();
+  return query ? `/scans?${query}` : '/scans';
+}
 
 function ScanWizardStep({ active, complete, index, label }: { active: boolean; complete: boolean; index: number; label: string }) {
   return (
@@ -226,13 +263,16 @@ export default function ScansPage() {
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
 
   const [images, setImages] = useState<ImageSummary[]>([]);
+  const [activityScans, setActivityScans] = useState<Scan[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const [imageFilter, setImageFilter] = useState(searchParams.get('image') ?? '');
+  const [appliedImageFilter, setAppliedImageFilter] = useState(searchParams.get('image') ?? '');
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? '');
+  const [activityRange, setActivityRange] = useState<ScansTimeRange>(normalizeScansTimeRange(searchParams.get('range'), searchParams.get('view')));
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Which image names are expanded
@@ -269,8 +309,10 @@ export default function ScansPage() {
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const LIMIT = 30;
+  const hasRecentWindow = activityRange !== '';
+  const resolvedActivityRange = activityRange || DEFAULT_ACTIVITY_RANGE;
 
-  const load = useCallback(async (p: number, img: string, status: string, options?: { silent?: boolean }) => {
+  const loadImages = useCallback(async (p: number, img: string, status: string, options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
     if (!silent) {
       setLoading(true);
@@ -294,7 +336,45 @@ export default function ScansPage() {
     }
   }, []);
 
-  useEffect(() => { load(page, imageFilter, statusFilter); }, [imageFilter, load, page, scopeKey, statusFilter]);
+  const loadActivity = useCallback(async (p: number, img: string, range: RecentActivityRange, options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
+
+    try {
+      const { from, to } = getRecentActivityBounds(range);
+      const res = await listScans(p, LIMIT, img || undefined, undefined, undefined, undefined, undefined, from, to);
+      setActivityScans(res.data ?? []);
+      setTotal(res.total);
+      if (silent) {
+        setError('');
+      }
+    } catch (e: unknown) {
+      if (!silent) {
+        setError(e instanceof Error ? e.message : 'Failed to load');
+      }
+    } finally {
+      if (!silent) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (hasRecentWindow) {
+      loadActivity(page, appliedImageFilter, resolvedActivityRange);
+      return;
+    }
+
+    loadImages(page, appliedImageFilter, statusFilter);
+  }, [appliedImageFilter, hasRecentWindow, loadActivity, loadImages, page, resolvedActivityRange, scopeKey, statusFilter]);
+
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
+
   useEffect(() => { listTags().then(setAvailableTags).catch(() => {}); }, [scopeKey]);
   useEffect(() => {
     listRegistriesWithCapabilities()
@@ -493,29 +573,76 @@ export default function ScansPage() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const refreshCurrentView = useCallback((options?: { silent?: boolean }) => {
+    if (hasRecentWindow) {
+      return loadActivity(page, appliedImageFilter, resolvedActivityRange, options);
+    }
+
+    return loadImages(page, appliedImageFilter, statusFilter, options);
+  }, [appliedImageFilter, hasRecentWindow, loadActivity, loadImages, page, resolvedActivityRange, statusFilter]);
+
   useConditionalInterval(() => {
-    void load(page, imageFilter, statusFilter, { silent: true });
-  }, images.some((image) => image.latest_status === 'running' || image.latest_status === 'pending'), 5000);
+    void refreshCurrentView({ silent: true });
+  }, hasRecentWindow
+    ? activityScans.some((scan) => scan.status === 'running' || scan.status === 'pending')
+    : images.some((image) => image.latest_status === 'running' || image.latest_status === 'pending'), 5000);
 
+  function syncRoute(next: Partial<{ image: string; status: string; range: ScansTimeRange }>) {
+    router.replace(buildScansRoute({
+      image: next.image ?? appliedImageFilter,
+      status: next.status ?? statusFilter,
+      range: next.range ?? activityRange,
+    }));
+  }
 
-  function applyFilter(img: string, status: string) {
-    const params = new URLSearchParams();
-    if (img) params.set('image', img);
-    if (status) params.set('status', status);
-    router.replace(`/scans${params.toString() ? `?${params}` : ''}`);
+  function clearPendingImageCommit() {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+  }
+
+  function handleActivityRangeChange(nextRange: RecentActivityRange) {
+    clearPendingImageCommit();
+    setActivityRange(nextRange);
+    setStatusFilter('');
     setPage(1);
-    load(1, img, status);
+    syncRoute({ range: nextRange, status: '' });
+  }
+
+  function handleActivityRangeClear() {
+    clearPendingImageCommit();
+    setActivityRange('');
+    setPage(1);
+    syncRoute({ range: '' });
+  }
+
+  function handleClearFilters() {
+    clearPendingImageCommit();
+    setImageFilter('');
+    setAppliedImageFilter('');
+    setStatusFilter('');
+    setActivityRange('');
+    setPage(1);
+    syncRoute({ image: '', status: '', range: '' });
   }
 
   function handleImageFilterChange(value: string) {
     setImageFilter(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => applyFilter(value, statusFilter), 300);
+    clearPendingImageCommit();
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      setAppliedImageFilter(value);
+      setPage(1);
+      syncRoute({ image: value });
+    }, 300);
   }
 
   function handleStatusFilterChange(value: string) {
+    clearPendingImageCommit();
     setStatusFilter(value);
-    applyFilter(imageFilter, value);
+    setPage(1);
+    syncRoute({ status: value, range: '' });
   }
 
   function toggleExpand(imageName: string) {
@@ -572,8 +699,10 @@ export default function ScansPage() {
         createdScans.forEach(scan => next.add(scan.image_name));
         return next;
       });
-      await load(1, imageFilter, statusFilter);
       setPage(1);
+      await (hasRecentWindow
+        ? loadActivity(1, appliedImageFilter, resolvedActivityRange)
+        : loadImages(1, appliedImageFilter, statusFilter));
     } catch (err: unknown) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create scan');
     } finally { setCreating(false); }
@@ -591,7 +720,7 @@ export default function ScansPage() {
       await deleteScan(scanId);
       toast.success('Scan deleted');
       setChildRefreshKey(prev => ({ ...prev, [imageName]: (prev[imageName] ?? 0) + 1 }));
-      load(page, imageFilter, statusFilter);
+      refreshCurrentView();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete');
     }
@@ -609,7 +738,7 @@ export default function ScansPage() {
       await cancelScan(scanId);
       toast.success('Scan cancelled');
       setChildRefreshKey(prev => ({ ...prev, [imageName]: (prev[imageName] ?? 0) + 1 }));
-      load(page, imageFilter, statusFilter);
+      refreshCurrentView();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to cancel');
     }
@@ -629,7 +758,7 @@ export default function ScansPage() {
       await bulkDeleteScans(Array.from(selectedScans));
       toast.success(`${selectedScans.size} scan${selectedScans.size !== 1 ? 's' : ''} deleted`);
       setSelectedScans(new Set());
-      load(page, imageFilter, statusFilter);
+      refreshCurrentView();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete scans');
     }
@@ -642,7 +771,7 @@ export default function ScansPage() {
       await bulkAddTagToScans(tagId, Array.from(selectedScans));
       toast.success(`Tag added to ${selectedScans.size} scan${selectedScans.size !== 1 ? 's' : ''}`);
       setSelectedScans(new Set());
-      load(page, imageFilter, statusFilter);
+      refreshCurrentView();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to add tag');
     }
@@ -655,13 +784,23 @@ export default function ScansPage() {
   }
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+  const activityRangeLabel = RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === resolvedActivityRange)?.label ?? 'Last 24 hours';
+  const hasActiveFilters = Boolean(imageFilter) || Boolean(statusFilter) || hasRecentWindow;
+  const headerDescription = hasRecentWindow
+    ? (total > 0
+        ? `${total} scan event${total !== 1 ? 's' : ''} in ${activityRangeLabel.toLowerCase()}`
+        : 'Chronological scan activity for the selected time window.')
+    : (total > 0
+        ? `${total} image${total !== 1 ? 's' : ''}`
+        : 'Search images, compare runs, and start new scans.');
+  const visibleActivityImageCount = new Set(activityScans.map((scan) => scan.image_name)).size;
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
       <PageHeader
         eyebrow="Scan operations"
         title="Scans"
-        description={total > 0 ? `${total} image${total !== 1 ? 's' : ''}` : 'Search images, compare runs, and start new scans.'}
+        description={headerDescription}
         actions={(
           <div className="flex flex-wrap items-center gap-2">
             <Link
@@ -682,56 +821,102 @@ export default function ScansPage() {
         )}
       />
 
-      {/* Search bar */}
-      <div className="glass-panel rounded-2xl p-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_280px_auto] xl:items-end">
-          <div className="space-y-1.5 md:col-span-2 xl:col-span-1">
-            <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image</label>
-            <input
-              className={inputCls}
-              placeholder="Filter by image name…"
-              value={imageFilter}
-              onChange={e => handleImageFilterChange(e.target.value)}
+      <div className="glass-panel rounded-2xl p-4 space-y-4">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Time Window</label>
+            <RecentActivityRangePicker
+              value={activityRange || null}
+              onChange={handleActivityRangeChange}
+              allowClear
+              clearLabel="Any time"
+              onClear={handleActivityRangeClear}
             />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Latest State</label>
-            <Select value={statusFilter || '__all__'} onChange={value => handleStatusFilterChange(String(value === '__all__' ? '' : value ?? ''))} className="min-w-0">
-              <Select.Trigger className={selectTriggerCls}>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="__all__">All latest states</ListBox.Item>
-                  {STATUS_FILTER_OPTIONS.filter((option) => option.id !== '').map((option) => (
-                    <ListBox.Item key={option.id} id={option.id}>{option.label}</ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
-          <div className="flex items-end md:col-span-2 xl:col-span-1 xl:justify-end">
-            {(imageFilter || statusFilter) ? (
-              <button
-                onClick={() => { setImageFilter(''); setStatusFilter(''); applyFilter('', ''); }}
-                className="btn-secondary flex w-full items-center justify-center gap-1.5 md:w-auto"
-                type="button"
-              >
-                <FilterIcon size={12} />
-                Clear Filters
-              </button>
-            ) : (
-              <p className="text-sm text-zinc-500 md:text-right">{total} image{total !== 1 ? 's' : ''}</p>
-            )}
-          </div>
+
+          <p className="max-w-xl text-sm text-zinc-500 xl:text-right">
+            {hasRecentWindow
+              ? 'Recent windows switch the results to raw scan events so repeated scans stay visible.'
+              : 'Use a recent window when you want chronological scan activity instead of one latest row per image.'}
+          </p>
         </div>
+
+        {hasRecentWindow ? (
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image</label>
+              <input
+                className={inputCls}
+                placeholder="Filter recent activity by image name…"
+                value={imageFilter}
+                onChange={e => handleImageFilterChange(e.target.value)}
+              />
+            </div>
+            <div className="flex items-end md:justify-end">
+              {hasActiveFilters ? (
+                <button
+                  onClick={handleClearFilters}
+                  className="btn-secondary flex w-full items-center justify-center gap-1.5 md:w-auto"
+                  type="button"
+                >
+                  <FilterIcon size={12} />
+                  Clear Filters
+                </button>
+              ) : (
+                <p className="text-sm text-zinc-500 md:text-right">{total} scan event{total !== 1 ? 's' : ''}</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_280px_auto] xl:items-end">
+            <div className="space-y-1.5 md:col-span-2 xl:col-span-1">
+              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image</label>
+              <input
+                className={inputCls}
+                placeholder="Filter by image name…"
+                value={imageFilter}
+                onChange={e => handleImageFilterChange(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Latest State</label>
+              <Select value={statusFilter || '__all__'} onChange={value => handleStatusFilterChange(String(value === '__all__' ? '' : value ?? ''))} className="min-w-0">
+                <Select.Trigger className={selectTriggerCls}>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item id="__all__">All latest states</ListBox.Item>
+                    {STATUS_FILTER_OPTIONS.filter((option) => option.id !== '').map((option) => (
+                      <ListBox.Item key={option.id} id={option.id}>{option.label}</ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </div>
+            <div className="flex items-end md:col-span-2 xl:col-span-1 xl:justify-end">
+              {hasActiveFilters ? (
+                <button
+                  onClick={handleClearFilters}
+                  className="btn-secondary flex w-full items-center justify-center gap-1.5 md:w-auto"
+                  type="button"
+                >
+                  <FilterIcon size={12} />
+                  Clear Filters
+                </button>
+              ) : (
+                <p className="text-sm text-zinc-500 md:text-right">{total} image{total !== 1 ? 's' : ''}</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {error ? <FormAlert description={error} title="Scan list failed to load" /> : null}
 
       {/* Bulk action toolbar */}
-      {selectedScans.size > 0 && (
+      {!hasRecentWindow && selectedScans.size > 0 && (
         <div className="glass-panel rounded-2xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
           <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             {selectedScans.size} scan{selectedScans.size !== 1 ? 's' : ''} selected
@@ -793,6 +978,41 @@ export default function ScansPage() {
         </div>
       )}
 
+      {hasRecentWindow ? (
+        <div className="glass-panel rounded-2xl overflow-hidden">
+          <div className="flex flex-col gap-2 border-b px-4 py-4 sm:flex-row sm:items-end sm:justify-between" style={{ borderColor: 'var(--glass-border)' }}>
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Recent Activity</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Newest-first scan events for {activityRangeLabel.toLowerCase()}
+              </p>
+            </div>
+            <p className="text-xs text-zinc-500">
+              {total} scan event{total !== 1 ? 's' : ''}{activityScans.length > 0 ? ` · ${visibleActivityImageCount} image${visibleActivityImageCount !== 1 ? 's' : ''} on this page` : ''}
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="space-y-1.5 p-4">
+              {Array.from({ length: 6 }).map((_, index) => <RecentScanRowSkeleton key={index} />)}
+            </div>
+          ) : activityScans.length === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                icon={<Shield01Icon size={28} />}
+                title={imageFilter ? 'No recent scans match your filters' : 'No recent scans in this window'}
+                description={imageFilter ? 'Try a different image filter or show all scans.' : 'Choose a wider time window or show all scans.'}
+                action={{ label: 'Show all scans', onClick: handleClearFilters }}
+              />
+            </div>
+          ) : (
+            <div className="space-y-1.5 p-3">
+              {activityScans.map((scan) => <RecentActivityRow key={scan.id} scan={scan} />)}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
       {/* Mobile list */}
       <div className="space-y-3 md:hidden">
         {loading ? (
@@ -1067,11 +1287,13 @@ export default function ScansPage() {
           </table>
         </div>
       </div>
+        </>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <span className="text-sm text-zinc-500">{total} images</span>
+          <span className="text-sm text-zinc-500">{total} {hasRecentWindow ? `scan event${total !== 1 ? 's' : ''}` : `image${total !== 1 ? 's' : ''}`}</span>
           <div className="flex items-center gap-2">
             <button
               disabled={page <= 1}

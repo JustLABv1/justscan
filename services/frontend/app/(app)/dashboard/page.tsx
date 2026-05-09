@@ -1,11 +1,10 @@
 'use client';
-import { StatusBadge } from '@/components/ui/badges';
+import { buildRecentActivityHref, getRecentActivityBounds, RECENT_ACTIVITY_RANGE_OPTIONS, RecentActivityRange, RecentActivityRangePicker, RecentActivityRow } from '@/components/scans/recent-activity';
 import { PageHeader } from '@/components/ui/page-header';
 import { ChartSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
-import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, Scan, ScannerHealth } from '@/lib/api';
-import { fullDate, timeAgo } from '@/lib/time';
+import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, listScans, Scan, ScannerHealth } from '@/lib/api';
 import { Activity01Icon, Add01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -33,35 +32,6 @@ function glassCard(tint?: string): React.CSSProperties {
   };
 }
 
-const XRAY_STEP_LABELS: Record<string, string> = {
-  queued: 'Queued',
-  warming_cache: 'Warming Cache',
-  indexing_artifact: 'Indexing Artifact',
-  queued_in_xray: 'Queued in Xray',
-  waiting_for_xray: 'Waiting for Xray',
-  importing_results: 'Importing Results',
-  failed: 'Failed',
-  completed: 'Completed',
-};
-
-function formatStepLabel(step?: string): string {
-  if (!step) return XRAY_STEP_LABELS.queued;
-  return XRAY_STEP_LABELS[step] ?? step.replace(/_/g, ' ');
-}
-
-function scanContextLabel(scan: Scan): string {
-  if (scan.scan_provider === 'artifactory_xray') {
-    if (scan.status === 'failed' && scan.external_status === 'blocked_by_xray_policy') {
-      return 'Artifactory Xray · blocked by policy';
-    }
-    if (scan.status === 'running' || scan.status === 'pending') {
-      return `Artifactory Xray · ${formatStepLabel(scan.current_step)}`;
-    }
-    return 'Artifactory Xray';
-  }
-  return 'Built-in scanner';
-}
-
 function formatDbAge(hours?: number | null): string {
   if (hours == null || Number.isNaN(hours)) return 'Unknown';
   if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m`;
@@ -69,10 +39,11 @@ function formatDbAge(hours?: number | null): string {
   return `${(hours / 24).toFixed(1)}d`;
 }
 
-function buildScansHref(filters?: { status?: string; image?: string }): string {
+function buildScansHref(filters?: { status?: string; image?: string; range?: RecentActivityRange }): string {
   const params = new URLSearchParams();
   if (filters?.status) params.set('status', filters.status);
   if (filters?.image) params.set('image', filters.image);
+  if (filters?.range) params.set('range', filters.range);
   const query = params.toString();
   return query ? `/scans?${query}` : '/scans';
 }
@@ -102,53 +73,6 @@ function buildTrendSeries(
 
 function sumAvgFindings(point: DashboardVulnTrendPoint): number {
   return point.critical + point.high + point.medium + point.low + point.unknown;
-}
-
-function RecentScanRow({ scan }: { scan: Scan }) {
-	const eventTime = scan.started_at ?? scan.created_at;
-  return (
-    <Link
-      href={`/scans/${scan.id}`}
-      className="flex items-center justify-between px-3 py-2.5 rounded-xl transition-colors duration-150 group"
-      onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-    >
-      <div className="flex items-center gap-2.5 min-w-0">
-    <div className="shrink-0 pt-0.5">
-      <StatusBadge status={scan.status} externalStatus={scan.external_status} />
-    </div>
-        <div className="min-w-0">
-          <p className="text-xs font-mono text-zinc-700 dark:text-zinc-300 truncate group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
-            {scan.image_name}:{scan.image_tag}
-          </p>
-      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-        <p className="text-[11px] text-zinc-500">{scanContextLabel(scan)}</p>
-        <span className="text-[11px] text-zinc-400" title={fullDate(eventTime)}>{timeAgo(eventTime)}</span>
-      </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-1 shrink-0 ml-2">
-        {scan.critical_count > 0 && (
-          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md"
-            style={{ color: '#f87171', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.18)' }}>
-            C:{scan.critical_count}
-          </span>
-        )}
-        {scan.high_count > 0 && (
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md"
-            style={{ color: '#fb923c', background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.18)' }}>
-            H:{scan.high_count}
-          </span>
-        )}
-        {scan.medium_count > 0 && (
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md"
-            style={{ color: '#fbbf24', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.18)' }}>
-            M:{scan.medium_count}
-          </span>
-        )}
-      </div>
-    </Link>
-  );
 }
 
 // ── Mini Sparkline ────────────────────────────────────────────────────
@@ -483,6 +407,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [attentionFilter, setAttentionFilter] = useState<'all' | 'failed' | 'blocked' | 'running'>('all');
+  const [recentActivityRange, setRecentActivityRange] = useState<RecentActivityRange>('24h');
+  const [recentActivityScans, setRecentActivityScans] = useState<Scan[]>([]);
+  const [recentActivityTotal, setRecentActivityTotal] = useState(0);
+  const [recentActivityLoading, setRecentActivityLoading] = useState(true);
+  const [recentActivityError, setRecentActivityError] = useState('');
   const currentUser = getUser() as { role?: string } | null;
   const isAdmin = currentUser?.role === 'admin' || getTokenType() === 'admin';
 
@@ -513,6 +442,25 @@ export default function DashboardPage() {
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, [isAdmin, scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const { from, to } = getRecentActivityBounds(recentActivityRange);
+
+    setRecentActivityLoading(true);
+    setRecentActivityError('');
+
+    listScans(1, 8, undefined, undefined, undefined, undefined, undefined, from, to)
+      .then((result) => {
+        setRecentActivityScans(result.data ?? []);
+        setRecentActivityTotal(result.total ?? 0);
+      })
+      .catch((recentError: Error) => {
+        setRecentActivityScans([]);
+        setRecentActivityTotal(0);
+        setRecentActivityError(recentError.message);
+      })
+      .finally(() => setRecentActivityLoading(false));
+  }, [recentActivityRange, scopeKey]);
 
   function handleVulnPeriodChange(days: number) {
     setVulnTrendPeriod(days);
@@ -591,6 +539,8 @@ export default function DashboardPage() {
   const displayedAttentionScans = allAttentionScans.slice(0, 5);
   const moreAttentionCount = Math.max(0, totalAttentionForFilter - displayedAttentionScans.length);
   const triageHref = attentionFilter === 'running' ? buildScansHref({ status: 'running' }) : buildScansHref({ status: 'failed' });
+  const recentActivityRangeLabel = RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === recentActivityRange)?.label ?? 'Last 24 hours';
+  const recentActivityHref = buildRecentActivityHref(recentActivityRange);
 
   return (
     <div className="p-6 space-y-4 max-w-7xl mx-auto">
@@ -694,84 +644,143 @@ export default function DashboardPage() {
       {/* ── Zone 2: Action + Context ── */}
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
 
-        {/* Needs Attention */}
-        <div className="rounded-2xl p-5" style={glassCard()}>
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div>
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Needs Attention</h2>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
-                {needsAttentionTotal > 0
-                  ? `${needsAttentionTotal} scan${needsAttentionTotal !== 1 ? 's' : ''} require intervention`
-                  : 'No items require intervention right now'}
-              </p>
-            </div>
-            <Link
-              href={triageHref}
-              className="text-xs shrink-0 transition-colors"
-              style={{ color: 'var(--text-muted)' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
-            >
-              Triage all →
-            </Link>
-          </div>
-
-          {/* Filter chips */}
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            {([
-              { key: 'all' as const,     label: 'All',           count: needsAttentionTotal, activeBg: 'rgba(124,58,237,0.12)', activeBorder: 'rgba(124,58,237,0.3)',  activeColor: '#a78bfa' },
-              { key: 'failed' as const,  label: 'Failed',        count: genericFailedCount,  activeBg: 'rgba(239,68,68,0.1)',   activeBorder: 'rgba(239,68,68,0.3)',   activeColor: '#f87171' },
-              { key: 'blocked' as const, label: 'Policy blocked', count: blockedPolicyCount,  activeBg: 'rgba(249,115,22,0.1)',  activeBorder: 'rgba(249,115,22,0.3)',  activeColor: '#fb923c' },
-              { key: 'running' as const, label: 'Running',       count: activeQueueCount,    activeBg: 'rgba(59,130,246,0.1)',  activeBorder: 'rgba(59,130,246,0.3)',  activeColor: '#60a5fa' },
-            ] as const).map(({ key, label, count, activeBg, activeBorder, activeColor }) => {
-              const isActive = attentionFilter === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setAttentionFilter(key)}
-                  className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition-all"
-                  style={isActive
-                    ? { background: activeBg, border: `1px solid ${activeBorder}`, color: activeColor }
-                    : { background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-faint)' }
-                  }
-                >
-                  {label}
-                  <span className="tabular-nums opacity-70">{count}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Scan list */}
-          {displayedAttentionScans.length === 0 ? (
-            <p className="py-10 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
-              {attentionFilter === 'all' ? 'No failed or blocked scans.' : `No ${attentionFilter === 'blocked' ? 'policy-blocked' : attentionFilter} scans.`}
-            </p>
-          ) : (
-            <>
-              <div className="mb-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                Showing latest {displayedAttentionScans.length} of {totalAttentionForFilter}
+        <div className="flex flex-col gap-3">
+          <div className="rounded-2xl p-5" style={glassCard()}>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Needs Attention</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
+                  {needsAttentionTotal > 0
+                    ? `${needsAttentionTotal} scan${needsAttentionTotal !== 1 ? 's' : ''} require intervention`
+                    : 'No items require intervention right now'}
+                </p>
               </div>
-              <div className="max-h-[308px] space-y-0.5 overflow-y-auto pr-1 -mx-1">
-                {displayedAttentionScans.map((scan) => <RecentScanRow key={scan.id} scan={scan} />)}
-              </div>
-            </>
-          )}
-
-          {moreAttentionCount > 0 && (
-            <div className="mt-3 text-center">
               <Link
                 href={triageHref}
-                className="text-xs transition-colors"
-                style={{ color: 'var(--text-faint)' }}
+                className="text-xs shrink-0 transition-colors"
+                style={{ color: 'var(--text-muted)' }}
                 onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
               >
-                {moreAttentionCount} more →
+                Triage all →
               </Link>
             </div>
-          )}
+
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {([
+                { key: 'all' as const,     label: 'All',           count: needsAttentionTotal, activeBg: 'rgba(124,58,237,0.12)', activeBorder: 'rgba(124,58,237,0.3)',  activeColor: '#a78bfa' },
+                { key: 'failed' as const,  label: 'Failed',        count: genericFailedCount,  activeBg: 'rgba(239,68,68,0.1)',   activeBorder: 'rgba(239,68,68,0.3)',   activeColor: '#f87171' },
+                { key: 'blocked' as const, label: 'Policy blocked', count: blockedPolicyCount,  activeBg: 'rgba(249,115,22,0.1)',  activeBorder: 'rgba(249,115,22,0.3)',  activeColor: '#fb923c' },
+                { key: 'running' as const, label: 'Running',       count: activeQueueCount,    activeBg: 'rgba(59,130,246,0.1)',  activeBorder: 'rgba(59,130,246,0.3)',  activeColor: '#60a5fa' },
+              ] as const).map(({ key, label, count, activeBg, activeBorder, activeColor }) => {
+                const isActive = attentionFilter === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setAttentionFilter(key)}
+                    className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition-all"
+                    style={isActive
+                      ? { background: activeBg, border: `1px solid ${activeBorder}`, color: activeColor }
+                      : { background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-faint)' }
+                    }
+                  >
+                    {label}
+                    <span className="tabular-nums opacity-70">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {displayedAttentionScans.length === 0 ? (
+              <p className="py-10 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
+                {attentionFilter === 'all' ? 'No failed or blocked scans.' : `No ${attentionFilter === 'blocked' ? 'policy-blocked' : attentionFilter} scans.`}
+              </p>
+            ) : (
+              <>
+                <div className="mb-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                  Showing latest {displayedAttentionScans.length} of {totalAttentionForFilter}
+                </div>
+                <div className="max-h-[308px] space-y-0.5 overflow-y-auto pr-1 -mx-1">
+                  {displayedAttentionScans.map((scan) => <RecentActivityRow key={scan.id} scan={scan} />)}
+                </div>
+              </>
+            )}
+
+            {moreAttentionCount > 0 && (
+              <div className="mt-3 text-center">
+                <Link
+                  href={triageHref}
+                  className="text-xs transition-colors"
+                  style={{ color: 'var(--text-faint)' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+                >
+                  {moreAttentionCount} more →
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl p-5" style={glassCard()}>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Recent Activity</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
+                  What got scanned in {recentActivityRangeLabel.toLowerCase()}
+                </p>
+              </div>
+              <Link
+                href={recentActivityHref}
+                className="text-xs shrink-0 transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+              >
+                Open feed →
+              </Link>
+            </div>
+
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <RecentActivityRangePicker value={recentActivityRange} onChange={setRecentActivityRange} />
+              <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                {recentActivityTotal} event{recentActivityTotal !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            {recentActivityError ? (
+              <p className="py-8 text-center text-sm" style={{ color: '#f87171' }}>
+                {recentActivityError}
+              </p>
+            ) : recentActivityLoading ? (
+              <div className="space-y-1.5">
+                {Array.from({ length: 4 }).map((_, index) => <RecentScanRowSkeleton key={index} />)}
+              </div>
+            ) : recentActivityScans.length === 0 ? (
+              <p className="py-8 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
+                No scans started in {recentActivityRangeLabel.toLowerCase()}.
+              </p>
+            ) : (
+              <>
+                <div className="space-y-0.5 -mx-1">
+                  {recentActivityScans.map((scan) => <RecentActivityRow key={scan.id} scan={scan} />)}
+                </div>
+                {recentActivityTotal > recentActivityScans.length ? (
+                  <div className="mt-3 text-center">
+                    <Link
+                      href={recentActivityHref}
+                      className="text-xs transition-colors"
+                      style={{ color: 'var(--text-faint)' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
+                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+                    >
+                      {recentActivityTotal - recentActivityScans.length} more →
+                    </Link>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Right column: Exposure + Scanner */}
@@ -893,43 +902,6 @@ export default function DashboardPage() {
           <VulnTrendChart data={vulnTrends} period={vulnTrendPeriod} onPeriod={handleVulnPeriodChange} />
         </div>
       </div>
-
-      {/* ── Recent Scans (collapsible) ── */}
-      <details className="group">
-        <summary
-          className="flex cursor-pointer list-none items-center justify-between rounded-xl px-5 py-3.5 transition-colors"
-          style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'var(--glass-bg)')}
-        >
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Recent Scans</h2>
-          <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
-            <span className="group-open:hidden">Expand ▸</span>
-            <span className="hidden group-open:inline">Collapse ▾</span>
-          </span>
-        </summary>
-        {(stats.recent_scans ?? []).length > 0 && (
-          <div className="mt-1 rounded-xl p-4" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-            <div className="space-y-0.5 -mx-1">
-              {(stats.recent_scans ?? []).map((scan) => <RecentScanRow key={scan.id} scan={scan} />)}
-            </div>
-            <div className="mt-3 text-center">
-              <Link
-                href="/scans"
-                className="text-xs transition-colors"
-                style={{ color: 'var(--text-faint)' }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
-              >
-                View all scans →
-              </Link>
-            </div>
-          </div>
-        )}
-        {(stats.recent_scans ?? []).length === 0 && (
-          <p className="mt-3 text-center text-sm" style={{ color: 'var(--text-faint)' }}>No scans yet</p>
-        )}
-      </details>
 
     </div>
   );

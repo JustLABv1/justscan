@@ -3,13 +3,25 @@ import { appendScope } from './scope';
 import type { ResourceShare, VulnerabilityViewPreferenceResponse, VulnerabilityViewSettings } from './types/orgs';
 import type { BulkDeleteScansResponse, ImageSummary, SBOMComponent, Scan, ScanComparison, ScanShareResponse, ScanTrendPoint, SharedScanRescanResponse, Vulnerability, VulnerabilityContextAnalysis } from './types/scans';
 
-export const listScans = (page = 1, limit = 20, image?: string, status?: string, exact?: boolean, helmOnly?: boolean, helmChart?: string) => {
+export const listScans = (
+  page = 1,
+  limit = 20,
+  image?: string,
+  status?: string,
+  exact?: boolean,
+  helmOnly?: boolean,
+  helmChart?: string,
+  from?: string,
+  to?: string,
+) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
   if (status) params.set('status', status);
   if (exact) params.set('exact', 'true');
   if (helmOnly) params.set('helm_only', 'true');
   if (helmChart) params.set('helm_chart', helmChart);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
   appendScope(params);
   return req<{ data: Scan[]; total: number }>('GET', `/api/v1/scans/?${params}`);
 };

@@ -170,7 +170,7 @@ function DetailBlock({
       <p
         className={
           mono
-            ? 'text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all leading-relaxed'
+            ? 'text-xs  text-zinc-700 dark:text-zinc-300 break-all leading-relaxed'
             : 'text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed'
         }
       >
@@ -213,7 +213,7 @@ function PolicyListSection({
         {items.map((item) => (
           <div
             key={item}
-            className={`rounded-lg border px-3 py-2 text-sm leading-relaxed ${mono ? 'font-mono text-xs break-all' : ''}`}
+            className={`rounded-lg border px-3 py-2 text-sm leading-relaxed ${mono ? ' text-xs break-all' : ''}`}
             style={{
               borderColor: 'var(--surface-border)',
               color: 'var(--text-primary)',
@@ -1150,21 +1150,21 @@ export default function ScanDetailPage() {
       count: scan.critical_count,
       label: 'Critical',
       color: 'text-red-400',
-      border: 'border-red-500/20',
+      border: '',
     },
     {
       count: scan.high_count,
       label: 'High',
       color: 'text-orange-400',
-      border: 'border-orange-500/20',
+      border: '',
     },
     {
       count: scan.medium_count,
       label: 'Medium',
       color: 'text-yellow-400',
-      border: 'border-yellow-500/20',
+      border: '',
     },
-    { count: scan.low_count, label: 'Low', color: 'text-blue-400', border: 'border-blue-500/20' },
+    { count: scan.low_count, label: 'Low', color: 'text-blue-400', border: '' },
   ];
 
   return (
@@ -1205,10 +1205,7 @@ export default function ScanDetailPage() {
                 title={scan.helm_source_path}
               >
                 <span className="font-medium text-violet-400">Helm</span>
-                <span
-                  className="max-w-full font-mono break-words"
-                  style={{ overflowWrap: 'anywhere' }}
-                >
+                <span className="max-w-full  break-words" style={{ overflowWrap: 'anywhere' }}>
                   {scan.helm_chart}
                 </span>
                 {scan.helm_source_path && (
@@ -1489,7 +1486,6 @@ export default function ScanDetailPage() {
               key={label}
               label={label}
               value={count ?? 0}
-              className={`border ${border}`}
               valueClassName={`text-xl font-semibold tabular-nums ${color}`}
             />
           ))}
@@ -1521,7 +1517,7 @@ export default function ScanDetailPage() {
                 </div>
               ) : (
                 <pre
-                  className="text-xs whitespace-pre-wrap break-all font-mono leading-relaxed"
+                  className="text-xs whitespace-pre-wrap break-all  leading-relaxed"
                   style={{ color: 'var(--text-secondary)' }}
                 >
                   {scan.error_message}
@@ -1718,10 +1714,10 @@ export default function ScanDetailPage() {
                     ) : (
                       sbomComponents.map((c) => (
                         <Table.Row key={c.id} id={c.id} className="hover:bg-[var(--row-hover)]">
-                          <Table.Cell className="font-mono text-xs text-zinc-700 dark:text-zinc-200">
+                          <Table.Cell className=" text-xs text-zinc-700 dark:text-zinc-200">
                             {c.name}
                           </Table.Cell>
-                          <Table.Cell className="font-mono text-xs text-zinc-500">
+                          <Table.Cell className=" text-xs text-zinc-500">
                             {c.version || '-'}
                           </Table.Cell>
                           <Table.Cell>
@@ -1739,7 +1735,7 @@ export default function ScanDetailPage() {
                           <Table.Cell className="text-xs text-zinc-500">
                             {c.license || '-'}
                           </Table.Cell>
-                          <Table.Cell className="font-mono text-xs text-zinc-400 max-w-xs truncate">
+                          <Table.Cell className=" text-xs text-zinc-400 max-w-xs truncate">
                             <span title={c.package_url}>{c.package_url || '-'}</span>
                           </Table.Cell>
                         </Table.Row>
@@ -2020,7 +2016,7 @@ export default function ScanDetailPage() {
                                   <button
                                     type="button"
                                     onClick={() => openVulnerabilityDetails(v)}
-                                    className="font-mono text-xs text-violet-500 dark:text-violet-400 hover:text-violet-400 dark:hover:text-violet-300 hover:underline transition-colors"
+                                    className=" text-xs text-violet-500 dark:text-violet-400 hover:text-violet-400 dark:hover:text-violet-300 hover:underline transition-colors"
                                   >
                                     {v.vuln_id}
                                   </button>
@@ -2046,13 +2042,13 @@ export default function ScanDetailPage() {
                                 <span className="text-zinc-400 dark:text-zinc-600">-</span>
                               )}
                             </Table.Cell>
-                            <Table.Cell className="font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                            <Table.Cell className=" text-xs text-zinc-700 dark:text-zinc-300">
                               {v.pkg_name}
                             </Table.Cell>
-                            <Table.Cell className="font-mono text-xs text-zinc-500">
+                            <Table.Cell className=" text-xs text-zinc-500">
                               {v.installed_version}
                             </Table.Cell>
-                            <Table.Cell className="font-mono text-xs text-emerald-500">
+                            <Table.Cell className=" text-xs text-emerald-500">
                               {v.fixed_version || (
                                 <span className="text-zinc-400 dark:text-zinc-700">-</span>
                               )}
@@ -2060,7 +2056,7 @@ export default function ScanDetailPage() {
                             <Table.Cell>
                               <SeverityBadge severity={v.severity} />
                             </Table.Cell>
-                            <Table.Cell className="text-right font-mono text-xs text-zinc-500">
+                            <Table.Cell className="text-right  text-xs text-zinc-500">
                               {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
                             </Table.Cell>
                             <Table.Cell>
@@ -2498,7 +2494,7 @@ export default function ScanDetailPage() {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
                     Runtime user
                   </p>
-                  <p className="mt-1 font-mono text-sm text-zinc-900 dark:text-zinc-100">
+                  <p className="mt-1  text-sm text-zinc-900 dark:text-zinc-100">
                     {imageUser || '-'}
                   </p>
                 </Card>
@@ -2506,7 +2502,7 @@ export default function ScanDetailPage() {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
                     Working directory
                   </p>
-                  <p className="mt-1 font-mono text-sm text-zinc-900 dark:text-zinc-100">
+                  <p className="mt-1  text-sm text-zinc-900 dark:text-zinc-100">
                     {imageWorkingDir || '-'}
                   </p>
                 </Card>
@@ -2586,21 +2582,19 @@ export default function ScanDetailPage() {
                         <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                           User
                         </Table.Cell>
-                        <Table.Cell className="font-mono text-xs">{imageUser || '-'}</Table.Cell>
+                        <Table.Cell className=" text-xs">{imageUser || '-'}</Table.Cell>
                       </Table.Row>
                       <Table.Row id="meta-working-dir">
                         <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                           Working directory
                         </Table.Cell>
-                        <Table.Cell className="font-mono text-xs">
-                          {imageWorkingDir || '-'}
-                        </Table.Cell>
+                        <Table.Cell className=" text-xs">{imageWorkingDir || '-'}</Table.Cell>
                       </Table.Row>
                       <Table.Row id="meta-entrypoint">
                         <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                           Entrypoint
                         </Table.Cell>
-                        <Table.Cell className="font-mono text-xs">
+                        <Table.Cell className=" text-xs">
                           {imageEntrypoint.length > 0 ? imageEntrypoint.join(' ') : '-'}
                         </Table.Cell>
                       </Table.Row>
@@ -2608,7 +2602,7 @@ export default function ScanDetailPage() {
                         <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                           Command
                         </Table.Cell>
-                        <Table.Cell className="font-mono text-xs">
+                        <Table.Cell className=" text-xs">
                           {imageCommand.length > 0 ? imageCommand.join(' ') : '-'}
                         </Table.Cell>
                       </Table.Row>
@@ -2616,9 +2610,7 @@ export default function ScanDetailPage() {
                         <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                           Exposed ports
                         </Table.Cell>
-                        <Table.Cell
-                          className={imageExposedPorts.length > 0 ? 'font-mono text-xs' : ''}
-                        >
+                        <Table.Cell className={imageExposedPorts.length > 0 ? ' text-xs' : ''}>
                           {imageExposedPorts.length > 0
                             ? imageExposedPorts.join(', ')
                             : 'None declared'}
@@ -2628,7 +2620,7 @@ export default function ScanDetailPage() {
                         <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                           Declared volumes
                         </Table.Cell>
-                        <Table.Cell className={imageVolumes.length > 0 ? 'font-mono text-xs' : ''}>
+                        <Table.Cell className={imageVolumes.length > 0 ? ' text-xs' : ''}>
                           {imageVolumes.length > 0 ? imageVolumes.join(', ') : '-'}
                         </Table.Cell>
                       </Table.Row>
@@ -2714,7 +2706,7 @@ export default function ScanDetailPage() {
                                 <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
                                   {key}
                                 </p>
-                                <p className="mt-2 break-all font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                                <p className="mt-2 break-all  text-xs text-zinc-700 dark:text-zinc-300">
                                   {value || '-'}
                                 </p>
                               </div>
@@ -2980,7 +2972,7 @@ export default function ScanDetailPage() {
                   <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
                     {scan.image_name}:{scan.image_tag}
                   </p>
-                  <p className="mt-1 font-mono text-xs text-zinc-500" title={scan.image_digest}>
+                  <p className="mt-1  text-xs text-zinc-500" title={scan.image_digest}>
                     {scan.image_digest}
                   </p>
                   <div className="mt-2">
@@ -3157,7 +3149,7 @@ export default function ScanDetailPage() {
                       {suppressionAccessTarget.vuln_id}
                     </p>
                     <p
-                      className="mt-1 font-mono text-xs text-zinc-500"
+                      className="mt-1  text-xs text-zinc-500"
                       title={suppressionAccessTarget.image_digest}
                     >
                       {suppressionAccessTarget.image_digest.length > 48

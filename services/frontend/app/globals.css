@@ -1,20 +1,24 @@
 @import "tailwindcss";
 @import "@heroui/styles";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 /* ── Design tokens ───────────────────────────────────────────────────── */
 :root {
   /* App shell */
   --app-bg: #f4f4f5;
   --sidebar-bg: linear-gradient(160deg, rgba(237,233,254,0.65) 0%, rgba(244,244,245,0.92) 50%, rgba(240,237,255,0.6) 100%);
-  --sidebar-border: rgba(0,0,0,0.08);
+  --sidebar-border: oklch(0.922 0 0);
   --sidebar-shadow: 4px 0 24px rgba(0,0,0,0.06), inset -1px 0 0 rgba(124,58,237,0.04);
 
-  /* Glass panel */
-  --glass-bg: linear-gradient(145deg, rgba(255,255,255,0.92) 0%, rgba(248,248,252,0.88) 100%);
-  --glass-bg-tint-end: rgba(0,0,0,0.004);
-  --glass-border: rgba(0,0,0,0.08);
-  --glass-shadow: 0 4px 32px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.9);
-  --glass-backdrop: blur(20px);
+  /* Surface panel */
+  --surface-bg: linear-gradient(145deg, rgba(255,255,255,0.92) 0%, rgba(248,248,252,0.88) 100%);
+  --surface-bg-tint-end: rgba(0,0,0,0.004);
+  --surface-border: rgba(0,0,0,0.08);
+  --surface-shadow: 0 4px 32px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.9);
+  --surface-backdrop: blur(20px);
   --card-bg: rgba(255,255,255,0.84);
   --table-header-bg: rgba(255,255,255,0.62);
 
@@ -40,8 +44,8 @@
   --text-faint: #a1a1aa;
 
   /* HeroUI semantic accent */
-  --accent: oklch(0.56 0.24 295.5);
-  --accent-foreground: var(--snow);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
   --focus: var(--accent);
   --link: var(--accent);
 
@@ -58,20 +62,49 @@
   --status-pill-border: rgba(0,0,0,0.09);
   --status-bar-track: rgba(0,0,0,0.08);
   --status-header-border: rgba(0,0,0,0.09);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
   /* App shell */
   --app-bg: #09090b;
   --sidebar-bg: linear-gradient(160deg, rgba(39,32,74,0.55) 0%, rgba(9,9,11,0.75) 50%, rgba(15,10,30,0.65) 100%);
-  --sidebar-border: rgba(255,255,255,0.07);
+  --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-shadow: 4px 0 24px rgba(0,0,0,0.4), inset -1px 0 0 rgba(124,58,237,0.06);
 
-  /* Glass panel */
-  --glass-bg: linear-gradient(145deg, rgba(255,255,255,0.038) 0%, rgba(255,255,255,0.01) 100%);
-  --glass-bg-tint-end: rgba(255,255,255,0.015);
-  --glass-border: rgba(255,255,255,0.07);
-  --glass-shadow: 0 4px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05);
+  /* Surface panel */
+  --surface-bg: linear-gradient(145deg, rgba(255,255,255,0.038) 0%, rgba(255,255,255,0.01) 100%);
+  --surface-bg-tint-end: rgba(255,255,255,0.015);
+  --surface-border: rgba(255,255,255,0.07);
+  --surface-shadow: 0 4px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05);
   --card-bg: rgba(255,255,255,0.022);
   --table-header-bg: rgba(255,255,255,0.04);
 
@@ -97,8 +130,8 @@
   --text-faint: #52525b;
 
   /* HeroUI semantic accent */
-  --accent: oklch(0.68 0.2 292.5);
-  --accent-foreground: var(--snow);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
   --focus: var(--accent);
   --link: var(--accent);
 
@@ -115,18 +148,52 @@
   --status-pill-border: rgba(255,255,255,0.08);
   --status-bar-track: rgba(255,255,255,0.05);
   --status-header-border: rgba(255,255,255,0.06);
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
 /* ── Utility classes ─────────────────────────────────────────────────── */
-.glass-panel {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-backdrop);
-  -webkit-backdrop-filter: var(--glass-backdrop);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
+.surface-panel {
+  background: var(--surface-bg);
+  backdrop-filter: var(--surface-backdrop);
+  -webkit-backdrop-filter: var(--surface-backdrop);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
 }
 
-.glass-modal {
+.surface-card {
+  background: var(--card-bg);
+  border: 1px solid var(--surface-border);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.06);
+}
+
+.surface-modal {
   background: var(--modal-bg);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
@@ -134,14 +201,14 @@
   box-shadow: var(--modal-shadow);
 }
 
-.glass-input {
+.surface-input {
   background: var(--input-bg);
   border: 1px solid var(--input-border);
   border-radius: 10px;
   color: var(--input-color);
 }
 
-.glass-input::placeholder {
+.surface-input::placeholder {
   color: var(--input-placeholder);
 }
 
@@ -168,7 +235,7 @@
   background-color: var(--app-bg);
 }
 
-.sidebar-glass {
+.surface-sidebar {
   background: var(--sidebar-bg);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
@@ -176,24 +243,24 @@
   box-shadow: var(--sidebar-shadow);
 }
 
-.assistant-shell {
+.surface-assistant-shell {
   position: relative;
   background:
     radial-gradient(circle at 22% 18%, rgba(59,130,246,0.12) 0%, rgba(59,130,246,0) 28%),
     radial-gradient(circle at 78% 54%, rgba(124,58,237,0.12) 0%, rgba(124,58,237,0) 32%),
-    var(--glass-bg);
+    var(--surface-bg);
 }
 
-.assistant-rail {
+.surface-assistant-rail {
   background: color-mix(in srgb, var(--sidebar-bg) 82%, transparent);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
 }
 
-.assistant-composer {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
+.surface-assistant-composer {
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
 }
@@ -545,7 +612,7 @@
   font-weight: 500;
   color: var(--text-secondary);
   background: var(--row-hover);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
 }
 
 .btn-secondary:hover,
@@ -597,7 +664,7 @@
   border-radius: 0.75rem;
   color: var(--text-muted);
   background: var(--row-hover);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
 }
 
 .btn-icon-subtle:hover {
@@ -639,7 +706,7 @@
   padding: 0.25rem;
   border-radius: 0.875rem;
   background: var(--row-hover);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
 }
 
 .segmented-control-item {
@@ -730,4 +797,59 @@
     rgba(255,255,255,0.08) 40%,
     rgba(255,255,255,0.04) 100%
   );
+}
+
+@theme inline {
+  --font-heading: var(--font-mono);
+  --font-mono: var(--font-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-mono;
+  }
 }

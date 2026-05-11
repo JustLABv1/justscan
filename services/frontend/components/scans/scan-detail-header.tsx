@@ -3,7 +3,6 @@
 import type { ReactNode } from 'react';
 
 type ScanDetailHeaderProps = {
-  breadcrumbs?: ReactNode;
   navigation?: ReactNode;
   badges?: ReactNode;
   title: string;
@@ -13,7 +12,6 @@ type ScanDetailHeaderProps = {
 };
 
 export function ScanDetailHeader({
-  breadcrumbs,
   navigation,
   badges,
   title,
@@ -23,10 +21,8 @@ export function ScanDetailHeader({
 }: ScanDetailHeaderProps) {
   return (
     <div className="space-y-4">
-      {badges ? <div className="flex flex-wrap items-center gap-2">{badges}</div> : null}
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0 flex-1 space-y-3">
-          {breadcrumbs ? <div className="flex flex-wrap items-center gap-2">{breadcrumbs}</div> : null}
           {navigation ? <div className="flex flex-wrap items-center gap-2">{navigation}</div> : null}
           <div className="min-w-0">
             <h1
@@ -43,6 +39,7 @@ export function ScanDetailHeader({
                 {subtitle}
               </div>
             ) : null}
+            {badges ? <div className="mt-2 flex flex-wrap items-center gap-2">{badges}</div> : null}
             {meta ? <div className="mt-1">{meta}</div> : null}
           </div>
         </div>

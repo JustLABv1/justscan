@@ -86,7 +86,7 @@ export function RiskOverviewCard({ riskScore }: { riskScore: OrgRiskScore | null
     : null;
 
   return (
-    <div className="glass-panel relative rounded-2xl p-5">
+    <div className="surface-card relative rounded-2xl p-5">
       <div
         className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
         style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.2),transparent)' }}

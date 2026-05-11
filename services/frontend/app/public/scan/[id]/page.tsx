@@ -62,7 +62,7 @@ function ScannerDatabaseCard({
   downloadedAt?: string | null;
 }) {
   return (
-    <div className="rounded-2xl border p-4" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+    <div className="rounded-2xl border p-4" style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
       <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
       <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }} title={updatedAt ? fullDate(updatedAt) : ''}>
         {updatedAt ? `${timeAgo(updatedAt)} (${fullDate(updatedAt)})` : 'Unknown'}
@@ -380,7 +380,7 @@ export default function PublicScanResultPage() {
                 <div
                   key={label}
                   className={`rounded-2xl border ${border} p-4 cursor-pointer transition-all hover:scale-105`}
-                  style={{ background: 'var(--glass-bg)', backdropFilter: 'blur(20px)' }}
+                  style={{ background: 'var(--surface-bg)', backdropFilter: 'blur(20px)' }}
                   onClick={() => { setSeverityFilter(f => f === label.toUpperCase() ? '' : label.toUpperCase()); setPage(1); }}
                 >
                   <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
@@ -391,7 +391,7 @@ export default function PublicScanResultPage() {
 
             {(scan.trivy_version || scan.grype_version || scan.trivy_vuln_db_updated_at || scan.trivy_java_db_updated_at) && (
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                <div className="rounded-2xl border p-4" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                <div className="rounded-2xl border p-4" style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
                   <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Scanner</p>
                   <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Trivy {scan.trivy_version || 'unknown'}</p>
                   {scan.grype_version && (
@@ -474,7 +474,7 @@ export default function PublicScanResultPage() {
               </div>
 
               {/* Table */}
-              <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+              <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
                 <div className="overflow-x-auto">
                 <table className="w-full min-w-[920px] text-sm">
                   <thead>

@@ -78,7 +78,7 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
     <Modal state={state}>
       <Modal.Backdrop>
         <Modal.Container size="md" placement="center">
-          <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+          <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
             <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               <Modal.Heading className="text-zinc-900 dark:text-white font-semibold flex items-center gap-2">
                 <Key01Icon size={17} />
@@ -92,7 +92,7 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
                 This token will not be shown again. Copy it now and store it somewhere safe.
               </div>
               <div className="rounded-xl p-3 font-mono text-xs break-all"
-                style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                 {rawToken}
               </div>
               <button type="button" onClick={handleCopy} className="btn-primary w-full flex items-center justify-center gap-2">
@@ -140,7 +140,7 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
     <Modal state={state}>
       <Modal.Backdrop isDismissable>
         <Modal.Container size="sm" placement="center">
-          <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+          <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
             <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">New Org Token</Modal.Heading>
               <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -178,7 +178,7 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                         className="rounded-lg p-2 text-xs font-medium transition-all"
                         style={expiresIn === opt.value
                           ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(109,40,217,0.12) 100%)', border: '1px solid rgba(167,139,250,0.4)', color: '#a78bfa' }
-                          : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }
+                          : { background: 'var(--row-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-secondary)' }
                         }
                       >
                         {opt.label}
@@ -272,7 +272,7 @@ export function OrgTokensTab({ orgId, canManage }: OrgTokensTabProps) {
         )}
       </div>
 
-      <div className="glass-panel rounded-2xl overflow-hidden">
+      <div className="surface-card rounded-2xl overflow-hidden">
         {loading ? (
           <div className="flex justify-center py-8">
             <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />

@@ -3,93 +3,93 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
-import {
-  addTagToScan,
-  adminCreateGlobalRegistry,
-  adminCreateGroupMapping,
-  adminCreateOIDCProvider,
-  adminCreateOIDCRoleOverride,
-  adminDeleteGlobalRegistry,
-  adminDeleteGroupMapping,
-  adminDeleteOIDCProvider,
-  adminDeleteOIDCRoleOverride,
-  adminListGlobalRegistries,
-  adminListGroupMappings,
-  adminListOIDCProviders,
-  adminListOIDCRoleOverrides,
-  adminPreviewOIDCClaimSync,
-  adminSetDefaultRegistry,
-  adminUnsetDefaultRegistry,
-  adminUpdateAuthSettings,
-  adminUpdateGlobalRegistry,
-  adminUpdateGroupMapping,
-  adminUpdateOIDCProvider,
-  adminUpdateOIDCRoleOverride,
-  adminUpdateScannerSettings,
-  cancelScan,
-  createAdminUser,
-  createAutoTagRule,
-  createNotificationChannel,
-  createShare,
-  deleteAdminToken,
-  deleteAdminUser,
-  deleteAutoTagRule,
-  deleteNotificationChannel,
-  deleteShare,
-  disableAdminUser,
-  getAdminSettings,
-  getAPIUsageStats,
-  getScannerHealth,
-  getXRayUsageStats,
-  listAdminScans,
-  listAdminTokens,
-  listAdminUsers,
-  listAPIRequestLogs,
-  listAuditLogs,
-  listAutoTagRules,
-  listNotificationChannels,
-  listNotificationDeliveries,
-  listOrgs,
-  listTags,
-  listXRayRequestLogs,
-  reScan,
-  setPublicScanEnabled,
-  testNotificationChannel,
-  updateAdminToken,
-  updateAdminUser,
-  updateAPILogRetention,
-  updateAutoTagRule,
-  updateNotificationChannel,
-  updateRateLimit,
-  updateRegisterRateLimit,
-  updateXRayLogRetention,
-} from '@/lib/api';
 import type {
-  AdminScan,
-  AdminToken,
-  AdminUser,
-  APIRequestLog,
-  APIRequestLogFilters,
-  APIUsageStats,
-  AuditLog,
-  AuditLogFilters,
-  AutoTagRule,
-  NotificationChannel,
-  NotificationDelivery,
-  OIDCClaimSyncPreview,
-  OIDCGroupMapping,
-  OIDCOrgRoleOverride,
-  OIDCProviderAdmin,
-  Org,
-  Registry,
-  RegistryWithHealth,
-  ScannerCapabilities,
-  ScannerHealth,
-  ScannerSettings,
-  Tag,
-  XRayRequestLog,
-  XRayRequestLogFilters,
-  XRayUsageStats,
+    AdminScan,
+    AdminToken,
+    AdminUser,
+    APIRequestLog,
+    APIRequestLogFilters,
+    APIUsageStats,
+    AuditLog,
+    AuditLogFilters,
+    AutoTagRule,
+    NotificationChannel,
+    NotificationDelivery,
+    OIDCClaimSyncPreview,
+    OIDCGroupMapping,
+    OIDCOrgRoleOverride,
+    OIDCProviderAdmin,
+    Org,
+    Registry,
+    RegistryWithHealth,
+    ScannerCapabilities,
+    ScannerHealth,
+    ScannerSettings,
+    Tag,
+    XRayRequestLog,
+    XRayRequestLogFilters,
+    XRayUsageStats,
+} from '@/lib/api';
+import {
+    addTagToScan,
+    adminCreateGlobalRegistry,
+    adminCreateGroupMapping,
+    adminCreateOIDCProvider,
+    adminCreateOIDCRoleOverride,
+    adminDeleteGlobalRegistry,
+    adminDeleteGroupMapping,
+    adminDeleteOIDCProvider,
+    adminDeleteOIDCRoleOverride,
+    adminListGlobalRegistries,
+    adminListGroupMappings,
+    adminListOIDCProviders,
+    adminListOIDCRoleOverrides,
+    adminPreviewOIDCClaimSync,
+    adminSetDefaultRegistry,
+    adminUnsetDefaultRegistry,
+    adminUpdateAuthSettings,
+    adminUpdateGlobalRegistry,
+    adminUpdateGroupMapping,
+    adminUpdateOIDCProvider,
+    adminUpdateOIDCRoleOverride,
+    adminUpdateScannerSettings,
+    cancelScan,
+    createAdminUser,
+    createAutoTagRule,
+    createNotificationChannel,
+    createShare,
+    deleteAdminToken,
+    deleteAdminUser,
+    deleteAutoTagRule,
+    deleteNotificationChannel,
+    deleteShare,
+    disableAdminUser,
+    getAdminSettings,
+    getAPIUsageStats,
+    getScannerHealth,
+    getXRayUsageStats,
+    listAdminScans,
+    listAdminTokens,
+    listAdminUsers,
+    listAPIRequestLogs,
+    listAuditLogs,
+    listAutoTagRules,
+    listNotificationChannels,
+    listNotificationDeliveries,
+    listOrgs,
+    listTags,
+    listXRayRequestLogs,
+    reScan,
+    setPublicScanEnabled,
+    testNotificationChannel,
+    updateAdminToken,
+    updateAdminUser,
+    updateAPILogRetention,
+    updateAutoTagRule,
+    updateNotificationChannel,
+    updateRateLimit,
+    updateRegisterRateLimit,
+    updateXRayLogRetention,
 } from '@/lib/api';
 import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -210,7 +210,7 @@ function ScannerHealthPanel() {
   }, [load]);
 
   return (
-    <div className="glass-panel rounded-2xl p-5 space-y-4">
+    <div className="surface-panel rounded-2xl p-5 space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Scanner Health</h2>
@@ -251,7 +251,7 @@ function ScannerHealthPanel() {
                 ))}
               </div>
 
-              <div className="rounded-xl px-4 py-3 text-xs text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div className="rounded-xl px-4 py-3 text-xs text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                 Status is based on when each worker last downloaded its local DB copy. A worker is healthy if it downloaded within the last {health.max_allowed_age_hours}h.
               </div>
 
@@ -259,7 +259,7 @@ function ScannerHealthPanel() {
                 {health.workers.map((worker) => {
                   const tone = scannerTone(worker.status);
                   return (
-                    <div key={worker.worker_id} className="rounded-xl p-4 space-y-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <div key={worker.worker_id} className="rounded-xl p-4 space-y-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                       <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-semibold px-2 py-0.5 rounded-md" style={{ color: tone.color, background: tone.bg, border: `1px solid ${tone.border}` }}>
@@ -273,13 +273,13 @@ function ScannerHealthPanel() {
                         <span className="text-xs text-zinc-500" title={worker.cache_dir}>{worker.cache_dir}</span>
                       </div>
                       <div className="grid md:grid-cols-2 gap-3 text-xs">
-                        <div className="rounded-lg px-3 py-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                        <div className="rounded-lg px-3 py-2" style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
                           <p className="text-zinc-500 mb-1">Vulnerability DB</p>
                           <p className="text-zinc-700 dark:text-zinc-200">Snapshot age: {formatDbAge(worker.vuln_db_age_hours)}</p>
                           <p className="text-zinc-500 mt-1">Updated: {worker.vuln_db_updated_at ? fullDate(worker.vuln_db_updated_at) : 'Unknown'}</p>
                           <p className="text-zinc-500">Downloaded: {worker.vuln_db_downloaded_at ? fullDate(worker.vuln_db_downloaded_at) : 'Unknown'}</p>
                         </div>
-                        <div className="rounded-lg px-3 py-2" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                        <div className="rounded-lg px-3 py-2" style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
                           <p className="text-zinc-500 mb-1">Java DB</p>
                           <p className="text-zinc-700 dark:text-zinc-200">Snapshot age: {formatDbAge(worker.java_db_age_hours)}</p>
                           <p className="text-zinc-500 mt-1">Updated: {worker.java_db_updated_at ? fullDate(worker.java_db_updated_at) : 'Unknown'}</p>
@@ -431,7 +431,7 @@ function SettingsTab() {
         </div>
       )}
 
-      <div className="glass-panel rounded-2xl p-5 space-y-4">
+      <div className="surface-panel rounded-2xl p-5 space-y-4">
         <div>
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Public Scanning</h2>
           <p className="text-sm text-zinc-500 mt-0.5">
@@ -444,7 +444,7 @@ function SettingsTab() {
         {publicScanEnabled === null ? (
           <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
         ) : (
-          <div className="flex items-center justify-between gap-4 p-4 rounded-xl" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+          <div className="flex items-center justify-between gap-4 p-4 rounded-xl" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
             <div className="flex items-center gap-3">
               <div
                 className="size-10 rounded-xl flex items-center justify-center shrink-0"
@@ -497,7 +497,7 @@ function SettingsTab() {
       </div>
 
       {/* Rate limit */}
-      <div className="glass-panel rounded-2xl p-5 space-y-4">
+      <div className="surface-panel rounded-2xl p-5 space-y-4">
         <div>
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Public Scan Rate Limit</h2>
           <p className="text-sm text-zinc-500 mt-0.5">Maximum number of public scans allowed per IP address per hour.</p>
@@ -522,7 +522,7 @@ function SettingsTab() {
         </div>
       </div>
 
-      <div className="glass-panel rounded-2xl p-5 space-y-4">
+      <div className="surface-panel rounded-2xl p-5 space-y-4">
         <div>
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Registration Rate Limit</h2>
           <p className="text-sm text-zinc-500 mt-0.5">Maximum number of new accounts allowed per IP address per hour.</p>
@@ -548,7 +548,7 @@ function SettingsTab() {
       </div>
 
       {/* API Log Retention */}
-      <div className="glass-panel rounded-2xl p-5 space-y-4">
+      <div className="surface-panel rounded-2xl p-5 space-y-4">
         <div>
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">API Log Retention</h2>
           <p className="text-sm text-zinc-500 mt-0.5">How many days to keep API request logs. Set to 0 to retain indefinitely.</p>
@@ -575,7 +575,7 @@ function SettingsTab() {
       </div>
 
       {/* xRay Log Retention */}
-      <div className="glass-panel rounded-2xl p-5 space-y-4">
+      <div className="surface-panel rounded-2xl p-5 space-y-4">
         <div>
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">xRay Log Retention</h2>
           <p className="text-sm text-zinc-500 mt-0.5">How many days to keep Artifactory xRay request logs. Set to 0 to retain indefinitely.</p>
@@ -642,7 +642,7 @@ function ScannerSettingsPanel() {
   if (loading) return null;
 
   return (
-    <div className="glass-panel rounded-2xl p-5 space-y-4">
+    <div className="surface-panel rounded-2xl p-5 space-y-4">
       <div>
         <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Scanner Settings</h2>
         <p className="text-sm text-zinc-500 mt-0.5">Configure runtime scanner behavior. These override config.yaml values.</p>
@@ -713,7 +713,7 @@ function AuthSettingsPanel() {
   if (loading) return null;
 
   return (
-    <div className="glass-panel rounded-2xl p-5 space-y-4">
+    <div className="surface-panel rounded-2xl p-5 space-y-4">
       <div>
         <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Authentication Settings</h2>
         <p className="text-sm text-zinc-500 mt-0.5">Control which sign-in methods are available to users.</p>
@@ -810,7 +810,7 @@ function OverviewTab() {
       {summary && (
         <>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
-            <div className="glass-panel rounded-2xl p-5 space-y-4">
+            <div className="surface-panel rounded-2xl p-5 space-y-4">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Operations Snapshot</h2>
@@ -832,7 +832,7 @@ function OverviewTab() {
                     key={item.label}
                     href={item.href}
                     className="rounded-xl px-4 py-3 transition-colors hover:bg-violet-500/5"
-                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                    style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm text-zinc-500">{item.label}</span>
@@ -843,7 +843,7 @@ function OverviewTab() {
               </div>
             </div>
 
-            <div className="glass-panel rounded-2xl p-5 space-y-4">
+            <div className="surface-panel rounded-2xl p-5 space-y-4">
               <div>
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Attention Queue</h2>
                 <p className="text-sm text-zinc-500 mt-0.5">The admin flows that most likely need action.</p>
@@ -872,7 +872,7 @@ function OverviewTab() {
                     meta: `${summary.recentAudit.length} recent audit event${summary.recentAudit.length === 1 ? '' : 's'}`,
                   },
                 ].map((link) => (
-                  <Link key={link.href} href={link.href} className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <Link key={link.href} href={link.href} className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <div>
                       <p className="text-zinc-700 dark:text-zinc-200">{link.label}</p>
                       <p className="text-xs text-zinc-500 mt-0.5">{link.meta}</p>
@@ -885,7 +885,7 @@ function OverviewTab() {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-            <div className="glass-panel rounded-2xl p-5 space-y-4">
+            <div className="surface-panel rounded-2xl p-5 space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Recent Audit Activity</h2>
@@ -899,7 +899,7 @@ function OverviewTab() {
               ) : (
                 <div className="space-y-2">
                   {summary.recentAudit.map((entry) => (
-                    <div key={entry.id} className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <div key={entry.id} className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{entry.operation}</p>
@@ -915,7 +915,7 @@ function OverviewTab() {
             </div>
 
             <div className="space-y-4">
-              <div className="glass-panel rounded-2xl p-5 space-y-4">
+              <div className="surface-panel rounded-2xl p-5 space-y-4">
                 <div>
                   <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Control Surfaces</h2>
                   <p className="text-sm text-zinc-500 mt-0.5">Shortcuts into the areas that influence system behavior most.</p>
@@ -927,7 +927,7 @@ function OverviewTab() {
                     { href: '/admin/notifications', label: 'Test delivery channels and review history' },
                     { href: '/admin/scans', label: 'Manage cross-user scans and sharing' },
                   ].map((link) => (
-                    <Link key={link.href} href={link.href} className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <Link key={link.href} href={link.href} className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                       <span className="text-zinc-700 dark:text-zinc-200">{link.label}</span>
                       <span className="text-violet-500">Open</span>
                     </Link>
@@ -935,21 +935,21 @@ function OverviewTab() {
                 </div>
               </div>
 
-              <div className="glass-panel rounded-2xl p-5 space-y-4">
+              <div className="surface-panel rounded-2xl p-5 space-y-4">
                 <div>
                   <h2 className="text-base font-semibold text-zinc-900 dark:text-white">System & Legal</h2>
                   <p className="text-sm text-zinc-500 mt-0.5">Admin-only product metadata for this running frontend build.</p>
                 </div>
                 <div className="space-y-2 text-sm">
-                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <p className="text-xs text-zinc-500">Frontend version</p>
                     <p className="mt-1 font-semibold text-zinc-900 dark:text-white">v{APP_FRONTEND_VERSION}</p>
                   </div>
-                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <p className="text-xs text-zinc-500">Copyright</p>
                     <p className="mt-1 text-zinc-700 dark:text-zinc-200">{APP_COPYRIGHT}</p>
                   </div>
-                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <p className="text-xs text-zinc-500">Distribution</p>
                     <p className="mt-1 text-zinc-700 dark:text-zinc-200">JustScan self-hosted admin surface</p>
                   </div>
@@ -1072,11 +1072,11 @@ function UsersTab() {
       </div>
 
       {users.length === 0 ? (
-        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+        <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
           <p className="text-sm text-zinc-500">No users found.</p>
         </div>
       ) : (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -1155,7 +1155,7 @@ function UsersTab() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{isCreate ? 'Add User' : 'Edit User'}</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -1180,7 +1180,7 @@ function UsersTab() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Authentication</label>
-                        <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                           <span className="text-xs font-medium px-2 py-0.5 rounded-md" style={USER_AUTH_STYLE[editingUser.auth_type ?? 'local']}>
                             {userAuthLabel(editingUser.auth_type)}
                           </span>
@@ -1188,7 +1188,7 @@ function UsersTab() {
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Last Sign-in</label>
-                        <div className="rounded-xl px-3 py-2.5 text-sm text-zinc-700 dark:text-zinc-200" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div className="rounded-xl px-3 py-2.5 text-sm text-zinc-700 dark:text-zinc-200" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                           {editingUser.last_login_at ? fullDate(editingUser.last_login_at) : 'No successful sign-in recorded yet'}
                         </div>
                       </div>
@@ -1358,17 +1358,17 @@ function TokensTab() {
         </div>
       )}
 
-      <div className="glass-panel rounded-2xl p-5">
+      <div className="surface-panel rounded-2xl p-5">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Service Tokens</h2>
         <p className="text-sm text-zinc-500 mt-1">Review token usage, rotate descriptions, disable compromised keys, and delete obsolete credentials.</p>
       </div>
 
       {tokens.length === 0 ? (
-        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+        <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
           <p className="text-sm text-zinc-500">No tokens found.</p>
         </div>
       ) : (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -1420,7 +1420,7 @@ function TokensTab() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Edit Token</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -1538,12 +1538,12 @@ function AutoTagsTab() {
       </div>
 
       {rules.length === 0 ? (
-        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+        <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
           <p className="text-sm text-zinc-500">No auto-tag rules yet.</p>
           <p className="text-xs text-zinc-400">Use patterns like <code className="px-1 py-0.5 rounded font-mono" style={{background:'var(--row-hover)'}}>nginx/*</code> to match image names.</p>
         </div>
       ) : (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -1595,7 +1595,7 @@ function AutoTagsTab() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{isCreate ? 'Add Auto-Tag Rule' : 'Edit Auto-Tag Rule'}</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -1758,7 +1758,7 @@ function AuditLogTab() {
         </div>
       )}
 
-      <div className="glass-panel rounded-2xl p-4 space-y-3">
+      <div className="surface-panel rounded-2xl p-4 space-y-3">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <input className={inputCls} placeholder="Search details or operation" value={filters.q} onChange={(event) => updateFilter('q', event.target.value)} />
           <input className={inputCls} placeholder="User or email" value={filters.user} onChange={(event) => updateFilter('user', event.target.value)} />
@@ -1797,11 +1797,11 @@ function AuditLogTab() {
       </div>
 
       {logs.length === 0 ? (
-        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+        <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
           <p className="text-sm text-zinc-500">No audit log entries yet.</p>
         </div>
       ) : (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -2074,12 +2074,12 @@ export function NotificationsTab() {
       </div>
 
       {channels.length === 0 ? (
-        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+        <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
           <Notification01Icon size={32} className="text-zinc-400 dark:text-zinc-600" />
           <p className="text-sm text-zinc-500">No notification channels configured.</p>
         </div>
       ) : (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -2109,7 +2109,7 @@ export function NotificationsTab() {
                       <div className="flex flex-wrap gap-1">
                         {(ch.events ?? []).map(ev => (
                           <span key={ev} className="text-xs px-1.5 py-0.5 rounded font-mono"
-                            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
+                            style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-muted)' }}>
                             {ev}
                           </span>
                         ))}
@@ -2147,7 +2147,7 @@ export function NotificationsTab() {
                   {historyChannelId === ch.id && (
                     <tr key={`${ch.id}-history`}>
                       <td colSpan={6} className="px-4 pb-4 pt-0">
-                        <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Recent Delivery Attempts</p>
                             {historyLoading && <span className="text-xs text-zinc-500">Loading…</span>}
@@ -2162,10 +2162,10 @@ export function NotificationsTab() {
                           ) : (
                             <div className="space-y-2">
                               {(deliveryHistory[ch.id] ?? []).map((delivery) => (
-                                <div key={delivery.id} className="rounded-lg px-3 py-2.5" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                                <div key={delivery.id} className="rounded-lg px-3 py-2.5" style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
                                   <div className="flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>{delivery.event}</span>
+                                      <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-muted)' }}>{delivery.event}</span>
                                       <span className="text-xs font-medium px-2 py-0.5 rounded-full"
                                         style={delivery.status === 'delivered'
                                           ? { color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }
@@ -2197,7 +2197,7 @@ export function NotificationsTab() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
                   {isCreate ? 'Add Notification Channel' : 'Edit Notification Channel'}
@@ -2330,7 +2330,7 @@ export function NotificationsTab() {
                     {orgs.length === 0 ? (
                       <p className="text-sm text-zinc-500">No org filters configured. This channel will match all orgs.</p>
                     ) : (
-                      <div className="grid gap-2 rounded-xl p-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="grid gap-2 rounded-xl p-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                         {orgs.map((org) => (
                           <label key={org.id} className="flex items-center gap-2.5 cursor-pointer">
                             <input type="checkbox" checked={formOrgIds.includes(org.id)} onChange={() => toggleOrg(org.id)} className="size-4 rounded accent-violet-500" />
@@ -2588,7 +2588,7 @@ export function ScansTab() {
       )}
 
       {/* Filters */}
-      <div className="glass-panel rounded-2xl p-4">
+      <div className="surface-panel rounded-2xl p-4">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_220px_auto] items-end">
           <div className="space-y-1.5">
             <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image</Label>
@@ -2664,11 +2664,11 @@ export function ScansTab() {
           <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : groups.length === 0 ? (
-        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+        <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
           <p className="text-sm text-zinc-500">No scans found.</p>
         </div>
       ) : (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -2875,7 +2875,7 @@ export function ScansTab() {
       <Modal state={tagModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Add Tag</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -3176,7 +3176,7 @@ export function InsightsTab() {
 
           {/* Top endpoints */}
           {!statsLoading && stats && stats.top_endpoints.length > 0 && (
-            <div className="glass-panel rounded-2xl p-4 space-y-2">
+            <div className="surface-panel rounded-2xl p-4 space-y-2">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Top Endpoints</h3>
               <div className="space-y-1.5">
                 {stats.top_endpoints.map((ep, i) => (
@@ -3197,7 +3197,7 @@ export function InsightsTab() {
           )}
 
           {/* Filters */}
-          <div className="glass-panel rounded-2xl p-4 space-y-3">
+          <div className="surface-panel rounded-2xl p-4 space-y-3">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
               <select className={inputCls} value={apiFilters.method} onChange={e => updateApiFilter('method', e.target.value)}>
                 <option value="">All methods</option>
@@ -3239,11 +3239,11 @@ export function InsightsTab() {
               <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
             </div>
           ) : apiLogs.length === 0 ? (
-            <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+            <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
               <p className="text-sm text-zinc-500">No API request logs yet.</p>
             </div>
           ) : (
-            <div className="glass-panel rounded-2xl overflow-hidden">
+            <div className="surface-panel rounded-2xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -3308,7 +3308,7 @@ export function InsightsTab() {
               </div>
 
               {xrayStats.top_endpoints.length > 0 && (
-                <div className="glass-panel rounded-2xl p-4 space-y-2">
+                <div className="surface-panel rounded-2xl p-4 space-y-2">
                   <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Top Endpoints</h3>
                   <div className="space-y-1.5">
                     {xrayStats.top_endpoints.map((ep, i) => (
@@ -3331,7 +3331,7 @@ export function InsightsTab() {
           )}
 
           {/* Filters */}
-          <div className="glass-panel rounded-2xl p-4 space-y-3">
+          <div className="surface-panel rounded-2xl p-4 space-y-3">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <input className={inputCls} placeholder="Scan ID" value={xrayFilters.scan_id ?? ''} onChange={e => updateXrayFilter('scan_id', e.target.value)} />
               <input className={inputCls} placeholder="Endpoint path" value={xrayFilters.endpoint ?? ''} onChange={e => updateXrayFilter('endpoint', e.target.value)} />
@@ -3370,11 +3370,11 @@ export function InsightsTab() {
               <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
             </div>
           ) : xrayLogs.length === 0 ? (
-            <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+            <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
               <p className="text-sm text-zinc-500">No xRay request logs yet. Run a scan against an Artifactory Xray registry to populate.</p>
             </div>
           ) : (
-            <div className="glass-panel rounded-2xl overflow-hidden">
+            <div className="surface-panel rounded-2xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -3906,7 +3906,7 @@ export function IdentityProvidersTab() {
         </div>
       )}
 
-      <div className="glass-panel rounded-2xl p-5 flex items-start justify-between gap-4 flex-wrap">
+      <div className="surface-panel rounded-2xl p-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Identity Providers</h2>
           <p className="text-sm text-zinc-500 mt-1">Create, edit, and disable OIDC providers without leaving the admin UI. Select a row to manage mappings, overrides, and preview rules directly.</p>
@@ -3921,11 +3921,11 @@ export function IdentityProvidersTab() {
           <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : providers.length === 0 ? (
-        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+        <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
           <p className="text-sm text-zinc-500">No OIDC providers configured yet.</p>
         </div>
       ) : (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -4010,7 +4010,7 @@ export function IdentityProvidersTab() {
       )}
 
       {selectedProvider ? (
-        <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div className="surface-panel rounded-2xl p-5 space-y-4">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Provider Workspace</p>
@@ -4028,38 +4028,38 @@ export function IdentityProvidersTab() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
               <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Group filters</div>
               <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">
                 {selectedProvider.included_groups.length ? `Include: ${selectedProvider.included_groups.join(', ')}` : 'All groups allowed'}
                 {selectedProvider.excluded_groups.length ? ` | Exclude: ${selectedProvider.excluded_groups.join(', ')}` : ''}
               </div>
             </div>
-            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
               <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Derived org filters</div>
               <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">
                 {selectedProvider.included_org_names.length ? `Include: ${selectedProvider.included_org_names.join(', ')}` : 'All rendered org names allowed'}
                 {selectedProvider.excluded_org_names.length ? ` | Exclude: ${selectedProvider.excluded_org_names.join(', ')}` : ''}
               </div>
             </div>
-            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
               <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Claim mappings</div>
               <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{mappingsLoading ? 'Loading…' : `${mappings.length} configured`}</div>
             </div>
-            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
               <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Role overrides</div>
               <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{roleOverridesLoading ? 'Loading…' : `${roleOverrides.length} configured`}</div>
             </div>
           </div>
         </div>
       ) : (
-        <div className="glass-panel rounded-2xl px-5 py-6 text-sm text-zinc-500" style={{ border: '1px solid var(--glass-border)' }}>
+        <div className="surface-panel rounded-2xl px-5 py-6 text-sm text-zinc-500" style={{ border: '1px solid var(--surface-border)' }}>
           Select a provider row to open its rule workspace.
         </div>
       )}
 
       {selectedProvider ? (
-        <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div className="surface-panel rounded-2xl p-5 space-y-4">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Claim Mappings</h3>
@@ -4079,7 +4079,7 @@ export function IdentityProvidersTab() {
           {mappingsLoading ? (
             <p className="text-sm text-zinc-500">Loading mappings…</p>
           ) : mappings.length === 0 ? (
-            <div className="rounded-xl px-4 py-6 text-sm text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="rounded-xl px-4 py-6 text-sm text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
               No claim mappings configured for this provider yet.
             </div>
           ) : (
@@ -4138,7 +4138,7 @@ export function IdentityProvidersTab() {
       ) : null}
 
       {selectedProvider ? (
-        <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div className="surface-panel rounded-2xl p-5 space-y-4">
           <div>
             <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Claim Sync Preview</h3>
             <p className="text-sm text-zinc-500 mt-1">Test sample groups and roles against the current provider rules to see filtering, matched routes, and the final memberships without mutating any data.</p>
@@ -4168,19 +4168,19 @@ export function IdentityProvidersTab() {
           {claimSyncPreview ? (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                   <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Provider filtered out</div>
                   <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{claimSyncPreview.provider_filtered_out_groups.length ? claimSyncPreview.provider_filtered_out_groups.join(', ') : 'None'}</div>
                 </div>
-                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                   <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Blocked groups</div>
                   <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{claimSyncPreview.blocked_groups.length ? claimSyncPreview.blocked_groups.join(', ') : 'None'}</div>
                 </div>
-                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                   <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Blocked roles</div>
                   <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{claimSyncPreview.blocked_roles.length ? claimSyncPreview.blocked_roles.join(', ') : 'None'}</div>
                 </div>
-                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                   <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Final memberships</div>
                   <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{claimSyncPreview.final_memberships.length}</div>
                 </div>
@@ -4250,7 +4250,7 @@ export function IdentityProvidersTab() {
               </div>
             </div>
           ) : (
-            <div className="rounded-xl px-4 py-6 text-sm text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="rounded-xl px-4 py-6 text-sm text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
               Enter sample claims and run the preview to inspect provider filtering, route matching, derived-org gating, and final membership resolution.
             </div>
           )}
@@ -4258,7 +4258,7 @@ export function IdentityProvidersTab() {
       ) : null}
 
       {selectedProvider ? (
-        <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div className="surface-panel rounded-2xl p-5 space-y-4">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Role Overrides</h3>
@@ -4278,7 +4278,7 @@ export function IdentityProvidersTab() {
           {roleOverridesLoading ? (
             <p className="text-sm text-zinc-500">Loading role overrides…</p>
           ) : roleOverrides.length === 0 ? (
-            <div className="rounded-xl px-4 py-6 text-sm text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="rounded-xl px-4 py-6 text-sm text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
               No role overrides configured for this provider yet.
             </div>
           ) : (
@@ -4333,7 +4333,7 @@ export function IdentityProvidersTab() {
       <Modal state={providerModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editingProvider ? 'Edit Identity Provider' : 'Add Identity Provider'}</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -4454,7 +4454,7 @@ export function IdentityProvidersTab() {
       <Modal state={mappingModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editingMapping ? 'Edit Claim Mapping' : 'Add Claim Mapping'}</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -4565,7 +4565,7 @@ export function IdentityProvidersTab() {
                     </div>
                   ) : null}
                   {!mappingIsExclude && (mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg) ? (
-                    <div className="rounded-xl p-3 text-sm text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <div className="rounded-xl p-3 text-sm text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                       <div className="font-medium text-zinc-700 dark:text-zinc-200">Template preview</div>
                       <div className="mt-1 font-mono text-xs text-zinc-500">Example claim: {mappingPreview.claim}</div>
                       {mappingMatchType === 'prefix' ? (
@@ -4591,7 +4591,7 @@ export function IdentityProvidersTab() {
       <Modal state={roleOverrideModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editingRoleOverride ? 'Edit Role Override' : 'Add Role Override'}</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -4656,7 +4656,7 @@ export function IdentityProvidersTab() {
                     </div>
                   )}
                   {overrideTargetType === 'rendered_name' ? (
-                    <div className="rounded-xl p-3 text-sm text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <div className="rounded-xl p-3 text-sm text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                       <div className="font-medium text-zinc-700 dark:text-zinc-200">Target preview</div>
                       <div className="mt-1 font-mono text-xs text-zinc-500">Example claim: {overridePreview.claim}</div>
                       {overrideMatchType === 'prefix' ? (
@@ -4808,7 +4808,7 @@ export function GlobalRegistriesTab() {
         </div>
       )}
 
-      <div className="glass-panel rounded-2xl p-5 flex items-start justify-between gap-4 flex-wrap">
+      <div className="surface-panel rounded-2xl p-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Global Registries</h2>
           <p className="text-sm text-zinc-500 mt-1">Create platform-wide registries that every scan flow can see and optionally use by default.</p>
@@ -4823,11 +4823,11 @@ export function GlobalRegistriesTab() {
           <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : registries.length === 0 ? (
-        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3">
+        <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
           <p className="text-sm text-zinc-500">No global registries configured yet.</p>
         </div>
       ) : (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -4883,7 +4883,7 @@ export function GlobalRegistriesTab() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editingRegistry ? 'Edit Global Registry' : 'Add Global Registry'}</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -4973,7 +4973,7 @@ export default function AdminPage() {
   const activeTab = resolveAdminTab(pathname);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 space-y-6">
       <AdminChrome />
 
       {activeTab === 'overview' && <OverviewTab />}

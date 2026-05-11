@@ -48,7 +48,7 @@ function ConfirmDialogUI({
     <Modal state={state}>
       <Modal.Backdrop>
         <Modal.Container size="sm" placement="center">
-          <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+          <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
             <Modal.Body className="px-6 pt-6 pb-2">
               <div className="flex flex-col items-center text-center gap-4">
                 <div

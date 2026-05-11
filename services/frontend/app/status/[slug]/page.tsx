@@ -15,8 +15,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const AUTO_REFRESH_MS = 30000;
 const VULN_PAGE_SIZE = 25;
-const STATUS_SELECT_TRIGGER_CLS = 'glass-input min-h-11 rounded-full px-3 text-sm';
-const STATUS_INPUT_CLS = 'glass-input min-h-11 rounded-xl px-3 text-sm outline-none';
+const STATUS_SELECT_TRIGGER_CLS = 'surface-input min-h-11 rounded-full px-3 text-sm';
+const STATUS_INPUT_CLS = 'surface-input min-h-11 rounded-xl px-3 text-sm outline-none';
 const RECENT_SCAN_SEGMENTS = 12;
 const STATUS_PRIORITY: Record<string, number> = {
   failed: 0,
@@ -976,7 +976,7 @@ function StatusItemVulnerabilityModal({
     <Modal state={state}>
       <Modal.Backdrop>
         <Modal.Container size="lg" placement="center">
-          <Modal.Dialog className="glass-modal overflow-hidden rounded-[28px] w-[min(1120px,calc(100vw-1.5rem))] max-w-none">
+          <Modal.Dialog className="surface-modal overflow-hidden rounded-[28px] w-[min(1120px,calc(100vw-1.5rem))] max-w-none">
             <Modal.Body className="p-0">
               <div className="border-b px-6 py-5" style={{ borderColor: 'var(--border-subtle)' }}>
                 <div className="flex flex-wrap items-start justify-between gap-4">

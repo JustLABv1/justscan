@@ -377,7 +377,7 @@ export default function SharedScanPage() {
                 <div
                   key={label}
                   className={`rounded-2xl border ${border} p-4 cursor-pointer transition-all hover:scale-105`}
-                  style={{ background: 'var(--glass-bg)', backdropFilter: 'blur(20px)' }}
+                  style={{ background: 'var(--surface-bg)', backdropFilter: 'blur(20px)' }}
                   onClick={() => { setSeverityFilter(f => f === label.toUpperCase() ? '' : label.toUpperCase()); setPage(1); }}
                 >
                   <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
@@ -445,7 +445,7 @@ export default function SharedScanPage() {
               </div>
 
               {/* Table */}
-              <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+              <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
                 <div className="overflow-x-auto">
                 <table className="w-full min-w-[920px] text-sm">
                   <thead>

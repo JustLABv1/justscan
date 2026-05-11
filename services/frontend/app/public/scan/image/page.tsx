@@ -27,7 +27,7 @@ function CopyButton({ url }: { url: string }) {
       }}
       title="Copy link"
       className="shrink-0 flex items-center justify-center size-6 rounded-md transition-all opacity-0 group-hover:opacity-100 hover:!opacity-100"
-      style={{ color: copied ? '#34d399' : 'var(--text-muted)', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}
+      style={{ color: copied ? '#34d399' : 'var(--text-muted)', background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
     >
       {copied ? (
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -74,7 +74,7 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
       onKeyDown={e => { if (e.key === 'Enter') router.push(`/public/scan/${record.id}`); }}
       className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors group cursor-pointer"
       style={{ background: 'var(--row-hover)' }}
-      onMouseEnter={e => (e.currentTarget.style.background = 'var(--glass-bg)')}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-bg)')}
       onMouseLeave={e => (e.currentTarget.style.background = 'var(--row-hover)')}
     >
       <div className="flex-1 min-w-0">
@@ -327,7 +327,7 @@ export default function PublicImageScanPage() {
           ) : (
             <form onSubmit={handleScan} className="space-y-2">
               <div className="flex items-center gap-2 p-2 rounded-2xl"
-                style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
+                style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)', boxShadow: 'var(--surface-shadow)' }}>
                 <div className="pl-2 shrink-0" style={{ color: 'var(--text-faint)' }}>
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/><line x1="15" y1="9" x2="15" y2="21"/>
@@ -412,7 +412,7 @@ export default function PublicImageScanPage() {
                 </button>
               </div>
               <div className="rounded-2xl overflow-hidden space-y-px p-2"
-                style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
                 {history.map(record => (
                   <HistoryRow key={record.id} record={record} />
                 ))}

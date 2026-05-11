@@ -150,7 +150,7 @@ export default function TagsPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
+    <div className="p-6 space-y-5">
     <PageHeader
       eyebrow="Organization"
       title="Tags"
@@ -168,7 +168,7 @@ export default function TagsPage() {
       {error ? <FormAlert description={error} title="Tag loading failed" /> : null}
 
       {loading ? (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-panel rounded-2xl overflow-hidden">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex items-center gap-4 px-4 py-3.5"
               style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}>
@@ -189,7 +189,7 @@ export default function TagsPage() {
           action={{ label: '+ New Tag', onClick: openCreate }}
         />
       ) : (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-panel rounded-2xl overflow-hidden">
           {tags.map((tag, i) => (
             <div
               key={tag.id}
@@ -233,7 +233,7 @@ export default function TagsPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="sm" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editing ? 'Edit Tag' : 'New Tag'}</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -285,7 +285,7 @@ export default function TagsPage() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Tag Access</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -293,7 +293,7 @@ export default function TagsPage() {
               <Modal.Body className="px-6 py-5 space-y-4">
                 {shareError ? <FormAlert description={shareError} title="Access update failed" /> : null}
                 {shareTarget ? (
-                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <div className="flex items-center gap-3">
                       <span className="size-4 rounded-full shrink-0" style={{ background: shareTarget.color, boxShadow: `0 0 8px ${shareTarget.color}88` }} />
                       <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{shareTarget.name}</p>
@@ -318,7 +318,7 @@ export default function TagsPage() {
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
-                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
                             <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>

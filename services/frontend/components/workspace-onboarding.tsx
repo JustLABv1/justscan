@@ -1,13 +1,12 @@
 'use client';
 
-import type { Org, WorkScope } from '@/lib/api';
 import { Logo } from '@/components/logo';
+import type { Org, WorkScope } from '@/lib/api';
 import {
-  ArrowRight01Icon,
-  Building04Icon,
-  DashboardSquare01Icon,
-  Shield01Icon,
-  Tag01Icon,
+    ArrowRight01Icon,
+    DashboardSquare01Icon,
+    Shield01Icon,
+    Tag01Icon
 } from 'hugeicons-react';
 import { useEffect, useState } from 'react';
 
@@ -69,7 +68,7 @@ function ProductIntroAnimation() {
             radial-gradient(circle at 16% 16%, rgba(124,58,237,0.14) 0%, transparent 24%),
             radial-gradient(circle at 84% 78%, rgba(56,189,248,0.14) 0%, transparent 24%),
             linear-gradient(145deg, rgba(255,255,255,0.68) 0%, rgba(255,255,255,0.24) 56%, rgba(186,230,253,0.12) 100%);
-          border: 1px solid var(--glass-border);
+          border: 1px solid var(--surface-border);
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.48), 0 26px 60px rgba(24,24,27,0.08);
         }
 
@@ -283,7 +282,7 @@ export function WorkspaceOnboarding({
         className="rounded-2xl p-4 text-left transition-all duration-150"
         style={{
           background: selected ? 'linear-gradient(145deg, rgba(124,58,237,0.18) 0%, rgba(124,58,237,0.08) 100%)' : 'var(--row-hover)',
-          border: selected ? '1px solid rgba(167,139,250,0.38)' : '1px solid var(--glass-border)',
+          border: selected ? '1px solid rgba(167,139,250,0.38)' : '1px solid var(--surface-border)',
           boxShadow: selected ? '0 12px 30px rgba(124,58,237,0.12)' : 'none',
         }}
       >
@@ -318,7 +317,7 @@ export function WorkspaceOnboarding({
         style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.14) 0%, transparent 72%)' }}
       />
 
-      <div className="glass-panel relative mx-auto flex min-h-[calc(100dvh-1.5rem)] max-w-[1600px] flex-col overflow-hidden rounded-[36px]">
+      <div className="surface-card relative mx-auto flex min-h-[calc(100dvh-1.5rem)] max-w-[1600px] flex-col overflow-hidden rounded-[36px]">
         <header className="relative z-10 flex items-center justify-between gap-4 border-b px-5 py-4 md:px-8 md:py-5" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="flex items-center gap-3">
             <div
@@ -363,7 +362,7 @@ export function WorkspaceOnboarding({
                         <span
                           key={item}
                           className="rounded-full px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200"
-                          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                          style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
                         >
                           {item}
                         </span>
@@ -388,11 +387,11 @@ export function WorkspaceOnboarding({
 
               {stepIndex === 1 && (
                 <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <p className="text-lg font-semibold text-zinc-900 dark:text-white">Personal workspace</p>
                     <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">Your own scans, registries, tags, suppressions, and watchlist items live here.</p>
                   </div>
-                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <p className="text-lg font-semibold text-zinc-900 dark:text-white">Organization workspace</p>
                     <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">A shared team context where visibility and management depend on org membership and role.</p>
                   </div>
@@ -405,17 +404,17 @@ export function WorkspaceOnboarding({
 
               {stepIndex === 2 && (
                 <div className="grid gap-4 lg:grid-cols-3">
-                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <DashboardSquare01Icon size={22} className="text-violet-500" />
                     <p className="mt-4 text-lg font-semibold text-zinc-900 dark:text-white">Dashboards follow scope</p>
                     <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">Counts, trends, and recent activity reflect the workspace you are currently viewing.</p>
                   </div>
-                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <Shield01Icon size={22} className="text-sky-500" />
                     <p className="mt-4 text-lg font-semibold text-zinc-900 dark:text-white">Resources stay owned</p>
                     <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">A shared scan can appear in your current workspace while still being owned somewhere else.</p>
                   </div>
-                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <Tag01Icon size={22} className="text-amber-500" />
                     <p className="mt-4 text-lg font-semibold text-zinc-900 dark:text-white">Labels explain access</p>
                     <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">Personal, org, and shared badges tell you how an item is owned and why you can see it.</p>
@@ -440,12 +439,12 @@ export function WorkspaceOnboarding({
                         ))}
                       </div>
                     ) : (
-                      <div className="rounded-[28px] p-6 text-sm leading-7 text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="rounded-[28px] p-6 text-sm leading-7 text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                         You do not have organization access yet. Start in your personal workspace. If you are invited later, organization workspaces will appear in the workspace switcher.
                       </div>
                     )
                   ) : (
-                    <div className="rounded-[28px] p-6 text-sm leading-7 text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                    <div className="rounded-[28px] p-6 text-sm leading-7 text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                       Checking your organization access…
                     </div>
                   )}
@@ -455,17 +454,17 @@ export function WorkspaceOnboarding({
 
             {stepIndex > 0 && (
               <aside className="space-y-4 xl:pt-2">
-                <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                   <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Product introduction</p>
                   <p className="mt-4 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white">JustScan ties scanning, triage, and ownership together.</p>
                   <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">The product view only makes sense once users understand what belongs to them personally, what belongs to a team, and what they are only seeing through shared access.</p>
                 </div>
                 <div className="space-y-3">
-                  <div className="rounded-[28px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-[28px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <p className="text-sm font-semibold text-zinc-900 dark:text-white">Scan and monitor</p>
                     <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">Run scans, track vulnerabilities, and keep watchlist signals visible where the right people can act on them.</p>
                   </div>
-                  <div className="rounded-[28px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-[28px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <p className="text-sm font-semibold text-zinc-900 dark:text-white">Organize by workspace</p>
                     <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">Workspaces keep dashboards, tags, suppressions, and access boundaries aligned with how teams actually operate.</p>
                   </div>

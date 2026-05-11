@@ -10,34 +10,34 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/toast';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import {
-  createAIConversation,
-  createScans,
-  deleteAIConversation,
-  getAIConversation,
-  getAISettings,
-  getScan,
-  getVulnerabilityContextAnalysis,
-  getWorkScope,
-  listAIConversations,
-  listAIProviders,
-  listArtifactoryRepositories,
-  listRegistriesWithCapabilities,
-  listVulnerabilities,
-  reScan,
-  sendAIConversationMessage,
-  type AIConversation,
-  type AIMessageSource,
-  type AIProviderSummary,
-  type AISettings,
-  type AIToolCall,
-  type RegistryWithHealth,
-  type Scan,
-  type Vulnerability
+    createAIConversation,
+    createScans,
+    deleteAIConversation,
+    getAIConversation,
+    getAISettings,
+    getScan,
+    getVulnerabilityContextAnalysis,
+    getWorkScope,
+    listAIConversations,
+    listAIProviders,
+    listArtifactoryRepositories,
+    listRegistriesWithCapabilities,
+    listVulnerabilities,
+    reScan,
+    sendAIConversationMessage,
+    type AIConversation,
+    type AIMessageSource,
+    type AIProviderSummary,
+    type AISettings,
+    type AIToolCall,
+    type RegistryWithHealth,
+    type Scan,
+    type Vulnerability
 } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 
 const selectTriggerCls = `${heroSelectTriggerClassName.replace('rounded-xl', 'rounded-2xl')} min-h-10 py-2.5 text-sm`;
-const composerInputCls = 'glass-input min-h-11 max-h-48 w-full rounded-2xl px-4 py-3 text-sm resize-none overflow-hidden';
+const composerInputCls = 'surface-input min-h-11 max-h-48 w-full rounded-2xl px-4 py-3 text-sm resize-none overflow-hidden';
 
 type ScopeContext = {
   title: string;
@@ -491,7 +491,7 @@ export default function AssistantPage() {
   function renderConversationList() {
     if (loading) {
       return (
-        <div className="rounded-2xl border px-4 py-5 text-sm text-zinc-500" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+        <div className="rounded-2xl border px-4 py-5 text-sm text-zinc-500" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
           Loading conversations…
         </div>
       );
@@ -499,14 +499,14 @@ export default function AssistantPage() {
 
     if (filteredConversations.length === 0) {
       return (
-        <div className="rounded-2xl border px-4 py-5 text-sm text-zinc-500" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+        <div className="rounded-2xl border px-4 py-5 text-sm text-zinc-500" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
           {normalizedRailQuery ? 'No threads match this search.' : 'No conversations yet for this scope.'}
         </div>
       );
     }
 
     return filteredConversations.map((item) => (
-      <div key={item.id} className="flex items-center gap-2 rounded-2xl border p-3 transition-colors" style={{ borderColor: conversation?.id === item.id ? 'rgba(124,58,237,0.42)' : 'var(--glass-border)', background: conversation?.id === item.id ? 'rgba(124,58,237,0.12)' : 'var(--row-hover)' }}>
+      <div key={item.id} className="flex items-center gap-2 rounded-2xl border p-3 transition-colors" style={{ borderColor: conversation?.id === item.id ? 'rgba(124,58,237,0.42)' : 'var(--surface-border)', background: conversation?.id === item.id ? 'rgba(124,58,237,0.12)' : 'var(--row-hover)' }}>
         <button
           type="button"
           className="min-w-0 flex-1 text-left"
@@ -549,8 +549,8 @@ export default function AssistantPage() {
             </div>
           </div>
 
-          <SearchField name="assistant-rail-search" variant="secondary">
-            <SearchField.Group className="glass-input flex min-h-11 items-center gap-2 rounded-2xl px-3">
+          <SearchField name="surface-assistant-rail-search" variant="secondary">
+            <SearchField.Group className="surface-input flex min-h-11 items-center gap-2 rounded-2xl px-3">
               <SearchField.SearchIcon />
               <SearchField.Input placeholder="Search" value={railQuery} onChange={(event) => setRailQuery(event.target.value)} />
               <SearchField.ClearButton />
@@ -567,7 +567,7 @@ export default function AssistantPage() {
 
         <div className="mt-8 flex-1 space-y-6 overflow-y-auto pr-1">
           {filteredStarterSections.length === 0 ? (
-            <div className="rounded-2xl border p-4 text-sm text-zinc-500" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+            <div className="rounded-2xl border p-4 text-sm text-zinc-500" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
               No prompt starters match this search.
             </div>
           ) : filteredStarterSections.map((section) => (
@@ -601,7 +601,7 @@ export default function AssistantPage() {
   }
 
   const composerPanel = (
-    <div className="assistant-composer overflow-hidden rounded-[32px] p-4 md:px-5 md:py-5">
+    <div className="surface-assistant-composer overflow-hidden rounded-[32px] p-4 md:px-5 md:py-5">
         <div className="flex items-end gap-3">
         <TextArea
           ref={composerRef}
@@ -616,7 +616,7 @@ export default function AssistantPage() {
             {sending ? 'Working...' : 'Send'}
           </Button>
         </div>
-        <div className="mt-4 flex flex-col gap-3 border-t pt-4 md:flex-row md:items-center md:justify-between" style={{ borderColor: 'var(--glass-border)' }}>
+        <div className="mt-4 flex flex-col gap-3 border-t pt-4 md:flex-row md:items-center md:justify-between" style={{ borderColor: 'var(--surface-border)' }}>
           <div className="flex flex-wrap items-center gap-2">
             <Button className="btn-secondary" onPress={() => handleStarterPick(suggestions[0] ?? 'How do I start a new scan?')} variant="secondary">Scope</Button>
             <Button className="btn-secondary" onPress={() => handleStarterPick(scopeContext?.rescanId ? 'rescan this scan' : 'open scans')} variant="secondary">Command</Button>
@@ -637,8 +637,8 @@ export default function AssistantPage() {
 
   return (
     <div className="app-bg flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="assistant-shell mx-auto flex min-h-0 w-full max-w-[132rem] flex-1 overflow-hidden">
-        <aside className="assistant-rail hidden min-h-0 w-[280px] shrink-0 border-r lg:flex lg:flex-col" style={{ borderColor: 'var(--glass-border)' }}>
+      <div className="surface-assistant-shell flex min-h-0 w-full flex-1 overflow-hidden">
+        <aside className="surface-assistant-rail hidden min-h-0 w-[280px] shrink-0 border-r lg:flex lg:flex-col" style={{ borderColor: 'var(--surface-border)' }}>
           {renderUtilityRail()}
         </aside>
 
@@ -650,7 +650,7 @@ export default function AssistantPage() {
           }}>
             <AlertDialog.Backdrop variant="blur">
               <AlertDialog.Container placement="center">
-                <AlertDialog.Dialog className="glass-modal overflow-hidden rounded-3xl sm:max-w-[420px]">
+                <AlertDialog.Dialog className="surface-modal overflow-hidden rounded-3xl sm:max-w-[420px]">
                   <AlertDialog.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
                   <AlertDialog.Header>
                     <AlertDialog.Icon status="danger" />
@@ -682,13 +682,13 @@ export default function AssistantPage() {
             </AlertDialog.Backdrop>
           </AlertDialog>
 
-          <div className="border-b px-4 py-3 md:px-6" style={{ borderColor: 'var(--glass-border)' }}>
+          <div className="border-b px-4 py-3 md:px-6" style={{ borderColor: 'var(--surface-border)' }}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1">
                 <button
                   type="button"
                   className="flex size-10 shrink-0 items-center justify-center rounded-2xl border transition-colors"
-                  style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)', color: 'var(--text-secondary)' }}
+                  style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)', color: 'var(--text-secondary)' }}
                   onClick={() => startNewConversation()}
                 >
                   <PlusSignIcon size={14} />
@@ -704,7 +704,7 @@ export default function AssistantPage() {
                     className="inline-flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2 text-sm transition-colors"
                     style={conversation?.id === item.id
                       ? { borderColor: 'rgba(167,139,250,0.24)', background: 'rgba(124,58,237,0.14)', color: '#ede9fe' }
-                      : { borderColor: 'var(--glass-border)', background: 'var(--row-hover)', color: 'var(--text-secondary)' }}
+                      : { borderColor: 'var(--surface-border)', background: 'var(--row-hover)', color: 'var(--text-secondary)' }}
                     onClick={() => {
                       void handleOpenConversation(item.id);
                     }}
@@ -744,11 +744,11 @@ export default function AssistantPage() {
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {!settings?.enabled ? (
-              <div className="m-4 rounded-3xl border px-5 py-6 text-sm text-zinc-500 md:m-6" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+              <div className="m-4 rounded-3xl border px-5 py-6 text-sm text-zinc-500 md:m-6" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
                 AI is disabled on this instance.
               </div>
             ) : providers.length === 0 ? (
-              <div className="m-4 rounded-3xl border px-5 py-6 text-sm text-zinc-500 md:m-6" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+              <div className="m-4 rounded-3xl border px-5 py-6 text-sm text-zinc-500 md:m-6" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
                 No enabled provider is configured. Ask an administrator to configure one in <Link href="/admin/ai" className="text-violet-300 hover:text-violet-200">Admin → AI</Link>.
               </div>
             ) : (
@@ -756,7 +756,7 @@ export default function AssistantPage() {
                 <div className="relative flex-1 overflow-y-auto p-4 md:px-8 md:py-7">
                   <div className="pointer-events-none absolute left-[8%] top-[12%] size-48 rounded-full blur-3xl" style={{ background: 'rgba(59,130,246,0.12)' }} />
                   <div className="pointer-events-none absolute right-[10%] top-[28%] size-56 rounded-full blur-3xl" style={{ background: 'rgba(167,139,250,0.12)' }} />
-                  <div className="mx-auto flex min-h-full w-full max-w-[78rem] flex-col">
+                  <div className="flex min-h-full w-full flex-col">
                     {hasMessages ? (
                       <div className="mb-5 flex items-center gap-3 text-xs" style={{ color: 'var(--text-faint)' }}>
                         <span>{hasMeaningfulContext ? scopeLabel : 'JustScan workspace'}</span>
@@ -781,7 +781,7 @@ export default function AssistantPage() {
                             {item.role === 'assistant' ? <MessageAvatar role="assistant" /> : null}
                             <Card className="w-full max-w-[min(100%,52rem)] overflow-hidden rounded-[28px] shadow-none" style={item.role === 'user'
                               ? { borderColor: 'rgba(167,139,250,0.18)', background: 'linear-gradient(180deg, rgba(124,58,237,0.16) 0%, rgba(91,33,182,0.1) 100%)', borderBottomRightRadius: '0.9rem' }
-                              : { borderColor: 'var(--glass-border)', background: 'var(--glass-bg)', borderBottomLeftRadius: '0.9rem' }}>
+                              : { borderColor: 'var(--surface-border)', background: 'var(--surface-bg)', borderBottomLeftRadius: '0.9rem' }}>
                               <Card.Content className="px-5 py-4">
                                 {item.role === 'assistant' && !item.thinking ? (
                                   <div className="mb-3 flex items-center gap-2">
@@ -840,8 +840,8 @@ export default function AssistantPage() {
                 </div>
 
                 {hasMessages ? (
-                  <div className="border-t px-4 pb-4 pt-4 md:px-8 md:pb-6" style={{ borderColor: 'var(--glass-border)', background: 'var(--glass-bg)' }}>
-                    <div className="mx-auto max-w-[78rem]">{composerPanel}</div>
+                  <div className="border-t px-4 pb-4 pt-4 md:px-8 md:pb-6" style={{ borderColor: 'var(--surface-border)', background: 'var(--surface-bg)' }}>
+                    <div className="w-full">{composerPanel}</div>
                   </div>
                 ) : null}
               </>

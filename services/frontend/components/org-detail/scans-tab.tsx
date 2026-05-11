@@ -22,11 +22,11 @@ export function OrgScansTab({ onOpenAssignModal, onRemoveScan, orgScans }: OrgSc
       </div>
 
       {orgScans.length === 0 ? (
-        <div className="glass-panel rounded-2xl p-6 text-center text-sm text-zinc-500">
+        <div className="surface-card rounded-2xl p-6 text-center text-sm text-zinc-500">
           No scans assigned. Assign a scan to evaluate it against this organization&apos;s policies.
         </div>
       ) : (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-card rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>

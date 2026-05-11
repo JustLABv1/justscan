@@ -2,12 +2,10 @@
 
 import { WorkspaceOnboarding } from '@/components/workspace-onboarding';
 import { clearToken, clearUser, getUser, getWorkScope, listMyOrgInvites, listOrgs, Org, setWorkScope, WorkScope } from '@/lib/api';
-import { Button, Drawer, Dropdown, Header, Label, Separator, useOverlayState } from '@heroui/react';
+import { Avatar, Button, Card, Drawer, Dropdown, Header, Label, Separator, useOverlayState } from '@heroui/react';
 import {
   AiContentGenerator01Icon,
   ArrowDown01Icon,
-  ArrowLeft01Icon,
-  ArrowRight01Icon,
   Building04Icon,
   DashboardSquare01Icon,
   EyeIcon,
@@ -17,24 +15,26 @@ import {
   Menu01Icon,
   Moon02Icon,
   PackageIcon,
-  PlusSignIcon,
   Search01Icon,
   ServerStack01Icon,
   Settings01Icon,
   Shield01Icon,
   ShieldKeyIcon,
+  SidebarLeft01Icon,
+  SidebarRight01Icon,
   Sun01Icon,
-  Tag01Icon,
+  Tag01Icon
 } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AdminSidebarTree } from '@/components/admin-sidebar-tree';
 import { Logo } from '@/components/logo';
 import { SearchModal } from '@/components/search';
 import { ToastProvider } from '@/components/toast';
+import { BreadcrumbItem, PageHeaderConfig, PageHeaderContext } from '@/components/ui/page-header';
 import { hasSeenWorkspaceOnboarding, markWorkspaceOnboardingSeen } from '@/lib/workspace-onboarding';
 
 const navGroups = [
@@ -80,6 +80,25 @@ function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + '/');
 }
 
+function titleFromPath(pathname: string) {
+  const segment = pathname.split('/').filter(Boolean).pop();
+  if (!segment) return 'Dashboard';
+
+  return segment
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function resolveFallbackHeader(pathname: string, items: Array<{ href: string; label: string }>): PageHeaderConfig {
+  const current = items.find((item) => isActiveRoute(pathname, item.href));
+  const breadcrumbs: BreadcrumbItem[] = current ? [{ label: current.label }] : [];
+
+  return {
+    title: current?.label ?? titleFromPath(pathname),
+    breadcrumbs,
+  };
+}
+
 export function AppShell({ children, initialUser }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -97,6 +116,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
   const [hoveredNavPopover, setHoveredNavPopover] = useState<string | null>(null);
   const [hoveredNavPopoverAnchor, setHoveredNavPopoverAnchor] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const [pageHeader, setPageHeader] = useState<PageHeaderConfig | null>(null);
   const navPopoverCloseTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -109,6 +129,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   }, [mobileNav, pathname]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHoveredNavPopover(null);
     setHoveredNavPopoverAnchor(null);
   }, [pathname]);
@@ -134,6 +155,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   useEffect(() => {
     if (!mounted) return;
     const currentUser = (getUser() ?? user ?? initialUser) as { id?: string; email?: string; username?: string } | null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnboardingStatus(hasSeenWorkspaceOnboarding(currentUser) ? 'done' : 'show');
   }, [initialUser, mounted, user]);
 
@@ -168,6 +190,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrgsReady(false);
     Promise.allSettled([listOrgs(), listMyOrgInvites()])
       .then(([orgsResult, invitesResult]) => {
@@ -282,6 +305,9 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const hoveredLeafNavItem = hoveredNavHref
     ? navigationGroups.flatMap((group) => group.items).find((item) => item.href === hoveredNavHref && item.href !== '/admin')
     : null;
+  const navItems = navigationGroups.flatMap((group) => group.items.map(({ href, label }) => ({ href, label })));
+  const topbarHeader = pageHeader ?? resolveFallbackHeader(pathname, navItems);
+  const pageHeaderContextValue = useMemo(() => ({ setHeader: setPageHeader }), []);
 
   function cancelNavPopoverClose() {
     if (navPopoverCloseTimer.current !== null) {
@@ -310,11 +336,19 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     }, 220);
   }
 
+  function handleRowHoverEnter(event: MouseEvent<HTMLElement>) {
+    event.currentTarget.style.background = 'var(--row-hover)';
+  }
+
+  function handleRowHoverLeave(event: MouseEvent<HTMLElement>) {
+    event.currentTarget.style.background = 'transparent';
+  }
+
   if (onboardingStatus === 'checking') {
     return (
       <ToastProvider>
         <div className="app-bg flex min-h-dvh items-center justify-center px-6 py-10">
-          <div className="glass-panel flex w-full max-w-md flex-col items-center rounded-[28px] px-8 py-10 text-center">
+          <div className="surface-card flex w-full max-w-md flex-col items-center rounded-[28px] px-8 py-10 text-center">
             <div
               className="flex size-12 items-center justify-center rounded-2xl"
               style={{
@@ -349,10 +383,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
   return (
     <ToastProvider>
-      {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
-      <div className="flex h-dvh app-bg overflow-hidden">
-        <aside
-          className={`relative hidden md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out sidebar-glass ${
+      <PageHeaderContext.Provider value={pageHeaderContextValue}>
+        {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
+        <div className="flex h-dvh app-bg overflow-hidden">
+        <Card
+          className={`relative hidden rounded-none rounded-br-3xl md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
             desktopCollapsed ? 'w-[68px]' : 'w-72'
           }`}
         >
@@ -384,45 +419,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             </span>
           </div>
 
-          <div className="px-2 pt-3 pb-2 space-y-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-            <button
-              onClick={() => setSearchOpen(true)}
-              title="Search (⌘K)"
-              aria-label="Open search"
-              className={`w-full flex items-center rounded-xl px-3 py-2.5 text-sm transition-all duration-150 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 ${desktopCollapsed ? 'justify-center' : 'gap-2.5'}`}
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
-              onMouseEnter={(event) => (event.currentTarget.style.borderColor = 'rgba(167,139,250,0.3)')}
-              onMouseLeave={(event) => (event.currentTarget.style.borderColor = 'var(--glass-border)')}
-            >
-              <Search01Icon size={15} className="shrink-0" />
-              <span
-                className="flex-1 text-left overflow-hidden transition-all duration-300 text-xs"
-                style={{ maxWidth: desktopCollapsed ? 0 : 120, opacity: desktopCollapsed ? 0 : 1 }}
-              >
-                Search…
-              </span>
-              {!desktopCollapsed && (
-                <kbd className="text-[9px] font-mono px-1 py-0.5 rounded text-zinc-500"
-                  style={{ background: 'var(--row-divider)', border: '1px solid var(--glass-border)' }}>
-                  ⌘K
-                </kbd>
-              )}
-            </button>
-
-            <Link
-              href="/scans?new=1"
-              title={desktopCollapsed ? 'New Scan' : undefined}
-              className={`w-full flex items-center rounded-xl transition-all duration-150 btn-primary-sm py-2.5 ${desktopCollapsed ? 'justify-center px-2' : 'gap-2 px-3'}`}
-            >
-              <PlusSignIcon size={14} className="shrink-0" />
-              <span
-                className="overflow-hidden transition-all duration-300"
-                style={{ maxWidth: desktopCollapsed ? 0 : 120, opacity: desktopCollapsed ? 0 : 1 }}
-              >
-                New Scan
-              </span>
-            </Link>
-
+          <div className="px-2 pt-3 pb-2 space-y-2">
             {!desktopCollapsed && pendingInviteCount > 0 && (
               <Link
                 href="/orgs"
@@ -573,7 +570,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               onMouseLeave={scheduleNavPopoverClose}
             >
               <div
-                className="glass-modal w-[320px] overflow-hidden rounded-[24px] p-3"
+                className="surface-modal w-[320px] overflow-hidden rounded-[24px] p-3"
                 style={{ borderColor: 'var(--modal-border)', maxHeight: hoveredNavPopoverAnchor.maxHeight }}
               >
                 <div className="space-y-2 overflow-y-auto pr-1" style={{ maxHeight: hoveredNavPopoverAnchor.maxHeight - 32 }}>
@@ -594,7 +591,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               className="pointer-events-none fixed z-[70] hidden pl-2 md:block"
               style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
             >
-              <div className="glass-modal w-[220px] rounded-[20px] p-3" style={{ borderColor: 'var(--modal-border)' }}>
+              <div className="surface-modal w-[220px] rounded-[20px] p-3" style={{ borderColor: 'var(--modal-border)' }}>
                 <div className="flex items-center gap-3 text-sm font-medium text-zinc-800 dark:text-zinc-100">
                   <hoveredLeafNavItem.Icon size={18} className="shrink-0" style={{ color: isActiveRoute(pathname, hoveredLeafNavItem.href) ? '#a78bfa' : 'var(--text-faint)' }} />
                   <span className="flex-1">{hoveredLeafNavItem.label}</span>
@@ -615,8 +612,8 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 className={`w-full flex items-center rounded-xl transition-all duration-150 outline-none ${desktopCollapsed ? 'justify-center py-2' : 'gap-2.5 p-2.5'}`}
                 style={{ background: 'transparent' }}
                 aria-label={workspaceTitle}
-                onMouseEnter={(event: any) => (event.currentTarget.style.background = 'var(--row-hover)')}
-                onMouseLeave={(event: any) => (event.currentTarget.style.background = 'transparent')}
+                onMouseEnter={handleRowHoverEnter}
+                onMouseLeave={handleRowHoverLeave}
               >
                 <div className="relative shrink-0" title={desktopCollapsed ? workspaceTitle : undefined}>
                   <div
@@ -661,70 +658,17 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               </Dropdown.Popover>
             </Dropdown>
 
-            <Dropdown>
-              <Dropdown.Trigger className={`w-full flex items-center ${desktopCollapsed ? 'justify-center' : 'gap-2.5 px-2'} py-2 rounded-xl transition-all duration-150 outline-none`}
-                style={{ background: 'transparent' }}
-                aria-label={desktopCollapsed ? (user?.username ?? user?.email ?? 'User menu') : 'Open user menu'}
-                onMouseEnter={(event: any) => (event.currentTarget.style.background = 'var(--row-hover)')}
-                onMouseLeave={(event: any) => (event.currentTarget.style.background = 'transparent')}
-              >
-                <div
-                  className="size-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
-                  title={desktopCollapsed ? (user?.username ?? user?.email ?? 'User menu') : undefined}
-                  style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
-                >
-                  {initials}
-                </div>
-                {!desktopCollapsed && (
-                   <div className="flex-1 flex flex-col justify-center min-w-0 pl-1.5 pr-1">
-                     <div className="flex items-center justify-between w-full">
-                       <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200 truncate">{user?.username ?? user?.email ?? 'User'}</p>
-                     </div>
-                     <p className="text-[11px] text-zinc-500 truncate text-left">{user?.role ?? 'user'}</p>
-                   </div>
-                )}
-              </Dropdown.Trigger>
+          </div>
+        </Card>
 
-              <Dropdown.Popover className="min-w-[200px]" placement="right bottom">
-                <Dropdown.Menu onAction={(key) => {
-                   if (key === 'settings') router.push('/settings');
-                   if (key === 'api-docs') window.open('/swagger/index.html', '_blank');
-                   if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
-                   if (key === 'signout') handleLogout();
-                }}>
-                  <Dropdown.Item id="settings" textValue="Settings">
-                    <div className="flex items-center gap-2">
-                       <Settings01Icon size={14} className="text-zinc-500" />
-                       <Label>Settings</Label>
-                    </div>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="theme" textValue="Theme">
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-2">
-                        {mounted ? (isDark ? <Sun01Icon size={14} className="text-zinc-500" /> : <Moon02Icon size={14} className="text-zinc-500" />) : <span aria-hidden className="block size-[14px]" />}
-                        <Label>Theme</Label>
-                      </div>
-                    </div>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="api-docs" textValue="API Docs">
-                    <div className="flex items-center gap-2">
-                      <FileExportIcon size={14} className="text-zinc-500" />
-                      <Label>API Docs</Label>
-                    </div>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="signout" textValue="Sign Out" className="text-danger flex items-center gap-2 mt-1 border-t border-zinc-200 dark:border-zinc-800 pt-1">
-                    <div className="flex items-center gap-2">
-                      <Logout02Icon size={14} />
-                      <Label className="text-danger">Sign Out</Label>
-                    </div>
-                  </Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
-
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <Card
+            className="sticky top-0 z-20 -ml-px w-[calc(100%+1px)] rounded-bl-none rounded-br-2xl rounded-t-none border-0 shadow-none"
+          >
+            <div className="flex min-h-12 items-center gap-2.5 px-3 py-2">
             <button
               onClick={toggleCollapsed}
-              className="w-full flex items-center justify-center h-8 rounded-xl transition-all duration-150 text-zinc-400 hover:text-zinc-700 dark:text-zinc-600 dark:hover:text-zinc-300"
+              className="hidden h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-all duration-150 hover:text-zinc-900 md:inline-flex dark:hover:text-zinc-200"
               onMouseEnter={(event) => {
                 event.currentTarget.style.background = 'var(--row-hover)';
               }}
@@ -734,28 +678,16 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               title={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              {desktopCollapsed ? <ArrowRight01Icon size={14} /> : <ArrowLeft01Icon size={14} />}
+              {desktopCollapsed ? <SidebarRight01Icon size={20} /> : <SidebarLeft01Icon size={20} />}
             </button>
-          </div>
-        </aside>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div
-            className="sticky top-0 z-20 flex items-center gap-2 px-4 py-3 md:hidden"
-            style={{
-              background: isDark ? 'rgba(9,9,11,0.82)' : 'rgba(244,244,245,0.88)',
-              backdropFilter: 'blur(18px)',
-              WebkitBackdropFilter: 'blur(18px)',
-              borderBottom: '1px solid var(--border-subtle)',
-            }}
-          >
             <Drawer state={mobileNav}>
-              <Button aria-label="Open navigation menu" className="rounded-xl" isIconOnly variant="secondary">
-                <Menu01Icon size={18} />
+              <Button aria-label="Open navigation menu" className="rounded-lg md:hidden" isIconOnly variant="secondary">
+                <Menu01Icon size={16} />
               </Button>
               <Drawer.Backdrop className="md:hidden" variant="blur">
                 <Drawer.Content className="md:hidden" placement="left">
-                  <Drawer.Dialog className="flex h-full w-[min(88vw,320px)] flex-col sidebar-glass">
+                  <Drawer.Dialog className="flex h-full w-[min(88vw,320px)] flex-col surface-sidebar">
                     <Drawer.Header
                       className="flex items-center justify-between p-4"
                       style={{ borderBottom: '1px solid var(--border-subtle)' }}
@@ -785,7 +717,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                       <div className="space-y-4">
                         <Dropdown>
                           <Dropdown.Trigger className="w-full flex items-center justify-between rounded-xl p-3 text-sm transition-all duration-150 outline-none text-left"
-                            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                            style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
                           >
                             <div className="flex min-w-0 flex-1 items-center gap-2.5">
                               <div className="relative shrink-0">
@@ -954,38 +886,115 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 </Drawer.Content>
               </Drawer.Backdrop>
             </Drawer>
+            <div className="min-w-0 flex-1 space-y-0.5">
+              {topbarHeader.breadcrumbs && topbarHeader.breadcrumbs.length > 0 ? (
+                <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-[10px] font-medium">
+                  {topbarHeader.breadcrumbs.map((item, index) => {
+                    const isCurrent = index === topbarHeader.breadcrumbs!.length - 1;
 
-            <Link className="flex items-center gap-2 min-w-0" href="/dashboard">
-              <div
-                className="size-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{
-                  background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                  boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
-                }}
-              >
-                <Logo size={18} className="text-white" />
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>JustScan</p>
-                <p className="truncate text-[11px]" style={{ color: 'var(--text-faint)' }}>Security workflow hub</p>
-              </div>
-            </Link>
+                    return (
+                      <span key={`${item.label}-${index}`} className="inline-flex items-center gap-1.5">
+                        {item.href && !isCurrent ? (
+                          <Link href={item.href} className="transition-colors hover:text-zinc-900 dark:hover:text-white" style={{ color: 'var(--text-faint)' }}>
+                            {item.label}
+                          </Link>
+                        ) : (
+                          <span aria-current={isCurrent ? 'page' : undefined} style={{ color: isCurrent ? 'var(--text-primary)' : 'var(--text-faint)' }}>
+                            {item.label}
+                          </span>
+                        )}
+                        {!isCurrent ? <span style={{ color: 'var(--text-faint)' }}>/</span> : null}
+                      </span>
+                    );
+                  })}
+                </nav>
+              ) : null}
 
-            <div className="ml-auto flex items-center gap-2">
-              <Button className="rounded-xl" onPress={() => setSearchOpen(true)} variant="secondary">
-                <Search01Icon size={15} />
-                Search
-              </Button>
-              <Link className="btn-primary-sm h-10 px-3" href="/scans?new=1">
-                <PlusSignIcon size={14} className="shrink-0" />
-                <span>New</span>
-              </Link>
+              <div>
+                <h1 className="flex flex-wrap items-center gap-1 text-base font-semibold tracking-tight md:text-base">
+                  {topbarHeader.title}
+                  {topbarHeader.titleCom}
+                </h1>
+              </div>
             </div>
-          </div>
+
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              {topbarHeader.actions ? <div className="hidden items-center gap-1.5 md:flex">{topbarHeader.actions}</div> : null}
+              <Separator className="hidden h-5 md:block mr-1.5 ml-1.5" orientation="vertical" />
+              <Button
+                aria-label="Open search"
+                className="rounded-full text-zinc-700 dark:text-zinc-200 md:hidden"
+                isIconOnly
+                onPress={() => setSearchOpen(true)}
+                variant="secondary"
+              >
+                <Search01Icon size={14} className="text-current" />
+              </Button>
+              <Button className="hidden rounded-full text-zinc-700 dark:text-zinc-200 md:inline-flex" onPress={() => setSearchOpen(true)} variant="secondary">
+                <Search01Icon size={14} className="text-current" />
+              </Button>
+
+              <Dropdown>
+                <Dropdown.Trigger>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 outline-none transition-all duration-150"
+                    aria-label="Open user menu"
+                    onMouseEnter={handleRowHoverEnter}
+                    onMouseLeave={handleRowHoverLeave}
+                  >
+                    <Avatar
+                      className="h-7 w-7 border border-violet-300/25 bg-violet-500/15 text-[11px] font-semibold text-violet-300"
+                      size="sm"
+                      variant="soft"
+                    >
+                      <Avatar.Fallback>{initials}</Avatar.Fallback>
+                    </Avatar>
+                  </button>
+                </Dropdown.Trigger>
+
+                <Dropdown.Popover className="min-w-[200px]" placement="bottom end">
+                  <Dropdown.Menu onAction={(key) => {
+                    if (key === 'settings') router.push('/settings');
+                    if (key === 'api-docs') window.open('/swagger/index.html', '_blank');
+                    if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
+                    if (key === 'signout') handleLogout();
+                  }}>
+                    <Dropdown.Item key="settings" id="settings" textValue="Settings">
+                      <div className="flex items-center gap-2">
+                        <Settings01Icon size={14} className="text-zinc-500" />
+                        <Label>Settings</Label>
+                      </div>
+                    </Dropdown.Item>
+                    <Dropdown.Item key="theme" id="theme" textValue="Theme">
+                      <div className="flex items-center gap-2">
+                        {mounted ? (isDark ? <Sun01Icon size={14} className="text-zinc-500" /> : <Moon02Icon size={14} className="text-zinc-500" />) : <span aria-hidden className="block size-[14px]" />}
+                        <Label>{themeToggleTitle}</Label>
+                      </div>
+                    </Dropdown.Item>
+                    <Dropdown.Item key="api-docs" id="api-docs" textValue="API Docs">
+                      <div className="flex items-center gap-2">
+                        <FileExportIcon size={14} className="text-zinc-500" />
+                        <Label>API Docs</Label>
+                      </div>
+                    </Dropdown.Item>
+                    <Dropdown.Item key="signout" id="signout" textValue="Sign Out" className="text-danger flex items-center gap-2 mt-1 border-t border-zinc-200 dark:border-zinc-800 pt-1">
+                      <div className="flex items-center gap-2">
+                        <Logout02Icon size={14} />
+                        <Label className="text-danger">Sign Out</Label>
+                      </div>
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
+            </div>
+            </div>
+          </Card>
 
           <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
         </div>
-      </div>
+        </div>
+      </PageHeaderContext.Provider>
     </ToastProvider>
   );
 }

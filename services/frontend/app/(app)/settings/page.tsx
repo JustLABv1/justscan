@@ -14,15 +14,15 @@ import { useEffect, useState } from 'react';
 const inputCls = nativeFieldClassName;
 
 const panelStyle: CSSProperties = {
-  background: 'var(--glass-bg)',
-  border: '1px solid var(--glass-border)',
-  boxShadow: 'var(--glass-shadow)',
+  background: 'var(--surface-bg)',
+  border: '1px solid var(--surface-border)',
+  boxShadow: 'var(--surface-shadow)',
 };
 
 const heroShellStyle: CSSProperties = {
-  background: 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(59,130,246,0.08) 38%, rgba(255,255,255,0.04) 100%), var(--glass-bg)',
+  background: 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(59,130,246,0.08) 38%, rgba(255,255,255,0.04) 100%), var(--surface-bg)',
   border: '1px solid rgba(124,58,237,0.16)',
-  boxShadow: '0 30px 80px rgba(124,58,237,0.10), var(--glass-shadow)',
+  boxShadow: '0 30px 80px rgba(124,58,237,0.10), var(--surface-shadow)',
 };
 
 function SectionCard({
@@ -81,7 +81,7 @@ function HeroPill({ icon, label, tone = 'default' }: { icon: ReactNode; label: s
 
 function DetailRow({ label, value, mono = false }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-2xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+    <div className="flex items-start justify-between gap-4 rounded-2xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
       <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">{label}</span>
       <span className={`text-right text-sm text-zinc-800 dark:text-zinc-100 ${mono ? 'font-mono break-all' : ''}`.trim()}>{value}</span>
     </div>
@@ -231,7 +231,7 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                 <div>
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">Profile changes stay local to this account</p>
                   <p className="mt-1 text-xs text-zinc-500">Update display information without affecting sign-in ownership or access rules.</p>
@@ -247,7 +247,7 @@ export default function SettingsPage() {
               </div>
             </form>
 
-            <div className="space-y-3 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="space-y-3 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Identity context</p>
                 <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
@@ -268,7 +268,7 @@ export default function SettingsPage() {
           description={isOIDCUser ? 'Your identity provider controls password changes. Use this panel to confirm trust state and provider-managed access details.' : 'Change your password and confirm the current trust state of this browser session.'}
         >
           <div className="space-y-5">
-            <div className="rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+            <div className="rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-zinc-900 dark:text-white">Current access posture</p>
@@ -329,7 +329,7 @@ export default function SettingsPage() {
                     value={confirmPw}
                   />
                 </div>
-                <div className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <div className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                   <p className="text-xs leading-5 text-zinc-500 max-w-md">
                     Password updates apply to local JustScan authentication only. If you use SSO, this panel will switch to provider-managed guidance automatically.
                   </p>
@@ -362,7 +362,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="rounded-[24px] p-5 min-w-[280px]" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+          <div className="rounded-[24px] p-5 min-w-[280px]" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
             <p className="text-sm font-semibold text-zinc-900 dark:text-white">Manage API tokens on a dedicated screen</p>
             <p className="mt-1.5 text-sm leading-6 text-zinc-500">Open the token management page when you need to create, reveal, or revoke credentials for automation.</p>
             <Link

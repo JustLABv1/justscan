@@ -1,10 +1,11 @@
 'use client';
+import SplitText from '@/components/SplitText';
 import { buildRecentActivityHref, getRecentActivityBounds, RECENT_ACTIVITY_RANGE_OPTIONS, RecentActivityRange, RecentActivityRangePicker, RecentActivityRow } from '@/components/scans/recent-activity';
 import { PageHeader } from '@/components/ui/page-header';
 import { ChartSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
-import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, listScans, Scan, ScannerHealth } from '@/lib/api';
+import { Card } from '@heroui/react';
 import { Activity01Icon, Add01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -20,15 +21,15 @@ const SEV = [
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────
-function glassCard(tint?: string): React.CSSProperties {
+function surfaceCard(tint?: string): React.CSSProperties {
   return {
     background: tint
-      ? `linear-gradient(145deg, ${tint} 0%, var(--glass-bg-tint-end) 70%)`
-      : 'var(--glass-bg)',
+      ? `linear-gradient(145deg, ${tint} 0%, var(--surface-bg-tint-end) 70%)`
+      : 'var(--surface-bg)',
     backdropFilter: 'blur(20px)',
     WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid var(--glass-border)',
-    boxShadow: 'var(--glass-shadow)',
+    border: '1px solid var(--surface-border)',
+    boxShadow: 'var(--surface-shadow)',
   };
 }
 
@@ -238,7 +239,7 @@ function VulnTrendChart({ data, period, onPeriod }: {
   const PERIODS = [7, 14, 30] as const;
 
   return (
-    <div className="relative rounded-2xl p-5 z-10" style={glassCard()}>
+    <Card className="relative rounded-2xl p-5 z-10">
       <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
         style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.2), transparent)' }} />
 
@@ -267,7 +268,7 @@ function VulnTrendChart({ data, period, onPeriod }: {
               className="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150"
               style={period === d
                 ? { background: 'rgba(124,58,237,0.25)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)' }
-                : { background: 'var(--row-hover)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }}
+                : { background: 'var(--row-hover)', color: 'var(--text-muted)', border: '1px solid var(--surface-border)' }}
               aria-pressed={period === d}
               aria-label={`Show last ${d} days`}
             >
@@ -390,7 +391,7 @@ function VulnTrendChart({ data, period, onPeriod }: {
           Peak daily average in this window: <span className="tabular-nums" style={{ color: 'var(--text-secondary)' }}>{peakAverage}</span>
         </p>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -470,7 +471,7 @@ export default function DashboardPage() {
   }
 
   if (loading) return (
-    <div className="p-6 space-y-4 max-w-7xl mx-auto">
+    <div className="p-6 space-y-4">
       <div className="flex items-start justify-between">
         <div className="space-y-2">
           <div className="skeleton h-7 w-32 rounded-lg" />
@@ -480,7 +481,7 @@ export default function DashboardPage() {
       </div>
       <div className="skeleton h-20 w-full rounded-xl" />
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
-        <div className="rounded-2xl p-5" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+        <div className="rounded-2xl p-5" style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
           <div className="skeleton h-4 w-32 rounded mb-4" />
           {Array.from({ length: 5 }).map((_, i) => <RecentScanRowSkeleton key={i} />)}
         </div>
@@ -542,12 +543,28 @@ export default function DashboardPage() {
   const recentActivityRangeLabel = RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === recentActivityRange)?.label ?? 'Last 24 hours';
   const recentActivityHref = buildRecentActivityHref(recentActivityRange);
 
+  console.log(getUser());
   return (
-    <div className="p-6 space-y-4 max-w-7xl mx-auto">
+    <div className="p-6 space-y-4">
 
       <PageHeader
         eyebrow="Operations overview"
-        title="Dashboard"
+        title={`Welcome back, `}
+        titleCom={(
+          <SplitText
+            text={getUser()?.username ? getUser()?.username : 'User'}
+            delay={50}
+            duration={1.25}
+            ease="power3.out"
+            splitType="chars"
+            from={{ opacity: 0, y: 40 }}
+            to={{ opacity: 1, y: 0 }}
+            threshold={0.1}
+            rootMargin="-100px"
+            textAlign="center"
+            onLetterAnimationComplete={false}
+          />
+        )}
         description={new Date().toLocaleDateString('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         actions={(
           <Link
@@ -562,90 +579,67 @@ export default function DashboardPage() {
       />
 
       {/* ── Stat strip ── */}
-      <div className="overflow-x-auto rounded-xl" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(180px, 1fr))' }}>
-          <StatCard
-            label="Total Scans"
-            value={(
-              <div className="flex w-full items-end justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-2xl font-bold tabular-nums tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                    {stats.total_scans.toLocaleString()}
-                  </p>
-                  <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                    {recentWindowAverage >= 10 ? recentWindowAverage.toFixed(0) : recentWindowAverage.toFixed(1)} avg/day
-                  </p>
-                </div>
-                <MiniSparkline data={scanVolumeTrend.slice(-14)} color="#a78bfa" id="stat-total-scans" compact showArea={false} valueLabel="scans" />
+      <div className="grid gap-3 lg:grid-cols-4">
+        <Card>
+          <Card.Header>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <Card.Title>Total Scans</Card.Title>
+                <Card.Description>{recentWindowAverage >= 10 ? recentWindowAverage.toFixed(0) : recentWindowAverage.toFixed(1)} avg/day</Card.Description>
               </div>
-            )}
-            hint={<span className="flex items-center gap-1.5">{activeQueueCount > 0 && <span className="size-1.5 rounded-full inline-block shrink-0 animate-pulse" style={{ background: '#60a5fa' }} />} {activeQueueCount > 0 ? `${activeQueueCount} running` : 'none running'}</span>}
-            className="rounded-none px-5 py-4"
-            style={{ borderRight: '1px solid var(--glass-border)' }}
-            valueClassName=""
-            hintStyle={{ color: activeQueueCount > 0 ? '#60a5fa' : 'var(--text-faint)' }}
-          />
-          <StatCard
-            label="Completed"
-            value={(
-              <div className="flex w-full items-end justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-2xl font-bold tabular-nums tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                    {completedCount.toLocaleString()}
-                  </p>
-                  <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                    {recentCompletedTotal.toLocaleString()} in last 14d
-                  </p>
-                </div>
-                <MiniSparkline data={completedTrend} color="#34d399" id="stat-completed" compact showArea={false} valueLabel="completed" />
+              <p className="text-xl font-bold">{stats.total_scans.toLocaleString()}</p>
+            </div>
+          </Card.Header>
+        </Card>
+
+        <Card>
+          <Card.Header>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <Card.Title>Completed Scans</Card.Title>
+                <Card.Description>{`${successRate}% success rate`}</Card.Description>
               </div>
-            )}
-            hint={`${successRate}% success rate`}
-            className="rounded-none px-5 py-4"
-            style={{ borderRight: '1px solid var(--glass-border)' }}
-            valueClassName=""
-          />
-          <StatCard
-            label="Needs Attention"
-            value={(
-              <div className="flex w-full items-end justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-2xl font-bold tabular-nums tracking-tight" style={{ color: needsAttentionTotal > 0 ? '#f87171' : 'var(--text-primary)' }}>
-                    {needsAttentionTotal}
-                  </p>
-                  <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                    {attentionPeak.toLocaleString()} peak failed/day in last 14d
-                  </p>
-                </div>
-                <MiniSparkline data={attentionTrend} color="#f87171" id="stat-attention" compact showArea={false} valueLabel="failed" />
+              <p className="text-xl font-bold">{completedCount.toLocaleString()}</p>
+            </div>
+          </Card.Header>
+        </Card>
+
+        <Card>
+          <Card.Header>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <Card.Title>Needs Attention</Card.Title>
+                <Card.Description>
+                  <span className="flex items-center gap-2">
+                    {genericFailedCount > 0 && <span style={{ color: '#f87171' }}>{genericFailedCount} failed</span>}
+                    {blockedPolicyCount > 0 && <span style={{ color: '#fb923c' }}>{blockedPolicyCount} blocked</span>}
+                    {needsAttentionTotal === 0 && <span style={{ color: 'var(--text-faint)' }}>all clear</span>}
+                  </span>
+                </Card.Description>
               </div>
-            )}
-            hint={
-              <span className="flex items-center gap-2">
-                {genericFailedCount > 0 && <span style={{ color: '#f87171' }}>{genericFailedCount} failed</span>}
-                {blockedPolicyCount > 0 && <span style={{ color: '#fb923c' }}>{blockedPolicyCount} blocked</span>}
-                {needsAttentionTotal === 0 && <span style={{ color: 'var(--text-faint)' }}>all clear</span>}
-              </span>
-            }
-            className="rounded-none px-5 py-4"
-            style={{ borderRight: '1px solid var(--glass-border)' }}
-            valueClassName=""
-          />
-          <StatCard
-            label="Watchlist"
-            value={stats.watchlist_count.toLocaleString()}
-            hint={`${startedTodayCount} started today`}
-            className="rounded-none px-5 py-4"
-            valueStyle={{ color: 'var(--text-primary)' }}
-          />
-        </div>
+              <p className="text-xl font-bold">{needsAttentionTotal}</p>
+            </div>
+          </Card.Header>
+        </Card>
+
+        <Card>
+          <Card.Header>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <Card.Title>Watchlist</Card.Title>
+                <Card.Description>{`${startedTodayCount} started today`}</Card.Description>
+              </div>
+              <p className="text-xl font-bold">{stats.watchlist_count.toLocaleString()}</p>
+            </div>
+          </Card.Header>
+        </Card>
       </div>
 
       {/* ── Zone 2: Action + Context ── */}
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
 
         <div className="flex flex-col gap-3">
-          <div className="rounded-2xl p-5" style={glassCard()}>
+          <Card className="p-5">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Needs Attention</h2>
@@ -682,7 +676,7 @@ export default function DashboardPage() {
                     className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition-all"
                     style={isActive
                       ? { background: activeBg, border: `1px solid ${activeBorder}`, color: activeColor }
-                      : { background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-faint)' }
+                      : { background: 'transparent', border: '1px solid var(--surface-border)', color: 'var(--text-faint)' }
                     }
                   >
                     {label}
@@ -720,9 +714,9 @@ export default function DashboardPage() {
                 </Link>
               </div>
             )}
-          </div>
+          </Card>
 
-          <div className="rounded-2xl p-5" style={glassCard()}>
+          <Card className="p-5">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Recent Activity</h2>
@@ -780,14 +774,14 @@ export default function DashboardPage() {
                 ) : null}
               </>
             )}
-          </div>
+          </Card>
         </div>
 
         {/* Right column: Exposure + Scanner */}
         <div className="flex flex-col gap-3">
 
           {/* Exposure Snapshot */}
-          <div className="rounded-2xl p-5" style={glassCard()}>
+          <Card className="p-5">
             <div className="flex items-start justify-between gap-2 mb-4">
               <div>
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Exposure Snapshot</h2>
@@ -813,10 +807,10 @@ export default function DashboardPage() {
                 );
               })}
             </div>
-          </div>
+          </Card>
 
           {/* Scanner */}
-          <div className="rounded-2xl p-5" style={glassCard()}>
+          <Card className="p-5">
             <div className="flex items-start justify-between gap-2 mb-3">
               <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Scanner</h2>
               {activeXrayCount > 0 && (
@@ -861,7 +855,7 @@ export default function DashboardPage() {
                 )
               )}
             </div>
-          </div>
+          </Card>
         </div>
       </div>
 
@@ -870,7 +864,7 @@ export default function DashboardPage() {
         <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>History</p>
         <div className="grid gap-3 lg:grid-cols-2">
           {/* Scan volume */}
-          <div className="flex min-h-[280px] flex-col rounded-2xl p-5" style={glassCard()}>
+          <Card className="flex min-h-[280px] flex-col p-5">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Scan Volume</h2>
@@ -896,7 +890,7 @@ export default function DashboardPage() {
               ? <div className="flex-1"><MiniSparkline data={scanVolumeTrend} color="#a78bfa" id="scan-volume" valueLabel="scans" /></div>
               : <div className="flex items-center justify-center py-8 text-sm" style={{ color: 'var(--text-faint)' }}>No trend data yet</div>
             }
-          </div>
+          </Card>
 
           {/* Avg findings per scan */}
           <VulnTrendChart data={vulnTrends} period={vulnTrendPeriod} onPeriod={handleVulnPeriodChange} />

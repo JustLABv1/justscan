@@ -4,6 +4,7 @@ import { useToast } from '@/components/toast';
 import { OwnershipBadge, SeverityBadge, SourceBadge, StatusBadge, SuppressionSourceBadge } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { PageHeader } from '@/components/ui/page-header';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
@@ -36,8 +37,8 @@ import {
     removeScanFromOrg,
     removeTagFromScan,
     reScan,
-    revokeScanOrgAccess,
     resetScanVulnerabilityViewPreference,
+    revokeScanOrgAccess,
     saveScanVulnerabilityViewPreference,
     shareSuppression,
     unshareSuppression,
@@ -96,7 +97,7 @@ function DetailBlock({ label, value, mono = false }: { label: string; value?: st
   if (!value) return null;
 
   return (
-    <div className="rounded-xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+    <div className="rounded-xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
       <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-2">{label}</p>
       <p className={mono ? 'text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all leading-relaxed' : 'text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed'}>
         {value}
@@ -109,16 +110,16 @@ function PolicyListSection({ label, items, mono = false }: { label: string; item
   if (items.length === 0) return null;
 
   return (
-    <div className="rounded-xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+    <div className="rounded-xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">{label}</p>
-        <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'var(--glass-border)', color: 'var(--text-secondary)', background: 'var(--app-bg)' }}>
+        <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'var(--surface-border)', color: 'var(--text-secondary)', background: 'var(--app-bg)' }}>
           {items.length}
         </span>
       </div>
       <div className="space-y-2">
         {items.map((item) => (
-          <div key={item} className={`rounded-lg border px-3 py-2 text-sm leading-relaxed ${mono ? 'font-mono text-xs break-all' : ''}`} style={{ borderColor: 'var(--glass-border)', color: 'var(--text-primary)', background: 'var(--app-bg)' }}>
+          <div key={item} className={`rounded-lg border px-3 py-2 text-sm leading-relaxed ${mono ? 'font-mono text-xs break-all' : ''}`} style={{ borderColor: 'var(--surface-border)', color: 'var(--text-primary)', background: 'var(--app-bg)' }}>
             {item}
           </div>
         ))}
@@ -132,7 +133,7 @@ function WatchStatusBadge({ status }: { status: 'active_ignore' | 'no_ignore' | 
     ? { color: '#b45309', background: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.26)' }
     : status === 'status_unavailable'
       ? { color: '#7c2d12', background: 'rgba(251,146,60,0.12)', border: 'rgba(251,146,60,0.28)' }
-      : { color: 'var(--text-secondary)', background: 'var(--app-bg)', border: 'var(--glass-border)' };
+      : { color: 'var(--text-secondary)', background: 'var(--app-bg)', border: 'var(--surface-border)' };
 
   return (
     <span className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ color: palette.color, background: palette.background, borderColor: palette.border }}>
@@ -145,16 +146,16 @@ function PolicyWatchList({ watches }: { watches: Array<{ name: string; ignoreRul
   if (watches.length === 0) return null;
 
   return (
-    <div className="rounded-xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+    <div className="rounded-xl p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Matched Watches</p>
-        <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'var(--glass-border)', color: 'var(--text-secondary)', background: 'var(--app-bg)' }}>
+        <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'var(--surface-border)', color: 'var(--text-secondary)', background: 'var(--app-bg)' }}>
           {watches.length}
         </span>
       </div>
       <div className="space-y-2">
         {watches.map((watch) => (
-          <div key={watch.name} className="flex flex-col gap-2 rounded-lg border px-3 py-2 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--glass-border)', background: 'var(--app-bg)' }}>
+          <div key={watch.name} className="flex flex-col gap-2 rounded-lg border px-3 py-2 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--surface-border)', background: 'var(--app-bg)' }}>
             <span className="text-sm break-all" style={{ color: 'var(--text-primary)' }}>{watch.name}</span>
             <WatchStatusBadge status={watch.ignoreRuleStatus} />
           </div>
@@ -885,19 +886,15 @@ export default function ScanDetailPage() {
   ];
 
   return (
-    <div className="p-6 max-w-[1500px] mx-auto space-y-5">
+    <div className="p-6 space-y-5">
+      <PageHeader
+        title="Scan details"
+        breadcrumbs={[{ label: 'Scans', href: '/scans' }, { label: 'Scan details' }]}
+      />
+
       {/* Header */}
       <ScanDetailHeader
         badges={<OwnershipBadge ownerType={scan.owner_type} ownerOrgId={scan.owner_org_id} orgNamesById={orgNamesById} />}
-        breadcrumbs={(
-          <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
-            <button type="button" onClick={() => router.push('/scans')} className="transition-colors hover:text-zinc-900 dark:hover:text-white" style={{ color: 'var(--text-faint)' }}>
-              Scans
-            </button>
-            <span style={{ color: 'var(--text-faint)' }}>/</span>
-            <span aria-current="page" style={{ color: 'var(--text-primary)' }}>Scan details</span>
-          </nav>
-        )}
         navigation={(
           <Button className="btn-secondary" onPress={() => router.back()} variant="secondary">
             <ArrowLeft01Icon size={15} />
@@ -1111,7 +1108,7 @@ export default function ScanDetailPage() {
             hint={scan.external_status && scan.scan_provider === 'artifactory_xray'
               ? `External state: ${scan.external_status.replace(/_/g, ' ')}`
               : undefined}
-            className="glass-panel col-span-2 rounded-xl md:col-span-1"
+            className="surface-panel col-span-2 rounded-xl md:col-span-1"
             inline
           />
           {sevCards.map(({ label, count, color, border }) => (
@@ -1119,7 +1116,7 @@ export default function ScanDetailPage() {
               key={label}
               label={label}
               value={count ?? 0}
-              className={`glass-panel rounded-xl border ${border}`}
+              className={`surface-panel rounded-xl border ${border}`}
               valueClassName={`text-xl font-semibold tabular-nums ${color}`}
               inline
             />
@@ -1277,7 +1274,7 @@ export default function ScanDetailPage() {
               </Select.Popover>
             </Select>
           </div>
-          <div className="glass-panel rounded-2xl overflow-hidden">
+          <div className="surface-panel rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[860px] text-sm">
                 <thead>
@@ -1311,7 +1308,7 @@ export default function ScanDetailPage() {
                       <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{c.version || '-'}</td>
                       <td className="px-4 py-2.5">
                         <span className="text-xs px-1.5 py-0.5 rounded font-medium"
-                          style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
+                          style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-muted)' }}>
                           {c.type}
                         </span>
                       </td>
@@ -1398,7 +1395,7 @@ export default function ScanDetailPage() {
           </div>
           <div
             className="flex flex-col gap-2 rounded-xl px-3 py-2 md:flex-row md:items-center md:justify-between"
-            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+            style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
           >
             <div className="min-w-0">
               <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{vulnerabilityViewSourceLabel}</p>
@@ -1427,7 +1424,7 @@ export default function ScanDetailPage() {
           </div>
         </div>
 
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-panel rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1120px] text-sm">
               <thead>
@@ -1788,7 +1785,7 @@ export default function ScanDetailPage() {
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Scanner</p>
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                <div className="glass-panel rounded-xl p-4">
+                <div className="surface-panel rounded-xl p-4">
                   <p className="text-xs text-zinc-500 mb-1">Scanner</p>
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">Trivy {scan.trivy_version || 'unknown'}</p>
                   {scan.grype_version && (
@@ -1840,24 +1837,24 @@ export default function ScanDetailPage() {
               )}
 
               {imageEnv.length > 0 && (
-                <details className="glass-panel rounded-xl p-4">
+                <details className="surface-panel rounded-xl p-4">
                   <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                     Environment
                   </summary>
-                  <pre className="mt-3 overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <pre className="mt-3 overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     {imageEnv.join('\n')}
                   </pre>
                 </details>
               )}
 
               {imageLabelEntries.length > 0 && (
-                <details className="glass-panel rounded-xl p-4">
+                <details className="surface-panel rounded-xl p-4">
                   <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                     Labels
                   </summary>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     {imageLabelEntries.map(([key, value]) => (
-                      <div key={key} className="rounded-xl p-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div key={key} className="rounded-xl p-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                         <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{key}</p>
                         <p className="mt-2 break-all font-mono text-xs text-zinc-700 dark:text-zinc-300">{value || '-'}</p>
                       </div>
@@ -1866,11 +1863,11 @@ export default function ScanDetailPage() {
                 </details>
               )}
 
-              <details className="glass-panel rounded-xl p-4">
+              <details className="surface-panel rounded-xl p-4">
                 <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                   Raw image config
                 </summary>
-                <pre className="mt-3 overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <pre className="mt-3 overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                   {JSON.stringify(fullImageConfig, null, 2)}
                 </pre>
               </details>
@@ -1879,7 +1876,7 @@ export default function ScanDetailPage() {
 
           {/* Tags */}
           {allTags.length > 0 && (
-            <div className="glass-panel rounded-xl p-4">
+            <div className="surface-panel rounded-xl p-4">
               <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>Tags</p>
               <div className="flex items-center gap-2 flex-wrap">
                 {allTags.map((tag) => {
@@ -1904,7 +1901,7 @@ export default function ScanDetailPage() {
 
           {/* Compliance */}
           {(allOrgs.length > 0 || compliance.length > 0) && (
-            <div className="glass-panel rounded-xl p-4">
+            <div className="surface-panel rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Compliance</p>
                 {compliance.length > 0 && (
@@ -1926,7 +1923,7 @@ export default function ScanDetailPage() {
                         key={org.id}
                         onClick={() => handleAssignOrg(org.id)}
                         className="text-xs px-2.5 py-1 rounded-full font-medium border transition-colors"
-                        style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
+                        style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-muted)' }}
                       >
                         + {org.name}
                       </button>
@@ -1963,7 +1960,7 @@ export default function ScanDetailPage() {
                         key={org.id}
                         onClick={() => handleAssignOrg(org.id)}
                         className="text-xs px-2.5 py-1 rounded-full font-medium border transition-colors"
-                        style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
+                        style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-muted)' }}
                       >
                         + {org.name}
                       </button>
@@ -2003,14 +2000,14 @@ export default function ScanDetailPage() {
       <Modal state={scanAccessModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Scan Access</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5 space-y-4">
                 {scanOrgGrantsError ? <FormAlert description={scanOrgGrantsError} title="Access update failed" /> : null}
-                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                   <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{scan.image_name}:{scan.image_tag}</p>
                   <p className="mt-1 font-mono text-xs text-zinc-500" title={scan.image_digest}>{scan.image_digest}</p>
                   <div className="mt-2">
@@ -2032,7 +2029,7 @@ export default function ScanDetailPage() {
                   ) : (
                     <div className="space-y-2">
                       {scanOrgGrants.map((share) => (
-                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
                             <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>
@@ -2083,7 +2080,7 @@ export default function ScanDetailPage() {
       <Modal state={suppressionAccessModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Suppression Access</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -2095,7 +2092,7 @@ export default function ScanDetailPage() {
                   </div>
                 ) : null}
                 {suppressionAccessTarget ? (
-                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{suppressionAccessTarget.vuln_id}</p>
                     <p className="mt-1 font-mono text-xs text-zinc-500" title={suppressionAccessTarget.image_digest}>
                       {suppressionAccessTarget.image_digest.length > 48 ? `${suppressionAccessTarget.image_digest.slice(0, 48)}…` : suppressionAccessTarget.image_digest}
@@ -2120,7 +2117,7 @@ export default function ScanDetailPage() {
                   ) : (
                     <div className="space-y-2">
                       {suppressionAccessShares.map((share) => (
-                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
                             <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>

@@ -426,9 +426,9 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {FEATURES.map(({ Icon, title, desc }) => (
               <div key={title} className="rounded-2xl p-5 space-y-2 transition-all"
-                style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}
+                style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
                 onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(167,139,250,0.35)')}
-                onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.borderColor = 'var(--glass-border)')}>
+                onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.borderColor = 'var(--surface-border)')}>
                 <div
                   className="size-14 rounded-2xl flex items-center justify-center"
                   style={{

@@ -159,7 +159,7 @@ export default function SuppressionsPage() {
     : [];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
+    <div className="p-6 space-y-5">
       <PageHeader
         eyebrow="Security workflow"
         title="Suppressions"
@@ -167,7 +167,7 @@ export default function SuppressionsPage() {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <input
-              className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input w-48"
+              className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl surface-input w-48"
               placeholder="Search CVE ID…"
               value={searchQuery}
               onChange={e => {
@@ -180,7 +180,7 @@ export default function SuppressionsPage() {
             <Select value={statusFilter || '__all__'} onChange={value => { const v = String(value === '__all__' ? '' : value ?? ''); setStatusFilter(v); setPage(1); load(1, v, searchQuery); }}
               className="w-44"
             >
-              <Select.Trigger className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl glass-input">
+              <Select.Trigger className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl surface-input">
                 <Select.Value />
                 <Select.Indicator />
               </Select.Trigger>
@@ -202,7 +202,7 @@ export default function SuppressionsPage() {
         <FormAlert description={error} title="Suppressions loading failed" />
       )}
 
-      <div className="glass-panel rounded-2xl overflow-hidden">
+      <div className="surface-panel rounded-2xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -347,7 +347,7 @@ export default function SuppressionsPage() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Suppression Access</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -355,7 +355,7 @@ export default function SuppressionsPage() {
               <Modal.Body className="px-6 py-5 space-y-4">
                 {shareError ? <FormAlert description={shareError} title="Access update failed" /> : null}
                 {shareTarget ? (
-                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{shareTarget.vuln_id}</p>
                     <p className="mt-1 font-mono text-xs text-zinc-500" title={shareTarget.image_digest}>
                       {shareTarget.image_digest.length > 48 ? `${shareTarget.image_digest.slice(0, 48)}…` : shareTarget.image_digest}
@@ -380,7 +380,7 @@ export default function SuppressionsPage() {
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
-                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
                             <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>

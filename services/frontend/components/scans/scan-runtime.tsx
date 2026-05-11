@@ -517,7 +517,7 @@ function buildProgressModel(status: string, currentStep: string | null | undefin
 
 export function ScannerDatabaseCard({ label, updatedAt, downloadedAt }: { label: string; updatedAt?: string | null; downloadedAt?: string | null }) {
 	return (
-		<div className="glass-panel rounded-xl p-4">
+		<div className="surface-card rounded-xl p-4">
 			<p className="text-xs text-zinc-500 mb-1">{label}</p>
 			<p className="text-sm font-medium text-zinc-900 dark:text-white" title={updatedAt ? fullDate(updatedAt) : ''}>
 				{updatedAt ? `${timeAgo(updatedAt)} (${fullDate(updatedAt)})` : 'Unknown'}
@@ -579,7 +579,7 @@ export function ScanningAnimation({
 	const compactImage = compactImageLabel(image);
 
 	return (
-		<div className="rounded-2xl px-5 py-6 md:px-7" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+		<div className="rounded-2xl px-5 py-6 md:px-7" style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
 			<style>{`
 				@keyframes stepPulse { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.6); opacity: 0.2; } }
 				@keyframes horizontalTrail { 0% { transform: translateX(-100%); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; transform: translateX(300%); } 100% { opacity: 0;  } }
@@ -639,7 +639,7 @@ export function ScanningAnimation({
 											style={{
 												color: isActive || isComplete ? '#ffffff' : '#71717a',
 												background: isActive || isComplete ? nodeColor : 'var(--card-bg)',
-												border: `1px solid ${isActive || isComplete ? nodeColor : 'var(--glass-border)'}`,
+												border: `1px solid ${isActive || isComplete ? nodeColor : 'var(--surface-border)'}`,
 												boxShadow: isActive ? `0 0 14px ${progress.accentSoft}` : undefined,
 												transform: isActive ? 'scale(1.1)' : 'scale(1)',
 												transition: 'transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, color 0.3s ease',
@@ -657,7 +657,7 @@ export function ScanningAnimation({
 									</div>
 
 									{!isLast && (
-										<div className="flex-1 mx-2 h-1 rounded-full overflow-hidden" style={{ background: isComplete ? progress.accentSoft : 'var(--glass-border)' }}>
+										<div className="flex-1 mx-2 h-1 rounded-full overflow-hidden" style={{ background: isComplete ? progress.accentSoft : 'var(--surface-border)' }}>
 											{isActive && (
 												<div className="h-full w-[40%] rounded-full" style={{ background: progress.accent, animation: 'horizontalTrail 1.8s linear infinite' }} />
 											)}
@@ -745,8 +745,8 @@ export function ScanStepTimeline({
 
 	return (
 		<div
-			className="glass-panel overflow-hidden rounded-[28px] p-5 md:px-6 md:py-6"
-			style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}
+			className="surface-card overflow-hidden rounded-[28px] p-5 md:px-6 md:py-6"
+			style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
 		>
 			<style>{`
 				@keyframes timelineRise { 0% { opacity: 0; transform: translateY(12px); } 100% { opacity: 1; transform: translateY(0); } }
@@ -770,7 +770,7 @@ export function ScanStepTimeline({
 						</span>
 					)}
 					{totalDurationMs !== null && (
-						<span className="rounded-full px-3 py-1 font-medium text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+						<span className="rounded-full px-3 py-1 font-medium text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
 							Total duration {formatDuration(totalDurationMs)}
 						</span>
 					)}
@@ -778,22 +778,22 @@ export function ScanStepTimeline({
 			</div>
 
 			<div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-				<div className="rounded-2xl px-4 py-3" style={{ background: 'var(--card-bg)', border: '1px solid var(--glass-border)' }}>
+				<div className="rounded-2xl px-4 py-3" style={{ background: 'var(--card-bg)', border: '1px solid var(--surface-border)' }}>
 					<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Total duration</p>
 					<p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-white">{totalDurationMs !== null ? formatDuration(totalDurationMs) : '—'}</p>
 					<p className="mt-1 text-xs text-zinc-500">Across {orderedLogs.length} recorded steps</p>
 				</div>
-				<div className="rounded-2xl px-4 py-3" style={{ background: 'var(--card-bg)', border: '1px solid var(--glass-border)' }}>
+				<div className="rounded-2xl px-4 py-3" style={{ background: 'var(--card-bg)', border: '1px solid var(--surface-border)' }}>
 					<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Slowest step</p>
 					<p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-white">{slowestStep?.title ?? '—'}</p>
 					<p className="mt-1 text-xs text-zinc-500">{slowestStep ? formatDuration(slowestStep.durationMs) : 'No completed duration yet'}</p>
 				</div>
-				<div className="rounded-2xl px-4 py-3" style={{ background: 'var(--card-bg)', border: '1px solid var(--glass-border)' }}>
+				<div className="rounded-2xl px-4 py-3" style={{ background: 'var(--card-bg)', border: '1px solid var(--surface-border)' }}>
 					<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Provider</p>
 					<p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-white">{providerName}</p>
 					<p className="mt-1 text-xs text-zinc-500">{totalOutputs} backend update{totalOutputs === 1 ? '' : 's'} captured</p>
 				</div>
-				<div className="rounded-2xl px-4 py-3" style={{ background: 'var(--card-bg)', border: '1px solid var(--glass-border)' }}>
+				<div className="rounded-2xl px-4 py-3" style={{ background: 'var(--card-bg)', border: '1px solid var(--surface-border)' }}>
 					<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Finished</p>
 					<p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-white">{finalTimestamp ? timeAgo(finalTimestamp) : '—'}</p>
 					<p className="mt-1 text-xs text-zinc-500">{finalTimestamp ? fullDate(finalTimestamp) : 'No completion time recorded'}</p>
@@ -827,7 +827,7 @@ export function ScanStepTimeline({
 							className="rounded-2xl p-4"
 							style={{
 								background: 'var(--card-bg)',
-								border: `1px solid ${isTerminal ? rowTone.border : 'var(--glass-border)'}`,
+								border: `1px solid ${isTerminal ? rowTone.border : 'var(--surface-border)'}`,
 								animation: `timelineRise 380ms ease forwards`,
 								animationDelay: `${index * 70}ms`,
 								opacity: 0,
@@ -876,11 +876,11 @@ export function ScanStepTimeline({
 											<div className="flex shrink-0 flex-col items-end gap-2 text-xs">
 												<div className="flex flex-wrap justify-end gap-2">
 											{durationMs !== null && (
-												<span className="rounded-full px-2.5 py-1 font-medium text-zinc-700 dark:text-zinc-200" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+												<span className="rounded-full px-2.5 py-1 font-medium text-zinc-700 dark:text-zinc-200" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
 													{formatDuration(durationMs)}
 												</span>
 											)}
-											<span className="rounded-full px-2.5 py-1 font-medium text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+											<span className="rounded-full px-2.5 py-1 font-medium text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
 												{timeAgo(stepLog.started_at)}
 											</span>
 												</div>
@@ -901,12 +901,12 @@ export function ScanStepTimeline({
 										{expanded && (
 											<>
 												<div className="grid gap-2 sm:grid-cols-2">
-													<div className="rounded-xl px-3 py-2" style={{ background: 'var(--card-bg)', border: '1px solid var(--glass-border)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}>
+													<div className="rounded-xl px-3 py-2" style={{ background: 'var(--card-bg)', border: '1px solid var(--surface-border)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}>
 														<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Started</p>
 														<p className="mt-1 text-xs text-zinc-800 dark:text-zinc-200" title={fullDate(stepLog.started_at)}>{fullDate(stepLog.started_at)}</p>
 													</div>
 													{resolvedEnd && (
-														<div className="rounded-xl px-3 py-2" style={{ background: 'var(--card-bg)', border: '1px solid var(--glass-border)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}>
+														<div className="rounded-xl px-3 py-2" style={{ background: 'var(--card-bg)', border: '1px solid var(--surface-border)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}>
 															<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Finished</p>
 															<p className="mt-1 text-xs text-zinc-800 dark:text-zinc-200" title={fullDate(resolvedEnd)}>{fullDate(resolvedEnd)}</p>
 														</div>

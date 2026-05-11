@@ -56,7 +56,7 @@ function SevCount({ count, cls }: { count: number; cls: string }) {
 function StatBox({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
     <div
-      className="glass-panel flex flex-col gap-0.5 px-4 py-3 rounded-xl"
+      className="surface-panel flex flex-col gap-0.5 px-4 py-3 rounded-xl"
     >
       <span className="text-xs text-zinc-500">{label}</span>
       <span className={`text-xl font-bold font-mono ${color ?? 'text-zinc-900 dark:text-zinc-100'}`}>{value}</span>
@@ -238,7 +238,7 @@ export default function HelmRunDetailPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
+    <div className="p-6 space-y-5">
       <div>
         <button
           onClick={() => router.push('/helm')}
@@ -374,20 +374,20 @@ export default function HelmRunDetailPage() {
       )}
 
       {loading && (
-        <div className="glass-panel rounded-2xl px-6 py-10 flex items-center justify-center gap-3 text-zinc-400 text-sm">
+        <div className="surface-panel rounded-2xl px-6 py-10 flex items-center justify-center gap-3 text-zinc-400 text-sm">
           <span className="size-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
           Loading Helm run…
         </div>
       )}
 
       {!loading && items.length === 0 && (
-        <div className="glass-panel rounded-2xl px-6 py-10 text-center text-zinc-400 text-sm">
+        <div className="surface-panel rounded-2xl px-6 py-10 text-center text-zinc-400 text-sm">
           No scans found for this Helm run.
         </div>
       )}
 
       {!loading && items.length > 0 && (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-panel rounded-2xl overflow-hidden">
           <div
             className="grid px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide"
             style={{
@@ -458,7 +458,7 @@ export default function HelmRunDetailPage() {
       )}
 
       {!loading && Object.keys(bySource).length > 1 && (
-        <div className="glass-panel rounded-2xl px-5 py-4 space-y-3">
+        <div className="surface-panel rounded-2xl px-5 py-4 space-y-3">
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Images by template file</h2>
           <div className="flex flex-col gap-1.5">
             {Object.entries(bySource)

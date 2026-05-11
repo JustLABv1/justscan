@@ -146,7 +146,7 @@ function toneStyle(tone: 'success' | 'danger' | 'neutral' | 'accent') {
 
 function SurfaceCard({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <Card className={`glass-panel overflow-hidden rounded-[28px] ${className}`.trim()}>
+    <Card className={`surface-panel overflow-hidden rounded-[28px] ${className}`.trim()}>
       {children}
     </Card>
   );
@@ -385,7 +385,7 @@ export default function AdminAIPage() {
   return (
     <AdminShell>
       <div className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4 rounded-[28px] border p-5 sm:px-6" style={{ borderColor: 'var(--glass-border)', background: 'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))' }}>
+        <div className="flex flex-wrap items-start justify-between gap-4 rounded-[28px] border p-5 sm:px-6" style={{ borderColor: 'var(--surface-border)', background: 'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))' }}>
           <div className="max-w-3xl space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--text-faint)' }}>Provider Control</p>
             <h2 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Manage AI providers without the permanent editor</h2>
@@ -411,7 +411,7 @@ export default function AdminAIPage() {
                   {settings?.enabled ? 'On' : 'Off'}
                 </StatusPill>
               </div>
-              <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+              <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
                 <Switch
                   isDisabled={!settings || savingSetting !== ''}
                   isSelected={settings?.enabled ?? false}
@@ -449,7 +449,7 @@ export default function AdminAIPage() {
                   {settings?.allowAnonymous ? 'Allowed' : 'Blocked'}
                 </StatusPill>
               </div>
-              <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+              <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
                 <Switch
                   isDisabled={!settings || savingSetting !== ''}
                   isSelected={settings?.allowAnonymous ?? false}
@@ -520,11 +520,11 @@ export default function AdminAIPage() {
             </div>
 
             {loading ? (
-              <div className="rounded-2xl border px-4 py-10 text-sm" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)', color: 'var(--text-faint)' }}>
+              <div className="rounded-2xl border px-4 py-10 text-sm" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)', color: 'var(--text-faint)' }}>
                 Loading AI providers…
               </div>
             ) : sortedProviders.length === 0 ? (
-              <div className="rounded-3xl border px-5 py-10 text-center" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+              <div className="rounded-3xl border px-5 py-10 text-center" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
                 <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>No provider configured yet</p>
                 <p className="mx-auto mt-2 max-w-2xl text-sm leading-6" style={{ color: 'var(--text-faint)' }}>
                   Create your first provider to validate credentials, choose a default runtime, and unblock assistant traffic.
@@ -619,7 +619,7 @@ export default function AdminAIPage() {
 
                 <div className="space-y-3 md:hidden">
                   {sortedProviders.map((provider) => (
-                    <div key={provider.providerKey} className="rounded-3xl border p-4" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                    <div key={provider.providerKey} className="rounded-3xl border p-4" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
                       <div className="space-y-4">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
@@ -693,7 +693,7 @@ export default function AdminAIPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               {supportedProviders.map((provider) => (
-                <div key={provider.type} className="rounded-full border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--glass-border)', background: 'var(--app-bg)', color: 'var(--text-secondary)' }}>
+                <div key={provider.type} className="rounded-full border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--surface-border)', background: 'var(--app-bg)', color: 'var(--text-secondary)' }}>
                   {provider.label}
                 </div>
               ))}
@@ -704,7 +704,7 @@ export default function AdminAIPage() {
         <Modal state={modal}>
           <Modal.Backdrop isDismissable variant="blur">
             <Modal.Container placement="center" size="lg">
-              <Modal.Dialog className="glass-modal overflow-hidden rounded-3xl">
+              <Modal.Dialog className="surface-modal overflow-hidden rounded-3xl">
                 <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                   <Modal.Heading className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
                     {editingProviderKey ? 'Edit provider' : 'Create provider'}
@@ -725,7 +725,7 @@ export default function AdminAIPage() {
                       </div>
                     ) : null}
 
-                    <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                    <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
                       <div className="mb-4">
                         <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Identity</h4>
                         <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-faint)' }}>Provider identity is stable and controls how the assistant references this runtime.</p>
@@ -782,7 +782,7 @@ export default function AdminAIPage() {
                       </div>
                     </div>
 
-                    <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                    <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
                       <div className="mb-4">
                         <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Endpoint and authentication</h4>
                         <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-faint)' }}>Provide the runtime endpoint and secret material used to reach this model provider.</p>
@@ -836,7 +836,7 @@ export default function AdminAIPage() {
                       </div>
                     </div>
 
-                    <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                    <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
                       <div className="mb-4">
                         <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Models and runtime tuning</h4>
                         <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-faint)' }}>Set model defaults and the runtime safety rails used by the assistant.</p>
@@ -881,13 +881,13 @@ export default function AdminAIPage() {
                       </div>
                     </div>
 
-                    <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                    <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
                       <div className="mb-4">
                         <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Provider state</h4>
                         <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-faint)' }}>Set whether this provider can receive traffic and whether it becomes the assistant default.</p>
                       </div>
                       <div className="grid gap-3 md:grid-cols-2">
-                        <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--app-bg)' }}>
+                        <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--surface-border)', background: 'var(--app-bg)' }}>
                           <Switch isSelected={form.enabled} onChange={(nextSelected) => setForm((current) => ({ ...current, enabled: nextSelected }))}>
                             <Switch.Control>
                               <Switch.Thumb />
@@ -897,7 +897,7 @@ export default function AdminAIPage() {
                             </Switch.Content>
                           </Switch>
                         </div>
-                        <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--app-bg)' }}>
+                        <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--surface-border)', background: 'var(--app-bg)' }}>
                           <Switch isSelected={form.isDefault} onChange={(nextSelected) => setForm((current) => ({ ...current, isDefault: nextSelected }))}>
                             <Switch.Control>
                               <Switch.Thumb />
@@ -934,7 +934,7 @@ export default function AdminAIPage() {
         }}>
           <AlertDialog.Backdrop variant="blur">
             <AlertDialog.Container placement="center">
-              <AlertDialog.Dialog className="glass-modal overflow-hidden rounded-3xl sm:max-w-[420px]">
+              <AlertDialog.Dialog className="surface-modal overflow-hidden rounded-3xl sm:max-w-[420px]">
                 <AlertDialog.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
                 <AlertDialog.Header>
                   <AlertDialog.Icon status="danger" />

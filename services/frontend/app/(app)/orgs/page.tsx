@@ -92,7 +92,7 @@ export default function OrgsPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
+    <div className="p-6 space-y-5">
     <PageHeader
       eyebrow="Workspace management"
       title="Organizations"
@@ -111,7 +111,7 @@ export default function OrgsPage() {
       {inviteError ? <FormAlert description={inviteError} title="Invite action failed" /> : null}
 
       {pendingInvites.length > 0 && (
-        <section className="glass-panel rounded-2xl p-5 space-y-4">
+        <section className="surface-panel rounded-2xl p-5 space-y-4">
           <div className="flex items-center gap-3">
             <div className="size-10 rounded-xl flex items-center justify-center shrink-0"
               style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.22)' }}>
@@ -127,7 +127,7 @@ export default function OrgsPage() {
             {pendingInvites.map((invite) => {
               const busy = inviteActionId === invite.id;
               return (
-                <div key={invite.id} className="rounded-2xl p-4 space-y-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                <div key={invite.id} className="rounded-2xl p-4 space-y-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -180,7 +180,7 @@ export default function OrgsPage() {
           <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : orgs.length === 0 ? (
-        <div className="glass-panel rounded-2xl py-20 flex flex-col items-center gap-3">
+        <div className="surface-panel rounded-2xl py-20 flex flex-col items-center gap-3">
           <div className="size-14 rounded-2xl flex items-center justify-center"
             style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
             <Building04Icon size={28} color="rgba(167,139,250,0.6)" />
@@ -195,9 +195,9 @@ export default function OrgsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {orgs.map((org) => (
-            <div key={org.id} className="glass-panel relative rounded-2xl p-5 flex flex-col gap-4 group transition-all duration-200 cursor-default"
+            <div key={org.id} className="surface-panel relative rounded-2xl p-5 flex flex-col gap-4 group transition-all duration-200 cursor-default"
               onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(167,139,250,0.2)')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--glass-border)')}>
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--surface-border)')}>
               <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
                 style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)' }} />
 
@@ -239,7 +239,7 @@ export default function OrgsPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">New Organization</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />

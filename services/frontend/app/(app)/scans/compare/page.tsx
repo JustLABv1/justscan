@@ -153,7 +153,7 @@ function ComparePageInner() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
+    <div className="p-6 space-y-5">
       {/* Header */}
       <div>
         <Link
@@ -168,7 +168,7 @@ function ComparePageInner() {
       </div>
 
       {/* Selectors */}
-      <div className="glass-panel rounded-2xl p-5">
+      <div className="surface-panel rounded-2xl p-5">
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           {scansLoading ? (
             <div className="flex-1 flex items-center justify-center py-4">
@@ -204,7 +204,7 @@ function ComparePageInner() {
         <>
           {/* Summary bar */}
           <div className="grid grid-cols-3 gap-3">
-            <div className="glass-panel rounded-xl p-4 text-center">
+            <div className="surface-panel rounded-xl p-4 text-center">
               <p className="text-2xl font-bold tabular-nums" style={{ color: '#f87171' }}>{result.summary.added_count}</p>
               <p className="text-xs text-zinc-500 mt-0.5">New vulnerabilities</p>
               {(result.summary.added_critical > 0 || result.summary.added_high > 0) && (
@@ -215,18 +215,18 @@ function ComparePageInner() {
                 </p>
               )}
             </div>
-            <div className="glass-panel rounded-xl p-4 text-center">
+            <div className="surface-panel rounded-xl p-4 text-center">
               <p className="text-2xl font-bold tabular-nums" style={{ color: '#34d399' }}>{result.summary.removed_count}</p>
               <p className="text-xs text-zinc-500 mt-0.5">Resolved vulnerabilities</p>
             </div>
-            <div className="glass-panel rounded-xl p-4 text-center">
+            <div className="surface-panel rounded-xl p-4 text-center">
               <p className="text-2xl font-bold tabular-nums text-zinc-400">{result.summary.unchanged_count}</p>
               <p className="text-xs text-zinc-500 mt-0.5">Unchanged</p>
             </div>
           </div>
 
           {/* Added */}
-          <div className="glass-panel rounded-2xl overflow-hidden">
+          <div className="surface-panel rounded-2xl overflow-hidden">
             <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: '1px solid var(--row-divider)' }}>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">New Vulnerabilities</h2>
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ color: '#f87171', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.2)' }}>
@@ -237,7 +237,7 @@ function ComparePageInner() {
           </div>
 
           {/* Removed */}
-          <div className="glass-panel rounded-2xl overflow-hidden">
+          <div className="surface-panel rounded-2xl overflow-hidden">
             <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: '1px solid var(--row-divider)' }}>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Resolved Vulnerabilities</h2>
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ color: '#34d399', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.2)' }}>
@@ -248,7 +248,7 @@ function ComparePageInner() {
           </div>
 
           {/* Unchanged */}
-          <div className="glass-panel rounded-2xl overflow-hidden">
+          <div className="surface-panel rounded-2xl overflow-hidden">
             <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: '1px solid var(--row-divider)' }}>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Unchanged</h2>
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ color: '#a1a1aa', background: 'rgba(161,161,170,0.08)', border: '1px solid rgba(161,161,170,0.15)' }}>

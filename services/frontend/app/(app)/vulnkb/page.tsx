@@ -185,7 +185,7 @@ export default function VulnKBPage() {
   const activeFilters = [severity, minCvss !== '0' ? `CVSS ≥ ${minCvss}` : '', exploitOnly ? 'Exploit Only' : '', publishedRange ? PUBLISHED_OPTIONS.find(o => o.id === publishedRange)?.label : ''].filter(Boolean);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
+    <div className="p-6 space-y-5">
       <PageHeader
         eyebrow="Security intelligence"
         title="Vulnerability Knowledge Base"
@@ -193,7 +193,7 @@ export default function VulnKBPage() {
       />
 
       {/* Filters */}
-      <div className="glass-panel rounded-2xl p-4 space-y-3">
+      <div className="surface-panel rounded-2xl p-4 space-y-3">
         <div className="flex flex-wrap gap-3 items-end">
           {/* Search */}
           <div className="flex-1 min-w-52">
@@ -332,7 +332,7 @@ export default function VulnKBPage() {
         </div>
       )}
 
-      <div className="glass-panel rounded-2xl overflow-hidden">
+      <div className="surface-panel rounded-2xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>

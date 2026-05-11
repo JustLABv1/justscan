@@ -70,7 +70,7 @@ export default function OIDCCallbackPage() {
           <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</h1>
         </div>
 
-        <div className="glass-panel rounded-2xl p-6 space-y-4 relative">
+        <div className="surface-panel rounded-2xl p-6 space-y-4 relative">
           <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
             style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.3),transparent)' }} />
           <div className="rounded-xl px-3.5 py-2.5 text-sm"

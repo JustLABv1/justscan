@@ -55,7 +55,7 @@ export function OrgTeamTab({
           )}
         </div>
 
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div className="surface-card rounded-2xl overflow-hidden">
           {membersLoading ? (
             <div className="flex justify-center py-8">
               <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
@@ -130,7 +130,7 @@ export function OrgTeamTab({
         </div>
       </div>
 
-      <div className="glass-panel relative rounded-2xl p-5 space-y-3">
+      <div className="surface-card relative rounded-2xl p-5 space-y-3">
         <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none" style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)' }} />
         <div>
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Pending Invites</h3>
@@ -141,7 +141,7 @@ export function OrgTeamTab({
         ) : (
           <div className="space-y-2">
             {invites.map((invite) => (
-              <div key={invite.id} className="rounded-xl px-4 py-3 flex items-center justify-between gap-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div key={invite.id} className="rounded-xl px-4 py-3 flex items-center justify-between gap-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">{invite.email}</p>
                   <p className="text-xs text-zinc-500 mt-0.5">{invite.role} · expires {timeUntil(invite.expires_at)}</p>

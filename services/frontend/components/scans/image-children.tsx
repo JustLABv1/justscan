@@ -63,7 +63,7 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
         ) : (
           <div className="space-y-3 p-3">
             {scans.map((scan) => (
-              <div key={scan.id} className="rounded-xl p-3.5 space-y-3" style={{ background: 'rgba(124,58,237,0.05)', border: '1px solid var(--glass-border)' }}>
+              <div key={scan.id} className="rounded-xl p-3.5 space-y-3" style={{ background: 'rgba(124,58,237,0.05)', border: '1px solid var(--surface-border)' }}>
                 <div className="flex items-start gap-3">
                   <div className="pt-0.5" onClick={(event) => event.stopPropagation()}>
                     <Checkbox isSelected={selectedScans.has(scan.id)} onChange={(checked: boolean) => onSelectScan(scan.id, checked)}>
@@ -101,19 +101,19 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
                     </div>
 
                     <div className="grid grid-cols-4 gap-2">
-                      <div className="rounded-lg px-2.5 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="rounded-lg px-2.5 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                         <p className="text-[10px] uppercase tracking-[0.18em] text-red-400/80">C</p>
                         <SevCount count={scan.critical_count} level="critical" />
                       </div>
-                      <div className="rounded-lg px-2.5 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="rounded-lg px-2.5 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                         <p className="text-[10px] uppercase tracking-[0.18em] text-orange-400/80">H</p>
                         <SevCount count={scan.high_count} level="high" />
                       </div>
-                      <div className="rounded-lg px-2.5 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="rounded-lg px-2.5 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                         <p className="text-[10px] uppercase tracking-[0.18em] text-yellow-400/80">M</p>
                         <SevCount count={scan.medium_count} level="medium" />
                       </div>
-                      <div className="rounded-lg px-2.5 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="rounded-lg px-2.5 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                         <p className="text-[10px] uppercase tracking-[0.18em] text-blue-400/80">L</p>
                         <SevCount count={scan.low_count} level="low" />
                       </div>
@@ -139,9 +139,9 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
           <div className="flex items-center justify-between px-4 py-2" style={{ borderTop: '1px solid var(--row-divider)' }}>
             <span className="text-xs text-zinc-500">{total} scans</span>
             <div className="flex items-center gap-1.5">
-              <button className="px-2.5 py-1 text-xs rounded-lg text-zinc-500 disabled:opacity-30 transition-all" disabled={page <= 1} onClick={() => setPage((previous) => previous - 1)} style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }} type="button">← Prev</button>
+              <button className="px-2.5 py-1 text-xs rounded-lg text-zinc-500 disabled:opacity-30 transition-all" disabled={page <= 1} onClick={() => setPage((previous) => previous - 1)} style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }} type="button">← Prev</button>
               <span className="text-xs text-zinc-500 px-1">{page} / {totalPages}</span>
-              <button className="px-2.5 py-1 text-xs rounded-lg text-zinc-500 disabled:opacity-30 transition-all" disabled={page >= totalPages} onClick={() => setPage((previous) => previous + 1)} style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }} type="button">Next →</button>
+              <button className="px-2.5 py-1 text-xs rounded-lg text-zinc-500 disabled:opacity-30 transition-all" disabled={page >= totalPages} onClick={() => setPage((previous) => previous + 1)} style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }} type="button">Next →</button>
             </div>
           </div>
         )}
@@ -238,9 +238,9 @@ export function ImageChildren({ imageName, mode = 'table', orgNamesById, onDelet
             <div className="flex items-center justify-between px-4 py-2" style={{ borderTop: '1px solid var(--row-divider)' }}>
               <span className="text-xs text-zinc-500">{total} scans</span>
               <div className="flex items-center gap-1.5">
-                <button disabled={page <= 1} onClick={() => setPage((previous) => previous - 1)} className="px-2.5 py-1 text-xs rounded-lg text-zinc-500 disabled:opacity-30 transition-all" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>← Prev</button>
+                <button disabled={page <= 1} onClick={() => setPage((previous) => previous - 1)} className="px-2.5 py-1 text-xs rounded-lg text-zinc-500 disabled:opacity-30 transition-all" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>← Prev</button>
                 <span className="text-xs text-zinc-500 px-1">{page} / {totalPages}</span>
-                <button disabled={page >= totalPages} onClick={() => setPage((previous) => previous + 1)} className="px-2.5 py-1 text-xs rounded-lg text-zinc-500 disabled:opacity-30 transition-all" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>Next →</button>
+                <button disabled={page >= totalPages} onClick={() => setPage((previous) => previous + 1)} className="px-2.5 py-1 text-xs rounded-lg text-zinc-500 disabled:opacity-30 transition-all" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>Next →</button>
               </div>
             </div>
           )}

@@ -364,7 +364,7 @@ export default function PublicHelmScanPage() {
               <div>
                 <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Chart URL</label>
                 <div className="flex items-center gap-2 p-2 rounded-2xl"
-                  style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
+                  style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)', boxShadow: 'var(--surface-shadow)' }}>
                   <div className="pl-2 shrink-0" style={{ color: 'var(--text-faint)' }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
@@ -393,7 +393,7 @@ export default function PublicHelmScanPage() {
                       placeholder="e.g. nginx"
                       disabled={step === 'extracting'}
                       className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
-                      style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', caretColor: '#7c3aed' }}
+                      style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', caretColor: '#7c3aed' }}
                     />
                   </div>
                   <div>
@@ -405,7 +405,7 @@ export default function PublicHelmScanPage() {
                       placeholder="e.g. 1.2.3"
                       disabled={step === 'extracting'}
                       className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
-                      style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', caretColor: '#7c3aed' }}
+                      style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', caretColor: '#7c3aed' }}
                     />
                   </div>
                 </div>
@@ -422,7 +422,7 @@ export default function PublicHelmScanPage() {
                     placeholder="e.g. 1.2.3"
                     disabled={step === 'extracting'}
                     className="w-full px-3 py-2.5 rounded-xl text-sm outline-none font-mono"
-                    style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', caretColor: '#7c3aed' }}
+                    style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', caretColor: '#7c3aed' }}
                   />
                 </div>
               )}
@@ -457,7 +457,7 @@ export default function PublicHelmScanPage() {
                 <span className="text-xs font-medium px-2" style={{ color: 'var(--text-faint)' }}>Recent scans</span>
                 <div className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
               </div>
-              <div className="rounded-2xl overflow-hidden divide-y" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+              <div className="rounded-2xl overflow-hidden divide-y" style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
                 {helmHistory.slice(0, 5).map((run) => {
                   const displayUrl = run.chart_url.replace(/^oci:\/\//, '');
                   const isGroupOCI = run.chart_url.startsWith('oci://');
@@ -538,7 +538,7 @@ export default function PublicHelmScanPage() {
               </p>
 
               {/* Image list */}
-              <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+              <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
                 <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: 'var(--row-divider)' }}>
                   <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
                     {images.length} image{images.length !== 1 ? 's' : ''} found · {selected.size} selected

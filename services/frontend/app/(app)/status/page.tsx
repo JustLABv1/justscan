@@ -426,7 +426,7 @@ export default function StatusPagesPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
+    <div className="p-6 space-y-5">
     <PageHeader
       eyebrow="Sharing"
       title="Status Pages"
@@ -453,12 +453,12 @@ export default function StatusPagesPage() {
           <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : pages.length === 0 ? (
-        <div className="glass-panel rounded-2xl py-16 flex flex-col items-center gap-3 text-center">
+        <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3 text-center">
           <EyeIcon size={32} color="rgba(113,113,122,0.5)" />
           <p className="text-sm text-zinc-500 max-w-lg">No status pages yet. Create one to share the latest status of all image tags or a curated subset.</p>
         </div>
       ) : (
-        <Card className="glass-panel rounded-2xl overflow-hidden">
+        <Card className="surface-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -540,7 +540,7 @@ export default function StatusPagesPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="status-page-modal-heading"
-            className="glass-modal relative z-10 grid max-h-[calc(100dvh-2rem)] w-[min(1120px,calc(100vw-1.5rem))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl"
+            className="surface-modal relative z-10 grid max-h-[calc(100dvh-2rem)] w-[min(1120px,calc(100vw-1.5rem))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl"
           >
             <div className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               <div className="flex items-center justify-between gap-4">
@@ -615,7 +615,7 @@ export default function StatusPagesPage() {
                             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 1px rgba(124,58,237,0.08)',
                           }
                         : {
-                            borderColor: 'var(--glass-border)',
+                            borderColor: 'var(--surface-border)',
                             background: 'var(--row-hover)',
                           }}
                     >
@@ -644,7 +644,7 @@ export default function StatusPagesPage() {
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.95fr)]">
                     <div
                       className={`space-y-3 rounded-2xl border p-4${includeAllTags ? ' opacity-50' : ''}`}
-                      style={{ borderColor: 'var(--glass-border)', background: 'var(--input-bg)' }}
+                      style={{ borderColor: 'var(--surface-border)', background: 'var(--input-bg)' }}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -664,7 +664,7 @@ export default function StatusPagesPage() {
                         disabled={includeAllTags}
                       />
 
-                      <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                      <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
                         {loadingOptions ? (
                           <p className="p-4 text-sm text-zinc-500">Loading image tags…</p>
                         ) : filteredTargetOptions.length === 0 ? (
@@ -753,7 +753,7 @@ export default function StatusPagesPage() {
 
                     <div
                       className={`space-y-3 rounded-2xl border p-4${includeAllTags ? ' opacity-50' : ''}`}
-                      style={{ borderColor: 'var(--glass-border)', background: 'var(--input-bg)' }}
+                      style={{ borderColor: 'var(--surface-border)', background: 'var(--input-bg)' }}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -783,7 +783,7 @@ export default function StatusPagesPage() {
                         </div>
                       )}
 
-                      <div className="rounded-2xl border p-3" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+                      <div className="rounded-2xl border p-3" style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}>
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Preview</p>
                           <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={exactSelectionBadgeStyle}>
@@ -807,7 +807,7 @@ export default function StatusPagesPage() {
                               </span>
                             ))}
                             {regexMatchedOptions.length > 10 && (
-                              <span className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--glass-border)' }}>
+                              <span className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--surface-border)' }}>
                                 +{regexMatchedOptions.length - 10} more
                               </span>
                             )}
@@ -822,7 +822,7 @@ export default function StatusPagesPage() {
                   {!includeAllTags && (
                     <div
                       className="space-y-3 rounded-2xl border p-4 min-h-[8.5rem]"
-                      style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)', overflowAnchor: 'none' }}
+                      style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)', overflowAnchor: 'none' }}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
@@ -844,7 +844,7 @@ export default function StatusPagesPage() {
                             </span>
                           ))}
                           {selectedTargets.length > 12 && (
-                            <span className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--glass-border)' }}>
+                            <span className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--surface-border)' }}>
                               +{selectedTargets.length - 12} more exact tags
                             </span>
                           )}
@@ -923,7 +923,7 @@ export default function StatusPagesPage() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Status Page Access</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -935,7 +935,7 @@ export default function StatusPagesPage() {
                   </div>
                 )}
                 {shareTarget ? (
-                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{shareTarget.name}</p>
                     <p className="mt-1 text-xs text-zinc-500 font-mono">/status/{shareTarget.slug}</p>
                     <div className="mt-2">
@@ -958,7 +958,7 @@ export default function StatusPagesPage() {
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
-                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
                             <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>

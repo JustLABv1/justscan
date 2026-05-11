@@ -133,10 +133,10 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
         <div
           className="rounded-2xl overflow-hidden"
           style={{
-            background: 'var(--glass-bg)',
+            background: 'var(--surface-bg)',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
-            border: '1px solid var(--glass-border)',
+            border: '1px solid var(--surface-border)',
             boxShadow: '0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(167,139,250,0.08)',
           }}
         >
@@ -217,7 +217,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                           <span className="flex-1 font-mono text-sm truncate" style={{ color: 'var(--text-primary)' }}>{img.image_name}</span>
                           <span
                             className="text-[10px] font-mono px-1.5 py-0.5 rounded-md shrink-0"
-                            style={{ color: 'var(--text-muted)', background: 'var(--row-divider)', border: '1px solid var(--glass-border)' }}
+                            style={{ color: 'var(--text-muted)', background: 'var(--row-divider)', border: '1px solid var(--surface-border)' }}
                           >
                             {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
                           </span>

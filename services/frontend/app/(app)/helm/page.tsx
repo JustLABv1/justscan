@@ -237,7 +237,7 @@ export default function HelmPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex items-center gap-3 justify-between">
         <div className="flex items-center gap-3">
           <PackageIcon size={22} className="text-violet-500 shrink-0" />
@@ -263,7 +263,7 @@ export default function HelmPage() {
 
       {step === 'input' && (
         <div
-          className="glass-panel rounded-2xl p-6 space-y-5"
+          className="surface-panel rounded-2xl p-6 space-y-5"
         >
           <form onSubmit={handleExtract} className="space-y-4">
             <div>
@@ -350,7 +350,7 @@ export default function HelmPage() {
       {step === 'preview' && extracted && (
         <div className="space-y-4">
           <div
-            className="glass-panel rounded-2xl px-5 py-4 flex items-center justify-between gap-4"
+            className="surface-panel rounded-2xl px-5 py-4 flex items-center justify-between gap-4"
           >
             <div>
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -374,7 +374,7 @@ export default function HelmPage() {
           </div>
 
           <div
-            className="glass-panel rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4"
+            className="surface-panel rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4"
           >
             <div className="flex items-center gap-2 min-w-[260px]">
               <label className="text-xs text-zinc-500 whitespace-nowrap">Registry</label>
@@ -473,7 +473,7 @@ export default function HelmPage() {
             </div>
           </div>
 
-          <div className="glass-panel rounded-2xl overflow-hidden">
+          <div className="surface-panel rounded-2xl overflow-hidden">
             <div
               className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide"
               style={{ background: 'var(--row-hover)', borderBottom: '1px solid var(--border-subtle)' }}
@@ -592,7 +592,7 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
 
       {runs.length === 0 ? (
         <div
-          className="glass-panel rounded-2xl px-5 py-8 text-center text-sm text-zinc-400"
+          className="surface-panel rounded-2xl px-5 py-8 text-center text-sm text-zinc-400"
         >
           No Helm runs yet. Queue one above to start tracking chart history by run ID.
         </div>
@@ -602,7 +602,7 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
             <Link
               key={run.id}
               href={`/helm/runs/${run.id}`}
-              className="glass-panel rounded-2xl p-4 transition-colors hover:bg-violet-500/5"
+              className="surface-panel rounded-2xl p-4 transition-colors hover:bg-violet-500/5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -643,7 +643,7 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
 
 function RunMetric({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
-    <div className="rounded-xl p-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+    <div className="rounded-xl p-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
       <div className={`text-sm font-semibold ${value > 0 ? tone : 'text-zinc-400'}`}>{value}</div>
       <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
     </div>

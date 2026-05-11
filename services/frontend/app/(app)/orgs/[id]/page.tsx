@@ -38,8 +38,8 @@ import {
     transferOrgOwnership,
     TrendPoint,
     updateOrg,
-    updateOrgVulnerabilityViewSettings,
     updateOrgMemberRole,
+    updateOrgVulnerabilityViewSettings,
     updatePolicy,
     VulnerabilityViewSettings,
 } from '@/lib/api';
@@ -453,7 +453,7 @@ export default function OrgDetailPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 space-y-6">
       <PageHeader
         breadcrumbs={[{ label: 'Organizations', href: '/orgs' }, { label: org.name }]}
         eyebrow="Organization workspace"
@@ -471,7 +471,7 @@ export default function OrgDetailPage() {
         }
       />
 
-      <div className="glass-panel rounded-2xl p-1.5" role="tablist" aria-label="Organization sections">
+      <div className="surface-panel rounded-2xl p-1.5" role="tablist" aria-label="Organization sections">
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-1">
           {ORG_TABS.map((tab, index) => {
             const active = activeTab === tab.id;
@@ -559,7 +559,7 @@ export default function OrgDetailPage() {
       <Modal state={policyModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
                   {editingPolicy ? 'Edit Policy' : 'New Policy'}
@@ -600,7 +600,7 @@ export default function OrgDetailPage() {
 
                     {policyRules.map((rule, idx) => (
                       <div key={idx} className="rounded-xl p-3 space-y-3"
-                        style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                         <div className="flex items-center justify-between gap-2">
                           <Select value={rule.type} onChange={value => {
                               const newType = value as PolicyRule['type'];
@@ -749,7 +749,7 @@ export default function OrgDetailPage() {
       <Modal state={assignModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Assign Scan</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -795,7 +795,7 @@ export default function OrgDetailPage() {
       <Modal state={inviteModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Invite Member</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />

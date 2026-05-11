@@ -64,7 +64,7 @@ export function OrgAutomationTab({
 
   return (
     <div className="space-y-6">
-      <div className="glass-panel relative rounded-2xl p-5 space-y-3">
+      <div className="surface-card relative rounded-2xl p-5 space-y-3">
         <div
           className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
           style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)' }}
@@ -81,7 +81,7 @@ export function OrgAutomationTab({
             <span
               key={`${pattern}-${index}`}
               className="inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-200"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
             >
               {pattern}
               <button onClick={() => void onRemovePattern(pattern)} className="text-zinc-400 hover:text-red-400 transition-colors ml-0.5" type="button">×</button>
@@ -105,7 +105,7 @@ export function OrgAutomationTab({
         </div>
       </div>
 
-      <div className="glass-panel relative rounded-2xl p-5 space-y-4">
+      <div className="surface-card relative rounded-2xl p-5 space-y-4">
         <div
           className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
           style={{ background: 'linear-gradient(90deg,transparent,rgba(14,165,233,0.18),transparent)' }}
@@ -229,13 +229,13 @@ export function OrgAutomationTab({
         </div>
 
         {(org.policies ?? []).length === 0 ? (
-          <div className="glass-panel rounded-2xl p-6 text-center text-sm text-zinc-500">
+          <div className="surface-card rounded-2xl p-6 text-center text-sm text-zinc-500">
             No policies yet. Add one to start evaluating compliance.
           </div>
         ) : (
           <div className="space-y-2">
             {(org.policies ?? []).map((policy) => (
-              <div key={policy.id} className="glass-panel rounded-2xl p-4 flex items-start justify-between gap-4">
+              <div key={policy.id} className="surface-card rounded-2xl p-4 flex items-start justify-between gap-4">
                 <div className="space-y-2 min-w-0">
                   <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{policy.name}</p>
                   {policy.rules.length > 0 && (

@@ -1,6 +1,7 @@
 'use client';
 
 import { Logo } from '@/components/logo';
+import { Card } from '@heroui/react';
 import type { ReactNode } from 'react';
 
 type AuthCardProps = {
@@ -33,13 +34,15 @@ export function AuthCard({ title, subtitle, children, footer }: AuthCardProps) {
         </div>
       </div>
 
-      <div className="glass-panel rounded-2xl p-6 space-y-5 relative">
-        <div
-          className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-          style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.3),transparent)' }}
-        />
-        {children}
-      </div>
+      <Card className="surface-card rounded-2xl relative">
+        <Card.Content className="p-6 space-y-5">
+          <div
+            className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
+            style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.3),transparent)' }}
+          />
+          {children}
+        </Card.Content>
+      </Card>
 
       {footer ? (
         <div className="text-center text-sm" style={{ color: 'var(--text-faint)' }}>

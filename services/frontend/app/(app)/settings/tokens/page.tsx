@@ -27,9 +27,9 @@ const EXPIRY_OPTIONS = [
 ];
 
 const panelStyle: CSSProperties = {
-  background: 'var(--glass-bg)',
-  border: '1px solid var(--glass-border)',
-  boxShadow: 'var(--glass-shadow)',
+  background: 'var(--surface-bg)',
+  border: '1px solid var(--surface-border)',
+  boxShadow: 'var(--surface-shadow)',
 };
 
 function SectionCard({
@@ -74,7 +74,7 @@ function InlineAlert({ message, tone = 'warn' }: { message: string; tone?: 'warn
 
 function DetailRow({ label, value, mono = false }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-2xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+    <div className="flex items-start justify-between gap-4 rounded-2xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
       <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">{label}</span>
       <span className={`text-right text-sm text-zinc-800 dark:text-zinc-100 ${mono ? 'font-mono break-all' : ''}`.trim()}>{value}</span>
     </div>
@@ -156,7 +156,7 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
     <Modal state={state}>
       <Modal.Backdrop>
         <Modal.Container size="md" placement="center">
-          <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+          <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
             <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               <Modal.Heading className="text-zinc-900 dark:text-white font-semibold flex items-center gap-2">
                 <Key01Icon size={17} />
@@ -170,7 +170,7 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
                 This token will not be shown again. Copy it now and store it somewhere safe.
               </div>
               <div className="rounded-xl p-3 font-mono text-xs break-all relative"
-                style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                 {rawToken}
               </div>
               <button
@@ -221,7 +221,7 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
     <Modal state={state}>
       <Modal.Backdrop isDismissable>
         <Modal.Container size="sm" placement="center">
-          <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
+          <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
             <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">New API Token</Modal.Heading>
               <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -259,7 +259,7 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
                         className="rounded-lg p-2 text-xs font-medium transition-all"
                         style={expiresIn === opt.value
                           ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(109,40,217,0.12) 100%)', border: '1px solid rgba(167,139,250,0.4)', color: '#a78bfa' }
-                          : { background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }
+                          : { background: 'var(--row-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-secondary)' }
                         }
                       >
                         {opt.label}
@@ -370,7 +370,7 @@ export default function TokensPage() {
                     hint="All tokens ever issued for this account."
                     icon={<Key01Icon size={16} />}
                     className="rounded-[24px]"
-                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                    style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
                     valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
                   />
                   <StatCard
@@ -379,7 +379,7 @@ export default function TokensPage() {
                     hint="Usable tokens that are not revoked or expired."
                     icon={<Key01Icon size={16} />}
                     className="rounded-[24px]"
-                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                    style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
                     valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
                   />
                   <StatCard
@@ -388,7 +388,7 @@ export default function TokensPage() {
                     hint="Tokens that expire within the next 30 days."
                     icon={<Clock01Icon size={16} />}
                     className="rounded-[24px]"
-                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                    style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
                     valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
                   />
                   <StatCard
@@ -397,13 +397,13 @@ export default function TokensPage() {
                     hint="Disabled tokens retained for audit visibility."
                     icon={<Delete01Icon size={16} />}
                     className="rounded-[24px]"
-                    style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
+                    style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
                     valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
                   />
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
-                  <div className="space-y-3 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="space-y-3 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">What tokens are for</p>
                       <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
@@ -415,7 +415,7 @@ export default function TokensPage() {
                     <DetailRow label="Revocation" value="Immediate for all consumers" />
                   </div>
 
-                  <div className="space-y-4 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                  <div className="space-y-4 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                     <div>
                       <p className="text-sm font-semibold text-zinc-900 dark:text-white">Issue a new token</p>
                       <p className="mt-1.5 text-sm leading-6 text-zinc-500">
@@ -454,7 +454,7 @@ export default function TokensPage() {
             description="Review active, expired, and revoked tokens in one list. Revoke any credential that no longer belongs to a live automation path."
           >
             {tokens.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-[24px] px-6 py-14 text-center gap-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div className="flex flex-col items-center justify-center rounded-[24px] px-6 py-14 text-center gap-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                 <div className="size-14 rounded-2xl flex items-center justify-center"
                   style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.15)' }}>
                   <Key01Icon size={24} color="#a78bfa" />
@@ -471,7 +471,7 @@ export default function TokensPage() {
                 </button>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-[24px]" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+              <div className="overflow-hidden rounded-[24px]" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                 <div className="hidden md:grid md:grid-cols-[minmax(220px,1.4fr)_160px_180px_140px_72px]" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                   <div className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</div>
                   <div className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Created</div>
@@ -521,7 +521,7 @@ export default function TokensPage() {
             <div className="space-y-4">
               <InlineAlert message="A newly created token is shown only once. Copy it immediately and move it into a secret manager before closing the reveal dialog." />
               <pre className="text-xs font-mono p-4 rounded-[24px] overflow-x-auto"
-                style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>
+                style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-secondary)' }}>
 {`curl -X POST https://justscan.example.com/api/v1/scans \\
   -H "Authorization: Bearer <your-token>" \\
   -H "Content-Type: application/json" \\

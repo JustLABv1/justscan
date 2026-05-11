@@ -110,7 +110,7 @@ export function RecentActivityRangePicker({
           className="rounded-lg px-2.5 py-1 text-xs font-medium transition-all duration-150"
           style={value == null
             ? { background: 'rgba(124,58,237,0.2)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.28)' }
-            : { background: 'var(--row-hover)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }}
+            : { background: 'var(--row-hover)', color: 'var(--text-muted)', border: '1px solid var(--surface-border)' }}
           aria-pressed={value == null}
           aria-label={clearLabel}
           title={clearLabel}
@@ -130,7 +130,7 @@ export function RecentActivityRangePicker({
             className="rounded-lg px-2.5 py-1 text-xs font-medium transition-all duration-150"
             style={isActive
               ? { background: 'rgba(124,58,237,0.2)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.28)' }
-              : { background: 'var(--row-hover)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }}
+              : { background: 'var(--row-hover)', color: 'var(--text-muted)', border: '1px solid var(--surface-border)' }}
             aria-pressed={isActive}
             aria-label={option.label}
             title={option.label}

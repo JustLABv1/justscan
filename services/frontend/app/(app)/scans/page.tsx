@@ -14,33 +14,33 @@ import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useOrgNameMap } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-  ArtifactoryRepository,
-  cancelScan,
-  createScans,
-  deleteScan,
-  getDefaultScannerCapabilities,
-  getWorkScope,
-  ImageSummary,
-  listArtifactoryRepositories,
-  listRegistriesWithCapabilities,
-  listScanImages,
-  listScans,
-  listTags,
-  RegistryWithHealth,
-  Scan,
-  ScannerCapabilities,
-  Tag
+    ArtifactoryRepository,
+    cancelScan,
+    createScans,
+    deleteScan,
+    getDefaultScannerCapabilities,
+    getWorkScope,
+    ImageSummary,
+    listArtifactoryRepositories,
+    listRegistriesWithCapabilities,
+    listScanImages,
+    listScans,
+    listTags,
+    RegistryWithHealth,
+    Scan,
+    ScannerCapabilities,
+    Tag
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Autocomplete, Checkbox, ListBox, Modal, Popover, SearchField, Select, useFilter, useOverlayState } from '@heroui/react';
 import {
-  ArrowDown01Icon,
-  ArrowRight01Icon,
-  Cancel01Icon,
-  FilterIcon,
-  GitCompareIcon,
-  PlusSignIcon,
-  Shield01Icon,
+    ArrowDown01Icon,
+    ArrowRight01Icon,
+    Cancel01Icon,
+    FilterIcon,
+    GitCompareIcon,
+    PlusSignIcon,
+    Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -123,7 +123,7 @@ function ImageReferenceLabel({ imageName }: { imageName: string }) {
 
 function MobileSevStat({ label, count, tone }: { label: string; count: number; tone: string }) {
   return (
-    <div className="rounded-xl px-3 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+    <div className="rounded-xl px-3 py-2 text-center" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
       <p className="text-[10px] uppercase tracking-[0.18em]" style={{ color: tone }}>{label}</p>
       <p className="mt-1 font-mono text-sm font-semibold text-zinc-700 dark:text-zinc-200">{count || '—'}</p>
     </div>
@@ -179,7 +179,7 @@ function ScanWizardStep({ active, complete, index, label }: { active: boolean; c
       className="rounded-2xl px-3 py-2.5 transition-all"
       style={{
         background: active ? 'linear-gradient(145deg, rgba(124,58,237,0.14) 0%, rgba(124,58,237,0.08) 100%)' : 'var(--row-hover)',
-        border: active ? '1px solid rgba(167,139,250,0.3)' : '1px solid var(--glass-border)',
+        border: active ? '1px solid rgba(167,139,250,0.3)' : '1px solid var(--surface-border)',
         boxShadow: active ? '0 10px 26px rgba(124,58,237,0.12)' : 'none',
       }}
     >
@@ -227,7 +227,7 @@ function ScanSourceCard({
       type="button"
       style={{
         background: selected ? 'linear-gradient(145deg, rgba(124,58,237,0.16) 0%, rgba(124,58,237,0.08) 100%)' : 'var(--row-hover)',
-        border: selected ? '1px solid rgba(167,139,250,0.32)' : '1px solid var(--glass-border)',
+        border: selected ? '1px solid rgba(167,139,250,0.32)' : '1px solid var(--surface-border)',
         boxShadow: selected ? '0 12px 28px rgba(124,58,237,0.12)' : 'none',
       }}
     >
@@ -796,7 +796,7 @@ export default function ScansPage() {
   const visibleActivityImageCount = new Set(activityScans.map((scan) => scan.image_name)).size;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
+    <div className="p-6 space-y-5">
       <PageHeader
         eyebrow="Scan operations"
         title="Scans"
@@ -821,7 +821,7 @@ export default function ScansPage() {
         )}
       />
 
-      <div className="glass-panel rounded-2xl p-4 space-y-4">
+      <div className="surface-panel rounded-2xl p-4 space-y-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Time Window</label>
@@ -917,7 +917,7 @@ export default function ScansPage() {
 
       {/* Bulk action toolbar */}
       {!hasRecentWindow && selectedScans.size > 0 && (
-        <div className="glass-panel rounded-2xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+        <div className="surface-panel rounded-2xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
           <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             {selectedScans.size} scan{selectedScans.size !== 1 ? 's' : ''} selected
           </span>
@@ -979,8 +979,8 @@ export default function ScansPage() {
       )}
 
       {hasRecentWindow ? (
-        <div className="glass-panel rounded-2xl overflow-hidden">
-          <div className="flex flex-col gap-2 border-b p-4 sm:flex-row sm:items-end sm:justify-between" style={{ borderColor: 'var(--glass-border)' }}>
+        <div className="surface-panel rounded-2xl overflow-hidden">
+          <div className="flex flex-col gap-2 border-b p-4 sm:flex-row sm:items-end sm:justify-between" style={{ borderColor: 'var(--surface-border)' }}>
             <div>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Recent Activity</h2>
               <p className="mt-1 text-xs text-zinc-500">
@@ -1017,7 +1017,7 @@ export default function ScansPage() {
       <div className="space-y-3 md:hidden">
         {loading ? (
           Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="glass-panel rounded-2xl p-4 space-y-3">
+            <div key={index} className="surface-panel rounded-2xl p-4 space-y-3">
               <div className="flex items-start gap-3">
                 <div className="size-4 rounded border border-zinc-400/50 mt-1" />
                 <div className="flex-1 space-y-2">
@@ -1042,7 +1042,7 @@ export default function ScansPage() {
           images.map((img) => {
             const isOpen = expanded.has(img.image_name);
             return (
-              <div key={img.image_name} className="glass-panel rounded-2xl overflow-hidden">
+              <div key={img.image_name} className="surface-panel rounded-2xl overflow-hidden">
                 <div className="p-4 space-y-4">
                   <div className="flex items-start gap-3">
                     <div className="pt-1" onClick={(event) => event.stopPropagation()}>
@@ -1093,7 +1093,7 @@ export default function ScansPage() {
                       aria-label={isOpen ? `Collapse ${img.image_name}` : `Expand ${img.image_name}`}
                       className="flex size-9 shrink-0 items-center justify-center rounded-xl transition-all"
                       onClick={() => toggleExpand(img.image_name)}
-                      style={{ background: isOpen ? 'rgba(124,58,237,0.12)' : 'var(--row-hover)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
+                      style={{ background: isOpen ? 'rgba(124,58,237,0.12)' : 'var(--row-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-muted)' }}
                       type="button"
                     >
                       {isOpen ? <ArrowDown01Icon size={15} className="text-violet-400" /> : <ArrowRight01Icon size={15} />}
@@ -1139,7 +1139,7 @@ export default function ScansPage() {
       </div>
 
       {/* Tree table */}
-      <div className="hidden md:block glass-panel rounded-2xl overflow-hidden">
+      <div className="hidden md:block surface-panel rounded-2xl overflow-hidden">
         <div className="overflow-x-auto overscroll-x-contain">
           <table className="w-full min-w-[980px] text-sm">
             <thead>
@@ -1314,7 +1314,7 @@ export default function ScansPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="glass-modal w-[min(94vw,72rem)] max-w-none rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal w-[min(94vw,72rem)] max-w-none rounded-2xl overflow-hidden">
               <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">New Scan</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
@@ -1381,7 +1381,7 @@ export default function ScansPage() {
                         <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-300">{routingStepDescription}</p>
                       </div>
 
-                      <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                         <p className="text-[11px] uppercase tracking-[0.18em] text-violet-500">Selected source</p>
                         <p className="mt-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
                           {scanSource === 'artifactory_xray' ? 'Artifactory Xray' : scanSource === 'private_registry' ? 'Private registry' : 'Public / Docker Hub'}
@@ -1389,7 +1389,7 @@ export default function ScansPage() {
                       </div>
 
                       {scanSource === 'public' ? (
-                        <div className="rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div className="rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                           <p className="text-[11px] uppercase tracking-[0.18em] text-violet-500">Public image</p>
                           <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">No registry or repo selection needed</p>
                           <p className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
@@ -1399,7 +1399,7 @@ export default function ScansPage() {
                       ) : null}
 
                       {scanSource === 'private_registry' ? (
-                        <div className="space-y-1.5 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div className="space-y-1.5 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                           <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Private registry</label>
                           <Select value={registryId || '__none__'} onChange={value => setRegistryId(String(value === '__none__' ? '' : value ?? ''))}>
                             <Select.Trigger className={selectTriggerCls}>
@@ -1422,7 +1422,7 @@ export default function ScansPage() {
 
                       {scanSource === 'artifactory_xray' ? (
                         <div className="space-y-4">
-                          <div className="space-y-1.5 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <div className="space-y-1.5 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                             <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Artifactory registry</label>
                             <Select value={registryId || '__none__'} onChange={value => setRegistryId(String(value === '__none__' ? '' : value ?? ''))}>
                               <Select.Trigger className={selectTriggerCls}>
@@ -1442,7 +1442,7 @@ export default function ScansPage() {
                             <p className="text-xs text-zinc-500">Choose the Xray-backed registry that should resolve and analyze this image.</p>
                           </div>
 
-                          <div className="space-y-1.5 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <div className="space-y-1.5 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                             <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                               Artifactory Repo <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional override)</span>
                             </label>
@@ -1523,7 +1523,7 @@ export default function ScansPage() {
                         <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-300">{detailsStepDescription}</p>
                       </div>
 
-                      <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                         <p className="text-[11px] uppercase tracking-[0.18em] text-violet-500">Selected source</p>
                         <p className="mt-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
                           {scanSource === 'artifactory_xray' ? 'Artifactory Xray' : scanSource === 'private_registry' ? 'Private registry' : 'Public / Docker Hub'}
@@ -1533,7 +1533,7 @@ export default function ScansPage() {
                       <FormField className="font-mono" label="Image Name" onChange={e => setImageName(e.target.value)} placeholder="nginx or n8nio/n8n" value={imageName} />
                       <FormField className="font-mono" label="Tag" onChange={e => setImageTag(e.target.value)} placeholder="latest" required value={imageTag} />
 
-                      <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                      <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                         <button
                           aria-expanded={advancedOptionsOpen}
                           className="flex w-full items-start justify-between gap-4 text-left"
@@ -1574,16 +1574,16 @@ export default function ScansPage() {
                                 </button>
                               </div>
                               {additionalImageEntries.length > 0 ? (
-                                <div className="rounded-2xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)' }}>
+                                <div className="rounded-2xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--surface-border)' }}>
                                   <div className="flex items-center justify-between gap-3">
                                     <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">Queued additional images</p>
-                                    <span className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-500" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}>
+                                    <span className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-500" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--surface-border)' }}>
                                       {additionalImageEntries.length}
                                     </span>
                                   </div>
                                   <div className="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
                                     {additionalImageEntries.map((image) => (
-                                      <div key={image} className="flex items-start justify-between gap-3 rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)' }}>
+                                      <div key={image} className="flex items-start justify-between gap-3 rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--surface-border)' }}>
                                         <span className="min-w-0 break-all font-mono text-xs text-zinc-600 dark:text-zinc-300">{image}</span>
                                         <button
                                           aria-label={`Remove ${image}`}
@@ -1645,7 +1645,7 @@ export default function ScansPage() {
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2">
-                        <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Source</p>
                           <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">
                             {scanSource === 'artifactory_xray' ? 'Artifactory Xray' : scanSource === 'private_registry' ? 'Private registry' : 'Public / Docker Hub'}
@@ -1659,7 +1659,7 @@ export default function ScansPage() {
                           </p>
                         </div>
 
-                        <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Images</p>
                           <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">{requestedImages.length} target{requestedImages.length === 1 ? '' : 's'}</p>
                           <p className="mt-2 break-all font-mono text-sm text-zinc-600 dark:text-zinc-300">{primaryImage || 'No primary image provided'}</p>
@@ -1669,7 +1669,7 @@ export default function ScansPage() {
                         </div>
 
                         {scanSource !== 'public' ? (
-                          <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                             <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Registry routing</p>
                             <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">{selectedRegistry?.name ?? '—'}</p>
                             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{selectedRegistry?.url ?? 'No registry selected.'}</p>
@@ -1677,7 +1677,7 @@ export default function ScansPage() {
                         ) : null}
 
                         {selectedRegistryIsXray ? (
-                          <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                          <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                             <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Artifactory repo</p>
                             <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">{xrayRepository.trim() || 'Use image path as-is'}</p>
                             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Override the repo when the image lives behind a remote or mirror key like docker-remote.</p>

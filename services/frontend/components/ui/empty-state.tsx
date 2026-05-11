@@ -1,5 +1,5 @@
 'use client';
-import { Card } from '@heroui/react';
+import { Button, Card } from '@heroui/react';
 import React from 'react';
 
 interface EmptyStateProps {
@@ -26,13 +26,13 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
         <p className="text-sm text-zinc-500 max-w-xs mx-auto leading-relaxed">{description}</p>
       </div>
       {action && (
-        <button
+        <Button
           onClick={action.onClick}
-          type="button"
-          className="btn-primary mt-1"
+          className="mt-1"
+          variant="tertiary"
         >
           {action.label}
-        </button>
+        </Button>
       )}
     </Card>
   );

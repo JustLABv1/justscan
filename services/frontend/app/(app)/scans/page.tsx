@@ -1,7 +1,7 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { ImageChildren } from '@/components/scans/image-children';
-import { getRecentActivityBounds, RECENT_ACTIVITY_RANGE_OPTIONS, RecentActivityRange, RecentActivityRangePicker, RecentActivityRow } from '@/components/scans/recent-activity';
+import { getRecentActivityBounds, RECENT_ACTIVITY_RANGE_OPTIONS, RecentActivityRange, RecentActivityRow } from '@/components/scans/recent-activity';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -14,46 +14,41 @@ import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useOrgNameMap } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-    ArtifactoryRepository,
-    cancelScan,
-    createScans,
-    deleteScan,
-    getDefaultScannerCapabilities,
-    getWorkScope,
-    ImageSummary,
-    listArtifactoryRepositories,
-    listRegistriesWithCapabilities,
-    listScanImages,
-    listScans,
-    listTags,
-    RegistryWithHealth,
-    Scan,
-    ScannerCapabilities,
-    Tag
+  ArtifactoryRepository,
+  cancelScan,
+  createScans,
+  deleteScan,
+  getDefaultScannerCapabilities,
+  getWorkScope,
+  ImageSummary,
+  listArtifactoryRepositories,
+  listRegistriesWithCapabilities,
+  listScanImages,
+  listScans,
+  listTags,
+  RegistryWithHealth,
+  Scan,
+  ScannerCapabilities,
+  Tag
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Autocomplete, Checkbox, ListBox, Modal, Popover, SearchField, Select, useFilter, useOverlayState } from '@heroui/react';
+import { Autocomplete, Button, Card, Checkbox, Input, Label, ListBox, Modal, Popover, SearchField, Select, TextArea, useFilter, useOverlayState } from '@heroui/react';
 import {
-    ArrowDown01Icon,
-    ArrowRight01Icon,
-    Cancel01Icon,
-    FilterIcon,
-    GitCompareIcon,
-    PlusSignIcon,
-    Shield01Icon,
+  ArrowDown01Icon,
+  ArrowRight01Icon,
+  Cancel01Icon,
+  FilterIcon,
+  GitCompareIcon,
+  PlusSignIcon,
+  Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Key } from 'react';
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
-
-const PROVIDER_LABEL: Record<string, string> = {
-  trivy: 'Trivy',
-  artifactory_xray: 'Artifactory Xray',
-};
 
 const STATUS_FILTER_OPTIONS = [
   { id: '', label: 'All latest states' },
@@ -69,6 +64,12 @@ const STATUS_FILTER_OPTIONS = [
   { id: 'importing', label: 'Importing Findings' },
   { id: 'completed', label: 'Completed' },
   { id: 'cancelled', label: 'Cancelled' },
+] as const;
+
+const CRITICAL_FILTER_OPTIONS = [
+  { id: '', label: 'Any critical count' },
+  { id: 'yes', label: 'Has critical' },
+  { id: 'no', label: 'No critical' },
 ] as const;
 
 function parseImageReferences(value: string) {
@@ -150,24 +151,43 @@ function normalizeScansTimeRange(value?: string | null, legacyView?: string | nu
   return legacyView === 'activity' ? DEFAULT_ACTIVITY_RANGE : '';
 }
 
+function normalizeCriticalFilter(value?: string | null): '' | 'yes' | 'no' {
+  if (value === 'yes' || value === 'no') {
+    return value;
+  }
+
+  return '';
+}
+
+function matchesStatusFilter(statusFilterValue: string, status: string, externalStatus?: string | null): boolean {
+  if (!statusFilterValue) return true;
+
+  const expected = statusFilterValue.split(',').map((value) => value.trim()).filter(Boolean);
+  if (expected.length === 0) return true;
+
+  return expected.some((candidate) => candidate === status || candidate === (externalStatus ?? ''));
+}
+
 function buildScansRoute({
   image,
   status,
   range,
+  tag,
+  critical,
 }: {
   image?: string;
   status?: string;
   range?: ScansTimeRange;
+  tag?: string;
+  critical?: '' | 'yes' | 'no';
 }) {
   const params = new URLSearchParams();
 
   if (image) params.set('image', image);
-
-  if (range) {
-    params.set('range', range);
-  } else if (status) {
-    params.set('status', status);
-  }
+  if (status) params.set('status', status);
+  if (range) params.set('range', range);
+  if (tag) params.set('tag', tag);
+  if (critical) params.set('critical', critical);
 
   const query = params.toString();
   return query ? `/scans?${query}` : '/scans';
@@ -178,9 +198,8 @@ function ScanWizardStep({ active, complete, index, label }: { active: boolean; c
     <div
       className="rounded-2xl px-3 py-2.5 transition-all"
       style={{
-        background: active ? 'linear-gradient(145deg, rgba(124,58,237,0.14) 0%, rgba(124,58,237,0.08) 100%)' : 'var(--row-hover)',
+        background: active ? 'linear-gradient(145deg, rgba(124,58,237,0.14) 0%, rgba(124,58,237,0.08) 100%)' : 'var(--surface-secondary)',
         border: active ? '1px solid rgba(167,139,250,0.3)' : '1px solid var(--surface-border)',
-        boxShadow: active ? '0 10px 26px rgba(124,58,237,0.12)' : 'none',
       }}
     >
       <div className="flex items-center gap-3">
@@ -227,8 +246,7 @@ function ScanSourceCard({
       type="button"
       style={{
         background: selected ? 'linear-gradient(145deg, rgba(124,58,237,0.16) 0%, rgba(124,58,237,0.08) 100%)' : 'var(--row-hover)',
-        border: selected ? '1px solid rgba(167,139,250,0.32)' : '1px solid var(--surface-border)',
-        boxShadow: selected ? '0 12px 28px rgba(124,58,237,0.12)' : 'none',
+        border: selected ? '1px solid rgba(167,139,250,0.32)' : '1px solid var(--surface-tertiary)',
       }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -273,6 +291,8 @@ export default function ScansPage() {
   const [appliedImageFilter, setAppliedImageFilter] = useState(searchParams.get('image') ?? '');
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? '');
   const [activityRange, setActivityRange] = useState<ScansTimeRange>(normalizeScansTimeRange(searchParams.get('range'), searchParams.get('view')));
+  const [tagFilter, setTagFilter] = useState(searchParams.get('tag') ?? '');
+  const [criticalFilter, setCriticalFilter] = useState<'' | 'yes' | 'no'>(normalizeCriticalFilter(searchParams.get('critical')));
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Which image names are expanded
@@ -587,11 +607,13 @@ export default function ScansPage() {
     ? activityScans.some((scan) => scan.status === 'running' || scan.status === 'pending')
     : images.some((image) => image.latest_status === 'running' || image.latest_status === 'pending'), 5000);
 
-  function syncRoute(next: Partial<{ image: string; status: string; range: ScansTimeRange }>) {
+  function syncRoute(next: Partial<{ image: string; status: string; range: ScansTimeRange; tag: string; critical: '' | 'yes' | 'no' }>) {
     router.replace(buildScansRoute({
       image: next.image ?? appliedImageFilter,
       status: next.status ?? statusFilter,
       range: next.range ?? activityRange,
+      tag: next.tag ?? tagFilter,
+      critical: next.critical ?? criticalFilter,
     }));
   }
 
@@ -605,9 +627,8 @@ export default function ScansPage() {
   function handleActivityRangeChange(nextRange: RecentActivityRange) {
     clearPendingImageCommit();
     setActivityRange(nextRange);
-    setStatusFilter('');
     setPage(1);
-    syncRoute({ range: nextRange, status: '' });
+    syncRoute({ range: nextRange });
   }
 
   function handleActivityRangeClear() {
@@ -623,8 +644,10 @@ export default function ScansPage() {
     setAppliedImageFilter('');
     setStatusFilter('');
     setActivityRange('');
+    setTagFilter('');
+    setCriticalFilter('');
     setPage(1);
-    syncRoute({ image: '', status: '', range: '' });
+    syncRoute({ image: '', status: '', range: '', tag: '', critical: '' });
   }
 
   function handleImageFilterChange(value: string) {
@@ -642,7 +665,21 @@ export default function ScansPage() {
     clearPendingImageCommit();
     setStatusFilter(value);
     setPage(1);
-    syncRoute({ status: value, range: '' });
+    syncRoute({ status: value });
+  }
+
+  function handleTagFilterChange(value: string) {
+    clearPendingImageCommit();
+    setTagFilter(value);
+    setPage(1);
+    syncRoute({ tag: value });
+  }
+
+  function handleCriticalFilterChange(value: '' | 'yes' | 'no') {
+    clearPendingImageCommit();
+    setCriticalFilter(value);
+    setPage(1);
+    syncRoute({ critical: value });
   }
 
   function toggleExpand(imageName: string) {
@@ -783,17 +820,74 @@ export default function ScansPage() {
     window.open(`/reports/print?scans=${scanIds}`, '_blank');
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+  const tagFilterOptions = useMemo(() => {
+    const values = new Set<string>();
+
+    images.forEach((image) => {
+      if (image.latest_tag) values.add(image.latest_tag);
+    });
+
+    activityScans.forEach((scan) => {
+      if (scan.image_tag) values.add(scan.image_tag);
+    });
+
+    return Array.from(values).sort((a, b) => a.localeCompare(b));
+  }, [activityScans, images]);
+
+  const filteredActivityScans = useMemo(() => (
+    activityScans.filter((scan) => {
+      if (!matchesStatusFilter(statusFilter, scan.status, scan.external_status)) {
+        return false;
+      }
+
+      if (tagFilter && scan.image_tag !== tagFilter) {
+        return false;
+      }
+
+      if (criticalFilter === 'yes' && scan.critical_count <= 0) {
+        return false;
+      }
+
+      if (criticalFilter === 'no' && scan.critical_count > 0) {
+        return false;
+      }
+
+      return true;
+    })
+  ), [activityScans, criticalFilter, statusFilter, tagFilter]);
+
+  const filteredImages = useMemo(() => (
+    images.filter((image) => {
+      if (tagFilter && image.latest_tag !== tagFilter) {
+        return false;
+      }
+
+      if (criticalFilter === 'yes' && image.critical_count <= 0) {
+        return false;
+      }
+
+      if (criticalFilter === 'no' && image.critical_count > 0) {
+        return false;
+      }
+
+      return true;
+    })
+  ), [criticalFilter, images, tagFilter]);
+
+  const visibleRows = hasRecentWindow ? filteredActivityScans.length : filteredImages.length;
+  const hasClientSideFilters = Boolean(tagFilter) || Boolean(criticalFilter) || (hasRecentWindow && Boolean(statusFilter));
+  const totalForDisplay = hasClientSideFilters ? visibleRows : total;
+  const totalPages = hasClientSideFilters ? 1 : Math.max(1, Math.ceil(total / LIMIT));
   const activityRangeLabel = RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === resolvedActivityRange)?.label ?? 'Last 24 hours';
-  const hasActiveFilters = Boolean(imageFilter) || Boolean(statusFilter) || hasRecentWindow;
+  const hasActiveFilters = Boolean(imageFilter) || Boolean(statusFilter) || hasRecentWindow || Boolean(tagFilter) || Boolean(criticalFilter);
   const headerDescription = hasRecentWindow
-    ? (total > 0
-        ? `${total} scan event${total !== 1 ? 's' : ''} in ${activityRangeLabel.toLowerCase()}`
+    ? (totalForDisplay > 0
+        ? `${totalForDisplay} scan event${totalForDisplay !== 1 ? 's' : ''} in ${activityRangeLabel.toLowerCase()}`
         : 'Chronological scan activity for the selected time window.')
-    : (total > 0
-        ? `${total} image${total !== 1 ? 's' : ''}`
+    : (totalForDisplay > 0
+        ? `${totalForDisplay} image${totalForDisplay !== 1 ? 's' : ''}`
         : 'Search images, compare runs, and start new scans.');
-  const visibleActivityImageCount = new Set(activityScans.map((scan) => scan.image_name)).size;
+  const visibleActivityImageCount = new Set(filteredActivityScans.map((scan) => scan.image_name)).size;
 
   return (
     <div className="p-6 space-y-5">
@@ -803,138 +897,155 @@ export default function ScansPage() {
         description={headerDescription}
         actions={(
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/scans/compare"
-              className="btn-secondary flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
+            <Button
+              onPress={() => {
+                router.push('/scans/compare');
+              }}
+              variant='tertiary'
+              className="flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
             >
               <GitCompareIcon size={15} />
               Compare
-            </Link>
-            <button
-              onClick={openCreateModal}
-              className="btn-primary flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
+            </Button>
+            <Button
+              onPress={openCreateModal}
+              className="flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
             >
               <PlusSignIcon size={15} />
               New Scan
-            </button>
+            </Button>
           </div>
         )}
       />
 
-      <div className="surface-panel rounded-2xl p-4 space-y-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Time Window</label>
-            <RecentActivityRangePicker
-              value={activityRange || null}
-              onChange={handleActivityRangeChange}
-              allowClear
-              clearLabel="Any time"
-              onClear={handleActivityRangeClear}
+      <Card className="surface-panel rounded-2xl p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-[220px] flex-1 space-y-1.5">
+            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image</Label>
+            <Input
+              className={inputCls}
+              placeholder={hasRecentWindow ? 'Filter recent activity by image name…' : 'Filter by image name…'}
+              value={imageFilter}
+              onChange={e => handleImageFilterChange(e.target.value)}
             />
           </div>
 
-          <p className="max-w-xl text-sm text-zinc-500 xl:text-right">
-            {hasRecentWindow
-              ? 'Recent windows switch the results to raw scan events so repeated scans stay visible.'
-              : 'Use a recent window when you want chronological scan activity instead of one latest row per image.'}
-          </p>
-        </div>
+          <div className="min-w-[180px] space-y-1.5">
+            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Time Window</Label>
+            <Select value={activityRange || '__any__'} onChange={value => {
+              const next = String(value === '__any__' ? '' : value ?? '');
+              if (!next) {
+                handleActivityRangeClear();
+                return;
+              }
+              handleActivityRangeChange(next as RecentActivityRange);
+            }} className="min-w-0">
+              <Select.Trigger className="bg-surface-secondary">
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="__any__">Any time</ListBox.Item>
+                  {RECENT_ACTIVITY_RANGE_OPTIONS.map((option) => (
+                    <ListBox.Item key={option.id} id={option.id}>{option.label}</ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
 
-        {hasRecentWindow ? (
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image</label>
-              <input
-                className={inputCls}
-                placeholder="Filter recent activity by image name…"
-                value={imageFilter}
-                onChange={e => handleImageFilterChange(e.target.value)}
-              />
-            </div>
-            <div className="flex items-end md:justify-end">
-              {hasActiveFilters ? (
-                <button
-                  onClick={handleClearFilters}
-                  className="btn-secondary flex w-full items-center justify-center gap-1.5 md:w-auto"
-                  type="button"
-                >
-                  <FilterIcon size={12} />
-                  Clear Filters
-                </button>
-              ) : (
-                <p className="text-sm text-zinc-500 md:text-right">{total} scan event{total !== 1 ? 's' : ''}</p>
-              )}
-            </div>
+          <div className="min-w-[220px] space-y-1.5">
+            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Latest State</Label>
+            <Select value={statusFilter || '__all__'} onChange={value => handleStatusFilterChange(String(value === '__all__' ? '' : value ?? ''))} className="min-w-0">
+              <Select.Trigger className="bg-surface-secondary">
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="__all__">All latest states</ListBox.Item>
+                  {STATUS_FILTER_OPTIONS.filter((option) => option.id !== '').map((option) => (
+                    <ListBox.Item key={option.id} id={option.id}>{option.label}</ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
           </div>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_280px_auto] xl:items-end">
-            <div className="space-y-1.5 md:col-span-2 xl:col-span-1">
-              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image</label>
-              <input
-                className={inputCls}
-                placeholder="Filter by image name…"
-                value={imageFilter}
-                onChange={e => handleImageFilterChange(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Latest State</label>
-              <Select value={statusFilter || '__all__'} onChange={value => handleStatusFilterChange(String(value === '__all__' ? '' : value ?? ''))} className="min-w-0">
-                <Select.Trigger className={selectTriggerCls}>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="__all__">All latest states</ListBox.Item>
-                    {STATUS_FILTER_OPTIONS.filter((option) => option.id !== '').map((option) => (
-                      <ListBox.Item key={option.id} id={option.id}>{option.label}</ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-            </div>
-            <div className="flex items-end md:col-span-2 xl:col-span-1 xl:justify-end">
-              {hasActiveFilters ? (
-                <button
-                  onClick={handleClearFilters}
-                  className="btn-secondary flex w-full items-center justify-center gap-1.5 md:w-auto"
-                  type="button"
-                >
-                  <FilterIcon size={12} />
-                  Clear Filters
-                </button>
-              ) : (
-                <p className="text-sm text-zinc-500 md:text-right">{total} image{total !== 1 ? 's' : ''}</p>
-              )}
-            </div>
+
+          <div className="min-w-[180px] space-y-1.5">
+            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Tag</Label>
+            <Select value={tagFilter || '__all__'} onChange={value => handleTagFilterChange(String(value === '__all__' ? '' : value ?? ''))} className="min-w-0">
+              <Select.Trigger className="bg-surface-secondary">
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="__all__">All tags</ListBox.Item>
+                  {tagFilterOptions.map((tagValue) => (
+                    <ListBox.Item key={tagValue} id={tagValue}>{tagValue}</ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
           </div>
-        )}
-      </div>
+
+          <div className="min-w-[180px] space-y-1.5">
+            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Has Critical</Label>
+            <Select value={criticalFilter || '__all__'} onChange={value => handleCriticalFilterChange((value === '__all__' ? '' : value ?? '') as '' | 'yes' | 'no')} className="min-w-0">
+              <Select.Trigger className="bg-surface-secondary">
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {CRITICAL_FILTER_OPTIONS.map((option) => (
+                    <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>{option.label}</ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+
+          <div className="ml-auto flex min-w-[140px] items-end justify-end">
+            {hasActiveFilters ? (
+              <Button
+                onClick={handleClearFilters}
+                className="flex w-full items-center justify-center gap-1.5 md:w-auto"
+                variant="secondary"
+              >
+                <FilterIcon size={12} />
+                Clear Filters
+              </Button>
+            ) : (
+              <p className="text-sm text-zinc-500 md:text-right">{totalForDisplay} {hasRecentWindow ? `scan event${totalForDisplay !== 1 ? 's' : ''}` : `image${totalForDisplay !== 1 ? 's' : ''}`}</p>
+            )}
+          </div>
+        </div>
+      </Card>
 
       {error ? <FormAlert description={error} title="Scan list failed to load" /> : null}
 
       {/* Bulk action toolbar */}
       {!hasRecentWindow && selectedScans.size > 0 && (
-        <div className="surface-panel rounded-2xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+        <Card className="bg-surface-secondary rounded-2xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             {selectedScans.size} scan{selectedScans.size !== 1 ? 's' : ''} selected
           </span>
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <Button
               onClick={handleGenerateReport}
-              className="btn-secondary flex flex-1 min-w-[110px] items-center justify-center gap-1.5 sm:flex-none"
-              type="button"
-              title="Generate report for selected scans"
+              className="flex flex-1 min-w-[110px] items-center justify-center gap-1.5 sm:flex-none"
+              variant='secondary'
             >
-              Report
-            </button>
+              Generate Report
+            </Button>
             <Popover>
-              <Popover.Trigger
-                className="btn-secondary"
-              >
-                Add Tag
+              <Popover.Trigger>
+                <Button variant='secondary'>
+                  Add Tag
+                </Button>
               </Popover.Trigger>
               <Popover.Content className="rounded-xl min-w-[160px]" placement="bottom end">
                 <Popover.Dialog className="p-1">
@@ -947,7 +1058,7 @@ export default function ScansPage() {
                       }}
                     >
                       {availableTags.map(tag => (
-                        <ListBox.Item key={tag.id} id={tag.id} className="px-3 py-1.5 text-sm rounded-lg cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                        <ListBox.Item key={tag.id} id={tag.id} className="px-3 py-1.5 text-sm rounded-lg cursor-pointer flex items-center gap-2">
                           <span
                             className="size-2.5 rounded-full shrink-0"
                             style={{ background: tag.color }}
@@ -960,27 +1071,27 @@ export default function ScansPage() {
                 </Popover.Dialog>
               </Popover.Content>
             </Popover>
-            <button
+            <Button
               onClick={() => setSelectedScans(new Set())}
-              className="btn-secondary flex-1 min-w-[90px] sm:flex-none"
-              type="button"
+              className="flex-1 min-w-[90px] sm:flex-none"
+              variant='secondary'
             >
               Clear
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleBulkDelete}
-              className="btn-danger flex-1 min-w-[90px] sm:flex-none"
-              type="button"
+              className="flex-1 min-w-[90px] sm:flex-none"
+              variant='danger-soft'
             >
               Delete
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
       {hasRecentWindow ? (
-        <div className="surface-panel rounded-2xl overflow-hidden">
-          <div className="flex flex-col gap-2 border-b p-4 sm:flex-row sm:items-end sm:justify-between" style={{ borderColor: 'var(--surface-border)' }}>
+        <Card className="surface-panel rounded-2xl overflow-hidden">
+          <div className="flex flex-col gap-2 border-b p-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Recent Activity</h2>
               <p className="mt-1 text-xs text-zinc-500">
@@ -988,7 +1099,7 @@ export default function ScansPage() {
               </p>
             </div>
             <p className="text-xs text-zinc-500">
-              {total} scan event{total !== 1 ? 's' : ''}{activityScans.length > 0 ? ` · ${visibleActivityImageCount} image${visibleActivityImageCount !== 1 ? 's' : ''} on this page` : ''}
+              {totalForDisplay} scan event{totalForDisplay !== 1 ? 's' : ''}{filteredActivityScans.length > 0 ? ` · ${visibleActivityImageCount} image${visibleActivityImageCount !== 1 ? 's' : ''} on this page` : ''}
             </p>
           </div>
 
@@ -996,21 +1107,21 @@ export default function ScansPage() {
             <div className="space-y-1.5 p-4">
               {Array.from({ length: 6 }).map((_, index) => <RecentScanRowSkeleton key={index} />)}
             </div>
-          ) : activityScans.length === 0 ? (
+          ) : filteredActivityScans.length === 0 ? (
             <div className="p-4">
               <EmptyState
                 icon={<Shield01Icon size={28} />}
-                title={imageFilter ? 'No recent scans match your filters' : 'No recent scans in this window'}
-                description={imageFilter ? 'Try a different image filter or show all scans.' : 'Choose a wider time window or show all scans.'}
+                title={hasActiveFilters ? 'No recent scans match your filters' : 'No recent scans in this window'}
+                description={hasActiveFilters ? 'Try a different filter combination or clear filters.' : 'Choose a wider time window or show all scans.'}
                 action={{ label: 'Show all scans', onClick: handleClearFilters }}
               />
             </div>
           ) : (
             <div className="space-y-1.5 p-3">
-              {activityScans.map((scan) => <RecentActivityRow key={scan.id} scan={scan} />)}
+              {filteredActivityScans.map((scan) => <RecentActivityRow key={scan.id} scan={scan} />)}
             </div>
           )}
-        </div>
+        </Card>
       ) : (
         <>
       {/* Mobile list */}
@@ -1031,15 +1142,15 @@ export default function ScansPage() {
               </div>
             </div>
           ))
-        ) : images.length === 0 ? (
+        ) : filteredImages.length === 0 ? (
           <EmptyState
             icon={<Shield01Icon size={28} />}
-            title={imageFilter ? 'No images match your filter' : 'No scans yet'}
-            description={imageFilter ? 'Try a different search term or clear the filter.' : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.'}
-            action={imageFilter ? undefined : { label: '+ New Scan', onClick: openCreateModal }}
+            title={hasActiveFilters ? 'No images match your filters' : 'No scans yet'}
+            description={hasActiveFilters ? 'Try a different filter combination or clear filters.' : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.'}
+            action={hasActiveFilters ? { label: 'Clear Filters', onClick: handleClearFilters } : { label: '+ New Scan', onClick: openCreateModal }}
           />
         ) : (
-          images.map((img) => {
+          filteredImages.map((img) => {
             const isOpen = expanded.has(img.image_name);
             return (
               <div key={img.image_name} className="surface-panel rounded-2xl overflow-hidden">
@@ -1139,7 +1250,7 @@ export default function ScansPage() {
       </div>
 
       {/* Tree table */}
-      <div className="hidden md:block surface-panel rounded-2xl overflow-hidden">
+      <Card className="hidden md:block rounded-2xl overflow-hidden">
         <div className="overflow-x-auto overscroll-x-contain">
           <table className="w-full min-w-[980px] text-sm">
             <thead>
@@ -1158,18 +1269,18 @@ export default function ScansPage() {
             <tbody>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => <ImageRowSkeleton key={i} />)
-            ) : images.length === 0 ? (
+            ) : filteredImages.length === 0 ? (
               <tr>
                 <td colSpan={9} className="py-4">
                   <EmptyState
                     icon={<Shield01Icon size={28} />}
-                    title={imageFilter ? 'No images match your filter' : 'No scans yet'}
-                    description={imageFilter ? 'Try a different search term or clear the filter.' : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.'}
-                    action={imageFilter ? undefined : { label: '+ New Scan', onClick: openCreateModal }}
+                    title={hasActiveFilters ? 'No images match your filters' : 'No scans yet'}
+                    description={hasActiveFilters ? 'Try a different filter combination or clear filters.' : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.'}
+                    action={hasActiveFilters ? { label: 'Clear Filters', onClick: handleClearFilters } : { label: '+ New Scan', onClick: openCreateModal }}
                   />
                 </td>
               </tr>
-            ) : images.map((img, i) => {
+            ) : filteredImages.map((img, i) => {
               const isOpen = expanded.has(img.image_name);
               return (
                 <Fragment key={img.image_name}>
@@ -1286,14 +1397,14 @@ export default function ScansPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
         </>
       )}
 
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <span className="text-sm text-zinc-500">{total} {hasRecentWindow ? `scan event${total !== 1 ? 's' : ''}` : `image${total !== 1 ? 's' : ''}`}</span>
+          <span className="text-sm text-zinc-500">{totalForDisplay} {hasRecentWindow ? `scan event${totalForDisplay !== 1 ? 's' : ''}` : `image${totalForDisplay !== 1 ? 's' : ''}`}</span>
           <div className="flex items-center gap-2">
             <button
               disabled={page <= 1}
@@ -1314,9 +1425,9 @@ export default function ScansPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="surface-modal w-[min(94vw,72rem)] max-w-none rounded-2xl overflow-hidden">
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">New Scan</Modal.Heading>
+            <Modal.Dialog className="w-[min(94vw,72rem)] max-w-none rounded-2xl overflow-hidden">
+              <Modal.Header className="px-6 py-4">
+                <Modal.Heading className="font-semibold">New Scan</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
@@ -1337,7 +1448,6 @@ export default function ScansPage() {
                   {scanStepIndex === 0 ? (
                     <div className="space-y-5">
                       <div className="space-y-2">
-                        <p className="text-[11px] uppercase tracking-[0.22em] text-violet-500">Step 1</p>
                         <h2 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">Where is this image hosted?</h2>
                         <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-300">
                           Start with the source, then JustScan will only ask for the routing details that matter for that path.
@@ -1376,12 +1486,11 @@ export default function ScansPage() {
                   {scanStepIndex === 1 ? (
                     <div className="space-y-5">
                       <div className="space-y-2">
-                        <p className="text-[11px] uppercase tracking-[0.22em] text-violet-500">Step 2</p>
                         <h2 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">{routingStepTitle}</h2>
                         <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-300">{routingStepDescription}</p>
                       </div>
 
-                      <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                      <div className="rounded-[24px] p-4" style={{ background: 'var(--surface-secondary)'}}>
                         <p className="text-[11px] uppercase tracking-[0.18em] text-violet-500">Selected source</p>
                         <p className="mt-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
                           {scanSource === 'artifactory_xray' ? 'Artifactory Xray' : scanSource === 'private_registry' ? 'Private registry' : 'Public / Docker Hub'}
@@ -1389,7 +1498,7 @@ export default function ScansPage() {
                       </div>
 
                       {scanSource === 'public' ? (
-                        <div className="rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                        <div className="rounded-[24px] p-5" style={{ background: 'var(--surface-secondary)'}}>
                           <p className="text-[11px] uppercase tracking-[0.18em] text-violet-500">Public image</p>
                           <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">No registry or repo selection needed</p>
                           <p className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
@@ -1399,7 +1508,7 @@ export default function ScansPage() {
                       ) : null}
 
                       {scanSource === 'private_registry' ? (
-                        <div className="space-y-1.5 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                        <div className="space-y-1.5 rounded-[24px] p-5" style={{ background: 'var(--surface-secondary)'}}>
                           <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Private registry</label>
                           <Select value={registryId || '__none__'} onChange={value => setRegistryId(String(value === '__none__' ? '' : value ?? ''))}>
                             <Select.Trigger className={selectTriggerCls}>
@@ -1422,10 +1531,10 @@ export default function ScansPage() {
 
                       {scanSource === 'artifactory_xray' ? (
                         <div className="space-y-4">
-                          <div className="space-y-1.5 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
-                            <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Artifactory registry</label>
+                          <Card className="space-y-1.5 rounded-[24px] p-5 bg-surface-secondary">
+                            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Artifactory registry</Label>
                             <Select value={registryId || '__none__'} onChange={value => setRegistryId(String(value === '__none__' ? '' : value ?? ''))}>
-                              <Select.Trigger className={selectTriggerCls}>
+                              <Select.Trigger className="bg-surface-tertiary">
                                 <Select.Value />
                                 <Select.Indicator />
                               </Select.Trigger>
@@ -1440,12 +1549,12 @@ export default function ScansPage() {
                               </Select.Popover>
                             </Select>
                             <p className="text-xs text-zinc-500">Choose the Xray-backed registry that should resolve and analyze this image.</p>
-                          </div>
+                          </Card>
 
-                          <div className="space-y-1.5 rounded-[24px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
-                            <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                          <Card className="space-y-1.5 rounded-[24px] p-5 bg-surface-secondary">
+                            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                               Artifactory Repo <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional override)</span>
-                            </label>
+                            </Label>
                             <Autocomplete
                               value={xrayRepositoryAutocompleteValue}
                               onChange={(key: Key | null) => {
@@ -1458,7 +1567,7 @@ export default function ScansPage() {
                                 setXrayRepository(value === '__none__' ? '' : value);
                               }}
                             >
-                              <Autocomplete.Trigger className={selectTriggerCls}>
+                              <Autocomplete.Trigger className="bg-surface-tertiary">
                                 <Autocomplete.Value />
                                 <Autocomplete.ClearButton />
                                 <Autocomplete.Indicator />
@@ -1509,7 +1618,7 @@ export default function ScansPage() {
                                 value={xrayRepository}
                               />
                             ) : null}
-                          </div>
+                          </Card>
                         </div>
                       ) : null}
                     </div>
@@ -1518,45 +1627,46 @@ export default function ScansPage() {
                   {scanStepIndex === 2 ? (
                     <div className="space-y-5">
                       <div className="space-y-2">
-                        <p className="text-[11px] uppercase tracking-[0.22em] text-violet-500">Step 3</p>
                         <h2 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">{detailsStepTitle}</h2>
                         <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-300">{detailsStepDescription}</p>
                       </div>
 
-                      <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                      <Card className="bg-surface-secondary">
                         <p className="text-[11px] uppercase tracking-[0.18em] text-violet-500">Selected source</p>
-                        <p className="mt-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
                           {scanSource === 'artifactory_xray' ? 'Artifactory Xray' : scanSource === 'private_registry' ? 'Private registry' : 'Public / Docker Hub'}
                         </p>
-                      </div>
+                      </Card>
 
-                      <FormField className="font-mono" label="Image Name" onChange={e => setImageName(e.target.value)} placeholder="nginx or n8nio/n8n" value={imageName} />
-                      <FormField className="font-mono" label="Tag" onChange={e => setImageTag(e.target.value)} placeholder="latest" required value={imageTag} />
+                      <FormField className="bg-surface-secondary" label="Image Name" onChange={e => setImageName(e.target.value)} placeholder="nginx or n8nio/n8n" value={imageName} />
+                      <FormField className="bg-surface-secondary" label="Tag" onChange={e => setImageTag(e.target.value)} placeholder="latest" required value={imageTag} />
 
-                      <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
-                        <button
+                      <Card className="bg-surface-secondary">
+                        <div
                           aria-expanded={advancedOptionsOpen}
                           className="flex w-full items-start justify-between gap-4 text-left"
-                          onClick={() => setAdvancedOptionsOpen((current) => !current)}
-                          type="button"
+                          
                         >
                           <div className="space-y-1">
                             <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Advanced options</p>
                             <p className="text-sm text-zinc-600 dark:text-zinc-300">Optional scan settings for multiple images or platform-specific artifacts.</p>
                           </div>
-                          <span className="mt-0.5 flex size-8 items-center justify-center rounded-full border border-zinc-200/50 text-zinc-500 dark:border-zinc-700/60 dark:text-zinc-300">
+                          <Button
+                            onClick={() => setAdvancedOptionsOpen((current) => !current)}
+                            variant='secondary'
+                            className="mt-0.5 flex size-8 items-center justify-center rounded-full border border-zinc-200/50 dark:border-zinc-700/60">
                             {advancedOptionsOpen ? <ArrowDown01Icon size={16} /> : <ArrowRight01Icon size={16} />}
-                          </span>
-                        </button>
+                          </Button>
+                        </div>
 
                         {advancedOptionsOpen ? (
                           <div className="mt-4 space-y-4">
                             <div className="space-y-1.5">
-                              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                              <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                                 Additional Images <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span>
-                              </label>
-                              <textarea
-                                className={joinClassNames(inputCls, 'min-h-24 font-mono resize-y')}
+                              </Label>
+                              <TextArea
+                                className={joinClassNames(inputCls, 'min-h-24 bg-surface-tertiary resize-y')}
                                 placeholder={'Paste one or more full image references here\nExample: ghcr.io/example/api:1.2.3, registry.example.com/team/worker:latest'}
                                 value={additionalImageDraft}
                                 onChange={e => setAdditionalImageDraft(e.target.value)}
@@ -1565,18 +1675,19 @@ export default function ScansPage() {
                                 <p className="text-xs text-zinc-500">
                                   Paste one or many full image references, separated by commas or new lines. Anything still in this box is included when you continue.
                                 </p>
-                                <button
-                                  className="btn-secondary-sm shrink-0"
+                                <Button
+                                  variant="secondary"
+                                  size='sm'
+                                  className="shrink-0"
                                   onClick={addAdditionalImagesFromDraft}
-                                  type="button"
                                 >
                                   Add {pendingAdditionalImages.length > 1 ? `${pendingAdditionalImages.length} refs` : 'to list'}
-                                </button>
+                                </Button>
                               </div>
                               {additionalImageEntries.length > 0 ? (
                                 <div className="rounded-2xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--surface-border)' }}>
                                   <div className="flex items-center justify-between gap-3">
-                                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">Queued additional images</p>
+                                    <p className="text-xs font-medium text-zinc-500">Queued additional images</p>
                                     <span className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-500" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--surface-border)' }}>
                                       {additionalImageEntries.length}
                                     </span>
@@ -1601,11 +1712,11 @@ export default function ScansPage() {
                             </div>
 
                             <div className="space-y-1.5">
-                              <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                              <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                                 Platform <span className="text-zinc-400 dark:text-zinc-600 font-normal">(optional)</span>
-                              </label>
+                              </Label>
                               <Select value={platform || '__auto__'} onChange={value => setPlatform(String(value === '__auto__' ? '' : value ?? ''))}>
-                                <Select.Trigger className={selectTriggerCls}>
+                                <Select.Trigger className="bg-surface-tertiary">
                                   <Select.Value />
                                   <Select.Indicator />
                                 </Select.Trigger>
@@ -1630,14 +1741,13 @@ export default function ScansPage() {
                             Collapsed by default. Open this only if you want to queue more images or force a platform.
                           </p>
                         )}
-                      </div>
+                      </Card>
                     </div>
                   ) : null}
 
                   {scanStepIndex === 3 ? (
                     <div className="space-y-5">
                       <div className="space-y-2">
-                        <p className="text-[11px] uppercase tracking-[0.22em] text-violet-500">Step 4</p>
                         <h2 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">Review &amp; start</h2>
                         <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-300">
                           Confirm the scan target and routing details before JustScan queues the work.
@@ -1645,59 +1755,58 @@ export default function ScansPage() {
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2">
-                        <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                        <Card className="bg-surface-secondary">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Source</p>
-                          <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">
+                          <p className="text-base font-semibold text-zinc-900 dark:text-white">
                             {scanSource === 'artifactory_xray' ? 'Artifactory Xray' : scanSource === 'private_registry' ? 'Private registry' : 'Public / Docker Hub'}
                           </p>
-                          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+                          <p className="text-sm text-zinc-600 dark:text-zinc-300">
                             {scanSource === 'artifactory_xray'
                               ? 'JustScan will route this scan through your selected Xray-backed Artifactory registry.'
                               : scanSource === 'private_registry'
                                 ? 'JustScan will authenticate against the selected private registry before scanning.'
                                 : 'JustScan will scan the public image directly.'}
                           </p>
-                        </div>
+                        </Card>
 
-                        <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                        <Card className="bg-surface-secondary">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Images</p>
-                          <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">{requestedImages.length} target{requestedImages.length === 1 ? '' : 's'}</p>
-                          <p className="mt-2 break-all font-mono text-sm text-zinc-600 dark:text-zinc-300">{primaryImage || 'No primary image provided'}</p>
+                          <p className="text-base font-semibold text-zinc-900 dark:text-white">{requestedImages.length} target{requestedImages.length === 1 ? '' : 's'}</p>
+                          <p className="break-all text-sm text-zinc-600 dark:text-zinc-300">{primaryImage || 'No primary image provided'}</p>
                           {requestedImages.length > 1 ? (
-                            <p className="mt-2 text-xs text-zinc-500">Includes {requestedImages.length - 1} additional image{requestedImages.length - 1 === 1 ? '' : 's'}.</p>
+                            <p className="text-xs text-zinc-500">Includes {requestedImages.length - 1} additional image{requestedImages.length - 1 === 1 ? '' : 's'}.</p>
                           ) : null}
-                        </div>
+                        </Card>
 
                         {scanSource !== 'public' ? (
-                          <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                          <Card className="bg-surface-secondary">
                             <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Registry routing</p>
-                            <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">{selectedRegistry?.name ?? '—'}</p>
-                            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{selectedRegistry?.url ?? 'No registry selected.'}</p>
-                          </div>
+                            <p className="text-base font-semibold text-zinc-900 dark:text-white">{selectedRegistry?.name ?? '—'}</p>
+                            <p className="text-sm text-zinc-600 dark:text-zinc-300">{selectedRegistry?.url ?? 'No registry selected.'}</p>
+                          </Card>
                         ) : null}
 
                         {selectedRegistryIsXray ? (
-                          <div className="rounded-[24px] p-4" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                          <Card className="bg-surface-secondary">
                             <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Artifactory repo</p>
-                            <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">{xrayRepository.trim() || 'Use image path as-is'}</p>
-                            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Override the repo when the image lives behind a remote or mirror key like docker-remote.</p>
-                          </div>
+                            <p className="text-base font-semibold text-zinc-900 dark:text-white">{xrayRepository.trim() || 'Use image path as-is'}</p>
+                            <p className="text-sm text-zinc-600 dark:text-zinc-300">Override the repo when the image lives behind a remote or mirror key like docker-remote.</p>
+                          </Card>
                         ) : null}
                       </div>
 
-                      <div className="rounded-[24px] p-4" style={{ background: 'linear-gradient(145deg, rgba(124,58,237,0.1) 0%, rgba(124,58,237,0.04) 100%)', border: '1px solid rgba(167,139,250,0.18)' }}>
+                      <Card className="bg-surface-secondary">
                         <div className="grid gap-3 md:grid-cols-2">
                           <div>
-                            <p className="text-[11px] uppercase tracking-[0.18em] text-violet-500">Platform</p>
-                            <p className="mt-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">{platform || 'Auto-detect'}</p>
+                            <p className="text-[11px] uppercase tracking-[0.18em]">Platform</p>
+                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{platform || 'Auto-detect'}</p>
                           </div>
                           <div>
-                            <p className="text-[11px] uppercase tracking-[0.18em] text-violet-500">Additional images</p>
-                            <p className="mt-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">{requestedImages.length > 1 ? `${requestedImages.length - 1} queued` : 'None added'}</p>
+                            <p className="text-[11px] uppercase tracking-[0.18em]">Additional images</p>
+                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{requestedImages.length > 1 ? `${requestedImages.length - 1} queued` : 'None added'}</p>
                           </div>
                         </div>
-                        <p className="mt-4 text-xs text-zinc-600 dark:text-zinc-300">Tags can be added from the scan detail page after creation.</p>
-                      </div>
+                      </Card>
                     </div>
                   ) : null}
                 </form>
@@ -1706,40 +1815,39 @@ export default function ScansPage() {
                 <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-xs text-zinc-500">Step {scanStepIndex + 1} of {SCAN_WIZARD_STEPS.length}</div>
                   <div className="flex items-center justify-end gap-3">
-                    <button
+                    <Button
                       onClick={modal.close}
-                      className="btn-secondary"
-                      type="button"
+                      variant='outline'
                     >
                       Cancel
-                    </button>
+                    </Button>
                     {scanStepIndex > 0 ? (
-                      <button
+                      <Button
                         onClick={handleWizardBack}
-                        className="btn-secondary"
-                        type="button"
+                        variant='secondary'
                       >
                         Back
-                      </button>
+                      </Button>
                     ) : null}
                     {scanStepIndex < SCAN_WIZARD_STEPS.length - 1 ? (
-                      <button
+                      <Button
                         key="wizard-continue"
                         onClick={handleWizardNext}
-                        className="btn-primary"
-                        type="button"
                       >
                         Continue
-                      </button>
+                      </Button>
                     ) : (
-                      <button
+                      <Button
                         key="wizard-submit"
-                        type="submit" form="create-scan-form" disabled={creating || xrayOnlyWithoutRegistries}
-                        className="btn-primary inline-flex items-center gap-2"
+                        type="submit" 
+                        form="create-scan-form" 
+                        isDisabled={creating || xrayOnlyWithoutRegistries}
+                        variant="primary"
+                        className="inline-flex items-center gap-2"
                       >
                         {creating && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                         Start Scan
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>

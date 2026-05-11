@@ -719,7 +719,7 @@ function PrintReport() {
         }
         * { box-sizing: border-box; }
         html, body, #__next { margin: 0; padding: 0; min-height: 100%; background: #fff !important; color: #111827; color-scheme: light; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        body { font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); }
       `}</style>
 
       <div style={{ minHeight: '100vh', width: '100%', background: '#fff', color: '#111827' }}>

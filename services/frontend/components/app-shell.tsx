@@ -663,7 +663,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <Card
-            className="sticky top-0 z-20 -ml-px w-[calc(100%+1px)] rounded-bl-none rounded-br-2xl rounded-t-none border-0 shadow-none"
+            className="sticky top-3 z-20 mx-3 mt-2 rounded-2xl"
           >
             <div className="flex min-h-12 items-center gap-2.5 px-3 py-2">
             <button

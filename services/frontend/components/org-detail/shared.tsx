@@ -1,4 +1,5 @@
 import { OrgPolicy, OrgRiskScore, Scan, TrendPoint } from '@/lib/api';
+import { Card } from '@heroui/react';
 
 export type OrgScanItem = Scan & { compliance: { policy_id: string; policy_name: string; status: string }[] };
 
@@ -86,7 +87,7 @@ export function RiskOverviewCard({ riskScore }: { riskScore: OrgRiskScore | null
     : null;
 
   return (
-    <div className="surface-card relative rounded-2xl p-5">
+    <Card className="surface-card relative rounded-2xl p-5">
       <div
         className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
         style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.2),transparent)' }}
@@ -125,6 +126,6 @@ export function RiskOverviewCard({ riskScore }: { riskScore: OrgRiskScore | null
           </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 }

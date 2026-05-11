@@ -159,12 +159,12 @@ function StatusReportContent() {
   }
 
   if (error) {
-    return <div style={{ padding: '40px', color: '#dc2626', fontFamily: 'sans-serif' }}><strong>Error:</strong> {error}</div>;
+    return <div style={{ padding: '40px', color: '#dc2626', fontFamily: "var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif)" }}><strong>Error:</strong> {error}</div>;
   }
 
   if (!scan) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#6b7280', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: "var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif)", color: '#6b7280', gap: 12 }}>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         <div style={{ width: 20, height: 20, border: '2px solid #e5e7eb', borderTopColor: '#7c3aed', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
         Loading report…
@@ -181,7 +181,7 @@ function StatusReportContent() {
           .print\\:hidden { display: none !important; }
         }
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; background: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; }
+        body { margin: 0; padding: 0; background: #fff; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); color: #111827; }
       `}</style>
 
       <button

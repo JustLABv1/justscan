@@ -1,4 +1,5 @@
 import { OrgRiskScore, TrendPoint } from '@/lib/api';
+import { Card } from '@heroui/react';
 
 import { RiskOverviewCard, TrendChart } from './shared';
 
@@ -12,7 +13,7 @@ export function OrgOverviewTab({ riskScore, trend }: OrgOverviewTabProps) {
     <div className="space-y-6">
       <RiskOverviewCard riskScore={riskScore} />
 
-      <div className="surface-card relative rounded-2xl p-5 space-y-3">
+      <Card className="surface-card relative rounded-2xl p-5 space-y-3">
         <div
           className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
           style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.2),transparent)' }}
@@ -28,7 +29,7 @@ export function OrgOverviewTab({ riskScore, trend }: OrgOverviewTabProps) {
           </div>
         </div>
         <TrendChart points={trend} />
-      </div>
+      </Card>
     </div>
   );
 }

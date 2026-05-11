@@ -1,4 +1,5 @@
 import { timeAgo } from '@/lib/time';
+import { Card } from '@heroui/react';
 import { Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import Link from 'next/link';
 
@@ -22,11 +23,11 @@ export function OrgScansTab({ onOpenAssignModal, onRemoveScan, orgScans }: OrgSc
       </div>
 
       {orgScans.length === 0 ? (
-        <div className="surface-card rounded-2xl p-6 text-center text-sm text-zinc-500">
+        <Card className="surface-card rounded-2xl p-6 text-center text-sm text-zinc-500">
           No scans assigned. Assign a scan to evaluate it against this organization&apos;s policies.
-        </div>
+        </Card>
       ) : (
-        <div className="surface-card rounded-2xl overflow-hidden">
+        <Card className="surface-card rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
@@ -77,7 +78,7 @@ export function OrgScansTab({ onOpenAssignModal, onRemoveScan, orgScans }: OrgSc
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
     </div>
   );

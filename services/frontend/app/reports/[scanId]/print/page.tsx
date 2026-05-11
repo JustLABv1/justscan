@@ -397,7 +397,7 @@ export default function PrintReportPage() {
         }
         * { box-sizing: border-box; }
         html, body, #__next { margin: 0; padding: 0; min-height: 100%; background: #fff !important; color: #111827; color-scheme: light; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; }
+        body { font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); font-size: 13px; }
         h1, h2, h3 { margin: 0; }
       `}</style>
 

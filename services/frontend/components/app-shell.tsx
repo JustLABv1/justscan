@@ -452,7 +452,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
         {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
         <div className="flex h-dvh app-bg overflow-hidden">
           <Card
-            className={`relative hidden rounded-none rounded-r-3xl md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
+            className={`relative hidden rounded-none rounded-br-3xl md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
               desktopCollapsed ? 'w-[68px]' : 'w-72'
             }`}
           >
@@ -808,7 +808,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
           </Card>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="flex min-h-12 items-center gap-2.5 px-3 py-2">
+            <div className="bg-surface flex min-h-12 items-center gap-2.5 px-3 py-2">
               <button
                 onClick={toggleCollapsed}
                 className="hidden h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-all duration-150 hover:text-zinc-900 md:inline-flex dark:hover:text-zinc-200"

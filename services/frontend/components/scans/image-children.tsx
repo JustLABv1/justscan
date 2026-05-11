@@ -5,7 +5,7 @@ import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { listScans, Scan } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Checkbox, Table } from '@heroui/react';
+import { Button, Checkbox, Pagination, Table } from '@heroui/react';
 import { Cancel01Icon, Delete01Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -393,28 +393,19 @@ export function ImageChildren({
                         className="flex items-center gap-2 justify-end"
                         onClick={(event) => event.stopPropagation()}
                       >
-                        <button
-                          onClick={() => openScan(scan.id)}
-                          className="text-zinc-400 hover:text-violet-400 transition-colors"
-                          title="Open scan"
-                          aria-label="Open scan"
-                          type="button"
-                        >
-                          Open
-                        </button>
                         {(scan.status === 'pending' || scan.status === 'running') && (
-                          <button
+                          <Button
                             onClick={(event) => {
                               event.stopPropagation();
                               void onCancel(scan.id, imageName);
                             }}
                             className="text-zinc-400 hover:text-amber-400 transition-colors"
-                            title="Cancel scan"
                             aria-label="Cancel scan"
-                            type="button"
+                            size="sm"
+                            variant="ghost"
                           >
                             <Cancel01Icon size={15} aria-hidden />
-                          </button>
+                          </Button>
                         )}
                         <button
                           onClick={(event) => {
@@ -438,35 +429,34 @@ export function ImageChildren({
         </Table>
       )}
       {totalPages > 1 && (
-        <div
-          className="flex items-center justify-between px-4 py-2"
-          style={{ borderTop: '1px solid var(--row-divider)' }}
-        >
-          <span className="text-xs text-zinc-500">{total} scans</span>
-          <div className="flex items-center gap-1.5">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((previous) => previous - 1)}
-              className="px-2.5 py-1 text-xs rounded-lg text-zinc-500 disabled:opacity-30 transition-all"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
-              type="button"
-            >
-              ← Prev
-            </button>
-            <span className="text-xs text-zinc-500 px-1">
-              {page} / {totalPages}
-            </span>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((previous) => previous + 1)}
-              className="px-2.5 py-1 text-xs rounded-lg text-zinc-500 disabled:opacity-30 transition-all"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
-              type="button"
-            >
-              Next →
-            </button>
-          </div>
-        </div>
+        <>
+          <Pagination className="justify-end px-4 py-2" size="sm">
+            <Pagination.Content>
+              <Pagination.Item>
+                <Pagination.Previous isDisabled={page === 1} onPress={() => setPage((p) => p - 1)}>
+                  <Pagination.PreviousIcon />
+                  <span>Previous</span>
+                </Pagination.Previous>
+              </Pagination.Item>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <Pagination.Item key={p}>
+                  <Pagination.Link isActive={p === page} onPress={() => setPage(p)}>
+                    {p}
+                  </Pagination.Link>
+                </Pagination.Item>
+              ))}
+              <Pagination.Item>
+                <Pagination.Next
+                  isDisabled={page === totalPages}
+                  onPress={() => setPage((p) => p + 1)}
+                >
+                  <span>Next</span>
+                  <Pagination.NextIcon />
+                </Pagination.Next>
+              </Pagination.Item>
+            </Pagination.Content>
+          </Pagination>
+        </>
       )}
     </div>
   );

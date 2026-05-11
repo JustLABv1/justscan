@@ -1,23 +1,82 @@
 'use client';
 import SplitText from '@/components/SplitText';
-import { buildRecentActivityHref, getRecentActivityBounds, RECENT_ACTIVITY_RANGE_OPTIONS, RecentActivityRange, RecentActivityRangePicker, RecentActivityRow } from '@/components/scans/recent-activity';
+import {
+  buildRecentActivityHref,
+  getRecentActivityBounds,
+  RECENT_ACTIVITY_RANGE_OPTIONS,
+  RecentActivityRange,
+  RecentActivityRangePicker,
+  RecentActivityRow,
+} from '@/components/scans/recent-activity';
 import { PageHeader } from '@/components/ui/page-header';
 import { ChartSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { useWorkScope } from '@/hooks/use-work-scope';
-import { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, getDashboardTrends, getDashboardVulnTrends, getScannerHealth, getStats, getTokenType, getUser, listScans, Scan, ScannerHealth } from '@/lib/api';
+import {
+  DashboardStats,
+  DashboardTrendPoint,
+  DashboardVulnTrendPoint,
+  getDashboardTrends,
+  getDashboardVulnTrends,
+  getScannerHealth,
+  getStats,
+  getTokenType,
+  getUser,
+  listScans,
+  Scan,
+  ScannerHealth,
+} from '@/lib/api';
 import { Card } from '@heroui/react';
 import { Activity01Icon, Add01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 // ── severity config ──────────────────────────────────────────────────
 const SEV = [
-  { key: 'critical', label: 'Critical', hex: '#f87171', glow: 'rgba(239,68,68,0.35)',   grad: 'linear-gradient(90deg,#991b1b,#f87171)' },
-  { key: 'high',     label: 'High',     hex: '#fb923c', glow: 'rgba(249,115,22,0.35)',  grad: 'linear-gradient(90deg,#c2410c,#fb923c)' },
-  { key: 'medium',   label: 'Medium',   hex: '#fbbf24', glow: 'rgba(245,158,11,0.3)',   grad: 'linear-gradient(90deg,#b45309,#fbbf24)' },
-  { key: 'low',      label: 'Low',      hex: '#60a5fa', glow: 'rgba(59,130,246,0.3)',   grad: 'linear-gradient(90deg,#1d4ed8,#60a5fa)' },
-  { key: 'unknown',  label: 'Unknown',  hex: '#a1a1aa', glow: 'rgba(113,113,122,0.25)', grad: 'linear-gradient(90deg,#3f3f46,#a1a1aa)' },
+  {
+    key: 'critical',
+    label: 'Critical',
+    hex: '#f87171',
+    glow: 'rgba(239,68,68,0.35)',
+    grad: 'linear-gradient(90deg,#991b1b,#f87171)',
+  },
+  {
+    key: 'high',
+    label: 'High',
+    hex: '#fb923c',
+    glow: 'rgba(249,115,22,0.35)',
+    grad: 'linear-gradient(90deg,#c2410c,#fb923c)',
+  },
+  {
+    key: 'medium',
+    label: 'Medium',
+    hex: '#fbbf24',
+    glow: 'rgba(245,158,11,0.3)',
+    grad: 'linear-gradient(90deg,#b45309,#fbbf24)',
+  },
+  {
+    key: 'low',
+    label: 'Low',
+    hex: '#60a5fa',
+    glow: 'rgba(59,130,246,0.3)',
+    grad: 'linear-gradient(90deg,#1d4ed8,#60a5fa)',
+  },
+  {
+    key: 'unknown',
+    label: 'Unknown',
+    hex: '#a1a1aa',
+    glow: 'rgba(113,113,122,0.25)',
+    grad: 'linear-gradient(90deg,#3f3f46,#a1a1aa)',
+  },
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -40,7 +99,11 @@ function formatDbAge(hours?: number | null): string {
   return `${(hours / 24).toFixed(1)}d`;
 }
 
-function buildScansHref(filters?: { status?: string; image?: string; range?: RecentActivityRange }): string {
+function buildScansHref(filters?: {
+  status?: string;
+  image?: string;
+  range?: RecentActivityRange;
+}): string {
   const params = new URLSearchParams();
   if (filters?.status) params.set('status', filters.status);
   if (filters?.image) params.set('image', filters.image);
@@ -50,13 +113,16 @@ function buildScansHref(filters?: { status?: string; image?: string; range?: Rec
 }
 
 function formatChartDate(date: string, options?: Intl.DateTimeFormatOptions): string {
-  return new Date(`${date}T12:00:00Z`).toLocaleDateString('en', options ?? { month: 'short', day: 'numeric' });
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString(
+    'en',
+    options ?? { month: 'short', day: 'numeric' }
+  );
 }
 
 function buildTrendSeries(
   trends: DashboardTrendPoint[],
   days: number,
-  selectValue: (point: DashboardTrendPoint) => number,
+  selectValue: (point: DashboardTrendPoint) => number
 ): { date: string; value: number }[] {
   const result: { date: string; value: number }[] = [];
   const valuesByDate = new Map(trends.map((point) => [point.date, selectValue(point)]));
@@ -101,7 +167,11 @@ function MiniSparkline({
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}
-          margin={compact ? { top: 1, right: 0, left: 0, bottom: 1 } : { top: 12, right: 8, left: 0, bottom: 0 }}
+          margin={
+            compact
+              ? { top: 1, right: 0, left: 0, bottom: 1 }
+              : { top: 12, right: 8, left: 0, bottom: 0 }
+          }
         >
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -141,7 +211,10 @@ function MiniSparkline({
                       boxShadow: '0 12px 28px rgba(0,0,0,0.28)',
                     }}
                   >
-                    <p className="text-[10px] uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.46)' }}>
+                    <p
+                      className="text-[10px] uppercase tracking-[0.18em]"
+                      style={{ color: 'rgba(255,255,255,0.46)' }}
+                    >
                       {formatChartDate(point.date)}
                     </p>
                     <p className="mt-1 text-xs font-semibold tabular-nums" style={{ color }}>
@@ -178,21 +251,20 @@ function MiniSparkline({
   );
 }
 
-
 // ── Vulnerability Trend Chart ─────────────────────────────────────────
 
 // Stack order: low at bottom, critical at top (most severe is most visible)
 const STACK = [
-  { key: 'unknown'  as const, label: 'Unknown',  color: '#a1a1aa', opacity: 0.72 },
-  { key: 'low'      as const, label: 'Low',      color: '#60a5fa', opacity: 0.82 },
-  { key: 'medium'   as const, label: 'Medium',   color: '#fbbf24', opacity: 0.85 },
-  { key: 'high'     as const, label: 'High',     color: '#fb923c', opacity: 0.88 },
+  { key: 'unknown' as const, label: 'Unknown', color: '#a1a1aa', opacity: 0.72 },
+  { key: 'low' as const, label: 'Low', color: '#60a5fa', opacity: 0.82 },
+  { key: 'medium' as const, label: 'Medium', color: '#fbbf24', opacity: 0.85 },
+  { key: 'high' as const, label: 'High', color: '#fb923c', opacity: 0.88 },
   { key: 'critical' as const, label: 'Critical', color: '#f87171', opacity: 0.92 },
 ];
 
 // Fill every calendar day in the period so gaps are visible as zeros
 function fillDates(data: DashboardVulnTrendPoint[], days: number): DashboardVulnTrendPoint[] {
-  const map = new Map(data.map(d => [d.date, d]));
+  const map = new Map(data.map((d) => [d.date, d]));
   const result: DashboardVulnTrendPoint[] = [];
   const today = new Date();
   for (let i = days - 1; i >= 0; i--) {
@@ -210,12 +282,15 @@ function niceTicks(maxVal: number): number[] {
   const magnitude = Math.pow(10, Math.floor(Math.log10(maxVal)));
   const normalised = maxVal / magnitude;
   const niceMax =
-    normalised <= 1 ? magnitude :
-    normalised <= 2 ? 2 * magnitude :
-    normalised <= 5 ? 5 * magnitude :
-    10 * magnitude;
+    normalised <= 1
+      ? magnitude
+      : normalised <= 2
+        ? 2 * magnitude
+        : normalised <= 5
+          ? 5 * magnitude
+          : 10 * magnitude;
   const step = niceMax / 4;
-  return [0, 1, 2, 3, 4].map(i => Math.round(i * step));
+  return [0, 1, 2, 3, 4].map((i) => Math.round(i * step));
 }
 
 function fmtTick(n: number): string {
@@ -223,7 +298,11 @@ function fmtTick(n: number): string {
   return String(n);
 }
 
-function VulnTrendChart({ data, period, onPeriod }: {
+function VulnTrendChart({
+  data,
+  period,
+  onPeriod,
+}: {
   data: DashboardVulnTrendPoint[];
   period: number;
   onPeriod: (d: number) => void;
@@ -240,35 +319,65 @@ function VulnTrendChart({ data, period, onPeriod }: {
 
   return (
     <Card className="relative rounded-2xl p-5 z-10">
-      <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-        style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.2), transparent)' }} />
+      <div
+        className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
+        style={{
+          background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.2), transparent)',
+        }}
+      />
 
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
-          <div className="size-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: 'rgba(124,58,237,0.2)', boxShadow: '0 0 14px rgba(124,58,237,0.3)' }}>
+          <div
+            className="size-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{
+              background: 'rgba(124,58,237,0.2)',
+              boxShadow: '0 0 14px rgba(124,58,237,0.3)',
+            }}
+          >
             <Activity01Icon size={17} color="#a78bfa" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Avg. Findings per Scan</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Average vulnerabilities per finalized scan, by day</p>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
+              Avg. Findings per Scan
+            </h2>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Average vulnerabilities per finalized scan, by day
+            </p>
             <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-              {latestActivePoint
-                ? <><span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>{latestActivePoint.total}</span> on {formatChartDate(latestActivePoint.date)}</>
-                : `No finalized scans in the last ${period} days`}
+              {latestActivePoint ? (
+                <>
+                  <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                    {latestActivePoint.total}
+                  </span>{' '}
+                  on {formatChartDate(latestActivePoint.date)}
+                </>
+              ) : (
+                `No finalized scans in the last ${period} days`
+              )}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {PERIODS.map(d => (
+          {PERIODS.map((d) => (
             <button
               key={d}
               onClick={() => onPeriod(d)}
               className="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150"
-              style={period === d
-                ? { background: 'rgba(124,58,237,0.25)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)' }
-                : { background: 'var(--row-hover)', color: 'var(--text-muted)', border: '1px solid var(--surface-border)' }}
+              style={
+                period === d
+                  ? {
+                      background: 'rgba(124,58,237,0.25)',
+                      color: '#a78bfa',
+                      border: '1px solid rgba(167,139,250,0.3)',
+                    }
+                  : {
+                      background: 'var(--row-hover)',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--surface-border)',
+                    }
+              }
               aria-pressed={period === d}
               aria-label={`Show last ${d} days`}
             >
@@ -289,106 +398,142 @@ function VulnTrendChart({ data, period, onPeriod }: {
       </div>
 
       <div className="w-full">
-      {!hasData ? (
-        <div className="flex items-center justify-center text-sm text-zinc-500 py-10">
-          No finalized scans in this period
-        </div>
-      ) : (
-        <div className="h-[220px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-              <CartesianGrid vertical={false} stroke="rgba(161,161,170,0.16)" strokeDasharray="4 4" />
-              <XAxis
-                dataKey="date"
-                axisLine={false}
-                tickLine={false}
-                minTickGap={28}
-                tick={{ fontSize: 10, fill: 'rgba(113,113,122,0.78)' }}
-                tickFormatter={(value: string) => formatChartDate(value)}
-              />
-              <YAxis
-                allowDecimals={false}
-                axisLine={false}
-                tickLine={false}
-                ticks={ticks}
-                width={36}
-                tick={{ fontSize: 10, fill: 'rgba(113,113,122,0.78)' }}
-                tickFormatter={(value: number) => fmtTick(value)}
-              />
-              <Tooltip
-                cursor={{ stroke: '#a78bfa', strokeOpacity: 0.22, strokeDasharray: '3 3' }}
-                content={({ active, payload, label }) => {
-                  if (!active || !payload?.length || typeof label !== 'string') return null;
-
-                  const total = payload.reduce((sum, entry) => sum + Number(entry.value ?? 0), 0);
-
-                  return (
-                    <div
-                      className="rounded-xl px-3 py-2.5"
-                      style={{
-                        background: 'rgba(10,10,15,0.94)',
-                        border: '1px solid rgba(167,139,250,0.24)',
-                        boxShadow: '0 14px 30px rgba(0,0,0,0.3)',
-                      }}
-                    >
-                      <p className="text-[10px] uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.46)' }}>
-                        {formatChartDate(label)}
-                      </p>
-                      {total === 0 ? (
-                        <p className="mt-1 text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>No finalized scans</p>
-                      ) : (
-                        <>
-                          <div className="mt-2 space-y-1.5">
-                            {[...series].reverse().map(({ key, label: seriesLabel, color: seriesColor }) => {
-                              const entry = payload.find((item) => item.dataKey === key);
-                              const value = Number(entry?.value ?? 0);
-                              if (value === 0) return null;
-
-                              return (
-                                <div key={key} className="flex items-center justify-between gap-3 text-[11px]">
-                                  <span className="flex items-center gap-1.5" style={{ color: seriesColor }}>
-                                    <span className="size-2 rounded-full" style={{ background: seriesColor }} />
-                                    {seriesLabel}
-                                  </span>
-                                  <span className="tabular-nums" style={{ color: 'rgba(255,255,255,0.88)' }}>{value}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          <div className="mt-2 flex items-center justify-between border-t pt-2 text-[11px]" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-                            <span style={{ color: 'rgba(255,255,255,0.52)' }}>Total avg</span>
-                            <span className="font-semibold tabular-nums" style={{ color: '#fff' }}>{total}</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                }}
-              />
-
-              {series.map(({ key, color, opacity }) => (
-                <Area
-                  key={key}
-                  type="monotone"
-                  dataKey={key}
-                  stackId="avg-findings"
-                  stroke={color}
-                  fill={color}
-                  fillOpacity={opacity}
-                  dot={false}
-                  isAnimationActive={false}
-                  activeDot={{ r: 4, fill: color, stroke: '#fff', strokeWidth: 1.5 }}
+        {!hasData ? (
+          <div className="flex items-center justify-center text-sm text-zinc-500 py-10">
+            No finalized scans in this period
+          </div>
+        ) : (
+          <div className="h-[220px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <CartesianGrid
+                  vertical={false}
+                  stroke="rgba(161,161,170,0.16)"
+                  strokeDasharray="4 4"
                 />
-              ))}
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+                <XAxis
+                  dataKey="date"
+                  axisLine={false}
+                  tickLine={false}
+                  minTickGap={28}
+                  tick={{ fontSize: 10, fill: 'rgba(113,113,122,0.78)' }}
+                  tickFormatter={(value: string) => formatChartDate(value)}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  axisLine={false}
+                  tickLine={false}
+                  ticks={ticks}
+                  width={36}
+                  tick={{ fontSize: 10, fill: 'rgba(113,113,122,0.78)' }}
+                  tickFormatter={(value: number) => fmtTick(value)}
+                />
+                <Tooltip
+                  cursor={{ stroke: '#a78bfa', strokeOpacity: 0.22, strokeDasharray: '3 3' }}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length || typeof label !== 'string') return null;
+
+                    const total = payload.reduce((sum, entry) => sum + Number(entry.value ?? 0), 0);
+
+                    return (
+                      <div
+                        className="rounded-xl px-3 py-2.5"
+                        style={{
+                          background: 'rgba(10,10,15,0.94)',
+                          border: '1px solid rgba(167,139,250,0.24)',
+                          boxShadow: '0 14px 30px rgba(0,0,0,0.3)',
+                        }}
+                      >
+                        <p
+                          className="text-[10px] uppercase tracking-[0.18em]"
+                          style={{ color: 'rgba(255,255,255,0.46)' }}
+                        >
+                          {formatChartDate(label)}
+                        </p>
+                        {total === 0 ? (
+                          <p className="mt-1 text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                            No finalized scans
+                          </p>
+                        ) : (
+                          <>
+                            <div className="mt-2 space-y-1.5">
+                              {[...series]
+                                .reverse()
+                                .map(({ key, label: seriesLabel, color: seriesColor }) => {
+                                  const entry = payload.find((item) => item.dataKey === key);
+                                  const value = Number(entry?.value ?? 0);
+                                  if (value === 0) return null;
+
+                                  return (
+                                    <div
+                                      key={key}
+                                      className="flex items-center justify-between gap-3 text-[11px]"
+                                    >
+                                      <span
+                                        className="flex items-center gap-1.5"
+                                        style={{ color: seriesColor }}
+                                      >
+                                        <span
+                                          className="size-2 rounded-full"
+                                          style={{ background: seriesColor }}
+                                        />
+                                        {seriesLabel}
+                                      </span>
+                                      <span
+                                        className="tabular-nums"
+                                        style={{ color: 'rgba(255,255,255,0.88)' }}
+                                      >
+                                        {value}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                            <div
+                              className="mt-2 flex items-center justify-between border-t pt-2 text-[11px]"
+                              style={{ borderColor: 'rgba(255,255,255,0.08)' }}
+                            >
+                              <span style={{ color: 'rgba(255,255,255,0.52)' }}>Total avg</span>
+                              <span
+                                className="font-semibold tabular-nums"
+                                style={{ color: '#fff' }}
+                              >
+                                {total}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
+
+                {series.map(({ key, color, opacity }) => (
+                  <Area
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    stackId="avg-findings"
+                    stroke={color}
+                    fill={color}
+                    fillOpacity={opacity}
+                    dot={false}
+                    isAnimationActive={false}
+                    activeDot={{ r: 4, fill: color, stroke: '#fff', strokeWidth: 1.5 }}
+                  />
+                ))}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {hasData && (
         <p className="mt-3 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-          Peak daily average in this window: <span className="tabular-nums" style={{ color: 'var(--text-secondary)' }}>{peakAverage}</span>
+          Peak daily average in this window:{' '}
+          <span className="tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+            {peakAverage}
+          </span>
         </p>
       )}
     </Card>
@@ -407,7 +552,9 @@ export default function DashboardPage() {
   const [scannerHealthError, setScannerHealthError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [attentionFilter, setAttentionFilter] = useState<'all' | 'failed' | 'blocked' | 'running'>('all');
+  const [attentionFilter, setAttentionFilter] = useState<'all' | 'failed' | 'blocked' | 'running'>(
+    'all'
+  );
   const [recentActivityRange, setRecentActivityRange] = useState<RecentActivityRange>('24h');
   const [recentActivityScans, setRecentActivityScans] = useState<Scan[]>([]);
   const [recentActivityTotal, setRecentActivityTotal] = useState(0);
@@ -416,9 +563,18 @@ export default function DashboardPage() {
   const currentUser = getUser() as { role?: string } | null;
   const isAdmin = currentUser?.role === 'admin' || getTokenType() === 'admin';
 
-  const scanVolumeTrend = useMemo(() => buildTrendSeries(trends, 30, (point) => point.total), [trends]);
-  const completedTrend = useMemo(() => buildTrendSeries(trends, 14, (point) => point.completed), [trends]);
-  const attentionTrend = useMemo(() => buildTrendSeries(trends, 14, (point) => point.failed), [trends]);
+  const scanVolumeTrend = useMemo(
+    () => buildTrendSeries(trends, 30, (point) => point.total),
+    [trends]
+  );
+  const completedTrend = useMemo(
+    () => buildTrendSeries(trends, 14, (point) => point.completed),
+    [trends]
+  );
+  const attentionTrend = useMemo(
+    () => buildTrendSeries(trends, 14, (point) => point.failed),
+    [trends]
+  );
 
   useEffect(() => {
     const healthPromise = isAdmin
@@ -470,53 +626,72 @@ export default function DashboardPage() {
       .catch(() => setVulnTrends([]));
   }
 
-  if (loading) return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-start justify-between">
-        <div className="space-y-2">
-          <div className="skeleton h-7 w-32 rounded-lg" />
-          <div className="skeleton h-3.5 w-48 rounded" />
+  if (loading)
+    return (
+      <div className="p-6 space-y-4">
+        <div className="flex items-start justify-between">
+          <div className="space-y-2">
+            <div className="skeleton h-7 w-32 rounded-lg" />
+            <div className="skeleton h-3.5 w-48 rounded" />
+          </div>
+          <div className="skeleton h-9 w-28 rounded-xl" />
         </div>
-        <div className="skeleton h-9 w-28 rounded-xl" />
+        <div className="skeleton h-20 w-full rounded-xl" />
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
+          <div
+            className="rounded-2xl p-5"
+            style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
+          >
+            <div className="skeleton h-4 w-32 rounded mb-4" />
+            {Array.from({ length: 5 }).map((_, i) => (
+              <RecentScanRowSkeleton key={i} />
+            ))}
+          </div>
+          <div className="flex flex-col gap-3">
+            <div className="skeleton h-44 w-full rounded-2xl" />
+            <div className="skeleton h-28 w-full rounded-2xl" />
+          </div>
+        </div>
+        <ChartSkeleton />
       </div>
-      <div className="skeleton h-20 w-full rounded-xl" />
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
-        <div className="rounded-2xl p-5" style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
-          <div className="skeleton h-4 w-32 rounded mb-4" />
-          {Array.from({ length: 5 }).map((_, i) => <RecentScanRowSkeleton key={i} />)}
-        </div>
-        <div className="flex flex-col gap-3">
-          <div className="skeleton h-44 w-full rounded-2xl" />
-          <div className="skeleton h-28 w-full rounded-2xl" />
-        </div>
-      </div>
-      <ChartSkeleton />
-    </div>
-  );
+    );
 
-  if (error) return (
-    <div className="p-8">
-      <div className="rounded-xl px-4 py-3 text-sm"
-        style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
-        {error}
+  if (error)
+    return (
+      <div className="p-8">
+        <div
+          className="rounded-xl px-4 py-3 text-sm"
+          style={{
+            background: 'rgba(239,68,68,0.08)',
+            border: '1px solid rgba(239,68,68,0.18)',
+            color: '#f87171',
+          }}
+        >
+          {error}
+        </div>
       </div>
-    </div>
-  );
+    );
 
   if (!stats) return null;
 
   const totalVulns = Object.values(stats.severity_totals).reduce((a, b) => a + b, 0);
   const todayKey = new Date().toISOString().slice(0, 10);
-  const startedTodayCount = [...trends].reverse().find((point) => point.date === todayKey)?.total ?? 0;
+  const startedTodayCount =
+    [...trends].reverse().find((point) => point.date === todayKey)?.total ?? 0;
   const failedStatusCount = stats.status_counts['failed'] ?? 0;
-  const activeQueueCount = (stats.status_counts['running'] ?? 0) + (stats.status_counts['pending'] ?? 0);
-  const blockedPolicyCount = stats.operations?.blocked_policy_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
+  const activeQueueCount =
+    (stats.status_counts['running'] ?? 0) + (stats.status_counts['pending'] ?? 0);
+  const blockedPolicyCount =
+    stats.operations?.blocked_policy_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
   const genericFailedCount = Math.max(0, failedStatusCount - blockedPolicyCount);
   const activeXrayCount = stats.operations?.active_xray_count ?? 0;
   const completedCount = stats.status_counts['completed'] ?? 0;
   const needsAttentionTotal = genericFailedCount + blockedPolicyCount;
-  const successRate = stats.total_scans > 0 ? Math.round((completedCount / stats.total_scans) * 100) : 0;
-  const recentWindowAverage = scanVolumeTrend.reduce((sum, point) => sum + point.value, 0) / Math.max(scanVolumeTrend.length, 1);
+  const successRate =
+    stats.total_scans > 0 ? Math.round((completedCount / stats.total_scans) * 100) : 0;
+  const recentWindowAverage =
+    scanVolumeTrend.reduce((sum, point) => sum + point.value, 0) /
+    Math.max(scanVolumeTrend.length, 1);
   const recentCompletedTotal = completedTrend.reduce((sum, point) => sum + point.value, 0);
   const attentionPeak = Math.max(...attentionTrend.map((point) => point.value), 0);
   const attentionScans = stats.attention_scans ?? stats.recent_scans ?? [];
@@ -530,27 +705,32 @@ export default function DashboardPage() {
     if (attentionFilter === 'running') return isRunning;
     return isFailed || isBlocked;
   });
-  const totalAttentionForFilter = attentionFilter === 'failed'
-    ? genericFailedCount
-    : attentionFilter === 'blocked'
-      ? blockedPolicyCount
-      : attentionFilter === 'running'
-        ? activeQueueCount
-        : needsAttentionTotal;
+  const totalAttentionForFilter =
+    attentionFilter === 'failed'
+      ? genericFailedCount
+      : attentionFilter === 'blocked'
+        ? blockedPolicyCount
+        : attentionFilter === 'running'
+          ? activeQueueCount
+          : needsAttentionTotal;
   const displayedAttentionScans = allAttentionScans.slice(0, 5);
   const moreAttentionCount = Math.max(0, totalAttentionForFilter - displayedAttentionScans.length);
-  const triageHref = attentionFilter === 'running' ? buildScansHref({ status: 'running' }) : buildScansHref({ status: 'failed' });
-  const recentActivityRangeLabel = RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === recentActivityRange)?.label ?? 'Last 24 hours';
+  const triageHref =
+    attentionFilter === 'running'
+      ? buildScansHref({ status: 'running' })
+      : buildScansHref({ status: 'failed' });
+  const recentActivityRangeLabel =
+    RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === recentActivityRange)?.label ??
+    'Last 24 hours';
   const recentActivityHref = buildRecentActivityHref(recentActivityRange);
 
   console.log(getUser());
   return (
     <div className="p-6 space-y-4">
-
       <PageHeader
         eyebrow="Operations overview"
         title={`Welcome back, `}
-        titleCom={(
+        titleCom={
           <SplitText
             text={getUser()?.username ? getUser()?.username : 'User'}
             delay={50}
@@ -564,9 +744,14 @@ export default function DashboardPage() {
             textAlign="center"
             onLetterAnimationComplete={false}
           />
-        )}
-        description={new Date().toLocaleDateString('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        actions={(
+        }
+        description={new Date().toLocaleDateString('en', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })}
+        actions={
           <Link
             href="/scans"
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
@@ -575,8 +760,10 @@ export default function DashboardPage() {
             <Add01Icon size={14} />
             New Scan
           </Link>
-        )}
+        }
       />
+
+      <p className="text-xl font-bold">Dashboard</p>
 
       {/* ── Stat strip ── */}
       <div className="grid gap-3 lg:grid-cols-4">
@@ -585,7 +772,12 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <Card.Title>Total Scans</Card.Title>
-                <Card.Description>{recentWindowAverage >= 10 ? recentWindowAverage.toFixed(0) : recentWindowAverage.toFixed(1)} avg/day</Card.Description>
+                <Card.Description>
+                  {recentWindowAverage >= 10
+                    ? recentWindowAverage.toFixed(0)
+                    : recentWindowAverage.toFixed(1)}{' '}
+                  avg/day
+                </Card.Description>
               </div>
               <p className="text-xl font-bold">{stats.total_scans.toLocaleString()}</p>
             </div>
@@ -611,9 +803,15 @@ export default function DashboardPage() {
                 <Card.Title>Needs Attention</Card.Title>
                 <Card.Description>
                   <span className="flex items-center gap-2">
-                    {genericFailedCount > 0 && <span style={{ color: '#f87171' }}>{genericFailedCount} failed</span>}
-                    {blockedPolicyCount > 0 && <span style={{ color: '#fb923c' }}>{blockedPolicyCount} blocked</span>}
-                    {needsAttentionTotal === 0 && <span style={{ color: 'var(--text-faint)' }}>all clear</span>}
+                    {genericFailedCount > 0 && (
+                      <span style={{ color: '#f87171' }}>{genericFailedCount} failed</span>
+                    )}
+                    {blockedPolicyCount > 0 && (
+                      <span style={{ color: '#fb923c' }}>{blockedPolicyCount} blocked</span>
+                    )}
+                    {needsAttentionTotal === 0 && (
+                      <span style={{ color: 'var(--text-faint)' }}>all clear</span>
+                    )}
                   </span>
                 </Card.Description>
               </div>
@@ -635,14 +833,77 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* ── Zone 2: Action + Context ── */}
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
+      <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest">Stats</p>
 
+      {/* ── Zone 2: Action + Context ── */}
+      <div className="grid gap-3 lg:grid-cols-2">
         <div className="flex flex-col gap-3">
+          {/* Exposure Snapshot */}
+          <Card className="p-5">
+            <div className="flex items-start justify-between gap-2 mb-4">
+              <div>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Exposure Snapshot
+                </h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
+                  Across all finalized scan results
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <p
+                  className="text-xl font-bold tabular-nums"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  {totalVulns.toLocaleString()}
+                </p>
+                <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>
+                  total
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2.5">
+              {SEV.map(({ key, label, hex }) => {
+                const count = stats.severity_totals[key] ?? 0;
+                const pct = totalVulns > 0 ? (count / totalVulns) * 100 : 0;
+                return (
+                  <div key={key} className="flex items-center gap-3">
+                    <span className="text-[11px] font-medium w-12 shrink-0" style={{ color: hex }}>
+                      {label}
+                    </span>
+                    <div
+                      className="flex-1 h-[5px] rounded-full overflow-hidden"
+                      style={{ background: 'var(--row-divider)' }}
+                    >
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${pct}%`, background: hex, transition: 'width 0.6s ease' }}
+                      />
+                    </div>
+                    <span
+                      className="text-[11px] font-mono w-10 text-right shrink-0 tabular-nums"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      {count.toLocaleString()}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Avg findings per scan */}
+          <VulnTrendChart
+            data={vulnTrends}
+            period={vulnTrendPeriod}
+            onPeriod={handleVulnPeriodChange}
+          />
+
           <Card className="p-5">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Needs Attention</h2>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Needs Attention
+                </h2>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
                   {needsAttentionTotal > 0
                     ? `${needsAttentionTotal} scan${needsAttentionTotal !== 1 ? 's' : ''} require intervention`
@@ -653,20 +914,50 @@ export default function DashboardPage() {
                 href={triageHref}
                 className="text-xs shrink-0 transition-colors"
                 style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
               >
                 Triage all →
               </Link>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mb-4">
-              {([
-                { key: 'all' as const,     label: 'All',           count: needsAttentionTotal, activeBg: 'rgba(124,58,237,0.12)', activeBorder: 'rgba(124,58,237,0.3)',  activeColor: '#a78bfa' },
-                { key: 'failed' as const,  label: 'Failed',        count: genericFailedCount,  activeBg: 'rgba(239,68,68,0.1)',   activeBorder: 'rgba(239,68,68,0.3)',   activeColor: '#f87171' },
-                { key: 'blocked' as const, label: 'Policy blocked', count: blockedPolicyCount,  activeBg: 'rgba(249,115,22,0.1)',  activeBorder: 'rgba(249,115,22,0.3)',  activeColor: '#fb923c' },
-                { key: 'running' as const, label: 'Running',       count: activeQueueCount,    activeBg: 'rgba(59,130,246,0.1)',  activeBorder: 'rgba(59,130,246,0.3)',  activeColor: '#60a5fa' },
-              ] as const).map(({ key, label, count, activeBg, activeBorder, activeColor }) => {
+              {(
+                [
+                  {
+                    key: 'all' as const,
+                    label: 'All',
+                    count: needsAttentionTotal,
+                    activeBg: 'rgba(124,58,237,0.12)',
+                    activeBorder: 'rgba(124,58,237,0.3)',
+                    activeColor: '#a78bfa',
+                  },
+                  {
+                    key: 'failed' as const,
+                    label: 'Failed',
+                    count: genericFailedCount,
+                    activeBg: 'rgba(239,68,68,0.1)',
+                    activeBorder: 'rgba(239,68,68,0.3)',
+                    activeColor: '#f87171',
+                  },
+                  {
+                    key: 'blocked' as const,
+                    label: 'Policy blocked',
+                    count: blockedPolicyCount,
+                    activeBg: 'rgba(249,115,22,0.1)',
+                    activeBorder: 'rgba(249,115,22,0.3)',
+                    activeColor: '#fb923c',
+                  },
+                  {
+                    key: 'running' as const,
+                    label: 'Running',
+                    count: activeQueueCount,
+                    activeBg: 'rgba(59,130,246,0.1)',
+                    activeBorder: 'rgba(59,130,246,0.3)',
+                    activeColor: '#60a5fa',
+                  },
+                ] as const
+              ).map(({ key, label, count, activeBg, activeBorder, activeColor }) => {
                 const isActive = attentionFilter === key;
                 return (
                   <button
@@ -674,9 +965,18 @@ export default function DashboardPage() {
                     type="button"
                     onClick={() => setAttentionFilter(key)}
                     className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition-all"
-                    style={isActive
-                      ? { background: activeBg, border: `1px solid ${activeBorder}`, color: activeColor }
-                      : { background: 'transparent', border: '1px solid var(--surface-border)', color: 'var(--text-faint)' }
+                    style={
+                      isActive
+                        ? {
+                            background: activeBg,
+                            border: `1px solid ${activeBorder}`,
+                            color: activeColor,
+                          }
+                        : {
+                            background: 'transparent',
+                            border: '1px solid var(--surface-border)',
+                            color: 'var(--text-faint)',
+                          }
                     }
                   >
                     {label}
@@ -688,7 +988,9 @@ export default function DashboardPage() {
 
             {displayedAttentionScans.length === 0 ? (
               <p className="py-10 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
-                {attentionFilter === 'all' ? 'No failed or blocked scans.' : `No ${attentionFilter === 'blocked' ? 'policy-blocked' : attentionFilter} scans.`}
+                {attentionFilter === 'all'
+                  ? 'No failed or blocked scans.'
+                  : `No ${attentionFilter === 'blocked' ? 'policy-blocked' : attentionFilter} scans.`}
               </p>
             ) : (
               <>
@@ -696,7 +998,9 @@ export default function DashboardPage() {
                   Showing latest {displayedAttentionScans.length} of {totalAttentionForFilter}
                 </div>
                 <div className="max-h-[308px] space-y-0.5 overflow-y-auto pr-1 -mx-1">
-                  {displayedAttentionScans.map((scan) => <RecentActivityRow key={scan.id} scan={scan} />)}
+                  {displayedAttentionScans.map((scan) => (
+                    <RecentActivityRow key={scan.id} scan={scan} />
+                  ))}
                 </div>
               </>
             )}
@@ -707,8 +1011,8 @@ export default function DashboardPage() {
                   href={triageHref}
                   className="text-xs transition-colors"
                   style={{ color: 'var(--text-faint)' }}
-                  onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
-                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-faint)')}
                 >
                   {moreAttentionCount} more →
                 </Link>
@@ -719,7 +1023,9 @@ export default function DashboardPage() {
           <Card className="p-5">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Recent Activity</h2>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Recent Activity
+                </h2>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
                   What got scanned in {recentActivityRangeLabel.toLowerCase()}
                 </p>
@@ -728,15 +1034,18 @@ export default function DashboardPage() {
                 href={recentActivityHref}
                 className="text-xs shrink-0 transition-colors"
                 style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
               >
                 Open feed →
               </Link>
             </div>
 
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <RecentActivityRangePicker value={recentActivityRange} onChange={setRecentActivityRange} />
+              <RecentActivityRangePicker
+                value={recentActivityRange}
+                onChange={setRecentActivityRange}
+              />
               <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
                 {recentActivityTotal} event{recentActivityTotal !== 1 ? 's' : ''}
               </span>
@@ -748,7 +1057,9 @@ export default function DashboardPage() {
               </p>
             ) : recentActivityLoading ? (
               <div className="space-y-1.5">
-                {Array.from({ length: 4 }).map((_, index) => <RecentScanRowSkeleton key={index} />)}
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <RecentScanRowSkeleton key={index} />
+                ))}
               </div>
             ) : recentActivityScans.length === 0 ? (
               <p className="py-8 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
@@ -757,7 +1068,9 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div className="space-y-0.5 -mx-1">
-                  {recentActivityScans.map((scan) => <RecentActivityRow key={scan.id} scan={scan} />)}
+                  {recentActivityScans.map((scan) => (
+                    <RecentActivityRow key={scan.id} scan={scan} />
+                  ))}
                 </div>
                 {recentActivityTotal > recentActivityScans.length ? (
                   <div className="mt-3 text-center">
@@ -765,8 +1078,8 @@ export default function DashboardPage() {
                       href={recentActivityHref}
                       className="text-xs transition-colors"
                       style={{ color: 'var(--text-faint)' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
-                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-faint)')}
                     >
                       {recentActivityTotal - recentActivityScans.length} more →
                     </Link>
@@ -779,42 +1092,21 @@ export default function DashboardPage() {
 
         {/* Right column: Exposure + Scanner */}
         <div className="flex flex-col gap-3">
-
-          {/* Exposure Snapshot */}
-          <Card className="p-5">
-            <div className="flex items-start justify-between gap-2 mb-4">
-              <div>
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Exposure Snapshot</h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>Across all finalized scan results</p>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>{totalVulns.toLocaleString()}</p>
-                <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>total</p>
-              </div>
-            </div>
-            <div className="space-y-2.5">
-              {SEV.map(({ key, label, hex }) => {
-                const count = stats.severity_totals[key] ?? 0;
-                const pct = totalVulns > 0 ? (count / totalVulns) * 100 : 0;
-                return (
-                  <div key={key} className="flex items-center gap-3">
-                    <span className="text-[11px] font-medium w-12 shrink-0" style={{ color: hex }}>{label}</span>
-                    <div className="flex-1 h-[5px] rounded-full overflow-hidden" style={{ background: 'var(--row-divider)' }}>
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: hex, transition: 'width 0.6s ease' }} />
-                    </div>
-                    <span className="text-[11px] font-mono w-10 text-right shrink-0 tabular-nums" style={{ color: 'var(--text-muted)' }}>{count.toLocaleString()}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-
           {/* Scanner */}
           <Card className="p-5">
             <div className="flex items-start justify-between gap-2 mb-3">
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Scanner</h2>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                Scanner
+              </h2>
               {activeXrayCount > 0 && (
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full tabular-nums" style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.24)', color: '#60a5fa' }}>
+                <span
+                  className="text-[11px] font-semibold px-2 py-0.5 rounded-full tabular-nums"
+                  style={{
+                    background: 'rgba(96,165,250,0.12)',
+                    border: '1px solid rgba(96,165,250,0.24)',
+                    color: '#60a5fa',
+                  }}
+                >
                   {activeXrayCount} Xray in flight
                 </span>
               )}
@@ -822,53 +1114,71 @@ export default function DashboardPage() {
             <div className="space-y-2.5">
               <div className="flex items-center justify-between text-[12px]">
                 <span style={{ color: 'var(--text-muted)' }}>In-flight</span>
-                <span style={{ color: activeQueueCount > 0 ? '#60a5fa' : 'var(--text-muted)' }}>{activeQueueCount}</span>
+                <span style={{ color: activeQueueCount > 0 ? '#60a5fa' : 'var(--text-muted)' }}>
+                  {activeQueueCount}
+                </span>
               </div>
               <div className="flex items-center justify-between text-[12px]">
                 <span style={{ color: 'var(--text-muted)' }}>Started today</span>
                 <span style={{ color: 'var(--text-secondary)' }}>{startedTodayCount}</span>
               </div>
               {isAdmin && scannerHealthError && (
-                <p className="text-xs pt-1" style={{ color: '#f87171' }}>{scannerHealthError}</p>
+                <p className="text-xs pt-1" style={{ color: '#f87171' }}>
+                  {scannerHealthError}
+                </p>
               )}
-              {isAdmin && !scannerHealthError && scannerHealth && (
-                scannerHealth.local_scanner_enabled ? (
+              {isAdmin &&
+                !scannerHealthError &&
+                scannerHealth &&
+                (scannerHealth.local_scanner_enabled ? (
                   <>
                     <div className="flex items-center justify-between text-[12px]">
                       <span style={{ color: 'var(--text-muted)' }}>Workers</span>
-                      <span className="flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
-                        <span className="size-1.5 rounded-full shrink-0" style={{ background: '#34d399' }} />
-                        {scannerHealth.healthy_workers} healthy{scannerHealth.stale_workers > 0 ? `, ${scannerHealth.stale_workers} stale` : ''}
+                      <span
+                        className="flex items-center gap-1.5"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        <span
+                          className="size-1.5 rounded-full shrink-0"
+                          style={{ background: '#34d399' }}
+                        />
+                        {scannerHealth.healthy_workers} healthy
+                        {scannerHealth.stale_workers > 0
+                          ? `, ${scannerHealth.stale_workers} stale`
+                          : ''}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-[12px]">
                       <span style={{ color: 'var(--text-muted)' }}>Vuln DB</span>
-                      <span style={{ color: 'var(--text-secondary)' }}>{formatDbAge(scannerHealth.oldest_vuln_db_age_hours)}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {formatDbAge(scannerHealth.oldest_vuln_db_age_hours)}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between text-[12px]">
                       <span style={{ color: 'var(--text-muted)' }}>Java DB</span>
-                      <span style={{ color: 'var(--text-secondary)' }}>{formatDbAge(scannerHealth.oldest_java_db_age_hours)}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {formatDbAge(scannerHealth.oldest_java_db_age_hours)}
+                      </span>
                     </div>
                   </>
                 ) : (
-                  <p className="text-xs pt-1" style={{ color: 'var(--text-faint)' }}>{scannerHealth.message || 'Local scanner disabled.'}</p>
-                )
-              )}
+                  <p className="text-xs pt-1" style={{ color: 'var(--text-faint)' }}>
+                    {scannerHealth.message || 'Local scanner disabled.'}
+                  </p>
+                ))}
             </div>
           </Card>
-        </div>
-      </div>
 
-      {/* ── Zone 3: History ── */}
-      <div>
-        <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>History</p>
-        <div className="grid gap-3 lg:grid-cols-2">
           {/* Scan volume */}
           <Card className="flex min-h-[280px] flex-col p-5">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Scan Volume</h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>Total scans per day - last 30 days</p>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Scan Volume
+                </h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
+                  Total scans per day - last 30 days
+                </p>
                 <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
                   <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
                     {scanVolumeTrend.reduce((sum, point) => sum + point.value, 0).toLocaleString()}
@@ -880,24 +1190,32 @@ export default function DashboardPage() {
                 href="/scans"
                 className="text-xs transition-colors"
                 style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
               >
                 View all →
               </Link>
             </div>
-            {scanVolumeTrend.length >= 2
-              ? <div className="flex-1"><MiniSparkline data={scanVolumeTrend} color="#a78bfa" id="scan-volume" valueLabel="scans" /></div>
-              : <div className="flex items-center justify-center py-8 text-sm" style={{ color: 'var(--text-faint)' }}>No trend data yet</div>
-            }
+            {scanVolumeTrend.length >= 2 ? (
+              <div className="flex-1">
+                <MiniSparkline
+                  data={scanVolumeTrend}
+                  color="#a78bfa"
+                  id="scan-volume"
+                  valueLabel="scans"
+                />
+              </div>
+            ) : (
+              <div
+                className="flex items-center justify-center py-8 text-sm"
+                style={{ color: 'var(--text-faint)' }}
+              >
+                No trend data yet
+              </div>
+            )}
           </Card>
-
-          {/* Avg findings per scan */}
-          <VulnTrendChart data={vulnTrends} period={vulnTrendPeriod} onPeriod={handleVulnPeriodChange} />
         </div>
       </div>
-
     </div>
   );
 }
-

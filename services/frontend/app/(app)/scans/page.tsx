@@ -50,6 +50,7 @@ import {
   Label,
   ListBox,
   Modal,
+  Pagination,
   Popover,
   SearchField,
   Select,
@@ -1562,256 +1563,249 @@ export default function ScansPage() {
           </div>
 
           {/* Tree table */}
-          <Card className="hidden md:block rounded-2xl overflow-hidden">
-            <Table>
-              <Table.ScrollContainer>
-                <Table.Content aria-label="Scans by image" className="min-w-[980px]">
-                  <Table.Header>
-                    <Table.Column className="w-8" />
-                    <Table.Column className="w-8" />
-                    <Table.Column isRowHeader>Image</Table.Column>
-                    <Table.Column>Metadata</Table.Column>
-                    <Table.Column>Latest</Table.Column>
-                    <Table.Column className="text-center" style={{ color: 'rgba(239,68,68,0.7)' }}>
-                      C
-                    </Table.Column>
-                    <Table.Column className="text-center" style={{ color: 'rgba(249,115,22,0.7)' }}>
-                      H
-                    </Table.Column>
-                    <Table.Column className="text-center" style={{ color: 'rgba(234,179,8,0.7)' }}>
-                      M
-                    </Table.Column>
-                    <Table.Column className="text-center" style={{ color: 'rgba(59,130,246,0.7)' }}>
-                      L
-                    </Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {loading ? (
-                      Array.from({ length: 5 }).map((_, i) => (
-                        <Table.Row key={`loading-${i}`} id={`loading-${i}`}>
-                          <Table.Cell colSpan={9}>
-                            <div className="px-4 py-3.5">
-                              <div
-                                className="h-8 rounded-md animate-pulse"
-                                style={{ background: 'var(--row-hover)' }}
-                              />
-                            </div>
-                          </Table.Cell>
-                        </Table.Row>
-                      ))
-                    ) : filteredImages.length === 0 ? (
-                      <Table.Row id="empty">
+          <Table>
+            <Table.ScrollContainer>
+              <Table.Content aria-label="Scans by image" className="min-w-[980px]">
+                <Table.Header>
+                  <Table.Column className="w-8" />
+                  <Table.Column className="w-8" />
+                  <Table.Column isRowHeader>Image</Table.Column>
+                  <Table.Column>Metadata</Table.Column>
+                  <Table.Column>Latest</Table.Column>
+                  <Table.Column className="text-center" style={{ color: 'rgba(239,68,68,0.7)' }}>
+                    C
+                  </Table.Column>
+                  <Table.Column className="text-center" style={{ color: 'rgba(249,115,22,0.7)' }}>
+                    H
+                  </Table.Column>
+                  <Table.Column className="text-center" style={{ color: 'rgba(234,179,8,0.7)' }}>
+                    M
+                  </Table.Column>
+                  <Table.Column className="text-center" style={{ color: 'rgba(59,130,246,0.7)' }}>
+                    L
+                  </Table.Column>
+                </Table.Header>
+                <Table.Body>
+                  {loading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <Table.Row key={`loading-${i}`} id={`loading-${i}`}>
                         <Table.Cell colSpan={9}>
-                          <div className="py-4">
-                            <EmptyState
-                              icon={<Shield01Icon size={28} />}
-                              title={
-                                hasActiveFilters ? 'No images match your filters' : 'No scans yet'
-                              }
-                              description={
-                                hasActiveFilters
-                                  ? 'Try a different filter combination or clear filters.'
-                                  : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.'
-                              }
-                              action={
-                                hasActiveFilters
-                                  ? { label: 'Clear Filters', onClick: handleClearFilters }
-                                  : { label: '+ New Scan', onClick: openCreateModal }
-                              }
-                            />
+                          <div className="px-4 py-3.5">
+                            <div className="h-8 rounded-md animate-pulse" />
                           </div>
                         </Table.Cell>
                       </Table.Row>
-                    ) : (
-                      filteredImages.map((img) => {
-                        const isOpen = expanded.has(img.image_name);
-                        return (
-                          <Fragment key={img.image_name}>
-                            <Table.Row
-                              id={img.image_name}
-                              className="cursor-pointer transition-colors hover:bg-[var(--row-hover)]"
-                            >
-                              <Table.Cell onClick={(e) => e.stopPropagation()}>
-                                <Checkbox
-                                  isSelected={selectedScans.has(img.latest_scan_id)}
-                                  onChange={(checked: boolean) => {
-                                    if (checked) {
-                                      setSelectedScans((prev) =>
-                                        new Set(prev).add(img.latest_scan_id)
-                                      );
-                                    } else {
-                                      setSelectedScans((prev) => {
-                                        const next = new Set(prev);
-                                        next.delete(img.latest_scan_id);
-                                        return next;
-                                      });
-                                    }
-                                  }}
-                                >
-                                  <Checkbox.Control className="border border-zinc-500/50 data-[selected=true]:border-violet-500 data-[selected=true]:bg-violet-600">
-                                    <Checkbox.Indicator />
-                                  </Checkbox.Control>
-                                </Checkbox>
-                              </Table.Cell>
-                              <Table.Cell>
-                                <button
-                                  type="button"
-                                  aria-label={
-                                    isOpen
-                                      ? `Collapse ${img.image_name}`
-                                      : `Expand ${img.image_name}`
+                    ))
+                  ) : filteredImages.length === 0 ? (
+                    <Table.Row id="empty">
+                      <Table.Cell colSpan={9}>
+                        <div className="py-4">
+                          <EmptyState
+                            icon={<Shield01Icon size={28} />}
+                            title={
+                              hasActiveFilters ? 'No images match your filters' : 'No scans yet'
+                            }
+                            description={
+                              hasActiveFilters
+                                ? 'Try a different filter combination or clear filters.'
+                                : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.'
+                            }
+                            action={
+                              hasActiveFilters
+                                ? { label: 'Clear Filters', onClick: handleClearFilters }
+                                : { label: '+ New Scan', onClick: openCreateModal }
+                            }
+                          />
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  ) : (
+                    filteredImages.map((img) => {
+                      const isOpen = expanded.has(img.image_name);
+                      return (
+                        <Fragment key={img.image_name}>
+                          <Table.Row
+                            id={img.image_name}
+                            className="cursor-pointer transition-colors"
+                          >
+                            <Table.Cell onClick={(e) => e.stopPropagation()}>
+                              <Checkbox
+                                isSelected={selectedScans.has(img.latest_scan_id)}
+                                onChange={(checked: boolean) => {
+                                  if (checked) {
+                                    setSelectedScans((prev) =>
+                                      new Set(prev).add(img.latest_scan_id)
+                                    );
+                                  } else {
+                                    setSelectedScans((prev) => {
+                                      const next = new Set(prev);
+                                      next.delete(img.latest_scan_id);
+                                      return next;
+                                    });
                                   }
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    toggleExpand(img.image_name);
-                                  }}
-                                  className="flex size-7 items-center justify-center rounded-md transition-all duration-150"
+                                }}
+                              >
+                                <Checkbox.Control className="border border-zinc-500/50 data-[selected=true]:border-violet-500 data-[selected=true]:bg-violet-600">
+                                  <Checkbox.Indicator />
+                                </Checkbox.Control>
+                              </Checkbox>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <button
+                                type="button"
+                                aria-label={
+                                  isOpen ? `Collapse ${img.image_name}` : `Expand ${img.image_name}`
+                                }
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleExpand(img.image_name);
+                                }}
+                                className="flex size-7 items-center justify-center rounded-md transition-all duration-150"
+                                style={{
+                                  background: isOpen ? 'rgba(124,58,237,0.12)' : undefined,
+                                }}
+                              >
+                                {isOpen ? (
+                                  <ArrowDown01Icon size={13} className="text-violet-400" />
+                                ) : (
+                                  <ArrowRight01Icon size={13} />
+                                )}
+                              </button>
+                            </Table.Cell>
+
+                            <Table.Cell>
+                              <ImageReferenceLabel imageName={img.image_name} />
+                              <div className="flex items-center gap-2 mt-1.5">
+                                <span className="font-mono text-xs text-zinc-400">
+                                  :{img.latest_tag}
+                                </span>
+                                <StatusBadge
+                                  status={img.latest_status}
+                                  externalStatus={img.latest_external_status}
+                                />
+                                <span
+                                  className="text-xs text-zinc-500"
+                                  title={fullDate(img.latest_scan_at)}
+                                >
+                                  {timeAgo(img.latest_scan_at)}
+                                </span>
+                              </div>
+                            </Table.Cell>
+
+                            <Table.Cell>
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider whitespace-nowrap"
                                   style={{
-                                    color: 'var(--text-muted)',
-                                    background: isOpen ? 'rgba(124,58,237,0.12)' : undefined,
+                                    background: 'rgba(124,58,237,0.1)',
+                                    color: '#a78bfa',
+                                    border: '1px solid rgba(167,139,250,0.2)',
                                   }}
                                 >
-                                  {isOpen ? (
-                                    <ArrowDown01Icon size={13} className="text-violet-400" />
-                                  ) : (
-                                    <ArrowRight01Icon size={13} />
-                                  )}
-                                </button>
-                              </Table.Cell>
-
-                              <Table.Cell>
-                                <ImageReferenceLabel imageName={img.image_name} />
-                                <div className="flex items-center gap-2 mt-1.5">
-                                  <span className="font-mono text-xs text-zinc-400">
-                                    :{img.latest_tag}
-                                  </span>
-                                  <StatusBadge
-                                    status={img.latest_status}
-                                    externalStatus={img.latest_external_status}
-                                  />
-                                  <span
-                                    className="text-xs text-zinc-500"
-                                    title={fullDate(img.latest_scan_at)}
-                                  >
-                                    {timeAgo(img.latest_scan_at)}
-                                  </span>
+                                  {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
                                 </div>
-                              </Table.Cell>
+                                <OwnershipBadge
+                                  ownerType={img.owner_type}
+                                  ownerOrgId={img.owner_org_id}
+                                  orgNamesById={orgNamesById}
+                                />
+                              </div>
+                            </Table.Cell>
 
-                              <Table.Cell>
-                                <div className="flex items-center gap-3">
-                                  <div
-                                    className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider whitespace-nowrap"
-                                    style={{
-                                      background: 'rgba(124,58,237,0.1)',
-                                      color: '#a78bfa',
-                                      border: '1px solid rgba(167,139,250,0.2)',
-                                    }}
-                                  >
-                                    {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
-                                  </div>
-                                  <OwnershipBadge
-                                    ownerType={img.owner_type}
-                                    ownerOrgId={img.owner_org_id}
+                            <Table.Cell>
+                              <Link
+                                href={`/scans/${img.latest_scan_id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs text-zinc-500 hover:text-violet-400 transition-colors font-mono truncate max-w-[96px] inline-block"
+                                title="Open latest scan"
+                              >
+                                {img.latest_scan_id.slice(0, 8)}…
+                              </Link>
+                            </Table.Cell>
+
+                            <Table.Cell className="text-center">
+                              <SevCount count={img.critical_count} level="critical" />
+                            </Table.Cell>
+                            <Table.Cell className="text-center">
+                              <SevCount count={img.high_count} level="high" />
+                            </Table.Cell>
+                            <Table.Cell className="text-center">
+                              <SevCount count={img.medium_count} level="medium" />
+                            </Table.Cell>
+                            <Table.Cell className="text-center">
+                              <SevCount count={img.low_count} level="low" />
+                            </Table.Cell>
+                          </Table.Row>
+
+                          {isOpen && (
+                            <Table.Row id={`expanded-${img.image_name}`}>
+                              <Table.Cell colSpan={9} className="p-0">
+                                <div className="px-4 pb-4 pt-2">
+                                  <ImageChildren
+                                    key={`${img.image_name}-${childRefreshKey[img.image_name] ?? 0}`}
+                                    imageName={img.image_name}
+                                    mode="table"
                                     orgNamesById={orgNamesById}
+                                    onDelete={(scanId) => handleDelete(scanId, img.image_name)}
+                                    onCancel={(scanId) => handleCancel(scanId, img.image_name)}
+                                    selectedScans={selectedScans}
+                                    onSelectScan={(scanId, selected) => {
+                                      if (selected) {
+                                        setSelectedScans((prev) => new Set(prev).add(scanId));
+                                      } else {
+                                        setSelectedScans((prev) => {
+                                          const next = new Set(prev);
+                                          next.delete(scanId);
+                                          return next;
+                                        });
+                                      }
+                                    }}
                                   />
                                 </div>
-                              </Table.Cell>
-
-                              <Table.Cell>
-                                <Link
-                                  href={`/scans/${img.latest_scan_id}`}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-xs text-zinc-500 hover:text-violet-400 transition-colors font-mono truncate max-w-[96px] inline-block"
-                                  title="Open latest scan"
-                                >
-                                  {img.latest_scan_id.slice(0, 8)}…
-                                </Link>
-                              </Table.Cell>
-
-                              <Table.Cell className="text-center">
-                                <SevCount count={img.critical_count} level="critical" />
-                              </Table.Cell>
-                              <Table.Cell className="text-center">
-                                <SevCount count={img.high_count} level="high" />
-                              </Table.Cell>
-                              <Table.Cell className="text-center">
-                                <SevCount count={img.medium_count} level="medium" />
-                              </Table.Cell>
-                              <Table.Cell className="text-center">
-                                <SevCount count={img.low_count} level="low" />
                               </Table.Cell>
                             </Table.Row>
-
-                            {isOpen && (
-                              <Table.Row id={`expanded-${img.image_name}`}>
-                                <Table.Cell colSpan={9} className="p-0">
-                                  <div className="px-4 pb-4 pt-2">
-                                    <ImageChildren
-                                      key={`${img.image_name}-${childRefreshKey[img.image_name] ?? 0}`}
-                                      imageName={img.image_name}
-                                      mode="table"
-                                      orgNamesById={orgNamesById}
-                                      onDelete={(scanId) => handleDelete(scanId, img.image_name)}
-                                      onCancel={(scanId) => handleCancel(scanId, img.image_name)}
-                                      selectedScans={selectedScans}
-                                      onSelectScan={(scanId, selected) => {
-                                        if (selected) {
-                                          setSelectedScans((prev) => new Set(prev).add(scanId));
-                                        } else {
-                                          setSelectedScans((prev) => {
-                                            const next = new Set(prev);
-                                            next.delete(scanId);
-                                            return next;
-                                          });
-                                        }
-                                      }}
-                                    />
-                                  </div>
-                                </Table.Cell>
-                              </Table.Row>
-                            )}
-                          </Fragment>
-                        );
-                      })
-                    )}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
-          </Card>
+                          )}
+                        </Fragment>
+                      );
+                    })
+                  )}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
         </>
       )}
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-zinc-500">
-            {totalForDisplay}{' '}
-            {hasRecentWindow
-              ? `scan event${totalForDisplay !== 1 ? 's' : ''}`
-              : `image${totalForDisplay !== 1 ? 's' : ''}`}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="btn-secondary"
-            >
-              ← Prev
-            </button>
-            <span className="text-sm text-zinc-500 px-2">
-              {page} / {totalPages}
-            </span>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="btn-secondary"
-            >
-              Next →
-            </button>
-          </div>
-        </div>
+        <>
+          <Pagination className="justify-center">
+            <Pagination.Content>
+              <Pagination.Item>
+                <Pagination.Previous isDisabled={page === 1} onPress={() => setPage((p) => p - 1)}>
+                  <Pagination.PreviousIcon />
+                  <span>Previous</span>
+                </Pagination.Previous>
+              </Pagination.Item>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <Pagination.Item key={p}>
+                  <Pagination.Link isActive={p === page} onPress={() => setPage(p)}>
+                    {p}
+                  </Pagination.Link>
+                </Pagination.Item>
+              ))}
+              <Pagination.Item>
+                <Pagination.Next
+                  isDisabled={page === totalPages}
+                  onPress={() => setPage((p) => p + 1)}
+                >
+                  <span>Next</span>
+                  <Pagination.NextIcon />
+                </Pagination.Next>
+              </Pagination.Item>
+            </Pagination.Content>
+          </Pagination>
+        </>
       )}
 
       {/* Create scan modal */}

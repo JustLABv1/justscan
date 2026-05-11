@@ -1968,7 +1968,7 @@ export default function ScanDetailPage() {
                           className={`cursor-pointer select-none transition-colors ${
                             align === 'right' ? 'text-right' : 'text-left'
                           }`}
-                          style={{ color: active ? '#a78bfa' : 'rgba(113,113,122,0.8)' }}
+                          style={{ color: active ? '#a78bfa' : undefined }}
                         >
                           <span className="inline-flex items-center gap-1">
                             {label}
@@ -1981,12 +1981,8 @@ export default function ScanDetailPage() {
                         </Table.Column>
                       );
                     })}
-                    <Table.Column className="text-left" style={{ color: 'rgba(113,113,122,0.8)' }}>
-                      First Seen
-                    </Table.Column>
-                    <Table.Column className="text-right" style={{ color: 'rgba(113,113,122,0.8)' }}>
-                      Notes
-                    </Table.Column>
+                    <Table.Column className="text-left">First Seen</Table.Column>
+                    <Table.Column className="text-right">Notes</Table.Column>
                   </Table.Header>
                   <Table.Body>
                     {vulnLoading || vulns.length === 0 ? (

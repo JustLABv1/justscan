@@ -32,6 +32,7 @@ const registryRequestTimeout = 5 * time.Minute
 const xraySummaryPollInterval = 10 * time.Second
 const xrayMissingArtifactWindow = 2 * time.Minute
 const xrayBlockedSummaryWaitWindow = 45 * time.Second
+const xrayFreshScanSettleDelay = 8 * time.Second
 const registryWarmupRetryInterval = 10 * time.Second
 
 // Set to 0 to disable truncation and persist full request/response bodies.
@@ -449,9 +450,11 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Requested Xray indexing for %s.", repoPath))
 
 	if err := client.scanNow(ctx, repoPath); err != nil {
-		// Scan Artifact can still succeed for already-indexed images.
-		// Keep going so Xray-backed scans remain usable across setups.
-		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIndexError(repoPath, err))
+		var httpErr *xrayHTTPError
+		if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusConflict {
+			return fmt.Errorf("failed to trigger a fresh xray index run for %s: %w", repoPath, err)
+		}
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray reported that %s is already being indexed. Continuing with the current in-flight indexing run.", repoPath))
 	}
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "queued", models.ScanStepQueuedInXray); err != nil {
@@ -462,11 +465,18 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Submitted the artifact scan request for component %s.", componentID))
 
 	if err := client.scanArtifact(ctx, componentID); err != nil {
-		if !isRetriableXrayScanArtifactError(err) {
-			return err
+		var httpErr *xrayHTTPError
+		if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusConflict {
+			return fmt.Errorf("failed to trigger a fresh xray scanArtifact run for %s: %w", componentID, err)
 		}
-		log.Warnf("Xray scanArtifact returned a non-fatal error for scan %s (%s); continuing to poll artifact summary: %v", scan.ID, componentID, err)
-		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayScanArtifactError(componentID, err))
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray reported that %s is already queued or scanning. Continuing with the current in-flight scan run.", componentID))
+	}
+
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Waiting %s before polling Xray summary so we import from the active scan run.", xrayFreshScanSettleDelay))
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(xrayFreshScanSettleDelay):
 	}
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "waiting_for_xray", models.ScanStepWaitingForXray); err != nil {

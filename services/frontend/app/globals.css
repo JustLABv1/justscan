@@ -1,18 +1,18 @@
-@import "tailwindcss";
-@import "@heroui/styles";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import 'tailwindcss';
+@import '@heroui/styles';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 
 :root {
-	--accent: #7c3aed;
-	--accent-foreground: #ffffff;
-	--focus: var(--accent);
-	--link: var(--accent);
+  --accent: #7c3aed;
+  --accent-foreground: #ffffff;
+  --focus: var(--accent);
+  --link: var(--accent);
 }
 
 .dark {
-	--accent: #8b5cf6;
-	--accent-foreground: #ffffff;
-	--focus: var(--accent);
-	--link: var(--accent);
+  --accent: #8b5cf6;
+  --accent-foreground: #ffffff;
+  --focus: var(--accent);
+  --link: var(--accent);
 }

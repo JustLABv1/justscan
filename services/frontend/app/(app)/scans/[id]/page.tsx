@@ -66,8 +66,10 @@ import {
 import { formatIgnoreRuleStatusLabel, getBlockedPolicyDetails } from '@/lib/blocked-policy';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
+  Alert,
   Button,
   Calendar,
+  Card,
   DateField,
   DatePicker,
   Dropdown,
@@ -75,6 +77,7 @@ import {
   ListBox,
   Modal,
   Select,
+  Table,
   useOverlayState,
 } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
@@ -1477,7 +1480,7 @@ export default function ScanDetailPage() {
           <StatCard
             label="Status"
             value={<StatusBadge status={scan.status} externalStatus={scan.external_status} />}
-            className="surface-panel col-span-2 rounded-xl md:col-span-1"
+            className="col-span-2 md:col-span-1"
             valueClassName="text-sm font-semibold"
           />
           {sevCards.map(({ label, count, color, border }) => (
@@ -1485,7 +1488,7 @@ export default function ScanDetailPage() {
               key={label}
               label={label}
               value={count ?? 0}
-              className={`rounded-xl border ${border}`}
+              className={`border ${border}`}
               valueClassName={`text-xl font-semibold tabular-nums ${color}`}
             />
           ))}
@@ -1496,60 +1499,39 @@ export default function ScanDetailPage() {
 
       {/* Error banner - shown when scan failed */}
       {scan.status === 'failed' && scan.error_message && (
-        <div
-          className="rounded-xl px-4 py-3 flex items-start gap-3"
-          style={
-            scan.external_status === 'blocked_by_xray_policy'
-              ? { background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.22)' }
-              : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)' }
-          }
-        >
-          <svg
-            className="shrink-0 mt-0.5"
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={scan.external_status === 'blocked_by_xray_policy' ? '#f59e0b' : '#f87171'}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <div className="min-w-0">
-            <p
-              className="text-sm font-medium mb-0.5"
-              style={{
-                color: scan.external_status === 'blocked_by_xray_policy' ? '#d97706' : '#dc2626',
-              }}
-            >
+        <Alert status="danger" className="border border-danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>
               {scan.external_status === 'blocked_by_xray_policy'
                 ? 'Blocked by Xray policy'
                 : 'Scan failed'}
-            </p>
-            {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
-              <div className="space-y-1.5">
-                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                  {blockedPolicyDetails.summary}
-                </p>
-                <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                  See the Policy Violations tab for the matched issues, watches, policies, and raw
-                  JFrog response.
-                </p>
-              </div>
-            ) : (
-              <pre
-                className="text-xs whitespace-pre-wrap break-all font-mono leading-relaxed"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                {scan.error_message}
-              </pre>
-            )}
-          </div>
-        </div>
+            </Alert.Title>
+            <Alert.Description>
+              {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
+                <div className="space-y-1.5">
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    {blockedPolicyDetails.summary}
+                  </p>
+                  <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                    See the Policy Violations tab for the matched issues, watches, policies, and raw
+                    JFrog response.
+                  </p>
+                </div>
+              ) : (
+                <pre
+                  className="text-xs whitespace-pre-wrap break-all font-mono leading-relaxed"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  {scan.error_message}
+                </pre>
+              )}
+            </Alert.Description>
+            <Button className="mt-2 sm:hidden" size="sm" variant="primary">
+              Refresh
+            </Button>
+          </Alert.Content>
+        </Alert>
       )}
 
       {/* Tags + Compliance + Scanner info → moved to Details tab */}
@@ -1704,85 +1686,69 @@ export default function ScanDetailPage() {
               </Select.Popover>
             </Select>
           </div>
-          <div className="surface-panel rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-sm">
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                      Name
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                      Version
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                      License
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                      Package URL
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sbomLoading ? (
-                    <tr>
-                      <td colSpan={5} className="py-12 text-center">
-                        <div className="flex justify-center">
-                          <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
-                        </div>
-                      </td>
-                    </tr>
-                  ) : sbomComponents.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-12 text-center text-sm text-zinc-500">
-                        No SBOM components found for this scan.
-                      </td>
-                    </tr>
-                  ) : (
-                    sbomComponents.map((c, i) => (
-                      <tr
-                        key={c.id}
-                        style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.background = 'var(--row-hover)')
-                        }
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <td className="px-4 py-2.5 font-mono text-xs text-zinc-700 dark:text-zinc-200">
-                          {c.name}
-                        </td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">
-                          {c.version || '-'}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span
-                            className="text-xs px-1.5 py-0.5 rounded font-medium"
-                            style={{
-                              background: 'var(--row-hover)',
-                              border: '1px solid var(--surface-border)',
-                              color: 'var(--text-muted)',
-                            }}
-                          >
-                            {c.type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-zinc-500">{c.license || '-'}</td>
-                        <td
-                          className="px-4 py-2.5 font-mono text-xs text-zinc-400 max-w-xs truncate"
-                          title={c.package_url}
-                        >
-                          {c.package_url || '-'}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <Card className="surface-panel rounded-2xl overflow-hidden">
+            <Table variant="secondary">
+              <Table.ScrollContainer>
+                <Table.Content aria-label="SBOM components" className="min-w-[860px]">
+                  <Table.Header>
+                    <Table.Column isRowHeader>Name</Table.Column>
+                    <Table.Column>Version</Table.Column>
+                    <Table.Column>Type</Table.Column>
+                    <Table.Column>License</Table.Column>
+                    <Table.Column>Package URL</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {sbomLoading || sbomComponents.length === 0 ? (
+                      <Table.Row key="sbom-state" id="sbom-state">
+                        <Table.Cell colSpan={5}>
+                          {sbomLoading ? (
+                            <div className="py-12 text-center">
+                              <div className="flex justify-center">
+                                <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="py-12 text-center text-sm text-zinc-500">
+                              No SBOM components found for this scan.
+                            </div>
+                          )}
+                        </Table.Cell>
+                      </Table.Row>
+                    ) : (
+                      sbomComponents.map((c) => (
+                        <Table.Row key={c.id} id={c.id} className="hover:bg-[var(--row-hover)]">
+                          <Table.Cell className="font-mono text-xs text-zinc-700 dark:text-zinc-200">
+                            {c.name}
+                          </Table.Cell>
+                          <Table.Cell className="font-mono text-xs text-zinc-500">
+                            {c.version || '-'}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span
+                              className="text-xs px-1.5 py-0.5 rounded font-medium"
+                              style={{
+                                background: 'var(--row-hover)',
+                                border: '1px solid var(--surface-border)',
+                                color: 'var(--text-muted)',
+                              }}
+                            >
+                              {c.type}
+                            </span>
+                          </Table.Cell>
+                          <Table.Cell className="text-xs text-zinc-500">
+                            {c.license || '-'}
+                          </Table.Cell>
+                          <Table.Cell className="font-mono text-xs text-zinc-400 max-w-xs truncate">
+                            <span title={c.package_url}>{c.package_url || '-'}</span>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))
+                    )}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </Card>
         </div>
       )}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'vulns' && (
@@ -1929,10 +1895,8 @@ export default function ScanDetailPage() {
                 </Button>
               </div>
             </div>
-            <div
-              className="flex flex-col gap-2 rounded-xl px-3 py-2 md:flex-row md:items-center md:justify-between"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
-            >
+
+            <Card className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div className="min-w-0">
                 <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
                   {vulnerabilityViewSourceLabel}
@@ -1967,14 +1931,14 @@ export default function ScanDetailPage() {
                   Reset default
                 </Button>
               </div>
-            </div>
+            </Card>
           </div>
 
-          <div className="surface-panel rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1120px] text-sm">
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+          <Card className="surface-panel rounded-2xl overflow-hidden">
+            <Table variant="secondary">
+              <Table.ScrollContainer>
+                <Table.Content aria-label="Scan vulnerabilities" className="min-w-[1120px]">
+                  <Table.Header>
                     {(
                       [
                         { label: 'CVE ID', key: 'vuln_id', align: 'left' },
@@ -1991,8 +1955,9 @@ export default function ScanDetailPage() {
                     ).map(({ label, key, align }) => {
                       const active = sortBy === key;
                       return (
-                        <th
+                        <Table.Column
                           key={key}
+                          isRowHeader={key === 'vuln_id'}
                           onClick={() => {
                             if (active) {
                               setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -2002,7 +1967,9 @@ export default function ScanDetailPage() {
                             }
                             setPage(1);
                           }}
-                          className={`px-4 py-3 text-xs font-medium uppercase tracking-wider cursor-pointer select-none transition-colors text-${align}`}
+                          className={`cursor-pointer select-none transition-colors ${
+                            align === 'right' ? 'text-right' : 'text-left'
+                          }`}
                           style={{ color: active ? '#a78bfa' : 'rgba(113,113,122,0.8)' }}
                         >
                           <span className="inline-flex items-center gap-1">
@@ -2013,426 +1980,423 @@ export default function ScanDetailPage() {
                               {active && sortDir === 'desc' ? '↓' : '↑'}
                             </span>
                           </span>
-                        </th>
+                        </Table.Column>
                       );
                     })}
-                    <th
-                      className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider"
-                      style={{ color: 'rgba(113,113,122,0.8)' }}
-                    >
+                    <Table.Column className="text-left" style={{ color: 'rgba(113,113,122,0.8)' }}>
                       First Seen
-                    </th>
-                    <th
-                      className="text-right px-4 py-3 text-xs font-medium uppercase tracking-wider"
-                      style={{ color: 'rgba(113,113,122,0.8)' }}
-                    >
+                    </Table.Column>
+                    <Table.Column className="text-right" style={{ color: 'rgba(113,113,122,0.8)' }}>
                       Notes
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {vulnLoading ? (
-                    <tr>
-                      <td colSpan={8} className="py-12 text-center">
-                        <div className="flex justify-center">
-                          <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
-                        </div>
-                      </td>
-                    </tr>
-                  ) : vulns.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-12 text-center text-zinc-500 text-sm">
-                        {scan.external_status === 'blocked_by_xray_policy'
-                          ? 'No imported vulnerabilities are available because Xray blocked this artifact before the normal scan summary was produced. See the Policy Violations tab for the matched issues, watches, and policies.'
-                          : 'No vulnerabilities found.'}
-                      </td>
-                    </tr>
-                  ) : (
-                    vulns.map((v, i) => (
-                      <Fragment key={v.id}>
-                        <tr
-                          style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                          onMouseEnter={(e) =>
-                            (e.currentTarget.style.background = 'var(--row-hover)')
-                          }
-                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                        >
-                          <td className="px-4 py-3">
-                            {v.vuln_id ? (
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <button
-                                  type="button"
-                                  onClick={() => openVulnerabilityDetails(v)}
-                                  className="font-mono text-xs text-violet-500 dark:text-violet-400 hover:text-violet-400 dark:hover:text-violet-300 hover:underline transition-colors"
-                                >
-                                  {v.vuln_id}
-                                </button>
-                                <SourceBadge source={v.data_source} />
-                                {v.suppression && (
-                                  <span
-                                    className="text-xs font-medium px-1.5 py-0.5 rounded-md capitalize shrink-0"
-                                    style={{
-                                      background: 'rgba(251,146,60,0.12)',
-                                      color: '#fb923c',
-                                      border: '1px solid rgba(251,146,60,0.25)',
-                                    }}
-                                    title={v.suppression.justification || 'Suppressed'}
+                    </Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {vulnLoading || vulns.length === 0 ? (
+                      <Table.Row key="vuln-state" id="vuln-state">
+                        <Table.Cell colSpan={8}>
+                          {vulnLoading ? (
+                            <div className="py-12 text-center">
+                              <div className="flex justify-center">
+                                <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="py-12 text-center text-zinc-500 text-sm">
+                              {scan.external_status === 'blocked_by_xray_policy'
+                                ? 'No imported vulnerabilities are available because Xray blocked this artifact before the normal scan summary was produced. See the Policy Violations tab for the matched issues, watches, and policies.'
+                                : 'No vulnerabilities found.'}
+                            </div>
+                          )}
+                        </Table.Cell>
+                      </Table.Row>
+                    ) : (
+                      vulns.map((v) => (
+                        <Fragment key={v.id}>
+                          <Table.Row id={v.id} className="hover:bg-[var(--row-hover)]">
+                            <Table.Cell>
+                              {v.vuln_id ? (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => openVulnerabilityDetails(v)}
+                                    className="font-mono text-xs text-violet-500 dark:text-violet-400 hover:text-violet-400 dark:hover:text-violet-300 hover:underline transition-colors"
                                   >
-                                    {v.suppression.status.replace(/_/g, ' ')}
+                                    {v.vuln_id}
+                                  </button>
+                                  <SourceBadge source={v.data_source} />
+                                  {v.suppression && (
+                                    <span
+                                      className="text-xs font-medium px-1.5 py-0.5 rounded-md capitalize shrink-0"
+                                      style={{
+                                        background: 'rgba(251,146,60,0.12)',
+                                        color: '#fb923c',
+                                        border: '1px solid rgba(251,146,60,0.25)',
+                                      }}
+                                      title={v.suppression.justification || 'Suppressed'}
+                                    >
+                                      {v.suppression.status.replace(/_/g, ' ')}
+                                    </span>
+                                  )}
+                                  {v.suppression && (
+                                    <SuppressionSourceBadge source={v.suppression.source} />
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-zinc-400 dark:text-zinc-600">-</span>
+                              )}
+                            </Table.Cell>
+                            <Table.Cell className="font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                              {v.pkg_name}
+                            </Table.Cell>
+                            <Table.Cell className="font-mono text-xs text-zinc-500">
+                              {v.installed_version}
+                            </Table.Cell>
+                            <Table.Cell className="font-mono text-xs text-emerald-500">
+                              {v.fixed_version || (
+                                <span className="text-zinc-400 dark:text-zinc-700">-</span>
+                              )}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <SeverityBadge severity={v.severity} />
+                            </Table.Cell>
+                            <Table.Cell className="text-right font-mono text-xs text-zinc-500">
+                              {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <FirstSeenBadge firstSeenAt={v.first_seen_at} />
+                            </Table.Cell>
+                            <Table.Cell className="text-right">
+                              <Button
+                                onPress={() => {
+                                  setExpandedVuln(expandedVuln === v.id ? null : v.id);
+                                  setCommentText('');
+                                }}
+                                className="inline-flex items-center gap-1 text-zinc-400 dark:text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
+                                variant="secondary"
+                              >
+                                <Comment01Icon size={15} />
+                                {v.comments && v.comments.length > 0 && (
+                                  <span
+                                    className="text-xs rounded-full px-1.5 py-0.5 font-medium"
+                                    style={{ background: 'rgba(124,58,237,0.2)', color: '#a78bfa' }}
+                                  >
+                                    {v.comments.length}
                                   </span>
                                 )}
-                                {v.suppression && (
-                                  <SuppressionSourceBadge source={v.suppression.source} />
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-zinc-400 dark:text-zinc-600">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
-                            {v.pkg_name}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-xs text-zinc-500">
-                            {v.installed_version}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-xs text-emerald-500">
-                            {v.fixed_version || (
-                              <span className="text-zinc-400 dark:text-zinc-700">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <SeverityBadge severity={v.severity} />
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono text-xs text-zinc-500">
-                            {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
-                          </td>
-                          <td className="px-4 py-3">
-                            <FirstSeenBadge firstSeenAt={v.first_seen_at} />
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <Button
-                              onPress={() => {
-                                setExpandedVuln(expandedVuln === v.id ? null : v.id);
-                                setCommentText('');
-                              }}
-                              className="inline-flex items-center gap-1 text-zinc-400 dark:text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
-                              variant="secondary"
-                            >
-                              <Comment01Icon size={15} />
-                              {v.comments && v.comments.length > 0 && (
-                                <span
-                                  className="text-xs rounded-full px-1.5 py-0.5 font-medium"
-                                  style={{ background: 'rgba(124,58,237,0.2)', color: '#a78bfa' }}
-                                >
-                                  {v.comments.length}
-                                </span>
-                              )}
-                            </Button>
-                          </td>
-                        </tr>
-                        {expandedVuln === v.id && (
-                          <tr>
-                            <td
-                              colSpan={8}
-                              className="p-4"
-                              style={{
-                                borderTop: '1px solid var(--border-subtle)',
-                                background: 'var(--row-hover)',
-                              }}
-                            >
-                              <div className="space-y-4 max-w-3xl">
-                                {/* Suppression section */}
-                                {scan.image_digest && (
-                                  <div className="space-y-2.5">
+                              </Button>
+                            </Table.Cell>
+                          </Table.Row>
+                          {expandedVuln === v.id && (
+                            <Table.Row id={`${v.id}-expanded`}>
+                              <Table.Cell
+                                colSpan={8}
+                                className="p-4"
+                                style={{
+                                  borderTop: '1px solid var(--border-subtle)',
+                                  background: 'var(--row-hover)',
+                                }}
+                              >
+                                <div className="space-y-4 max-w-3xl">
+                                  {/* Suppression section */}
+                                  {scan.image_digest && (
+                                    <div className="space-y-2.5">
+                                      <div className="flex items-center gap-2">
+                                        <ShieldKeyIcon size={13} className="text-zinc-400" />
+                                        <span
+                                          className="text-xs font-semibold uppercase tracking-wider"
+                                          style={{ color: 'var(--text-muted)' }}
+                                        >
+                                          Suppression
+                                        </span>
+                                        {v.suppression && (
+                                          <span
+                                            className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
+                                            style={{
+                                              background: 'rgba(239,68,68,0.1)',
+                                              color: '#f87171',
+                                              border: '1px solid rgba(239,68,68,0.2)',
+                                            }}
+                                          >
+                                            {v.suppression.status.replace(/_/g, ' ')}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {v.suppression && (
+                                        <div
+                                          className="rounded-lg px-3 py-2 space-y-1"
+                                          style={{
+                                            background: 'rgba(239,68,68,0.05)',
+                                            border: '1px solid rgba(239,68,68,0.15)',
+                                          }}
+                                        >
+                                          <p className="text-xs text-zinc-400">
+                                            {v.suppression.justification || '-'}
+                                          </p>
+                                          <div className="flex items-center gap-2 pt-1 flex-wrap">
+                                            <SuppressionSourceBadge source={v.suppression.source} />
+                                            <OwnershipBadge
+                                              ownerType={v.suppression.owner_type}
+                                              ownerOrgId={v.suppression.owner_org_id}
+                                              orgNamesById={orgNamesById}
+                                            />
+                                            {v.suppression.read_only && (
+                                              <span className="text-[11px] text-zinc-400">
+                                                Managed by Xray
+                                              </span>
+                                            )}
+                                            {canManageSuppressionAccess(v.suppression) && (
+                                              <Button
+                                                onPress={() =>
+                                                  openSuppressionAccess(
+                                                    v.suppression as Suppression
+                                                  )
+                                                }
+                                                className="inline-flex items-center gap-1 text-[11px] text-violet-400 hover:text-violet-300 transition-colors"
+                                                type="button"
+                                                variant="secondary"
+                                              >
+                                                <Shield01Icon size={12} />
+                                                Manage access
+                                              </Button>
+                                            )}
+                                          </div>
+                                          {v.suppression.expires_at && (
+                                            <p className="text-xs text-zinc-500">
+                                              Expires:{' '}
+                                              {new Date(
+                                                v.suppression.expires_at
+                                              ).toLocaleDateString()}
+                                            </p>
+                                          )}
+                                          {(v.suppression.xray_policy_name ||
+                                            v.suppression.xray_watch_name) && (
+                                            <p className="text-xs text-zinc-500">
+                                              {[
+                                                v.suppression.xray_policy_name,
+                                                v.suppression.xray_watch_name,
+                                              ]
+                                                .filter(Boolean)
+                                                .join(' · ')}
+                                            </p>
+                                          )}
+                                          {v.suppression.username && (
+                                            <p className="text-xs text-zinc-500">
+                                              By: {v.suppression.username}
+                                            </p>
+                                          )}
+                                        </div>
+                                      )}
+                                      {!(
+                                        v.suppression?.read_only || v.suppression?.source === 'xray'
+                                      ) ? (
+                                        <div className="flex gap-2 items-center flex-wrap">
+                                          <Select
+                                            value={suppressStatus}
+                                            onChange={(value) =>
+                                              setSuppressStatus(value as Suppression['status'])
+                                            }
+                                          >
+                                            <Select.Trigger>
+                                              <Select.Value />
+                                              <Select.Indicator />
+                                            </Select.Trigger>
+                                            <Select.Popover>
+                                              <ListBox>
+                                                <ListBox.Item id="accepted">
+                                                  Accepted Risk
+                                                </ListBox.Item>
+                                                <ListBox.Item id="wont_fix">
+                                                  Won&apos;t Fix
+                                                </ListBox.Item>
+                                                <ListBox.Item id="false_positive">
+                                                  False Positive
+                                                </ListBox.Item>
+                                              </ListBox>
+                                            </Select.Popover>
+                                          </Select>
+                                          <FormField
+                                            hideLabel
+                                            label="Suppression justification"
+                                            type="text"
+                                            value={suppressJustification}
+                                            onChange={(e) =>
+                                              setSuppressJustification(e.target.value)
+                                            }
+                                            placeholder="Justification..."
+                                            className="flex-1 min-w-0"
+                                            containerClassName="flex-1 min-w-0"
+                                          />
+                                          <DatePicker
+                                            aria-label="Expiry date (optional)"
+                                            value={suppressExpiry}
+                                            onChange={setSuppressExpiry}
+                                            className="w-40"
+                                          >
+                                            <DateField.Group
+                                              className={`${inputCls} flex items-center gap-1`}
+                                            >
+                                              <DateField.Input>
+                                                {(seg) => <DateField.Segment segment={seg} />}
+                                              </DateField.Input>
+                                              <DateField.Suffix>
+                                                <DatePicker.Trigger>
+                                                  <DatePicker.TriggerIndicator />
+                                                </DatePicker.Trigger>
+                                              </DateField.Suffix>
+                                            </DateField.Group>
+                                            <DatePicker.Popover>
+                                              <Calendar aria-label="Expiry date">
+                                                <Calendar.Header>
+                                                  <Calendar.YearPickerTrigger>
+                                                    <Calendar.YearPickerTriggerHeading />
+                                                    <Calendar.YearPickerTriggerIndicator />
+                                                  </Calendar.YearPickerTrigger>
+                                                  <Calendar.NavButton slot="previous" />
+                                                  <Calendar.NavButton slot="next" />
+                                                </Calendar.Header>
+                                                <Calendar.Grid>
+                                                  <Calendar.GridHeader>
+                                                    {(day) => (
+                                                      <Calendar.HeaderCell>
+                                                        {day}
+                                                      </Calendar.HeaderCell>
+                                                    )}
+                                                  </Calendar.GridHeader>
+                                                  <Calendar.GridBody>
+                                                    {(date) => <Calendar.Cell date={date} />}
+                                                  </Calendar.GridBody>
+                                                </Calendar.Grid>
+                                                <Calendar.YearPickerGrid>
+                                                  <Calendar.YearPickerGridBody>
+                                                    {({ year }) => (
+                                                      <Calendar.YearPickerCell year={year} />
+                                                    )}
+                                                  </Calendar.YearPickerGridBody>
+                                                </Calendar.YearPickerGrid>
+                                              </Calendar>
+                                            </DatePicker.Popover>
+                                          </DatePicker>
+                                          <Button
+                                            onPress={() => handleSuppress(v)}
+                                            isDisabled={
+                                              suppressSaving || !suppressJustification.trim()
+                                            }
+                                            className="btn-warning inline-flex shrink-0 items-center gap-1.5"
+                                            type="button"
+                                            variant="danger-soft"
+                                          >
+                                            {suppressSaving && (
+                                              <span className="size-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                                            )}
+                                            {v.suppression ? 'Update' : 'Suppress'}
+                                          </Button>
+                                          {v.suppression && (
+                                            <Button
+                                              onPress={() => handleLiftSuppression(v)}
+                                              isDisabled={suppressSaving}
+                                              className="btn-secondary shrink-0"
+                                              type="button"
+                                              variant="secondary"
+                                            >
+                                              Lift
+                                            </Button>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs text-zinc-500">
+                                          This suppression comes from Xray and cannot be edited
+                                          here.
+                                        </p>
+                                      )}
+                                      {suppressError && (
+                                        <p className="text-xs mt-1" style={{ color: '#f87171' }}>
+                                          {suppressError}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  <div style={{ borderTop: '1px solid var(--border-subtle)' }} />
+
+                                  {/* Notes / Comments */}
+                                  <div className="space-y-3">
                                     <div className="flex items-center gap-2">
-                                      <ShieldKeyIcon size={13} className="text-zinc-400" />
+                                      <Comment01Icon size={13} className="text-zinc-400" />
                                       <span
                                         className="text-xs font-semibold uppercase tracking-wider"
                                         style={{ color: 'var(--text-muted)' }}
                                       >
-                                        Suppression
+                                        Notes
                                       </span>
-                                      {v.suppression && (
-                                        <span
-                                          className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
-                                          style={{
-                                            background: 'rgba(239,68,68,0.1)',
-                                            color: '#f87171',
-                                            border: '1px solid rgba(239,68,68,0.2)',
-                                          }}
-                                        >
-                                          {v.suppression.status.replace(/_/g, ' ')}
-                                        </span>
-                                      )}
                                     </div>
-                                    {v.suppression && (
-                                      <div
-                                        className="rounded-lg px-3 py-2 space-y-1"
-                                        style={{
-                                          background: 'rgba(239,68,68,0.05)',
-                                          border: '1px solid rgba(239,68,68,0.15)',
-                                        }}
-                                      >
-                                        <p className="text-xs text-zinc-400">
-                                          {v.suppression.justification || '-'}
-                                        </p>
-                                        <div className="flex items-center gap-2 pt-1 flex-wrap">
-                                          <SuppressionSourceBadge source={v.suppression.source} />
-                                          <OwnershipBadge
-                                            ownerType={v.suppression.owner_type}
-                                            ownerOrgId={v.suppression.owner_org_id}
-                                            orgNamesById={orgNamesById}
-                                          />
-                                          {v.suppression.read_only && (
-                                            <span className="text-[11px] text-zinc-400">
-                                              Managed by Xray
-                                            </span>
-                                          )}
-                                          {canManageSuppressionAccess(v.suppression) && (
-                                            <Button
-                                              onPress={() =>
-                                                openSuppressionAccess(v.suppression as Suppression)
-                                              }
-                                              className="inline-flex items-center gap-1 text-[11px] text-violet-400 hover:text-violet-300 transition-colors"
-                                              type="button"
-                                              variant="secondary"
-                                            >
-                                              <Shield01Icon size={12} />
-                                              Manage access
-                                            </Button>
-                                          )}
-                                        </div>
-                                        {v.suppression.expires_at && (
-                                          <p className="text-xs text-zinc-500">
-                                            Expires:{' '}
-                                            {new Date(
-                                              v.suppression.expires_at
-                                            ).toLocaleDateString()}
-                                          </p>
-                                        )}
-                                        {(v.suppression.xray_policy_name ||
-                                          v.suppression.xray_watch_name) && (
-                                          <p className="text-xs text-zinc-500">
-                                            {[
-                                              v.suppression.xray_policy_name,
-                                              v.suppression.xray_watch_name,
-                                            ]
-                                              .filter(Boolean)
-                                              .join(' · ')}
-                                          </p>
-                                        )}
-                                        {v.suppression.username && (
-                                          <p className="text-xs text-zinc-500">
-                                            By: {v.suppression.username}
-                                          </p>
-                                        )}
-                                      </div>
-                                    )}
-                                    {!(
-                                      v.suppression?.read_only || v.suppression?.source === 'xray'
-                                    ) ? (
-                                      <div className="flex gap-2 items-center flex-wrap">
-                                        <Select
-                                          value={suppressStatus}
-                                          onChange={(value) =>
-                                            setSuppressStatus(value as Suppression['status'])
-                                          }
-                                        >
-                                          <Select.Trigger className={selectTriggerCls}>
-                                            <Select.Value />
-                                            <Select.Indicator />
-                                          </Select.Trigger>
-                                          <Select.Popover>
-                                            <ListBox>
-                                              <ListBox.Item id="accepted">
-                                                Accepted Risk
-                                              </ListBox.Item>
-                                              <ListBox.Item id="wont_fix">
-                                                Won&apos;t Fix
-                                              </ListBox.Item>
-                                              <ListBox.Item id="false_positive">
-                                                False Positive
-                                              </ListBox.Item>
-                                            </ListBox>
-                                          </Select.Popover>
-                                        </Select>
-                                        <FormField
-                                          hideLabel
-                                          label="Suppression justification"
-                                          type="text"
-                                          value={suppressJustification}
-                                          onChange={(e) => setSuppressJustification(e.target.value)}
-                                          placeholder="Justification..."
-                                          className="flex-1 min-w-0"
-                                          containerClassName="flex-1 min-w-0"
-                                        />
-                                        <DatePicker
-                                          aria-label="Expiry date (optional)"
-                                          value={suppressExpiry}
-                                          onChange={setSuppressExpiry}
-                                          className="w-40"
-                                        >
-                                          <DateField.Group
-                                            className={`${inputCls} flex items-center gap-1`}
+                                    {v.comments && v.comments.length > 0 ? (
+                                      <div className="space-y-2">
+                                        {v.comments.map((c) => (
+                                          <div
+                                            key={c.id}
+                                            className="flex items-start justify-between gap-3 group"
                                           >
-                                            <DateField.Input>
-                                              {(seg) => <DateField.Segment segment={seg} />}
-                                            </DateField.Input>
-                                            <DateField.Suffix>
-                                              <DatePicker.Trigger>
-                                                <DatePicker.TriggerIndicator />
-                                              </DatePicker.Trigger>
-                                            </DateField.Suffix>
-                                          </DateField.Group>
-                                          <DatePicker.Popover>
-                                            <Calendar aria-label="Expiry date">
-                                              <Calendar.Header>
-                                                <Calendar.YearPickerTrigger>
-                                                  <Calendar.YearPickerTriggerHeading />
-                                                  <Calendar.YearPickerTriggerIndicator />
-                                                </Calendar.YearPickerTrigger>
-                                                <Calendar.NavButton slot="previous" />
-                                                <Calendar.NavButton slot="next" />
-                                              </Calendar.Header>
-                                              <Calendar.Grid>
-                                                <Calendar.GridHeader>
-                                                  {(day) => (
-                                                    <Calendar.HeaderCell>{day}</Calendar.HeaderCell>
-                                                  )}
-                                                </Calendar.GridHeader>
-                                                <Calendar.GridBody>
-                                                  {(date) => <Calendar.Cell date={date} />}
-                                                </Calendar.GridBody>
-                                              </Calendar.Grid>
-                                              <Calendar.YearPickerGrid>
-                                                <Calendar.YearPickerGridBody>
-                                                  {({ year }) => (
-                                                    <Calendar.YearPickerCell year={year} />
-                                                  )}
-                                                </Calendar.YearPickerGridBody>
-                                              </Calendar.YearPickerGrid>
-                                            </Calendar>
-                                          </DatePicker.Popover>
-                                        </DatePicker>
-                                        <Button
-                                          onPress={() => handleSuppress(v)}
-                                          isDisabled={
-                                            suppressSaving || !suppressJustification.trim()
-                                          }
-                                          className="btn-warning inline-flex shrink-0 items-center gap-1.5"
-                                          type="button"
-                                          variant="danger-soft"
-                                        >
-                                          {suppressSaving && (
-                                            <span className="size-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
-                                          )}
-                                          {v.suppression ? 'Update' : 'Suppress'}
-                                        </Button>
-                                        {v.suppression && (
-                                          <Button
-                                            onPress={() => handleLiftSuppression(v)}
-                                            isDisabled={suppressSaving}
-                                            className="btn-secondary shrink-0"
-                                            type="button"
-                                            variant="secondary"
-                                          >
-                                            Lift
-                                          </Button>
-                                        )}
+                                            <div className="flex-1 min-w-0">
+                                              <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                                                {c.username || 'You'}
+                                              </span>
+                                              <span
+                                                className="text-xs text-zinc-500 ml-2"
+                                                title={fullDate(c.created_at)}
+                                              >
+                                                {timeAgo(c.created_at)}
+                                              </span>
+                                              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+                                                {c.content}
+                                              </p>
+                                            </div>
+                                            {currentUser?.id === c.user_id && (
+                                              <Button
+                                                onPress={() => handleDeleteComment(c.id)}
+                                                className="text-zinc-400 dark:text-zinc-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                                                isIconOnly
+                                                variant="secondary"
+                                              >
+                                                <Delete02Icon size={14} />
+                                              </Button>
+                                            )}
+                                          </div>
+                                        ))}
                                       </div>
                                     ) : (
-                                      <p className="text-xs text-zinc-500">
-                                        This suppression comes from Xray and cannot be edited here.
-                                      </p>
+                                      <p className="text-xs text-zinc-500">No notes yet.</p>
                                     )}
-                                    {suppressError && (
-                                      <p className="text-xs mt-1" style={{ color: '#f87171' }}>
-                                        {suppressError}
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-
-                                <div style={{ borderTop: '1px solid var(--border-subtle)' }} />
-
-                                {/* Notes / Comments */}
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2">
-                                    <Comment01Icon size={13} className="text-zinc-400" />
-                                    <span
-                                      className="text-xs font-semibold uppercase tracking-wider"
-                                      style={{ color: 'var(--text-muted)' }}
-                                    >
-                                      Notes
-                                    </span>
-                                  </div>
-                                  {v.comments && v.comments.length > 0 ? (
-                                    <div className="space-y-2">
-                                      {v.comments.map((c) => (
-                                        <div
-                                          key={c.id}
-                                          className="flex items-start justify-between gap-3 group"
-                                        >
-                                          <div className="flex-1 min-w-0">
-                                            <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                                              {c.username || 'You'}
-                                            </span>
-                                            <span
-                                              className="text-xs text-zinc-500 ml-2"
-                                              title={fullDate(c.created_at)}
-                                            >
-                                              {timeAgo(c.created_at)}
-                                            </span>
-                                            <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
-                                              {c.content}
-                                            </p>
-                                          </div>
-                                          {currentUser?.id === c.user_id && (
-                                            <Button
-                                              onPress={() => handleDeleteComment(c.id)}
-                                              className="text-zinc-400 dark:text-zinc-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                                              isIconOnly
-                                              variant="secondary"
-                                            >
-                                              <Delete02Icon size={14} />
-                                            </Button>
-                                          )}
-                                        </div>
-                                      ))}
+                                    <div className="flex gap-2 items-end pt-1">
+                                      <textarea
+                                        value={commentText}
+                                        onChange={(e) => setCommentText(e.target.value)}
+                                        placeholder="Add a note…"
+                                        rows={2}
+                                        className={`${inputCls} flex-1 resize-none`}
+                                      />
+                                      <Button
+                                        onPress={() => handleAddComment(v.id)}
+                                        isDisabled={commentSaving || !commentText.trim()}
+                                        className="btn-primary shrink-0"
+                                        type="button"
+                                        variant="primary"
+                                      >
+                                        Add Note
+                                      </Button>
                                     </div>
-                                  ) : (
-                                    <p className="text-xs text-zinc-500">No notes yet.</p>
-                                  )}
-                                  <div className="flex gap-2 items-end pt-1">
-                                    <textarea
-                                      value={commentText}
-                                      onChange={(e) => setCommentText(e.target.value)}
-                                      placeholder="Add a note…"
-                                      rows={2}
-                                      className={`${inputCls} flex-1 resize-none`}
-                                    />
-                                    <Button
-                                      onPress={() => handleAddComment(v.id)}
-                                      isDisabled={commentSaving || !commentText.trim()}
-                                      className="btn-primary shrink-0"
-                                      type="button"
-                                      variant="primary"
-                                    >
-                                      Add Note
-                                    </Button>
                                   </div>
                                 </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                              </Table.Cell>
+                            </Table.Row>
+                          )}
+                        </Fragment>
+                      ))
+                    )}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </Card>
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
@@ -2520,44 +2484,104 @@ export default function ScanDetailPage() {
                 Image metadata
               </p>
 
-              <div className="grid gap-3 lg:grid-cols-3">
-                <DetailBlock label="Created" value={imageCreated} />
-                <DetailBlock label="Author" value={imageAuthor} />
-                <DetailBlock label="Docker version" value={imageDockerVersion} />
-                <DetailBlock label="User" value={imageUser} mono />
-                <DetailBlock label="Working directory" value={imageWorkingDir} mono />
-                <DetailBlock label="Entrypoint" value={imageEntrypoint.join(' ')} mono />
-              </div>
-
-              {imageCommand.length > 0 && (
-                <DetailBlock label="Command" value={imageCommand.join(' ')} mono />
-              )}
-
-              <div className="grid gap-3 lg:grid-cols-3">
-                <DetailBlock
-                  label="Environment variables"
-                  value={imageEnv.length > 0 ? `${imageEnv.length} captured` : '0 captured'}
-                />
-                <DetailBlock
-                  label="Labels"
-                  value={
-                    imageLabelEntries.length > 0
-                      ? `${imageLabelEntries.length} captured`
-                      : '0 captured'
-                  }
-                />
-                <DetailBlock
-                  label="Exposed ports"
-                  value={
-                    imageExposedPorts.length > 0 ? imageExposedPorts.join(', ') : 'None declared'
-                  }
-                  mono={imageExposedPorts.length > 0}
-                />
-              </div>
-
-              {imageVolumes.length > 0 && (
-                <DetailBlock label="Declared volumes" value={imageVolumes.join(', ')} mono />
-              )}
+              <Card className="surface-panel rounded-xl overflow-hidden">
+                <Table variant="secondary">
+                  <Table.Content aria-label="Image metadata details">
+                    <Table.Header>
+                      <Table.Column isRowHeader>Field</Table.Column>
+                      <Table.Column>Value</Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      <Table.Row id="meta-created">
+                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                          Created
+                        </Table.Cell>
+                        <Table.Cell>{imageCreated || '-'}</Table.Cell>
+                      </Table.Row>
+                      <Table.Row id="meta-author">
+                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                          Author
+                        </Table.Cell>
+                        <Table.Cell>{imageAuthor || '-'}</Table.Cell>
+                      </Table.Row>
+                      <Table.Row id="meta-docker-version">
+                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                          Docker version
+                        </Table.Cell>
+                        <Table.Cell>{imageDockerVersion || '-'}</Table.Cell>
+                      </Table.Row>
+                      <Table.Row id="meta-user">
+                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                          User
+                        </Table.Cell>
+                        <Table.Cell className="font-mono text-xs">{imageUser || '-'}</Table.Cell>
+                      </Table.Row>
+                      <Table.Row id="meta-working-dir">
+                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                          Working directory
+                        </Table.Cell>
+                        <Table.Cell className="font-mono text-xs">
+                          {imageWorkingDir || '-'}
+                        </Table.Cell>
+                      </Table.Row>
+                      <Table.Row id="meta-entrypoint">
+                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                          Entrypoint
+                        </Table.Cell>
+                        <Table.Cell className="font-mono text-xs">
+                          {imageEntrypoint.length > 0 ? imageEntrypoint.join(' ') : '-'}
+                        </Table.Cell>
+                      </Table.Row>
+                      <Table.Row id="meta-command">
+                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                          Command
+                        </Table.Cell>
+                        <Table.Cell className="font-mono text-xs">
+                          {imageCommand.length > 0 ? imageCommand.join(' ') : '-'}
+                        </Table.Cell>
+                      </Table.Row>
+                      <Table.Row id="meta-env-count">
+                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                          Environment variables
+                        </Table.Cell>
+                        <Table.Cell>
+                          {imageEnv.length > 0 ? `${imageEnv.length} captured` : '0 captured'}
+                        </Table.Cell>
+                      </Table.Row>
+                      <Table.Row id="meta-label-count">
+                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                          Labels
+                        </Table.Cell>
+                        <Table.Cell>
+                          {imageLabelEntries.length > 0
+                            ? `${imageLabelEntries.length} captured`
+                            : '0 captured'}
+                        </Table.Cell>
+                      </Table.Row>
+                      <Table.Row id="meta-exposed-ports">
+                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                          Exposed ports
+                        </Table.Cell>
+                        <Table.Cell
+                          className={imageExposedPorts.length > 0 ? 'font-mono text-xs' : ''}
+                        >
+                          {imageExposedPorts.length > 0
+                            ? imageExposedPorts.join(', ')
+                            : 'None declared'}
+                        </Table.Cell>
+                      </Table.Row>
+                      <Table.Row id="meta-declared-volumes">
+                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                          Declared volumes
+                        </Table.Cell>
+                        <Table.Cell className={imageVolumes.length > 0 ? 'font-mono text-xs' : ''}>
+                          {imageVolumes.length > 0 ? imageVolumes.join(', ') : '-'}
+                        </Table.Cell>
+                      </Table.Row>
+                    </Table.Body>
+                  </Table.Content>
+                </Table>
+              </Card>
 
               {imageEnv.length > 0 && (
                 <details className="surface-panel rounded-xl p-4">

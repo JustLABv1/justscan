@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@heroui/react';
+import { Tabs } from '@heroui/react';
 import type { CSSProperties, ReactNode } from 'react';
 
 type SegmentOption<T extends string> = {
@@ -34,24 +34,31 @@ export function SegmentedControl<T extends string>({
   getItemStyle,
 }: SegmentedControlProps<T>) {
   return (
-    <div className={cx('segmented-control', className)} role="radiogroup" aria-label={ariaLabel}>
-      {options.map((option) => {
-        const active = value === option.id;
-        return (
-          <Button
-            key={option.id}
-            type="button"
-            variant="secondary"
-            onPress={() => onChange(option.id)}
-            className={cx('segmented-control-item', itemClassName)}
-            data-active={active ? 'true' : 'false'}
-            data-size={size}
-            style={getItemStyle?.(option, active)}
-          >
-            {option.label}
-          </Button>
-        );
-      })}
-    </div>
+    <Tabs
+      selectedKey={value}
+      onSelectionChange={(key) => onChange(String(key) as T)}
+      className={cx('segmented-control-root', className)}
+    >
+      <Tabs.ListContainer>
+        <Tabs.List aria-label={ariaLabel ?? 'Segmented control'} className="segmented-control">
+          {options.map((option) => {
+            const active = value === option.id;
+            return (
+              <Tabs.Tab
+                key={option.id}
+                id={option.id}
+                className={cx('segmented-control-item', itemClassName)}
+                data-active={active ? 'true' : 'false'}
+                data-size={size}
+                style={getItemStyle?.(option, active)}
+              >
+                {option.label}
+                <Tabs.Indicator />
+              </Tabs.Tab>
+            );
+          })}
+        </Tabs.List>
+      </Tabs.ListContainer>
+    </Tabs>
   );
 }

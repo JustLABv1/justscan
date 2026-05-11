@@ -389,7 +389,10 @@ export function ImageChildren({
                       {timeAgo(scan.created_at)}
                     </Table.Cell>
                     <Table.Cell>
-                      <div className="flex items-center gap-2 justify-end" onClick={(event) => event.stopPropagation()}>
+                      <div
+                        className="flex items-center gap-2 justify-end"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <button
                           onClick={() => openScan(scan.id)}
                           className="text-zinc-400 hover:text-violet-400 transition-colors"

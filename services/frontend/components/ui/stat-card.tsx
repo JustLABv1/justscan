@@ -60,7 +60,7 @@ export function StatCard({
 
   if (inline) {
     return (
-      <Card className={joinClassNames('rounded-2xl px-3.5 py-3', className)} style={style}>
+      <Card className={joinClassNames('px-3.5 py-3', className)} style={style}>
         <Card.Content className="p-0">
           <div className="flex min-h-9 items-center justify-between gap-3">
             {labelNode}
@@ -80,7 +80,7 @@ export function StatCard({
   }
 
   return (
-    <Card className={joinClassNames('rounded-2xl px-3.5 py-3', className)} style={style}>
+    <Card className={joinClassNames('px-3.5 py-3', className)} style={style}>
       <Card.Content className="p-0">
         <div className="flex min-h-9 items-center justify-between gap-3">
           {labelNode}

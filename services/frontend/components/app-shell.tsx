@@ -20,7 +20,9 @@ import {
   Dropdown,
   Header,
   Label,
+  Popover,
   Separator,
+  Tooltip,
   useOverlayState,
 } from '@heroui/react';
 import {
@@ -362,14 +364,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
           ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
           : []),
       ];
-  const hoveredNavHref = hoveredNavPopover?.startsWith('desktop:')
-    ? hoveredNavPopover.slice('desktop:'.length)
-    : null;
-  const hoveredLeafNavItem = hoveredNavHref
-    ? navigationGroups
-        .flatMap((group) => group.items)
-        .find((item) => item.href === hoveredNavHref && item.href !== '/admin')
-    : null;
   const navItems = navigationGroups.flatMap((group) =>
     group.items.map(({ href, label }) => ({ href, label }))
   );
@@ -472,7 +466,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             <div className="absolute inset-y-0 right-0 w-px pointer-events-none bg-gradient-to-b from-violet-500/10 via-transparent to-transparent" />
 
             <div
-              className="flex items-center px-[18px] py-5 shrink-0"
+              className={`flex items-center py-5 shrink-0 ${desktopCollapsed ? 'justify-center px-0' : 'px-[18px]'}`}
               style={{ borderBottom: '1px solid var(--border-subtle)' }}
             >
               <div
@@ -496,8 +490,8 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               </span>
             </div>
 
-            <div className="px-2 pt-3 pb-2 space-y-2">
-              {!desktopCollapsed && pendingInviteCount > 0 && (
+            {!desktopCollapsed && pendingInviteCount > 0 && (
+              <div className="px-2 pt-3 pb-2">
                 <Link
                   href="/orgs"
                   className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all duration-150 text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
@@ -519,17 +513,20 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                     {pendingInviteCount}
                   </span>
                 </Link>
-              )}
-            </div>
+              </div>
+            )}
 
-            <nav className="flex-1 overflow-y-auto overflow-x-hidden p-2">
+            <nav
+              className={`flex-1 overflow-y-auto overflow-x-hidden pb-2 pt-1.5${desktopCollapsed ? '' : ' px-2'}`}
+            >
               {navigationGroups.map(({ label, items }) => (
                 <div key={label} className="mb-1">
                   <div
-                    className="nav-section-label transition-all duration-300 overflow-hidden"
+                    className="nav-section-label px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-[0.1em] leading-none transition-all duration-300 overflow-hidden"
                     style={{
-                      maxHeight: desktopCollapsed ? 0 : 28,
+                      maxHeight: desktopCollapsed ? 0 : 22,
                       opacity: desktopCollapsed ? 0 : 1,
+                      color: 'var(--text-faint)',
                       paddingTop: desktopCollapsed ? 0 : undefined,
                       paddingBottom: desktopCollapsed ? 0 : undefined,
                     }}
@@ -548,91 +545,93 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
                       if (desktopCollapsed && showAdminTree) {
                         return (
-                          <Link
-                            key={href}
-                            href={href}
-                            aria-label={itemLabel}
-                            onMouseEnter={(event) =>
-                              openAnchoredNavPopover(
-                                popoverKey,
-                                event.currentTarget.getBoundingClientRect()
-                              )
-                            }
-                            onMouseLeave={scheduleNavPopoverClose}
-                            className={`relative flex w-full items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                            style={
-                              active
-                                ? {
-                                    background:
-                                      'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                                    boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
+                          <div key={href}>
+                            <Popover>
+                              <Popover.Trigger aria-label={itemLabel} className="block w-full">
+                                <button
+                                  className={`relative flex w-full h-10 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                                  style={
+                                    active
+                                      ? {
+                                          background:
+                                            'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.28)',
+                                        }
+                                      : undefined
                                   }
-                                : undefined
-                            }
-                          >
-                            {!active && (
-                              <span
-                                className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                                style={{ background: 'var(--row-hover)' }}
-                              />
-                            )}
-                            {active ? (
-                              <span
-                                className="absolute left-0 inset-y-2 w-0.5 rounded-full"
-                                style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
-                              />
-                            ) : null}
-                            <Icon
-                              size={18}
-                              className="shrink-0 relative z-10"
-                              style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }}
-                            />
-                          </Link>
+                                >
+                                  {!active && (
+                                    <span
+                                      className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                                      style={{ background: 'var(--row-hover)' }}
+                                    />
+                                  )}
+                                  <Icon
+                                    size={18}
+                                    className="shrink-0 relative z-10"
+                                    style={{ color: active ? '#8b5cf6' : 'var(--text-faint)' }}
+                                  />
+                                </button>
+                              </Popover.Trigger>
+                              <Popover.Content
+                                placement="right top"
+                                className="bg-surface-secondary"
+                              >
+                                <Popover.Dialog>
+                                  <div className="w-[260px] p-2">
+                                    <p
+                                      className="px-2 pb-1.5 text-[11px] uppercase tracking-[0.18em]"
+                                      style={{ color: 'var(--text-faint)' }}
+                                    >
+                                      Admin
+                                    </p>
+                                    <AdminSidebarTree
+                                      condensed
+                                      showLabel={false}
+                                      showRoot={false}
+                                    />
+                                  </div>
+                                </Popover.Dialog>
+                              </Popover.Content>
+                            </Popover>
+                          </div>
                         );
                       }
 
                       if (desktopCollapsed) {
                         return (
-                          <Link
-                            key={href}
-                            href={href}
-                            aria-label={itemLabel}
-                            onMouseEnter={(event) =>
-                              openAnchoredNavPopover(
-                                popoverKey,
-                                event.currentTarget.getBoundingClientRect()
-                              )
-                            }
-                            onMouseLeave={scheduleNavPopoverClose}
-                            className={`relative flex w-full items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                            style={
-                              active
-                                ? {
-                                    background:
-                                      'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                                    boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
+                          <div key={href}>
+                            <Tooltip delay={0}>
+                              <Tooltip.Trigger aria-label={itemLabel} className="block w-full">
+                                <Link
+                                  href={href}
+                                  className={`relative flex w-full h-10 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                                  style={
+                                    active
+                                      ? {
+                                          background:
+                                            'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.28)',
+                                        }
+                                      : undefined
                                   }
-                                : undefined
-                            }
-                          >
-                            {!active && (
-                              <span
-                                className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                                style={{ background: 'var(--row-hover)' }}
-                              />
-                            )}
-                            {active ? (
-                              <span
-                                className="absolute left-0 inset-y-2 w-0.5 rounded-full"
-                                style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
-                              />
-                            ) : null}
-                            <Icon
-                              size={18}
-                              className="shrink-0 relative z-10"
-                              style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }}
-                            />
-                          </Link>
+                                >
+                                  {!active && (
+                                    <span
+                                      className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                                      style={{ background: 'var(--row-hover)' }}
+                                    />
+                                  )}
+                                  <Icon
+                                    size={18}
+                                    className="shrink-0 relative z-10"
+                                    style={{ color: active ? '#8b5cf6' : 'var(--text-faint)' }}
+                                  />
+                                </Link>
+                              </Tooltip.Trigger>
+                              <Tooltip.Content placement="right">{itemLabel}</Tooltip.Content>
+                            </Tooltip>
+                          </div>
                         );
                       }
 
@@ -728,39 +727,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                         setHoveredNavPopoverAnchor(null);
                       }}
                     />
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {desktopCollapsed && hoveredLeafNavItem && hoveredNavPopoverAnchor ? (
-              <div
-                className="pointer-events-none fixed z-[70] hidden pl-2 md:block"
-                style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
-              >
-                <div
-                  className="surface-modal w-[220px] rounded-[20px] p-3"
-                  style={{ borderColor: 'var(--modal-border)' }}
-                >
-                  <div className="flex items-center gap-3 text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                    <hoveredLeafNavItem.Icon
-                      size={18}
-                      className="shrink-0"
-                      style={{
-                        color: isActiveRoute(pathname, hoveredLeafNavItem.href)
-                          ? '#a78bfa'
-                          : 'var(--text-faint)',
-                      }}
-                    />
-                    <span className="flex-1">{hoveredLeafNavItem.label}</span>
-                    {hoveredLeafNavItem.href === '/orgs' && pendingInviteCount > 0 ? (
-                      <span
-                        className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
-                        style={{ background: 'rgba(245, 158, 11, 0.16)' }}
-                      >
-                        {pendingInviteCount}
-                      </span>
-                    ) : null}
                   </div>
                 </div>
               </div>

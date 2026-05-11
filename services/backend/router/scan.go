@@ -23,6 +23,7 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 		s.GET("/compare", scans.Compare(db))
 		s.GET("/trends", scans.GetTrends(db))
 		s.GET("/:id", scans.GetScan(db))
+		s.GET("/:id/xray-requests", scans.ListScanXRayRequestLogs(db))
 		s.PATCH("/:id", scans.UpdateScan(db))
 		s.DELETE("/:id", scans.DeleteScan(db))
 		s.POST("/:id/cancel", scans.CancelScan(db))

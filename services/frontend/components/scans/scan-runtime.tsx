@@ -1,8 +1,8 @@
 'use client';
 
-import type { ScanStepLog } from '@/lib/api';
+import { getScanXrayRequestLogs, type ScanStepLog, type XRayRequestLog } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Card } from '@heroui/react';
+import { Button, Card, Modal, useOverlayState } from '@heroui/react';
 import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 
@@ -331,6 +331,20 @@ function stepOutputCount(stepLog?: ScanStepLog | null): number {
     return 0;
   }
   return stepLog.output_count ?? stepLog.output.length;
+}
+
+function prettyXrayValue(value: unknown): string {
+  if (value == null) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 }
 
 function providerLabel(scanProvider?: string | null, stepLogs?: ScanStepLog[] | null): string {
@@ -931,14 +945,21 @@ export function ScanStepTimeline({
   status,
   externalStatus,
   scanProvider,
+  scanId,
 }: {
   stepLogs?: ScanStepLog[] | null;
   completedAt?: string | null;
   status?: string | null;
   externalStatus?: string | null;
   scanProvider?: string | null;
+  scanId?: string | null;
 }) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const xrayDebugModal = useOverlayState();
+  const [xrayLogs, setXrayLogs] = useState<XRayRequestLog[]>([]);
+  const [xrayLogsLoading, setXrayLogsLoading] = useState(false);
+  const [xrayLogsError, setXrayLogsError] = useState<string | null>(null);
+  const [selectedXrayLogID, setSelectedXrayLogID] = useState<string | null>(null);
   const orderedLogs = orderStepLogs(stepLogs);
 
   if (orderedLogs.length === 0) {
@@ -957,6 +978,7 @@ export function ScanStepTimeline({
   const recoveredBlockedSummary = blockedByPolicy && hasRecoveredBlockedSummary(orderedLogs);
   const effectiveStatus = effectiveTimelineStatus(status, externalStatus);
   const statusTone = timelineStatusTone(effectiveStatus);
+  const canShowXrayDebug = scanProvider === 'artifactory_xray' && Boolean(scanId);
 
   const resolvedSelectedStepId =
     selectedStepId && orderedLogs.some((stepLog) => stepLog.id === selectedStepId)
@@ -1010,6 +1032,35 @@ export function ScanStepTimeline({
     }
   }
 
+  const selectedXrayLog =
+    xrayLogs.find((entry) => entry.id === selectedXrayLogID) ??
+    xrayLogs[xrayLogs.length - 1] ??
+    null;
+
+  const loadXrayLogs = async () => {
+    if (!scanId) {
+      return;
+    }
+    setXrayLogsLoading(true);
+    setXrayLogsError(null);
+    try {
+      const entries = await getScanXrayRequestLogs(scanId, 400);
+      setXrayLogs(entries);
+      setSelectedXrayLogID(entries[entries.length - 1]?.id ?? null);
+    } catch (error: unknown) {
+      setXrayLogsError(error instanceof Error ? error.message : 'Failed to load Xray debug logs');
+      setXrayLogs([]);
+      setSelectedXrayLogID(null);
+    } finally {
+      setXrayLogsLoading(false);
+    }
+  };
+
+  const handleOpenXrayDebug = async () => {
+    xrayDebugModal.open();
+    await loadXrayLogs();
+  };
+
   return (
     <Card
       className="surface-card overflow-hidden rounded-[28px] p-5 md:px-6 md:py-6"
@@ -1032,18 +1083,31 @@ export function ScanStepTimeline({
               : 'Each row is persisted by the backend, including timestamps and any step output that was produced.'}
           </p>
         </div>
-        {effectiveStatus && (
-          <span
-            className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
-            style={{
-              color: statusTone.color,
-              background: statusTone.background,
-              border: `1px solid ${statusTone.border}`,
-            }}
-          >
-            {statusTone.label}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {canShowXrayDebug && (
+            <Button
+              size="sm"
+              variant="outline"
+              onPress={() => {
+                void handleOpenXrayDebug();
+              }}
+            >
+              Xray debug
+            </Button>
+          )}
+          {effectiveStatus && (
+            <span
+              className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
+              style={{
+                color: statusTone.color,
+                background: statusTone.background,
+                border: `1px solid ${statusTone.border}`,
+              }}
+            >
+              {statusTone.label}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -1345,6 +1409,170 @@ export function ScanStepTimeline({
           )}
         </Card>
       </Card>
+
+      <Modal state={xrayDebugModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="full" placement="center">
+            <Modal.Dialog className="surface-modal max-h-[85vh] overflow-hidden rounded-2xl">
+              <Modal.Header
+                className="border-b px-6 py-4"
+                style={{ borderColor: 'var(--surface-border)' }}
+              >
+                <Modal.Heading className="text-base font-semibold text-zinc-900 dark:text-white">
+                  Xray request timeline debug
+                </Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="min-h-0 px-0 py-0">
+                <div className="grid h-[70vh] grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]">
+                  <div
+                    className="border-b p-3 lg:border-b-0 lg:border-r"
+                    style={{ borderColor: 'var(--surface-border)' }}
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                        Requests ({xrayLogs.length})
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="light"
+                        onPress={() => {
+                          void loadXrayLogs();
+                        }}
+                        isLoading={xrayLogsLoading}
+                      >
+                        Refresh
+                      </Button>
+                    </div>
+                    {xrayLogsError && (
+                      <p className="mb-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-2 text-xs text-red-500">
+                        {xrayLogsError}
+                      </p>
+                    )}
+                    <div className="max-h-[60vh] space-y-1 overflow-y-auto pr-1">
+                      {xrayLogs.map((entry, index) => {
+                        const isActive = selectedXrayLog?.id === entry.id;
+                        return (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            className="w-full rounded-lg border px-2.5 py-2 text-left"
+                            style={{
+                              borderColor: isActive
+                                ? 'rgba(20,184,166,0.35)'
+                                : 'var(--surface-border)',
+                              background: isActive ? 'rgba(20,184,166,0.10)' : 'var(--card-bg)',
+                            }}
+                            onClick={() => setSelectedXrayLogID(entry.id)}
+                          >
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                              #{index + 1} - {entry.method}
+                            </p>
+                            <p className="mt-0.5 line-clamp-2 text-xs font-medium text-zinc-900 dark:text-white">
+                              {entry.endpoint}
+                            </p>
+                            <p className="mt-1 text-[11px] text-zinc-500">
+                              {entry.status_code} - {entry.duration_ms}ms -{' '}
+                              {timeAgo(entry.created_at)}
+                            </p>
+                          </button>
+                        );
+                      })}
+                      {!xrayLogsLoading && xrayLogs.length === 0 && (
+                        <p
+                          className="rounded-lg border px-3 py-2 text-xs text-zinc-500"
+                          style={{ borderColor: 'var(--surface-border)' }}
+                        >
+                          No Xray requests were logged for this scan yet.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="min-h-0 overflow-y-auto p-4 md:p-5">
+                    {selectedXrayLog ? (
+                      <div className="space-y-3">
+                        <Card variant="secondary" className="space-y-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                            Request
+                          </p>
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                            {selectedXrayLog.method} {selectedXrayLog.endpoint}
+                          </p>
+                          <p className="text-xs text-zinc-500">
+                            URL: {selectedXrayLog.request_url || selectedXrayLog.endpoint}
+                          </p>
+                          <p className="text-xs text-zinc-500">
+                            {fullDate(selectedXrayLog.created_at)} - {selectedXrayLog.duration_ms}ms
+                            - Status {selectedXrayLog.status_code}
+                          </p>
+                          {selectedXrayLog.error && (
+                            <p className="rounded-md border border-red-500/20 bg-red-500/10 px-2 py-1 text-xs text-red-500">
+                              {selectedXrayLog.error}
+                            </p>
+                          )}
+                        </Card>
+
+                        <Card variant="secondary">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                            Request headers
+                          </p>
+                          <pre
+                            className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border p-2 text-xs"
+                            style={{ borderColor: 'var(--surface-border)' }}
+                          >
+                            {prettyXrayValue(selectedXrayLog.request_headers ?? {})}
+                          </pre>
+                        </Card>
+
+                        <Card variant="secondary">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                            Request body
+                          </p>
+                          <pre
+                            className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border p-2 text-xs"
+                            style={{ borderColor: 'var(--surface-border)' }}
+                          >
+                            {prettyXrayValue(selectedXrayLog.request_body ?? '')}
+                          </pre>
+                        </Card>
+
+                        <Card variant="secondary">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                            Response headers
+                          </p>
+                          <pre
+                            className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border p-2 text-xs"
+                            style={{ borderColor: 'var(--surface-border)' }}
+                          >
+                            {prettyXrayValue(selectedXrayLog.response_headers ?? {})}
+                          </pre>
+                        </Card>
+
+                        <Card variant="secondary">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                            Response body
+                          </p>
+                          <pre
+                            className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border p-2 text-xs"
+                            style={{ borderColor: 'var(--surface-border)' }}
+                          >
+                            {prettyXrayValue(selectedXrayLog.response_body ?? '')}
+                          </pre>
+                        </Card>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-zinc-500">
+                        Select a request to inspect full debug details.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </Modal.Body>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </Card>
   );
 }

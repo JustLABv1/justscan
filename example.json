@@ -1,0 +1,49 @@
+{
+  "violations": [
+    {
+      "user_issue_id": "2052541046701252608",
+      "comp_id": "docker://openwebui/open-webui:sha256__6403a9b0e6ec71956466300dbcde0dca373f9aa0f597aff3d4c24fbb3b10bec3",
+      "component_package_type": "docker",
+      "comp_name": "openwebui/open-webui",
+      "comp_version": "sha256__6403a9b0e6ec71956466300dbcde0dca373f9aa0f597aff3d4c24fbb3b10bec3",
+      "type": "security",
+      "targets": [],
+      "issue_id": "XRAY-971174",
+      "paths": [
+        "default/docker-remote-cache/openwebui/open-webui/sha256__6403a9b0e6ec71956466300dbcde0dca373f9aa0f597aff3d4c24fbb3b10bec3/manifest.json"
+      ],
+      "watcher_id": "99ad3de1b189264e660c88ce",
+      "watcher_name": "bbsr-watch",
+      "matched_policies": [
+        {
+          "policy": "bbsr-cve-policy",
+          "rule": "bbsr-cve-policy-rule",
+          "is_blocking": true,
+          "blocking_mask": 0,
+          "is_skip_not_applicable": false
+        }
+      ],
+      "summary": "GitPython is a python library used to interact with Git repositories. Prior to version 3.1.47, _clone() validates multi_options as the original list, then executes shlex.split(\" \".join(multi_options)). A string like \"--branch main --config core.hooksPath=/x\" passes validation (starts with --branch), but after split becomes [\"--branch\", \"main\", \"--config\", \"core.hooksPath=/x\"]. Git applies the config and executes attacker hooks during clone. This issue has been patched in version 3.1.47.",
+      "severity": "Critical",
+      "updated": "2026-05-08T00:08:14Z",
+      "permissions": {},
+      "is_source_root": false,
+      "is_high_profile": false,
+      "applicability_detail": {
+        "component_id": "",
+        "source_comp_id": "",
+        "vulnerability_id": "",
+        "result": "not_covered",
+        "transitive_status": "scanned"
+      },
+      "is_exposures_issue": false,
+      "is_package_issue": false,
+      "source": "GitPython",
+      "source_version": "3.1.46",
+      "source_id": "pypi://GitPython",
+      "component_physical_paths": [
+        "sha256__c2fc193801cf2662ca40a9b5898ed68c41ad25ff40cffeab276a0693ddec1a0b.tar.gz/usr/local/lib/python3.11/site-packages/gitpython-3.1.46.dist-info/GitPython:3.1.46"
+      ]
+    }
+  ]
+}

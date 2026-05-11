@@ -1585,6 +1585,7 @@ export default function ScanDetailPage() {
 
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'timeline' && (
         <ScanStepTimeline
+          scanId={scan.id}
           stepLogs={scan.step_logs}
           completedAt={scan.completed_at}
           status={scan.status}

@@ -34,6 +34,9 @@ const xrayMissingArtifactWindow = 2 * time.Minute
 const xrayBlockedSummaryWaitWindow = 45 * time.Second
 const registryWarmupRetryInterval = 10 * time.Second
 
+// Set to 0 to disable truncation and persist full request/response bodies.
+const xrayRequestLogBodyLimit = 0
+
 type xrayClient struct {
 	baseURL            string
 	registryURL        string
@@ -80,8 +83,14 @@ type xraySummaryError struct {
 	Error      string `json:"error"`
 }
 
+type xraySummaryArtifactGeneral struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
 type xraySummaryArtifact struct {
-	Issues []xraySummaryIssue `json:"issues"`
+	General xraySummaryArtifactGeneral `json:"general"`
+	Issues  []xraySummaryIssue         `json:"issues"`
 }
 
 type xraySummaryIssue struct {
@@ -119,12 +128,14 @@ type xrayComponentExportRequest struct {
 	PackageType       string `json:"package_type"`
 	ComponentName     string `json:"component_name"`
 	Path              string `json:"path,omitempty"`
+	OutputFormat      string `json:"output_format,omitempty"`
 	CycloneDX         bool   `json:"cyclonedx,omitempty"`
 	CycloneDXFormat   string `json:"cyclonedx_format,omitempty"`
 	License           bool   `json:"license,omitempty"`
 	LicenseResolution bool   `json:"license_resolution,omitempty"`
 	Vulnerabilities   bool   `json:"vulnerabilities,omitempty"`
 	Violations        bool   `json:"violations,omitempty"`
+	IncludeIgnored    bool   `json:"include_ignored_violations,omitempty"`
 	OperationalRisk   bool   `json:"operational_risk,omitempty"`
 }
 
@@ -183,15 +194,27 @@ type xrayIgnoreRule struct {
 	Raw           models.JSONObject
 }
 
+type xrayExportIgnoreRule struct {
+	VulnID string
+	Rule   xrayIgnoreRule
+}
+
 type xrayViolationRecord struct {
-	ID              string                `json:"violation_id,omitempty"`
-	IssueID         string                `json:"issue_id,omitempty"`
-	Watch           string                `json:"watch_name,omitempty"`
-	Summary         string                `json:"summary,omitempty"`
-	Description     string                `json:"description,omitempty"`
-	Severity        string                `json:"severity,omitempty"`
-	ImpactArtifacts []string              `json:"impact_artifacts,omitempty"`
-	Policies        []xrayViolationPolicy `json:"matched_policies,omitempty"`
+	ID                     string                `json:"violation_id,omitempty"`
+	IssueID                string                `json:"issue_id,omitempty"`
+	WatchID                string                `json:"watcher_id,omitempty"`
+	Watch                  string                `json:"watch_name,omitempty"`
+	Summary                string                `json:"summary,omitempty"`
+	Description            string                `json:"description,omitempty"`
+	Severity               string                `json:"severity,omitempty"`
+	ImpactArtifacts        []string              `json:"impact_artifacts,omitempty"`
+	ComponentPhysicalPaths []string              `json:"component_physical_paths,omitempty"`
+	Source                 string                `json:"source,omitempty"`
+	SourceVersion          string                `json:"source_version,omitempty"`
+	SourceID               string                `json:"source_id,omitempty"`
+	IsBlocking             bool                  `json:"is_blocking,omitempty"`
+	Raw                    models.JSONObject     `json:"raw,omitempty"`
+	Policies               []xrayViolationPolicy `json:"matched_policies,omitempty"`
 }
 
 type xrayViolationPolicy struct {
@@ -262,12 +285,15 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		return err
 	}
 
+	exportComponentName := xrayExportComponentName(artifactName, imageTag, scan.ImageDigest)
+
 	imageRepoPath := repoKey + "/" + artifactName
 	manifestFilename := client.resolveManifestFilename(ctx, imageRepoPath, imageTag)
 	artifactCandidates := buildXrayArtifactPathCandidates(client.artifactoryID, repoKey, artifactName, imageTag, manifestFilename, "")
-	artifactRepoPath := artifactCandidates[0].Path
-	repoPath := artifactCandidates[0].RepoPath
-	artifactPath := artifactCandidates[0].ArtifactPath
+	selectedCandidate := preferredXrayArtifactCandidate(artifactCandidates)
+	artifactRepoPath := selectedCandidate.Path
+	repoPath := selectedCandidate.RepoPath
+	artifactPath := selectedCandidate.ArtifactPath
 	if imageConfig, configErr := client.imageConfigMetadata(ctx, imageRepoPath, imageTag, scan.Platform); configErr != nil {
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to load image config metadata from Artifactory: %v", configErr))
 	} else if len(imageConfig) > 0 {
@@ -294,7 +320,12 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to resolve image digest before starting the Xray flow: %v", resolveErr))
 	} else if resolvedDigest != "" {
 		scan.ImageDigest = resolvedDigest
+		exportComponentName = xrayExportComponentName(artifactName, imageTag, scan.ImageDigest)
 		artifactCandidates = buildXrayArtifactPathCandidates(client.artifactoryID, repoKey, artifactName, imageTag, manifestFilename, resolvedDigest)
+		selectedCandidate = preferredXrayArtifactCandidate(artifactCandidates)
+		artifactRepoPath = selectedCandidate.Path
+		repoPath = selectedCandidate.RepoPath
+		artifactPath = selectedCandidate.ArtifactPath
 		if _, err := db.NewUpdate().Model(scan).
 			Column("image_digest").
 			Where("id = ?", scan.ID).
@@ -304,7 +335,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Resolved image digest %s for suppression and reporting.", resolvedDigest))
 	}
 
-	componentID := "docker://" + buildImageRef(scan.ImageName, scan.ImageTag)
+	componentID := "docker://" + exportComponentName
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "warming_artifactory_cache", models.ScanStepWarmingCache); err != nil {
 		return err
 	}
@@ -317,7 +348,38 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	if err := client.warmImageInArtifactory(ctx, imageRepoPath, imageTag, scan.Platform); err != nil {
 		if normalizedMessage, ok := normalizeXrayDownloadBlockedError(err); ok {
 			targets := blockedViolationLookupTargets(err, repoKey, artifactRepoPath)
+
+			// Trigger re-index then poll summary/artifact to get the authoritative
+			// component name and path from Xray before building any exportDetails requests.
+			client.bestEffortTriggerBlockedArtifactScan(ctx, componentID, targets)
+			recordScanStepOutput(ctx, db, scan.ID, "Triggered best-effort blocked-artifact indexing so any available findings can still be imported.")
+
+			var blockedSummary *xraySummaryResponse
+			if summary, blockedArtifactPath, summaryErr := client.bestEffortBlockedArtifactSummary(ctx, targets); summaryErr != nil {
+				log.Warnf("Failed to fetch Xray artifact summary for blocked scan %s: %v", scan.ID, summaryErr)
+			} else if summary != nil {
+				blockedSummary = summary
+				recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Fetched a blocked-artifact summary from %s.", blockedArtifactPath))
+				// Update export identifiers to the canonical values Xray returned in
+				// the summary response so all subsequent exportDetails calls are correct.
+				if resolvedName, resolvedPath := xraySummaryExportDetails(summary, client.artifactoryID); resolvedName != "" {
+					exportComponentName = resolvedName
+					if resolvedPath != "" {
+						repoPath = resolvedPath
+						artifactPath = resolvedPath
+					}
+				}
+			}
+
 			violations, violationsErr := client.getViolations(ctx, targets)
+			if violationsErr != nil || violations == nil || len(violations.Violations) == 0 {
+				exportPaths := append([]string{artifactPath}, blockedArtifactSummaryPaths(client.artifactoryID, targets)...)
+				if exportViolations, exportErr := client.exportViolations(ctx, exportComponentName, exportPaths...); exportErr == nil && exportViolations != nil && len(exportViolations.Violations) > 0 {
+					violations = exportViolations
+					violationsErr = nil
+					recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Recovered %d policy violations from Xray export details.", len(exportViolations.Violations)))
+				}
+			}
 			if violationsErr != nil {
 				log.Warnf("Failed to fetch Xray violations for blocked scan %s: %v", scan.ID, violationsErr)
 			} else if enrichment := formatBlockedViolationsSummary(violations); enrichment != "" {
@@ -330,22 +392,19 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 			scan.ExternalStatus = models.ScanExternalStatusBlockedByXrayPolicy
 			scan.CurrentStep = models.ScanStepFailed
 
-			client.bestEffortTriggerBlockedArtifactScan(ctx, componentID, targets)
-			recordScanStepOutput(ctx, db, scan.ID, "Triggered best-effort blocked-artifact indexing so any available findings can still be imported.")
-
-			if summary, blockedArtifactPath, summaryErr := client.bestEffortBlockedArtifactSummary(ctx, targets); summaryErr != nil {
-				log.Warnf("Failed to fetch Xray artifact summary for blocked scan %s: %v", scan.ID, summaryErr)
-			} else if summary != nil {
-				recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Fetched a blocked-artifact summary from %s.", blockedArtifactPath))
-				if err := persistXraySummaryFindings(ctx, db, scan, summary); err != nil {
+			if blockedSummary != nil {
+				if err := persistXraySummaryFindings(ctx, db, scan, blockedSummary); err != nil {
 					log.Warnf("Failed to persist Xray findings for blocked scan %s: %v", scan.ID, err)
 				} else {
-					log.Infof("Imported Xray vulnerabilities for blocked scan %s from %s", scan.ID, blockedArtifactPath)
+					log.Infof("Imported Xray vulnerabilities for blocked scan %s", scan.ID)
+				}
+				if err := persistXrayViolationContext(ctx, db, scan, violations); err != nil {
+					log.Warnf("Failed to persist Xray violation context for blocked scan %s (non-fatal): %v", scan.ID, err)
 				}
 			}
 
 			if scan.CriticalCount+scan.HighCount+scan.MediumCount+scan.LowCount+scan.UnknownCount == 0 {
-				if recoveredCount, exportErr := persistXrayCycloneDXFallback(ctx, db, scan, client, artifactPath, repoPath); exportErr != nil {
+				if recoveredCount, exportErr := persistXrayCycloneDXFallback(ctx, db, scan, client, exportComponentName, artifactPath, repoPath); exportErr != nil {
 					log.Warnf("Failed to persist Xray CycloneDX fallback findings for blocked scan %s: %v", scan.ID, exportErr)
 				} else if recoveredCount > 0 {
 					recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Recovered %d vulnerabilities from the Xray CycloneDX export.", recoveredCount))
@@ -362,11 +421,11 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 
 			if scan.CriticalCount+scan.HighCount+scan.MediumCount+scan.LowCount+scan.UnknownCount > 0 {
 				// CycloneDX fallback already persisted SBOM data when it succeeded.
-			} else if err := persistXraySBOMComponents(ctx, db, scan, client, artifactPath, repoPath); err != nil {
+			} else if err := persistXraySBOMComponents(ctx, db, scan, client, exportComponentName, artifactPath, repoPath); err != nil {
 				log.Warnf("Failed to persist Xray SBOM components for blocked scan %s: %v", scan.ID, err)
 			}
 
-			if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, repoPath, artifactPath); err != nil {
+			if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, exportComponentName, repoPath, artifactPath); err != nil {
 				log.Warnf("Failed to persist Xray ignore-rule snapshots for blocked scan %s: %v", scan.ID, err)
 				recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIgnoreRuleSyncError(err))
 			}
@@ -435,11 +494,16 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	if err := persistXraySummaryFindings(ctx, db, scan, summary); err != nil {
 		return err
 	}
-	if err := persistXraySBOMComponents(ctx, db, scan, client, artifactPath, repoPath); err != nil {
+	if violationContext, exportErr := client.exportViolations(ctx, exportComponentName, artifactPath, repoPath); exportErr != nil {
+		log.Warnf("Failed to fetch Xray exportDetails violation context for scan %s (non-fatal): %v", scan.ID, exportErr)
+	} else if err := persistXrayViolationContext(ctx, db, scan, violationContext); err != nil {
+		log.Warnf("Failed to persist Xray violation context for scan %s (non-fatal): %v", scan.ID, err)
+	}
+	if err := persistXraySBOMComponents(ctx, db, scan, client, exportComponentName, artifactPath, repoPath); err != nil {
 		log.Warnf("Failed to persist Xray SBOM components for scan %s (non-fatal): %v", scan.ID, err)
 		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXraySBOMImportError(err))
 	}
-	if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, repoPath, artifactPath); err != nil {
+	if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, exportComponentName, repoPath, artifactPath); err != nil {
 		log.Warnf("Failed to persist Xray ignore-rule snapshots for scan %s (non-fatal): %v", scan.ID, err)
 		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIgnoreRuleSyncError(err))
 	}
@@ -660,19 +724,7 @@ func (c *xrayClient) artifactSummary(ctx context.Context, artifactPath string) (
 }
 
 func (c *xrayClient) exportComponentCycloneDX(ctx context.Context, componentName string, candidatePaths ...string) (*TrivySBOMOutput, string, error) {
-	trimmedPaths := make([]string, 0, len(candidatePaths))
-	seen := make(map[string]bool)
-	for _, candidate := range candidatePaths {
-		path := strings.TrimSpace(candidate)
-		if path == "" {
-			continue
-		}
-		if seen[path] {
-			continue
-		}
-		seen[path] = true
-		trimmedPaths = append(trimmedPaths, path)
-	}
+	trimmedPaths := xrayExportPathCandidates(c.artifactoryID, candidatePaths...)
 	if len(trimmedPaths) == 0 {
 		trimmedPaths = append(trimmedPaths, "")
 	}
@@ -683,12 +735,14 @@ func (c *xrayClient) exportComponentCycloneDX(ctx context.Context, componentName
 			PackageType:       "docker",
 			ComponentName:     componentName,
 			Path:              candidatePath,
+			OutputFormat:      "json",
 			CycloneDX:         true,
 			CycloneDXFormat:   "json",
 			License:           true,
 			LicenseResolution: true,
 			Vulnerabilities:   true,
 			Violations:        true,
+			IncludeIgnored:    true,
 			OperationalRisk:   true,
 		}
 
@@ -710,6 +764,119 @@ func (c *xrayClient) exportComponentCycloneDX(ctx context.Context, componentName
 		lastErr = fmt.Errorf("xray component export did not return a CycloneDX SBOM")
 	}
 	return nil, "", lastErr
+}
+
+func (c *xrayClient) exportIgnoredViolationRules(ctx context.Context, componentName string, candidatePaths ...string) ([]xrayExportIgnoreRule, error) {
+	trimmedPaths := xrayExportPathCandidates(c.artifactoryID, candidatePaths...)
+	if len(trimmedPaths) == 0 {
+		trimmedPaths = append(trimmedPaths, "")
+	}
+
+	var lastErr error
+	for _, candidatePath := range trimmedPaths {
+		body := xrayComponentExportRequest{
+			PackageType:    "docker",
+			ComponentName:  componentName,
+			Path:           candidatePath,
+			OutputFormat:   "json_full",
+			Violations:     true,
+			IncludeIgnored: true,
+		}
+
+		payload, err := c.doRawJSON(ctx, http.MethodPost, "/xray/api/v2/component/exportDetails", body, "application/json, application/zip", http.StatusOK)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		rules, err := parseXrayIgnoredViolationRulesFromExport(payload)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		// A successful HTTP response with zero rules is valid (no ignored violations).
+		// Return immediately so we don't fall through to try other paths and surface
+		// a spurious error from a later candidate.
+		return rules, nil
+	}
+
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, nil
+}
+
+func (c *xrayClient) exportViolations(ctx context.Context, componentName string, candidatePaths ...string) (*xrayViolationsResponse, error) {
+	trimmedPaths := xrayExportPathCandidates(c.artifactoryID, candidatePaths...)
+	if len(trimmedPaths) == 0 {
+		trimmedPaths = append(trimmedPaths, "")
+	}
+
+	var lastErr error
+	for _, candidatePath := range trimmedPaths {
+		body := xrayComponentExportRequest{
+			PackageType:    "docker",
+			ComponentName:  componentName,
+			Path:           candidatePath,
+			OutputFormat:   "json_full",
+			Violations:     true,
+			IncludeIgnored: true,
+		}
+
+		payload, err := c.doRawJSON(ctx, http.MethodPost, "/xray/api/v2/component/exportDetails", body, "application/json, application/zip", http.StatusOK)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		violations, err := parseXrayViolationsExport(payload)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if violations != nil && len(violations.Violations) > 0 {
+			return violations, nil
+		}
+	}
+
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, nil
+}
+
+func xrayExportPathCandidates(artifactoryID string, candidatePaths ...string) []string {
+	results := make([]string, 0, len(candidatePaths)*2)
+	seen := make(map[string]bool)
+	trimmedArtifactoryID := strings.Trim(strings.TrimSpace(artifactoryID), "/")
+
+	add := func(path string) {
+		path = strings.Trim(strings.TrimSpace(path), "/")
+		if path == "" || seen[path] {
+			return
+		}
+		seen[path] = true
+		results = append(results, path)
+	}
+
+	for _, candidate := range candidatePaths {
+		path := strings.Trim(strings.TrimSpace(candidate), "/")
+		if path == "" {
+			continue
+		}
+
+		add(path)
+		if trimmedArtifactoryID != "" {
+			prefix := trimmedArtifactoryID + "/"
+			if strings.HasPrefix(path, prefix) {
+				add(strings.TrimPrefix(path, prefix))
+			} else {
+				add(prefix + path)
+			}
+		}
+	}
+
+	return results
 }
 
 func (c *xrayClient) warmImageInArtifactory(ctx context.Context, imageRepoPath, tag, platform string) error {
@@ -1088,12 +1255,14 @@ func (c *xrayClient) doJSON(ctx context.Context, method, path string, body any, 
 
 func (c *xrayClient) doRawJSON(ctx context.Context, method, path string, body any, accept string, allowedStatus ...int) ([]byte, error) {
 	var requestBody io.Reader
+	var requestPayload []byte
 	if body != nil {
 		payload, err := json.Marshal(body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal xray request: %w", err)
 		}
-		requestBody = bytes.NewReader(payload)
+		requestPayload = payload
+		requestBody = bytes.NewReader(requestPayload)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, requestBody)
@@ -1112,8 +1281,22 @@ func (c *xrayClient) doRawJSON(ctx context.Context, method, path string, body an
 	start := time.Now()
 	resp, err := c.httpClient.Do(req)
 	elapsed := time.Since(start)
+	requestHeaders := sanitizeXrayHeaders(req.Header)
+	requestBodyLog := truncateForXrayLog(string(requestPayload))
 	if err != nil {
-		c.logXRayRequest(ctx, method, path, 0, elapsed, err)
+		c.logXRayRequest(
+			ctx,
+			method,
+			path,
+			req.URL.String(),
+			0,
+			elapsed,
+			err,
+			requestHeaders,
+			requestBodyLog,
+			nil,
+			"",
+		)
 		return nil, fmt.Errorf("xray request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -1122,22 +1305,60 @@ func (c *xrayClient) doRawJSON(ctx context.Context, method, path string, body an
 	if err != nil {
 		return nil, fmt.Errorf("failed to read xray response: %w", err)
 	}
+	responseHeaders := sanitizeXrayHeaders(resp.Header)
+	responseBodyLog := truncateForXrayLog(string(responseBody))
 
 	for _, allowed := range allowedStatus {
 		if resp.StatusCode == allowed {
-			c.logXRayRequest(ctx, method, path, resp.StatusCode, elapsed, nil)
+			c.logXRayRequest(
+				ctx,
+				method,
+				path,
+				req.URL.String(),
+				resp.StatusCode,
+				elapsed,
+				nil,
+				requestHeaders,
+				requestBodyLog,
+				responseHeaders,
+				responseBodyLog,
+			)
 			return responseBody, nil
 		}
 	}
 
 	httpErr := &xrayHTTPError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(string(responseBody))}
-	c.logXRayRequest(ctx, method, path, resp.StatusCode, elapsed, httpErr)
+	c.logXRayRequest(
+		ctx,
+		method,
+		path,
+		req.URL.String(),
+		resp.StatusCode,
+		elapsed,
+		httpErr,
+		requestHeaders,
+		requestBodyLog,
+		responseHeaders,
+		responseBodyLog,
+	)
 	return nil, httpErr
 }
 
 // logXRayRequest persists a single xRay HTTP call to xray_request_logs. It is
 // always fire-and-forget so it never blocks or fails the caller.
-func (c *xrayClient) logXRayRequest(ctx context.Context, method, endpoint string, statusCode int, duration time.Duration, callErr error) {
+func (c *xrayClient) logXRayRequest(
+	ctx context.Context,
+	method,
+	endpoint,
+	requestURL string,
+	statusCode int,
+	duration time.Duration,
+	callErr error,
+	requestHeaders models.JSONObject,
+	requestBody string,
+	responseHeaders models.JSONObject,
+	responseBody string,
+) {
 	if c.db == nil {
 		return
 	}
@@ -1160,13 +1381,18 @@ func (c *xrayClient) logXRayRequest(ctx context.Context, method, endpoint string
 	}
 
 	entry := &models.XRayRequestLog{
-		ScanID:     scanID,
-		RegistryID: registryID,
-		Method:     method,
-		Endpoint:   endpoint,
-		StatusCode: statusCode,
-		DurationMs: durationMs,
-		Error:      errMsg,
+		ScanID:          scanID,
+		RegistryID:      registryID,
+		Method:          method,
+		Endpoint:        endpoint,
+		RequestURL:      requestURL,
+		StatusCode:      statusCode,
+		DurationMs:      durationMs,
+		Error:           errMsg,
+		RequestHeaders:  requestHeaders,
+		RequestBody:     requestBody,
+		ResponseHeaders: responseHeaders,
+		ResponseBody:    responseBody,
 	}
 
 	db := c.db
@@ -1175,6 +1401,41 @@ func (c *xrayClient) logXRayRequest(ctx context.Context, method, endpoint string
 			log.Debugf("xray_log: failed to record xray request: %v", err)
 		}
 	}()
+}
+
+func sanitizeXrayHeaders(headers http.Header) models.JSONObject {
+	if len(headers) == 0 {
+		return models.JSONObject{}
+	}
+
+	result := make(models.JSONObject, len(headers))
+	for key, values := range headers {
+		if len(values) == 0 {
+			continue
+		}
+		lowerKey := strings.ToLower(strings.TrimSpace(key))
+		if lowerKey == "authorization" || lowerKey == "x-jfrog-art-api" || lowerKey == "cookie" {
+			result[key] = "[REDACTED]"
+			continue
+		}
+		result[key] = strings.Join(values, ", ")
+	}
+
+	return result
+}
+
+func truncateForXrayLog(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if xrayRequestLogBodyLimit <= 0 {
+		return raw
+	}
+	if len(raw) <= xrayRequestLogBodyLimit {
+		return raw
+	}
+	return raw[:xrayRequestLogBodyLimit] + "\n...[truncated]"
 }
 
 func (c *xrayClient) doRegistryRequest(ctx context.Context, method, path string, accept []string) (*http.Response, error) {
@@ -1329,7 +1590,7 @@ func xrayIgnoreRuleVulnerabilityFilter(vulnerabilityID string) (string, string, 
 	return "", "", false
 }
 
-func persistXrayIgnoreRuleSnapshots(ctx context.Context, db *bun.DB, scan *models.Scan, client *xrayClient, artifactPaths ...string) error {
+func persistXrayIgnoreRuleSnapshots(ctx context.Context, db *bun.DB, scan *models.Scan, client *xrayClient, exportComponentName string, artifactPaths ...string) error {
 	if scan == nil || client == nil {
 		return nil
 	}
@@ -1346,10 +1607,15 @@ func persistXrayIgnoreRuleSnapshots(ctx context.Context, db *bun.DB, scan *model
 
 	artifactName := lastPathSegment(scan.ImageName)
 	artifactVersion := strings.TrimPrefix(scan.ImageTag, ":")
+	if strings.TrimSpace(exportComponentName) == "" {
+		exportComponentName = xrayExportComponentName(scan.ImageName, scan.ImageTag, scan.ImageDigest)
+	}
 	results := make([]models.XraySuppression, 0, len(rows))
 	successfulLookups := 0
 	lookupErrors := 0
 	var firstLookupErr error
+	var exportFallback map[string]xrayIgnoreRule
+	useExportFallback := false
 	now := time.Now()
 
 	for _, row := range rows {
@@ -1358,22 +1624,62 @@ func persistXrayIgnoreRuleSnapshots(ctx context.Context, db *bun.DB, scan *model
 			continue
 		}
 
-		rules, err := client.getIgnoreRules(ctx, vulnID, artifactPaths, artifactName, artifactVersion)
-		if err != nil {
-			if shouldTreatIgnoreRuleLookupAsUnavailable(err) {
-				recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIgnoreRuleSyncError(err))
-				return nil
+		rules := []xrayIgnoreRule(nil)
+		if useExportFallback {
+			if fallbackRule, ok := exportFallback[vulnID]; ok {
+				rules = []xrayIgnoreRule{fallbackRule}
+				successfulLookups += 1
+			} else {
+				continue
 			}
-			lookupErrors += 1
-			if firstLookupErr == nil {
-				firstLookupErr = err
+		} else {
+			lookupRules, err := client.getIgnoreRules(ctx, vulnID, artifactPaths, artifactName, artifactVersion)
+			if err != nil {
+				if shouldTreatIgnoreRuleLookupAsUnavailable(err) {
+					if exportFallback == nil {
+						exportRules, exportErr := client.exportIgnoredViolationRules(ctx, exportComponentName, artifactPaths...)
+						if exportErr != nil {
+							recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIgnoreRuleSyncError(err))
+							recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayExportIgnoreRuleFallbackError(exportErr))
+							return nil
+						}
+						exportFallback = map[string]xrayIgnoreRule{}
+						for _, exportRule := range exportRules {
+							if strings.TrimSpace(exportRule.VulnID) == "" {
+								continue
+							}
+							if _, exists := exportFallback[exportRule.VulnID]; exists {
+								continue
+							}
+							exportFallback[exportRule.VulnID] = exportRule.Rule
+						}
+						if len(exportFallback) > 0 {
+							recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray ignore-rule API is unavailable; resolved %d suppressions from Export Component Details.", len(exportFallback)))
+						}
+					}
+					useExportFallback = true
+					if fallbackRule, ok := exportFallback[vulnID]; ok {
+						rules = []xrayIgnoreRule{fallbackRule}
+						successfulLookups += 1
+					} else {
+						continue
+					}
+				} else {
+					lookupErrors += 1
+					if firstLookupErr == nil {
+						firstLookupErr = err
+					}
+					if successfulLookups == 0 && lookupErrors >= 5 {
+						return fmt.Errorf("aborted xray ignore-rule sync after %d lookup failures: %w", lookupErrors, firstLookupErr)
+					}
+					continue
+				}
+			} else {
+				rules = lookupRules
+				successfulLookups += 1
 			}
-			if successfulLookups == 0 && lookupErrors >= 5 {
-				return fmt.Errorf("aborted xray ignore-rule sync after %d lookup failures: %w", lookupErrors, firstLookupErr)
-			}
-			continue
 		}
-		successfulLookups += 1
+
 		if len(rules) == 0 {
 			continue
 		}
@@ -1450,6 +1756,414 @@ func describeNonFatalXrayIgnoreRuleSyncError(err error) string {
 	return fmt.Sprintf("Xray returned vulnerability results, but the optional ignore-rule lookup did not complete: %v", err)
 }
 
+func describeNonFatalXrayExportIgnoreRuleFallbackError(err error) string {
+	var httpErr *xrayHTTPError
+	if errors.As(err, &httpErr) {
+		body := strings.ToLower(strings.TrimSpace(httpErr.Body))
+		switch httpErr.StatusCode {
+		case http.StatusBadRequest:
+			if strings.Contains(body, "one parameter or more are missing") || strings.Contains(body, "non of the export options were selected") {
+				return "Xray export fallback ran, but the endpoint rejected the report parameters. Ignore-rule suppressions were skipped for this scan."
+			}
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return "Xray export fallback ran, but the configured credentials do not have permission to export violation details. Ignore-rule suppressions were skipped for this scan."
+		case http.StatusNotFound:
+			return "Xray export fallback ran, but no export details were found for this artifact path. Ignore-rule suppressions were skipped for this scan."
+		case http.StatusMethodNotAllowed:
+			return "Xray export fallback ran, but this instance does not expose export details for violation reports. Ignore-rule suppressions were skipped for this scan."
+		}
+	}
+
+	return fmt.Sprintf("Xray export fallback could not derive ignore-rule suppressions: %v", err)
+}
+
+func parseXrayIgnoredViolationRulesFromExport(payload []byte) ([]xrayExportIgnoreRule, error) {
+	reader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
+	if err == nil {
+		results := make([]xrayExportIgnoreRule, 0)
+		seen := make(map[string]bool)
+		for _, file := range reader.File {
+			if !strings.HasSuffix(strings.ToLower(file.Name), ".json") {
+				continue
+			}
+			handle, err := file.Open()
+			if err != nil {
+				return nil, fmt.Errorf("failed to open %s in Xray export ZIP: %w", file.Name, err)
+			}
+			body, readErr := io.ReadAll(handle)
+			handle.Close()
+			if readErr != nil {
+				return nil, fmt.Errorf("failed to read %s in Xray export ZIP: %w", file.Name, readErr)
+			}
+
+			var raw any
+			if err := json.Unmarshal(body, &raw); err != nil {
+				continue
+			}
+			parsed := appendXrayIgnoredViolationRulesFromPayload(results, seen, raw)
+			results = parsed
+		}
+
+		return results, nil
+	}
+
+	// Some Xray versions can return plain JSON directly for report exports.
+	var raw any
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse Xray export response as ZIP or JSON: %w", err)
+	}
+	results := make([]xrayExportIgnoreRule, 0)
+	seen := make(map[string]bool)
+	return appendXrayIgnoredViolationRulesFromPayload(results, seen, raw), nil
+}
+
+func appendXrayIgnoredViolationRulesFromPayload(results []xrayExportIgnoreRule, seen map[string]bool, payload any) []xrayExportIgnoreRule {
+	candidates := collectXrayExportViolationCandidates(payload)
+	for _, candidate := range candidates {
+		vulnID := strings.TrimSpace(firstNonEmpty(
+			findStringValue(candidate, "issue_id"),
+			findStringValue(candidate, "vuln_id"),
+			findStringValue(candidate, "vulnerability_id"),
+			findStringValue(candidate, "cve"),
+			findStringValue(candidate, "id"),
+		))
+		if vulnID == "" {
+			continue
+		}
+
+		ignoredValue, ignoredPresent := findBoolValue(candidate, "ignored")
+		if !ignoredPresent {
+			ignoredValue, ignoredPresent = findBoolValue(candidate, "is_ignored")
+		}
+		if !ignoredPresent {
+			ignoredText := strings.ToLower(strings.TrimSpace(firstNonEmpty(
+				findStringValue(candidate, "status"),
+				findStringValue(candidate, "violation_status"),
+				findStringValue(candidate, "ignore_status"),
+			)))
+			if ignoredText == "ignored" || ignoredText == "ignore" || ignoredText == "suppressed" {
+				ignoredValue = true
+				ignoredPresent = true
+			}
+		}
+		if !ignoredPresent || !ignoredValue {
+			continue
+		}
+
+		rule := xrayIgnoreRule{
+			RuleID: strings.TrimSpace(firstNonEmpty(
+				findStringValue(candidate, "ignore_rule_id"),
+				findStringValue(candidate, "rule_id"),
+				findStringValue(candidate, "external_id"),
+			)),
+			PolicyName: strings.TrimSpace(firstNonEmpty(
+				findStringValue(candidate, "policy"),
+				findStringValue(candidate, "policy_name"),
+			)),
+			WatchName: strings.TrimSpace(firstNonEmpty(
+				findStringValue(candidate, "watch"),
+				findStringValue(candidate, "watch_name"),
+			)),
+			Justification: strings.TrimSpace(firstNonEmpty(
+				findStringValue(candidate, "justification"),
+				findStringValue(candidate, "ignore_reason"),
+				findStringValue(candidate, "comment"),
+			)),
+			Raw: candidate,
+		}
+
+		rule.ExpiresAt = findTimeValue(candidate,
+			"expires_at",
+			"expired_at",
+			"expires",
+		)
+
+		if rule.RuleID == "" {
+			rule.RuleID = fallbackXrayIgnoreRuleID(vulnID, rule.PolicyName, rule.WatchName)
+		}
+
+		key := vulnID + "|" + rule.RuleID
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		results = append(results, xrayExportIgnoreRule{VulnID: vulnID, Rule: rule})
+	}
+
+	return results
+}
+
+func collectXrayExportViolationCandidates(payload any) []models.JSONObject {
+	objects := collectXrayIgnoreRuleObjects(payload)
+	results := make([]models.JSONObject, 0, len(objects))
+	for _, object := range objects {
+		hasIssue := hasMapKey(object, "issue_id") || hasMapKey(object, "vuln_id") || hasMapKey(object, "vulnerability_id") || hasMapKey(object, "cve")
+		hasIgnoreSignal := hasMapKey(object, "is_ignored") || hasMapKey(object, "ignored") || hasMapKey(object, "ignore_rule_id") || hasMapKey(object, "justification") || hasMapKey(object, "policy") || hasMapKey(object, "policy_name") || hasMapKey(object, "watch") || hasMapKey(object, "watch_name")
+		hasViolationContext := hasMapKey(object, "matched_policies") || hasMapKey(object, "watcher_name") || hasMapKey(object, "watch_name") || hasMapKey(object, "user_issue_id")
+		if hasIssue && (hasIgnoreSignal || hasViolationContext) {
+			results = append(results, object)
+		}
+	}
+	return results
+}
+
+func hasMapKey(values models.JSONObject, key string) bool {
+	if values == nil {
+		return false
+	}
+	_, ok := values[key]
+	if ok {
+		return true
+	}
+	_, ok = values[strings.ToUpper(key)]
+	if ok {
+		return true
+	}
+	_, ok = values[strings.ToLower(key)]
+	if ok {
+		return true
+	}
+	return false
+}
+
+func findBoolValue(values models.JSONObject, key string) (bool, bool) {
+	if values == nil {
+		return false, false
+	}
+	raw, ok := values[key]
+	if !ok {
+		raw, ok = values[strings.ToUpper(key)]
+	}
+	if !ok {
+		raw, ok = values[strings.ToLower(key)]
+	}
+	if !ok {
+		return false, false
+	}
+
+	switch typed := raw.(type) {
+	case bool:
+		return typed, true
+	case string:
+		trimmed := strings.ToLower(strings.TrimSpace(typed))
+		switch trimmed {
+		case "true", "1", "yes", "y", "ignored", "suppressed":
+			return true, true
+		case "false", "0", "no", "n", "active", "open":
+			return false, true
+		}
+	case float64:
+		return typed != 0, true
+	}
+
+	return false, false
+}
+
+func parseXrayViolationsExport(payload []byte) (*xrayViolationsResponse, error) {
+	reader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
+	if err == nil {
+		for _, file := range reader.File {
+			if !strings.HasSuffix(strings.ToLower(file.Name), ".json") {
+				continue
+			}
+			handle, err := file.Open()
+			if err != nil {
+				return nil, fmt.Errorf("failed to open %s in Xray export ZIP: %w", file.Name, err)
+			}
+			body, readErr := io.ReadAll(handle)
+			handle.Close()
+			if readErr != nil {
+				return nil, fmt.Errorf("failed to read %s in Xray export ZIP: %w", file.Name, readErr)
+			}
+
+			var raw any
+			if err := json.Unmarshal(body, &raw); err != nil {
+				continue
+			}
+			if parsed := parseXrayViolationsPayload(raw); parsed != nil {
+				return parsed, nil
+			}
+		}
+		return &xrayViolationsResponse{}, nil
+	}
+
+	var raw any
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse Xray violations export response as ZIP or JSON: %w", err)
+	}
+	parsed := parseXrayViolationsPayload(raw)
+	if parsed == nil {
+		return &xrayViolationsResponse{}, nil
+	}
+	return parsed, nil
+}
+
+func parseXrayViolationsPayload(payload any) *xrayViolationsResponse {
+	objects := collectXrayExportViolationCandidates(payload)
+	if len(objects) == 0 {
+		return nil
+	}
+
+	response := &xrayViolationsResponse{Violations: make([]xrayViolationRecord, 0, len(objects))}
+	seen := make(map[string]bool)
+	for _, object := range objects {
+		issueID := strings.TrimSpace(firstNonEmpty(
+			findStringValue(object, "issue_id"),
+			findStringValue(object, "vuln_id"),
+			findStringValue(object, "vulnerability_id"),
+			findStringValue(object, "cve"),
+		))
+		if issueID == "" {
+			continue
+		}
+
+		violationID := strings.TrimSpace(firstNonEmpty(
+			findStringValue(object, "violation_id"),
+			findStringValue(object, "user_issue_id"),
+			findStringValue(object, "id"),
+		))
+		watchName := strings.TrimSpace(firstNonEmpty(
+			findStringValue(object, "watch_name"),
+			findStringValue(object, "watcher_name"),
+		))
+		watchID := strings.TrimSpace(firstNonEmpty(
+			findStringValue(object, "watcher_id"),
+			findStringValue(object, "watch_id"),
+		))
+
+		key := issueID + "|" + watchName + "|" + violationID
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		record := xrayViolationRecord{
+			ID:            violationID,
+			IssueID:       issueID,
+			WatchID:       watchID,
+			Watch:         watchName,
+			Summary:       strings.TrimSpace(findStringValue(object, "summary")),
+			Description:   strings.TrimSpace(findStringValue(object, "description")),
+			Severity:      strings.TrimSpace(findStringValue(object, "severity")),
+			Source:        strings.TrimSpace(findStringValue(object, "source")),
+			SourceVersion: strings.TrimSpace(findStringValue(object, "source_version")),
+			SourceID:      strings.TrimSpace(findStringValue(object, "source_id")),
+			Raw:           object,
+			Policies:      extractXrayViolationPolicies(object),
+		}
+		record.ImpactArtifacts = extractStringSlice(object, "paths")
+		record.ComponentPhysicalPaths = extractStringSlice(object, "component_physical_paths")
+		record.IsBlocking = anyXrayViolationPolicyBlocking(record.Policies)
+		response.Violations = append(response.Violations, record)
+	}
+
+	response.Total = len(response.Violations)
+	return response
+}
+
+func anyXrayViolationPolicyBlocking(policies []xrayViolationPolicy) bool {
+	for _, policy := range policies {
+		if policy.IsBlocking {
+			return true
+		}
+	}
+	return false
+}
+
+func extractXrayViolationPolicies(value any) []xrayViolationPolicy {
+	objects := collectNestedObjectsByKey(value, "matched_policies")
+	policies := make([]xrayViolationPolicy, 0, len(objects))
+	for _, object := range objects {
+		policy := xrayViolationPolicy{
+			PolicyName:        strings.TrimSpace(findStringValue(object, "policy")),
+			Rule:              strings.TrimSpace(findStringValue(object, "rule")),
+			FailBuild:         findBoolValueLoose(object, "is_build_failed"),
+			FailPullRequest:   findBoolValueLoose(object, "fail_pull_request"),
+			SkipNotApplicable: findBoolValueLoose(object, "is_skip_not_applicable"),
+			IsBlocking:        findBoolValueLoose(object, "is_blocking"),
+		}
+		if policy.PolicyName == "" && policy.Rule == "" {
+			continue
+		}
+		policies = append(policies, policy)
+	}
+	return policies
+}
+
+func extractStringSlice(value any, key string) []string {
+	objects := collectNestedValuesByKey(value, key)
+	results := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, object := range objects {
+		slice, ok := object.([]any)
+		if !ok {
+			continue
+		}
+		for _, item := range slice {
+			text := strings.TrimSpace(fmt.Sprint(item))
+			if text == "" || text == "<nil>" || seen[text] {
+				continue
+			}
+			seen[text] = true
+			results = append(results, text)
+		}
+	}
+	return results
+}
+
+func collectNestedObjectsByKey(value any, key string) []models.JSONObject {
+	results := make([]models.JSONObject, 0)
+	for _, raw := range collectNestedValuesByKey(value, key) {
+		slice, ok := raw.([]any)
+		if !ok {
+			continue
+		}
+		for _, item := range slice {
+			switch typed := item.(type) {
+			case map[string]any:
+				results = append(results, toJSONObject(typed))
+			case models.JSONObject:
+				results = append(results, typed)
+			}
+		}
+	}
+	return results
+}
+
+func collectNestedValuesByKey(value any, key string) []any {
+	results := make([]any, 0)
+	var walk func(any)
+	walk = func(current any) {
+		switch typed := current.(type) {
+		case models.JSONObject:
+			for k, item := range typed {
+				if strings.EqualFold(strings.TrimSpace(k), key) {
+					results = append(results, item)
+				}
+				walk(item)
+			}
+		case map[string]any:
+			for k, item := range typed {
+				if strings.EqualFold(strings.TrimSpace(k), key) {
+					results = append(results, item)
+				}
+				walk(item)
+			}
+		case []any:
+			for _, item := range typed {
+				walk(item)
+			}
+		}
+	}
+	walk(value)
+	return results
+}
+
+func findBoolValueLoose(values models.JSONObject, key string) bool {
+	value, ok := findBoolValue(values, key)
+	return ok && value
+}
+
 func extractXrayIgnoreRules(payload any) []xrayIgnoreRule {
 	objects := collectXrayIgnoreRuleObjects(payload)
 	results := make([]xrayIgnoreRule, 0, len(objects))
@@ -1499,7 +2213,7 @@ func collectXrayIgnoreRuleObjects(payload any) []models.JSONObject {
 		return results
 	case map[string]any:
 		object := toJSONObject(typed)
-		for _, key := range []string{"ignore_rules", "data", "results", "items", "rules"} {
+		for _, key := range []string{"ignore_rules", "data", "results", "items", "rules", "violations"} {
 			if nested, ok := typed[key]; ok {
 				results := collectXrayIgnoreRuleObjects(nested)
 				if len(results) > 0 {
@@ -1775,6 +2489,35 @@ func xrayDigestArtifactReference(digest string) string {
 	return strings.TrimSpace(parts[0]) + "__" + strings.TrimSpace(parts[1])
 }
 
+func xrayExportComponentName(imageName, imageTag, imageDigest string) string {
+	if digestRef := xrayDigestArtifactReference(imageDigest); digestRef != "" {
+		return buildImageRef(imageName, digestRef)
+	}
+	return buildImageRef(imageName, imageTag)
+}
+
+// xraySummaryExportDetails extracts the canonical component name and export path
+// from the first artifact in a summary/artifact response. The returned exportPath
+// does NOT include the artifactoryID prefix and ends with "/manifest.json" so it
+// matches what the Xray exportDetails endpoint expects.
+func xraySummaryExportDetails(summary *xraySummaryResponse, artifactoryID string) (componentName, exportPath string) {
+	if summary == nil || len(summary.Artifacts) == 0 {
+		return "", ""
+	}
+	artifact := summary.Artifacts[0]
+	componentName = strings.TrimSpace(artifact.General.Name)
+	rawPath := strings.TrimRight(strings.TrimSpace(artifact.General.Path), "/")
+	if rawPath == "" {
+		return componentName, ""
+	}
+	prefix := strings.TrimRight(strings.TrimSpace(artifactoryID), "/")
+	if prefix != "" {
+		rawPath = strings.TrimPrefix(rawPath, prefix+"/")
+	}
+	exportPath = rawPath + "/manifest.json"
+	return
+}
+
 func dedupeXrayArtifactPathCandidates(candidates []xrayArtifactPathCandidate) []xrayArtifactPathCandidate {
 	results := make([]xrayArtifactPathCandidate, 0, len(candidates))
 	seen := make(map[string]bool)
@@ -1787,6 +2530,45 @@ func dedupeXrayArtifactPathCandidates(candidates []xrayArtifactPathCandidate) []
 		results = append(results, candidate)
 	}
 	return results
+}
+
+func preferredXrayArtifactCandidate(candidates []xrayArtifactPathCandidate) xrayArtifactPathCandidate {
+	if len(candidates) == 0 {
+		return xrayArtifactPathCandidate{}
+	}
+
+	best := candidates[0]
+	bestScore := scoreXrayArtifactCandidate(best)
+	for _, candidate := range candidates[1:] {
+		score := scoreXrayArtifactCandidate(candidate)
+		if score > bestScore {
+			best = candidate
+			bestScore = score
+		}
+	}
+
+	return best
+}
+
+func scoreXrayArtifactCandidate(candidate xrayArtifactPathCandidate) int {
+	path := strings.ToLower(strings.TrimSpace(candidate.Path))
+	repo := strings.ToLower(strings.TrimSpace(candidate.Repository))
+	score := 0
+
+	if strings.Contains(path, "sha256__") {
+		score += 6
+	}
+	if strings.HasSuffix(repo, "-cache") {
+		score += 4
+	}
+	if strings.HasSuffix(path, "/manifest.json") {
+		score += 3
+	}
+	if strings.Contains(path, "list.manifest.json") {
+		score -= 2
+	}
+
+	return score
 }
 
 func joinXrayArtifactPaths(candidates []xrayArtifactPathCandidate) string {
@@ -2160,12 +2942,187 @@ func persistXrayViolationFindings(ctx context.Context, db *bun.DB, scan *models.
 	return nil
 }
 
-func persistXrayCycloneDXFallback(ctx context.Context, db *bun.DB, scan *models.Scan, client *xrayClient, artifactPath, repoPath string) (int, error) {
+func persistXrayViolationContext(ctx context.Context, db *bun.DB, scan *models.Scan, response *xrayViolationsResponse) error {
+	if scan == nil || response == nil || len(response.Violations) == 0 {
+		return nil
+	}
+
+	type contextRecord struct {
+		IssueID                string
+		ViolationID            string
+		WatchName              string
+		WatchNames             []string
+		WatchPolicyMatches     []models.JSONObject
+		MatchedPolicies        []models.JSONObject
+		ViolationPaths         []string
+		ComponentPhysicalPaths []string
+		Source                 string
+		SourceVersion          string
+		SourceID               string
+		IsBlocking             bool
+		Raw                    models.JSONObject
+	}
+
+	byVulnID := make(map[string]*contextRecord)
+	for _, violation := range response.Violations {
+		candidateVulnIDs := xrayViolationCandidateVulnIDs(violation)
+		if len(candidateVulnIDs) == 0 {
+			continue
+		}
+
+		firstKey := candidateVulnIDs[0]
+		record, exists := byVulnID[firstKey]
+		if !exists {
+			record = &contextRecord{}
+			byVulnID[firstKey] = record
+		}
+		for _, vulnID := range candidateVulnIDs[1:] {
+			if _, ok := byVulnID[vulnID]; !ok {
+				byVulnID[vulnID] = record
+			}
+		}
+
+		if record.ViolationID == "" {
+			record.ViolationID = strings.TrimSpace(violation.ID)
+		}
+		if record.IssueID == "" {
+			record.IssueID = strings.TrimSpace(violation.IssueID)
+		}
+		if record.WatchName == "" {
+			record.WatchName = strings.TrimSpace(violation.Watch)
+		}
+		record.WatchNames = append(record.WatchNames, strings.TrimSpace(violation.Watch))
+		if record.Source == "" {
+			record.Source = strings.TrimSpace(violation.Source)
+		}
+		if record.SourceVersion == "" {
+			record.SourceVersion = strings.TrimSpace(violation.SourceVersion)
+		}
+		if record.SourceID == "" {
+			record.SourceID = strings.TrimSpace(violation.SourceID)
+		}
+		if len(record.Raw) == 0 && len(violation.Raw) > 0 {
+			record.Raw = violation.Raw
+		}
+		record.IsBlocking = record.IsBlocking || violation.IsBlocking
+
+		record.MatchedPolicies = append(record.MatchedPolicies, xrayViolationPoliciesToJSON(violation.Policies)...)
+		record.WatchPolicyMatches = append(record.WatchPolicyMatches, xrayWatchPolicyMatchesToJSON(violation)...)
+		record.ViolationPaths = append(record.ViolationPaths, violation.ImpactArtifacts...)
+		record.ComponentPhysicalPaths = append(record.ComponentPhysicalPaths, violation.ComponentPhysicalPaths...)
+	}
+
+	for vulnID, record := range byVulnID {
+		watchNames := dedupeStrings(record.WatchNames)
+		watchName := strings.TrimSpace(record.WatchName)
+		if watchName == "" && len(watchNames) > 0 {
+			watchName = watchNames[0]
+		}
+		if _, err := db.NewUpdate().Model((*models.Vulnerability)(nil)).
+			Set("xray_issue_id = ?", strings.TrimSpace(record.IssueID)).
+			Set("xray_violation_id = ?", strings.TrimSpace(record.ViolationID)).
+			Set("xray_watch_name = ?", watchName).
+			Set("xray_watch_names = ?", watchNames).
+			Set("xray_watch_policy_matches = ?", dedupeJSONObjects(record.WatchPolicyMatches)).
+			Set("xray_matched_policies = ?", dedupeJSONObjects(record.MatchedPolicies)).
+			Set("xray_violation_paths = ?", dedupeStrings(record.ViolationPaths)).
+			Set("xray_component_physical_paths = ?", dedupeStrings(record.ComponentPhysicalPaths)).
+			Set("xray_source = ?", strings.TrimSpace(record.Source)).
+			Set("xray_source_version = ?", strings.TrimSpace(record.SourceVersion)).
+			Set("xray_source_id = ?", strings.TrimSpace(record.SourceID)).
+			Set("xray_is_blocking = ?", record.IsBlocking).
+			Set("xray_violation_raw = ?", record.Raw).
+			Where("scan_id = ?", scan.ID).
+			Where("(vuln_id = ? OR xray_issue_id = ?)", vulnID, vulnID).
+			Exec(ctx); err != nil {
+			return fmt.Errorf("failed to persist xray violation context for %s: %w", vulnID, err)
+		}
+	}
+
+	return nil
+}
+
+func xrayViolationCandidateVulnIDs(violation xrayViolationRecord) []string {
+	results := make([]string, 0, 4)
+	seen := make(map[string]bool)
+	add := func(value string) {
+		value = strings.TrimSpace(strings.ToUpper(value))
+		if value == "" || seen[value] {
+			return
+		}
+		seen[value] = true
+		results = append(results, value)
+	}
+
+	add(violation.IssueID)
+	add(violation.ID)
+
+	if rawCVEs, ok := violation.Raw["cves"]; ok {
+		if entries, ok := rawCVEs.([]any); ok {
+			for _, entry := range entries {
+				switch typed := entry.(type) {
+				case map[string]any:
+					add(fmt.Sprint(typed["cve"]))
+				case models.JSONObject:
+					add(fmt.Sprint(typed["cve"]))
+				}
+			}
+		}
+	}
+
+	return results
+}
+
+func dedupeStrings(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	results := make([]string, 0, len(values))
+	seen := make(map[string]bool)
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		results = append(results, value)
+	}
+	return results
+}
+
+func dedupeJSONObjects(values []models.JSONObject) []models.JSONObject {
+	if len(values) == 0 {
+		return []models.JSONObject{}
+	}
+	results := make([]models.JSONObject, 0, len(values))
+	seen := make(map[string]bool)
+	for _, value := range values {
+		if value == nil {
+			continue
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			continue
+		}
+		key := string(encoded)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		results = append(results, value)
+	}
+	return results
+}
+
+func persistXrayCycloneDXFallback(ctx context.Context, db *bun.DB, scan *models.Scan, client *xrayClient, exportComponentName, artifactPath, repoPath string) (int, error) {
 	if scan == nil || client == nil {
 		return 0, nil
 	}
+	if strings.TrimSpace(exportComponentName) == "" {
+		exportComponentName = xrayExportComponentName(scan.ImageName, scan.ImageTag, scan.ImageDigest)
+	}
 
-	sbom, exportPath, err := client.exportComponentCycloneDX(ctx, buildImageRef(scan.ImageName, scan.ImageTag), artifactPath, repoPath)
+	sbom, exportPath, err := client.exportComponentCycloneDX(ctx, exportComponentName, artifactPath, repoPath)
 	if err != nil {
 		return 0, err
 	}
@@ -2225,12 +3182,15 @@ func upsertXrayKBEntries(ctx context.Context, db *bun.DB, scan *models.Scan, ent
 	return nil
 }
 
-func persistXraySBOMComponents(ctx context.Context, db *bun.DB, scan *models.Scan, client *xrayClient, artifactPath, repoPath string) error {
+func persistXraySBOMComponents(ctx context.Context, db *bun.DB, scan *models.Scan, client *xrayClient, exportComponentName, artifactPath, repoPath string) error {
 	if scan == nil || client == nil {
 		return nil
 	}
+	if strings.TrimSpace(exportComponentName) == "" {
+		exportComponentName = xrayExportComponentName(scan.ImageName, scan.ImageTag, scan.ImageDigest)
+	}
 
-	sbom, exportPath, err := client.exportComponentCycloneDX(ctx, buildImageRef(scan.ImageName, scan.ImageTag), artifactPath, repoPath)
+	sbom, exportPath, err := client.exportComponentCycloneDX(ctx, exportComponentName, artifactPath, repoPath)
 	if err != nil {
 		return err
 	}
@@ -2285,6 +3245,7 @@ func ParseXrayVulnerabilities(summary *xraySummaryResponse, scanID uuid.UUID) []
 					References:          xrayReferences(issue.References),
 					DataSource:          xrayDataSource,
 					ExternalComponentID: strings.TrimSpace(component.ComponentID),
+					XrayIssueID:         strings.TrimSpace(issue.IssueID),
 					CVSSScore:           score,
 					CVSSVector:          vector,
 				})
@@ -2323,19 +3284,74 @@ func ParseXrayViolationVulnerabilities(response *xrayViolationsResponse, scanID 
 		seen[key] = true
 
 		vulns = append(vulns, models.Vulnerability{
-			ScanID:           scanID,
-			VulnID:           vulnID,
-			PkgName:          pkgName,
-			InstalledVersion: strings.TrimSpace(fallbackVersion),
-			Severity:         normalizeXraySeverity(violation.Severity),
-			Title:            strings.TrimSpace(violation.Summary),
-			Description:      strings.TrimSpace(violation.Description),
-			References:       nil,
-			DataSource:       xrayDataSource,
+			ScanID:                     scanID,
+			VulnID:                     vulnID,
+			PkgName:                    pkgName,
+			InstalledVersion:           strings.TrimSpace(fallbackVersion),
+			Severity:                   normalizeXraySeverity(violation.Severity),
+			Title:                      strings.TrimSpace(violation.Summary),
+			Description:                strings.TrimSpace(violation.Description),
+			References:                 nil,
+			DataSource:                 xrayDataSource,
+			XrayIssueID:                strings.TrimSpace(violation.IssueID),
+			XrayViolationID:            strings.TrimSpace(violation.ID),
+			XrayWatchName:              strings.TrimSpace(violation.Watch),
+			XrayWatchNames:             dedupeStrings([]string{strings.TrimSpace(violation.Watch)}),
+			XrayWatchPolicyMatches:     xrayWatchPolicyMatchesToJSON(violation),
+			XrayMatchedPolicies:        xrayViolationPoliciesToJSON(violation.Policies),
+			XrayViolationPaths:         append([]string(nil), violation.ImpactArtifacts...),
+			XrayComponentPhysicalPaths: append([]string(nil), violation.ComponentPhysicalPaths...),
+			XraySource:                 strings.TrimSpace(violation.Source),
+			XraySourceVersion:          strings.TrimSpace(violation.SourceVersion),
+			XraySourceID:               strings.TrimSpace(violation.SourceID),
+			XrayIsBlocking:             violation.IsBlocking,
+			XrayViolationRaw:           violation.Raw,
 		})
 	}
 
 	return vulns
+}
+
+func xrayViolationPoliciesToJSON(policies []xrayViolationPolicy) []models.JSONObject {
+	if len(policies) == 0 {
+		return []models.JSONObject{}
+	}
+	results := make([]models.JSONObject, 0, len(policies))
+	for _, policy := range policies {
+		results = append(results, models.JSONObject{
+			"policy":                 strings.TrimSpace(policy.PolicyName),
+			"rule":                   strings.TrimSpace(policy.Rule),
+			"is_build_failed":        policy.FailBuild,
+			"fail_pull_request":      policy.FailPullRequest,
+			"is_skip_not_applicable": policy.SkipNotApplicable,
+			"is_blocking":            policy.IsBlocking,
+		})
+	}
+	return results
+}
+
+func xrayWatchPolicyMatchesToJSON(violation xrayViolationRecord) []models.JSONObject {
+	if len(violation.Policies) == 0 {
+		return []models.JSONObject{}
+	}
+
+	watchName := strings.TrimSpace(violation.Watch)
+	watchID := strings.TrimSpace(violation.WatchID)
+	results := make([]models.JSONObject, 0, len(violation.Policies))
+	for _, policy := range violation.Policies {
+		results = append(results, models.JSONObject{
+			"watch_name":             watchName,
+			"watch_id":               watchID,
+			"policy":                 strings.TrimSpace(policy.PolicyName),
+			"rule":                   strings.TrimSpace(policy.Rule),
+			"is_build_failed":        policy.FailBuild,
+			"fail_pull_request":      policy.FailPullRequest,
+			"is_skip_not_applicable": policy.SkipNotApplicable,
+			"is_blocking":            policy.IsBlocking,
+		})
+	}
+
+	return results
 }
 
 func ParseCycloneDXVulnerabilities(sbom *TrivySBOMOutput, scanID uuid.UUID) []models.Vulnerability {

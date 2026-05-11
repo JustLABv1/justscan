@@ -1,7 +1,23 @@
 import { req } from './core';
 import { appendScope } from './scope';
-import type { ResourceShare, VulnerabilityViewPreferenceResponse, VulnerabilityViewSettings } from './types/orgs';
-import type { BulkDeleteScansResponse, ImageSummary, SBOMComponent, Scan, ScanComparison, ScanShareResponse, ScanTrendPoint, SharedScanRescanResponse, Vulnerability, VulnerabilityContextAnalysis } from './types/scans';
+import type {
+    ResourceShare,
+    VulnerabilityViewPreferenceResponse,
+    VulnerabilityViewSettings,
+} from './types/orgs';
+import type {
+    BulkDeleteScansResponse,
+    ImageSummary,
+    SBOMComponent,
+    Scan,
+    ScanComparison,
+    ScanShareResponse,
+    ScanTrendPoint,
+    SharedScanRescanResponse,
+    Vulnerability,
+    VulnerabilityContextAnalysis,
+    XRayRequestLog,
+} from './types/scans';
 
 export const listScans = (
   page = 1,
@@ -12,7 +28,7 @@ export const listScans = (
   helmOnly?: boolean,
   helmChart?: string,
   from?: string,
-  to?: string,
+  to?: string
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
@@ -34,17 +50,50 @@ export const listScanImages = (page = 1, limit = 30, image?: string, status?: st
   return req<{ data: ImageSummary[]; total: number }>('GET', `/api/v1/scans/images?${params}`);
 };
 
-export const getScan = (id: string) =>
-  req<Scan>('GET', `/api/v1/scans/${id}`);
+export const getScan = (id: string) => req<Scan>('GET', `/api/v1/scans/${id}`);
 
-export const createScan = (imageName: string, imageTag: string, registryId?: string, tagIds?: string[], platform?: string, orgId?: string, xrayRepository?: string) =>
-  req<Scan>('POST', '/api/v1/scans/', { image: imageName, tag: imageTag, registry_id: registryId, tag_ids: tagIds, platform, org_id: orgId, xray_repository: xrayRepository });
+export const getScanXrayRequestLogs = (id: string, limit = 200) =>
+  req<{ data: XRayRequestLog[] }>('GET', `/api/v1/scans/${id}/xray-requests?limit=${limit}`).then(
+    (result) => result.data ?? []
+  );
 
-export const createScans = (images: string[], registryId?: string, tagIds?: string[], platform?: string, orgId?: string, xrayRepository?: string) =>
-  req<{ scans: Scan[] }>('POST', '/api/v1/scans/batch', { images, registry_id: registryId, tag_ids: tagIds, platform, org_id: orgId, xray_repository: xrayRepository });
+export const createScan = (
+  imageName: string,
+  imageTag: string,
+  registryId?: string,
+  tagIds?: string[],
+  platform?: string,
+  orgId?: string,
+  xrayRepository?: string
+) =>
+  req<Scan>('POST', '/api/v1/scans/', {
+    image: imageName,
+    tag: imageTag,
+    registry_id: registryId,
+    tag_ids: tagIds,
+    platform,
+    org_id: orgId,
+    xray_repository: xrayRepository,
+  });
 
-export const deleteScan = (id: string) =>
-  req<{ result: string }>('DELETE', `/api/v1/scans/${id}`);
+export const createScans = (
+  images: string[],
+  registryId?: string,
+  tagIds?: string[],
+  platform?: string,
+  orgId?: string,
+  xrayRepository?: string
+) =>
+  req<{ scans: Scan[] }>('POST', '/api/v1/scans/batch', {
+    images,
+    registry_id: registryId,
+    tag_ids: tagIds,
+    platform,
+    org_id: orgId,
+    xray_repository: xrayRepository,
+  });
+
+export const deleteScan = (id: string) => req<{ result: string }>('DELETE', `/api/v1/scans/${id}`);
 
 export const listVulnerabilities = (
   scanId: string,
@@ -55,7 +104,7 @@ export const listVulnerabilities = (
   hasFix?: boolean,
   minCvss?: number,
   sortBy?: string,
-  sortDir?: 'asc' | 'desc',
+  sortDir?: 'asc' | 'desc'
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (severity) params.set('severity', severity);
@@ -64,7 +113,10 @@ export const listVulnerabilities = (
   if (minCvss) params.set('min_cvss', String(minCvss));
   if (sortBy) params.set('sort_by', sortBy);
   if (sortDir) params.set('sort_dir', sortDir);
-  return req<{ data: Vulnerability[]; total: number }>('GET', `/api/v1/scans/${scanId}/vulnerabilities?${params}`);
+  return req<{ data: Vulnerability[]; total: number }>(
+    'GET',
+    `/api/v1/scans/${scanId}/vulnerabilities?${params}`
+  );
 };
 
 const vulnerabilityViewQuery = () => {
@@ -75,16 +127,32 @@ const vulnerabilityViewQuery = () => {
 };
 
 export const getScanVulnerabilityViewSettings = (scanId: string) =>
-  req<VulnerabilityViewPreferenceResponse>('GET', `/api/v1/scans/${scanId}/vulnerability-view${vulnerabilityViewQuery()}`);
+  req<VulnerabilityViewPreferenceResponse>(
+    'GET',
+    `/api/v1/scans/${scanId}/vulnerability-view${vulnerabilityViewQuery()}`
+  );
 
-export const saveScanVulnerabilityViewPreference = (scanId: string, settings: VulnerabilityViewSettings) =>
-  req<VulnerabilityViewPreferenceResponse>('PUT', `/api/v1/scans/${scanId}/vulnerability-view${vulnerabilityViewQuery()}`, settings);
+export const saveScanVulnerabilityViewPreference = (
+  scanId: string,
+  settings: VulnerabilityViewSettings
+) =>
+  req<VulnerabilityViewPreferenceResponse>(
+    'PUT',
+    `/api/v1/scans/${scanId}/vulnerability-view${vulnerabilityViewQuery()}`,
+    settings
+  );
 
 export const resetScanVulnerabilityViewPreference = (scanId: string) =>
-  req<VulnerabilityViewPreferenceResponse>('DELETE', `/api/v1/scans/${scanId}/vulnerability-view${vulnerabilityViewQuery()}`);
+  req<VulnerabilityViewPreferenceResponse>(
+    'DELETE',
+    `/api/v1/scans/${scanId}/vulnerability-view${vulnerabilityViewQuery()}`
+  );
 
 export const getVulnerabilityContextAnalysis = (scanId: string, vulnerabilityId: string) =>
-  req<VulnerabilityContextAnalysis>('GET', `/api/v1/scans/${scanId}/vulnerabilities/${vulnerabilityId}/analysis`);
+  req<VulnerabilityContextAnalysis>(
+    'GET',
+    `/api/v1/scans/${scanId}/vulnerabilities/${vulnerabilityId}/analysis`
+  );
 
 export const compareScans = (scanIdA: string, scanIdB: string) =>
   req<ScanComparison>('GET', `/api/v1/scans/compare?a=${scanIdA}&b=${scanIdB}`);
@@ -93,14 +161,22 @@ export const getScanTrends = (imageName?: string, imageTag?: string, days = 30) 
   const params = new URLSearchParams({ days: String(days) });
   if (imageName) params.set('image_name', imageName);
   if (imageTag) params.set('image_tag', imageTag);
-  return req<{ data: ScanTrendPoint[] }>('GET', `/api/v1/scans/trends?${params}`).then((result) => result.data ?? []);
+  return req<{ data: ScanTrendPoint[] }>('GET', `/api/v1/scans/trends?${params}`).then(
+    (result) => result.data ?? []
+  );
 };
 
-export const reScan = (id: string) =>
-  req<Scan>('POST', `/api/v1/scans/${id}/rescan`);
+export const reScan = (id: string) => req<Scan>('POST', `/api/v1/scans/${id}/rescan`);
 
 export const cancelScan = (id: string) =>
-  req<{ result: string; status?: string; current_step?: string; external_status?: string; completed_at?: string; error_message?: string }>('POST', `/api/v1/scans/${id}/cancel`);
+  req<{
+    result: string;
+    status?: string;
+    current_step?: string;
+    external_status?: string;
+    completed_at?: string;
+    error_message?: string;
+  }>('POST', `/api/v1/scans/${id}/cancel`);
 
 export const bulkDeleteScans = (ids: string[]) =>
   req<BulkDeleteScansResponse>('DELETE', '/api/v1/scans/bulk', { ids });
@@ -112,7 +188,10 @@ export const getScanSBOM = (scanId: string, name?: string, type?: string) => {
   const params = new URLSearchParams();
   if (name) params.set('name', name);
   if (type) params.set('type', type);
-  return req<{ data: SBOMComponent[]; total: number }>('GET', `/api/v1/scans/${scanId}/sbom?${params}`);
+  return req<{ data: SBOMComponent[]; total: number }>(
+    'GET',
+    `/api/v1/scans/${scanId}/sbom?${params}`
+  );
 };
 
 export const createShare = (scanId: string, visibility: 'public' | 'authenticated') =>
@@ -122,7 +201,9 @@ export const deleteShare = (scanId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/scans/${scanId}/share`);
 
 export const listScanOrgGrants = (scanId: string) =>
-  req<{ data: ResourceShare[] }>('GET', `/api/v1/scans/${scanId}/org-grants`).then((result) => result.data ?? []);
+  req<{ data: ResourceShare[] }>('GET', `/api/v1/scans/${scanId}/org-grants`).then(
+    (result) => result.data ?? []
+  );
 
 export const grantScanOrgAccess = (scanId: string, orgId: string) =>
   req<{ result: string }>('POST', `/api/v1/scans/${scanId}/org-grants`, { org_id: orgId });

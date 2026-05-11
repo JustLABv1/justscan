@@ -66,6 +66,7 @@ import {
 import { formatIgnoreRuleStatusLabel, getBlockedPolicyDetails } from '@/lib/blocked-policy';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
+  Accordion,
   Alert,
   Button,
   Calendar,
@@ -2445,7 +2446,7 @@ export default function ScanDetailPage() {
                 Scanner
               </p>
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                <div className="surface-panel rounded-xl p-4">
+                <div className="p-4">
                   <p className="text-xs text-zinc-500 mb-1">Scanner</p>
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">
                     Trivy {scan.trivy_version || 'unknown'}
@@ -2484,7 +2485,78 @@ export default function ScanDetailPage() {
                 Image metadata
               </p>
 
-              <Card className="surface-panel rounded-xl overflow-hidden">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <Card className="p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                    Created
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
+                    {imageCreated || '-'}
+                  </p>
+                </Card>
+                <Card className="p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                    Runtime user
+                  </p>
+                  <p className="mt-1 font-mono text-sm text-zinc-900 dark:text-zinc-100">
+                    {imageUser || '-'}
+                  </p>
+                </Card>
+                <Card className="p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                    Working directory
+                  </p>
+                  <p className="mt-1 font-mono text-sm text-zinc-900 dark:text-zinc-100">
+                    {imageWorkingDir || '-'}
+                  </p>
+                </Card>
+                <Card className="p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                    Entrypoint
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
+                    {imageEntrypoint.length > 0 ? 'Configured' : 'Not declared'}
+                  </p>
+                </Card>
+                <Card className="p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                    Environment variables
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
+                    {imageEnv.length > 0 ? `${imageEnv.length} captured` : '0 captured'}
+                  </p>
+                </Card>
+                <Card className="p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                    Labels
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
+                    {imageLabelEntries.length > 0
+                      ? `${imageLabelEntries.length} captured`
+                      : '0 captured'}
+                  </p>
+                </Card>
+                <Card className="p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                    Exposed ports
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
+                    {imageExposedPorts.length > 0
+                      ? `${imageExposedPorts.length} declared`
+                      : 'None declared'}
+                  </p>
+                </Card>
+                <Card className="p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                    Volumes
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
+                    {imageVolumes.length > 0 ? `${imageVolumes.length} declared` : 'None declared'}
+                  </p>
+                </Card>
+              </div>
+
+              <Card className="overflow-hidden">
                 <Table variant="secondary">
                   <Table.Content aria-label="Image metadata details">
                     <Table.Header>
@@ -2540,24 +2612,6 @@ export default function ScanDetailPage() {
                           {imageCommand.length > 0 ? imageCommand.join(' ') : '-'}
                         </Table.Cell>
                       </Table.Row>
-                      <Table.Row id="meta-env-count">
-                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Environment variables
-                        </Table.Cell>
-                        <Table.Cell>
-                          {imageEnv.length > 0 ? `${imageEnv.length} captured` : '0 captured'}
-                        </Table.Cell>
-                      </Table.Row>
-                      <Table.Row id="meta-label-count">
-                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Labels
-                        </Table.Cell>
-                        <Table.Cell>
-                          {imageLabelEntries.length > 0
-                            ? `${imageLabelEntries.length} captured`
-                            : '0 captured'}
-                        </Table.Cell>
-                      </Table.Row>
                       <Table.Row id="meta-exposed-ports">
                         <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                           Exposed ports
@@ -2583,79 +2637,137 @@ export default function ScanDetailPage() {
                 </Table>
               </Card>
 
-              {imageEnv.length > 0 && (
-                <details className="surface-panel rounded-xl p-4">
-                  <summary
-                    className="cursor-pointer text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: 'var(--text-muted)' }}
+              <Card className="p-2">
+                <Accordion allowsMultipleExpanded hideSeparator className="space-y-2">
+                  <Accordion.Item
+                    isExpanded={imageEnv.length > 0}
+                    className="overflow-hidden rounded-lg"
                   >
-                    Environment
-                  </summary>
-                  <pre
-                    className="mt-3 overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300"
-                    style={{
-                      background: 'var(--row-hover)',
-                      border: '1px solid var(--surface-border)',
-                    }}
-                  >
-                    {imageEnv.join('\n')}
-                  </pre>
-                </details>
-              )}
+                    <Accordion.Heading>
+                      <Accordion.Trigger className="rounded-lg px-3 py-2 text-left">
+                        <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                            Environment
+                          </span>
+                          <span className="text-[11px] text-zinc-500">
+                            {imageEnv.length} entries
+                          </span>
+                        </div>
+                      </Accordion.Trigger>
+                    </Accordion.Heading>
+                    <Accordion.Panel>
+                      <Accordion.Body className="pt-0">
+                        {imageEnv.length > 0 ? (
+                          <pre
+                            className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300"
+                            style={{
+                              background: 'var(--row-hover)',
+                              border: '1px solid var(--surface-border)',
+                            }}
+                          >
+                            {imageEnv.join('\n')}
+                          </pre>
+                        ) : (
+                          <div
+                            className="rounded-xl px-3 py-2 text-xs text-zinc-500"
+                            style={{
+                              background: 'var(--row-hover)',
+                              border: '1px solid var(--surface-border)',
+                            }}
+                          >
+                            No environment variables were captured for this image.
+                          </div>
+                        )}
+                      </Accordion.Body>
+                    </Accordion.Panel>
+                  </Accordion.Item>
 
-              {imageLabelEntries.length > 0 && (
-                <details className="surface-panel rounded-xl p-4">
-                  <summary
-                    className="cursor-pointer text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: 'var(--text-muted)' }}
+                  <Accordion.Item
+                    isExpanded={imageLabelEntries.length > 0}
+                    className="overflow-hidden rounded-lg"
                   >
-                    Labels
-                  </summary>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {imageLabelEntries.map(([key, value]) => (
-                      <div
-                        key={key}
-                        className="rounded-xl p-3"
-                        style={{
-                          background: 'var(--row-hover)',
-                          border: '1px solid var(--surface-border)',
-                        }}
-                      >
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                          {key}
-                        </p>
-                        <p className="mt-2 break-all font-mono text-xs text-zinc-700 dark:text-zinc-300">
-                          {value || '-'}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              )}
+                    <Accordion.Heading>
+                      <Accordion.Trigger className="rounded-lg px-3 py-2 text-left">
+                        <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                            Labels
+                          </span>
+                          <span className="text-[11px] text-zinc-500">
+                            {imageLabelEntries.length} entries
+                          </span>
+                        </div>
+                      </Accordion.Trigger>
+                    </Accordion.Heading>
+                    <Accordion.Panel>
+                      <Accordion.Body className="pt-0">
+                        {imageLabelEntries.length > 0 ? (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {imageLabelEntries.map(([key, value]) => (
+                              <div
+                                key={key}
+                                className="rounded-xl p-3"
+                                style={{
+                                  background: 'var(--row-hover)',
+                                  border: '1px solid var(--surface-border)',
+                                }}
+                              >
+                                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                                  {key}
+                                </p>
+                                <p className="mt-2 break-all font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                                  {value || '-'}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div
+                            className="rounded-xl px-3 py-2 text-xs text-zinc-500"
+                            style={{
+                              background: 'var(--row-hover)',
+                              border: '1px solid var(--surface-border)',
+                            }}
+                          >
+                            No labels were captured for this image.
+                          </div>
+                        )}
+                      </Accordion.Body>
+                    </Accordion.Panel>
+                  </Accordion.Item>
 
-              <details className="surface-panel rounded-xl p-4">
-                <summary
-                  className="cursor-pointer text-xs font-semibold uppercase tracking-wider"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  Raw image config
-                </summary>
-                <pre
-                  className="mt-3 overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300"
-                  style={{
-                    background: 'var(--row-hover)',
-                    border: '1px solid var(--surface-border)',
-                  }}
-                >
-                  {JSON.stringify(fullImageConfig, null, 2)}
-                </pre>
-              </details>
+                  <Accordion.Item className="overflow-hidden rounded-lg">
+                    <Accordion.Heading>
+                      <Accordion.Trigger className="rounded-lg px-3 py-2 text-left">
+                        <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                            Raw image config
+                          </span>
+                          <span className="text-[11px] text-zinc-500">JSON</span>
+                        </div>
+                      </Accordion.Trigger>
+                    </Accordion.Heading>
+                    <Accordion.Panel>
+                      <Accordion.Body className="pt-0">
+                        <pre
+                          className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300"
+                          style={{
+                            background: 'var(--row-hover)',
+                            border: '1px solid var(--surface-border)',
+                          }}
+                        >
+                          {JSON.stringify(fullImageConfig, null, 2)}
+                        </pre>
+                      </Accordion.Body>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                </Accordion>
+              </Card>
             </div>
           )}
 
           {/* Tags */}
           {allTags.length > 0 && (
-            <div className="surface-panel rounded-xl p-4">
+            <div className="p-4">
               <p
                 className="text-xs font-semibold uppercase tracking-wider mb-3"
                 style={{ color: 'var(--text-muted)' }}
@@ -2670,7 +2782,7 @@ export default function ScanDetailPage() {
                       key={tag.id}
                       onPress={() => toggleTag(tag)}
                       isDisabled={tagLoading === tag.id}
-                      className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-all disabled:opacity-50 ${
+                      className={`text-xs px-2.5 py-1 font-medium border transition-all disabled:opacity-50 ${
                         !active
                           ? 'text-zinc-500 border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600'
                           : ''
@@ -2696,7 +2808,7 @@ export default function ScanDetailPage() {
 
           {/* Compliance */}
           {(allOrgs.length > 0 || compliance.length > 0) && (
-            <div className="surface-panel rounded-xl p-4">
+            <div className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <p
                   className="text-xs font-semibold uppercase tracking-wider"
@@ -2723,13 +2835,8 @@ export default function ScanDetailPage() {
                       <Button
                         key={org.id}
                         onPress={() => handleAssignOrg(org.id)}
-                        className="text-xs px-2.5 py-1 rounded-full font-medium border transition-colors"
+                        className="text-xs px-2.5 py-1 font-medium border transition-colors"
                         variant="secondary"
-                        style={{
-                          background: 'var(--row-hover)',
-                          border: '1px solid var(--surface-border)',
-                          color: 'var(--text-muted)',
-                        }}
                       >
                         + {org.name}
                       </Button>

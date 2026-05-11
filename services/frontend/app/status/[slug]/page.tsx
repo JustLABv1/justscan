@@ -1,14 +1,38 @@
 'use client';
 
 import { Logo } from '@/components/logo';
-import { SeverityBadge, SourceBadge, StatusBadge, formatStatusLabel, resolveDisplayStatus } from '@/components/ui/badges';
+import {
+  SeverityBadge,
+  SourceBadge,
+  StatusBadge,
+  formatStatusLabel,
+  resolveDisplayStatus,
+} from '@/components/ui/badges';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
-import type { StatusPageItem, StatusPageResponse, StatusPageScanSummary, Vulnerability } from '@/lib/api';
-import { ApiError, getStatusPageBySlug, getStatusPageItemVulnerabilityContextAnalysis, getStatusPageTrackedScan, getToken, listStatusPageItemVulnerabilities, listStatusPageScanHistory } from '@/lib/api';
+import type {
+  StatusPageItem,
+  StatusPageResponse,
+  StatusPageScanSummary,
+  Vulnerability,
+} from '@/lib/api';
+import {
+  ApiError,
+  getStatusPageBySlug,
+  getStatusPageItemVulnerabilityContextAnalysis,
+  getStatusPageTrackedScan,
+  getToken,
+  listStatusPageItemVulnerabilities,
+  listStatusPageScanHistory,
+} from '@/lib/api';
 import type { BlockedPolicyDetailsView } from '@/lib/blocked-policy';
-import { compactBlockedPolicyList, countBlockedPolicyList, formatIgnoreRuleStatusLabel, getBlockedPolicyDetails } from '@/lib/blocked-policy';
+import {
+  compactBlockedPolicyList,
+  countBlockedPolicyList,
+  formatIgnoreRuleStatusLabel,
+  getBlockedPolicyDetails,
+} from '@/lib/blocked-policy';
 import { timeAgo } from '@/lib/time';
-import { Button, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { Button, ListBox, Modal, Select, Table, useOverlayState } from '@heroui/react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -60,7 +84,14 @@ const STATUS_COLOR: Record<string, string> = {
   indexing_artifact: '#f97316',
   queued_in_xray: '#f59e0b',
 };
-const ACTIVE_SCAN_STATUSES = new Set(['running', 'pending', 'waiting_for_xray', 'warming_cache', 'indexing_artifact', 'queued_in_xray']);
+const ACTIVE_SCAN_STATUSES = new Set([
+  'running',
+  'pending',
+  'waiting_for_xray',
+  'warming_cache',
+  'indexing_artifact',
+  'queued_in_xray',
+]);
 
 const EXPOSURE_PRIORITY: Record<string, number> = {
   high_risk: 0,
@@ -76,7 +107,13 @@ const EXPOSURE_COLOR: Record<string, string> = {
   clear: '#22c55e',
 };
 
-type VulnerabilitySortKey = 'vuln_id' | 'pkg_name' | 'installed_version' | 'fixed_version' | 'severity' | 'cvss_score';
+type VulnerabilitySortKey =
+  | 'vuln_id'
+  | 'pkg_name'
+  | 'installed_version'
+  | 'fixed_version'
+  | 'severity'
+  | 'cvss_score';
 type ExposureStatus = 'high_risk' | 'findings_present' | 'unknown' | 'clear';
 
 function getStatusRank(status: string) {
@@ -84,7 +121,7 @@ function getStatusRank(status: string) {
 }
 
 function getExposureRank(status: ExposureStatus) {
-	return EXPOSURE_PRIORITY[status] ?? 99;
+  return EXPOSURE_PRIORITY[status] ?? 99;
 }
 
 function getTintedChipStyle(accent: string, textColor = accent) {
@@ -134,7 +171,7 @@ function formatExposureStatusLabel(status: ExposureStatus) {
 
 function getExposureStatus(
   item: Pick<StatusPageItem, 'critical_count' | 'high_count' | 'medium_count' | 'low_count'>,
-  operationalStatus?: string,
+  operationalStatus?: string
 ): ExposureStatus {
   if (item.critical_count > 0 || item.high_count > 0) {
     return 'high_risk';
@@ -142,7 +179,12 @@ function getExposureStatus(
   if (item.medium_count > 0 || item.low_count > 0) {
     return 'findings_present';
   }
-  if (operationalStatus && (operationalStatus === 'failed' || operationalStatus === 'blocked_by_xray_policy' || ACTIVE_SCAN_STATUSES.has(operationalStatus))) {
+  if (
+    operationalStatus &&
+    (operationalStatus === 'failed' ||
+      operationalStatus === 'blocked_by_xray_policy' ||
+      ACTIVE_SCAN_STATUSES.has(operationalStatus))
+  ) {
     return 'unknown';
   }
   return 'clear';
@@ -154,7 +196,10 @@ function isExposedStatus(status: ExposureStatus) {
 
 function isClearStatus(item: StatusPageItem, operationalStatus?: string) {
   const resolvedOperationalStatus = operationalStatus ?? getPresentationStatus(item);
-  return resolvedOperationalStatus === 'healthy' && getExposureStatus(item, resolvedOperationalStatus) === 'clear';
+  return (
+    resolvedOperationalStatus === 'healthy' &&
+    getExposureStatus(item, resolvedOperationalStatus) === 'clear'
+  );
 }
 
 function getPrimaryAccent(operationalStatus: string, exposureStatus: ExposureStatus) {
@@ -171,14 +216,14 @@ function compareItemsByPriority(left: StatusPageItem, right: StatusPageItem) {
   const rightExposure = getExposureStatus(right, rightStatus);
 
   return (
-    getStatusRank(leftStatus) - getStatusRank(rightStatus)
-    || getExposureRank(leftExposure) - getExposureRank(rightExposure)
-    || right.critical_count - left.critical_count
-    || right.high_count - left.high_count
-    || right.medium_count - left.medium_count
-    || right.low_count - left.low_count
-    || right.freshness_hours - left.freshness_hours
-    || new Date(right.observed_at).getTime() - new Date(left.observed_at).getTime()
+    getStatusRank(leftStatus) - getStatusRank(rightStatus) ||
+    getExposureRank(leftExposure) - getExposureRank(rightExposure) ||
+    right.critical_count - left.critical_count ||
+    right.high_count - left.high_count ||
+    right.medium_count - left.medium_count ||
+    right.low_count - left.low_count ||
+    right.freshness_hours - left.freshness_hours ||
+    new Date(right.observed_at).getTime() - new Date(left.observed_at).getTime()
   );
 }
 
@@ -192,7 +237,10 @@ function TagBadge({ tag }: { tag: string }) {
         color: 'var(--text-primary)',
       }}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>
+      <span
+        className="text-[10px] font-semibold uppercase tracking-[0.14em]"
+        style={{ color: 'var(--text-muted)' }}
+      >
         Tag
       </span>
       <span className="font-mono text-[12px] leading-none">{tag}</span>
@@ -201,7 +249,10 @@ function TagBadge({ tag }: { tag: string }) {
 }
 
 function compactErrorSummary(message?: string) {
-  const firstLine = message?.split('\n').map((line) => line.trim()).find(Boolean);
+  const firstLine = message
+    ?.split('\n')
+    .map((line) => line.trim())
+    .find(Boolean);
   if (!firstLine) return '';
   return firstLine.length > 180 ? `${firstLine.slice(0, 177)}...` : firstLine;
 }
@@ -210,12 +261,16 @@ function summarizeWatchCoverage(blockedPolicyDetails: BlockedPolicyDetailsView) 
   const totalWatches = blockedPolicyDetails.matchedWatches.length;
   if (totalWatches === 0) return '';
 
-  const activeIgnoreCount = blockedPolicyDetails.matchedWatches.filter((watch) => watch.ignoreRuleStatus === 'active_ignore').length;
+  const activeIgnoreCount = blockedPolicyDetails.matchedWatches.filter(
+    (watch) => watch.ignoreRuleStatus === 'active_ignore'
+  ).length;
   if (activeIgnoreCount > 0) {
     return `${activeIgnoreCount}/${totalWatches} watches have active ignore`;
   }
 
-  const unavailableCount = blockedPolicyDetails.matchedWatches.filter((watch) => watch.ignoreRuleStatus === 'status_unavailable').length;
+  const unavailableCount = blockedPolicyDetails.matchedWatches.filter(
+    (watch) => watch.ignoreRuleStatus === 'status_unavailable'
+  ).length;
   if (unavailableCount > 0) {
     return `${unavailableCount}/${totalWatches} watch statuses unavailable`;
   }
@@ -223,14 +278,19 @@ function summarizeWatchCoverage(blockedPolicyDetails: BlockedPolicyDetailsView) 
   return `${totalWatches} watches with no ignore`;
 }
 
-function buildItemNote(item: StatusPageItem, blockedPolicyDetails: BlockedPolicyDetailsView | null) {
+function buildItemNote(
+  item: StatusPageItem,
+  blockedPolicyDetails: BlockedPolicyDetailsView | null
+) {
   if (blockedPolicyDetails) {
     const details: string[] = [];
     if (blockedPolicyDetails.totalViolations) {
       details.push(`${blockedPolicyDetails.totalViolations} violations`);
     }
     if (blockedPolicyDetails.blockingPolicies.length > 0) {
-      details.push(`${countBlockedPolicyList(blockedPolicyDetails.blockingPolicies)} blocking policies`);
+      details.push(
+        `${countBlockedPolicyList(blockedPolicyDetails.blockingPolicies)} blocking policies`
+      );
     }
     const watchCoverage = summarizeWatchCoverage(blockedPolicyDetails);
     if (watchCoverage) {
@@ -251,21 +311,47 @@ function buildItemNote(item: StatusPageItem, blockedPolicyDetails: BlockedPolicy
   return parts.length > 0 ? parts.join(' · ') : 'No active findings';
 }
 
-function BlockedPolicyWatchBadge({ status }: { status: 'active_ignore' | 'no_ignore' | 'status_unavailable' }) {
-  const palette = status === 'active_ignore'
-    ? { color: '#b45309', background: 'rgba(245,158,11,0.12)', borderColor: 'rgba(245,158,11,0.26)' }
-    : status === 'status_unavailable'
-      ? { color: '#9a3412', background: 'rgba(251,146,60,0.12)', borderColor: 'rgba(251,146,60,0.28)' }
-      : { color: 'var(--text-secondary)', background: 'var(--status-pill-bg)', borderColor: 'var(--status-pill-border)' };
+function BlockedPolicyWatchBadge({
+  status,
+}: {
+  status: 'active_ignore' | 'no_ignore' | 'status_unavailable';
+}) {
+  const palette =
+    status === 'active_ignore'
+      ? {
+          color: '#b45309',
+          background: 'rgba(245,158,11,0.12)',
+          borderColor: 'rgba(245,158,11,0.26)',
+        }
+      : status === 'status_unavailable'
+        ? {
+            color: '#9a3412',
+            background: 'rgba(251,146,60,0.12)',
+            borderColor: 'rgba(251,146,60,0.28)',
+          }
+        : {
+            color: 'var(--text-secondary)',
+            background: 'var(--status-pill-bg)',
+            borderColor: 'var(--status-pill-border)',
+          };
 
   return (
-    <span className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={palette}>
+    <span
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+      style={palette}
+    >
       {formatIgnoreRuleStatusLabel(status)}
     </span>
   );
 }
 
-function BlockedPolicyWatchList({ watches, compact = false }: { watches: BlockedPolicyDetailsView['matchedWatches']; compact?: boolean }) {
+function BlockedPolicyWatchList({
+  watches,
+  compact = false,
+}: {
+  watches: BlockedPolicyDetailsView['matchedWatches'];
+  compact?: boolean;
+}) {
   if (watches.length === 0) return null;
 
   return (
@@ -274,9 +360,17 @@ function BlockedPolicyWatchList({ watches, compact = false }: { watches: Blocked
         <div
           key={`${watch.name}-${watch.ignoreRuleStatus}`}
           className={`flex flex-col gap-2 rounded-xl border ${compact ? 'px-3 py-2' : 'px-3 py-2.5'} sm:flex-row sm:items-center sm:justify-between`}
-          style={{ borderColor: 'rgba(245,158,11,0.18)', background: 'color-mix(in srgb, rgba(245,158,11,0.06) 60%, var(--status-card-bg))' }}
+          style={{
+            borderColor: 'rgba(245,158,11,0.18)',
+            background: 'color-mix(in srgb, rgba(245,158,11,0.06) 60%, var(--status-card-bg))',
+          }}
         >
-          <span className={`break-all ${compact ? 'text-[12px]' : 'text-[13px]'}`} style={{ color: 'var(--text-primary)' }}>{watch.name}</span>
+          <span
+            className={`break-all ${compact ? 'text-[12px]' : 'text-[13px]'}`}
+            style={{ color: 'var(--text-primary)' }}
+          >
+            {watch.name}
+          </span>
           <BlockedPolicyWatchBadge status={watch.ignoreRuleStatus} />
         </div>
       ))}
@@ -290,7 +384,10 @@ function getRefreshCadence(lastLoadedAt: number | null, now: number) {
   return {
     elapsedMs,
     progress: Math.min(100, (elapsedMs / AUTO_REFRESH_MS) * 100),
-    secondsRemaining: Math.max(0, Math.ceil((AUTO_REFRESH_MS - Math.min(elapsedMs, AUTO_REFRESH_MS)) / 1000)),
+    secondsRemaining: Math.max(
+      0,
+      Math.ceil((AUTO_REFRESH_MS - Math.min(elapsedMs, AUTO_REFRESH_MS)) / 1000)
+    ),
   };
 }
 
@@ -337,22 +434,35 @@ function RunningScanVisualization({
     >
       <div
         className="absolute inset-y-0 left-0 w-20 opacity-70"
-        style={{ background: `radial-gradient(circle at left center, ${accentSoft}, transparent 72%)` }}
+        style={{
+          background: `radial-gradient(circle at left center, ${accentSoft}, transparent 72%)`,
+        }}
       />
       <div className="relative flex items-center justify-between gap-4">
         <div className="space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>
+          <p
+            className="text-[11px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: 'var(--text-muted)' }}
+          >
             {isXray ? 'Xray pipeline active' : 'Scan pipeline active'}
           </p>
-          <p className={`font-semibold ${compact ? 'text-sm' : 'text-base'}`} style={{ color: 'var(--text-primary)' }}>
+          <p
+            className={`font-semibold ${compact ? 'text-sm' : 'text-base'}`}
+            style={{ color: 'var(--text-primary)' }}
+          >
             {detail}
           </p>
           <p className="text-[12px] leading-5" style={{ color: 'var(--text-secondary)' }}>
-            {startedAt ? `Started ${timeAgo(startedAt)}` : 'Live scan data is still arriving for this tag.'}
+            {startedAt
+              ? `Started ${timeAgo(startedAt)}`
+              : 'Live scan data is still arriving for this tag.'}
           </p>
         </div>
 
-        <div className={`relative shrink-0 ${compact ? 'h-14 w-28' : 'h-16 w-32'}`} aria-hidden="true">
+        <div
+          className={`relative shrink-0 ${compact ? 'h-14 w-28' : 'h-16 w-32'}`}
+          aria-hidden="true"
+        >
           {[0, 1, 2].map((lane) => (
             <span
               key={`lane-${lane}`}
@@ -365,12 +475,24 @@ function RunningScanVisualization({
             />
           ))}
           {[0, 1, 2].map((dot) => (
-            <span key={`dot-${dot}`} className="absolute" style={{ left: `${12 + dot * 18}px`, top: `${13 + dot * 12}px` }}>
+            <span
+              key={`dot-${dot}`}
+              className="absolute"
+              style={{ left: `${12 + dot * 18}px`, top: `${13 + dot * 12}px` }}
+            >
               <span
                 className="absolute inline-flex size-3 animate-ping rounded-full"
-                style={{ background: accent, opacity: 0.45, animationDelay: `${dot * 220}ms`, animationDuration: '1.8s' }}
+                style={{
+                  background: accent,
+                  opacity: 0.45,
+                  animationDelay: `${dot * 220}ms`,
+                  animationDuration: '1.8s',
+                }}
               />
-              <span className="relative inline-flex size-3 rounded-full border border-white/50" style={{ background: accent }} />
+              <span
+                className="relative inline-flex size-3 rounded-full border border-white/50"
+                style={{ background: accent }}
+              />
             </span>
           ))}
           <span
@@ -386,32 +508,32 @@ function RunningScanVisualization({
 function StatusDot({ status }: { status: string }) {
   const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium capitalize"
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium capitalize"
       style={{
         color: 'var(--text-secondary)',
         background: 'var(--status-pill-bg)',
         border: '1px solid var(--status-pill-border)',
-      }}>
+      }}
+    >
       <span className="relative flex size-2.5">
         {(status === 'running' || status === 'pending') && (
-          <span className="absolute inline-flex size-full animate-ping rounded-full opacity-60" style={{ background: color }} />
+          <span
+            className="absolute inline-flex size-full animate-ping rounded-full opacity-60"
+            style={{ background: color }}
+          />
         )}
-        <span className="relative inline-flex size-2.5 rounded-full" style={{ background: color }} />
+        <span
+          className="relative inline-flex size-2.5 rounded-full"
+          style={{ background: color }}
+        />
       </span>
       {formatStatusLabel(status)}
     </span>
   );
 }
 
-function StateChip({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color: string;
-}) {
+function StateChip({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <span
       className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-medium"
@@ -422,7 +544,12 @@ function StateChip({
       }}
     >
       <span className="size-2.5 rounded-full" style={{ background: color }} />
-      <span className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--text-muted)' }}>{label}</span>
+      <span
+        className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+        style={{ color: 'var(--text-muted)' }}
+      >
+        {label}
+      </span>
       <span style={{ color: 'var(--text-primary)' }}>{value}</span>
     </span>
   );
@@ -577,7 +704,9 @@ function buildFallbackScanSummary(item: StatusPageItem): StatusPageScanSummary {
 function getRecentScanStripScans(item: StatusPageItem, scans?: StatusPageScanSummary[]) {
   const source = scans && scans.length > 0 ? scans : [buildFallbackScanSummary(item)];
   return source
-    .toSorted((left, right) => new Date(left.observed_at).getTime() - new Date(right.observed_at).getTime())
+    .toSorted(
+      (left, right) => new Date(left.observed_at).getTime() - new Date(right.observed_at).getTime()
+    )
     .slice(-RECENT_SCAN_SEGMENTS);
 }
 
@@ -700,8 +829,18 @@ function ScanTimeline({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-medium uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Older</span>
-        <span className="text-[10px] font-medium uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Latest</span>
+        <span
+          className="text-[10px] font-medium uppercase tracking-widest"
+          style={{ color: 'var(--text-faint)' }}
+        >
+          Older
+        </span>
+        <span
+          className="text-[10px] font-medium uppercase tracking-widest"
+          style={{ color: 'var(--text-faint)' }}
+        >
+          Latest
+        </span>
       </div>
 
       {isLoading ? (
@@ -709,7 +848,11 @@ function ScanTimeline({
           <div className="size-4 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500" />
         </div>
       ) : (
-        <div className="flex items-center overflow-x-auto py-1" role="radiogroup" aria-label="Scan history timeline">
+        <div
+          className="flex items-center overflow-x-auto py-1"
+          role="radiogroup"
+          aria-label="Scan history timeline"
+        >
           {ordered.map((scan, i) => {
             const status = getEffectiveScanStatus(scan.scan_status, scan.external_status);
             const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
@@ -718,7 +861,10 @@ function ScanTimeline({
             return (
               <div key={scan.scan_id} className="flex shrink-0 items-center">
                 {i > 0 && (
-                  <div className="h-[2px] w-6 shrink-0" style={{ background: 'var(--border-subtle)' }} />
+                  <div
+                    className="h-[2px] w-6 shrink-0"
+                    style={{ background: 'var(--border-subtle)' }}
+                  />
                 )}
 
                 {/* Touch target wraps a smaller visual dot */}
@@ -745,7 +891,10 @@ function ScanTimeline({
                     {scan.is_latest && (
                       <span
                         className="absolute -right-[3px] -top-[3px] size-[7px] rounded-full"
-                        style={{ background: 'var(--status-card-bg)', border: `2px solid ${color}` }}
+                        style={{
+                          background: 'var(--status-card-bg)',
+                          border: `2px solid ${color}`,
+                        }}
                       />
                     )}
                   </span>
@@ -757,16 +906,20 @@ function ScanTimeline({
       )}
 
       {/* Info strip - updates on hover, shows selected when not hovering */}
-      {infoScan && (() => {
-        const status = getEffectiveScanStatus(infoScan.scan_status, infoScan.external_status);
-        const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
-        return (
-          <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-            <span className="size-2 shrink-0 rounded-full" style={{ background: color }} />
-            <span>{formatScanHistoryOptionLabel(infoScan)}</span>
-          </div>
-        );
-      })()}
+      {infoScan &&
+        (() => {
+          const status = getEffectiveScanStatus(infoScan.scan_status, infoScan.external_status);
+          const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
+          return (
+            <div
+              className="flex items-center gap-2 text-[12px]"
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              <span className="size-2 shrink-0 rounded-full" style={{ background: color }} />
+              <span>{formatScanHistoryOptionLabel(infoScan)}</span>
+            </div>
+          );
+        })()}
     </div>
   );
 }
@@ -797,7 +950,10 @@ function StatusItemVulnerabilityModal({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [historyResponseKey, setHistoryResponseKey] = useState('');
   const [historyError, setHistoryError] = useState('');
-  const [fetchedSelectedScan, setFetchedSelectedScan] = useState<{ scanId: string; scan: StatusPageScanSummary | null }>({ scanId: '', scan: null });
+  const [fetchedSelectedScan, setFetchedSelectedScan] = useState<{
+    scanId: string;
+    scan: StatusPageScanSummary | null;
+  }>({ scanId: '', scan: null });
   const [vulnerabilityState, setVulnerabilityState] = useState<{
     requestKey: string;
     data: Vulnerability[];
@@ -812,16 +968,32 @@ function StatusItemVulnerabilityModal({
   const historyLoading = Boolean(historyRequestKey) && historyResponseKey !== historyRequestKey;
   const historyMatch = useMemo(
     () => history.find((scan) => scan.scan_id === selectedScanId) ?? null,
-    [history, selectedScanId],
+    [history, selectedScanId]
   );
-  const selectedScan = historyMatch ?? (fetchedSelectedScan.scanId === selectedScanId ? fetchedSelectedScan.scan : null);
+  const selectedScan =
+    historyMatch ??
+    (fetchedSelectedScan.scanId === selectedScanId ? fetchedSelectedScan.scan : null);
   const vulnerabilityRequestKey = selectedScanId
-    ? [slug, selectedScanId, page, severityFilter, pkgFilter, hasFix ? '1' : '0', String(minCvss), sortBy, sortDir].join('|')
+    ? [
+        slug,
+        selectedScanId,
+        page,
+        severityFilter,
+        pkgFilter,
+        hasFix ? '1' : '0',
+        String(minCvss),
+        sortBy,
+        sortDir,
+      ].join('|')
     : '';
-  const loading = Boolean(vulnerabilityRequestKey) && vulnerabilityState.requestKey !== vulnerabilityRequestKey;
-  const vulns = vulnerabilityState.requestKey === vulnerabilityRequestKey ? vulnerabilityState.data : [];
-  const vulnTotal = vulnerabilityState.requestKey === vulnerabilityRequestKey ? vulnerabilityState.total : 0;
-  const error = vulnerabilityState.requestKey === vulnerabilityRequestKey ? vulnerabilityState.error : '';
+  const loading =
+    Boolean(vulnerabilityRequestKey) && vulnerabilityState.requestKey !== vulnerabilityRequestKey;
+  const vulns =
+    vulnerabilityState.requestKey === vulnerabilityRequestKey ? vulnerabilityState.data : [];
+  const vulnTotal =
+    vulnerabilityState.requestKey === vulnerabilityRequestKey ? vulnerabilityState.total : 0;
+  const error =
+    vulnerabilityState.requestKey === vulnerabilityRequestKey ? vulnerabilityState.error : '';
 
   const reportHref = (() => {
     if (!selectedScanId) return '';
@@ -861,23 +1033,21 @@ function StatusItemVulnerabilityModal({
       .then(([historyResponse, trackedScan]) => {
         if (cancelled) return;
 
-        const scans = historyResponse.length > 0
-          ? historyResponse
-          : trackedScan
-            ? [trackedScan]
-            : [];
+        const scans =
+          historyResponse.length > 0 ? historyResponse : trackedScan ? [trackedScan] : [];
 
         setHistory(scans);
         if (item?.latest_scan_id && scans.length > 0) {
           onHistoryLoaded?.(item.latest_scan_id, scans);
         }
         setHistoryResponseKey(requestKey);
-        setSelectedScanId((current) => (
-          scans.find((scan) => scan.scan_id === current)?.scan_id
-          ?? scans.find((scan) => scan.is_latest)?.scan_id
-          ?? trackedScan?.scan_id
-          ?? item.latest_scan_id
-        ));
+        setSelectedScanId(
+          (current) =>
+            scans.find((scan) => scan.scan_id === current)?.scan_id ??
+            scans.find((scan) => scan.is_latest)?.scan_id ??
+            trackedScan?.scan_id ??
+            item.latest_scan_id
+        );
         setHistoryError('');
       })
       .catch((err) => {
@@ -915,7 +1085,17 @@ function StatusItemVulnerabilityModal({
   useEffect(() => {
     if (!selectedScanId) return;
 
-    const requestKey = [slug, selectedScanId, page, severityFilter, pkgFilter, hasFix ? '1' : '0', String(minCvss), sortBy, sortDir].join('|');
+    const requestKey = [
+      slug,
+      selectedScanId,
+      page,
+      severityFilter,
+      pkgFilter,
+      hasFix ? '1' : '0',
+      String(minCvss),
+      sortBy,
+      sortDir,
+    ].join('|');
     listStatusPageItemVulnerabilities(
       slug,
       selectedScanId,
@@ -926,7 +1106,7 @@ function StatusItemVulnerabilityModal({
       hasFix || undefined,
       minCvss || undefined,
       sortBy,
-      sortDir,
+      sortDir
     )
       .then((result) => {
         setVulnerabilityState({
@@ -956,9 +1136,16 @@ function StatusItemVulnerabilityModal({
     return getBlockedPolicyDetails(
       selectedScan?.external_status ?? item?.external_status,
       selectedScan?.blocked_policy_details ?? item?.blocked_policy_details,
-      selectedScan?.error_message ?? item?.error_message ?? null,
+      selectedScan?.error_message ?? item?.error_message ?? null
     );
-  }, [item?.blocked_policy_details, item?.error_message, item?.external_status, selectedScan?.blocked_policy_details, selectedScan?.error_message, selectedScan?.external_status]);
+  }, [
+    item?.blocked_policy_details,
+    item?.error_message,
+    item?.external_status,
+    selectedScan?.blocked_policy_details,
+    selectedScan?.error_message,
+    selectedScan?.external_status,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(vulnTotal / VULN_PAGE_SIZE));
 
@@ -981,17 +1168,28 @@ function StatusItemVulnerabilityModal({
               <div className="border-b px-6 py-5" style={{ borderColor: 'var(--border-subtle)' }}>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Vulnerability drill-down</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                      Vulnerability drill-down
+                    </p>
                     <div>
-                      <h3 className="font-mono text-base font-semibold sm:text-lg" style={{ color: 'var(--text-primary)' }}>
+                      <h3
+                        className="font-mono text-base font-semibold sm:text-lg"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
                         {item ? item.image_name : 'Loading item'}
                       </h3>
                       {item && (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <TagBadge tag={item.image_tag} />
                           {selectedScan?.is_latest === false && (
-                            <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                              style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                            <span
+                              className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                              style={{
+                                background: 'var(--status-pill-bg)',
+                                border: '1px solid var(--status-pill-border)',
+                                color: 'var(--text-secondary)',
+                              }}
+                            >
                               Historical snapshot
                             </span>
                           )}
@@ -999,13 +1197,17 @@ function StatusItemVulnerabilityModal({
                       )}
                       {displayedScan && (
                         <p className="mt-1 text-[13px] leading-6 text-zinc-500">
-                          Snapshot {timeAgo(displayedScan.observed_at)}. {vulnTotal.toLocaleString()} matching finding{vulnTotal === 1 ? '' : 's'}.
+                          Snapshot {timeAgo(displayedScan.observed_at)}.{' '}
+                          {vulnTotal.toLocaleString()} matching finding{vulnTotal === 1 ? '' : 's'}.
                         </p>
                       )}
                     </div>
                   </div>
                   {selectedScan ? (
-                    <StatusBadge status={selectedScan.scan_status} externalStatus={selectedScan.external_status} />
+                    <StatusBadge
+                      status={selectedScan.scan_status}
+                      externalStatus={selectedScan.external_status}
+                    />
                   ) : item ? (
                     <StatusDot status={getPresentationStatus(item)} />
                   ) : null}
@@ -1013,7 +1215,10 @@ function StatusItemVulnerabilityModal({
               </div>
 
               <div className="space-y-4 px-6 py-5">
-                {effectiveScanStatus === 'running' || effectiveScanStatus === 'pending' || selectedScan?.scan_status === 'running' || selectedScan?.scan_status === 'pending' ? (
+                {effectiveScanStatus === 'running' ||
+                effectiveScanStatus === 'pending' ||
+                selectedScan?.scan_status === 'running' ||
+                selectedScan?.scan_status === 'pending' ? (
                   <RunningScanVisualization
                     provider={selectedScan?.scan_provider ?? item?.scan_provider}
                     currentStep={selectedScan?.current_step ?? item?.current_step}
@@ -1024,59 +1229,188 @@ function StatusItemVulnerabilityModal({
                 ) : null}
 
                 {blockedPolicyDetails && (
-                  <div className="rounded-3xl border p-4" style={{ borderColor: 'rgba(245,158,11,0.24)', background: 'rgba(245,158,11,0.08)' }}>
+                  <div
+                    className="rounded-3xl border p-4"
+                    style={{
+                      borderColor: 'rgba(245,158,11,0.24)',
+                      background: 'rgba(245,158,11,0.08)',
+                    }}
+                  >
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: '#b45309' }}>Xray policy violation</p>
-                      <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'rgba(245,158,11,0.24)', color: '#b45309' }}>
+                      <p
+                        className="text-[11px] font-semibold uppercase tracking-[0.16em]"
+                        style={{ color: '#b45309' }}
+                      >
+                        Xray policy violation
+                      </p>
+                      <span
+                        className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                        style={{ borderColor: 'rgba(245,158,11,0.24)', color: '#b45309' }}
+                      >
                         Findings may still be available below
                       </span>
                     </div>
-                    <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-primary)' }}>{blockedPolicyDetails.summary}</p>
+                    <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-primary)' }}>
+                      {blockedPolicyDetails.summary}
+                    </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {blockedPolicyDetails.totalViolations && (
-                        <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={getTintedChipStyle('#f59e0b', '#b45309')}>
+                        <span
+                          className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                          style={getTintedChipStyle('#f59e0b', '#b45309')}
+                        >
                           {blockedPolicyDetails.totalViolations} violations
                         </span>
                       )}
                       {blockedPolicyDetails.blockingPolicies.length > 0 && (
-                        <span className="rounded-full border px-2.5 py-1 text-[11px]" style={getTintedChipStyle('#f59e0b', 'var(--text-secondary)')}>
-                          {countBlockedPolicyList(blockedPolicyDetails.blockingPolicies)} blocking policies
+                        <span
+                          className="rounded-full border px-2.5 py-1 text-[11px]"
+                          style={getTintedChipStyle('#f59e0b', 'var(--text-secondary)')}
+                        >
+                          {countBlockedPolicyList(blockedPolicyDetails.blockingPolicies)} blocking
+                          policies
                         </span>
                       )}
                       {blockedPolicyDetails.matchedWatches.length > 0 && (
-                        <span className="rounded-full border px-2.5 py-1 text-[11px]" style={getTintedChipStyle('#f59e0b', 'var(--text-secondary)')}>
+                        <span
+                          className="rounded-full border px-2.5 py-1 text-[11px]"
+                          style={getTintedChipStyle('#f59e0b', 'var(--text-secondary)')}
+                        >
                           {blockedPolicyDetails.matchedWatches.length} watches
                         </span>
                       )}
                       {blockedPolicyDetails.matchedIssues.length > 0 && (
-                        <span className="rounded-full border px-2.5 py-1 text-[11px]" style={getTintedChipStyle('#f59e0b', 'var(--text-secondary)')}>
-                          {countBlockedPolicyList(blockedPolicyDetails.matchedIssues)} matched issues
+                        <span
+                          className="rounded-full border px-2.5 py-1 text-[11px]"
+                          style={getTintedChipStyle('#f59e0b', 'var(--text-secondary)')}
+                        >
+                          {countBlockedPolicyList(blockedPolicyDetails.matchedIssues)} matched
+                          issues
                         </span>
                       )}
                     </div>
                     <details className="mt-3 group">
-                      <summary className="cursor-pointer list-none text-[12px] font-semibold" style={{ color: '#b45309' }}>
+                      <summary
+                        className="cursor-pointer list-none text-[12px] font-semibold"
+                        style={{ color: '#b45309' }}
+                      >
                         Show Xray details
                       </summary>
                       <div className="mt-3 space-y-3">
                         {blockedPolicyDetails.matchedWatches.length > 0 && (
                           <div className="space-y-2">
-                            <p className="text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>Matched watches</p>
-                            <BlockedPolicyWatchList watches={blockedPolicyDetails.matchedWatches} compact />
+                            <p
+                              className="text-[12px] font-semibold"
+                              style={{ color: 'var(--text-primary)' }}
+                            >
+                              Matched watches
+                            </p>
+                            <BlockedPolicyWatchList
+                              watches={blockedPolicyDetails.matchedWatches}
+                              compact
+                            />
                           </div>
                         )}
                         <div className="grid gap-2 sm:grid-cols-2">
-                          {blockedPolicyDetails.blockingPolicies.length > 0 && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Blocking policies:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactBlockedPolicyList(blockedPolicyDetails.blockingPolicies, 3)}</span></div>}
-                          {blockedPolicyDetails.matchedPolicies.length > 0 && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Matched policies:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactBlockedPolicyList(blockedPolicyDetails.matchedPolicies, 3)}</span></div>}
-                          {blockedPolicyDetails.matchedIssues.length > 0 && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Matched issues:</span> <span style={{ color: 'var(--text-secondary)' }}>{compactBlockedPolicyList(blockedPolicyDetails.matchedIssues, 3)}</span></div>}
-                        {blockedPolicyDetails.artifact && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Artifact:</span> <span className="break-all" style={{ color: 'var(--text-secondary)' }}>{blockedPolicyDetails.artifact}</span></div>}
-                        {blockedPolicyDetails.manifest && <div className="text-[12px] leading-5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Manifest:</span> <span className="break-all" style={{ color: 'var(--text-secondary)' }}>{blockedPolicyDetails.manifest}</span></div>}
-                        {blockedPolicyDetails.jfrog && <div className="text-[12px] leading-5 sm:col-span-2"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>JFrog:</span> <span className="break-all" style={{ color: 'var(--text-secondary)' }}>{blockedPolicyDetails.jfrog}</span></div>}
+                          {blockedPolicyDetails.blockingPolicies.length > 0 && (
+                            <div className="text-[12px] leading-5">
+                              <span
+                                className="font-semibold"
+                                style={{ color: 'var(--text-primary)' }}
+                              >
+                                Blocking policies:
+                              </span>{' '}
+                              <span style={{ color: 'var(--text-secondary)' }}>
+                                {compactBlockedPolicyList(blockedPolicyDetails.blockingPolicies, 3)}
+                              </span>
+                            </div>
+                          )}
+                          {blockedPolicyDetails.matchedPolicies.length > 0 && (
+                            <div className="text-[12px] leading-5">
+                              <span
+                                className="font-semibold"
+                                style={{ color: 'var(--text-primary)' }}
+                              >
+                                Matched policies:
+                              </span>{' '}
+                              <span style={{ color: 'var(--text-secondary)' }}>
+                                {compactBlockedPolicyList(blockedPolicyDetails.matchedPolicies, 3)}
+                              </span>
+                            </div>
+                          )}
+                          {blockedPolicyDetails.matchedIssues.length > 0 && (
+                            <div className="text-[12px] leading-5">
+                              <span
+                                className="font-semibold"
+                                style={{ color: 'var(--text-primary)' }}
+                              >
+                                Matched issues:
+                              </span>{' '}
+                              <span style={{ color: 'var(--text-secondary)' }}>
+                                {compactBlockedPolicyList(blockedPolicyDetails.matchedIssues, 3)}
+                              </span>
+                            </div>
+                          )}
+                          {blockedPolicyDetails.artifact && (
+                            <div className="text-[12px] leading-5">
+                              <span
+                                className="font-semibold"
+                                style={{ color: 'var(--text-primary)' }}
+                              >
+                                Artifact:
+                              </span>{' '}
+                              <span
+                                className="break-all"
+                                style={{ color: 'var(--text-secondary)' }}
+                              >
+                                {blockedPolicyDetails.artifact}
+                              </span>
+                            </div>
+                          )}
+                          {blockedPolicyDetails.manifest && (
+                            <div className="text-[12px] leading-5">
+                              <span
+                                className="font-semibold"
+                                style={{ color: 'var(--text-primary)' }}
+                              >
+                                Manifest:
+                              </span>{' '}
+                              <span
+                                className="break-all"
+                                style={{ color: 'var(--text-secondary)' }}
+                              >
+                                {blockedPolicyDetails.manifest}
+                              </span>
+                            </div>
+                          )}
+                          {blockedPolicyDetails.jfrog && (
+                            <div className="text-[12px] leading-5 sm:col-span-2">
+                              <span
+                                className="font-semibold"
+                                style={{ color: 'var(--text-primary)' }}
+                              >
+                                JFrog:
+                              </span>{' '}
+                              <span
+                                className="break-all"
+                                style={{ color: 'var(--text-secondary)' }}
+                              >
+                                {blockedPolicyDetails.jfrog}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </details>
-                    <div className="mt-3 border-t pt-3 text-[12px]" style={{ borderColor: 'rgba(245,158,11,0.16)', color: 'var(--text-secondary)' }}>
-                      Select a previous scan if you want to compare how the policy block and findings changed across snapshots.
+                    <div
+                      className="mt-3 border-t pt-3 text-[12px]"
+                      style={{
+                        borderColor: 'rgba(245,158,11,0.16)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      Select a previous scan if you want to compare how the policy block and
+                      findings changed across snapshots.
                     </div>
                   </div>
                 )}
@@ -1090,19 +1424,30 @@ function StatusItemVulnerabilityModal({
                 <ScanTimeline
                   scans={history}
                   selectedId={selectedScanId}
-                  onSelect={(id) => { setSelectedScanId(id); setPage(1); }}
+                  onSelect={(id) => {
+                    setSelectedScanId(id);
+                    setPage(1);
+                  }}
                   isLoading={historyLoading}
                 />
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Select value={severityFilter || '__all__'} onChange={value => { setSeverityFilter(String(value === '__all__' ? '' : value ?? '')); setPage(1); }} className="w-full min-w-[180px] sm:w-auto" aria-label="Filter vulnerabilities by severity">
+                  <Select
+                    value={severityFilter || '__all__'}
+                    onChange={(value) => {
+                      setSeverityFilter(String(value === '__all__' ? '' : (value ?? '')));
+                      setPage(1);
+                    }}
+                    className="w-full min-w-[180px] sm:w-auto"
+                    aria-label="Filter vulnerabilities by severity"
+                  >
                     <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
                       <Select.Value />
                       <Select.Indicator />
                     </Select.Trigger>
                     <Select.Popover>
                       <ListBox>
-                        {VULN_SEVERITY_OPTIONS.map(option => (
+                        {VULN_SEVERITY_OPTIONS.map((option) => (
                           <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
                             {option.label}
                             <ListBox.ItemIndicator />
@@ -1115,7 +1460,9 @@ function StatusItemVulnerabilityModal({
                   <input
                     type="text"
                     value={pkgInput}
-                    onChange={event => { setPkgInput(event.target.value); }}
+                    onChange={(event) => {
+                      setPkgInput(event.target.value);
+                    }}
                     placeholder="Package name"
                     aria-label="Filter vulnerabilities by package name"
                     className={`${STATUS_INPUT_CLS} min-w-[180px] flex-1`}
@@ -1128,7 +1475,7 @@ function StatusItemVulnerabilityModal({
                     max={10}
                     step={0.1}
                     value={minCvssInput}
-                    onChange={event => {
+                    onChange={(event) => {
                       setMinCvssInput(event.target.value);
                       const value = parseFloat(event.target.value);
                       setMinCvss(Number.isNaN(value) ? 0 : value);
@@ -1140,7 +1487,15 @@ function StatusItemVulnerabilityModal({
                     style={{ color: 'var(--text-primary)' }}
                   />
 
-                  <Button size="sm" variant={hasFix ? 'primary' : 'secondary'} onPress={() => { setHasFix(value => !value); setPage(1); }} className="rounded-full px-4 text-sm font-medium">
+                  <Button
+                    size="sm"
+                    variant={hasFix ? 'primary' : 'secondary'}
+                    onPress={() => {
+                      setHasFix((value) => !value);
+                      setPage(1);
+                    }}
+                    className="rounded-full px-4 text-sm font-medium"
+                  >
                     Has Fix
                   </Button>
                 </div>
@@ -1151,27 +1506,38 @@ function StatusItemVulnerabilityModal({
                   </div>
                 )}
 
-                <div className="overflow-hidden rounded-3xl" style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[840px] text-sm">
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                          {([
-                            { label: 'CVE ID', key: 'vuln_id' },
-                            { label: 'Package', key: 'pkg_name' },
-                            { label: 'Installed', key: 'installed_version' },
-                            { label: 'Fixed In', key: 'fixed_version' },
-                            { label: 'Severity', key: 'severity' },
-                            { label: 'CVSS', key: 'cvss_score' },
-                          ] as { label: string; key: VulnerabilitySortKey }[]).map(({ label, key }) => {
+                <div
+                  className="overflow-hidden rounded-3xl"
+                  style={{
+                    background: 'var(--status-card-bg)',
+                    border: '1px solid var(--status-card-border)',
+                  }}
+                >
+                  <Table variant="secondary">
+                    <Table.ScrollContainer>
+                      <Table.Content
+                        aria-label="Status page vulnerabilities"
+                        className="min-w-[840px]"
+                      >
+                        <Table.Header>
+                          {(
+                            [
+                              { label: 'CVE ID', key: 'vuln_id' },
+                              { label: 'Package', key: 'pkg_name' },
+                              { label: 'Installed', key: 'installed_version' },
+                              { label: 'Fixed In', key: 'fixed_version' },
+                              { label: 'Severity', key: 'severity' },
+                              { label: 'CVSS', key: 'cvss_score' },
+                            ] as { label: string; key: VulnerabilitySortKey }[]
+                          ).map(({ label, key }) => {
                             const active = sortBy === key;
                             return (
-                              <th key={key} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                              <Table.Column key={key} isRowHeader={key === 'vuln_id'}>
                                 <button
                                   type="button"
                                   onClick={() => {
                                     if (active) {
-                                      setSortDir(current => current === 'asc' ? 'desc' : 'asc');
+                                      setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'));
                                     } else {
                                       setSortBy(key);
                                       setSortDir('asc');
@@ -1185,90 +1551,152 @@ function StatusItemVulnerabilityModal({
                                   <span>{label}</span>
                                   {active && <span>{sortDir === 'desc' ? '↓' : '↑'}</span>}
                                 </button>
-                              </th>
+                              </Table.Column>
                             );
                           })}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {loading ? (
-                          <tr>
-                            <td colSpan={6} className="py-12 text-center">
-                              <div className="flex justify-center">
-                                <div className="size-6 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500" />
-                              </div>
-                            </td>
-                          </tr>
-                        ) : vulns.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="py-12 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
-                              {vulnTotal === 0
-                                ? blockedPolicyDetails
-                                  ? 'Xray blocked this snapshot with policy violations, but no vulnerability records were returned for this scan.'
-                                  : 'No vulnerabilities found for this image tag.'
-                                : 'No results match your filters.'}
-                            </td>
-                          </tr>
-                        ) : vulns.map((vuln, index) => (
-                          <tr
-                            key={vuln.id}
-                            style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
-                            onMouseEnter={event => (event.currentTarget.style.background = 'var(--row-hover)')}
-                            onMouseLeave={event => (event.currentTarget.style.background = 'transparent')}
-                          >
-                            <td className="px-4 py-3 align-top">
-                              {vuln.vuln_id ? (
-                                <div className="flex flex-col gap-1.5">
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={() => openVulnerabilityDetails(vuln)}
-                                      className="font-mono text-xs text-violet-600 transition-colors hover:underline dark:text-violet-400"
-                                    >
-                                      {vuln.vuln_id}
-                                    </button>
-                                    <SourceBadge source={vuln.data_source} />
+                        </Table.Header>
+                        <Table.Body>
+                          {loading ? (
+                            <Table.Row id="loading">
+                              <Table.Cell colSpan={6}>
+                                <div className="py-12 text-center">
+                                  <div className="flex justify-center">
+                                    <div className="size-6 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500" />
                                   </div>
-                                  {vuln.title && (
-                                    <p className="max-w-[280px] text-xs leading-5 text-zinc-500">{vuln.title}</p>
-                                  )}
                                 </div>
-                              ) : <span style={{ color: 'var(--text-faint)' }}>-</span>}
-                            </td>
-                            <td className="px-4 py-3 font-mono text-xs align-top" style={{ color: 'var(--text-secondary)' }}>{vuln.pkg_name}</td>
-                            <td className="px-4 py-3 font-mono text-xs align-top" style={{ color: 'var(--text-muted)' }}>{vuln.installed_version || '-'}</td>
-                            <td className="px-4 py-3 font-mono text-xs align-top text-emerald-600 dark:text-emerald-500">
-                              {vuln.fixed_version || <span style={{ color: 'var(--text-faint)' }}>-</span>}
-                            </td>
-                            <td className="px-4 py-3 align-top"><SeverityBadge severity={vuln.severity} /></td>
-                            <td className="px-4 py-3 font-mono text-xs align-top" style={{ color: 'var(--text-muted)' }}>
-                              {vuln.cvss_score ? vuln.cvss_score.toFixed(1) : '-'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                              </Table.Cell>
+                            </Table.Row>
+                          ) : vulns.length === 0 ? (
+                            <Table.Row id="empty">
+                              <Table.Cell colSpan={6}>
+                                <div
+                                  className="py-12 text-center text-sm"
+                                  style={{ color: 'var(--text-faint)' }}
+                                >
+                                  {vulnTotal === 0
+                                    ? blockedPolicyDetails
+                                      ? 'Xray blocked this snapshot with policy violations, but no vulnerability records were returned for this scan.'
+                                      : 'No vulnerabilities found for this image tag.'
+                                    : 'No results match your filters.'}
+                                </div>
+                              </Table.Cell>
+                            </Table.Row>
+                          ) : (
+                            vulns.map((vuln) => (
+                              <Table.Row
+                                key={vuln.id}
+                                id={vuln.id}
+                                className="hover:bg-[var(--row-hover)]"
+                              >
+                                <Table.Cell>
+                                  {vuln.vuln_id ? (
+                                    <div className="flex flex-col gap-1.5">
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => openVulnerabilityDetails(vuln)}
+                                          className="font-mono text-xs text-violet-600 transition-colors hover:underline dark:text-violet-400"
+                                        >
+                                          {vuln.vuln_id}
+                                        </button>
+                                        <SourceBadge source={vuln.data_source} />
+                                      </div>
+                                      {vuln.title && (
+                                        <p className="max-w-[280px] text-xs leading-5 text-zinc-500">
+                                          {vuln.title}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: 'var(--text-faint)' }}>-</span>
+                                  )}
+                                </Table.Cell>
+                                <Table.Cell
+                                  className="font-mono text-xs"
+                                  style={{ color: 'var(--text-secondary)' }}
+                                >
+                                  {vuln.pkg_name}
+                                </Table.Cell>
+                                <Table.Cell
+                                  className="font-mono text-xs"
+                                  style={{ color: 'var(--text-muted)' }}
+                                >
+                                  {vuln.installed_version || '-'}
+                                </Table.Cell>
+                                <Table.Cell className="font-mono text-xs text-emerald-600 dark:text-emerald-500">
+                                  {vuln.fixed_version || (
+                                    <span style={{ color: 'var(--text-faint)' }}>-</span>
+                                  )}
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <SeverityBadge severity={vuln.severity} />
+                                </Table.Cell>
+                                <Table.Cell
+                                  className="font-mono text-xs"
+                                  style={{ color: 'var(--text-muted)' }}
+                                >
+                                  {vuln.cvss_score ? vuln.cvss_score.toFixed(1) : '-'}
+                                </Table.Cell>
+                              </Table.Row>
+                            ))
+                          )}
+                        </Table.Body>
+                      </Table.Content>
+                    </Table.ScrollContainer>
+                  </Table>
                 </div>
               </div>
             </Modal.Body>
 
-            <Modal.Footer className="flex items-center justify-between gap-3 px-6 py-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{vulnTotal.toLocaleString()} total findings</span>
+            <Modal.Footer
+              className="flex items-center justify-between gap-3 px-6 py-4"
+              style={{ borderTop: '1px solid var(--border-subtle)' }}
+            >
+              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                {vulnTotal.toLocaleString()} total findings
+              </span>
               <div className="flex items-center gap-2">
                 {reportHref && (
-                  <Button size="sm" variant="primary" onPress={() => window.open(reportHref, '_blank', 'noopener,noreferrer')} className="rounded-full px-4">
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onPress={() => window.open(reportHref, '_blank', 'noopener,noreferrer')}
+                    className="rounded-full px-4"
+                  >
                     Generate report
                   </Button>
                 )}
-                <Button size="sm" variant="secondary" isDisabled={page <= 1} onPress={() => { setPage(current => Math.max(1, current - 1)); }} className="rounded-full px-4">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  isDisabled={page <= 1}
+                  onPress={() => {
+                    setPage((current) => Math.max(1, current - 1));
+                  }}
+                  className="rounded-full px-4"
+                >
                   Prev
                 </Button>
-                <span className="px-2 text-sm" style={{ color: 'var(--text-muted)' }}>{page} / {totalPages}</span>
-                <Button size="sm" variant="secondary" isDisabled={page >= totalPages} onPress={() => { setPage(current => Math.min(totalPages, current + 1)); }} className="rounded-full px-4">
+                <span className="px-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+                  {page} / {totalPages}
+                </span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  isDisabled={page >= totalPages}
+                  onPress={() => {
+                    setPage((current) => Math.min(totalPages, current + 1));
+                  }}
+                  className="rounded-full px-4"
+                >
                   Next
                 </Button>
-                <Button size="sm" variant="secondary" onPress={onClose} className="rounded-full px-4">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onPress={onClose}
+                  className="rounded-full px-4"
+                >
                   Close
                 </Button>
               </div>
@@ -1281,9 +1709,16 @@ function StatusItemVulnerabilityModal({
         vulnerability={selectedVulnerability}
         state={vulnerabilityDetailsModal}
         onClose={closeVulnerabilityDetails}
-        loadContextAnalysis={selectedScanId
-          ? (vulnerability) => getStatusPageItemVulnerabilityContextAnalysis(slug, selectedScanId, vulnerability.id)
-          : undefined}
+        loadContextAnalysis={
+          selectedScanId
+            ? (vulnerability) =>
+                getStatusPageItemVulnerabilityContextAnalysis(
+                  slug,
+                  selectedScanId,
+                  vulnerability.id
+                )
+            : undefined
+        }
       />
     </Modal>
   );
@@ -1304,9 +1739,10 @@ function StatusBoardRow({
 }) {
   const tone = getServiceTone(item);
   const totalFindings = getFindingTotal(item);
-  const meta = totalFindings > 0
-    ? `${item.image_tag} · ${totalFindings.toLocaleString()} findings`
-    : `${item.image_tag} · Updated ${timeAgo(item.observed_at)}`;
+  const meta =
+    totalFindings > 0
+      ? `${item.image_tag} · ${totalFindings.toLocaleString()} findings`
+      : `${item.image_tag} · Updated ${timeAgo(item.observed_at)}`;
 
   return (
     <button
@@ -1318,10 +1754,15 @@ function StatusBoardRow({
       <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-2">
-            <h3 className="text-lg font-semibold tracking-[-0.01em]" style={{ color: 'var(--text-primary)' }}>
+            <h3
+              className="text-lg font-semibold tracking-[-0.01em]"
+              style={{ color: 'var(--text-primary)' }}
+            >
               {item.image_name}
             </h3>
-            <p className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{meta}</p>
+            <p className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>
+              {meta}
+            </p>
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-2">
@@ -1371,34 +1812,37 @@ export default function PublicStatusPage() {
     });
   }
 
-  const load = useCallback(async (showLoader: boolean) => {
-    if (showLoader) {
-      setLoading(true);
-    } else {
-      setRefreshing(true);
-    }
-
-    try {
-      const result = await getStatusPageBySlug(slug);
-      if (!mountedRef.current) return;
-      setData(result);
-      setError('');
-      setNeedsAuth(false);
-      setLastLoadedAt(Date.now());
-    } catch (err: unknown) {
-      if (!mountedRef.current) return;
-      if (err instanceof ApiError && err.status === 401) {
-        setNeedsAuth(true);
-        setError('This status page requires authentication.');
+  const load = useCallback(
+    async (showLoader: boolean) => {
+      if (showLoader) {
+        setLoading(true);
       } else {
-        setError(err instanceof Error ? err.message : 'Failed to load status page');
+        setRefreshing(true);
       }
-    } finally {
-      if (!mountedRef.current) return;
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [slug]);
+
+      try {
+        const result = await getStatusPageBySlug(slug);
+        if (!mountedRef.current) return;
+        setData(result);
+        setError('');
+        setNeedsAuth(false);
+        setLastLoadedAt(Date.now());
+      } catch (err: unknown) {
+        if (!mountedRef.current) return;
+        if (err instanceof ApiError && err.status === 401) {
+          setNeedsAuth(true);
+          setError('This status page requires authentication.');
+        } else {
+          setError(err instanceof Error ? err.message : 'Failed to load status page');
+        }
+      } finally {
+        if (!mountedRef.current) return;
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [slug]
+  );
 
   useEffect(() => {
     return () => {
@@ -1422,7 +1866,8 @@ export default function PublicStatusPage() {
         const operationalStatus = getPresentationStatus(item);
         const exposureStatus = getExposureStatus(item, operationalStatus);
         acc.total += 1;
-        acc.attention += operationalStatus === 'healthy' && !isExposedStatus(exposureStatus) ? 0 : 1;
+        acc.attention +=
+          operationalStatus === 'healthy' && !isExposedStatus(exposureStatus) ? 0 : 1;
         acc.critical += item.critical_count;
         acc.high += item.high_count;
         acc.medium += item.medium_count;
@@ -1444,23 +1889,26 @@ export default function PublicStatusPage() {
         stale: 0,
         operations: {} as Record<string, number>,
         exposure: {} as Record<string, number>,
-      },
+      }
     );
   }, [data]);
 
   const trackedItems = useMemo(() => {
-    return (data?.items ?? []).toSorted((left, right) => (
-      compareItemsByPriority(left, right)
-      || left.display_order - right.display_order
-      || left.image_name.localeCompare(right.image_name)
-      || left.image_tag.localeCompare(right.image_tag)
-    ));
+    return (data?.items ?? []).toSorted(
+      (left, right) =>
+        compareItemsByPriority(left, right) ||
+        left.display_order - right.display_order ||
+        left.image_name.localeCompare(right.image_name) ||
+        left.image_tag.localeCompare(right.image_tag)
+    );
   }, [data]);
 
   const latestObservedAt = useMemo(() => {
     return trackedItems.reduce<string | null>((latest, item) => {
       if (!latest) return item.observed_at;
-      return new Date(item.observed_at).getTime() > new Date(latest).getTime() ? item.observed_at : latest;
+      return new Date(item.observed_at).getTime() > new Date(latest).getTime()
+        ? item.observed_at
+        : latest;
     }, null);
   }, [trackedItems]);
 
@@ -1468,7 +1916,10 @@ export default function PublicStatusPage() {
     return (
       <div className="min-h-screen flex items-center justify-center app-bg">
         <div className="flex flex-col items-center gap-4">
-          <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
+          <div
+            className="size-10 rounded-2xl flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}
+          >
             <Logo size={18} className="text-white" />
           </div>
           <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
@@ -1480,9 +1931,17 @@ export default function PublicStatusPage() {
   if (!data) {
     return (
       <div className="min-h-screen app-bg flex items-center justify-center px-6">
-        <div className="rounded-2xl p-8 max-w-md text-center space-y-4"
-          style={{ background: 'var(--status-card-bg)', border: '1px solid var(--status-card-border)' }}>
-          <div className="size-11 rounded-2xl mx-auto flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
+        <div
+          className="rounded-2xl p-8 max-w-md text-center space-y-4"
+          style={{
+            background: 'var(--status-card-bg)',
+            border: '1px solid var(--status-card-border)',
+          }}
+        >
+          <div
+            className="size-11 rounded-2xl mx-auto flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}
+          >
             <Logo size={18} className="text-white" />
           </div>
           <div>
@@ -1492,7 +1951,11 @@ export default function PublicStatusPage() {
             <p className="text-sm text-zinc-500 mt-1.5">{error}</p>
           </div>
           {needsAuth && (
-            <Link href={`/login?returnUrl=/status/${slug}`} className="inline-flex px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
+            <Link
+              href={`/login?returnUrl=/status/${slug}`}
+              className="inline-flex px-4 py-2 rounded-xl text-sm font-semibold text-white"
+              style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}
+            >
               {getToken() ? 'Sign in again to continue' : 'Sign in to continue'}
             </Link>
           )}
@@ -1504,34 +1967,39 @@ export default function PublicStatusPage() {
   const recentUpdates = data.page.updates?.slice(0, 3) ?? [];
   const latestUpdate = recentUpdates[0] ?? null;
   const olderUpdates = recentUpdates.slice(1);
-  const operationalIssueCount = (summary.operations.failed ?? 0) + (summary.operations.blocked_by_xray_policy ?? 0) + (summary.operations.stale ?? 0);
+  const operationalIssueCount =
+    (summary.operations.failed ?? 0) +
+    (summary.operations.blocked_by_xray_policy ?? 0) +
+    (summary.operations.stale ?? 0);
   const exposedCount = (summary.exposure.high_risk ?? 0) + (summary.exposure.findings_present ?? 0);
   const runningCount = summary.operations.running ?? 0;
   const healthyCount = trackedItems.length - operationalIssueCount;
   const { secondsRemaining } = getRefreshCadence(lastLoadedAt, refreshClock);
-  const pageTone = operationalIssueCount > 0
-    ? {
-        label: 'Investigating Issues',
-        color: STATUS_COLOR.failed,
-        description: `${summary.operations.failed ?? 0} failed, ${summary.operations.blocked_by_xray_policy ?? 0} policy blocked, and ${summary.operations.stale ?? 0} stale snapshot${operationalIssueCount === 1 ? '' : 's'} currently need attention.`,
-      }
-    : exposedCount > 0
+  const pageTone =
+    operationalIssueCount > 0
       ? {
-          label: 'Operational With Findings',
-          color: EXPOSURE_COLOR.findings_present,
-          description: `${summary.exposure.high_risk ?? 0} high-risk and ${summary.exposure.findings_present ?? 0} lower-severity finding set${exposedCount === 1 ? '' : 's'} are present in the latest scans.`,
+          label: 'Investigating Issues',
+          color: STATUS_COLOR.failed,
+          description: `${summary.operations.failed ?? 0} failed, ${summary.operations.blocked_by_xray_policy ?? 0} policy blocked, and ${summary.operations.stale ?? 0} stale snapshot${operationalIssueCount === 1 ? '' : 's'} currently need attention.`,
         }
-      : runningCount > 0
+      : exposedCount > 0
         ? {
-            label: 'Operational, Scans Active',
-            color: STATUS_COLOR.running,
-            description: `${runningCount} scan${runningCount === 1 ? '' : 's'} are still processing, but there are no current operational failures on tracked services.`,
+            label: 'Operational With Findings',
+            color: EXPOSURE_COLOR.findings_present,
+            description: `${summary.exposure.high_risk ?? 0} high-risk and ${summary.exposure.findings_present ?? 0} lower-severity finding set${exposedCount === 1 ? '' : 's'} are present in the latest scans.`,
           }
-        : {
-            label: 'All Systems Operational',
-            color: STATUS_COLOR.healthy,
-            description: 'Every tracked service is healthy in the latest snapshot and no known findings are currently present.',
-          };
+        : runningCount > 0
+          ? {
+              label: 'Operational, Scans Active',
+              color: STATUS_COLOR.running,
+              description: `${runningCount} scan${runningCount === 1 ? '' : 's'} are still processing, but there are no current operational failures on tracked services.`,
+            }
+          : {
+              label: 'All Systems Operational',
+              color: STATUS_COLOR.healthy,
+              description:
+                'Every tracked service is healthy in the latest snapshot and no known findings are currently present.',
+            };
 
   return (
     <div className="min-h-screen app-bg">
@@ -1548,43 +2016,100 @@ export default function PublicStatusPage() {
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 space-y-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl" style={{ background: 'linear-gradient(135deg,#0f172a,#334155)' }}>
+                  <div
+                    className="flex size-11 shrink-0 items-center justify-center rounded-2xl"
+                    style={{ background: 'linear-gradient(135deg,#0f172a,#334155)' }}
+                  >
                     <Logo size={18} className="text-white" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Status</p>
-                    <h1 className="text-2xl font-semibold tracking-[-0.02em] sm:text-[30px]" style={{ color: 'var(--text-primary)' }}>{data.page.name}</h1>
+                    <p
+                      className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      Status
+                    </p>
+                    <h1
+                      className="text-2xl font-semibold tracking-[-0.02em] sm:text-[30px]"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {data.page.name}
+                    </h1>
                   </div>
                 </div>
 
                 {data.page.description ? (
-                  <p className="max-w-3xl text-[15px] leading-7" style={{ color: 'var(--text-secondary)' }}>{data.page.description}</p>
+                  <p
+                    className="max-w-3xl text-[15px] leading-7"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    {data.page.description}
+                  </p>
                 ) : null}
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                   <StatusBoardBadge label={pageTone.label} color={pageTone.color} />
-                  <p className="min-w-0 flex-1 text-[14px] leading-6" style={{ color: 'var(--text-secondary)' }}>{pageTone.description}</p>
+                  <p
+                    className="min-w-0 flex-1 text-[14px] leading-6"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    {pageTone.description}
+                  </p>
                 </div>
               </div>
 
               <div className="flex shrink-0 flex-col items-start gap-3 lg:items-end">
                 <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                  <span
+                    className="rounded-full px-3 py-1.5 text-[12px] font-medium"
+                    style={{
+                      background: 'var(--status-pill-bg)',
+                      border: '1px solid var(--status-pill-border)',
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
                     Snapshot {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
                   </span>
-                  <span className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                  <span
+                    className="rounded-full px-3 py-1.5 text-[12px] font-medium"
+                    style={{
+                      background: 'var(--status-pill-bg)',
+                      border: '1px solid var(--status-pill-border)',
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
                     {trackedItems.length} service{trackedItems.length === 1 ? '' : 's'}
                   </span>
-                  <span className="rounded-full px-3 py-1.5 text-[12px] font-medium capitalize" style={{ background: 'var(--status-pill-bg)', border: '1px solid var(--status-pill-border)', color: 'var(--text-secondary)' }}>
+                  <span
+                    className="rounded-full px-3 py-1.5 text-[12px] font-medium capitalize"
+                    style={{
+                      background: 'var(--status-pill-bg)',
+                      border: '1px solid var(--status-pill-border)',
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
                     {data.page.visibility}
                   </span>
-                  <Button size="sm" isPending={refreshing} onPress={() => void load(false)} className="rounded-full px-4 text-sm font-semibold">
+                  <Button
+                    size="sm"
+                    isPending={refreshing}
+                    onPress={() => void load(false)}
+                    className="rounded-full px-4 text-sm font-semibold"
+                  >
                     {refreshing ? 'Refreshing...' : 'Refresh now'}
                   </Button>
                 </div>
-                <div className="text-right text-[13px] leading-6" style={{ color: 'var(--text-secondary)' }}>
-                  <p>{healthyCount} healthy, {operationalIssueCount} issues, {exposedCount} exposed</p>
-                  <p>{refreshing ? 'Refreshing now' : `Auto refresh in ${secondsRemaining}s`} · Stale after {data.page.stale_after_hours}h</p>
+                <div
+                  className="text-right text-[13px] leading-6"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  <p>
+                    {healthyCount} healthy, {operationalIssueCount} issues, {exposedCount} exposed
+                  </p>
+                  <p>
+                    {refreshing ? 'Refreshing now' : `Auto refresh in ${secondsRemaining}s`} · Stale
+                    after {data.page.stale_after_hours}h
+                  </p>
                 </div>
               </div>
             </div>
@@ -1601,72 +2126,130 @@ export default function PublicStatusPage() {
             <div className="p-6 sm:px-8">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Notifications</p>
-                  <h2 className="mt-1 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Recent status messages</h2>
+                  <p
+                    className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Notifications
+                  </p>
+                  <h2
+                    className="mt-1 text-lg font-semibold"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    Recent status messages
+                  </h2>
                 </div>
-                <span className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{recentUpdates.length} shown</span>
+                <span className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>
+                  {recentUpdates.length} shown
+                </span>
               </div>
 
               <div className="mt-4 space-y-4">
-                {latestUpdate ? (() => {
-                  const tone = getStatusUpdateTone(latestUpdate.level);
+                {latestUpdate ? (
+                  (() => {
+                    const tone = getStatusUpdateTone(latestUpdate.level);
 
-                  return (
-                    <div
-                      className="rounded-[28px] border p-5 sm:px-6"
-                      style={{
-                        background: `linear-gradient(135deg, ${tone.background}, color-mix(in srgb, var(--status-card-bg) 92%, white))`,
-                        borderColor: tone.border,
-                        boxShadow: `0 18px 38px color-mix(in srgb, ${tone.color} 12%, transparent)`,
-                      }}
-                    >
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0 space-y-3">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <span
-                              className="inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1 text-[12px] font-semibold"
-                              style={{
-                                background: tone.strongBackground,
-                                border: `1px solid ${tone.border}`,
-                                color: tone.color,
-                              }}
+                    return (
+                      <div
+                        className="rounded-[28px] border p-5 sm:px-6"
+                        style={{
+                          background: `linear-gradient(135deg, ${tone.background}, color-mix(in srgb, var(--status-card-bg) 92%, white))`,
+                          borderColor: tone.border,
+                          boxShadow: `0 18px 38px color-mix(in srgb, ${tone.color} 12%, transparent)`,
+                        }}
+                      >
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0 space-y-3">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <span
+                                className="inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1 text-[12px] font-semibold"
+                                style={{
+                                  background: tone.strongBackground,
+                                  border: `1px solid ${tone.border}`,
+                                  color: tone.color,
+                                }}
+                              >
+                                <span
+                                  className="size-2.5 rounded-full"
+                                  style={{ background: tone.color }}
+                                />
+                                {tone.label}
+                              </span>
+                              <p
+                                className="text-base font-semibold"
+                                style={{ color: 'var(--text-primary)' }}
+                              >
+                                {latestUpdate.title}
+                              </p>
+                            </div>
+                            <p
+                              className="max-w-3xl text-[15px] leading-7"
+                              style={{ color: 'var(--text-primary)' }}
                             >
-                              <span className="size-2.5 rounded-full" style={{ background: tone.color }} />
-                              {tone.label}
-                            </span>
-                            <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{latestUpdate.title}</p>
+                              {latestUpdate.body}
+                            </p>
                           </div>
-                          <p className="max-w-3xl text-[15px] leading-7" style={{ color: 'var(--text-primary)' }}>{latestUpdate.body}</p>
+                          <span
+                            className="shrink-0 text-[12px]"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            {latestUpdate.created_at
+                              ? timeAgo(latestUpdate.created_at)
+                              : 'Recently updated'}
+                          </span>
                         </div>
-                        <span className="shrink-0 text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                          {latestUpdate.created_at ? timeAgo(latestUpdate.created_at) : 'Recently updated'}
-                        </span>
                       </div>
-                    </div>
-                  );
-                })() : (
-                  <div className="rounded-2xl border border-dashed px-4 py-5 text-sm" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                    );
+                  })()
+                ) : (
+                  <div
+                    className="rounded-2xl border border-dashed px-4 py-5 text-sm"
+                    style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
+                  >
                     No incident or maintenance updates are published for this page.
                   </div>
                 )}
 
                 {olderUpdates.length > 0 && (
                   <div className="space-y-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>Earlier messages</p>
+                    <p
+                      className="text-[11px] font-semibold uppercase tracking-[0.16em]"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      Earlier messages
+                    </p>
                     <div className="space-y-4">
                       {olderUpdates.map((update, index) => {
                         const tone = getStatusUpdateTone(update.level);
 
                         return (
-                          <div key={`${update.title}:${update.created_at ?? index}`} className="flex flex-col gap-2 border-b pb-4 last:border-b-0 last:pb-0" style={{ borderColor: 'var(--border-subtle)' }}>
+                          <div
+                            key={`${update.title}:${update.created_at ?? index}`}
+                            className="flex flex-col gap-2 border-b pb-4 last:border-b-0 last:pb-0"
+                            style={{ borderColor: 'var(--border-subtle)' }}
+                          >
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div className="flex flex-wrap items-center gap-3">
                                 <StatusBoardBadge label={tone.label} color={tone.color} />
-                                <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{update.title}</p>
+                                <p
+                                  className="text-sm font-semibold"
+                                  style={{ color: 'var(--text-primary)' }}
+                                >
+                                  {update.title}
+                                </p>
                               </div>
-                              <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>{update.created_at ? timeAgo(update.created_at) : 'Recently updated'}</span>
+                              <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                                {update.created_at
+                                  ? timeAgo(update.created_at)
+                                  : 'Recently updated'}
+                              </span>
                             </div>
-                            <p className="text-[14px] leading-6" style={{ color: 'var(--text-secondary)' }}>{update.body}</p>
+                            <p
+                              className="text-[14px] leading-6"
+                              style={{ color: 'var(--text-secondary)' }}
+                            >
+                              {update.body}
+                            </p>
                           </div>
                         );
                       })}
@@ -1679,26 +2262,45 @@ export default function PublicStatusPage() {
             <div className="border-b p-6 sm:px-8" style={{ borderColor: 'var(--border-subtle)' }}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Hosted Pages</p>
-                  <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em]" style={{ color: 'var(--text-primary)' }}>Current status across tracked services</h2>
+                  <p
+                    className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Hosted Pages
+                  </p>
+                  <h2
+                    className="mt-1 text-xl font-semibold tracking-[-0.02em]"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    Current status across tracked services
+                  </h2>
                 </div>
                 <div className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>
-                  <span>{operationalIssueCount} issue{operationalIssueCount === 1 ? '' : 's'}</span>
+                  <span>
+                    {operationalIssueCount} issue{operationalIssueCount === 1 ? '' : 's'}
+                  </span>
                   <span className="mx-2">•</span>
                   <span>{runningCount} scanning</span>
                   <span className="mx-2">•</span>
                   <span>{summary.findings.toLocaleString()} findings</span>
                 </div>
               </div>
-              <p className="mt-3 max-w-3xl text-[13px] leading-6" style={{ color: 'var(--text-secondary)' }}>
-                Each block represents one actual recorded scan, ordered from older scans on the left to the latest scan on the right.
+              <p
+                className="mt-3 max-w-3xl text-[13px] leading-6"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                Each block represents one actual recorded scan, ordered from older scans on the left
+                to the latest scan on the right.
               </p>
             </div>
 
             {trackedItems.length > 0 ? (
               <div>
                 {trackedItems.map((item, index) => (
-                  <div key={`${item.image_name}:${item.image_tag}`} style={{ borderTop: index > 0 ? '1px solid var(--border-subtle)' : undefined }}>
+                  <div
+                    key={`${item.image_name}:${item.image_tag}`}
+                    style={{ borderTop: index > 0 ? '1px solid var(--border-subtle)' : undefined }}
+                  >
                     <StatusBoardRow
                       slug={slug}
                       item={item}
@@ -1711,8 +2313,13 @@ export default function PublicStatusPage() {
               </div>
             ) : (
               <div className="px-6 py-14 text-center sm:px-8">
-                <p className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>No services are currently tracked</p>
-                <p className="mt-2 text-[14px] leading-6" style={{ color: 'var(--text-secondary)' }}>
+                <p className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  No services are currently tracked
+                </p>
+                <p
+                  className="mt-2 text-[14px] leading-6"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
                   Add image tags to this status page to populate the public board.
                 </p>
               </div>

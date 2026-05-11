@@ -3,13 +3,14 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, SuppressionSourceBadge } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
-import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { FormField } from '@/components/ui/form-field';
+import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { deleteSuppressionById, getTokenType, listAllSuppressions, listSuppressionShares, ResourceShare, shareSuppression, Suppression, unshareSuppression } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
-import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { Button, ListBox, Modal, Select, Table, useOverlayState } from '@heroui/react';
 import { Delete01Icon, SecurityLockIcon, Shield01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -37,7 +38,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 const LIMIT = 50;
-const inputCls = nativeFieldClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
 
 export default function SuppressionsPage() {
   const workScope = useWorkScope();
@@ -166,21 +167,24 @@ export default function SuppressionsPage() {
         description={total > 0 ? `${total} active suppression${total !== 1 ? 's' : ''}` : 'Manage vulnerability suppressions across all images.'}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <input
-              className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl surface-input w-48"
-              placeholder="Search CVE ID…"
-              value={searchQuery}
-              onChange={e => {
-                const v = e.target.value;
-                setSearchQuery(v);
-                if (debounceRef.current) clearTimeout(debounceRef.current);
-                debounceRef.current = setTimeout(() => { setPage(1); load(1, statusFilter, v); }, 300);
-              }}
-            />
+              <FormField
+                hideLabel
+                label="Search CVE ID"
+                className="w-48"
+                containerClassName="w-48"
+                placeholder="Search CVE ID..."
+                value={searchQuery}
+                onChange={e => {
+                  const v = e.target.value;
+                  setSearchQuery(v);
+                  if (debounceRef.current) clearTimeout(debounceRef.current);
+                  debounceRef.current = setTimeout(() => { setPage(1); load(1, statusFilter, v); }, 300);
+                }}
+              />
             <Select value={statusFilter || '__all__'} onChange={value => { const v = String(value === '__all__' ? '' : value ?? ''); setStatusFilter(v); setPage(1); load(1, v, searchQuery); }}
               className="w-44"
             >
-              <Select.Trigger className="px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500/40 transition-colors rounded-xl surface-input">
+                <Select.Trigger className={selectTriggerCls}>
                 <Select.Value />
                 <Select.Indicator />
               </Select.Trigger>
@@ -202,48 +206,48 @@ export default function SuppressionsPage() {
         <FormAlert description={error} title="Suppressions loading failed" />
       )}
 
-      <div className="surface-panel rounded-2xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">CVE ID</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image Digest</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Source</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Justification</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">By</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Expires</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Created</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={9} className="py-16 text-center">
-                  <div className="flex justify-center">
-                    <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
-                  </div>
-                </td>
-              </tr>
-            ) : suppressions.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="py-16 text-center">
-                  <div className="flex flex-col items-center gap-3">
-                    <SecurityLockIcon size={32} className="text-zinc-400 dark:text-zinc-600" />
-                    <p className="text-sm text-zinc-500">{searchQuery || statusFilter ? 'No suppressions match your filters.' : 'No suppressions found.'}</p>
-                    {!searchQuery && !statusFilter && <p className="text-xs text-zinc-400">Suppressions allow you to acknowledge known vulnerabilities in a scan.</p>}
-                  </div>
-                </td>
-              </tr>
-            ) : suppressions.map((s, i) => (
-              <tr
+      <Table variant="secondary">
+        <Table.ScrollContainer>
+          <Table.Content aria-label="Suppressions" className="min-w-[1100px]">
+            <Table.Header>
+              <Table.Column isRowHeader>CVE ID</Table.Column>
+              <Table.Column>Image Digest</Table.Column>
+              <Table.Column>Status</Table.Column>
+              <Table.Column>Source</Table.Column>
+              <Table.Column>Justification</Table.Column>
+              <Table.Column>By</Table.Column>
+              <Table.Column>Expires</Table.Column>
+              <Table.Column>Created</Table.Column>
+              <Table.Column>Actions</Table.Column>
+            </Table.Header>
+            <Table.Body>
+              {loading ? (
+                <Table.Row id="loading">
+                  <Table.Cell colSpan={9}>
+                    <div className="py-16 text-center">
+                      <div className="flex justify-center">
+                        <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      </div>
+                    </div>
+                  </Table.Cell>
+                </Table.Row>
+              ) : suppressions.length === 0 ? (
+                <Table.Row id="empty">
+                  <Table.Cell colSpan={9}>
+                    <div className="flex flex-col items-center gap-3 py-16 text-center">
+                      <SecurityLockIcon size={32} className="text-zinc-400 dark:text-zinc-600" />
+                      <p className="text-sm text-zinc-500">{searchQuery || statusFilter ? 'No suppressions match your filters.' : 'No suppressions found.'}</p>
+                      {!searchQuery && !statusFilter && <p className="text-xs text-zinc-400">Suppressions allow you to acknowledge known vulnerabilities in a scan.</p>}
+                    </div>
+                  </Table.Cell>
+                </Table.Row>
+              ) : suppressions.map((s) => (
+              <Table.Row
+                id={s.id}
                 key={s.id}
-                style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                className="hover:bg-[var(--row-hover)]"
               >
-                <td className="px-4 py-3">
+                <Table.Cell>
                   <a
                     href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
                     target="_blank"
@@ -253,33 +257,36 @@ export default function SuppressionsPage() {
                   >
                     {s.vuln_id}
                   </a>
-                </td>
-                <td className="px-4 py-3">
+                </Table.Cell>
+                <Table.Cell>
                   <span className="font-mono text-xs text-zinc-500" title={s.image_digest}>
                     {s.image_digest.length > 28 ? s.image_digest.slice(0, 28) + '…' : s.image_digest}
                   </span>
-                </td>
-                <td className="px-4 py-3">
+                </Table.Cell>
+                <Table.Cell>
                   <StatusBadge status={s.status} />
-                </td>
-                <td className="px-4 py-3">
+                </Table.Cell>
+                <Table.Cell>
                   <SuppressionSourceBadge source={s.source} />
-                </td>
-                <td className="px-4 py-3 text-xs text-zinc-500 max-w-xs">
+                </Table.Cell>
+                <Table.Cell>
+                  <div className="text-xs text-zinc-500 max-w-xs">
                   <span className="line-clamp-2">{s.justification || '—'}</span>
                   {(s.xray_policy_name || s.xray_watch_name) && (
                     <p className="mt-1 text-[11px] text-zinc-400">
                       {[s.xray_policy_name, s.xray_watch_name].filter(Boolean).join(' · ')}
                     </p>
                   )}
-                </td>
-                <td className="px-4 py-3">
+                  </div>
+                </Table.Cell>
+                <Table.Cell>
                   <div className="space-y-1">
                     <p className="text-xs text-zinc-500">{s.username || '—'}</p>
                     <OwnershipBadge ownerType={s.owner_type} ownerOrgId={s.owner_org_id} orgNamesById={orgNamesById} />
                   </div>
-                </td>
-                <td className="px-4 py-3 text-xs">
+                </Table.Cell>
+                <Table.Cell>
+                  <div className="text-xs">
                   {s.expires_at ? (
                     <span className={new Date(s.expires_at) < new Date() ? 'text-red-400' : 'text-zinc-500'} title={fullDate(s.expires_at)}>
                       {new Date(s.expires_at).toLocaleDateString()}
@@ -287,59 +294,69 @@ export default function SuppressionsPage() {
                   ) : (
                     <span className="text-zinc-400">Never</span>
                   )}
-                </td>
-                <td className="px-4 py-3 text-xs text-zinc-500" title={fullDate(s.created_at)}>
-                  {timeAgo(s.created_at)}
-                </td>
-                <td className="px-4 py-3">
+                  </div>
+                </Table.Cell>
+                <Table.Cell>
+                  <div className="text-xs text-zinc-500" title={fullDate(s.created_at)}>
+                    {timeAgo(s.created_at)}
+                  </div>
+                </Table.Cell>
+                <Table.Cell>
                   {s.read_only || s.source === 'xray' ? (
                     <span className="text-[11px] text-zinc-400">Read only</span>
                   ) : (
                     <div className="flex items-center justify-end gap-1">
                       {canManageAccess(s) && (
-                        <button
-                          onClick={() => openShareModal(s)}
+                        <Button
+                          onPress={() => openShareModal(s)}
                           className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1"
                           title="Manage access"
                           type="button"
+                          isIconOnly
+                          variant="secondary"
                         >
                           <Shield01Icon size={15} />
-                        </button>
+                        </Button>
                       )}
-                      <button
-                        onClick={() => handleDelete(s)}
+                      <Button
+                        onPress={() => handleDelete(s)}
                         className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1"
                         title="Remove suppression"
                         type="button"
+                        isIconOnly
+                        variant="secondary"
                       >
                         <Delete01Icon size={15} />
-                      </button>
+                      </Button>
                     </div>
                   )}
-                </td>
-              </tr>
+                </Table.Cell>
+              </Table.Row>
             ))}
-          </tbody>
-        </table>
-      </div>
+            </Table.Body>
+          </Table.Content>
+        </Table.ScrollContainer>
+      </Table>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <span className="text-sm text-zinc-500">{total} total</span>
           <div className="flex items-center gap-2">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage(p => p - 1)}
+            <Button
+              isDisabled={page <= 1}
+              onPress={() => setPage(p => p - 1)}
               className="btn-secondary"
               type="button"
-            >← Prev</button>
+              variant="secondary"
+            >← Prev</Button>
             <span className="text-sm text-zinc-500 px-2">{page} / {totalPages}</span>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage(p => p + 1)}
+            <Button
+              isDisabled={page >= totalPages}
+              onPress={() => setPage(p => p + 1)}
               className="btn-secondary"
               type="button"
-            >Next →</button>
+              variant="secondary"
+            >Next →</Button>
           </div>
         </div>
       )}
@@ -388,9 +405,9 @@ export default function SuppressionsPage() {
                           {share.is_owner ? (
                             <span className="text-xs font-medium text-zinc-500">Locked</span>
                           ) : (
-                            <button type="button" onClick={() => { void handleRevokeShare(share.org_id); }} disabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50">
+                            <Button type="button" onPress={() => { void handleRevokeShare(share.org_id); }} isDisabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50" isIconOnly variant="secondary">
                               <Delete01Icon size={15} />
-                            </button>
+                            </Button>
                           )}
                         </div>
                       ))}
@@ -407,21 +424,29 @@ export default function SuppressionsPage() {
                     <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
                   ) : (
                     <div className="flex gap-2">
-                      <select className={inputCls + ' flex-1'} value={shareOrgId} onChange={(event) => setShareOrgId(event.target.value)}>
-                        <option value="">Select an organization</option>
-                        {availableShareTargets.map((org) => (
-                          <option key={org.id} value={org.id}>{org.name}</option>
-                        ))}
-                      </select>
-                      <button type="button" onClick={() => { void handleGrantShare(); }} disabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60">
+                      <Select value={shareOrgId || '__none__'} onChange={value => setShareOrgId(String(value === '__none__' ? '' : value ?? ''))} className="flex-1">
+                        <Select.Trigger className={selectTriggerCls}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="__none__">Select an organization</ListBox.Item>
+                            {availableShareTargets.map((org) => (
+                              <ListBox.Item key={org.id} id={org.id}>{org.name}</ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                      <Button type="button" onPress={() => { void handleGrantShare(); }} isDisabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60" variant="primary">
                         Grant
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={shareModal.close} className="btn-secondary" type="button">Close</button>
+                <Button onPress={shareModal.close} className="btn-secondary" type="button" variant="secondary">Close</Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

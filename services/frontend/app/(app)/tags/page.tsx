@@ -5,19 +5,19 @@ import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { createTag, deleteTag, getTokenType, getUser, getWorkScope, listTags, listTagShares, ResourceShare, shareTag, Tag, unshareTag, updateTag } from '@/lib/api';
-import { Modal, useOverlayState } from '@heroui/react';
+import { Button, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon, Tag01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
 
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#14b8a6'];
-const inputCls = nativeFieldClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
 
 export default function TagsPage() {
   const workScope = useWorkScope();
@@ -156,12 +156,9 @@ export default function TagsPage() {
       title="Tags"
       description="Organize your scans with color-coded labels."
       actions={
-        <button
-          onClick={openCreate}
-          className="btn-primary inline-flex items-center gap-2"
-        >
+        <Button onPress={openCreate} className="btn-primary inline-flex items-center gap-2" variant="primary">
           <PlusSignIcon size={15} /> New Tag
-        </button>
+        </Button>
       }
     />
 
@@ -271,12 +268,12 @@ export default function TagsPage() {
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="btn-secondary" type="button">Cancel</button>
-                <button type="submit" form="tag-form" disabled={saving}
-                  className="btn-primary inline-flex items-center gap-2">
+                <Button onPress={modal.close} className="btn-secondary" type="button" variant="secondary">Cancel</Button>
+                <Button type="submit" form="tag-form" isDisabled={saving}
+                  className="btn-primary inline-flex items-center gap-2" variant="primary">
                   {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Create'}
-                </button>
+                </Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>
@@ -326,9 +323,9 @@ export default function TagsPage() {
                           {share.is_owner ? (
                             <span className="text-xs font-medium text-zinc-500">Locked</span>
                           ) : (
-                            <button type="button" onClick={() => { void handleRevokeShare(share.org_id); }} disabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50">
+                            <Button type="button" onPress={() => { void handleRevokeShare(share.org_id); }} isDisabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50" isIconOnly variant="secondary">
                               <Delete01Icon size={15} />
-                            </button>
+                            </Button>
                           )}
                         </div>
                       ))}
@@ -345,21 +342,29 @@ export default function TagsPage() {
                     <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
                   ) : (
                     <div className="flex gap-2">
-                      <select className={inputCls + ' flex-1'} value={shareOrgId} onChange={(event) => setShareOrgId(event.target.value)}>
-                        <option value="">Select an organization</option>
-                        {availableShareTargets.map((org) => (
-                          <option key={org.id} value={org.id}>{org.name}</option>
-                        ))}
-                      </select>
-                      <button type="button" onClick={() => { void handleGrantShare(); }} disabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60">
+                      <Select value={shareOrgId || '__none__'} onChange={value => setShareOrgId(String(value === '__none__' ? '' : value ?? ''))} className="flex-1">
+                        <Select.Trigger className={selectTriggerCls}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="__none__">Select an organization</ListBox.Item>
+                            {availableShareTargets.map((org) => (
+                              <ListBox.Item key={org.id} id={org.id}>{org.name}</ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                      <Button type="button" onPress={() => { void handleGrantShare(); }} isDisabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60" variant="primary">
                         Grant
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={shareModal.close} className="btn-secondary" type="button">Close</button>
+                <Button onPress={shareModal.close} className="btn-secondary" type="button" variant="secondary">Close</Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

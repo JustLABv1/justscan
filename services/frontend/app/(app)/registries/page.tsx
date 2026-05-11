@@ -5,7 +5,7 @@ import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
@@ -13,11 +13,11 @@ import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { createRegistry, deleteRegistry, getDefaultScannerCapabilities, getTokenType, getWorkScope, listRegistriesWithCapabilities, listRegistryShares, RegistryWithHealth, ResourceShare, ScannerCapabilities, shareRegistry, testRegistry, unshareRegistry, updateRegistry } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
-import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { Button, ListBox, Modal, Select, Table, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, ServerStack01Icon, Shield01Icon, TestTube01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
 
-const inputCls = nativeFieldClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
 
 const AUTH_TYPE_LABEL: Record<string, string> = {
   none: 'Public', basic: 'Basic auth', token: 'Token', aws_ecr: 'AWS ECR',
@@ -225,13 +225,9 @@ export default function RegistriesPage() {
       title="Registries"
       description="Configure private Docker registries and choose the scan provider per registry."
       actions={
-        <button
-          onClick={openCreate}
-          className="btn-primary inline-flex items-center gap-2"
-          type="button"
-        >
+        <Button onPress={openCreate} className="btn-primary inline-flex items-center gap-2" type="button" variant="primary">
           <PlusSignIcon size={15} /> Add Registry
-        </button>
+        </Button>
       }
     />
 
@@ -264,74 +260,70 @@ export default function RegistriesPage() {
           action={{ label: '+ Add Registry', onClick: openCreate }}
         />
       ) : (
-        <div className="surface-panel rounded-2xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">URL</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Provider</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Username</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Health</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {registries.map((r, i) => (
-                <tr key={r.id} style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                  <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      <p className="font-medium text-zinc-700 dark:text-zinc-200">{r.name}</p>
-                      <OwnershipBadge ownerType={r.owner_type} ownerOrgId={r.owner_org_id} orgNamesById={orgNamesById} />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-500">{r.url}</td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-md"
-                      style={PROVIDER_STYLE[r.scan_provider ?? 'trivy']}>
-                      {PROVIDER_LABEL[r.scan_provider ?? 'trivy']}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-md"
-                      style={AUTH_TYPE_STYLE[r.auth_type ?? 'none']}>
-                      {AUTH_TYPE_LABEL[r.auth_type ?? 'none']}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">{r.username || <span className="text-zinc-400 dark:text-zinc-700">-</span>}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-1">
-                      <HealthBadge status={r.health_status ?? 'unknown'} message={r.health_message ?? ''} />
-                      {r.last_health_check_at && (
-                        <span className="text-[10px] text-zinc-500">
-                          {timeAgo(r.last_health_check_at)}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end">
-                      <RowActionsMenu
-                        label={`Open actions menu for ${r.name}`}
-                        items={[
-                          { id: 'test', label: testing === r.id ? 'Testing…' : 'Test connection', icon: <TestTube01Icon size={15} />, disabled: testing === r.id, onAction: () => { void handleTest(r.id); } },
-                          ...(canManageAccess(r)
-                            ? [{ id: 'share', label: 'Manage access', icon: <Shield01Icon size={15} />, onAction: () => openShareModal(r) }]
-                            : []),
-                          { id: 'edit', label: 'Edit registry', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(r) },
-                          { id: 'delete', label: 'Delete registry', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(r.id); } },
-                        ]}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <Table.ScrollContainer>
+            <Table.Content aria-label="Configured registries" className="min-w-[980px]">
+              <Table.Header>
+                <Table.Column isRowHeader>Name</Table.Column>
+                <Table.Column>URL</Table.Column>
+                <Table.Column>Provider</Table.Column>
+                <Table.Column>Auth</Table.Column>
+                <Table.Column>Username</Table.Column>
+                <Table.Column>Health</Table.Column>
+                <Table.Column>Actions</Table.Column>
+              </Table.Header>
+              <Table.Body>
+                {registries.map((r) => (
+                  <Table.Row key={r.id} id={r.id}>
+                    <Table.Cell>
+                      <div className="space-y-1">
+                        <p className="font-medium text-zinc-700 dark:text-zinc-200">{r.name}</p>
+                        <OwnershipBadge ownerType={r.owner_type} ownerOrgId={r.owner_org_id} orgNamesById={orgNamesById} />
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="font-mono text-xs text-zinc-500">{r.url}</span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-md" style={PROVIDER_STYLE[r.scan_provider ?? 'trivy']}>
+                        {PROVIDER_LABEL[r.scan_provider ?? 'trivy']}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-md" style={AUTH_TYPE_STYLE[r.auth_type ?? 'none']}>
+                        {AUTH_TYPE_LABEL[r.auth_type ?? 'none']}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="text-sm text-zinc-500 dark:text-zinc-400">{r.username || <span className="text-zinc-400 dark:text-zinc-700">-</span>}</span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex flex-col gap-1">
+                        <HealthBadge status={r.health_status ?? 'unknown'} message={r.health_message ?? ''} />
+                        {r.last_health_check_at && <span className="text-[10px] text-zinc-500">{timeAgo(r.last_health_check_at)}</span>}
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex items-center justify-end">
+                        <RowActionsMenu
+                          label={`Open actions menu for ${r.name}`}
+                          items={[
+                            { id: 'test', label: testing === r.id ? 'Testing…' : 'Test connection', icon: <TestTube01Icon size={15} />, disabled: testing === r.id, onAction: () => { void handleTest(r.id); } },
+                            ...(canManageAccess(r)
+                              ? [{ id: 'share', label: 'Manage access', icon: <Shield01Icon size={15} />, onAction: () => openShareModal(r) }]
+                              : []),
+                            { id: 'edit', label: 'Edit registry', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(r) },
+                            { id: 'delete', label: 'Delete registry', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(r.id); } },
+                          ]}
+                        />
+                      </div>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table>
       )}
 
       <Modal state={modal}>
@@ -350,7 +342,7 @@ export default function RegistriesPage() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Scan Provider</label>
                     <Select value={scanProvider} onChange={value => setScanProvider(value as 'trivy' | 'artifactory_xray')}>
-                      <Select.Trigger className={inputCls}>
+                      <Select.Trigger className={selectTriggerCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><ServerStack01Icon size={15} /></span>
                           <Select.Value />
@@ -403,7 +395,7 @@ export default function RegistriesPage() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Auth Type</label>
                     <Select value={authType} onChange={value => setAuthType(value as 'none' | 'basic' | 'token' | 'aws_ecr')}>
-                      <Select.Trigger className={inputCls}>
+                      <Select.Trigger className={selectTriggerCls}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>
                           <Select.Value />
@@ -440,13 +432,13 @@ export default function RegistriesPage() {
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="btn-secondary" type="button">
+                <Button onPress={modal.close} className="btn-secondary" type="button" variant="secondary">
                   Cancel
-                </button>
-                <button type="submit" form="registry-form" disabled={saving} className="btn-primary disabled:opacity-60">
+                </Button>
+                <Button type="submit" form="registry-form" isDisabled={saving} className="btn-primary disabled:opacity-60" variant="primary">
                   {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Add'}
-                </button>
+                </Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>
@@ -493,9 +485,9 @@ export default function RegistriesPage() {
                           {share.is_owner ? (
                             <span className="text-xs font-medium text-zinc-500">Locked</span>
                           ) : (
-                            <button type="button" onClick={() => { void handleRevokeShare(share.org_id); }} disabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50">
+                            <Button type="button" onPress={() => { void handleRevokeShare(share.org_id); }} isDisabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50" isIconOnly variant="secondary">
                               <Delete01Icon size={15} />
-                            </button>
+                            </Button>
                           )}
                         </div>
                       ))}
@@ -512,21 +504,29 @@ export default function RegistriesPage() {
                     <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
                   ) : (
                     <div className="flex gap-2">
-                      <select className={inputCls + ' flex-1'} value={shareOrgId} onChange={(event) => setShareOrgId(event.target.value)}>
-                        <option value="">Select an organization</option>
-                        {availableShareTargets.map((org) => (
-                          <option key={org.id} value={org.id}>{org.name}</option>
-                        ))}
-                      </select>
-                      <button type="button" onClick={() => { void handleGrantShare(); }} disabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60">
+                      <Select value={shareOrgId || '__none__'} onChange={value => setShareOrgId(String(value === '__none__' ? '' : value ?? ''))} className="flex-1">
+                        <Select.Trigger className={selectTriggerCls}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="__none__">Select an organization</ListBox.Item>
+                            {availableShareTargets.map((org) => (
+                              <ListBox.Item key={org.id} id={org.id}>{org.name}</ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                      <Button type="button" onPress={() => { void handleGrantShare(); }} isDisabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60" variant="primary">
                         Grant
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={shareModal.close} className="btn-secondary" type="button">Close</button>
+                <Button onPress={shareModal.close} className="btn-secondary" type="button" variant="secondary">Close</Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

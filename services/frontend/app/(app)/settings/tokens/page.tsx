@@ -1,14 +1,14 @@
 'use client';
 
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
-import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { FormField } from '@/components/ui/form-field';
 import { StatCard } from '@/components/ui/stat-card';
 import { createUserToken, listUserTokens, PersonalToken, revokeUserToken } from '@/lib/api';
 import { fullDate, timeAgo, timeUntil } from '@/lib/time';
-import { Modal, useOverlayState } from '@heroui/react';
+import { Button, Card, Modal, Table, useOverlayState } from '@heroui/react';
 import {
     Clock01Icon,
     Copy01Icon,
@@ -26,12 +26,6 @@ const EXPIRY_OPTIONS = [
   { label: 'No expiry', value: 0 },
 ];
 
-const panelStyle: CSSProperties = {
-  background: 'var(--surface-bg)',
-  border: '1px solid var(--surface-border)',
-  boxShadow: 'var(--surface-shadow)',
-};
-
 function SectionCard({
   eyebrow,
   title,
@@ -44,18 +38,18 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-[28px] p-6 md:p-7 space-y-5" style={panelStyle}>
-      <div>
+    <Card className="rounded-[28px] p-6 md:p-7 space-y-5">
+      <Card.Header className="block p-0">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em]" style={{ color: 'var(--text-faint)' }}>
           {eyebrow}
         </p>
-        <h2 className="mt-2 text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">{title}</h2>
-        <p className="mt-1.5 text-sm leading-6 text-zinc-500">{description}</p>
-      </div>
-      <div className="pt-5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <Card.Title className="mt-2 text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">{title}</Card.Title>
+        <Card.Description className="mt-1.5 text-sm leading-6 text-zinc-500">{description}</Card.Description>
+      </Card.Header>
+      <Card.Content className="p-0 pt-5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
         {children}
-      </div>
-    </section>
+      </Card.Content>
+    </Card>
   );
 }
 
@@ -173,14 +167,15 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
                 style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
                 {rawToken}
               </div>
-              <button
+              <Button
                 type="button"
-                onClick={handleCopy}
+                onPress={handleCopy}
                 className="btn-primary w-full flex items-center justify-center gap-2"
+                variant="primary"
               >
                 <Copy01Icon size={15} />
                 {copied ? 'Copied!' : 'Copy Token'}
-              </button>
+              </Button>
             </Modal.Body>
           </Modal.Dialog>
         </Modal.Container>
@@ -234,52 +229,49 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
                     {error}
                   </div>
                 )}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                    Token name <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    className={nativeFieldClassName}
-                    placeholder="e.g. GitLab CI/CD, Local dev"
-                    value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    required
-                    minLength={2}
-                    maxLength={128}
-                  />
-                </div>
+                <FormField
+                  label="Token name"
+                  placeholder="e.g. GitLab CI/CD, Local dev"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  required
+                  minLength={2}
+                  maxLength={128}
+                />
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Expiration</label>
                   <div className="grid grid-cols-5 gap-1.5">
                     {EXPIRY_OPTIONS.map(opt => (
-                      <button
+                      <Button
                         key={opt.value}
                         type="button"
-                        onClick={() => setExpiresIn(opt.value)}
+                        onPress={() => setExpiresIn(opt.value)}
                         className="rounded-lg p-2 text-xs font-medium transition-all"
+                        variant="secondary"
                         style={expiresIn === opt.value
                           ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(109,40,217,0.12) 100%)', border: '1px solid rgba(167,139,250,0.4)', color: '#a78bfa' }
                           : { background: 'var(--row-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-secondary)' }
                         }
                       >
                         {opt.label}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
               </form>
             </Modal.Body>
             <Modal.Footer className="px-6 py-4 flex justify-end gap-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-              <button type="button" onClick={() => state.close()} className="btn-secondary">Cancel</button>
-              <button
+              <Button type="button" onPress={() => state.close()} className="btn-secondary" variant="secondary">Cancel</Button>
+              <Button
                 type="submit"
                 form="create-token-form"
-                disabled={saving}
+                isDisabled={saving}
                 className="btn-primary inline-flex items-center gap-2"
+                variant="primary"
               >
                 {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 Create Token
-              </button>
+              </Button>
             </Modal.Footer>
           </Modal.Dialog>
         </Modal.Container>
@@ -422,14 +414,15 @@ export default function TokensPage() {
                         Create a token only for a concrete automation use case, then store it in your secret manager right away.
                       </p>
                     </div>
-                    <button
+                    <Button
                       type="button"
-                      onClick={() => createModal.open()}
+                      onPress={() => createModal.open()}
                       className="btn-primary inline-flex items-center gap-2"
+                      variant="primary"
                     >
                       <PlusSignIcon size={15} />
                       New Token
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -465,51 +458,62 @@ export default function TokensPage() {
                     Create a token when an external system needs API access. Keep one token per integration so rotation and revocation stay easy to reason about.
                   </p>
                 </div>
-                <button type="button" onClick={() => createModal.open()} className="btn-primary inline-flex items-center gap-2">
+                <Button type="button" onPress={() => createModal.open()} className="btn-primary inline-flex items-center gap-2" variant="primary">
                   <PlusSignIcon size={14} />
                   Create your first token
-                </button>
+                </Button>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-[24px]" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
-                <div className="hidden md:grid md:grid-cols-[minmax(220px,1.4fr)_160px_180px_140px_72px]" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <div className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</div>
-                  <div className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Created</div>
-                  <div className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Expiry</div>
-                  <div className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</div>
-                  <div className="px-4 py-3" />
-                </div>
-
-                <div>
-                  {tokens.map((token, idx) => (
-                    <div
-                      key={token.id}
-                      className="grid gap-3 p-4 md:grid-cols-[minmax(220px,1.4fr)_160px_180px_140px_72px] md:items-center"
-                      style={idx < tokens.length - 1 ? { borderBottom: '1px solid var(--border-subtle)' } : undefined}
-                    >
-                      <div className="min-w-0">
-                        <p className="font-medium text-zinc-900 dark:text-white break-words">{token.description}</p>
-                        <p className="mt-1 text-xs text-zinc-500 md:hidden">Created {timeAgo(token.created_at)}</p>
-                      </div>
-                      <div className="text-sm text-zinc-500 hidden md:block">{timeAgo(token.created_at)}</div>
-                      <div className="text-sm text-zinc-500"><TokenExpiry token={token} /></div>
-                      <div><TokenStatusBadge token={token} /></div>
-                      <div className="flex justify-end">
-                        {!token.disabled ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleRevoke(token)}
-                            className="p-2 rounded-xl text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                            title="Revoke token"
-                          >
-                            <Delete01Icon size={15} />
-                          </button>
-                        ) : <span />}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <Table variant="secondary">
+                <Table.ScrollContainer>
+                  <Table.Content aria-label="Personal API tokens" className="min-w-[820px]">
+                    <Table.Header>
+                      <Table.Column isRowHeader>Name</Table.Column>
+                      <Table.Column>Created</Table.Column>
+                      <Table.Column>Expiry</Table.Column>
+                      <Table.Column>Status</Table.Column>
+                      <Table.Column>Actions</Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {tokens.map((token) => (
+                        <Table.Row key={token.id} id={token.id} className="hover:bg-[var(--row-hover)]">
+                          <Table.Cell>
+                            <div className="min-w-0">
+                              <p className="font-medium text-zinc-900 dark:text-white break-words">{token.description}</p>
+                              <p className="mt-1 text-xs text-zinc-500 md:hidden">Created {timeAgo(token.created_at)}</p>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-sm text-zinc-500 hidden md:inline">{timeAgo(token.created_at)}</span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="text-sm text-zinc-500"><TokenExpiry token={token} /></div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <TokenStatusBadge token={token} />
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="flex justify-end">
+                              {!token.disabled ? (
+                                <Button
+                                  type="button"
+                                  onPress={() => void handleRevoke(token)}
+                                  className="p-2 rounded-xl text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                  title="Revoke token"
+                                  isIconOnly
+                                  variant="secondary"
+                                >
+                                  <Delete01Icon size={15} />
+                                </Button>
+                              ) : <span />}
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
             )}
           </SectionCard>
 

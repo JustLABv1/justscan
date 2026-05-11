@@ -3,8 +3,10 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
-import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { FormField } from '@/components/ui/form-field';
+import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -14,12 +16,11 @@ import {
 } from '@/lib/api';
 import { cronToHuman, type HourCyclePreference } from '@/lib/cron';
 import { fullDate, timeAgo } from '@/lib/time';
-import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { Button, ListBox, Modal, Select, Switch, Table, useOverlayState } from '@heroui/react';
 import { Clock01Icon, Delete01Icon, EyeIcon, PencilEdit01Icon, PlayIcon, PlusSignIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
-const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
 const TIMEZONE_OPTIONS = typeof Intl.supportedValuesOf === 'function'
   ? Intl.supportedValuesOf('timeZone')
@@ -210,30 +211,20 @@ export default function WatchlistPage() {
       description="Auto-scan images on a schedule."
       actions={
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="segmented-control">
-            {[
-              { key: 'locale', label: 'Locale' },
-              { key: '12', label: '12h' },
-              { key: '24', label: '24h' },
-            ].map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => setHourCycle(option.key as HourCyclePreference)}
-                className="segmented-control-item"
-                data-active={hourCycle === option.key ? 'true' : 'false'}
-                data-size="sm"
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={openCreate}
-            className="btn-primary inline-flex items-center gap-2"
-          >
+          <SegmentedControl
+            ariaLabel="Hour format"
+            options={[
+              { id: 'locale', label: 'Locale' },
+              { id: '12', label: '12h' },
+              { id: '24', label: '24h' },
+            ]}
+            value={hourCycle}
+            onChange={(next) => setHourCycle(next as HourCyclePreference)}
+            size="sm"
+          />
+          <Button onPress={openCreate} className="btn-primary inline-flex items-center gap-2" variant="primary">
             <PlusSignIcon size={15} /> Add Image
-          </button>
+          </Button>
         </div>
       }
     />
@@ -270,84 +261,112 @@ export default function WatchlistPage() {
           action={{ label: '+ Add Image', onClick: openCreate }}
         />
       ) : (
-        <div className="surface-panel rounded-2xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Image</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Schedule</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Timezone</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Registry</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Last Scan</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, i) => {
-                const reg = registries.find((r) => r.id === item.registry_id);
-                return (
-                  <tr key={item.id} style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                    <td className="px-4 py-3">
-                      <div className="space-y-1">
-                        <p className="font-mono text-xs text-zinc-700 dark:text-zinc-200">{item.image_name}:{item.image_tag}</p>
-                        <OwnershipBadge ownerType={item.owner_type} ownerOrgId={item.owner_org_id} orgNamesById={orgNamesById} />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 text-xs" style={{ color: 'rgba(167,139,250,0.8)' }} title={item.schedule}>
-                        <Clock01Icon size={12} color="rgba(113,113,122,0.7)" className="shrink-0" />
-                        {cronToHuman(item.schedule ?? '', { timezone: item.timezone, hourCycle })}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-zinc-500 font-mono">{item.timezone || 'UTC'}</td>
-                    <td className="px-4 py-3 text-xs text-zinc-500">{reg?.name ?? <span className="text-zinc-400 dark:text-zinc-700">-</span>}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full"
-                        style={item.enabled
-                          ? { color: '#34d399', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.22)' }
-                          : { color: '#71717a', background: 'rgba(113,113,122,0.08)', border: '1px solid rgba(113,113,122,0.15)' }
-                        }>
-                        <span className={`size-1.5 rounded-full bg-current ${item.enabled ? 'animate-pulse' : ''}`} />
-                        {item.enabled ? 'Active' : 'Disabled'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-zinc-500">
-                      {item.last_scan_id ? (
-                        <Link href={`/scans/${item.last_scan_id}`} className="hover:text-violet-500 dark:hover:text-violet-400 transition-colors" title={fullDate(item.last_scanned_at, { hourCycle, timeZone: item.timezone })}>
-                          {timeAgo(item.last_scanned_at, { hourCycle, timeZone: item.timezone })}
-                        </Link>
-                      ) : <span className="text-zinc-400 dark:text-zinc-700">Never</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => handleTrigger(item.id)} disabled={triggering === item.id}
-                          className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 disabled:opacity-50 transition-colors p-1.5" title="Scan now">
-                          {triggering === item.id
-                            ? <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-400 rounded-full animate-spin" />
-                            : <PlayIcon size={15} />}
-                        </button>
-                        <button onClick={() => openEdit(item)} className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5" title="Edit">
-                          <PencilEdit01Icon size={15} />
-                        </button>
-                        {canManageAccess(item) && (
-                          <button onClick={() => openShareModal(item)} className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1.5" title="Manage access">
-                            <EyeIcon size={15} />
-                          </button>
-                        )}
-                        <button onClick={() => handleDelete(item.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1.5" title="Delete">
-                          <Delete01Icon size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Table variant="secondary">
+          <Table.ScrollContainer>
+            <Table.Content aria-label="Watchlist images" className="min-w-[1080px]">
+              <Table.Header>
+                <Table.Column isRowHeader>Image</Table.Column>
+                <Table.Column>Schedule</Table.Column>
+                <Table.Column>Timezone</Table.Column>
+                <Table.Column>Registry</Table.Column>
+                <Table.Column>Status</Table.Column>
+                <Table.Column>Last Scan</Table.Column>
+                <Table.Column>Actions</Table.Column>
+              </Table.Header>
+              <Table.Body>
+                {items.map((item) => {
+                  const reg = registries.find((r) => r.id === item.registry_id);
+                  return (
+                    <Table.Row key={item.id} id={item.id} className="hover:bg-[var(--row-hover)]">
+                      <Table.Cell>
+                        <div className="space-y-1">
+                          <p className="font-mono text-xs text-zinc-700 dark:text-zinc-200">{item.image_name}:{item.image_tag}</p>
+                          <OwnershipBadge ownerType={item.owner_type} ownerOrgId={item.owner_org_id} orgNamesById={orgNamesById} />
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="flex items-center gap-1.5 text-xs" style={{ color: 'rgba(167,139,250,0.8)' }} title={item.schedule}>
+                          <Clock01Icon size={12} color="rgba(113,113,122,0.7)" className="shrink-0" />
+                          {cronToHuman(item.schedule ?? '', { timezone: item.timezone, hourCycle })}
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span className="text-xs text-zinc-500 font-mono">{item.timezone || 'UTC'}</span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span className="text-xs text-zinc-500">{reg?.name ?? <span className="text-zinc-400 dark:text-zinc-700">-</span>}</span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full"
+                          style={item.enabled
+                            ? { color: '#34d399', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.22)' }
+                            : { color: '#71717a', background: 'rgba(113,113,122,0.08)', border: '1px solid rgba(113,113,122,0.15)' }
+                          }>
+                          <span className={`size-1.5 rounded-full bg-current ${item.enabled ? 'animate-pulse' : ''}`} />
+                          {item.enabled ? 'Active' : 'Disabled'}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span className="text-xs text-zinc-500">
+                          {item.last_scan_id ? (
+                            <Link href={`/scans/${item.last_scan_id}`} className="hover:text-violet-500 dark:hover:text-violet-400 transition-colors" title={fullDate(item.last_scanned_at, { hourCycle, timeZone: item.timezone })}>
+                              {timeAgo(item.last_scanned_at, { hourCycle, timeZone: item.timezone })}
+                            </Link>
+                          ) : <span className="text-zinc-400 dark:text-zinc-700">Never</span>}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            onPress={() => handleTrigger(item.id)}
+                            isDisabled={triggering === item.id}
+                            className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 disabled:opacity-50 transition-colors p-1.5"
+                            isIconOnly
+                            title="Scan now"
+                            variant="secondary"
+                          >
+                            {triggering === item.id
+                              ? <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-400 rounded-full animate-spin" />
+                              : <PlayIcon size={15} />}
+                          </Button>
+                          <Button
+                            onPress={() => openEdit(item)}
+                            className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5"
+                            isIconOnly
+                            title="Edit"
+                            variant="secondary"
+                          >
+                            <PencilEdit01Icon size={15} />
+                          </Button>
+                          {canManageAccess(item) && (
+                            <Button
+                              onPress={() => openShareModal(item)}
+                              className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1.5"
+                              isIconOnly
+                              title="Manage access"
+                              variant="secondary"
+                            >
+                              <EyeIcon size={15} />
+                            </Button>
+                          )}
+                          <Button
+                            onPress={() => handleDelete(item.id)}
+                            className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1.5"
+                            isIconOnly
+                            title="Delete"
+                            variant="secondary"
+                          >
+                            <Delete01Icon size={15} />
+                          </Button>
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  );
+                })}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table>
       )}
 
       <Modal state={modal}>
@@ -367,35 +386,44 @@ export default function WatchlistPage() {
                     </div>
                   )}
                   <div className="flex gap-3">
-                    <div className="flex-1 space-y-1.5">
-                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image Name</label>
-                      <input className={inputCls + ' font-mono'} placeholder="nginx"
-                        value={imageName} onChange={(e) => setImageName(e.target.value)} required />
-                    </div>
-                    <div className="w-28 space-y-1.5">
-                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Tag</label>
-                      <input className={inputCls + ' font-mono'} placeholder="latest"
-                        value={imageTag} onChange={(e) => setImageTag(e.target.value)} required />
-                    </div>
+                    <FormField
+                      label="Image Name"
+                      placeholder="nginx"
+                      value={imageName}
+                      onChange={(e) => setImageName(e.target.value)}
+                      required
+                      className="font-mono"
+                      containerClassName="flex-1"
+                    />
+                    <FormField
+                      label="Tag"
+                      placeholder="latest"
+                      value={imageTag}
+                      onChange={(e) => setImageTag(e.target.value)}
+                      required
+                      className="font-mono"
+                      containerClassName="w-28"
+                    />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Schedule <span className="text-zinc-400 dark:text-zinc-600 font-normal">(cron)</span></label>
-                    <input className={inputCls + ' font-mono'} placeholder="0 2 * * *"
-                      value={schedule} onChange={(e) => setSchedule(e.target.value)} required />
-                    <div className="space-y-1">
-                      <p className="text-xs text-zinc-500">e.g. <code className="text-zinc-400 dark:text-zinc-500">0 2 * * *</code> = daily at 2:00 in the selected timezone</p>
-                      <p className="text-xs font-medium" style={{ color: 'rgba(167,139,250,0.88)' }}>Preview: {schedulePreview}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Timezone</label>
-                    <input
-                      className={inputCls + ' font-mono'}
+                  <FormField
+                    label="Schedule (cron)"
+                    placeholder="0 2 * * *"
+                    value={schedule}
+                    onChange={(e) => setSchedule(e.target.value)}
+                    required
+                    className="font-mono"
+                    description="e.g. 0 2 * * * = daily at 2:00 in the selected timezone"
+                  />
+                  <p className="text-xs font-medium" style={{ color: 'rgba(167,139,250,0.88)' }}>Preview: {schedulePreview}</p>
+                  <div className="space-y-2">
+                    <FormField
+                      label="Timezone"
                       list="watchlist-timezone-options"
                       placeholder="Europe/Berlin"
                       value={timezone}
                       onChange={(e) => setTimezone(e.target.value)}
                       required
+                      className="font-mono"
                     />
                     <datalist id="watchlist-timezone-options">
                       {TIMEZONE_OPTIONS.map((zone) => <option key={zone} value={zone} />)}
@@ -424,25 +452,17 @@ export default function WatchlistPage() {
                       )}
                     </div>
                   )}
-                  <label className="flex items-center gap-3 cursor-pointer select-none">
-                    <button
-                      type="button"
-                      onClick={() => setEnabled(!enabled)}
-                      className="relative w-9 h-5 rounded-full transition-colors shrink-0"
-                      style={{ background: enabled ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'var(--surface-border)' }}
-                    >
-                      <div className={`absolute top-0.5 left-0.5 size-4 rounded-full bg-white transition-transform shadow ${enabled ? 'translate-x-4' : ''}`} />
-                    </button>
-                    <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Enabled</span>
-                  </label>
+                  <Switch isSelected={enabled} onChange={setEnabled}>
+                    Enabled
+                  </Switch>
                 </form>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="btn-secondary" type="button">Cancel</button>
-                <button type="submit" form="watchlist-form" disabled={saving || xrayOnlyWithoutRegistries} className="btn-primary disabled:opacity-60">
+                <Button onPress={modal.close} className="btn-secondary" type="button" variant="secondary">Cancel</Button>
+                <Button type="submit" form="watchlist-form" isDisabled={saving || xrayOnlyWithoutRegistries} className="btn-primary disabled:opacity-60" variant="primary">
                   {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {editing ? 'Save' : 'Add'}
-                </button>
+                </Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>
@@ -493,9 +513,9 @@ export default function WatchlistPage() {
                           {share.is_owner ? (
                             <span className="text-xs font-medium text-zinc-500">Locked</span>
                           ) : (
-                            <button type="button" onClick={() => { void handleRevokeShare(share.org_id); }} disabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50">
+                            <Button type="button" onPress={() => { void handleRevokeShare(share.org_id); }} isDisabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50" isIconOnly variant="secondary">
                               <Delete01Icon size={15} />
-                            </button>
+                            </Button>
                           )}
                         </div>
                       ))}
@@ -512,21 +532,29 @@ export default function WatchlistPage() {
                     <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
                   ) : (
                     <div className="flex gap-2">
-                      <select className={inputCls + ' flex-1'} value={shareOrgId} onChange={(event) => setShareOrgId(event.target.value)}>
-                        <option value="">Select an organization</option>
-                        {availableShareTargets.map((org) => (
-                          <option key={org.id} value={org.id}>{org.name}</option>
-                        ))}
-                      </select>
-                      <button type="button" onClick={() => { void handleGrantShare(); }} disabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60">
+                      <Select value={shareOrgId || '__none__'} onChange={value => setShareOrgId(String(value === '__none__' ? '' : value ?? ''))} className="flex-1">
+                        <Select.Trigger className={selectTriggerCls}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="__none__">Select an organization</ListBox.Item>
+                            {availableShareTargets.map((org) => (
+                              <ListBox.Item key={org.id} id={org.id}>{org.name}</ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                      <Button type="button" onPress={() => { void handleGrantShare(); }} isDisabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60" variant="primary">
                         Grant
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
               </Modal.Body>
               <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={shareModal.close} className="btn-secondary" type="button">Close</button>
+                <Button onPress={shareModal.close} className="btn-secondary" type="button" variant="secondary">Close</Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

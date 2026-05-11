@@ -1,8 +1,28 @@
 'use client';
 
 import { WorkspaceOnboarding } from '@/components/workspace-onboarding';
-import { clearToken, clearUser, getUser, getWorkScope, listMyOrgInvites, listOrgs, Org, setWorkScope, WorkScope } from '@/lib/api';
-import { Avatar, Button, Card, Drawer, Dropdown, Header, Label, Separator, useOverlayState } from '@heroui/react';
+import {
+  clearToken,
+  clearUser,
+  getUser,
+  getWorkScope,
+  listMyOrgInvites,
+  listOrgs,
+  Org,
+  setWorkScope,
+  WorkScope,
+} from '@/lib/api';
+import {
+  Avatar,
+  Button,
+  Card,
+  Drawer,
+  Dropdown,
+  Header,
+  Label,
+  Separator,
+  useOverlayState,
+} from '@heroui/react';
 import {
   AiContentGenerator01Icon,
   ArrowDown01Icon,
@@ -23,7 +43,7 @@ import {
   SidebarLeft01Icon,
   SidebarRight01Icon,
   Sun01Icon,
-  Tag01Icon
+  Tag01Icon,
 } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -35,7 +55,10 @@ import { Logo } from '@/components/logo';
 import { SearchModal } from '@/components/search';
 import { ToastProvider } from '@/components/toast';
 import { BreadcrumbItem, PageHeaderConfig, PageHeaderContext } from '@/components/ui/page-header';
-import { hasSeenWorkspaceOnboarding, markWorkspaceOnboardingSeen } from '@/lib/workspace-onboarding';
+import {
+  hasSeenWorkspaceOnboarding,
+  markWorkspaceOnboardingSeen,
+} from '@/lib/workspace-onboarding';
 
 const navGroups = [
   {
@@ -84,12 +107,13 @@ function titleFromPath(pathname: string) {
   const segment = pathname.split('/').filter(Boolean).pop();
   if (!segment) return 'Dashboard';
 
-  return segment
-    .replace(/[-_]/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return segment.replace(/[-_]/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function resolveFallbackHeader(pathname: string, items: Array<{ href: string; label: string }>): PageHeaderConfig {
+function resolveFallbackHeader(
+  pathname: string,
+  items: Array<{ href: string; label: string }>
+): PageHeaderConfig {
   const current = items.find((item) => isActiveRoute(pathname, item.href));
   const breadcrumbs: BreadcrumbItem[] = current ? [{ label: current.label }] : [];
 
@@ -111,11 +135,17 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const [orgsReady, setOrgsReady] = useState(false);
   const [pendingInviteCount, setPendingInviteCount] = useState(0);
   const [workScope, setWorkScopeState] = useState<WorkScope>(() => getWorkScope());
-  const [onboardingStatus, setOnboardingStatus] = useState<'checking' | 'show' | 'done'>('checking');
+  const [onboardingStatus, setOnboardingStatus] = useState<'checking' | 'show' | 'done'>(
+    'checking'
+  );
   const mobileNav = useOverlayState();
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
   const [hoveredNavPopover, setHoveredNavPopover] = useState<string | null>(null);
-  const [hoveredNavPopoverAnchor, setHoveredNavPopoverAnchor] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const [hoveredNavPopoverAnchor, setHoveredNavPopoverAnchor] = useState<{
+    top: number;
+    left: number;
+    maxHeight: number;
+  } | null>(null);
   const [pageHeader, setPageHeader] = useState<PageHeaderConfig | null>(null);
   const navPopoverCloseTimer = useRef<number | null>(null);
 
@@ -134,11 +164,14 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     setHoveredNavPopoverAnchor(null);
   }, [pathname]);
 
-  useEffect(() => () => {
-    if (navPopoverCloseTimer.current !== null) {
-      window.clearTimeout(navPopoverCloseTimer.current);
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (navPopoverCloseTimer.current !== null) {
+        window.clearTimeout(navPopoverCloseTimer.current);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     if (localStorage.getItem('sidebar_collapsed') === 'true') {
@@ -154,7 +187,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
   useEffect(() => {
     if (!mounted) return;
-    const currentUser = (getUser() ?? user ?? initialUser) as { id?: string; email?: string; username?: string } | null;
+    const currentUser = (getUser() ?? user ?? initialUser) as {
+      id?: string;
+      email?: string;
+      username?: string;
+    } | null;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnboardingStatus(hasSeenWorkspaceOnboarding(currentUser) ? 'done' : 'show');
   }, [initialUser, mounted, user]);
@@ -177,7 +214,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     }
 
     window.addEventListener('justscan-work-scope-changed', handleScopeChanged as EventListener);
-    return () => window.removeEventListener('justscan-work-scope-changed', handleScopeChanged as EventListener);
+    return () =>
+      window.removeEventListener(
+        'justscan-work-scope-changed',
+        handleScopeChanged as EventListener
+      );
   }, []);
 
   useEffect(() => {
@@ -186,7 +227,8 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     }
 
     window.addEventListener('justscan-org-membership-changed', handleOrgMembershipChanged);
-    return () => window.removeEventListener('justscan-org-membership-changed', handleOrgMembershipChanged);
+    return () =>
+      window.removeEventListener('justscan-org-membership-changed', handleOrgMembershipChanged);
   }, []);
 
   useEffect(() => {
@@ -196,7 +238,9 @@ export function AppShell({ children, initialUser }: AppShellProps) {
       .then(([orgsResult, invitesResult]) => {
         const nextOrgs = orgsResult.status === 'fulfilled' ? orgsResult.value : [];
         setOrgs(nextOrgs);
-        setPendingInviteCount(invitesResult.status === 'fulfilled' ? invitesResult.value.length : 0);
+        setPendingInviteCount(
+          invitesResult.status === 'fulfilled' ? invitesResult.value.length : 0
+        );
         const current = getWorkScope();
         if (current.kind !== 'org') {
           return;
@@ -260,7 +304,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   }
 
   function finishOnboarding(nextScope: WorkScope) {
-    const currentUser = (getUser() ?? user ?? initialUser) as { id?: string; email?: string; username?: string } | null;
+    const currentUser = (getUser() ?? user ?? initialUser) as {
+      id?: string;
+      email?: string;
+      username?: string;
+    } | null;
     markWorkspaceOnboardingSeen(currentUser);
     setWorkScopeState(nextScope);
     setWorkScope(nextScope);
@@ -269,7 +317,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   }
 
   function skipOnboarding() {
-    const currentUser = (getUser() ?? user ?? initialUser) as { id?: string; email?: string; username?: string } | null;
+    const currentUser = (getUser() ?? user ?? initialUser) as {
+      id?: string;
+      email?: string;
+      username?: string;
+    } | null;
     markWorkspaceOnboardingSeen(currentUser);
     const nextScope = resolveFallbackScope();
     setWorkScopeState(nextScope);
@@ -280,14 +332,23 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
   const initials = (user?.username ?? user?.email ?? 'U')[0]?.toUpperCase() ?? 'U';
   const isDark = resolvedTheme === 'dark';
-  const themeToggleTitle = !mounted ? 'Toggle theme' : isDark ? 'Switch to light mode' : 'Switch to dark mode';
-  const scopeLabel = workScope.kind === 'org' ? workScope.orgName ?? 'Organization' : 'Personal workspace';
+  const themeToggleTitle = !mounted
+    ? 'Toggle theme'
+    : isDark
+      ? 'Switch to light mode'
+      : 'Switch to dark mode';
+  const scopeLabel =
+    workScope.kind === 'org' ? (workScope.orgName ?? 'Organization') : 'Personal workspace';
   const workspaceTitle = `Workspace: ${scopeLabel}`;
   const isAdminRoute = Boolean(user?.role === 'admin' && isActiveRoute(pathname, '/admin'));
   const desktopCollapsed = collapsed;
-  const workspaceMarkerStyle = workScope.kind === 'org'
-    ? { background: 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)', boxShadow: '0 0 0 1px rgba(255,255,255,0.65)' }
-    : { background: 'rgba(113,113,122,0.72)', boxShadow: '0 0 0 1px rgba(255,255,255,0.5)' };
+  const workspaceMarkerStyle =
+    workScope.kind === 'org'
+      ? {
+          background: 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)',
+          boxShadow: '0 0 0 1px rgba(255,255,255,0.65)',
+        }
+      : { background: 'rgba(113,113,122,0.72)', boxShadow: '0 0 0 1px rgba(255,255,255,0.5)' };
   const navigationGroups = isAdminRoute
     ? [
         ...navGroups,
@@ -301,11 +362,17 @@ export function AppShell({ children, initialUser }: AppShellProps) {
           ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
           : []),
       ];
-  const hoveredNavHref = hoveredNavPopover?.startsWith('desktop:') ? hoveredNavPopover.slice('desktop:'.length) : null;
-  const hoveredLeafNavItem = hoveredNavHref
-    ? navigationGroups.flatMap((group) => group.items).find((item) => item.href === hoveredNavHref && item.href !== '/admin')
+  const hoveredNavHref = hoveredNavPopover?.startsWith('desktop:')
+    ? hoveredNavPopover.slice('desktop:'.length)
     : null;
-  const navItems = navigationGroups.flatMap((group) => group.items.map(({ href, label }) => ({ href, label })));
+  const hoveredLeafNavItem = hoveredNavHref
+    ? navigationGroups
+        .flatMap((group) => group.items)
+        .find((item) => item.href === hoveredNavHref && item.href !== '/admin')
+    : null;
+  const navItems = navigationGroups.flatMap((group) =>
+    group.items.map(({ href, label }) => ({ href, label }))
+  );
   const topbarHeader = pageHeader ?? resolveFallbackHeader(pathname, navItems);
   const pageHeaderContextValue = useMemo(() => ({ setHeader: setPageHeader }), []);
 
@@ -358,8 +425,12 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             >
               <Logo size={20} className="text-white" />
             </div>
-            <p className="mt-5 text-base font-semibold text-zinc-900 dark:text-white">Preparing your workspace view</p>
-            <p className="mt-2 text-sm text-zinc-500">Checking your workspace setup before entering JustScan.</p>
+            <p className="mt-5 text-base font-semibold text-zinc-900 dark:text-white">
+              Preparing your workspace view
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Checking your workspace setup before entering JustScan.
+            </p>
           </div>
         </div>
       </ToastProvider>
@@ -386,613 +457,850 @@ export function AppShell({ children, initialUser }: AppShellProps) {
       <PageHeaderContext.Provider value={pageHeaderContextValue}>
         {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
         <div className="flex h-dvh app-bg overflow-hidden">
-        <Card
-          className={`relative hidden rounded-none rounded-br-3xl md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
-            desktopCollapsed ? 'w-[68px]' : 'w-72'
-          }`}
-        >
-          <div
-            className="absolute -top-10 -left-10 size-40 rounded-full pointer-events-none"
-            style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%)' }}
-          />
-          <div className="absolute inset-x-0 top-0 h-px pointer-events-none bg-gradient-to-r from-transparent via-violet-400/20 to-transparent" />
-          <div className="absolute inset-y-0 right-0 w-px pointer-events-none bg-gradient-to-b from-violet-500/10 via-transparent to-transparent" />
-
-          <div
-            className="flex items-center px-[18px] py-5 shrink-0"
-            style={{ borderBottom: '1px solid var(--border-subtle)' }}
+          <Card
+            className={`relative hidden rounded-none rounded-r-3xl md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
+              desktopCollapsed ? 'w-[68px]' : 'w-72'
+            }`}
           >
             <div
-              className="size-8 rounded-xl flex items-center justify-center shrink-0"
+              className="absolute -top-10 -left-10 size-40 rounded-full pointer-events-none"
               style={{
-                background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
+                background: 'radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%)',
               }}
-            >
-              <Logo size={16} className="text-white" />
-            </div>
-            <span
-              className="ml-3 font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300"
-              style={{ maxWidth: desktopCollapsed ? 0 : 120, opacity: desktopCollapsed ? 0 : 1, color: 'var(--text-primary)' }}
-            >
-              JustScan
-            </span>
-          </div>
+            />
+            <div className="absolute inset-x-0 top-0 h-px pointer-events-none bg-gradient-to-r from-transparent via-violet-400/20 to-transparent" />
+            <div className="absolute inset-y-0 right-0 w-px pointer-events-none bg-gradient-to-b from-violet-500/10 via-transparent to-transparent" />
 
-          <div className="px-2 pt-3 pb-2 space-y-2">
-            {!desktopCollapsed && pendingInviteCount > 0 && (
-              <Link
-                href="/orgs"
-                className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all duration-150 text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
-                style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)' }}
-              >
-                <div>
-                  <p className="font-medium text-amber-600 dark:text-amber-400">Pending invites</p>
-                  <p className="text-xs text-zinc-500">Review organization access requests</p>
-                </div>
-                <span className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-300"
-                  style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
-                  {pendingInviteCount}
-                </span>
-              </Link>
-            )}
-          </div>
-
-          <nav className="flex-1 overflow-y-auto overflow-x-hidden p-2">
-            {navigationGroups.map(({ label, items }) => (
-              <div key={label} className="mb-1">
-                <div
-                  className="nav-section-label transition-all duration-300 overflow-hidden"
-                  style={{ maxHeight: desktopCollapsed ? 0 : 28, opacity: desktopCollapsed ? 0 : 1, paddingTop: desktopCollapsed ? 0 : undefined, paddingBottom: desktopCollapsed ? 0 : undefined }}
-                >
-                  {label}
-                </div>
-                <div className="space-y-0.5">
-                  {items.map(({ href, label: itemLabel, Icon }) => {
-                    const showAdminTree = href === '/admin';
-                    const active = isActiveRoute(pathname, href);
-                    const popoverKey = `desktop:${href}`;
-
-                    if (showAdminTree && !desktopCollapsed) {
-                      return <AdminSidebarTree key="admin-tree-desktop" showLabel={false} />;
-                    }
-
-                    if (desktopCollapsed && showAdminTree) {
-                      return (
-                        <Link
-                          key={href}
-                          href={href}
-                          aria-label={itemLabel}
-                          onMouseEnter={(event) => openAnchoredNavPopover(popoverKey, event.currentTarget.getBoundingClientRect())}
-                          onMouseLeave={scheduleNavPopoverClose}
-                          className={`relative flex w-full items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                          style={active ? {
-                            background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                            boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
-                          } : undefined}
-                        >
-                          {!active && (
-                            <span
-                              className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                              style={{ background: 'var(--row-hover)' }}
-                            />
-                          )}
-                          {active ? (
-                            <span
-                              className="absolute left-0 inset-y-2 w-0.5 rounded-full"
-                              style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
-                            />
-                          ) : null}
-                          <Icon size={18} className="shrink-0 relative z-10" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
-                        </Link>
-                      );
-                    }
-
-                    if (desktopCollapsed) {
-                      return (
-                        <Link
-                          key={href}
-                          href={href}
-                          aria-label={itemLabel}
-                          onMouseEnter={(event) => openAnchoredNavPopover(popoverKey, event.currentTarget.getBoundingClientRect())}
-                          onMouseLeave={scheduleNavPopoverClose}
-                          className={`relative flex w-full items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                          style={active ? {
-                            background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                            boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
-                          } : undefined}
-                        >
-                          {!active && (
-                            <span
-                              className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                              style={{ background: 'var(--row-hover)' }}
-                            />
-                          )}
-                          {active ? (
-                            <span
-                              className="absolute left-0 inset-y-2 w-0.5 rounded-full"
-                              style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
-                            />
-                          ) : null}
-                          <Icon size={18} className="shrink-0 relative z-10" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
-                        </Link>
-                      );
-                    }
-
-                    return (
-                      <Link
-                        key={href}
-                        href={href}
-                        className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                        style={active ? {
-                          background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
-                        } : undefined}
-                      >
-                        {!active && (
-                          <span
-                            className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                            style={{ background: 'var(--row-hover)' }}
-                          />
-                        )}
-                        {active && (
-                          <span
-                            className="absolute left-0 inset-y-2 w-0.5 rounded-full"
-                            style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
-                          />
-                        )}
-                        <Icon size={18} className="shrink-0 relative z-10" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
-                        <span
-                          className="flex-1 overflow-hidden transition-all duration-300 relative z-10"
-                          style={{ maxWidth: desktopCollapsed ? 0 : 160, opacity: desktopCollapsed ? 0 : 1 }}
-                        >
-                          {itemLabel}
-                        </span>
-                        {href === '/orgs' && pendingInviteCount > 0 && !desktopCollapsed && (
-                          <span className="relative z-10 ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
-                            style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
-                            {pendingInviteCount}
-                          </span>
-                        )}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </nav>
-
-          {desktopCollapsed && hoveredNavPopover === 'desktop:/admin' && hoveredNavPopoverAnchor ? (
             <div
-              className="fixed z-[70] hidden pl-2 md:block"
-              style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
-              onMouseEnter={cancelNavPopoverClose}
-              onMouseLeave={scheduleNavPopoverClose}
+              className="flex items-center px-[18px] py-5 shrink-0"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}
             >
               <div
-                className="surface-modal w-[320px] overflow-hidden rounded-[24px] p-3"
-                style={{ borderColor: 'var(--modal-border)', maxHeight: hoveredNavPopoverAnchor.maxHeight }}
+                className="size-8 rounded-xl flex items-center justify-center shrink-0"
+                style={{
+                  background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                  boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
+                }}
               >
-                <div className="space-y-2 overflow-y-auto pr-1" style={{ maxHeight: hoveredNavPopoverAnchor.maxHeight - 32 }}>
-                  <p className="px-1 text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>
-                    Admin
-                  </p>
-                  <AdminSidebarTree condensed showLabel={false} showRoot={false} onNavigate={() => {
-                    setHoveredNavPopover(null);
-                    setHoveredNavPopoverAnchor(null);
-                  }} />
-                </div>
+                <Logo size={16} className="text-white" />
               </div>
-            </div>
-          ) : null}
-
-          {desktopCollapsed && hoveredLeafNavItem && hoveredNavPopoverAnchor ? (
-            <div
-              className="pointer-events-none fixed z-[70] hidden pl-2 md:block"
-              style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
-            >
-              <div className="surface-modal w-[220px] rounded-[20px] p-3" style={{ borderColor: 'var(--modal-border)' }}>
-                <div className="flex items-center gap-3 text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                  <hoveredLeafNavItem.Icon size={18} className="shrink-0" style={{ color: isActiveRoute(pathname, hoveredLeafNavItem.href) ? '#a78bfa' : 'var(--text-faint)' }} />
-                  <span className="flex-1">{hoveredLeafNavItem.label}</span>
-                  {hoveredLeafNavItem.href === '/orgs' && pendingInviteCount > 0 ? (
-                    <span className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
-                      style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
-                      {pendingInviteCount}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="shrink-0 px-2 pb-3 pt-2 space-y-1.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-            <Dropdown>
-              <Dropdown.Trigger
-                className={`w-full flex items-center rounded-xl transition-all duration-150 outline-none ${desktopCollapsed ? 'justify-center py-2' : 'gap-2.5 p-2.5'}`}
-                style={{ background: 'transparent' }}
-                aria-label={workspaceTitle}
-                onMouseEnter={handleRowHoverEnter}
-                onMouseLeave={handleRowHoverLeave}
+              <span
+                className="ml-3 font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300"
+                style={{
+                  maxWidth: desktopCollapsed ? 0 : 120,
+                  opacity: desktopCollapsed ? 0 : 1,
+                  color: 'var(--text-primary)',
+                }}
               >
-                <div className="relative shrink-0" title={desktopCollapsed ? workspaceTitle : undefined}>
-                  <div
-                    className="flex size-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
-                    style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.12)' }}
-                  >
-                    <GridTableIcon size={16} />
-                  </div>
-                  <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full" style={workspaceMarkerStyle} />
-                </div>
-                {!desktopCollapsed && (
-                  <>
-                    <div className="flex min-w-0 flex-1 flex-col justify-center pr-1 text-left">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
-                      <p className="mt-0.5 truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{scopeLabel}</p>
-                    </div>
-                    <ArrowDown01Icon size={14} className="shrink-0 text-zinc-500" />
-                  </>
-                )}
-              </Dropdown.Trigger>
+                JustScan
+              </span>
+            </div>
 
-              <Dropdown.Popover className="min-w-[220px]" placement={desktopCollapsed ? 'right bottom' : 'top start'}>
-                <Dropdown.Menu
-                  onAction={(key) => handleScopeChange(key as string)}
-                  selectionMode="single"
-                  selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
+            <div className="px-2 pt-3 pb-2 space-y-2">
+              {!desktopCollapsed && pendingInviteCount > 0 && (
+                <Link
+                  href="/orgs"
+                  className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all duration-150 text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+                  style={{
+                    background: 'rgba(245, 158, 11, 0.08)',
+                    border: '1px solid rgba(245, 158, 11, 0.18)',
+                  }}
                 >
-                  <Dropdown.Item id="personal" textValue="Personal workspace">
-                    <Label>Personal workspace</Label>
-                  </Dropdown.Item>
-                  {orgs.length > 0 && (
-                    <Dropdown.Section>
-                      <Header>Organizations</Header>
-                      {orgs.map((org) => (
-                        <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
-                          <Label>{org.name}</Label>
-                        </Dropdown.Item>
-                      ))}
-                    </Dropdown.Section>
-                  )}
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
+                  <div>
+                    <p className="font-medium text-amber-600 dark:text-amber-400">
+                      Pending invites
+                    </p>
+                    <p className="text-xs text-zinc-500">Review organization access requests</p>
+                  </div>
+                  <span
+                    className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-300"
+                    style={{ background: 'rgba(245, 158, 11, 0.16)' }}
+                  >
+                    {pendingInviteCount}
+                  </span>
+                </Link>
+              )}
+            </div>
 
-          </div>
-        </Card>
+            <nav className="flex-1 overflow-y-auto overflow-x-hidden p-2">
+              {navigationGroups.map(({ label, items }) => (
+                <div key={label} className="mb-1">
+                  <div
+                    className="nav-section-label transition-all duration-300 overflow-hidden"
+                    style={{
+                      maxHeight: desktopCollapsed ? 0 : 28,
+                      opacity: desktopCollapsed ? 0 : 1,
+                      paddingTop: desktopCollapsed ? 0 : undefined,
+                      paddingBottom: desktopCollapsed ? 0 : undefined,
+                    }}
+                  >
+                    {label}
+                  </div>
+                  <div className="space-y-0.5">
+                    {items.map(({ href, label: itemLabel, Icon }) => {
+                      const showAdminTree = href === '/admin';
+                      const active = isActiveRoute(pathname, href);
+                      const popoverKey = `desktop:${href}`;
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <Card
-            className="sticky top-3 z-20 mx-3 mt-2 rounded-2xl"
-          >
-            <div className="flex min-h-12 items-center gap-2.5 px-3 py-2">
-            <button
-              onClick={toggleCollapsed}
-              className="hidden h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-all duration-150 hover:text-zinc-900 md:inline-flex dark:hover:text-zinc-200"
-              onMouseEnter={(event) => {
-                event.currentTarget.style.background = 'var(--row-hover)';
-              }}
-              onMouseLeave={(event) => {
-                event.currentTarget.style.background = 'transparent';
-              }}
-              title={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {desktopCollapsed ? <SidebarRight01Icon size={20} /> : <SidebarLeft01Icon size={20} />}
-            </button>
+                      if (showAdminTree && !desktopCollapsed) {
+                        return <AdminSidebarTree key="admin-tree-desktop" showLabel={false} />;
+                      }
 
-            <Drawer state={mobileNav}>
-              <Button aria-label="Open navigation menu" className="rounded-lg md:hidden" isIconOnly variant="secondary">
-                <Menu01Icon size={16} />
-              </Button>
-              <Drawer.Backdrop className="md:hidden" variant="blur">
-                <Drawer.Content className="md:hidden" placement="left">
-                  <Drawer.Dialog className="flex h-full w-[min(88vw,320px)] flex-col surface-sidebar">
-                    <Drawer.Header
-                      className="flex items-center justify-between p-4"
-                      style={{ borderBottom: '1px solid var(--border-subtle)' }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="size-9 rounded-xl flex items-center justify-center shrink-0"
-                          style={{
-                            background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                            boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
-                          }}
-                        >
-                          <Logo size={18} className="text-white" />
-                        </div>
-                        <div>
-                          <Drawer.Heading className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                            JustScan
-                          </Drawer.Heading>
-                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                            Scan, watch, and manage
-                          </p>
-                        </div>
-                      </div>
-                      <Drawer.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
-                    </Drawer.Header>
-                    <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
-                      <div className="space-y-4">
-                        <Dropdown>
-                          <Dropdown.Trigger className="w-full flex items-center justify-between rounded-xl p-3 text-sm transition-all duration-150 outline-none text-left"
-                            style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
-                          >
-                            <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                              <div className="relative shrink-0">
-                                <div
-                                  className="flex size-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
-                                  style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.12)' }}
-                                >
-                                  <GridTableIcon size={16} />
-                                </div>
-                                <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full" style={workspaceMarkerStyle} />
-                              </div>
-                              <div className="flex flex-col min-w-0 flex-1">
-                                <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
-                                <span className="mt-0.5 truncate text-[12px] font-medium text-zinc-700 dark:text-zinc-200">{scopeLabel}</span>
-                              </div>
-                            </div>
-                            <ArrowDown01Icon size={16} className="text-zinc-500 shrink-0 ml-2" />
-                          </Dropdown.Trigger>
-                          <Dropdown.Popover className="w-[min(80vw,300px)]">
-                            <Dropdown.Menu
-                              onAction={(key) => handleScopeChange(key as string)}
-                              selectionMode="single"
-                              selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
-                            >
-                              <Dropdown.Item id="personal" textValue="Personal workspace">
-                                <Label>Personal workspace</Label>
-                              </Dropdown.Item>
-                              {orgs.length > 0 && (
-                                <Dropdown.Section>
-                                  <Header>Organizations</Header>
-                                  {orgs.map((org) => (
-                                    <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
-                                      <Label>{org.name}</Label>
-                                    </Dropdown.Item>
-                                  ))}
-                                </Dropdown.Section>
-                              )}
-                            </Dropdown.Menu>
-                          </Dropdown.Popover>
-                        </Dropdown>
-
-                        {pendingInviteCount > 0 && (
+                      if (desktopCollapsed && showAdminTree) {
+                        return (
                           <Link
-                            href="/orgs"
-                            className="flex items-center justify-between rounded-xl p-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
-                            onClick={() => mobileNav.close()}
-                            style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)' }}
+                            key={href}
+                            href={href}
+                            aria-label={itemLabel}
+                            onMouseEnter={(event) =>
+                              openAnchoredNavPopover(
+                                popoverKey,
+                                event.currentTarget.getBoundingClientRect()
+                              )
+                            }
+                            onMouseLeave={scheduleNavPopoverClose}
+                            className={`relative flex w-full items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                            style={
+                              active
+                                ? {
+                                    background:
+                                      'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                                    boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
+                                  }
+                                : undefined
+                            }
                           >
-                            <div>
-                              <p>Pending invites</p>
-                              <p className="text-xs font-normal text-zinc-500">Review organization access requests</p>
-                            </div>
-                            <span className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
-                              style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
+                            {!active && (
+                              <span
+                                className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                                style={{ background: 'var(--row-hover)' }}
+                              />
+                            )}
+                            {active ? (
+                              <span
+                                className="absolute left-0 inset-y-2 w-0.5 rounded-full"
+                                style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
+                              />
+                            ) : null}
+                            <Icon
+                              size={18}
+                              className="shrink-0 relative z-10"
+                              style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }}
+                            />
+                          </Link>
+                        );
+                      }
+
+                      if (desktopCollapsed) {
+                        return (
+                          <Link
+                            key={href}
+                            href={href}
+                            aria-label={itemLabel}
+                            onMouseEnter={(event) =>
+                              openAnchoredNavPopover(
+                                popoverKey,
+                                event.currentTarget.getBoundingClientRect()
+                              )
+                            }
+                            onMouseLeave={scheduleNavPopoverClose}
+                            className={`relative flex w-full items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                            style={
+                              active
+                                ? {
+                                    background:
+                                      'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                                    boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
+                                  }
+                                : undefined
+                            }
+                          >
+                            {!active && (
+                              <span
+                                className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                                style={{ background: 'var(--row-hover)' }}
+                              />
+                            )}
+                            {active ? (
+                              <span
+                                className="absolute left-0 inset-y-2 w-0.5 rounded-full"
+                                style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
+                              />
+                            ) : null}
+                            <Icon
+                              size={18}
+                              className="shrink-0 relative z-10"
+                              style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }}
+                            />
+                          </Link>
+                        );
+                      }
+
+                      return (
+                        <Link
+                          key={href}
+                          href={href}
+                          className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                          style={
+                            active
+                              ? {
+                                  background:
+                                    'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                                  boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
+                                }
+                              : undefined
+                          }
+                        >
+                          {!active && (
+                            <span
+                              className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                              style={{ background: 'var(--row-hover)' }}
+                            />
+                          )}
+                          {active && (
+                            <span
+                              className="absolute left-0 inset-y-2 w-0.5 rounded-full"
+                              style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
+                            />
+                          )}
+                          <Icon
+                            size={18}
+                            className="shrink-0 relative z-10"
+                            style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }}
+                          />
+                          <span
+                            className="flex-1 overflow-hidden transition-all duration-300 relative z-10"
+                            style={{
+                              maxWidth: desktopCollapsed ? 0 : 160,
+                              opacity: desktopCollapsed ? 0 : 1,
+                            }}
+                          >
+                            {itemLabel}
+                          </span>
+                          {href === '/orgs' && pendingInviteCount > 0 && !desktopCollapsed && (
+                            <span
+                              className="relative z-10 ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
+                              style={{ background: 'rgba(245, 158, 11, 0.16)' }}
+                            >
                               {pendingInviteCount}
                             </span>
-                          </Link>
-                        )}
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
 
-                        {navigationGroups.map(({ label, items }) => (
-                          <div key={label} className="space-y-1.5">
-                            <p className="px-2 text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>
-                              {label}
-                            </p>
-                            <div className="space-y-1">
-                              {items.map(({ href, label: itemLabel, Icon }) => {
-                                const showAdminTree = href === '/admin';
-                                const active = isActiveRoute(pathname, href);
-
-                                if (showAdminTree) {
-                                  return <AdminSidebarTree key="admin-tree-mobile" condensed onNavigate={() => mobileNav.close()} showLabel={false} />;
-                                }
-
-                                return (
-                                  <Link
-                                    key={href}
-                                    href={href}
-                                    className={`flex items-center gap-3 rounded-xl p-3 text-sm font-medium transition-all ${
-                                      active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-700 dark:text-zinc-300'
-                                    }`}
-                                    onClick={() => mobileNav.close()}
-                                    style={active
-                                      ? {
-                                          background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
-                                        }
-                                      : { background: 'var(--row-hover)' }}
-                                  >
-                                    <Icon size={18} className="shrink-0" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
-                                    <span className="flex-1">{itemLabel}</span>
-                                    {href === '/orgs' && pendingInviteCount > 0 && (
-                                      <span className="ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
-                                        style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
-                                        {pendingInviteCount}
-                                      </span>
-                                    )}
-                                  </Link>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </Drawer.Body>
-                    <Drawer.Footer
-                      className="flex flex-col gap-2 p-3"
-                      style={{ borderTop: '1px solid var(--border-subtle)' }}
-                    >
-                      <Dropdown>
-                        <Dropdown.Trigger className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 outline-none text-left" style={{ background: 'var(--row-hover)' }}>
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <div
-                              className="size-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
-                              style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
-                            >
-                              {initials}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{user?.username ?? user?.email ?? 'User'}</p>
-                              <p className="truncate text-[11px] text-zinc-500">{user?.role ?? 'user'}</p>
-                            </div>
-                          </div>
-                          <Settings01Icon size={16} className="text-zinc-400 shrink-0" />
-                        </Dropdown.Trigger>
-                        <Dropdown.Popover className="w-[min(80vw,300px)]" placement="top end">
-                          <Dropdown.Menu onAction={(key) => {
-                             if (key === 'settings') { router.push('/settings'); mobileNav.close(); }
-                             if (key === 'api-docs') { window.open('/swagger/index.html', '_blank'); mobileNav.close(); }
-                             if (key === 'theme') { setTheme(isDark ? 'light' : 'dark'); }
-                             if (key === 'signout') { handleLogout(); mobileNav.close(); }
-                          }}>
-                            <Dropdown.Item key="settings" id="settings" textValue="Settings">
-                              <div className="flex items-center gap-2">
-                                 <Settings01Icon size={14} className="text-zinc-500" />
-                                 <Label>Settings</Label>
-                              </div>
-                            </Dropdown.Item>
-                            <Dropdown.Item key="theme" id="theme" textValue="Theme">
-                              <div className="flex items-center justify-between w-full">
-                                <div className="flex items-center gap-2">
-                                  {mounted ? (isDark ? <Sun01Icon size={14} className="text-zinc-500" /> : <Moon02Icon size={14} className="text-zinc-500" />) : <span aria-hidden className="block size-[14px]" />}
-                                  <Label>Theme</Label>
-                                </div>
-                              </div>
-                            </Dropdown.Item>
-                            <Dropdown.Item key="api-docs" id="api-docs" textValue="API Docs">
-                              <div className="flex items-center gap-2">
-                                <FileExportIcon size={14} className="text-zinc-500" />
-                                <Label>API Docs</Label>
-                              </div>
-                            </Dropdown.Item>
-                            <Dropdown.Section>
-                              <Separator className="my-1" />
-                              <Dropdown.Item key="signout" id="signout" textValue="Sign Out" className="text-danger">
-                                <div className="flex items-center gap-2">
-                                  <Logout02Icon size={14} />
-                                  <Label className="text-danger">Sign Out</Label>
-                                </div>
-                              </Dropdown.Item>
-                            </Dropdown.Section>
-                          </Dropdown.Menu>
-                        </Dropdown.Popover>
-                      </Dropdown>
-                    </Drawer.Footer>
-                  </Drawer.Dialog>
-                </Drawer.Content>
-              </Drawer.Backdrop>
-            </Drawer>
-            <div className="min-w-0 flex-1 space-y-0.5">
-              {topbarHeader.breadcrumbs && topbarHeader.breadcrumbs.length > 0 ? (
-                <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-[10px] font-medium">
-                  {topbarHeader.breadcrumbs.map((item, index) => {
-                    const isCurrent = index === topbarHeader.breadcrumbs!.length - 1;
-
-                    return (
-                      <span key={`${item.label}-${index}`} className="inline-flex items-center gap-1.5">
-                        {item.href && !isCurrent ? (
-                          <Link href={item.href} className="transition-colors hover:text-zinc-900 dark:hover:text-white" style={{ color: 'var(--text-faint)' }}>
-                            {item.label}
-                          </Link>
-                        ) : (
-                          <span aria-current={isCurrent ? 'page' : undefined} style={{ color: isCurrent ? 'var(--text-primary)' : 'var(--text-faint)' }}>
-                            {item.label}
-                          </span>
-                        )}
-                        {!isCurrent ? <span style={{ color: 'var(--text-faint)' }}>/</span> : null}
-                      </span>
-                    );
-                  })}
-                </nav>
-              ) : null}
-
-              <div>
-                <h1 className="flex flex-wrap items-center gap-1 text-base font-semibold tracking-tight md:text-base">
-                  {topbarHeader.title}
-                  {topbarHeader.titleCom}
-                </h1>
-              </div>
-            </div>
-
-            <div className="ml-auto flex shrink-0 items-center gap-1.5">
-              {topbarHeader.actions ? <div className="hidden items-center gap-1.5 md:flex">{topbarHeader.actions}</div> : null}
-              <Separator className="hidden h-5 md:block mr-1.5 ml-1.5" orientation="vertical" />
-              <Button
-                aria-label="Open search"
-                className="rounded-full text-zinc-700 dark:text-zinc-200 md:hidden"
-                isIconOnly
-                onPress={() => setSearchOpen(true)}
-                variant="secondary"
+            {desktopCollapsed &&
+            hoveredNavPopover === 'desktop:/admin' &&
+            hoveredNavPopoverAnchor ? (
+              <div
+                className="fixed z-[70] hidden pl-2 md:block"
+                style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
+                onMouseEnter={cancelNavPopoverClose}
+                onMouseLeave={scheduleNavPopoverClose}
               >
-                <Search01Icon size={14} className="text-current" />
-              </Button>
-              <Button className="hidden rounded-full text-zinc-700 dark:text-zinc-200 md:inline-flex" onPress={() => setSearchOpen(true)} variant="secondary">
-                <Search01Icon size={14} className="text-current" />
-              </Button>
-
-              <Dropdown>
-                <Dropdown.Trigger>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 outline-none transition-all duration-150"
-                    aria-label="Open user menu"
-                    onMouseEnter={handleRowHoverEnter}
-                    onMouseLeave={handleRowHoverLeave}
+                <div
+                  className="surface-modal w-[320px] overflow-hidden rounded-[24px] p-3"
+                  style={{
+                    borderColor: 'var(--modal-border)',
+                    maxHeight: hoveredNavPopoverAnchor.maxHeight,
+                  }}
+                >
+                  <div
+                    className="space-y-2 overflow-y-auto pr-1"
+                    style={{ maxHeight: hoveredNavPopoverAnchor.maxHeight - 32 }}
                   >
-                    <Avatar
-                      className="h-7 w-7 border border-violet-300/25 bg-violet-500/15 text-[11px] font-semibold text-violet-300"
-                      size="sm"
-                      variant="soft"
+                    <p
+                      className="px-1 text-[11px] uppercase tracking-[0.18em]"
+                      style={{ color: 'var(--text-faint)' }}
                     >
-                      <Avatar.Fallback>{initials}</Avatar.Fallback>
-                    </Avatar>
-                  </button>
+                      Admin
+                    </p>
+                    <AdminSidebarTree
+                      condensed
+                      showLabel={false}
+                      showRoot={false}
+                      onNavigate={() => {
+                        setHoveredNavPopover(null);
+                        setHoveredNavPopoverAnchor(null);
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {desktopCollapsed && hoveredLeafNavItem && hoveredNavPopoverAnchor ? (
+              <div
+                className="pointer-events-none fixed z-[70] hidden pl-2 md:block"
+                style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
+              >
+                <div
+                  className="surface-modal w-[220px] rounded-[20px] p-3"
+                  style={{ borderColor: 'var(--modal-border)' }}
+                >
+                  <div className="flex items-center gap-3 text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                    <hoveredLeafNavItem.Icon
+                      size={18}
+                      className="shrink-0"
+                      style={{
+                        color: isActiveRoute(pathname, hoveredLeafNavItem.href)
+                          ? '#a78bfa'
+                          : 'var(--text-faint)',
+                      }}
+                    />
+                    <span className="flex-1">{hoveredLeafNavItem.label}</span>
+                    {hoveredLeafNavItem.href === '/orgs' && pendingInviteCount > 0 ? (
+                      <span
+                        className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
+                        style={{ background: 'rgba(245, 158, 11, 0.16)' }}
+                      >
+                        {pendingInviteCount}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <div
+              className="shrink-0 px-2 pb-3 pt-2 space-y-1.5"
+              style={{ borderTop: '1px solid var(--border-subtle)' }}
+            >
+              <Dropdown>
+                <Dropdown.Trigger
+                  className={`w-full flex items-center rounded-xl transition-all duration-150 outline-none ${desktopCollapsed ? 'justify-center py-2' : 'gap-2.5 p-2.5'}`}
+                  style={{ background: 'transparent' }}
+                  aria-label={workspaceTitle}
+                  onMouseEnter={handleRowHoverEnter}
+                  onMouseLeave={handleRowHoverLeave}
+                >
+                  <div
+                    className="relative shrink-0"
+                    title={desktopCollapsed ? workspaceTitle : undefined}
+                  >
+                    <div
+                      className="flex size-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
+                      style={{
+                        background: 'rgba(124,58,237,0.08)',
+                        border: '1px solid rgba(124,58,237,0.12)',
+                      }}
+                    >
+                      <GridTableIcon size={16} />
+                    </div>
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full"
+                      style={workspaceMarkerStyle}
+                    />
+                  </div>
+                  {!desktopCollapsed && (
+                    <>
+                      <div className="flex min-w-0 flex-1 flex-col justify-center pr-1 text-left">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                          Workspace
+                        </p>
+                        <p className="mt-0.5 truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                          {scopeLabel}
+                        </p>
+                      </div>
+                      <ArrowDown01Icon size={14} className="shrink-0 text-zinc-500" />
+                    </>
+                  )}
                 </Dropdown.Trigger>
 
-                <Dropdown.Popover className="min-w-[200px]" placement="bottom end">
-                  <Dropdown.Menu onAction={(key) => {
-                    if (key === 'settings') router.push('/settings');
-                    if (key === 'api-docs') window.open('/swagger/index.html', '_blank');
-                    if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
-                    if (key === 'signout') handleLogout();
-                  }}>
-                    <Dropdown.Item key="settings" id="settings" textValue="Settings">
-                      <div className="flex items-center gap-2">
-                        <Settings01Icon size={14} className="text-zinc-500" />
-                        <Label>Settings</Label>
-                      </div>
+                <Dropdown.Popover
+                  className="min-w-[220px]"
+                  placement={desktopCollapsed ? 'right bottom' : 'top start'}
+                >
+                  <Dropdown.Menu
+                    onAction={(key) => handleScopeChange(key as string)}
+                    selectionMode="single"
+                    selectedKeys={
+                      new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])
+                    }
+                  >
+                    <Dropdown.Item id="personal" textValue="Personal workspace">
+                      <Label>Personal workspace</Label>
                     </Dropdown.Item>
-                    <Dropdown.Item key="theme" id="theme" textValue="Theme">
-                      <div className="flex items-center gap-2">
-                        {mounted ? (isDark ? <Sun01Icon size={14} className="text-zinc-500" /> : <Moon02Icon size={14} className="text-zinc-500" />) : <span aria-hidden className="block size-[14px]" />}
-                        <Label>{themeToggleTitle}</Label>
-                      </div>
-                    </Dropdown.Item>
-                    <Dropdown.Item key="api-docs" id="api-docs" textValue="API Docs">
-                      <div className="flex items-center gap-2">
-                        <FileExportIcon size={14} className="text-zinc-500" />
-                        <Label>API Docs</Label>
-                      </div>
-                    </Dropdown.Item>
-                    <Dropdown.Item key="signout" id="signout" textValue="Sign Out" className="text-danger flex items-center gap-2 mt-1 border-t border-zinc-200 dark:border-zinc-800 pt-1">
-                      <div className="flex items-center gap-2">
-                        <Logout02Icon size={14} />
-                        <Label className="text-danger">Sign Out</Label>
-                      </div>
-                    </Dropdown.Item>
+                    {orgs.length > 0 && (
+                      <Dropdown.Section>
+                        <Header>Organizations</Header>
+                        {orgs.map((org) => (
+                          <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
+                            <Label>{org.name}</Label>
+                          </Dropdown.Item>
+                        ))}
+                      </Dropdown.Section>
+                    )}
                   </Dropdown.Menu>
                 </Dropdown.Popover>
               </Dropdown>
             </div>
-            </div>
           </Card>
 
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
-        </div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="flex min-h-12 items-center gap-2.5 px-3 py-2">
+              <button
+                onClick={toggleCollapsed}
+                className="hidden h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-all duration-150 hover:text-zinc-900 md:inline-flex dark:hover:text-zinc-200"
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.background = 'var(--row-hover)';
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.background = 'transparent';
+                }}
+                title={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {desktopCollapsed ? (
+                  <SidebarRight01Icon size={20} />
+                ) : (
+                  <SidebarLeft01Icon size={20} />
+                )}
+              </button>
+
+              <Drawer state={mobileNav}>
+                <Button
+                  aria-label="Open navigation menu"
+                  className="rounded-lg md:hidden"
+                  isIconOnly
+                  variant="secondary"
+                >
+                  <Menu01Icon size={16} />
+                </Button>
+                <Drawer.Backdrop className="md:hidden" variant="blur">
+                  <Drawer.Content className="md:hidden" placement="left">
+                    <Drawer.Dialog className="flex h-full w-[min(88vw,320px)] flex-col surface-sidebar">
+                      <Drawer.Header
+                        className="flex items-center justify-between p-4"
+                        style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="size-9 rounded-xl flex items-center justify-center shrink-0"
+                            style={{
+                              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                              boxShadow:
+                                '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
+                            }}
+                          >
+                            <Logo size={18} className="text-white" />
+                          </div>
+                          <div>
+                            <Drawer.Heading
+                              className="text-sm font-semibold"
+                              style={{ color: 'var(--text-primary)' }}
+                            >
+                              JustScan
+                            </Drawer.Heading>
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                              Scan, watch, and manage
+                            </p>
+                          </div>
+                        </div>
+                        <Drawer.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                      </Drawer.Header>
+                      <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
+                        <div className="space-y-4">
+                          <Dropdown>
+                            <Dropdown.Trigger
+                              className="w-full flex items-center justify-between rounded-xl p-3 text-sm transition-all duration-150 outline-none text-left"
+                              style={{
+                                background: 'var(--row-hover)',
+                                border: '1px solid var(--surface-border)',
+                              }}
+                            >
+                              <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                                <div className="relative shrink-0">
+                                  <div
+                                    className="flex size-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
+                                    style={{
+                                      background: 'rgba(124,58,237,0.08)',
+                                      border: '1px solid rgba(124,58,237,0.12)',
+                                    }}
+                                  >
+                                    <GridTableIcon size={16} />
+                                  </div>
+                                  <span
+                                    className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full"
+                                    style={workspaceMarkerStyle}
+                                  />
+                                </div>
+                                <div className="flex flex-col min-w-0 flex-1">
+                                  <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                                    Workspace
+                                  </p>
+                                  <span className="mt-0.5 truncate text-[12px] font-medium text-zinc-700 dark:text-zinc-200">
+                                    {scopeLabel}
+                                  </span>
+                                </div>
+                              </div>
+                              <ArrowDown01Icon size={16} className="text-zinc-500 shrink-0 ml-2" />
+                            </Dropdown.Trigger>
+                            <Dropdown.Popover className="w-[min(80vw,300px)]">
+                              <Dropdown.Menu
+                                onAction={(key) => handleScopeChange(key as string)}
+                                selectionMode="single"
+                                selectedKeys={
+                                  new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])
+                                }
+                              >
+                                <Dropdown.Item id="personal" textValue="Personal workspace">
+                                  <Label>Personal workspace</Label>
+                                </Dropdown.Item>
+                                {orgs.length > 0 && (
+                                  <Dropdown.Section>
+                                    <Header>Organizations</Header>
+                                    {orgs.map((org) => (
+                                      <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
+                                        <Label>{org.name}</Label>
+                                      </Dropdown.Item>
+                                    ))}
+                                  </Dropdown.Section>
+                                )}
+                              </Dropdown.Menu>
+                            </Dropdown.Popover>
+                          </Dropdown>
+
+                          {pendingInviteCount > 0 && (
+                            <Link
+                              href="/orgs"
+                              className="flex items-center justify-between rounded-xl p-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
+                              onClick={() => mobileNav.close()}
+                              style={{
+                                background: 'rgba(245, 158, 11, 0.08)',
+                                border: '1px solid rgba(245, 158, 11, 0.18)',
+                              }}
+                            >
+                              <div>
+                                <p>Pending invites</p>
+                                <p className="text-xs font-normal text-zinc-500">
+                                  Review organization access requests
+                                </p>
+                              </div>
+                              <span
+                                className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
+                                style={{ background: 'rgba(245, 158, 11, 0.16)' }}
+                              >
+                                {pendingInviteCount}
+                              </span>
+                            </Link>
+                          )}
+
+                          {navigationGroups.map(({ label, items }) => (
+                            <div key={label} className="space-y-1.5">
+                              <p
+                                className="px-2 text-[11px] uppercase tracking-[0.18em]"
+                                style={{ color: 'var(--text-faint)' }}
+                              >
+                                {label}
+                              </p>
+                              <div className="space-y-1">
+                                {items.map(({ href, label: itemLabel, Icon }) => {
+                                  const showAdminTree = href === '/admin';
+                                  const active = isActiveRoute(pathname, href);
+
+                                  if (showAdminTree) {
+                                    return (
+                                      <AdminSidebarTree
+                                        key="admin-tree-mobile"
+                                        condensed
+                                        onNavigate={() => mobileNav.close()}
+                                        showLabel={false}
+                                      />
+                                    );
+                                  }
+
+                                  return (
+                                    <Link
+                                      key={href}
+                                      href={href}
+                                      className={`flex items-center gap-3 rounded-xl p-3 text-sm font-medium transition-all ${
+                                        active
+                                          ? 'text-violet-600 dark:text-violet-100'
+                                          : 'text-zinc-700 dark:text-zinc-300'
+                                      }`}
+                                      onClick={() => mobileNav.close()}
+                                      style={
+                                        active
+                                          ? {
+                                              background:
+                                                'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                                              boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
+                                            }
+                                          : { background: 'var(--row-hover)' }
+                                      }
+                                    >
+                                      <Icon
+                                        size={18}
+                                        className="shrink-0"
+                                        style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }}
+                                      />
+                                      <span className="flex-1">{itemLabel}</span>
+                                      {href === '/orgs' && pendingInviteCount > 0 && (
+                                        <span
+                                          className="ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
+                                          style={{ background: 'rgba(245, 158, 11, 0.16)' }}
+                                        >
+                                          {pendingInviteCount}
+                                        </span>
+                                      )}
+                                    </Link>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </Drawer.Body>
+                      <Drawer.Footer
+                        className="flex flex-col gap-2 p-3"
+                        style={{ borderTop: '1px solid var(--border-subtle)' }}
+                      >
+                        <Dropdown>
+                          <Dropdown.Trigger
+                            className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 outline-none text-left"
+                            style={{ background: 'var(--row-hover)' }}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div
+                                className="size-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
+                                style={{
+                                  background: 'rgba(124,58,237,0.12)',
+                                  color: '#a78bfa',
+                                  border: '1px solid rgba(124,58,237,0.18)',
+                                }}
+                              >
+                                {initials}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                                  {user?.username ?? user?.email ?? 'User'}
+                                </p>
+                                <p className="truncate text-[11px] text-zinc-500">
+                                  {user?.role ?? 'user'}
+                                </p>
+                              </div>
+                            </div>
+                            <Settings01Icon size={16} className="text-zinc-400 shrink-0" />
+                          </Dropdown.Trigger>
+                          <Dropdown.Popover className="w-[min(80vw,300px)]" placement="top end">
+                            <Dropdown.Menu
+                              onAction={(key) => {
+                                if (key === 'settings') {
+                                  router.push('/settings');
+                                  mobileNav.close();
+                                }
+                                if (key === 'api-docs') {
+                                  window.open('/swagger/index.html', '_blank');
+                                  mobileNav.close();
+                                }
+                                if (key === 'theme') {
+                                  setTheme(isDark ? 'light' : 'dark');
+                                }
+                                if (key === 'signout') {
+                                  handleLogout();
+                                  mobileNav.close();
+                                }
+                              }}
+                            >
+                              <Dropdown.Item key="settings" id="settings" textValue="Settings">
+                                <div className="flex items-center gap-2">
+                                  <Settings01Icon size={14} className="text-zinc-500" />
+                                  <Label>Settings</Label>
+                                </div>
+                              </Dropdown.Item>
+                              <Dropdown.Item key="theme" id="theme" textValue="Theme">
+                                <div className="flex items-center justify-between w-full">
+                                  <div className="flex items-center gap-2">
+                                    {mounted ? (
+                                      isDark ? (
+                                        <Sun01Icon size={14} className="text-zinc-500" />
+                                      ) : (
+                                        <Moon02Icon size={14} className="text-zinc-500" />
+                                      )
+                                    ) : (
+                                      <span aria-hidden className="block size-[14px]" />
+                                    )}
+                                    <Label>Theme</Label>
+                                  </div>
+                                </div>
+                              </Dropdown.Item>
+                              <Dropdown.Item key="api-docs" id="api-docs" textValue="API Docs">
+                                <div className="flex items-center gap-2">
+                                  <FileExportIcon size={14} className="text-zinc-500" />
+                                  <Label>API Docs</Label>
+                                </div>
+                              </Dropdown.Item>
+                              <Dropdown.Section>
+                                <Separator className="my-1" />
+                                <Dropdown.Item
+                                  key="signout"
+                                  id="signout"
+                                  textValue="Sign Out"
+                                  className="text-danger"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Logout02Icon size={14} />
+                                    <Label className="text-danger">Sign Out</Label>
+                                  </div>
+                                </Dropdown.Item>
+                              </Dropdown.Section>
+                            </Dropdown.Menu>
+                          </Dropdown.Popover>
+                        </Dropdown>
+                      </Drawer.Footer>
+                    </Drawer.Dialog>
+                  </Drawer.Content>
+                </Drawer.Backdrop>
+              </Drawer>
+              <div className="min-w-0 flex-1 space-y-0.5">
+                {topbarHeader.breadcrumbs && topbarHeader.breadcrumbs.length > 0 ? (
+                  <nav
+                    aria-label="Breadcrumb"
+                    className="flex flex-wrap items-center gap-1 text-[10px] font-medium"
+                  >
+                    {topbarHeader.breadcrumbs.map((item, index) => {
+                      const isCurrent = index === topbarHeader.breadcrumbs!.length - 1;
+
+                      return (
+                        <span
+                          key={`${item.label}-${index}`}
+                          className="inline-flex items-center gap-1.5"
+                        >
+                          {item.href && !isCurrent ? (
+                            <Link
+                              href={item.href}
+                              className="transition-colors hover:text-zinc-900 dark:hover:text-white"
+                              style={{ color: 'var(--text-faint)' }}
+                            >
+                              {item.label}
+                            </Link>
+                          ) : (
+                            <span
+                              aria-current={isCurrent ? 'page' : undefined}
+                              style={{
+                                color: isCurrent ? 'var(--text-primary)' : 'var(--text-faint)',
+                              }}
+                            >
+                              {item.label}
+                            </span>
+                          )}
+                          {!isCurrent ? (
+                            <span style={{ color: 'var(--text-faint)' }}>/</span>
+                          ) : null}
+                        </span>
+                      );
+                    })}
+                  </nav>
+                ) : null}
+
+                <div>
+                  <h1 className="flex flex-wrap items-center gap-1 text-base font-semibold tracking-tight md:text-base">
+                    {topbarHeader.title}
+                    {topbarHeader.titleCom}
+                  </h1>
+                </div>
+              </div>
+
+              <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                {topbarHeader.actions ? (
+                  <div className="hidden items-center gap-1.5 md:flex">{topbarHeader.actions}</div>
+                ) : null}
+                <Separator className="hidden h-5 md:block mr-1.5 ml-1.5" orientation="vertical" />
+                <Button
+                  aria-label="Open search"
+                  className="rounded-full text-zinc-700 dark:text-zinc-200 md:hidden"
+                  isIconOnly
+                  onPress={() => setSearchOpen(true)}
+                  variant="secondary"
+                >
+                  <Search01Icon size={14} className="text-current" />
+                </Button>
+                <Button
+                  className="hidden rounded-full text-zinc-700 dark:text-zinc-200 md:inline-flex"
+                  onPress={() => setSearchOpen(true)}
+                  variant="secondary"
+                >
+                  <Search01Icon size={14} className="text-current" />
+                </Button>
+
+                <Dropdown>
+                  <Dropdown.Trigger>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 outline-none transition-all duration-150"
+                      aria-label="Open user menu"
+                      onMouseEnter={handleRowHoverEnter}
+                      onMouseLeave={handleRowHoverLeave}
+                    >
+                      <Avatar
+                        className="h-7 w-7 border border-violet-300/25 bg-violet-500/15 text-[11px] font-semibold text-violet-300"
+                        size="sm"
+                        variant="soft"
+                      >
+                        <Avatar.Fallback>{initials}</Avatar.Fallback>
+                      </Avatar>
+                    </button>
+                  </Dropdown.Trigger>
+
+                  <Dropdown.Popover className="min-w-[200px]" placement="bottom end">
+                    <Dropdown.Menu
+                      onAction={(key) => {
+                        if (key === 'settings') router.push('/settings');
+                        if (key === 'api-docs') window.open('/swagger/index.html', '_blank');
+                        if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
+                        if (key === 'signout') handleLogout();
+                      }}
+                    >
+                      <Dropdown.Item key="settings" id="settings" textValue="Settings">
+                        <div className="flex items-center gap-2">
+                          <Settings01Icon size={14} className="text-zinc-500" />
+                          <Label>Settings</Label>
+                        </div>
+                      </Dropdown.Item>
+                      <Dropdown.Item key="theme" id="theme" textValue="Theme">
+                        <div className="flex items-center gap-2">
+                          {mounted ? (
+                            isDark ? (
+                              <Sun01Icon size={14} className="text-zinc-500" />
+                            ) : (
+                              <Moon02Icon size={14} className="text-zinc-500" />
+                            )
+                          ) : (
+                            <span aria-hidden className="block size-[14px]" />
+                          )}
+                          <Label>{themeToggleTitle}</Label>
+                        </div>
+                      </Dropdown.Item>
+                      <Dropdown.Item key="api-docs" id="api-docs" textValue="API Docs">
+                        <div className="flex items-center gap-2">
+                          <FileExportIcon size={14} className="text-zinc-500" />
+                          <Label>API Docs</Label>
+                        </div>
+                      </Dropdown.Item>
+                      <Dropdown.Item
+                        key="signout"
+                        id="signout"
+                        textValue="Sign Out"
+                        className="text-danger flex items-center gap-2 mt-1 border-t border-zinc-200 dark:border-zinc-800 pt-1"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Logout02Icon size={14} />
+                          <Label className="text-danger">Sign Out</Label>
+                        </div>
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
+              </div>
+            </div>
+
+            <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
+          </div>
         </div>
       </PageHeaderContext.Provider>
     </ToastProvider>

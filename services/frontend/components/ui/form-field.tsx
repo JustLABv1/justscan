@@ -9,6 +9,8 @@ type FormFieldProps = {
   label: string;
   description?: string;
   error?: string;
+  hideLabel?: boolean;
+  labelClassName?: string;
   containerClassName?: string;
   className?: string;
 } & Omit<ComponentProps<typeof Input>, 'className'>;
@@ -17,6 +19,8 @@ export function FormField({
   label,
   description,
   error,
+  hideLabel,
+  labelClassName,
   id,
   disabled,
   name,
@@ -107,7 +111,11 @@ export function FormField({
       name={name}
       type={type}
     >
-      <Label className="text-sm font-medium" htmlFor={fieldId} style={{ color: 'var(--text-secondary)' }}>
+      <Label
+        className={joinClassNames('text-sm font-medium', hideLabel ? 'sr-only' : '', labelClassName)}
+        htmlFor={fieldId}
+        style={{ color: 'var(--text-secondary)' }}
+      >
         {label}
       </Label>
       <Input

@@ -3,21 +3,13 @@
 import type { CSSProperties, ReactNode } from 'react';
 
 import { FormField } from '@/components/ui/form-field';
-import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { changePassword, getAuthSnapshot, getUserDetails, setUser, updateUserDetails, User } from '@/lib/api';
 import { fullDate } from '@/lib/time';
+import { Button, Card } from '@heroui/react';
 import { ApiIcon, Clock01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-const inputCls = nativeFieldClassName;
-
-const panelStyle: CSSProperties = {
-  background: 'var(--surface-bg)',
-  border: '1px solid var(--surface-border)',
-  boxShadow: 'var(--surface-shadow)',
-};
 
 const heroShellStyle: CSSProperties = {
   background: 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(59,130,246,0.08) 38%, rgba(255,255,255,0.04) 100%), var(--surface-bg)',
@@ -37,18 +29,18 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-[28px] p-6 md:p-7 space-y-5" style={panelStyle}>
-      <div>
+    <Card className="rounded-[28px] p-6 md:p-7 space-y-5">
+      <Card.Header className="block p-0">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em]" style={{ color: 'var(--text-faint)' }}>
           {eyebrow}
         </p>
-        <h2 className="mt-2 text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">{title}</h2>
-        <p className="mt-1.5 text-sm leading-6 text-zinc-500">{description}</p>
-      </div>
-      <div className="pt-5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <Card.Title className="mt-2 text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">{title}</Card.Title>
+        <Card.Description className="mt-1.5 text-sm leading-6 text-zinc-500">{description}</Card.Description>
+      </Card.Header>
+      <Card.Content className="p-0 pt-5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
         {children}
-      </div>
-    </section>
+      </Card.Content>
+    </Card>
   );
 }
 
@@ -236,14 +228,15 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">Profile changes stay local to this account</p>
                   <p className="mt-1 text-xs text-zinc-500">Update display information without affecting sign-in ownership or access rules.</p>
                 </div>
-                <button
+                <Button
                   type="submit"
-                  disabled={profileSaving}
+                  isDisabled={profileSaving}
                   className="btn-primary inline-flex items-center gap-2 shrink-0"
+                  variant="primary"
                 >
                   {profileSaving ? <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
                   Save Changes
-                </button>
+                </Button>
               </div>
             </form>
 
@@ -333,14 +326,15 @@ export default function SettingsPage() {
                   <p className="text-xs leading-5 text-zinc-500 max-w-md">
                     Password updates apply to local JustScan authentication only. If you use SSO, this panel will switch to provider-managed guidance automatically.
                   </p>
-                  <button
+                  <Button
                     type="submit"
-                    disabled={pwSaving}
+                    isDisabled={pwSaving}
                     className="btn-primary inline-flex items-center gap-2 shrink-0"
+                    variant="primary"
                   >
                     {pwSaving ? <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
                     Change Password
-                  </button>
+                  </Button>
                 </div>
               </form>
             )}
@@ -348,7 +342,7 @@ export default function SettingsPage() {
         </SectionCard>
       </div>
 
-      <section className="rounded-[28px] p-6 md:p-7" style={panelStyle}>
+      <Card className="rounded-[28px] p-6 md:p-7">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_auto] lg:items-center">
           <div className="space-y-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em]" style={{ color: 'var(--text-faint)' }}>
@@ -374,7 +368,7 @@ export default function SettingsPage() {
             </Link>
           </div>
         </div>
-      </section>
+      </Card>
     </div>
   );
 }

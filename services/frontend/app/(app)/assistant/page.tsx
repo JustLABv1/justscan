@@ -779,9 +779,10 @@ export default function AssistantPage() {
                         {displayMessages.map((item) => (
                           <div key={item.id} className={`flex items-end gap-3 ${item.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                             {item.role === 'assistant' ? <MessageAvatar role="assistant" /> : null}
-                            <Card className="w-full max-w-[min(100%,52rem)] overflow-hidden rounded-[28px] shadow-none" style={item.role === 'user'
-                              ? { borderColor: 'rgba(167,139,250,0.18)', background: 'linear-gradient(180deg, rgba(124,58,237,0.16) 0%, rgba(91,33,182,0.1) 100%)', borderBottomRightRadius: '0.9rem' }
-                              : { borderColor: 'var(--surface-border)', background: 'var(--surface-bg)', borderBottomLeftRadius: '0.9rem' }}>
+                            <Card
+                              className={`w-full max-w-[min(100%,52rem)] overflow-hidden rounded-[28px] shadow-none ${item.role === 'user' ? 'rounded-br-[0.9rem]' : 'rounded-bl-[0.9rem]'}`}
+                              variant={item.role === 'user' ? 'tertiary' : 'secondary'}
+                            >
                               <Card.Content className="px-5 py-4">
                                 {item.role === 'assistant' && !item.thinking ? (
                                   <div className="mb-3 flex items-center gap-2">

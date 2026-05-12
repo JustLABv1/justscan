@@ -71,3 +71,5 @@ csv-files/
 .agents/
 .superpowers/
 docs/superpowers/
+# heroui-agents-md
+.heroui-docs/

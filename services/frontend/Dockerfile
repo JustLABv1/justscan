@@ -4,7 +4,7 @@ FROM base AS platform
 WORKDIR /app
 
 # Install pnpm using the secret mount for CA trust
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10.33.4
 
 FROM platform AS deps
 WORKDIR /app

@@ -2,6 +2,7 @@
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { getKBEntry, listKBEntries, VulnKBEntry } from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { Label, ListBox, Select, Switch, Table } from '@heroui/react';
 import { InformationCircleIcon, Shield01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -228,7 +229,7 @@ export default function VulnKBPage() {
   }, [query, severity, page, exploitOnly, minCvss, publishedRange]);
 
   useEffect(() => {
-    load();
+    return deferEffect(load);
   }, [load]);
 
   useEffect(() => {
@@ -243,7 +244,9 @@ export default function VulnKBPage() {
   }, [queryInput]);
 
   useEffect(() => {
-    setPage(1);
+    return deferEffect(() => {
+      setPage(1);
+    });
   }, [severity, minCvss, exploitOnly, publishedRange]);
 
   async function handleRowClick(entry: VulnKBEntry) {

@@ -2,10 +2,10 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { ImageChildren } from '@/components/scans/image-children';
 import {
-  getRecentActivityBounds,
-  RECENT_ACTIVITY_RANGE_OPTIONS,
-  RecentActivityRange,
-  RecentActivityRow,
+    getRecentActivityBounds,
+    RECENT_ACTIVITY_RANGE_OPTIONS,
+    RecentActivityRange,
+    RecentActivityRow,
 } from '@/components/scans/recent-activity';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, SevCount, StatusBadge } from '@/components/ui/badges';
@@ -13,9 +13,9 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import {
-  heroSelectTriggerClassName,
-  joinClassNames,
-  nativeFieldClassName,
+    heroSelectTriggerClassName,
+    joinClassNames,
+    nativeFieldClassName,
 } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RecentScanRowSkeleton } from '@/components/ui/skeleton';
@@ -23,50 +23,51 @@ import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useOrgNameMap } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-  ArtifactoryRepository,
-  cancelScan,
-  createScans,
-  deleteScan,
-  getDefaultScannerCapabilities,
-  getWorkScope,
-  ImageSummary,
-  listArtifactoryRepositories,
-  listRegistriesWithCapabilities,
-  listScanImages,
-  listScans,
-  listTags,
-  RegistryWithHealth,
-  Scan,
-  ScannerCapabilities,
-  Tag,
+    ArtifactoryRepository,
+    cancelScan,
+    createScans,
+    deleteScan,
+    getDefaultScannerCapabilities,
+    getWorkScope,
+    ImageSummary,
+    listArtifactoryRepositories,
+    listRegistriesWithCapabilities,
+    listScanImages,
+    listScans,
+    listTags,
+    RegistryWithHealth,
+    Scan,
+    ScannerCapabilities,
+    Tag,
 } from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
-  Autocomplete,
-  Button,
-  Card,
-  Checkbox,
-  Input,
-  Label,
-  ListBox,
-  Modal,
-  Pagination,
-  Popover,
-  SearchField,
-  Select,
-  Table,
-  TextArea,
-  useFilter,
-  useOverlayState,
+    Autocomplete,
+    Button,
+    Card,
+    Checkbox,
+    Input,
+    Label,
+    ListBox,
+    Modal,
+    Pagination,
+    Popover,
+    SearchField,
+    Select,
+    Table,
+    TextArea,
+    useFilter,
+    useOverlayState,
 } from '@heroui/react';
 import {
-  ArrowDown01Icon,
-  ArrowRight01Icon,
-  Cancel01Icon,
-  FilterIcon,
-  GitCompareIcon,
-  PlusSignIcon,
-  Shield01Icon,
+    ArrowDown01Icon,
+    ArrowRight01Icon,
+    Cancel01Icon,
+    FilterIcon,
+    GitCompareIcon,
+    PlusSignIcon,
+    Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -477,12 +478,14 @@ export default function ScansPage() {
   );
 
   useEffect(() => {
-    if (hasRecentWindow) {
-      loadActivity(page, appliedImageFilter, resolvedActivityRange);
-      return;
-    }
+    return deferEffect(() => {
+      if (hasRecentWindow) {
+        void loadActivity(page, appliedImageFilter, resolvedActivityRange);
+        return;
+      }
 
-    loadImages(page, appliedImageFilter, statusFilter);
+      void loadImages(page, appliedImageFilter, statusFilter);
+    });
   }, [
     appliedImageFilter,
     hasRecentWindow,
@@ -679,50 +682,52 @@ export default function ScansPage() {
   }
 
   useEffect(() => {
-    if (!selectedRegistryIsXray || !selectedRegistry) {
-      setXrayRepository('');
+    return deferEffect(() => {
+      if (!selectedRegistryIsXray || !selectedRegistry) {
+        setXrayRepository('');
+        setUseManualXrayRepository(false);
+        return;
+      }
+
+      setXrayRepository(selectedRegistry.xray_repository ?? '');
       setUseManualXrayRepository(false);
-      return;
-    }
 
-    setXrayRepository(selectedRegistry.xray_repository ?? '');
-    setUseManualXrayRepository(false);
+      if (
+        artifactoryRepositoriesByRegistry[selectedRegistry.id] ||
+        artifactoryRepositoriesLoading === selectedRegistry.id
+      ) {
+        return;
+      }
 
-    if (
-      artifactoryRepositoriesByRegistry[selectedRegistry.id] ||
-      artifactoryRepositoriesLoading === selectedRegistry.id
-    ) {
-      return;
-    }
-
-    setArtifactoryRepositoriesLoading(selectedRegistry.id);
-    setArtifactoryRepositoriesErrorByRegistry((previous) => {
-      const next = { ...previous };
-      delete next[selectedRegistry.id];
-      return next;
-    });
-
-    void listArtifactoryRepositories(selectedRegistry.id)
-      .then((repositories) => {
-        setArtifactoryRepositoriesByRegistry((previous) => ({
-          ...previous,
-          [selectedRegistry.id]: repositories,
-        }));
-      })
-      .catch((repositoryError: unknown) => {
-        setArtifactoryRepositoriesErrorByRegistry((previous) => ({
-          ...previous,
-          [selectedRegistry.id]:
-            repositoryError instanceof Error
-              ? repositoryError.message
-              : 'Failed to load Artifactory repositories',
-        }));
-      })
-      .finally(() => {
-        setArtifactoryRepositoriesLoading((current) =>
-          current === selectedRegistry.id ? null : current
-        );
+      setArtifactoryRepositoriesLoading(selectedRegistry.id);
+      setArtifactoryRepositoriesErrorByRegistry((previous) => {
+        const next = { ...previous };
+        delete next[selectedRegistry.id];
+        return next;
       });
+
+      void listArtifactoryRepositories(selectedRegistry.id)
+        .then((repositories) => {
+          setArtifactoryRepositoriesByRegistry((previous) => ({
+            ...previous,
+            [selectedRegistry.id]: repositories,
+          }));
+        })
+        .catch((repositoryError: unknown) => {
+          setArtifactoryRepositoriesErrorByRegistry((previous) => ({
+            ...previous,
+            [selectedRegistry.id]:
+              repositoryError instanceof Error
+                ? repositoryError.message
+                : 'Failed to load Artifactory repositories',
+          }));
+        })
+        .finally(() => {
+          setArtifactoryRepositoriesLoading((current) =>
+            current === selectedRegistry.id ? null : current
+          );
+        });
+    });
   }, [
     artifactoryRepositoriesByRegistry,
     artifactoryRepositoriesLoading,
@@ -732,10 +737,12 @@ export default function ScansPage() {
 
   // Auto-open new scan modal when navigated from sidebar CTA (?new=1)
   useEffect(() => {
-    if (searchParams.get('new') === '1') {
-      openCreateModal();
-      router.replace('/scans');
-    }
+    return deferEffect(() => {
+      if (searchParams.get('new') === '1') {
+        openCreateModal();
+        router.replace('/scans');
+      }
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshCurrentView = useCallback(

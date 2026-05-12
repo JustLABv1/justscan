@@ -2,35 +2,36 @@
 
 import { Logo } from '@/components/logo';
 import {
-  SeverityBadge,
-  SourceBadge,
-  StatusBadge,
-  formatStatusLabel,
-  resolveDisplayStatus,
+    SeverityBadge,
+    SourceBadge,
+    StatusBadge,
+    formatStatusLabel,
+    resolveDisplayStatus,
 } from '@/components/ui/badges';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type {
-  StatusPageItem,
-  StatusPageResponse,
-  StatusPageScanSummary,
-  Vulnerability,
+    StatusPageItem,
+    StatusPageResponse,
+    StatusPageScanSummary,
+    Vulnerability,
 } from '@/lib/api';
 import {
-  ApiError,
-  getStatusPageBySlug,
-  getStatusPageItemVulnerabilityContextAnalysis,
-  getStatusPageTrackedScan,
-  getToken,
-  listStatusPageItemVulnerabilities,
-  listStatusPageScanHistory,
+    ApiError,
+    getStatusPageBySlug,
+    getStatusPageItemVulnerabilityContextAnalysis,
+    getStatusPageTrackedScan,
+    getToken,
+    listStatusPageItemVulnerabilities,
+    listStatusPageScanHistory,
 } from '@/lib/api';
 import type { BlockedPolicyDetailsView } from '@/lib/blocked-policy';
 import {
-  compactBlockedPolicyList,
-  countBlockedPolicyList,
-  formatIgnoreRuleStatusLabel,
-  getBlockedPolicyDetails,
+    compactBlockedPolicyList,
+    countBlockedPolicyList,
+    formatIgnoreRuleStatusLabel,
+    getBlockedPolicyDetails,
 } from '@/lib/blocked-policy';
+import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
 import { Button, ListBox, Modal, Select, Table, useOverlayState } from '@heroui/react';
 import Link from 'next/link';
@@ -725,35 +726,40 @@ function RecentScanStrip({
   const [localLoading, setLocalLoading] = useState(false);
 
   useEffect(() => {
-    setLocalScans(scans);
+    return deferEffect(() => {
+      setLocalScans(scans);
+    });
   }, [scans]);
 
   useEffect(() => {
-    if (scans !== undefined || !item.latest_scan_id) {
-      return;
-    }
-
     let cancelled = false;
-    setLocalLoading(true);
+    const cancelDeferred = deferEffect(() => {
+      if (scans !== undefined || !item.latest_scan_id) {
+        return;
+      }
 
-    listStatusPageScanHistoryWithRetry(slug, item.latest_scan_id)
-      .then((history) => {
-        if (cancelled) return;
-        setLocalScans(history);
-        onHistoryLoaded?.(item.latest_scan_id, history);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setLocalScans([]);
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLocalLoading(false);
-        }
-      });
+      setLocalLoading(true);
+
+      listStatusPageScanHistoryWithRetry(slug, item.latest_scan_id)
+        .then((history) => {
+          if (cancelled) return;
+          setLocalScans(history);
+          onHistoryLoaded?.(item.latest_scan_id, history);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setLocalScans([]);
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setLocalLoading(false);
+          }
+        });
+    });
 
     return () => {
       cancelled = true;
+      cancelDeferred();
     };
   }, [item.latest_scan_id, onHistoryLoaded, scans, slug]);
 
@@ -1060,7 +1066,7 @@ function StatusItemVulnerabilityModal({
     return () => {
       cancelled = true;
     };
-  }, [slug, item?.latest_scan_id]);
+  }, [item?.latest_scan_id, onHistoryLoaded, slug]);
 
   useEffect(() => {
     if (!selectedScanId || historyMatch) return;
@@ -1851,12 +1857,15 @@ export default function PublicStatusPage() {
   }, []);
 
   useEffect(() => {
-    void load(true);
+    const cancelDeferred = deferEffect(() => load(true));
     const interval = setInterval(() => {
       void load(false);
     }, AUTO_REFRESH_MS);
 
-    return () => clearInterval(interval);
+    return () => {
+      cancelDeferred();
+      clearInterval(interval);
+    };
   }, [load]);
 
   const summary = useMemo(() => {

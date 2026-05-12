@@ -4,6 +4,7 @@ import { ChartSkeleton } from '@/components/ui/skeleton';
 import { getAdminDashboard } from '@/lib/api/admin';
 import type { AdminDashboard, AdminDashboardVulnerabilityTrendPoint } from '@/lib/api/types/admin';
 import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
+import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
@@ -19,7 +20,9 @@ const SEVERITY_SERIES = [
 
 function surfaceCard(tint?: string): CSSProperties {
   return {
-    background: tint ? `linear-gradient(145deg, ${tint} 0%, var(--surface-bg-tint-end) 70%)` : 'var(--surface-bg)',
+    background: tint
+      ? `linear-gradient(145deg, ${tint} 0%, var(--surface-bg-tint-end) 70%)`
+      : 'var(--surface-bg)',
     backdropFilter: 'blur(20px)',
     WebkitBackdropFilter: 'blur(20px)',
     border: '1px solid var(--surface-border)',
@@ -28,14 +31,25 @@ function surfaceCard(tint?: string): CSSProperties {
 }
 
 function formatCompact(value: number) {
-  return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: value >= 1000 ? 1 : 0 }).format(value);
+  return new Intl.NumberFormat('en', {
+    notation: 'compact',
+    maximumFractionDigits: value >= 1000 ? 1 : 0,
+  }).format(value);
 }
 
 function formatLatency(value: number) {
   return `${Math.round(value)}ms`;
 }
 
-function MiniSparkline({ data, color, id }: { data: { date: string; value: number }[]; color: string; id: string }) {
+function MiniSparkline({
+  data,
+  color,
+  id,
+}: {
+  data: { date: string; value: number }[];
+  color: string;
+  id: string;
+}) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(200);
@@ -48,7 +62,11 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
   }, []);
 
   if (data.length < 2) {
-    return <div className="flex min-h-[176px] items-center justify-center text-sm text-zinc-500">Not enough trend data yet.</div>;
+    return (
+      <div className="flex min-h-[176px] items-center justify-center text-sm text-zinc-500">
+        Not enough trend data yet.
+      </div>
+    );
   }
 
   const height = 176;
@@ -58,10 +76,13 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
   const values = data.map((point) => point.value);
   const max = Math.max(...values, 5);
   const baselineY = height - padding;
-  const points = data.map((point, index) => [
-    (index / (data.length - 1)) * width,
-    baselineY - ((point.value / max) * (sparkHeight - padding * 2)),
-  ] as const);
+  const points = data.map(
+    (point, index) =>
+      [
+        (index / (data.length - 1)) * width,
+        baselineY - (point.value / max) * (sparkHeight - padding * 2),
+      ] as const
+  );
 
   let path = `M${points[0]![0].toFixed(1)},${points[0]![1].toFixed(1)}`;
   for (let index = 1; index < points.length; index++) {
@@ -77,7 +98,9 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
   function handleMouseMove(event: React.MouseEvent<SVGSVGElement>) {
     const bounds = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - bounds.left) / bounds.width) * width;
-    setHoverIdx(Math.max(0, Math.min(data.length - 1, Math.round((x / width) * (data.length - 1)))));
+    setHoverIdx(
+      Math.max(0, Math.min(data.length - 1, Math.round((x / width) * (data.length - 1))))
+    );
   }
 
   return (
@@ -97,29 +120,101 @@ function MiniSparkline({ data, color, id }: { data: { date: string; value: numbe
         </defs>
 
         <path d={`${path} L${width},${height} L0,${height} Z`} fill={`url(#${gradientId})`} />
-        <line x1={0} x2={width} y1={baselineY} y2={baselineY} stroke={color} strokeOpacity="0.12" strokeWidth="1" />
-        <path d={path} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: `drop-shadow(0 0 2px ${color}88)` }} />
+        <line
+          x1={0}
+          x2={width}
+          y1={baselineY}
+          y2={baselineY}
+          stroke={color}
+          strokeOpacity="0.12"
+          strokeWidth="1"
+        />
+        <path
+          d={path}
+          fill="none"
+          stroke={color}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ filter: `drop-shadow(0 0 2px ${color}88)` }}
+        />
 
         {hoveredPoint && hoveredData ? (
           <>
-            <line x1={hoveredPoint[0]} x2={hoveredPoint[0]} y1={top} y2={baselineY} stroke={color} strokeOpacity="0.25" strokeWidth="1" strokeDasharray="2 3" />
-            <circle cx={hoveredPoint[0]} cy={hoveredPoint[1]} r="3" fill={color} style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
+            <line
+              x1={hoveredPoint[0]}
+              x2={hoveredPoint[0]}
+              y1={top}
+              y2={baselineY}
+              stroke={color}
+              strokeOpacity="0.25"
+              strokeWidth="1"
+              strokeDasharray="2 3"
+            />
+            <circle
+              cx={hoveredPoint[0]}
+              cy={hoveredPoint[1]}
+              r="3"
+              fill={color}
+              style={{ filter: `drop-shadow(0 0 4px ${color})` }}
+            />
             {(() => {
-              const date = new Date(hoveredData.date).toLocaleDateString('en', { month: 'short', day: 'numeric' });
+              const date = new Date(hoveredData.date).toLocaleDateString('en', {
+                month: 'short',
+                day: 'numeric',
+              });
               const pillWidth = 96;
               const pillHeight = 22;
-              const pillX = Math.max(1, Math.min(width - pillWidth - 1, hoveredPoint[0] - pillWidth / 2));
+              const pillX = Math.max(
+                1,
+                Math.min(width - pillWidth - 1, hoveredPoint[0] - pillWidth / 2)
+              );
               return (
                 <g>
-                  <rect x={pillX} y={1.5} width={pillWidth} height={pillHeight} rx={6} fill="rgba(24,24,27,0.94)" stroke={color} strokeOpacity={0.6} strokeWidth={1} style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.4))' }} />
-                  <text x={pillX + 10} y={15} fontSize={11} fontWeight="700" fill={color} fontFamily="ui-monospace,monospace">{hoveredData.value}</text>
-                  <text x={pillX + pillWidth - 8} y={15.5} textAnchor="end" fontSize={10} fill="rgba(255,255,255,0.7)" fontFamily="ui-sans-serif,system-ui">{date}</text>
+                  <rect
+                    x={pillX}
+                    y={1.5}
+                    width={pillWidth}
+                    height={pillHeight}
+                    rx={6}
+                    fill="rgba(24,24,27,0.94)"
+                    stroke={color}
+                    strokeOpacity={0.6}
+                    strokeWidth={1}
+                    style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.4))' }}
+                  />
+                  <text
+                    x={pillX + 10}
+                    y={15}
+                    fontSize={11}
+                    fontWeight="700"
+                    fill={color}
+                    fontFamily="ui-monospace,monospace"
+                  >
+                    {hoveredData.value}
+                  </text>
+                  <text
+                    x={pillX + pillWidth - 8}
+                    y={15.5}
+                    textAnchor="end"
+                    fontSize={10}
+                    fill="rgba(255,255,255,0.7)"
+                    fontFamily="ui-sans-serif,system-ui"
+                  >
+                    {date}
+                  </text>
                 </g>
               );
             })()}
           </>
         ) : (
-          <circle cx={lastPoint[0]} cy={lastPoint[1]} r="2.5" fill={color} style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
+          <circle
+            cx={lastPoint[0]}
+            cy={lastPoint[1]}
+            r="2.5"
+            fill={color}
+            style={{ filter: `drop-shadow(0 0 4px ${color})` }}
+          />
         )}
       </svg>
     </div>
@@ -130,10 +225,16 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
   const series = data.slice(-12);
 
   if (series.length === 0) {
-    return <div className="flex min-h-[212px] items-center justify-center text-sm text-zinc-500">No finalized vulnerability trend data yet.</div>;
+    return (
+      <div className="flex min-h-[212px] items-center justify-center text-sm text-zinc-500">
+        No finalized vulnerability trend data yet.
+      </div>
+    );
   }
 
-  const totals = series.map((point) => point.critical + point.high + point.medium + point.low + point.unknown);
+  const totals = series.map(
+    (point) => point.critical + point.high + point.medium + point.low + point.unknown
+  );
   const max = Math.max(...totals, 1);
 
   return (
@@ -142,15 +243,29 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
         {series.map((point) => {
           const total = point.critical + point.high + point.medium + point.low + point.unknown;
           return (
-            <div key={point.date} className="flex min-w-0 flex-1 flex-col items-center gap-2" title={`${point.date}: ${total} avg findings`}>
-              <div className="flex size-full flex-col justify-end overflow-hidden rounded-t-xl" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--surface-border)' }}>
+            <div
+              key={point.date}
+              className="flex min-w-0 flex-1 flex-col items-center gap-2"
+              title={`${point.date}: ${total} avg findings`}
+            >
+              <div
+                className="flex size-full flex-col justify-end overflow-hidden rounded-t-xl"
+                style={{
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid var(--surface-border)',
+                }}
+              >
                 {SEVERITY_SERIES.map((severity) => {
                   const value = point[severity.key];
                   const height = total === 0 ? 0 : Math.max(6, (value / max) * 180);
-                  return value > 0 ? <div key={severity.key} style={{ height, background: severity.color }} /> : null;
+                  return value > 0 ? (
+                    <div key={severity.key} style={{ height, background: severity.color }} />
+                  ) : null;
                 })}
               </div>
-              <span className="text-[10px] text-zinc-500">{new Date(point.date).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
+              <span className="text-[10px] text-zinc-500">
+                {new Date(point.date).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+              </span>
             </div>
           );
         })}
@@ -158,7 +273,11 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
 
       <div className="flex flex-wrap gap-2">
         {SEVERITY_SERIES.map((severity) => (
-          <span key={severity.key} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+          <span
+            key={severity.key}
+            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] text-zinc-500"
+            style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
+          >
             <span className="size-2 rounded-full" style={{ background: severity.color }} />
             {severity.label}
           </span>
@@ -168,12 +287,26 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
   );
 }
 
-function SummaryTile({ label, value, hint, accent }: { label: string; value: string; hint: string; accent: string }) {
+function SummaryTile({
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  accent: string;
+}) {
   return (
     <div className="px-5 py-4" style={{ borderRight: '1px solid var(--surface-border)' }}>
       <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{label}</p>
-      <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-white">{value}</p>
-      <p className="mt-1.5 text-[11px]" style={{ color: accent }}>{hint}</p>
+      <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-white">
+        {value}
+      </p>
+      <p className="mt-1.5 text-[11px]" style={{ color: accent }}>
+        {hint}
+      </p>
     </div>
   );
 }
@@ -196,7 +329,7 @@ export function OverviewTab() {
   }, []);
 
   useEffect(() => {
-    load();
+    return deferEffect(load);
   }, [load]);
 
   const sparkData = useMemo(() => {
@@ -231,7 +364,14 @@ export function OverviewTab() {
 
   if (error) {
     return (
-      <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+      <div
+        className="rounded-xl px-4 py-3 text-sm"
+        style={{
+          background: 'rgba(239,68,68,0.08)',
+          border: '1px solid rgba(239,68,68,0.18)',
+          color: '#f87171',
+        }}
+      >
         {error}
       </div>
     );
@@ -241,25 +381,60 @@ export function OverviewTab() {
     return null;
   }
 
-  const totalFindings = Object.values(dashboard.severity_totals).reduce((sum, value) => sum + value, 0);
+  const totalFindings = Object.values(dashboard.severity_totals).reduce(
+    (sum, value) => sum + value,
+    0
+  );
   const completedScans = dashboard.status_counts.completed ?? 0;
   const failedScans = dashboard.status_counts.failed ?? 0;
-  const successRate = dashboard.total_scans > 0 ? Math.round((completedScans / dashboard.total_scans) * 100) : 0;
-  const telemetryErrorRate = dashboard.insights.api_requests_24h > 0
-    ? Math.round((dashboard.insights.api_error_requests_24h / dashboard.insights.api_requests_24h) * 100)
-    : 0;
+  const successRate =
+    dashboard.total_scans > 0 ? Math.round((completedScans / dashboard.total_scans) * 100) : 0;
+  const telemetryErrorRate =
+    dashboard.insights.api_requests_24h > 0
+      ? Math.round(
+          (dashboard.insights.api_error_requests_24h / dashboard.insights.api_requests_24h) * 100
+        )
+      : 0;
 
   return (
     <div className="space-y-4">
       <div className="overflow-x-auto rounded-2xl" style={surfaceCard()}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(220px, 1fr))' }}>
-          <SummaryTile label="Total Scans" value={dashboard.total_scans.toLocaleString()} hint={`${dashboard.queues.running + dashboard.queues.pending} active in queue`} accent={dashboard.queues.running + dashboard.queues.pending > 0 ? '#60a5fa' : 'var(--text-faint)'} />
-          <SummaryTile label="Findings" value={formatCompact(totalFindings)} hint={`${dashboard.severity_totals.critical ?? 0} critical`} accent={(dashboard.severity_totals.critical ?? 0) > 0 ? '#f87171' : 'var(--text-faint)'} />
-          <SummaryTile label="Needs Attention" value={dashboard.queues.needs_attention.toLocaleString()} hint={`${failedScans} failed · ${dashboard.queues.blocked_policies} blocked`} accent={dashboard.queues.needs_attention > 0 ? '#fb923c' : 'var(--text-faint)'} />
+          <SummaryTile
+            label="Total Scans"
+            value={dashboard.total_scans.toLocaleString()}
+            hint={`${dashboard.queues.running + dashboard.queues.pending} active in queue`}
+            accent={
+              dashboard.queues.running + dashboard.queues.pending > 0
+                ? '#60a5fa'
+                : 'var(--text-faint)'
+            }
+          />
+          <SummaryTile
+            label="Findings"
+            value={formatCompact(totalFindings)}
+            hint={`${dashboard.severity_totals.critical ?? 0} critical`}
+            accent={(dashboard.severity_totals.critical ?? 0) > 0 ? '#f87171' : 'var(--text-faint)'}
+          />
+          <SummaryTile
+            label="Needs Attention"
+            value={dashboard.queues.needs_attention.toLocaleString()}
+            hint={`${failedScans} failed · ${dashboard.queues.blocked_policies} blocked`}
+            accent={dashboard.queues.needs_attention > 0 ? '#fb923c' : 'var(--text-faint)'}
+          />
           <div className="px-5 py-4">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">API Requests 24h</p>
-            <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-white">{formatCompact(dashboard.insights.api_requests_24h)}</p>
-            <p className="mt-1.5 text-[11px]" style={{ color: telemetryErrorRate > 0 ? '#f59e0b' : 'var(--text-faint)' }}>{telemetryErrorRate}% error rate</p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+              API Requests 24h
+            </p>
+            <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-white">
+              {formatCompact(dashboard.insights.api_requests_24h)}
+            </p>
+            <p
+              className="mt-1.5 text-[11px]"
+              style={{ color: telemetryErrorRate > 0 ? '#f59e0b' : 'var(--text-faint)' }}
+            >
+              {telemetryErrorRate}% error rate
+            </p>
           </div>
         </div>
       </div>
@@ -269,12 +444,38 @@ export function OverviewTab() {
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Scan volume</h2>
-              <p className="mt-1 text-sm text-zinc-500">Thirty-day scan throughput across the full platform.</p>
+              <p className="mt-1 text-sm text-zinc-500">
+                Thirty-day scan throughput across the full platform.
+              </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-full px-3 py-1 text-xs text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>{completedScans} completed</span>
-              <span className="rounded-full px-3 py-1 text-xs text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>{failedScans} failed</span>
-              <span className="rounded-full px-3 py-1 text-xs text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>{successRate}% success</span>
+              <span
+                className="rounded-full px-3 py-1 text-xs text-zinc-500"
+                style={{
+                  background: 'var(--row-hover)',
+                  border: '1px solid var(--surface-border)',
+                }}
+              >
+                {completedScans} completed
+              </span>
+              <span
+                className="rounded-full px-3 py-1 text-xs text-zinc-500"
+                style={{
+                  background: 'var(--row-hover)',
+                  border: '1px solid var(--surface-border)',
+                }}
+              >
+                {failedScans} failed
+              </span>
+              <span
+                className="rounded-full px-3 py-1 text-xs text-zinc-500"
+                style={{
+                  background: 'var(--row-hover)',
+                  border: '1px solid var(--surface-border)',
+                }}
+              >
+                {successRate}% success
+              </span>
             </div>
           </div>
           <div className="mt-4 min-h-[176px]">
@@ -285,10 +486,16 @@ export function OverviewTab() {
         <div className="rounded-2xl p-5" style={surfaceCard()}>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Vulnerability trend</h2>
-              <p className="mt-1 text-sm text-zinc-500">Average finalized findings per day over the last thirty days.</p>
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                Vulnerability trend
+              </h2>
+              <p className="mt-1 text-sm text-zinc-500">
+                Average finalized findings per day over the last thirty days.
+              </p>
             </div>
-            <Link href="/admin/insights" className="text-sm text-violet-500 hover:underline">Open observability</Link>
+            <Link href="/admin/insights" className="text-sm text-violet-500 hover:underline">
+              Open observability
+            </Link>
           </div>
           <div className="mt-4">
             <VulnerabilityTrendBars data={dashboard.vulnerability_trends} />
@@ -301,44 +508,106 @@ export function OverviewTab() {
           <div className="rounded-2xl p-5" style={surfaceCard()}>
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Platform telemetry</h2>
-                <p className="mt-1 text-sm text-zinc-500">Short-horizon API and xRay signal for the last twenty-four hours.</p>
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                  Platform telemetry
+                </h2>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Short-horizon API and xRay signal for the last twenty-four hours.
+                </p>
               </div>
-              <Link href="/admin/insights" className="text-sm text-violet-500 hover:underline">Open logs</Link>
+              <Link href="/admin/insights" className="text-sm text-violet-500 hover:underline">
+                Open logs
+              </Link>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+              <div
+                className="rounded-xl px-4 py-3"
+                style={{
+                  background: 'var(--row-hover)',
+                  border: '1px solid var(--surface-border)',
+                }}
+              >
                 <p className="text-xs text-zinc-500">API traffic</p>
-                <p className="mt-1 text-xl font-semibold text-zinc-900 dark:text-white">{formatCompact(dashboard.insights.api_requests_24h)}</p>
-                <p className="mt-1 text-xs text-zinc-500">{dashboard.insights.api_error_requests_24h.toLocaleString()} errors · {formatLatency(dashboard.insights.api_p95_ms)} p95</p>
+                <p className="mt-1 text-xl font-semibold text-zinc-900 dark:text-white">
+                  {formatCompact(dashboard.insights.api_requests_24h)}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {dashboard.insights.api_error_requests_24h.toLocaleString()} errors ·{' '}
+                  {formatLatency(dashboard.insights.api_p95_ms)} p95
+                </p>
               </div>
-              <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+              <div
+                className="rounded-xl px-4 py-3"
+                style={{
+                  background: 'var(--row-hover)',
+                  border: '1px solid var(--surface-border)',
+                }}
+              >
                 <p className="text-xs text-zinc-500">xRay traffic</p>
-                <p className="mt-1 text-xl font-semibold text-zinc-900 dark:text-white">{formatCompact(dashboard.insights.xray_requests_24h)}</p>
-                <p className="mt-1 text-xs text-zinc-500">{dashboard.insights.xray_error_requests_24h.toLocaleString()} errors · {formatLatency(dashboard.insights.api_average_ms)} avg API latency</p>
+                <p className="mt-1 text-xl font-semibold text-zinc-900 dark:text-white">
+                  {formatCompact(dashboard.insights.xray_requests_24h)}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {dashboard.insights.xray_error_requests_24h.toLocaleString()} errors ·{' '}
+                  {formatLatency(dashboard.insights.api_average_ms)} avg API latency
+                </p>
               </div>
             </div>
           </div>
 
           <div className="rounded-2xl p-5" style={surfaceCard()}>
             <div>
-              <h2 className="text-base font-semibold text-zinc-900 dark:text-white">System and legal</h2>
-              <p className="mt-1 text-sm text-zinc-500">Runtime build metadata and exposure posture.</p>
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                System and legal
+              </h2>
+              <p className="mt-1 text-sm text-zinc-500">
+                Runtime build metadata and exposure posture.
+              </p>
             </div>
             <div className="mt-4 space-y-2 text-sm">
-              <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+              <div
+                className="rounded-xl px-4 py-3"
+                style={{
+                  background: 'var(--row-hover)',
+                  border: '1px solid var(--surface-border)',
+                }}
+              >
                 <p className="text-xs text-zinc-500">Public scanning</p>
-                <p className="mt-1 font-semibold text-zinc-900 dark:text-white">{dashboard.public_scan_enabled ? 'Enabled' : 'Disabled'}</p>
+                <p className="mt-1 font-semibold text-zinc-900 dark:text-white">
+                  {dashboard.public_scan_enabled ? 'Enabled' : 'Disabled'}
+                </p>
               </div>
-              <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+              <div
+                className="rounded-xl px-4 py-3"
+                style={{
+                  background: 'var(--row-hover)',
+                  border: '1px solid var(--surface-border)',
+                }}
+              >
                 <p className="text-xs text-zinc-500">Frontend version</p>
-                <p className="mt-1 font-semibold text-zinc-900 dark:text-white">v{APP_FRONTEND_VERSION}</p>
+                <p className="mt-1 font-semibold text-zinc-900 dark:text-white">
+                  v{APP_FRONTEND_VERSION}
+                </p>
               </div>
-              <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+              <div
+                className="rounded-xl px-4 py-3"
+                style={{
+                  background: 'var(--row-hover)',
+                  border: '1px solid var(--surface-border)',
+                }}
+              >
                 <p className="text-xs text-zinc-500">Dashboard generated</p>
-                <p className="mt-1 text-zinc-700 dark:text-zinc-200">{fullDate(dashboard.generated_at)}</p>
+                <p className="mt-1 text-zinc-700 dark:text-zinc-200">
+                  {fullDate(dashboard.generated_at)}
+                </p>
               </div>
-              <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+              <div
+                className="rounded-xl px-4 py-3"
+                style={{
+                  background: 'var(--row-hover)',
+                  border: '1px solid var(--surface-border)',
+                }}
+              >
                 <p className="text-xs text-zinc-500">Copyright</p>
                 <p className="mt-1 text-zinc-700 dark:text-zinc-200">{APP_COPYRIGHT}</p>
               </div>
@@ -349,50 +618,113 @@ export function OverviewTab() {
         <div className="space-y-4">
           <div className="rounded-2xl p-5" style={surfaceCard()}>
             <div>
-              <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Worker health</h2>
-              <p className="mt-1 text-sm text-zinc-500">Snapshot of local scanner workers from the current backend instance.</p>
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                Worker health
+              </h2>
+              <p className="mt-1 text-sm text-zinc-500">
+                Snapshot of local scanner workers from the current backend instance.
+              </p>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {[
-                { label: 'Healthy', value: dashboard.scanner_health.healthy_workers, color: '#34d399' },
+                {
+                  label: 'Healthy',
+                  value: dashboard.scanner_health.healthy_workers,
+                  color: '#34d399',
+                },
                 { label: 'Stale', value: dashboard.scanner_health.stale_workers, color: '#fbbf24' },
-                { label: 'Errors', value: dashboard.scanner_health.error_workers, color: '#f87171' },
-                { label: 'Workers', value: dashboard.scanner_health.total_workers, color: '#60a5fa' },
+                {
+                  label: 'Errors',
+                  value: dashboard.scanner_health.error_workers,
+                  color: '#f87171',
+                },
+                {
+                  label: 'Workers',
+                  value: dashboard.scanner_health.total_workers,
+                  color: '#60a5fa',
+                },
               ].map((item) => (
-                <div key={item.label} className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                <div
+                  key={item.label}
+                  className="rounded-xl px-4 py-3"
+                  style={{
+                    background: 'var(--row-hover)',
+                    border: '1px solid var(--surface-border)',
+                  }}
+                >
                   <p className="text-xs text-zinc-500">{item.label}</p>
-                  <p className="mt-1 text-xl font-semibold" style={{ color: item.color }}>{item.value}</p>
+                  <p className="mt-1 text-xl font-semibold" style={{ color: item.color }}>
+                    {item.value}
+                  </p>
                 </div>
               ))}
             </div>
-            <div className="mt-4 rounded-xl px-4 py-3 text-xs text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
-              Scanner status generated {timeAgo(dashboard.scanner_health.generated_at)}. Maximum allowed DB age: {dashboard.scanner_health.max_allowed_age_hours}h.
+            <div
+              className="mt-4 rounded-xl px-4 py-3 text-xs text-zinc-500"
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
+            >
+              Scanner status generated {timeAgo(dashboard.scanner_health.generated_at)}. Maximum
+              allowed DB age: {dashboard.scanner_health.max_allowed_age_hours}h.
             </div>
           </div>
 
           <div className="rounded-2xl p-5" style={surfaceCard()}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Recent audit activity</h2>
-                <p className="mt-1 text-sm text-zinc-500">The latest system-wide administrative changes.</p>
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                  Recent audit activity
+                </h2>
+                <p className="mt-1 text-sm text-zinc-500">
+                  The latest system-wide administrative changes.
+                </p>
               </div>
-              <Link href="/admin/audit" className="text-sm text-violet-500 hover:underline">View all</Link>
+              <Link href="/admin/audit" className="text-sm text-violet-500 hover:underline">
+                View all
+              </Link>
             </div>
             <div className="mt-4 space-y-2">
               {dashboard.recent_audit.length === 0 ? (
-                <p className="rounded-xl px-4 py-3 text-sm text-zinc-500" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>No audit activity yet.</p>
-              ) : dashboard.recent_audit.map((entry) => (
-                <div key={entry.id} className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{entry.operation}</p>
-                      <p className="mt-1 text-xs text-zinc-500">{entry.username || entry.user_id}</p>
+                <p
+                  className="rounded-xl px-4 py-3 text-sm text-zinc-500"
+                  style={{
+                    background: 'var(--row-hover)',
+                    border: '1px solid var(--surface-border)',
+                  }}
+                >
+                  No audit activity yet.
+                </p>
+              ) : (
+                dashboard.recent_audit.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="rounded-xl px-4 py-3"
+                    style={{
+                      background: 'var(--row-hover)',
+                      border: '1px solid var(--surface-border)',
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                          {entry.operation}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {entry.username || entry.user_id}
+                        </p>
+                      </div>
+                      <span
+                        className="whitespace-nowrap text-xs text-zinc-400"
+                        title={fullDate(entry.created_at)}
+                      >
+                        {timeAgo(entry.created_at)}
+                      </span>
                     </div>
-                    <span className="whitespace-nowrap text-xs text-zinc-400" title={fullDate(entry.created_at)}>{timeAgo(entry.created_at)}</span>
+                    <p className="mt-2 text-sm text-zinc-500 line-clamp-2">
+                      {entry.details || 'No details recorded.'}
+                    </p>
                   </div>
-                  <p className="mt-2 text-sm text-zinc-500 line-clamp-2">{entry.details || 'No details recorded.'}</p>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>

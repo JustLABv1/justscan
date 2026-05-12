@@ -2,12 +2,8 @@
 
 import { Logo } from '@/components/logo';
 import type { Org, WorkScope } from '@/lib/api';
-import {
-    ArrowRight01Icon,
-    DashboardSquare01Icon,
-    Shield01Icon,
-    Tag01Icon
-} from 'hugeicons-react';
+import { deferEffect } from '@/lib/defer-effect';
+import { ArrowRight01Icon, DashboardSquare01Icon, Shield01Icon, Tag01Icon } from 'hugeicons-react';
 import { useEffect, useState } from 'react';
 
 type WorkspaceOnboardingUser = {
@@ -59,9 +55,7 @@ function ProductIntroAnimation() {
   ];
 
   return (
-    <div
-      className="workspace-onboarding-intro-animation relative h-[300px] w-full overflow-hidden rounded-[40px] md:h-[340px] xl:h-[380px]"
-    >
+    <div className="workspace-onboarding-intro-animation relative h-[300px] w-full overflow-hidden rounded-[40px] md:h-[340px] xl:h-[380px]">
       <style>{`
         .workspace-onboarding-intro-animation {
           background:
@@ -169,9 +163,7 @@ function ProductIntroAnimation() {
       />
       <div className="pointer-events-none absolute inset-x-16 bottom-6 h-16 rounded-full bg-violet-500/10 blur-3xl dark:bg-violet-500/15" />
 
-      <div
-        className="workspace-onboarding-intro-track absolute left-10 right-10 top-1/2 h-px -translate-y-1/2 md:left-16 md:right-16 xl:left-20 xl:right-20"
-      />
+      <div className="workspace-onboarding-intro-track absolute left-10 right-10 top-1/2 h-px -translate-y-1/2 md:left-16 md:right-16 xl:left-20 xl:right-20" />
 
       {items.map((item) => (
         <div
@@ -183,7 +175,9 @@ function ProductIntroAnimation() {
           }}
         >
           <span className="size-2.5 rounded-full" style={{ background: item.color }} aria-hidden />
-          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-700">{item.label}</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-700">
+            {item.label}
+          </span>
         </div>
       ))}
 
@@ -193,8 +187,14 @@ function ProductIntroAnimation() {
           animation: 'onboarding-panel-pulse 2.8s ease-in-out infinite',
         }}
       >
-        <div className="absolute inset-x-3 top-4 h-px rounded-full" style={{ background: 'rgba(167,139,250,0.36)' }} />
-        <div className="absolute inset-x-3 bottom-4 h-px rounded-full" style={{ background: 'rgba(167,139,250,0.36)' }} />
+        <div
+          className="absolute inset-x-3 top-4 h-px rounded-full"
+          style={{ background: 'rgba(167,139,250,0.36)' }}
+        />
+        <div
+          className="absolute inset-x-3 bottom-4 h-px rounded-full"
+          style={{ background: 'rgba(167,139,250,0.36)' }}
+        />
         <div
           className="absolute inset-x-0 top-1/2 h-0.5"
           style={{
@@ -205,12 +205,12 @@ function ProductIntroAnimation() {
         />
       </div>
 
-      <div
-        className="workspace-onboarding-intro-dashboard absolute right-4 top-5 z-20 w-[228px] rounded-[28px] p-4 md:right-8 md:top-6 md:w-[256px] xl:right-12 xl:top-8 xl:w-[286px]"
-      >
+      <div className="workspace-onboarding-intro-dashboard absolute right-4 top-5 z-20 w-[228px] rounded-[28px] p-4 md:right-8 md:top-6 md:w-[256px] xl:right-12 xl:top-8 xl:w-[286px]">
         <div className="flex items-center gap-2">
           <DashboardSquare01Icon size={16} className="text-violet-500" />
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-300">Live dashboard</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-300">
+            Live dashboard
+          </p>
         </div>
         <div className="mt-4 space-y-3">
           {[70, 54, 86].map((width, index) => (
@@ -220,11 +220,12 @@ function ProductIntroAnimation() {
                 className="h-2 rounded-full origin-left"
                 style={{
                   width: `${width}%`,
-                  background: index === 0
-                    ? 'linear-gradient(90deg, rgba(124,58,237,0.82), rgba(167,139,250,0.95))'
-                    : index === 1
-                      ? 'linear-gradient(90deg, rgba(56,189,248,0.82), rgba(125,211,252,0.92))'
-                      : 'linear-gradient(90deg, rgba(245,158,11,0.82), rgba(251,191,36,0.92))',
+                  background:
+                    index === 0
+                      ? 'linear-gradient(90deg, rgba(124,58,237,0.82), rgba(167,139,250,0.95))'
+                      : index === 1
+                        ? 'linear-gradient(90deg, rgba(56,189,248,0.82), rgba(125,211,252,0.92))'
+                        : 'linear-gradient(90deg, rgba(245,158,11,0.82), rgba(251,191,36,0.92))',
                   animation: 'onboarding-bar-glow 2.2s ease-in-out infinite',
                   animationDelay: `${index * 0.25}s`,
                 }}
@@ -246,14 +247,16 @@ export function WorkspaceOnboarding({
   onSkip,
 }: WorkspaceOnboardingProps) {
   const [stepIndex, setStepIndex] = useState(0);
-  const [selectedScope, setSelectedScope] = useState<WorkScope>(initialScope.kind === 'org'
-    ? initialScope
-    : { kind: 'personal' });
+  const [selectedScope, setSelectedScope] = useState<WorkScope>(
+    initialScope.kind === 'org' ? initialScope : { kind: 'personal' }
+  );
 
   useEffect(() => {
-    if (selectedScope.kind !== 'org') return;
-    if (orgs.some((org) => org.id === selectedScope.orgId)) return;
-    setSelectedScope({ kind: 'personal' });
+    return deferEffect(() => {
+      if (selectedScope.kind !== 'org') return;
+      if (orgs.some((org) => org.id === selectedScope.orgId)) return;
+      setSelectedScope({ kind: 'personal' });
+    });
   }, [orgs, selectedScope]);
 
   const currentStep = steps[stepIndex]!;
@@ -270,8 +273,10 @@ export function WorkspaceOnboarding({
   }
 
   function renderScopeCard(scope: WorkScope, title: string, description: string) {
-    const selected = selectedScope.kind === scope.kind
-      && (scope.kind === 'personal' || selectedScope.kind === 'org' && selectedScope.orgId === scope.orgId);
+    const selected =
+      selectedScope.kind === scope.kind &&
+      (scope.kind === 'personal' ||
+        (selectedScope.kind === 'org' && selectedScope.orgId === scope.orgId));
 
     return (
       <button
@@ -281,7 +286,9 @@ export function WorkspaceOnboarding({
         onClick={() => setSelectedScope(scope)}
         className="rounded-2xl p-4 text-left transition-all duration-150"
         style={{
-          background: selected ? 'linear-gradient(145deg, rgba(124,58,237,0.18) 0%, rgba(124,58,237,0.08) 100%)' : 'var(--row-hover)',
+          background: selected
+            ? 'linear-gradient(145deg, rgba(124,58,237,0.18) 0%, rgba(124,58,237,0.08) 100%)'
+            : 'var(--row-hover)',
           border: selected ? '1px solid rgba(167,139,250,0.38)' : '1px solid var(--surface-border)',
           boxShadow: selected ? '0 12px 30px rgba(124,58,237,0.12)' : 'none',
         }}
@@ -296,7 +303,9 @@ export function WorkspaceOnboarding({
             style={{
               background: selected ? 'rgba(124,58,237,0.2)' : 'rgba(148,163,184,0.12)',
               color: selected ? '#a78bfa' : '#94a3b8',
-              border: selected ? '1px solid rgba(167,139,250,0.32)' : '1px solid rgba(148,163,184,0.18)',
+              border: selected
+                ? '1px solid rgba(167,139,250,0.32)'
+                : '1px solid rgba(148,163,184,0.18)',
             }}
           >
             {selected ? '✓' : ''}
@@ -318,7 +327,10 @@ export function WorkspaceOnboarding({
       />
 
       <div className="surface-card relative mx-auto flex min-h-[calc(100dvh-1.5rem)] max-w-[1600px] flex-col overflow-hidden rounded-[36px]">
-        <header className="relative z-10 flex items-center justify-between gap-4 border-b px-5 py-4 md:px-8 md:py-5" style={{ borderColor: 'var(--border-subtle)' }}>
+        <header
+          className="relative z-10 flex items-center justify-between gap-4 border-b px-5 py-4 md:px-8 md:py-5"
+          style={{ borderColor: 'var(--border-subtle)' }}
+        >
           <div className="flex items-center gap-3">
             <div
               className="flex size-11 items-center justify-center rounded-2xl"
@@ -331,24 +343,39 @@ export function WorkspaceOnboarding({
             </div>
             <div>
               <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">JustScan</p>
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Workspace onboarding</p>
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                Workspace onboarding
+              </p>
             </div>
           </div>
-          <button type="button" className="text-sm text-zinc-500 transition-colors hover:text-zinc-800 dark:hover:text-zinc-200" onClick={onSkip}>
+          <button
+            type="button"
+            className="text-sm text-zinc-500 transition-colors hover:text-zinc-800 dark:hover:text-zinc-200"
+            onClick={onSkip}
+          >
             Skip for now
           </button>
         </header>
 
         <main className="relative z-10 flex-1 overflow-y-auto px-5 py-6 md:px-8 md:py-8 xl:px-12 xl:py-10">
-          <div className={stepIndex === 0 ? 'space-y-8' : 'grid gap-8 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] xl:gap-10'}>
+          <div
+            className={
+              stepIndex === 0
+                ? 'space-y-8'
+                : 'grid gap-8 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] xl:gap-10'
+            }
+          >
             <section className={stepIndex === 0 ? 'space-y-8 xl:pr-0' : 'space-y-8'}>
               {stepIndex === 0 ? (
                 <div className="space-y-8">
                   <div className="space-y-6">
-                    <p className="text-xs uppercase tracking-[0.2em] text-violet-500">{currentStep.eyebrow}</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-violet-500">
+                      {currentStep.eyebrow}
+                    </p>
                     {displayName && (
                       <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                        Good to see you, <span className="text-zinc-900 dark:text-white">{displayName}</span>.
+                        Good to see you,{' '}
+                        <span className="text-zinc-900 dark:text-white">{displayName}</span>.
                       </p>
                     )}
                     <h1 className="max-w-[36rem] text-4xl font-semibold tracking-tight text-zinc-950 dark:text-white md:text-5xl md:leading-[1.02] xl:text-[4.2rem]">
@@ -362,7 +389,10 @@ export function WorkspaceOnboarding({
                         <span
                           key={item}
                           className="rounded-full px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200"
-                          style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
+                          style={{
+                            background: 'var(--row-hover)',
+                            border: '1px solid var(--surface-border)',
+                          }}
                         >
                           {item}
                         </span>
@@ -375,7 +405,9 @@ export function WorkspaceOnboarding({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-violet-500">{currentStep.eyebrow}</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-violet-500">
+                    {currentStep.eyebrow}
+                  </p>
                   <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-zinc-950 dark:text-white md:text-5xl md:leading-[1.02] xl:text-[3.7rem]">
                     {currentStep.title}
                   </h1>
@@ -387,37 +419,103 @@ export function WorkspaceOnboarding({
 
               {stepIndex === 1 && (
                 <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
-                    <p className="text-lg font-semibold text-zinc-900 dark:text-white">Personal workspace</p>
-                    <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">Your own scans, registries, tags, suppressions, and watchlist items live here.</p>
+                  <div
+                    className="rounded-[28px] p-6"
+                    style={{
+                      background: 'var(--row-hover)',
+                      border: '1px solid var(--surface-border)',
+                    }}
+                  >
+                    <p className="text-lg font-semibold text-zinc-900 dark:text-white">
+                      Personal workspace
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+                      Your own scans, registries, tags, suppressions, and watchlist items live here.
+                    </p>
                   </div>
-                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
-                    <p className="text-lg font-semibold text-zinc-900 dark:text-white">Organization workspace</p>
-                    <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">A shared team context where visibility and management depend on org membership and role.</p>
+                  <div
+                    className="rounded-[28px] p-6"
+                    style={{
+                      background: 'var(--row-hover)',
+                      border: '1px solid var(--surface-border)',
+                    }}
+                  >
+                    <p className="text-lg font-semibold text-zinc-900 dark:text-white">
+                      Organization workspace
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+                      A shared team context where visibility and management depend on org membership
+                      and role.
+                    </p>
                   </div>
-                  <div className="rounded-[28px] p-6 lg:col-span-2 xl:col-span-1" style={{ background: 'linear-gradient(145deg, rgba(124,58,237,0.12) 0%, rgba(14,165,233,0.08) 100%)', border: '1px solid rgba(124,58,237,0.18)' }}>
-                    <p className="text-lg font-semibold text-zinc-900 dark:text-white">What is scoped</p>
-                    <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">Scans, registries, tags, suppressions, watchlist items, and the dashboard views built on top of them.</p>
+                  <div
+                    className="rounded-[28px] p-6 lg:col-span-2 xl:col-span-1"
+                    style={{
+                      background:
+                        'linear-gradient(145deg, rgba(124,58,237,0.12) 0%, rgba(14,165,233,0.08) 100%)',
+                      border: '1px solid rgba(124,58,237,0.18)',
+                    }}
+                  >
+                    <p className="text-lg font-semibold text-zinc-900 dark:text-white">
+                      What is scoped
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+                      Scans, registries, tags, suppressions, watchlist items, and the dashboard
+                      views built on top of them.
+                    </p>
                   </div>
                 </div>
               )}
 
               {stepIndex === 2 && (
                 <div className="grid gap-4 lg:grid-cols-3">
-                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                  <div
+                    className="rounded-[28px] p-6"
+                    style={{
+                      background: 'var(--row-hover)',
+                      border: '1px solid var(--surface-border)',
+                    }}
+                  >
                     <DashboardSquare01Icon size={22} className="text-violet-500" />
-                    <p className="mt-4 text-lg font-semibold text-zinc-900 dark:text-white">Dashboards follow scope</p>
-                    <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">Counts, trends, and recent activity reflect the workspace you are currently viewing.</p>
+                    <p className="mt-4 text-lg font-semibold text-zinc-900 dark:text-white">
+                      Dashboards follow scope
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+                      Counts, trends, and recent activity reflect the workspace you are currently
+                      viewing.
+                    </p>
                   </div>
-                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                  <div
+                    className="rounded-[28px] p-6"
+                    style={{
+                      background: 'var(--row-hover)',
+                      border: '1px solid var(--surface-border)',
+                    }}
+                  >
                     <Shield01Icon size={22} className="text-sky-500" />
-                    <p className="mt-4 text-lg font-semibold text-zinc-900 dark:text-white">Resources stay owned</p>
-                    <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">A shared scan can appear in your current workspace while still being owned somewhere else.</p>
+                    <p className="mt-4 text-lg font-semibold text-zinc-900 dark:text-white">
+                      Resources stay owned
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+                      A shared scan can appear in your current workspace while still being owned
+                      somewhere else.
+                    </p>
                   </div>
-                  <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                  <div
+                    className="rounded-[28px] p-6"
+                    style={{
+                      background: 'var(--row-hover)',
+                      border: '1px solid var(--surface-border)',
+                    }}
+                  >
                     <Tag01Icon size={22} className="text-amber-500" />
-                    <p className="mt-4 text-lg font-semibold text-zinc-900 dark:text-white">Labels explain access</p>
-                    <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">Personal, org, and shared badges tell you how an item is owned and why you can see it.</p>
+                    <p className="mt-4 text-lg font-semibold text-zinc-900 dark:text-white">
+                      Labels explain access
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+                      Personal, org, and shared badges tell you how an item is owned and why you can
+                      see it.
+                    </p>
                   </div>
                 </div>
               )}
@@ -427,24 +525,41 @@ export function WorkspaceOnboarding({
                   {renderScopeCard(
                     { kind: 'personal' },
                     'Personal workspace',
-                    'Start with your own workspace and view resources that belong to you personally.',
+                    'Start with your own workspace and view resources that belong to you personally.'
                   )}
                   {orgsReady ? (
                     orgs.length > 0 ? (
                       <div className="grid gap-4 lg:grid-cols-2">
-                        {orgs.map((org) => renderScopeCard(
-                          { kind: 'org', orgId: org.id, orgName: org.name },
-                          org.name,
-                          org.description?.trim() || 'Enter the shared organization workspace for this team context.',
-                        ))}
+                        {orgs.map((org) =>
+                          renderScopeCard(
+                            { kind: 'org', orgId: org.id, orgName: org.name },
+                            org.name,
+                            org.description?.trim() ||
+                              'Enter the shared organization workspace for this team context.'
+                          )
+                        )}
                       </div>
                     ) : (
-                      <div className="rounded-[28px] p-6 text-sm leading-7 text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
-                        You do not have organization access yet. Start in your personal workspace. If you are invited later, organization workspaces will appear in the workspace switcher.
+                      <div
+                        className="rounded-[28px] p-6 text-sm leading-7 text-zinc-600 dark:text-zinc-300"
+                        style={{
+                          background: 'var(--row-hover)',
+                          border: '1px solid var(--surface-border)',
+                        }}
+                      >
+                        You do not have organization access yet. Start in your personal workspace.
+                        If you are invited later, organization workspaces will appear in the
+                        workspace switcher.
                       </div>
                     )
                   ) : (
-                    <div className="rounded-[28px] p-6 text-sm leading-7 text-zinc-600 dark:text-zinc-300" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                    <div
+                      className="rounded-[28px] p-6 text-sm leading-7 text-zinc-600 dark:text-zinc-300"
+                      style={{
+                        background: 'var(--row-hover)',
+                        border: '1px solid var(--surface-border)',
+                      }}
+                    >
                       Checking your organization access…
                     </div>
                   )}
@@ -454,19 +569,55 @@ export function WorkspaceOnboarding({
 
             {stepIndex > 0 && (
               <aside className="space-y-4 xl:pt-2">
-                <div className="rounded-[28px] p-6" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
-                  <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Product introduction</p>
-                  <p className="mt-4 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white">JustScan ties scanning, triage, and ownership together.</p>
-                  <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">The product view only makes sense once users understand what belongs to them personally, what belongs to a team, and what they are only seeing through shared access.</p>
+                <div
+                  className="rounded-[28px] p-6"
+                  style={{
+                    background: 'var(--row-hover)',
+                    border: '1px solid var(--surface-border)',
+                  }}
+                >
+                  <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                    Product introduction
+                  </p>
+                  <p className="mt-4 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white">
+                    JustScan ties scanning, triage, and ownership together.
+                  </p>
+                  <p className="mt-3 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+                    The product view only makes sense once users understand what belongs to them
+                    personally, what belongs to a team, and what they are only seeing through shared
+                    access.
+                  </p>
                 </div>
                 <div className="space-y-3">
-                  <div className="rounded-[28px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
-                    <p className="text-sm font-semibold text-zinc-900 dark:text-white">Scan and monitor</p>
-                    <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">Run scans, track vulnerabilities, and keep watchlist signals visible where the right people can act on them.</p>
+                  <div
+                    className="rounded-[28px] p-5"
+                    style={{
+                      background: 'var(--row-hover)',
+                      border: '1px solid var(--surface-border)',
+                    }}
+                  >
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      Scan and monitor
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                      Run scans, track vulnerabilities, and keep watchlist signals visible where the
+                      right people can act on them.
+                    </p>
                   </div>
-                  <div className="rounded-[28px] p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
-                    <p className="text-sm font-semibold text-zinc-900 dark:text-white">Organize by workspace</p>
-                    <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">Workspaces keep dashboards, tags, suppressions, and access boundaries aligned with how teams actually operate.</p>
+                  <div
+                    className="rounded-[28px] p-5"
+                    style={{
+                      background: 'var(--row-hover)',
+                      border: '1px solid var(--surface-border)',
+                    }}
+                  >
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      Organize by workspace
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                      Workspaces keep dashboards, tags, suppressions, and access boundaries aligned
+                      with how teams actually operate.
+                    </p>
                   </div>
                 </div>
               </aside>
@@ -474,7 +625,10 @@ export function WorkspaceOnboarding({
           </div>
         </main>
 
-        <footer className="relative z-10 flex flex-col gap-4 border-t px-5 py-4 md:px-8 md:py-5 lg:flex-row lg:items-center lg:justify-between" style={{ borderColor: 'var(--border-subtle)' }}>
+        <footer
+          className="relative z-10 flex flex-col gap-4 border-t px-5 py-4 md:px-8 md:py-5 lg:flex-row lg:items-center lg:justify-between"
+          style={{ borderColor: 'var(--border-subtle)' }}
+        >
           <div className="flex items-center gap-2">
             {steps.map((step, index) => (
               <span
@@ -482,19 +636,35 @@ export function WorkspaceOnboarding({
                 className="h-2.5 rounded-full transition-all duration-200"
                 style={{
                   width: index === stepIndex ? 30 : 10,
-                  background: index <= stepIndex ? 'linear-gradient(90deg, #a78bfa, #7c3aed)' : 'rgba(161,161,170,0.25)',
+                  background:
+                    index <= stepIndex
+                      ? 'linear-gradient(90deg, #a78bfa, #7c3aed)'
+                      : 'rgba(161,161,170,0.25)',
                 }}
               />
             ))}
           </div>
           <div className="flex items-center gap-2 self-end lg:self-auto">
             {stepIndex > 0 && (
-              <button type="button" className="btn-secondary" onClick={() => setStepIndex((current) => current - 1)}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setStepIndex((current) => current - 1)}
+              >
                 Back
               </button>
             )}
-            <button type="button" className="btn-primary" onClick={handleContinue} disabled={!canFinish}>
-              {stepIndex === 0 ? 'Start guide' : stepIndex === steps.length - 1 ? 'Open dashboard' : 'Continue'}
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={handleContinue}
+              disabled={!canFinish}
+            >
+              {stepIndex === 0
+                ? 'Start guide'
+                : stepIndex === steps.length - 1
+                  ? 'Open dashboard'
+                  : 'Continue'}
               <ArrowRight01Icon size={16} />
             </button>
           </div>

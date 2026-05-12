@@ -12,37 +12,38 @@ import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import {
-  assignScanToOrg,
-  createOrgInvite,
-  createPolicy,
-  deletePolicy,
-  getComplianceTrend,
-  getOrg,
-  getOrgRiskScore,
-  getUser,
-  listOrgInvites,
-  listOrgMembers,
-  listOrgScans,
-  listScans,
-  Org,
-  OrgInvite,
-  OrgMember,
-  OrgPolicy,
-  OrgRiskScore,
-  OrgRole,
-  PolicyRule,
-  removeOrgMember,
-  removeScanFromOrg,
-  revokeOrgInvite,
-  Scan,
-  transferOrgOwnership,
-  TrendPoint,
-  updateOrg,
-  updateOrgMemberRole,
-  updateOrgVulnerabilityViewSettings,
-  updatePolicy,
-  VulnerabilityViewSettings,
+    assignScanToOrg,
+    createOrgInvite,
+    createPolicy,
+    deletePolicy,
+    getComplianceTrend,
+    getOrg,
+    getOrgRiskScore,
+    getUser,
+    listOrgInvites,
+    listOrgMembers,
+    listOrgScans,
+    listScans,
+    Org,
+    OrgInvite,
+    OrgMember,
+    OrgPolicy,
+    OrgRiskScore,
+    OrgRole,
+    PolicyRule,
+    removeOrgMember,
+    removeScanFromOrg,
+    revokeOrgInvite,
+    Scan,
+    transferOrgOwnership,
+    TrendPoint,
+    updateOrg,
+    updateOrgMemberRole,
+    updateOrgVulnerabilityViewSettings,
+    updatePolicy,
+    VulnerabilityViewSettings,
 } from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { ArrowLeft01Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
@@ -174,41 +175,41 @@ export default function OrgDetailPage() {
     }
   }, [canManageMembers, id]);
 
+  const orgVulnerabilityViewSettings =
+    org?.vulnerability_view_settings ?? DEFAULT_VULNERABILITY_VIEW_SETTINGS;
+
   useEffect(() => {
-    load();
-    loadOrgScans();
-    loadMembers();
-    getComplianceTrend(id)
-      .then(setTrend)
-      .catch(() => {});
-    getOrgRiskScore(id)
-      .then(setRiskScore)
-      .catch(() => {});
+    return deferEffect(() => {
+      void load();
+      void loadOrgScans();
+      void loadMembers();
+      void getComplianceTrend(id)
+        .then(setTrend)
+        .catch(() => {});
+      void getOrgRiskScore(id)
+        .then(setRiskScore)
+        .catch(() => {});
+    });
   }, [load, loadMembers, loadOrgScans, id]);
 
   useEffect(() => {
-    setVulnerabilityViewSettings(
-      org?.vulnerability_view_settings ?? DEFAULT_VULNERABILITY_VIEW_SETTINGS
-    );
-  }, [
-    org?.vulnerability_view_settings?.sort_by,
-    org?.vulnerability_view_settings?.sort_dir,
-    org?.vulnerability_view_settings?.severity,
-    org?.vulnerability_view_settings?.min_cvss,
-    org?.vulnerability_view_settings?.has_fix,
-    org?.vulnerability_view_settings?.xray_policy_first,
-  ]);
+    return deferEffect(() => {
+      setVulnerabilityViewSettings(orgVulnerabilityViewSettings);
+    });
+  }, [orgVulnerabilityViewSettings]);
 
   useEffect(() => {
-    const requestedTab = searchParams.get('tab');
-    const match = ORG_TABS.find((tab) => tab.id === requestedTab);
-    if (match && match.id !== activeTab) {
-      setActiveTab(match.id);
-      return;
-    }
-    if (!requestedTab && activeTab !== 'overview') {
-      setActiveTab('overview');
-    }
+    return deferEffect(() => {
+      const requestedTab = searchParams.get('tab');
+      const match = ORG_TABS.find((tab) => tab.id === requestedTab);
+      if (match && match.id !== activeTab) {
+        setActiveTab(match.id);
+        return;
+      }
+      if (!requestedTab && activeTab !== 'overview') {
+        setActiveTab('overview');
+      }
+    });
   }, [activeTab, searchParams]);
 
   function openInviteModal() {

@@ -2,6 +2,7 @@
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { compareScans, listScans, Scan, ScanComparison, Vulnerability } from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { ListBox, Select, Table } from '@heroui/react';
 import { ArrowLeft01Icon } from 'hugeicons-react';
 import Link from 'next/link';
@@ -139,11 +140,13 @@ function ComparePageInner() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    setScansLoading(true);
-    listScans(1, 100)
-      .then((r) => setScans(r.data ?? []))
-      .catch(() => {})
-      .finally(() => setScansLoading(false));
+    return deferEffect(() => {
+      setScansLoading(true);
+      listScans(1, 100)
+        .then((r) => setScans(r.data ?? []))
+        .catch(() => {})
+        .finally(() => setScansLoading(false));
+    });
   }, [scopeKey]);
 
   // Auto-compare if both params are present on load

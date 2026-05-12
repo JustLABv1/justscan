@@ -17,6 +17,7 @@ import {
     ScannerCapabilities,
     Tag,
 } from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import {
     createEditableHelmImages,
     EditableHelmImage,
@@ -77,19 +78,23 @@ export default function HelmPage() {
   const [registryId, setRegistryId] = useState('');
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
-  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(
+    getDefaultScannerCapabilities()
+  );
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [scanning, setScanning] = useState(false);
   const [makePublic, setMakePublic] = useState(false);
 
   const [helmRuns, setHelmRuns] = useState<HelmScanRunSummary[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin] = useState(() => getTokenType() === 'admin');
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const isOCI = chartURL.trim().startsWith('oci://');
   const selectedImages = editableImages.filter((img) => selected.has(img.id));
   const hasInvalidSelection = selectedImages.some((img) => img.edited_ref.trim() === '');
-  const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
+  const selectableRegistries = registries.filter(
+    (registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy
+  );
   const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
 
   const loadTags = useCallback(async () => {
@@ -113,15 +118,16 @@ export default function HelmPage() {
   }, []);
 
   useEffect(() => {
-    setIsAdmin(getTokenType() === 'admin');
-    loadTags();
-    loadHistory();
-    listRegistriesWithCapabilities()
-      .then((response) => {
-        setRegistries(response.data);
-        setCapabilities(response.capabilities);
-      })
-      .catch(() => {});
+    return deferEffect(() => {
+      void loadTags();
+      void loadHistory();
+      void listRegistriesWithCapabilities()
+        .then((response) => {
+          setRegistries(response.data);
+          setCapabilities(response.capabilities);
+        })
+        .catch(() => {});
+    });
   }, [loadHistory, loadTags]);
 
   async function handleExtract(e: React.FormEvent) {
@@ -140,7 +146,7 @@ export default function HelmPage() {
       const result = await extractHelmImages(
         url,
         chartName.trim() || undefined,
-        chartVersion.trim() || undefined,
+        chartVersion.trim() || undefined
       );
       const images = Array.isArray(result.images) ? result.images : [];
       const nextImages = createEditableHelmImages(images);
@@ -184,17 +190,19 @@ export default function HelmPage() {
         extracted.chart_name,
         extracted.chart_version,
         registryId || undefined,
-        currentScope.kind === 'org' ? currentScope.orgId : undefined,
+        currentScope.kind === 'org' ? currentScope.orgId : undefined
       );
 
       if (makePublic && (result.scans?.length ?? 0) > 0) {
         await Promise.all(
-          result.scans.map((scan) => createShare(scan.id, 'public').catch(() => null)),
+          result.scans.map((scan) => createShare(scan.id, 'public').catch(() => null))
         );
       }
 
       await loadHistory();
-      toast.success(`${result.scans.length} image${result.scans.length === 1 ? '' : 's'} queued in Helm run ${result.run.id.slice(0, 8)}`);
+      toast.success(
+        `${result.scans.length} image${result.scans.length === 1 ? '' : 's'} queued in Helm run ${result.run.id.slice(0, 8)}`
+      );
       router.push(`/helm/runs/${result.run.id}`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to create scans');
@@ -222,9 +230,9 @@ export default function HelmPage() {
   }
 
   function updateEditedRef(id: string, value: string) {
-    setEditableImages((prev) => prev.map((image) => (
-      image.id === id ? { ...image, edited_ref: value } : image
-    )));
+    setEditableImages((prev) =>
+      prev.map((image) => (image.id === id ? { ...image, edited_ref: value } : image))
+    );
   }
 
   function toggleTag(id: string) {
@@ -242,9 +250,12 @@ export default function HelmPage() {
         <div className="flex items-center gap-3">
           <PackageIcon size={22} className="text-violet-500 shrink-0" />
           <div>
-            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Helm Scan Runs</h1>
+            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+              Helm Scan Runs
+            </h1>
             <p className="text-sm text-zinc-500 mt-0.5">
-              Queue a chart run once, keep it as a first-class record, and drill into the child scans by run ID.
+              Queue a chart run once, keep it as a first-class record, and drill into the child
+              scans by run ID.
             </p>
           </div>
         </div>
@@ -262,13 +273,12 @@ export default function HelmPage() {
       <StepBar current={step} />
 
       {step === 'input' && (
-        <div
-          className="surface-panel rounded-2xl p-6 space-y-5"
-        >
+        <div className="surface-panel rounded-2xl p-6 space-y-5">
           <form onSubmit={handleExtract} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                Chart URL <span className="text-zinc-400 font-normal text-xs">(OCI or HTTP repository)</span>
+                Chart URL{' '}
+                <span className="text-zinc-400 font-normal text-xs">(OCI or HTTP repository)</span>
               </label>
               <input
                 className={inputCls}
@@ -349,18 +359,19 @@ export default function HelmPage() {
 
       {step === 'preview' && extracted && (
         <div className="space-y-4">
-          <div
-            className="surface-panel rounded-2xl px-5 py-4 flex items-center justify-between gap-4"
-          >
+          <div className="surface-panel rounded-2xl px-5 py-4 flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 {extracted.chart_name}
                 {extracted.chart_version && (
-                  <span className="ml-2 text-xs font-normal text-zinc-400">v{extracted.chart_version}</span>
+                  <span className="ml-2 text-xs font-normal text-zinc-400">
+                    v{extracted.chart_version}
+                  </span>
                 )}
               </p>
               <p className="text-xs text-zinc-500 mt-0.5">
-                Found {extracted.images.length} image{extracted.images.length !== 1 ? 's' : ''} &nbsp;·&nbsp;
+                Found {extracted.images.length} image{extracted.images.length !== 1 ? 's' : ''}{' '}
+                &nbsp;·&nbsp;
                 <span className="text-violet-500 font-medium">{selected.size} selected</span>
               </p>
             </div>
@@ -373,14 +384,14 @@ export default function HelmPage() {
             </button>
           </div>
 
-          <div
-            className="surface-panel rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4"
-          >
+          <div className="surface-panel rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2 min-w-[260px]">
               <label className="text-xs text-zinc-500 whitespace-nowrap">Registry</label>
               <Select
                 value={registryId || '__auto__'}
-                onChange={(value) => setRegistryId(String(value === '__auto__' ? '' : value ?? ''))}
+                onChange={(value) =>
+                  setRegistryId(String(value === '__auto__' ? '' : (value ?? '')))
+                }
               >
                 <Select.Trigger className={selectTriggerCls}>
                   <Select.Value />
@@ -388,10 +399,15 @@ export default function HelmPage() {
                 </Select.Trigger>
                 <Select.Popover>
                   <ListBox>
-                    <ListBox.Item id="__auto__">{capabilities.enable_trivy ? 'Auto-match from image hostname' : 'Auto-match from configured Xray registries'}</ListBox.Item>
+                    <ListBox.Item id="__auto__">
+                      {capabilities.enable_trivy
+                        ? 'Auto-match from image hostname'
+                        : 'Auto-match from configured Xray registries'}
+                    </ListBox.Item>
                     {selectableRegistries.map((registry) => (
                       <ListBox.Item key={registry.id} id={registry.id}>
-                        {registry.name} · {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
+                        {registry.name} ·{' '}
+                        {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
                       </ListBox.Item>
                     ))}
                   </ListBox>
@@ -401,7 +417,8 @@ export default function HelmPage() {
 
             {xrayOnlyWithoutRegistries && (
               <p className="text-xs" style={{ color: '#f59e0b' }}>
-                No Artifactory Xray registry is configured yet, so this Helm run cannot be queued until one is added.
+                No Artifactory Xray registry is configured yet, so this Helm run cannot be queued
+                until one is added.
               </p>
             )}
 
@@ -409,7 +426,7 @@ export default function HelmPage() {
               <label className="text-xs text-zinc-500 whitespace-nowrap">Platform</label>
               <Select
                 value={platform || '__auto__'}
-                onChange={(value) => setPlatform(String(value === '__auto__' ? '' : value ?? ''))}
+                onChange={(value) => setPlatform(String(value === '__auto__' ? '' : (value ?? '')))}
               >
                 <Select.Trigger className={selectTriggerCls}>
                   <Select.Value />
@@ -460,14 +477,21 @@ export default function HelmPage() {
                 onClick={() => setMakePublic((value) => !value)}
                 className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none"
                 style={{ background: makePublic ? '#7c3aed' : 'var(--border-subtle)' }}
-                title={makePublic ? 'Result scans will be shared publicly' : 'Create public share links after queueing'}
+                title={
+                  makePublic
+                    ? 'Result scans will be shared publicly'
+                    : 'Create public share links after queueing'
+                }
               >
                 <span
                   className="inline-block size-3.5 rounded-full bg-white shadow transition-transform"
                   style={{ transform: makePublic ? 'translateX(18px)' : 'translateX(2px)' }}
                 />
               </button>
-              <label className="text-xs text-zinc-500 cursor-pointer" onClick={() => setMakePublic((value) => !value)}>
+              <label
+                className="text-xs text-zinc-500 cursor-pointer"
+                onClick={() => setMakePublic((value) => !value)}
+              >
                 Share publicly
               </label>
             </div>
@@ -476,7 +500,10 @@ export default function HelmPage() {
           <div className="surface-panel rounded-2xl overflow-hidden">
             <div
               className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide"
-              style={{ background: 'var(--row-hover)', borderBottom: '1px solid var(--border-subtle)' }}
+              style={{
+                background: 'var(--row-hover)',
+                borderBottom: '1px solid var(--border-subtle)',
+              }}
             >
               <button
                 type="button"
@@ -528,8 +555,13 @@ export default function HelmPage() {
                       {parsed.name || 'Enter an image reference'}
                     </p>
                   </div>
-                  <span className="w-32 text-xs font-mono text-zinc-500 truncate">{parsed.tag || '—'}</span>
-                  <span className="w-48 hidden sm:block text-xs text-zinc-400 truncate" title={getHelmImageSourceLabel(img)}>
+                  <span className="w-32 text-xs font-mono text-zinc-500 truncate">
+                    {parsed.tag || '—'}
+                  </span>
+                  <span
+                    className="w-48 hidden sm:block text-xs text-zinc-400 truncate"
+                    title={getHelmImageSourceLabel(img)}
+                  >
                     {img.source_file}
                   </span>
                 </div>
@@ -538,7 +570,8 @@ export default function HelmPage() {
           </div>
 
           <p className="text-xs text-zinc-500">
-            Override any extracted image reference before queueing. The selected rows will use the edited values.
+            Override any extracted image reference before queueing. The selected rows will use the
+            edited values.
           </p>
 
           <div className="flex items-center justify-between gap-4 pt-1">
@@ -553,10 +586,14 @@ export default function HelmPage() {
             <button
               type="button"
               onClick={handleScan}
-              disabled={scanning || selected.size === 0 || hasInvalidSelection || xrayOnlyWithoutRegistries}
+              disabled={
+                scanning || selected.size === 0 || hasInvalidSelection || xrayOnlyWithoutRegistries
+              }
               className="btn-primary"
             >
-              {scanning ? 'Queuing Helm run…' : `Queue ${selected.size} selected image${selected.size !== 1 ? '' : 's'}`}
+              {scanning
+                ? 'Queuing Helm run…'
+                : `Queue ${selected.size} selected image${selected.size !== 1 ? '' : 's'}`}
             </button>
           </div>
         </div>
@@ -578,7 +615,15 @@ function statusDot(status: string) {
   }
 }
 
-function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]; isAdmin: boolean; loading: boolean }) {
+function HelmRunHistory({
+  runs,
+  isAdmin,
+  loading,
+}: {
+  runs: HelmScanRunSummary[];
+  isAdmin: boolean;
+  loading: boolean;
+}) {
   if (loading) {
     return <div className="text-xs text-zinc-400 text-center py-4">Loading Helm runs…</div>;
   }
@@ -591,9 +636,7 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
       </div>
 
       {runs.length === 0 ? (
-        <div
-          className="surface-panel rounded-2xl px-5 py-8 text-center text-sm text-zinc-400"
-        >
+        <div className="surface-panel rounded-2xl px-5 py-8 text-center text-sm text-zinc-400">
           No Helm runs yet. Queue one above to start tracking chart history by run ID.
         </div>
       ) : (
@@ -606,19 +649,26 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate" title={run.chart_name || run.chart_url}>
+                  <p
+                    className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate"
+                    title={run.chart_name || run.chart_url}
+                  >
                     {run.chart_name || run.chart_url.replace(/^oci:\/\//, '')}
                   </p>
                   <p className="text-xs text-zinc-500 mt-1 truncate" title={run.chart_url}>
                     {run.chart_url.replace(/^oci:\/\//, '')}
                   </p>
                 </div>
-                <span className={`size-2.5 rounded-full shrink-0 ${statusDot(run.active_images > 0 ? 'running' : run.failed_images > 0 ? 'failed' : 'completed')}`} />
+                <span
+                  className={`size-2.5 rounded-full shrink-0 ${statusDot(run.active_images > 0 ? 'running' : run.failed_images > 0 ? 'failed' : 'completed')}`}
+                />
               </div>
 
               <div className="flex items-center gap-2 mt-3 text-xs text-zinc-500 flex-wrap">
                 {run.chart_version && <span>v{run.chart_version}</span>}
-                <span>{run.total_images} image{run.total_images === 1 ? '' : 's'}</span>
+                <span>
+                  {run.total_images} image{run.total_images === 1 ? '' : 's'}
+                </span>
                 <span>Started {timeAgo(run.created_at)}</span>
               </div>
 
@@ -631,7 +681,11 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
 
               <div className="flex items-center justify-between gap-2 mt-4 text-xs text-zinc-400">
                 <span className="font-mono">Run {run.id.slice(0, 8)}</span>
-                {isAdmin && run.owner_username ? <span>{run.owner_username}</span> : <span>Open run →</span>}
+                {isAdmin && run.owner_username ? (
+                  <span>{run.owner_username}</span>
+                ) : (
+                  <span>Open run →</span>
+                )}
               </div>
             </Link>
           ))}
@@ -643,7 +697,10 @@ function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]
 
 function RunMetric({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
-    <div className="rounded-xl p-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+    <div
+      className="rounded-xl p-2"
+      style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
+    >
       <div className={`text-sm font-semibold ${value > 0 ? tone : 'text-zinc-400'}`}>{value}</div>
       <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
     </div>
@@ -665,7 +722,8 @@ function StepBar({ current }: { current: Step }) {
             <div
               className="size-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
               style={{
-                background: index <= idx ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'var(--row-hover)',
+                background:
+                  index <= idx ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'var(--row-hover)',
                 color: index <= idx ? '#fff' : 'var(--text-muted)',
                 border: index <= idx ? 'none' : '1px solid var(--border-subtle)',
               }}
@@ -680,7 +738,10 @@ function StepBar({ current }: { current: Step }) {
             </span>
           </div>
           {index < steps.length - 1 && (
-            <div className="h-px flex-1 min-w-[24px]" style={{ background: index < idx ? '#7c3aed' : 'var(--border-subtle)' }} />
+            <div
+              className="h-px flex-1 min-w-[24px]"
+              style={{ background: index < idx ? '#7c3aed' : 'var(--border-subtle)' }}
+            />
           )}
         </div>
       ))}

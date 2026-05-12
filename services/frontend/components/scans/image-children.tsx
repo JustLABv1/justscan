@@ -4,6 +4,7 @@ import { OwnershipBadge, SevCount, StatusBadge } from '@/components/ui/badges';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { listScans, Scan } from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Button, Checkbox, Pagination, Table } from '@heroui/react';
 import { Cancel01Icon, Delete01Icon } from 'hugeicons-react';
@@ -60,7 +61,7 @@ export function ImageChildren({
   );
 
   useEffect(() => {
-    load(page);
+    return deferEffect(() => load(page));
   }, [load, page, scopeKey]);
 
   useConditionalInterval(

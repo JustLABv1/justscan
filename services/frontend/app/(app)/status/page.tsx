@@ -4,53 +4,54 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge } from '@/components/ui/badges';
 import {
-  fieldLabelClassName,
-  heroFieldClassName,
-  heroSelectTriggerClassName,
-  heroTextAreaClassName,
+    fieldLabelClassName,
+    heroFieldClassName,
+    heroSelectTriggerClassName,
+    heroTextAreaClassName,
 } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-  createStatusPage,
-  deleteStatusPage,
-  getStatusPage,
-  getTokenType,
-  getUser,
-  getWorkScope,
-  listStatusPages,
-  listStatusPageShares,
-  listStatusPageTargetOptions,
-  ResourceShare,
-  shareStatusPage,
-  StatusPage,
-  StatusPagePayload,
-  StatusPageTarget,
-  StatusPageTargetOption,
-  unshareStatusPage,
-  updateStatusPage,
+    createStatusPage,
+    deleteStatusPage,
+    getStatusPage,
+    getTokenType,
+    getUser,
+    getWorkScope,
+    listStatusPages,
+    listStatusPageShares,
+    listStatusPageTargetOptions,
+    ResourceShare,
+    shareStatusPage,
+    StatusPage,
+    StatusPagePayload,
+    StatusPageTarget,
+    StatusPageTargetOption,
+    unshareStatusPage,
+    updateStatusPage,
 } from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
 import {
-  Button,
-  Card,
-  Input,
-  Label,
-  ListBox,
-  Modal,
-  Select,
-  Switch,
-  Table,
-  TextArea,
-  useOverlayState,
+    Button,
+    Card,
+    Input,
+    Label,
+    ListBox,
+    Modal,
+    Select,
+    Switch,
+    Table,
+    TextArea,
+    useOverlayState,
 } from '@heroui/react';
 import {
-  Delete01Icon,
-  EyeIcon,
-  PencilEdit01Icon,
-  PlusSignIcon,
-  Shield01Icon,
+    Delete01Icon,
+    EyeIcon,
+    PencilEdit01Icon,
+    PlusSignIcon,
+    Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -157,7 +158,7 @@ export default function StatusPagesPage() {
   }, []);
 
   useEffect(() => {
-    load();
+    return deferEffect(load);
   }, [load, scopeKey]);
 
   useEffect(() => {

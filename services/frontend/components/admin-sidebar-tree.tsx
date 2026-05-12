@@ -2,24 +2,25 @@
 
 import { Disclosure } from '@heroui/react';
 import {
-  ArrowRight01Icon,
-  Home12Icon,
-  Key01Icon,
-  LinkSquare02Icon,
-  Setting07Icon,
-  Settings01Icon,
-  Shield01Icon,
+    ArrowRight01Icon,
+    Home12Icon,
+    Key01Icon,
+    LinkSquare02Icon,
+    Setting07Icon,
+    Settings01Icon,
+    Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import {
-  ADMIN_AREAS,
-  type AdminArea,
-  getAdminAreaForTab,
-  resolveAdminTab,
+    ADMIN_AREAS,
+    type AdminArea,
+    getAdminAreaForTab,
+    resolveAdminTab,
 } from '@/app/(app)/admin/_components/admin-tabs';
+import { deferEffect } from '@/lib/defer-effect';
 
 interface AdminSidebarTreeProps {
   onNavigate?: () => void;
@@ -52,15 +53,19 @@ export function AdminSidebarTree({
   );
 
   useEffect(() => {
-    if (isAdminRoute) setAdminExpanded(true);
+    return deferEffect(() => {
+      if (isAdminRoute) setAdminExpanded(true);
+    });
   }, [isAdminRoute]);
 
   useEffect(() => {
-    setExpandedAreas((current) => {
-      if (current.has(activeArea.value)) return current;
-      const next = new Set(current);
-      next.add(activeArea.value);
-      return next;
+    return deferEffect(() => {
+      setExpandedAreas((current) => {
+        if (current.has(activeArea.value)) return current;
+        const next = new Set(current);
+        next.add(activeArea.value);
+        return next;
+      });
     });
   }, [activeArea.value]);
 

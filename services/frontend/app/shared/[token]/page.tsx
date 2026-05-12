@@ -6,14 +6,15 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type { Scan, Vulnerability } from '@/lib/api';
 import {
-  ApiError,
-  getSharedScan,
-  getSharedVulnerabilityContextAnalysis,
-  getToken,
-  listScans,
-  listSharedVulnerabilities,
-  rescanShared,
+    ApiError,
+    getSharedScan,
+    getSharedVulnerabilityContextAnalysis,
+    getToken,
+    listScans,
+    listSharedVulnerabilities,
+    rescanShared,
 } from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { Button, Card, Table, useOverlayState } from '@heroui/react';
 import { CpuIcon, FileExportIcon, GitCompareIcon, Refresh01Icon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
@@ -184,16 +185,12 @@ export default function SharedScanPage() {
   const [reScanning, setReScanning] = useState(false);
   const [comparingPrev, setComparingPrev] = useState(false);
   const [actionError, setActionError] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn] = useState(() => !!getToken());
   const [activeTab, setActiveTab] = useState<ResultTab>('overview');
   const vulnerabilityDetailsModal = useOverlayState();
   const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    setIsLoggedIn(!!getToken());
-  }, []);
 
   useEffect(() => {
     function fetchScan() {
@@ -232,43 +229,36 @@ export default function SharedScanPage() {
   }, [pkgInput]);
 
   useEffect(() => {
-    if (!scan || (scan.status !== 'completed' && scan.external_status !== 'blocked_by_xray_policy'))
-      return;
-    setVulnLoading(true);
-    listSharedVulnerabilities(
-      token,
-      page,
-      LIMIT,
-      severityFilter || undefined,
-      pkgFilter || undefined,
-      hasFix || undefined,
-      minCvss || undefined,
-      sortBy,
-      sortDir
-    )
-      .then((res) => {
-        setVulns(res.data ?? []);
-        setVulnTotal(res.total);
-      })
-      .catch((e) => {
-        if (e instanceof ApiError && e.status === 401) {
-          router.push(`/login?returnUrl=/shared/${token}`);
-        }
-      })
-      .finally(() => setVulnLoading(false));
-  }, [
-    token,
-    scan?.status,
-    scan?.external_status,
-    page,
-    severityFilter,
-    pkgFilter,
-    minCvss,
-    hasFix,
-    sortBy,
-    sortDir,
-    router,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+    return deferEffect(() => {
+      if (
+        !scan ||
+        (scan.status !== 'completed' && scan.external_status !== 'blocked_by_xray_policy')
+      )
+        return;
+      setVulnLoading(true);
+      listSharedVulnerabilities(
+        token,
+        page,
+        LIMIT,
+        severityFilter || undefined,
+        pkgFilter || undefined,
+        hasFix || undefined,
+        minCvss || undefined,
+        sortBy,
+        sortDir
+      )
+        .then((res) => {
+          setVulns(res.data ?? []);
+          setVulnTotal(res.total);
+        })
+        .catch((e) => {
+          if (e instanceof ApiError && e.status === 401) {
+            router.push(`/login?returnUrl=/shared/${token}`);
+          }
+        })
+        .finally(() => setVulnLoading(false));
+    });
+  }, [token, scan, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir, router]);
 
   async function handleRescan() {
     setReScanning(true);

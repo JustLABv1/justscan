@@ -11,12 +11,41 @@ import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
-import { createTag, deleteTag, getTokenType, getUser, getWorkScope, listTags, listTagShares, ResourceShare, shareTag, Tag, unshareTag, updateTag } from '@/lib/api';
+import {
+    createTag,
+    deleteTag,
+    getTokenType,
+    getUser,
+    getWorkScope,
+    listTags,
+    listTagShares,
+    ResourceShare,
+    shareTag,
+    Tag,
+    unshareTag,
+    updateTag,
+} from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { Button, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
-import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon, Tag01Icon } from 'hugeicons-react';
+import {
+    Delete01Icon,
+    PencilEdit01Icon,
+    PlusSignIcon,
+    Shield01Icon,
+    Tag01Icon,
+} from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
 
-const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#14b8a6'];
+const COLORS = [
+  '#6366f1',
+  '#ec4899',
+  '#f59e0b',
+  '#10b981',
+  '#3b82f6',
+  '#ef4444',
+  '#8b5cf6',
+  '#14b8a6',
+];
 const selectTriggerCls = heroSelectTriggerClassName;
 
 export default function TagsPage() {
@@ -43,19 +72,39 @@ export default function TagsPage() {
   const toast = useToast();
   const isPlatformAdmin = getTokenType() === 'admin';
   const currentUserId = getUser()?.id as string | undefined;
-  const manageableOrgIds = new Set(orgs.filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin').map((org) => org.id));
+  const manageableOrgIds = new Set(
+    orgs
+      .filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin')
+      .map((org) => org.id)
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setTags(await listTags()); }
-    catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load'); }
-    finally { setLoading(false); }
+    try {
+      setTags(await listTags());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load, scopeKey]);
+  useEffect(() => deferEffect(load), [load, scopeKey]);
 
-  function openCreate() { setEditing(null); setName(''); setColor(COLORS[0]); setFormError(''); modal.open(); }
-  function openEdit(tag: Tag) { setEditing(tag); setName(tag.name); setColor(tag.color); setFormError(''); modal.open(); }
+  function openCreate() {
+    setEditing(null);
+    setName('');
+    setColor(COLORS[0]);
+    setFormError('');
+    modal.open();
+  }
+  function openEdit(tag: Tag) {
+    setEditing(tag);
+    setName(tag.name);
+    setColor(tag.color);
+    setFormError('');
+    modal.open();
+  }
 
   function canManageTag(tag: Tag) {
     if (tag.owner_type === 'system') return isPlatformAdmin;
@@ -119,21 +168,34 @@ export default function TagsPage() {
   }
 
   const availableShareTargets = shareTarget
-    ? orgs.filter((org) => (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id && !shares.some((share) => share.org_id === org.id))
+    ? orgs.filter(
+        (org) =>
+          (isPlatformAdmin || manageableOrgIds.has(org.id)) &&
+          org.id !== shareTarget.owner_org_id &&
+          !shares.some((share) => share.org_id === org.id)
+      )
     : [];
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault(); setFormError(''); setSaving(true);
+    e.preventDefault();
+    setFormError('');
+    setSaving(true);
     try {
       const currentScope = getWorkScope();
-      if (editing) { await updateTag(editing.id, name, color); toast.success('Tag updated'); }
-      else {
+      if (editing) {
+        await updateTag(editing.id, name, color);
+        toast.success('Tag updated');
+      } else {
         await createTag(name, color, currentScope.kind === 'org' ? currentScope.orgId : undefined);
         toast.success(`Tag "${name}" created`);
       }
-      modal.close(); await load();
-    } catch (err: unknown) { setFormError(err instanceof Error ? err.message : 'Failed to save'); }
-    finally { setSaving(false); }
+      modal.close();
+      await load();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleDelete(id: string) {
@@ -151,24 +213,31 @@ export default function TagsPage() {
 
   return (
     <div className="p-6 space-y-5">
-    <PageHeader
-      eyebrow="Organization"
-      title="Tags"
-      description="Organize your scans with color-coded labels."
-      actions={
-        <Button onPress={openCreate} className="btn-primary inline-flex items-center gap-2" variant="primary">
-          <PlusSignIcon size={15} /> New Tag
-        </Button>
-      }
-    />
+      <PageHeader
+        eyebrow="Organization"
+        title="Tags"
+        description="Organize your scans with color-coded labels."
+        actions={
+          <Button
+            onPress={openCreate}
+            className="btn-primary inline-flex items-center gap-2"
+            variant="primary"
+          >
+            <PlusSignIcon size={15} /> New Tag
+          </Button>
+        }
+      />
 
       {error ? <FormAlert description={error} title="Tag loading failed" /> : null}
 
       {loading ? (
         <div className="surface-panel rounded-2xl overflow-hidden">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4 px-4 py-3.5"
-              style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}>
+            <div
+              key={i}
+              className="flex items-center gap-4 px-4 py-3.5"
+              style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+            >
               <Skeleton className="size-8 rounded-lg shrink-0" />
               <Skeleton className="h-4 w-28 rounded" />
               <div className="flex-1" />
@@ -192,23 +261,38 @@ export default function TagsPage() {
               key={tag.id}
               className="flex items-center gap-4 px-4 py-3.5 transition-colors"
               style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--row-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
               <div
                 className="size-4 rounded-full shrink-0"
-                style={{ background: tag.color, boxShadow: `0 0 8px ${tag.color}88`, outline: `2px solid ${tag.color}40`, outlineOffset: 2 }}
+                style={{
+                  background: tag.color,
+                  boxShadow: `0 0 8px ${tag.color}88`,
+                  outline: `2px solid ${tag.color}40`,
+                  outlineOffset: 2,
+                }}
               />
               <span
                 className="text-xs font-medium px-2.5 py-0.5 rounded-full shrink-0"
-                style={{ background: tag.color + '22', color: tag.color, border: `1px solid ${tag.color}44` }}
+                style={{
+                  background: tag.color + '22',
+                  color: tag.color,
+                  border: `1px solid ${tag.color}44`,
+                }}
               >
                 {tag.name}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate">{tag.name}</p>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate">
+                  {tag.name}
+                </p>
                 <div className="mt-1">
-                  <OwnershipBadge ownerType={tag.owner_type} ownerOrgId={tag.owner_org_id} orgNamesById={orgNamesById} />
+                  <OwnershipBadge
+                    ownerType={tag.owner_type}
+                    ownerOrgId={tag.owner_org_id}
+                    orgNamesById={orgNamesById}
+                  />
                 </div>
               </div>
               <span className="font-mono text-xs text-zinc-500">{tag.color}</span>
@@ -216,9 +300,27 @@ export default function TagsPage() {
                 <RowActionsMenu
                   label={`Open actions menu for tag ${tag.name}`}
                   items={[
-                    { id: 'share', label: 'Manage access', icon: <Shield01Icon size={15} />, onAction: () => openShareModal(tag) },
-                    { id: 'edit', label: 'Edit tag', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(tag) },
-                    { id: 'delete', label: 'Delete tag', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(tag.id); } },
+                    {
+                      id: 'share',
+                      label: 'Manage access',
+                      icon: <Shield01Icon size={15} />,
+                      onAction: () => openShareModal(tag),
+                    },
+                    {
+                      id: 'edit',
+                      label: 'Edit tag',
+                      icon: <PencilEdit01Icon size={15} />,
+                      onAction: () => openEdit(tag),
+                    },
+                    {
+                      id: 'delete',
+                      label: 'Delete tag',
+                      icon: <Delete01Icon size={15} />,
+                      variant: 'danger',
+                      onAction: () => {
+                        void handleDelete(tag.id);
+                      },
+                    },
                   ]}
                 />
               ) : null}
@@ -231,19 +333,35 @@ export default function TagsPage() {
         <Modal.Backdrop isDismissable>
           <Modal.Container size="sm" placement="center">
             <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editing ? 'Edit Tag' : 'New Tag'}</Modal.Heading>
+              <Modal.Header
+                className="px-6 py-4"
+                style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              >
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                  {editing ? 'Edit Tag' : 'New Tag'}
+                </Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
                 <form id="tag-form" onSubmit={handleSubmit} className="space-y-4">
                   {formError ? <FormAlert description={formError} title="Tag save failed" /> : null}
-                  <FormField label="Name" onChange={(e) => setName(e.target.value)} placeholder="production" required value={name} />
+                  <FormField
+                    label="Name"
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="production"
+                    required
+                    value={name}
+                  />
                   <div className="space-y-2.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Color</label>
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                      Color
+                    </label>
                     <div className="flex flex-wrap gap-2">
                       {COLORS.map((c) => (
-                        <button key={c} type="button" onClick={() => setColor(c)}
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setColor(c)}
                           className="size-7 rounded-full transition-all"
                           style={{
                             background: c,
@@ -251,27 +369,55 @@ export default function TagsPage() {
                             outline: color === c ? `2px solid ${c}` : `2px solid transparent`,
                             outlineOffset: 2,
                             transform: color === c ? 'scale(1.15)' : 'scale(1)',
-                          }} />
+                          }}
+                        />
                       ))}
-                      <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
-                        className="size-7 rounded-full cursor-pointer border-0 p-0 bg-transparent" title="Custom color" />
+                      <input
+                        type="color"
+                        value={color}
+                        onChange={(e) => setColor(e.target.value)}
+                        className="size-7 rounded-full cursor-pointer border-0 p-0 bg-transparent"
+                        title="Custom color"
+                      />
                     </div>
                     <div className="flex items-center gap-2 pt-1">
-                      <span className="size-3.5 rounded-full shrink-0" style={{ background: color, boxShadow: `0 0 6px ${color}88` }} />
+                      <span
+                        className="size-3.5 rounded-full shrink-0"
+                        style={{ background: color, boxShadow: `0 0 6px ${color}88` }}
+                      />
                       <span className="text-xs font-mono text-zinc-500">{color}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium ml-1"
-                        style={{ background: color + '22', color, border: `1px solid ${color}44` }}>
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full font-medium ml-1"
+                        style={{ background: color + '22', color, border: `1px solid ${color}44` }}
+                      >
                         {name || 'preview'}
                       </span>
                     </div>
                   </div>
                 </form>
               </Modal.Body>
-              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <Button onPress={modal.close} className="btn-secondary" type="button" variant="secondary">Cancel</Button>
-                <Button type="submit" form="tag-form" isDisabled={saving}
-                  className="btn-primary inline-flex items-center gap-2" variant="primary">
-                  {saving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              <Modal.Footer
+                className="px-6 py-4 flex gap-3 justify-end"
+                style={{ borderTop: '1px solid var(--border-subtle)' }}
+              >
+                <Button
+                  onPress={modal.close}
+                  className="btn-secondary"
+                  type="button"
+                  variant="secondary"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  form="tag-form"
+                  isDisabled={saving}
+                  className="btn-primary inline-flex items-center gap-2"
+                  variant="primary"
+                >
+                  {saving && (
+                    <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  )}
                   {editing ? 'Save' : 'Create'}
                 </Button>
               </Modal.Footer>
@@ -283,28 +429,57 @@ export default function TagsPage() {
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Tag Access</Modal.Heading>
+              <Modal.Header
+                className="px-6 py-4"
+                style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              >
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                  Manage Tag Access
+                </Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5 space-y-4">
-                {shareError ? <FormAlert description={shareError} title="Access update failed" /> : null}
+                {shareError ? (
+                  <FormAlert description={shareError} title="Access update failed" />
+                ) : null}
                 {shareTarget ? (
-                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                  <div
+                    className="rounded-xl px-4 py-3"
+                    style={{
+                      background: 'var(--row-hover)',
+                      border: '1px solid var(--surface-border)',
+                    }}
+                  >
                     <div className="flex items-center gap-3">
-                      <span className="size-4 rounded-full shrink-0" style={{ background: shareTarget.color, boxShadow: `0 0 8px ${shareTarget.color}88` }} />
-                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{shareTarget.name}</p>
+                      <span
+                        className="size-4 rounded-full shrink-0"
+                        style={{
+                          background: shareTarget.color,
+                          boxShadow: `0 0 8px ${shareTarget.color}88`,
+                        }}
+                      />
+                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                        {shareTarget.name}
+                      </p>
                     </div>
                     <div className="mt-2">
-                      <OwnershipBadge ownerType={shareTarget.owner_type} ownerOrgId={shareTarget.owner_org_id} orgNamesById={orgNamesById} />
+                      <OwnershipBadge
+                        ownerType={shareTarget.owner_type}
+                        ownerOrgId={shareTarget.owner_org_id}
+                        orgNamesById={orgNamesById}
+                      />
                     </div>
                   </div>
                 ) : null}
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Current access</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Organizations listed here can apply this tag to scans they manage.</p>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      Current access
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Organizations listed here can apply this tag to scans they manage.
+                    </p>
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
@@ -315,15 +490,35 @@ export default function TagsPage() {
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
-                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                        <div
+                          key={share.org_id}
+                          className="flex items-start justify-between gap-3 rounded-xl px-4 py-3"
+                          style={{
+                            background: 'var(--row-hover)',
+                            border: '1px solid var(--surface-border)',
+                          }}
+                        >
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
-                            <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>
+                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                              {share.org_name}
+                            </p>
+                            <p className="text-xs text-zinc-500 mt-0.5">
+                              {share.is_owner ? 'Owner workspace' : 'Shared access'}
+                            </p>
                           </div>
                           {share.is_owner ? (
                             <span className="text-xs font-medium text-zinc-500">Locked</span>
                           ) : (
-                            <Button type="button" onPress={() => { void handleRevokeShare(share.org_id); }} isDisabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50" isIconOnly variant="secondary">
+                            <Button
+                              type="button"
+                              onPress={() => {
+                                void handleRevokeShare(share.org_id);
+                              }}
+                              isDisabled={shareSaving}
+                              className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
+                              isIconOnly
+                              variant="secondary"
+                            >
                               <Delete01Icon size={15} />
                             </Button>
                           )}
@@ -335,14 +530,26 @@ export default function TagsPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Grant access</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Share this tag with another organization you manage.</p>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      Grant access
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Share this tag with another organization you manage.
+                    </p>
                   </div>
                   {availableShareTargets.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
+                    <p className="text-sm text-zinc-500">
+                      No additional organizations are available for sharing.
+                    </p>
                   ) : (
                     <div className="flex gap-2">
-                      <Select value={shareOrgId || '__none__'} onChange={value => setShareOrgId(String(value === '__none__' ? '' : value ?? ''))} className="flex-1">
+                      <Select
+                        value={shareOrgId || '__none__'}
+                        onChange={(value) =>
+                          setShareOrgId(String(value === '__none__' ? '' : (value ?? '')))
+                        }
+                        className="flex-1"
+                      >
                         <Select.Trigger className={selectTriggerCls}>
                           <Select.Value />
                           <Select.Indicator />
@@ -351,20 +558,40 @@ export default function TagsPage() {
                           <ListBox>
                             <ListBox.Item id="__none__">Select an organization</ListBox.Item>
                             {availableShareTargets.map((org) => (
-                              <ListBox.Item key={org.id} id={org.id}>{org.name}</ListBox.Item>
+                              <ListBox.Item key={org.id} id={org.id}>
+                                {org.name}
+                              </ListBox.Item>
                             ))}
                           </ListBox>
                         </Select.Popover>
                       </Select>
-                      <Button type="button" onPress={() => { void handleGrantShare(); }} isDisabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60" variant="primary">
+                      <Button
+                        type="button"
+                        onPress={() => {
+                          void handleGrantShare();
+                        }}
+                        isDisabled={!shareOrgId || shareSaving}
+                        className="btn-primary disabled:opacity-60"
+                        variant="primary"
+                      >
                         Grant
                       </Button>
                     </div>
                   )}
                 </div>
               </Modal.Body>
-              <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <Button onPress={shareModal.close} className="btn-secondary" type="button" variant="secondary">Close</Button>
+              <Modal.Footer
+                className="px-6 py-4 flex justify-end"
+                style={{ borderTop: '1px solid var(--border-subtle)' }}
+              >
+                <Button
+                  onPress={shareModal.close}
+                  className="btn-secondary"
+                  type="button"
+                  variant="secondary"
+                >
+                  Close
+                </Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

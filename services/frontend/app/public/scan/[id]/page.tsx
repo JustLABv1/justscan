@@ -7,12 +7,13 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type { Scan, Vulnerability } from '@/lib/api';
 import {
-  getPublicScan,
-  getPublicVulnerabilityContextAnalysis,
-  getToken,
-  listPublicVulnerabilities,
-  reScanPublic,
+    getPublicScan,
+    getPublicVulnerabilityContextAnalysis,
+    getToken,
+    listPublicVulnerabilities,
+    reScanPublic,
 } from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Button, Card, ListBox, Select, Table, useOverlayState } from '@heroui/react';
@@ -219,14 +220,12 @@ export default function PublicScanResultPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [vulnLoading, setVulnLoading] = useState(false);
   const [reScanning, setReScanning] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn] = useState(() => !!getToken());
   const [activeTab, setActiveTab] = useState<ResultTab>('overview');
   const vulnerabilityDetailsModal = useOverlayState();
   const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => setIsLoggedIn(!!getToken()), []);
 
   useEffect(() => {
     function fetchScan() {
@@ -270,39 +269,32 @@ export default function PublicScanResultPage() {
   }, [pkgInput]);
 
   useEffect(() => {
-    if (!scan || (scan.status !== 'completed' && scan.external_status !== 'blocked_by_xray_policy'))
-      return;
-    setVulnLoading(true);
-    listPublicVulnerabilities(
-      id,
-      page,
-      LIMIT,
-      severityFilter || undefined,
-      pkgFilter || undefined,
-      hasFix || undefined,
-      minCvss || undefined,
-      sortBy,
-      sortDir
-    )
-      .then((res) => {
-        setVulns(res.data ?? []);
-        setVulnTotal(res.total);
-      })
-      .catch(() => {})
-      .finally(() => setVulnLoading(false));
-  }, [
-    id,
-    scan,
-    scan?.status,
-    scan?.external_status,
-    page,
-    severityFilter,
-    pkgFilter,
-    minCvss,
-    hasFix,
-    sortBy,
-    sortDir,
-  ]);
+    return deferEffect(() => {
+      if (
+        !scan ||
+        (scan.status !== 'completed' && scan.external_status !== 'blocked_by_xray_policy')
+      )
+        return;
+      setVulnLoading(true);
+      listPublicVulnerabilities(
+        id,
+        page,
+        LIMIT,
+        severityFilter || undefined,
+        pkgFilter || undefined,
+        hasFix || undefined,
+        minCvss || undefined,
+        sortBy,
+        sortDir
+      )
+        .then((res) => {
+          setVulns(res.data ?? []);
+          setVulnTotal(res.total);
+        })
+        .catch(() => {})
+        .finally(() => setVulnLoading(false));
+    });
+  }, [id, scan, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir]);
 
   async function handleRescan() {
     setReScanning(true);

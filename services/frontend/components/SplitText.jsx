@@ -1,8 +1,9 @@
-import { useRef, useEffect, useState } from 'react';
+import { deferEffect } from '@/lib/defer-effect';
+import { useGSAP } from '@gsap/react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { SplitText as GSAPSplitText } from 'gsap/SplitText';
-import { useGSAP } from '@gsap/react';
+import { useEffect, useRef, useState } from 'react';
 
 gsap.registerPlugin(ScrollTrigger, GSAPSplitText, useGSAP);
 
@@ -19,7 +20,7 @@ const SplitText = ({
   rootMargin = '-100px',
   textAlign = 'center',
   tag = 'p',
-  onLetterAnimationComplete
+  onLetterAnimationComplete,
 }) => {
   const ref = useRef(null);
   const animationCompletedRef = useRef(false);
@@ -32,13 +33,15 @@ const SplitText = ({
   }, [onLetterAnimationComplete]);
 
   useEffect(() => {
-    if (document.fonts.status === 'loaded') {
-      setFontsLoaded(true);
-    } else {
-      document.fonts.ready.then(() => {
+    return deferEffect(() => {
+      if (document.fonts.status === 'loaded') {
         setFontsLoaded(true);
-      });
-    }
+      } else {
+        document.fonts.ready.then(() => {
+          setFontsLoaded(true);
+        });
+      }
+    });
   }, []);
 
   useGSAP(
@@ -70,7 +73,7 @@ const SplitText = ({
       const start = `top ${startPct}%${sign}`;
 
       let targets;
-      const assignTargets = self => {
+      const assignTargets = (self) => {
         if (splitType.includes('chars') && self.chars.length) targets = self.chars;
         if (!targets && splitType.includes('words') && self.words.length) targets = self.words;
         if (!targets && splitType.includes('lines') && self.lines.length) targets = self.lines;
@@ -85,7 +88,7 @@ const SplitText = ({
         wordsClass: 'split-word',
         charsClass: 'split-char',
         reduceWhiteSpace: false,
-        onSplit: self => {
+        onSplit: (self) => {
           assignTargets(self);
           const tween = gsap.fromTo(
             targets,
@@ -100,24 +103,24 @@ const SplitText = ({
                 start,
                 once: true,
                 fastScrollEnd: true,
-                anticipatePin: 0.4
+                anticipatePin: 0.4,
               },
               onComplete: () => {
                 animationCompletedRef.current = true;
                 onCompleteRef.current?.();
               },
               willChange: 'transform, opacity',
-              force3D: true
+              force3D: true,
             }
           );
           return tween;
-        }
+        },
       });
 
       el._rbsplitInstance = splitInstance;
 
       return () => {
-        ScrollTrigger.getAll().forEach(st => {
+        ScrollTrigger.getAll().forEach((st) => {
           if (st.trigger === el) st.kill();
         });
         try {
@@ -139,9 +142,9 @@ const SplitText = ({
         JSON.stringify(to),
         threshold,
         rootMargin,
-        fontsLoaded
+        fontsLoaded,
       ],
-      scope: ref
+      scope: ref,
     }
   );
 
@@ -152,7 +155,7 @@ const SplitText = ({
       display: 'inline-block',
       whiteSpace: 'normal',
       wordWrap: 'break-word',
-      willChange: 'transform, opacity'
+      willChange: 'transform, opacity',
     };
     const classes = `split-parent ${className}`;
     const Tag = tag || 'p';

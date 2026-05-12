@@ -2,11 +2,11 @@
 import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
 import { useToast } from '@/components/toast';
 import {
-  OwnershipBadge,
-  SeverityBadge,
-  SourceBadge,
-  StatusBadge,
-  SuppressionSourceBadge,
+    OwnershipBadge,
+    SeverityBadge,
+    SourceBadge,
+    StatusBadge,
+    SuppressionSourceBadge,
 } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
@@ -18,93 +18,94 @@ import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import type {
-  ComplianceResult,
-  Org,
-  ResourceShare,
-  SBOMComponent,
-  Scan,
-  Suppression,
-  Tag,
-  Vulnerability,
-  VulnerabilityViewPreferenceResponse,
-  VulnerabilityViewSettings,
+    ComplianceResult,
+    Org,
+    ResourceShare,
+    SBOMComponent,
+    Scan,
+    Suppression,
+    Tag,
+    Vulnerability,
+    VulnerabilityViewPreferenceResponse,
+    VulnerabilityViewSettings,
 } from '@/lib/api';
 import {
-  addTagToScan,
-  assignScanToOrg,
-  cancelScan,
-  createComment,
-  createShare,
-  deleteComment,
-  deleteShare,
-  deleteSuppression,
-  getScan,
-  getScanCompliance,
-  getScanSBOM,
-  getScanVulnerabilityViewSettings,
-  getTokenType,
-  getUser,
-  getVulnerabilityContextAnalysis,
-  grantScanOrgAccess,
-  listOrgs,
-  listScanOrgGrants,
-  listScans,
-  listSuppressionShares,
-  listTags,
-  listVulnerabilities,
-  reEvaluateCompliance,
-  removeScanFromOrg,
-  removeTagFromScan,
-  reScan,
-  resetScanVulnerabilityViewPreference,
-  revokeScanOrgAccess,
-  saveScanVulnerabilityViewPreference,
-  shareSuppression,
-  unshareSuppression,
-  upsertSuppression,
+    addTagToScan,
+    assignScanToOrg,
+    cancelScan,
+    createComment,
+    createShare,
+    deleteComment,
+    deleteShare,
+    deleteSuppression,
+    getScan,
+    getScanCompliance,
+    getScanSBOM,
+    getScanVulnerabilityViewSettings,
+    getTokenType,
+    getUser,
+    getVulnerabilityContextAnalysis,
+    grantScanOrgAccess,
+    listOrgs,
+    listScanOrgGrants,
+    listScans,
+    listSuppressionShares,
+    listTags,
+    listVulnerabilities,
+    reEvaluateCompliance,
+    removeScanFromOrg,
+    removeTagFromScan,
+    reScan,
+    resetScanVulnerabilityViewPreference,
+    revokeScanOrgAccess,
+    saveScanVulnerabilityViewPreference,
+    shareSuppression,
+    unshareSuppression,
+    upsertSuppression,
 } from '@/lib/api';
 import { formatIgnoreRuleStatusLabel, getBlockedPolicyDetails } from '@/lib/blocked-policy';
+import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
-  Accordion,
-  Alert,
-  Button,
-  Calendar,
-  Card,
-  Chip,
-  DateField,
-  DatePicker,
-  Dropdown,
-  Label,
-  ListBox,
-  Modal,
-  Select,
-  Table,
-  useOverlayState,
+    Accordion,
+    Alert,
+    Button,
+    Calendar,
+    Card,
+    Chip,
+    DateField,
+    DatePicker,
+    Dropdown,
+    Label,
+    ListBox,
+    Modal,
+    Select,
+    Table,
+    useOverlayState,
 } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
 import {
-  ArrowLeft01Icon,
-  Cancel01Icon,
-  Comment01Icon,
-  CpuIcon,
-  Delete01Icon,
-  Delete02Icon,
-  FileExportIcon,
-  GitCompareIcon,
-  MoreVerticalIcon,
-  Refresh01Icon,
-  Share01Icon,
-  Shield01Icon,
-  ShieldKeyIcon,
+    ArrowLeft01Icon,
+    Cancel01Icon,
+    Comment01Icon,
+    CpuIcon,
+    Delete01Icon,
+    Delete02Icon,
+    FileExportIcon,
+    GitCompareIcon,
+    MoreVerticalIcon,
+    Refresh01Icon,
+    Share01Icon,
+    Shield01Icon,
+    ShieldKeyIcon,
 } from 'hugeicons-react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ScannerDatabaseCard,
-  ScanningAnimation,
-  ScanStepTimeline,
+    ScannerDatabaseCard,
+    ScanningAnimation,
+    ScanStepTimeline,
 } from '../../../../components/scans/scan-runtime';
 
 const inputCls = nativeFieldClassName;
@@ -595,18 +596,20 @@ export default function ScanDetailPage() {
   );
 
   useEffect(() => {
-    defaultTabInitializedRef.current = false;
-    vulnerabilityViewInitializedRef.current = false;
-    setActiveTab('vulns');
-    setViewSettingsReady(false);
-    setViewPreference(null);
-    setSeverityFilter('');
-    setMinCvss(0);
-    setHasFix(false);
-    setXrayPolicyFirst(false);
-    setSortBy('severity');
-    setSortDir('asc');
-    setPage(1);
+    return deferEffect(() => {
+      defaultTabInitializedRef.current = false;
+      vulnerabilityViewInitializedRef.current = false;
+      setActiveTab('vulns');
+      setViewSettingsReady(false);
+      setViewPreference(null);
+      setSeverityFilter('');
+      setMinCvss(0);
+      setHasFix(false);
+      setXrayPolicyFirst(false);
+      setSortBy('severity');
+      setSortDir('asc');
+      setPage(1);
+    });
   }, [id]);
 
   // Initial load
@@ -653,54 +656,59 @@ export default function ScanDetailPage() {
   }, [pkgInput]);
 
   useEffect(() => {
-    if (!scan || defaultTabInitializedRef.current) return;
-    if (scan.status === 'pending' || scan.status === 'running') return;
+    return deferEffect(() => {
+      if (!scan || defaultTabInitializedRef.current) return;
+      if (scan.status === 'pending' || scan.status === 'running') return;
 
-    const requestedTab = searchParams.get('tab');
-    if (isScanTab(requestedTab)) {
-      setActiveTab(requestedTab);
+      const requestedTab = searchParams.get('tab');
+      if (isScanTab(requestedTab)) {
+        setActiveTab(requestedTab);
+        defaultTabInitializedRef.current = true;
+        return;
+      }
+
       defaultTabInitializedRef.current = true;
-      return;
-    }
-
-    defaultTabInitializedRef.current = true;
+    });
   }, [blockedPolicyDetails, scan, searchParams]);
 
   useEffect(() => {
-    if (!scan) return;
-    if (scan.status === 'pending' || scan.status === 'running') {
-      setViewSettingsReady(true);
-      return;
-    }
-    if (vulnerabilityViewInitializedRef.current) return;
-
     let cancelled = false;
-    setViewSettingsReady(false);
-    getScanVulnerabilityViewSettings(id)
-      .then((preference) => {
-        if (cancelled) return;
-        applyVulnerabilityViewPreference(preference);
-        vulnerabilityViewInitializedRef.current = true;
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setViewPreference({
-          settings: DEFAULT_VULNERABILITY_VIEW_SETTINGS,
-          source: 'system',
-          scope_type: 'personal',
-          scope_ref: '',
-          has_user_override: false,
+    const cancelDeferred = deferEffect(() => {
+      if (!scan) return;
+      if (scan.status === 'pending' || scan.status === 'running') {
+        setViewSettingsReady(true);
+        return;
+      }
+      if (vulnerabilityViewInitializedRef.current) return;
+
+      setViewSettingsReady(false);
+      getScanVulnerabilityViewSettings(id)
+        .then((preference) => {
+          if (cancelled) return;
+          applyVulnerabilityViewPreference(preference);
+          vulnerabilityViewInitializedRef.current = true;
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setViewPreference({
+            settings: DEFAULT_VULNERABILITY_VIEW_SETTINGS,
+            source: 'system',
+            scope_type: 'personal',
+            scope_ref: '',
+            has_user_override: false,
+          });
+          vulnerabilityViewInitializedRef.current = true;
+        })
+        .finally(() => {
+          if (!cancelled) setViewSettingsReady(true);
         });
-        vulnerabilityViewInitializedRef.current = true;
-      })
-      .finally(() => {
-        if (!cancelled) setViewSettingsReady(true);
-      });
+    });
 
     return () => {
       cancelled = true;
+      cancelDeferred();
     };
-  }, [applyVulnerabilityViewPreference, id, scan?.id, scan?.status]);
+  }, [applyVulnerabilityViewPreference, id, scan]);
 
   useEffect(() => {
     if (!scan || scan.status === 'pending' || scan.status === 'running') return;
@@ -722,26 +730,30 @@ export default function ScanDetailPage() {
   }, [activeTab, pathname, router, scan, searchParams]);
 
   useEffect(() => {
-    if (!vulnerabilityDetailsModal.isOpen) {
-      setSelectedVulnerability(null);
-    }
+    return deferEffect(() => {
+      if (!vulnerabilityDetailsModal.isOpen) {
+        setSelectedVulnerability(null);
+      }
+    });
   }, [vulnerabilityDetailsModal.isOpen]);
 
   // Reset suppress form when expanded vuln changes
   useEffect(() => {
-    const v = vulns.find((v) => v.id === expandedVuln);
-    setSuppressError('');
-    if (v?.suppression) {
-      setSuppressStatus(v.suppression.status);
-      setSuppressJustification(v.suppression.justification);
-      setSuppressExpiry(
-        v.suppression.expires_at ? parseDate(v.suppression.expires_at.slice(0, 10)) : null
-      );
-    } else {
-      setSuppressStatus('accepted');
-      setSuppressJustification('');
-      setSuppressExpiry(null);
-    }
+    return deferEffect(() => {
+      const v = vulns.find((v) => v.id === expandedVuln);
+      setSuppressError('');
+      if (v?.suppression) {
+        setSuppressStatus(v.suppression.status);
+        setSuppressJustification(v.suppression.justification);
+        setSuppressExpiry(
+          v.suppression.expires_at ? parseDate(v.suppression.expires_at.slice(0, 10)) : null
+        );
+      } else {
+        setSuppressStatus('accepted');
+        setSuppressJustification('');
+        setSuppressExpiry(null);
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedVuln]);
 
@@ -756,30 +768,34 @@ export default function ScanDetailPage() {
 
   // Load SBOM when tab is first opened
   useEffect(() => {
-    if (activeTab !== 'sbom' || sbomLoaded || !scan || scan.status !== 'completed') return;
-    setSbomLoading(true);
-    getScanSBOM(id, sbomNameFilter || undefined, sbomTypeFilter || undefined)
-      .then((res) => {
-        setSbomComponents(res.data ?? []);
-        setSbomTotal(res.total);
-        setSbomLoaded(true);
-      })
-      .catch(() => {})
-      .finally(() => setSbomLoading(false));
+    return deferEffect(() => {
+      if (activeTab !== 'sbom' || sbomLoaded || !scan || scan.status !== 'completed') return;
+      setSbomLoading(true);
+      getScanSBOM(id, sbomNameFilter || undefined, sbomTypeFilter || undefined)
+        .then((res) => {
+          setSbomComponents(res.data ?? []);
+          setSbomTotal(res.total);
+          setSbomLoaded(true);
+        })
+        .catch(() => {})
+        .finally(() => setSbomLoading(false));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, scan?.status]);
 
   // Reload SBOM when filters change (after first load)
   useEffect(() => {
-    if (!sbomLoaded) return;
-    setSbomLoading(true);
-    getScanSBOM(id, sbomNameFilter || undefined, sbomTypeFilter || undefined)
-      .then((res) => {
-        setSbomComponents(res.data ?? []);
-        setSbomTotal(res.total);
-      })
-      .catch(() => {})
-      .finally(() => setSbomLoading(false));
+    return deferEffect(() => {
+      if (!sbomLoaded) return;
+      setSbomLoading(true);
+      getScanSBOM(id, sbomNameFilter || undefined, sbomTypeFilter || undefined)
+        .then((res) => {
+          setSbomComponents(res.data ?? []);
+          setSbomTotal(res.total);
+        })
+        .catch(() => {})
+        .finally(() => setSbomLoading(false));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sbomNameFilter, sbomTypeFilter]);
 
@@ -832,7 +848,7 @@ export default function ScanDetailPage() {
   }
 
   useEffect(() => {
-    loadVulns();
+    return deferEffect(loadVulns);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     id,

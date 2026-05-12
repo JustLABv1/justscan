@@ -11,34 +11,46 @@ import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-    createWatchlistItem,
-    deleteWatchlistItem,
-    getDefaultScannerCapabilities,
-    getTokenType,
-    getWorkScope,
-    listRegistriesWithCapabilities,
-    listWatchlist,
-    listWatchlistShares,
-    RegistryWithHealth,
-    ResourceShare,
-    ScannerCapabilities,
-    shareWatchlistItem,
-    triggerWatchlistScan,
-    unshareWatchlistItem,
-    updateWatchlistItem,
-    WatchlistItem,
+  createWatchlistItem,
+  deleteWatchlistItem,
+  getDefaultScannerCapabilities,
+  getTokenType,
+  getWorkScope,
+  listRegistriesWithCapabilities,
+  listWatchlist,
+  listWatchlistShares,
+  RegistryWithHealth,
+  ResourceShare,
+  ScannerCapabilities,
+  shareWatchlistItem,
+  triggerWatchlistScan,
+  unshareWatchlistItem,
+  updateWatchlistItem,
+  WatchlistItem,
 } from '@/lib/api';
 import { cronToHuman, type HourCyclePreference } from '@/lib/cron';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, ListBox, Modal, Select, Switch, Table, useOverlayState } from '@heroui/react';
 import {
-    Clock01Icon,
-    Delete01Icon,
-    EyeIcon,
-    PencilEdit01Icon,
-    PlayIcon,
-    PlusSignIcon,
+  Alert,
+  Button,
+  Label,
+  ListBox,
+  Modal,
+  Select,
+  Switch,
+  Table,
+  Tooltip,
+  useOverlayState,
+} from '@heroui/react';
+import {
+  BiometricAccessIcon,
+  Clock01Icon,
+  Delete01Icon,
+  EyeIcon,
+  PencilEdit01Icon,
+  PlayIcon,
+  PlusSignIcon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
@@ -363,7 +375,7 @@ export default function WatchlistPage() {
           action={{ label: '+ Add Image', onClick: openCreate }}
         />
       ) : (
-        <Table variant="secondary">
+        <Table>
           <Table.ScrollContainer>
             <Table.Content aria-label="Watchlist images" className="min-w-[1080px]">
               <Table.Header>
@@ -373,7 +385,7 @@ export default function WatchlistPage() {
                 <Table.Column>Registry</Table.Column>
                 <Table.Column>Status</Table.Column>
                 <Table.Column>Last Scan</Table.Column>
-                <Table.Column>Actions</Table.Column>
+                <Table.Column className="justify-end flex">Actions</Table.Column>
               </Table.Header>
               <Table.Body>
                 {items.map((item) => {
@@ -462,49 +474,57 @@ export default function WatchlistPage() {
                       </Table.Cell>
                       <Table.Cell>
                         <div className="flex items-center justify-end gap-1">
-                          <Button
-                            onPress={() => handleTrigger(item.id)}
-                            isDisabled={triggering === item.id}
-                            className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 disabled:opacity-50 transition-colors p-1.5"
-                            isIconOnly
-                            title="Scan now"
-                            variant="secondary"
-                          >
-                            {triggering === item.id ? (
-                              <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-400 rounded-full animate-spin" />
-                            ) : (
-                              <PlayIcon size={15} />
-                            )}
-                          </Button>
-                          <Button
-                            onPress={() => openEdit(item)}
-                            className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5"
-                            isIconOnly
-                            title="Edit"
-                            variant="secondary"
-                          >
-                            <PencilEdit01Icon size={15} />
-                          </Button>
-                          {canManageAccess(item) && (
+                          <Tooltip delay={0}>
                             <Button
-                              onPress={() => openShareModal(item)}
-                              className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1.5"
+                              onPress={() => handleTrigger(item.id)}
+                              isDisabled={triggering === item.id}
                               isIconOnly
-                              title="Manage access"
                               variant="secondary"
                             >
-                              <EyeIcon size={15} />
+                              {triggering === item.id ? (
+                                <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-400 rounded-full animate-spin" />
+                              ) : (
+                                <PlayIcon size={15} />
+                              )}
                             </Button>
+                            <Tooltip.Content>
+                              <p>Scan now</p>
+                            </Tooltip.Content>
+                          </Tooltip>
+                          <Tooltip delay={0}>
+                            <Button onPress={() => openEdit(item)} isIconOnly variant="tertiary">
+                              <PencilEdit01Icon size={15} />
+                            </Button>
+                            <Tooltip.Content>
+                              <p>Edit</p>
+                            </Tooltip.Content>
+                          </Tooltip>
+                          {canManageAccess(item) && (
+                            <Tooltip delay={0}>
+                              <Button
+                                onPress={() => openShareModal(item)}
+                                isIconOnly
+                                variant="tertiary"
+                              >
+                                <BiometricAccessIcon size={15} />
+                              </Button>
+                              <Tooltip.Content>
+                                <p>Manage access</p>
+                              </Tooltip.Content>
+                            </Tooltip>
                           )}
-                          <Button
-                            onPress={() => handleDelete(item.id)}
-                            className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1.5"
-                            isIconOnly
-                            title="Delete"
-                            variant="secondary"
-                          >
-                            <Delete01Icon size={15} />
-                          </Button>
+                          <Tooltip delay={0}>
+                            <Button
+                              onPress={() => handleDelete(item.id)}
+                              isIconOnly
+                              variant="danger-soft"
+                            >
+                              <Delete01Icon size={15} />
+                            </Button>
+                            <Tooltip.Content>
+                              <p>Delete</p>
+                            </Tooltip.Content>
+                          </Tooltip>
                         </div>
                       </Table.Cell>
                     </Table.Row>
@@ -519,29 +539,22 @@ export default function WatchlistPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+            <Modal.Dialog className="overflow-hidden">
+              <Modal.Header>
+                <Modal.Heading className="font-semibold">
                   {editing ? 'Edit Watchlist Item' : 'Add to Watchlist'}
                 </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5">
+              <Modal.Body className="py-5">
                 <form id="watchlist-form" onSubmit={handleSubmit} className="space-y-4">
                   {formError && (
-                    <div
-                      className="rounded-xl px-3 py-2.5 text-sm"
-                      style={{
-                        background: 'rgba(239,68,68,0.1)',
-                        border: '1px solid rgba(239,68,68,0.2)',
-                        color: '#f87171',
-                      }}
-                    >
-                      {formError}
-                    </div>
+                    <Alert status="danger" className="bg-danger-soft">
+                      <Alert.Indicator />
+                      <Alert.Content>
+                        <Alert.Title>{formError}</Alert.Title>
+                      </Alert.Content>
+                    </Alert>
                   )}
                   <div className="flex gap-3">
                     <FormField
@@ -550,7 +563,7 @@ export default function WatchlistPage() {
                       value={imageName}
                       onChange={(e) => setImageName(e.target.value)}
                       required
-                      className="font-mono"
+                      className="bg-surface-secondary"
                       containerClassName="flex-1"
                     />
                     <FormField
@@ -559,7 +572,7 @@ export default function WatchlistPage() {
                       value={imageTag}
                       onChange={(e) => setImageTag(e.target.value)}
                       required
-                      className="font-mono"
+                      className="bg-surface-secondary"
                       containerClassName="w-28"
                     />
                   </div>
@@ -569,7 +582,7 @@ export default function WatchlistPage() {
                     value={schedule}
                     onChange={(e) => setSchedule(e.target.value)}
                     required
-                    className="font-mono"
+                    className="bg-surface-secondary"
                     description="e.g. 0 2 * * * = daily at 2:00 in the selected timezone"
                   />
                   <p className="text-xs font-medium" style={{ color: 'rgba(167,139,250,0.88)' }}>
@@ -583,7 +596,7 @@ export default function WatchlistPage() {
                       value={timezone}
                       onChange={(e) => setTimezone(e.target.value)}
                       required
-                      className="font-mono"
+                      className="bg-surface-secondary"
                     />
                     <datalist id="watchlist-timezone-options">
                       {TIMEZONE_OPTIONS.map((zone) => (
@@ -599,7 +612,7 @@ export default function WatchlistPage() {
                   </div>
                   {registryOptions.length > 0 && (
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                      <label className="text-sm font-medium">
                         Registry{' '}
                         <span className="text-zinc-400 dark:text-zinc-600 font-normal">
                           (optional)
@@ -610,8 +623,9 @@ export default function WatchlistPage() {
                         onChange={(value) =>
                           setRegistryId(String(value === '__none__' ? '' : (value ?? '')))
                         }
+                        className="pt-1"
                       >
-                        <Select.Trigger className={selectTriggerCls}>
+                        <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
@@ -642,27 +656,23 @@ export default function WatchlistPage() {
                     </div>
                   )}
                   <Switch isSelected={enabled} onChange={setEnabled}>
-                    Enabled
+                    <Switch.Control>
+                      <Switch.Thumb />
+                    </Switch.Control>
+                    <Switch.Content>
+                      <Label className="text-sm">Enabled</Label>
+                    </Switch.Content>
                   </Switch>
                 </form>
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex gap-3 justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <Button
-                  onPress={modal.close}
-                  className="btn-secondary"
-                  type="button"
-                  variant="secondary"
-                >
+              <Modal.Footer>
+                <Button onPress={modal.close} variant="secondary">
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   form="watchlist-form"
                   isDisabled={saving || xrayOnlyWithoutRegistries}
-                  className="btn-primary disabled:opacity-60"
                   variant="primary"
                 >
                   {saving && (

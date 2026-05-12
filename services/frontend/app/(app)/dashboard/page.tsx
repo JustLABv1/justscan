@@ -22,10 +22,12 @@ import {
   getTokenType,
   getUser,
   listScans,
+  listWatchlist,
   Scan,
   ScannerHealth,
+  WatchlistItem,
 } from '@/lib/api';
-import { Card } from '@heroui/react';
+import { Button, Card, Modal, useOverlayState } from '@heroui/react';
 import { Activity01Icon, Add01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -140,6 +142,350 @@ function buildTrendSeries(
 
 function sumAvgFindings(point: DashboardVulnTrendPoint): number {
   return point.critical + point.high + point.medium + point.low + point.unknown;
+}
+
+type DashboardDrilldownKey = 'total' | 'completed' | 'attention' | 'watchlist';
+
+function mergeUniqueScans(groups: Scan[][]): Scan[] {
+  const seen = new Set<string>();
+  const merged: Scan[] = [];
+
+  for (const group of groups) {
+    for (const scan of group) {
+      if (seen.has(scan.id)) continue;
+      seen.add(scan.id);
+      merged.push(scan);
+    }
+  }
+
+  return merged.sort((left, right) => {
+    const leftTime = new Date(left.started_at ?? left.created_at).getTime();
+    const rightTime = new Date(right.started_at ?? right.created_at).getTime();
+    return rightTime - leftTime;
+  });
+}
+
+function StatDrilldownCard({
+  title,
+  description,
+  value,
+  onPress,
+}: {
+  title: string;
+  description: React.ReactNode;
+  value: React.ReactNode;
+  onPress: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPress}
+      className="group w-full text-left"
+      aria-haspopup="dialog"
+    >
+      <Card className="transition-transform duration-150 group-hover:-translate-y-0.5 group-focus-visible:-translate-y-0.5 group-focus-visible:outline-none group-focus-visible:ring-2 group-focus-visible:ring-violet-400/70">
+        <Card.Header>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <Card.Title>{title}</Card.Title>
+              <Card.Description>{description}</Card.Description>
+            </div>
+            <p className="text-xl font-bold">{value}</p>
+          </div>
+        </Card.Header>
+      </Card>
+    </button>
+  );
+}
+
+function WatchlistModalRow({ item }: { item: WatchlistItem }) {
+  return (
+    <div
+      className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
+      style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}
+    >
+      <div className="min-w-0">
+        <p className="truncate font-mono text-sm" style={{ color: 'var(--text-primary)' }}>
+          {item.image_name}:{item.image_tag}
+        </p>
+        <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+          {item.enabled ? `Scheduled ${item.schedule}` : 'Paused'} · {item.timezone}
+        </p>
+      </div>
+      <span
+        className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+        style={
+          item.enabled
+            ? {
+                background: 'rgba(52,211,153,0.12)',
+                border: '1px solid rgba(52,211,153,0.22)',
+                color: '#34d399',
+              }
+            : {
+                background: 'rgba(161,161,170,0.12)',
+                border: '1px solid rgba(161,161,170,0.22)',
+                color: 'var(--text-muted)',
+              }
+        }
+      >
+        {item.enabled ? 'Active' : 'Paused'}
+      </span>
+    </div>
+  );
+}
+
+function DashboardDrilldownModal({
+  state,
+  activeCard,
+  totalScans,
+  completedCount,
+  watchlistCount,
+  needsAttentionTotal,
+  attentionFilter,
+  onAttentionFilterChange,
+  recentActivityRange,
+  onRecentActivityRangeChange,
+  recentActivityRangeLabel,
+  totalAttentionForFilter,
+  genericFailedCount,
+  blockedPolicyCount,
+  activeQueueCount,
+  scans,
+  scansLoading,
+  scansError,
+  watchlistItems,
+  watchlistLoading,
+  watchlistError,
+  triageHref,
+  recentActivityHref,
+}: {
+  state: ReturnType<typeof useOverlayState>;
+  activeCard: DashboardDrilldownKey | null;
+  totalScans: number;
+  completedCount: number;
+  watchlistCount: number;
+  needsAttentionTotal: number;
+  attentionFilter: 'all' | 'failed' | 'blocked' | 'running';
+  onAttentionFilterChange: (value: 'all' | 'failed' | 'blocked' | 'running') => void;
+  recentActivityRange: RecentActivityRange;
+  onRecentActivityRangeChange: (value: RecentActivityRange) => void;
+  recentActivityRangeLabel: string;
+  totalAttentionForFilter: number;
+  genericFailedCount: number;
+  blockedPolicyCount: number;
+  activeQueueCount: number;
+  scans: Scan[];
+  scansLoading: boolean;
+  scansError: string;
+  watchlistItems: WatchlistItem[];
+  watchlistLoading: boolean;
+  watchlistError: string;
+  triageHref: string;
+  recentActivityHref: string;
+}) {
+  if (!activeCard) return null;
+
+  const isAttention = activeCard === 'attention';
+  const isWatchlist = activeCard === 'watchlist';
+  const heading =
+    activeCard === 'total'
+      ? 'Recent scans'
+      : activeCard === 'completed'
+        ? 'Completed scans'
+        : activeCard === 'attention'
+          ? 'Needs attention'
+          : 'Watchlist';
+  const description =
+    activeCard === 'total'
+      ? `${totalScans.toLocaleString()} total scans overall. Showing activity from ${recentActivityRangeLabel.toLowerCase()}.`
+      : activeCard === 'completed'
+        ? `${completedCount.toLocaleString()} completed scans overall. Showing completions from ${recentActivityRangeLabel.toLowerCase()}.`
+        : activeCard === 'attention'
+          ? `${needsAttentionTotal.toLocaleString()} scans currently need intervention.`
+          : `${watchlistCount.toLocaleString()} watchlist item${watchlistCount === 1 ? '' : 's'} in the current scope.`;
+  const emptyMessage =
+    activeCard === 'completed'
+      ? `No completed scans in ${recentActivityRangeLabel.toLowerCase()}.`
+      : activeCard === 'attention'
+        ? attentionFilter === 'all'
+          ? 'No failed, blocked, or in-flight scans right now.'
+          : `No ${attentionFilter === 'blocked' ? 'policy-blocked' : attentionFilter} scans right now.`
+        : `No scans started in ${recentActivityRangeLabel.toLowerCase()}.`;
+  const primaryHref = isAttention ? triageHref : isWatchlist ? '/watchlist' : recentActivityHref;
+  const primaryLabel = isAttention
+    ? 'Open full triage'
+    : isWatchlist
+      ? 'Open watchlist'
+      : 'Open full list';
+
+  return (
+    <Modal state={state}>
+      <Modal.Backdrop isDismissable>
+        <Modal.Container size="lg" placement="center">
+          <Modal.Dialog className="surface-modal overflow-hidden rounded-[28px] w-[min(920px,calc(100vw-1.5rem))] max-w-none">
+            <Modal.Header
+              className="px-6 py-5"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+            >
+              <div>
+                <Modal.Heading className="text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">
+                  {heading}
+                </Modal.Heading>
+                <p className="mt-1 text-sm text-zinc-500">{description}</p>
+              </div>
+              <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+            </Modal.Header>
+            <Modal.Body className="min-h-0 px-6 py-5">
+              {isWatchlist ? (
+                <>
+                  {watchlistError ? (
+                    <p className="py-8 text-center text-sm" style={{ color: '#f87171' }}>
+                      {watchlistError}
+                    </p>
+                  ) : watchlistLoading ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 4 }).map((_, index) => (
+                        <RecentScanRowSkeleton key={index} />
+                      ))}
+                    </div>
+                  ) : watchlistItems.length === 0 ? (
+                    <p className="py-8 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
+                      No watchlist items in this scope.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {watchlistItems.map((item) => (
+                        <WatchlistModalRow key={item.id} item={item} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    {isAttention ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {(
+                          [
+                            {
+                              key: 'all' as const,
+                              label: 'All',
+                              count: needsAttentionTotal,
+                              activeBg: 'rgba(124,58,237,0.12)',
+                              activeBorder: 'rgba(124,58,237,0.3)',
+                              activeColor: '#a78bfa',
+                            },
+                            {
+                              key: 'failed' as const,
+                              label: 'Failed',
+                              count: genericFailedCount,
+                              activeBg: 'rgba(239,68,68,0.1)',
+                              activeBorder: 'rgba(239,68,68,0.3)',
+                              activeColor: '#f87171',
+                            },
+                            {
+                              key: 'blocked' as const,
+                              label: 'Policy blocked',
+                              count: blockedPolicyCount,
+                              activeBg: 'rgba(249,115,22,0.1)',
+                              activeBorder: 'rgba(249,115,22,0.3)',
+                              activeColor: '#fb923c',
+                            },
+                            {
+                              key: 'running' as const,
+                              label: 'Running',
+                              count: activeQueueCount,
+                              activeBg: 'rgba(59,130,246,0.1)',
+                              activeBorder: 'rgba(59,130,246,0.3)',
+                              activeColor: '#60a5fa',
+                            },
+                          ] as const
+                        ).map(({ key, label, count, activeBg, activeBorder, activeColor }) => {
+                          const isActive = attentionFilter === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => onAttentionFilterChange(key)}
+                              className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition-all"
+                              style={
+                                isActive
+                                  ? {
+                                      background: activeBg,
+                                      border: `1px solid ${activeBorder}`,
+                                      color: activeColor,
+                                    }
+                                  : {
+                                      background: 'transparent',
+                                      border: '1px solid var(--surface-border)',
+                                      color: 'var(--text-faint)',
+                                    }
+                              }
+                            >
+                              {label}
+                              <span className="tabular-nums opacity-70">{count}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <RecentActivityRangePicker
+                        value={recentActivityRange}
+                        onChange={onRecentActivityRangeChange}
+                      />
+                    )}
+
+                    <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                      {isAttention
+                        ? `${totalAttentionForFilter} scan${totalAttentionForFilter === 1 ? '' : 's'}`
+                        : `${scans.length} item${scans.length === 1 ? '' : 's'} loaded`}
+                    </span>
+                  </div>
+
+                  {scansError ? (
+                    <p className="py-8 text-center text-sm" style={{ color: '#f87171' }}>
+                      {scansError}
+                    </p>
+                  ) : scansLoading ? (
+                    <div className="space-y-1.5">
+                      {Array.from({ length: 6 }).map((_, index) => (
+                        <RecentScanRowSkeleton key={index} />
+                      ))}
+                    </div>
+                  ) : scans.length === 0 ? (
+                    <p className="py-8 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
+                      {emptyMessage}
+                    </p>
+                  ) : (
+                    <div className="max-h-[60vh] space-y-0.5 overflow-y-auto pr-1 -mx-1">
+                      {scans.map((scan) => (
+                        <RecentActivityRow key={scan.id} scan={scan} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </Modal.Body>
+            <Modal.Footer
+              className="flex items-center justify-between gap-3 px-6 py-4"
+              style={{ borderTop: '1px solid var(--border-subtle)' }}
+            >
+              <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
+                {isWatchlist
+                  ? 'Use the watchlist page to manage schedules and trigger scans.'
+                  : 'Open the full page for broader filters and bulk actions.'}
+              </p>
+              <Button>
+                <Link href={primaryHref} onClick={() => state.close()}>
+                  {primaryLabel}
+                </Link>
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
+  );
 }
 
 // ── Mini Sparkline ────────────────────────────────────────────────────
@@ -544,6 +890,7 @@ function VulnTrendChart({
 export default function DashboardPage() {
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
+  const drilldownModal = useOverlayState();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [trends, setTrends] = useState<DashboardTrendPoint[]>([]);
   const [vulnTrends, setVulnTrends] = useState<DashboardVulnTrendPoint[]>([]);
@@ -552,27 +899,22 @@ export default function DashboardPage() {
   const [scannerHealthError, setScannerHealthError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeDrilldown, setActiveDrilldown] = useState<DashboardDrilldownKey | null>(null);
   const [attentionFilter, setAttentionFilter] = useState<'all' | 'failed' | 'blocked' | 'running'>(
     'all'
   );
   const [recentActivityRange, setRecentActivityRange] = useState<RecentActivityRange>('24h');
-  const [recentActivityScans, setRecentActivityScans] = useState<Scan[]>([]);
-  const [recentActivityTotal, setRecentActivityTotal] = useState(0);
-  const [recentActivityLoading, setRecentActivityLoading] = useState(true);
-  const [recentActivityError, setRecentActivityError] = useState('');
+  const [modalScans, setModalScans] = useState<Scan[]>([]);
+  const [modalScansLoading, setModalScansLoading] = useState(false);
+  const [modalScansError, setModalScansError] = useState('');
+  const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [watchlistError, setWatchlistError] = useState('');
   const currentUser = getUser() as { role?: string } | null;
   const isAdmin = currentUser?.role === 'admin' || getTokenType() === 'admin';
 
   const scanVolumeTrend = useMemo(
     () => buildTrendSeries(trends, 30, (point) => point.total),
-    [trends]
-  );
-  const completedTrend = useMemo(
-    () => buildTrendSeries(trends, 14, (point) => point.completed),
-    [trends]
-  );
-  const attentionTrend = useMemo(
-    () => buildTrendSeries(trends, 14, (point) => point.failed),
     [trends]
   );
 
@@ -601,23 +943,50 @@ export default function DashboardPage() {
   }, [isAdmin, scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!activeDrilldown || !drilldownModal.isOpen) return;
+
+    if (activeDrilldown === 'watchlist') {
+      listWatchlist()
+        .then((items) => setWatchlistItems(items))
+        .catch((watchlistLoadError: Error) => {
+          setWatchlistItems([]);
+          setWatchlistError(watchlistLoadError.message);
+        })
+        .finally(() => setWatchlistLoading(false));
+      return;
+    }
+
     const { from, to } = getRecentActivityBounds(recentActivityRange);
 
-    setRecentActivityLoading(true);
-    setRecentActivityError('');
+    const request =
+      activeDrilldown === 'attention'
+        ? Promise.all([
+            listScans(1, 50, undefined, 'failed'),
+            listScans(1, 50, undefined, 'running'),
+            listScans(1, 50, undefined, 'pending'),
+          ]).then(([failed, running, pending]) =>
+            mergeUniqueScans([failed.data ?? [], running.data ?? [], pending.data ?? []])
+          )
+        : listScans(
+            1,
+            50,
+            undefined,
+            activeDrilldown === 'completed' ? 'completed' : undefined,
+            undefined,
+            undefined,
+            undefined,
+            from,
+            to
+          ).then((result) => result.data ?? []);
 
-    listScans(1, 8, undefined, undefined, undefined, undefined, undefined, from, to)
-      .then((result) => {
-        setRecentActivityScans(result.data ?? []);
-        setRecentActivityTotal(result.total ?? 0);
+    request
+      .then((scans) => setModalScans(scans))
+      .catch((modalError: Error) => {
+        setModalScans([]);
+        setModalScansError(modalError.message);
       })
-      .catch((recentError: Error) => {
-        setRecentActivityScans([]);
-        setRecentActivityTotal(0);
-        setRecentActivityError(recentError.message);
-      })
-      .finally(() => setRecentActivityLoading(false));
-  }, [recentActivityRange, scopeKey]);
+      .finally(() => setModalScansLoading(false));
+  }, [activeDrilldown, drilldownModal.isOpen, recentActivityRange, scopeKey]);
 
   function handleVulnPeriodChange(days: number) {
     setVulnTrendPeriod(days);
@@ -692,19 +1061,6 @@ export default function DashboardPage() {
   const recentWindowAverage =
     scanVolumeTrend.reduce((sum, point) => sum + point.value, 0) /
     Math.max(scanVolumeTrend.length, 1);
-  const recentCompletedTotal = completedTrend.reduce((sum, point) => sum + point.value, 0);
-  const attentionPeak = Math.max(...attentionTrend.map((point) => point.value), 0);
-  const attentionScans = stats.attention_scans ?? stats.recent_scans ?? [];
-
-  const allAttentionScans = attentionScans.filter((scan) => {
-    const isFailed = scan.status === 'failed';
-    const isBlocked = scan.external_status === 'blocked_by_xray_policy';
-    const isRunning = scan.status === 'running' || scan.status === 'pending';
-    if (attentionFilter === 'failed') return isFailed && !isBlocked;
-    if (attentionFilter === 'blocked') return isBlocked;
-    if (attentionFilter === 'running') return isRunning;
-    return isFailed || isBlocked;
-  });
   const totalAttentionForFilter =
     attentionFilter === 'failed'
       ? genericFailedCount
@@ -713,8 +1069,18 @@ export default function DashboardPage() {
         : attentionFilter === 'running'
           ? activeQueueCount
           : needsAttentionTotal;
-  const displayedAttentionScans = allAttentionScans.slice(0, 5);
-  const moreAttentionCount = Math.max(0, totalAttentionForFilter - displayedAttentionScans.length);
+  const displayedModalScans =
+    activeDrilldown === 'attention'
+      ? modalScans.filter((scan) => {
+          const isFailed = scan.status === 'failed';
+          const isBlocked = scan.external_status === 'blocked_by_xray_policy';
+          const isRunning = scan.status === 'running' || scan.status === 'pending';
+          if (attentionFilter === 'failed') return isFailed && !isBlocked;
+          if (attentionFilter === 'blocked') return isBlocked;
+          if (attentionFilter === 'running') return isRunning;
+          return isFailed || isBlocked || isRunning;
+        })
+      : modalScans;
   const triageHref =
     attentionFilter === 'running'
       ? buildScansHref({ status: 'running' })
@@ -724,7 +1090,34 @@ export default function DashboardPage() {
     'Last 24 hours';
   const recentActivityHref = buildRecentActivityHref(recentActivityRange);
 
-  console.log(getUser());
+  function prepareDrilldown(card: DashboardDrilldownKey) {
+    if (card === 'watchlist') {
+      setWatchlistLoading(true);
+      setWatchlistError('');
+      return;
+    }
+
+    setModalScansLoading(true);
+    setModalScansError('');
+  }
+
+  function openDrilldown(card: DashboardDrilldownKey) {
+    setActiveDrilldown(card);
+    if (card !== 'attention') {
+      setAttentionFilter('all');
+    }
+    prepareDrilldown(card);
+    drilldownModal.open();
+  }
+
+  function handleRecentActivityRangeChange(range: RecentActivityRange) {
+    setRecentActivityRange(range);
+    if (activeDrilldown === 'total' || activeDrilldown === 'completed') {
+      setModalScansLoading(true);
+      setModalScansError('');
+    }
+  }
+
   return (
     <div className="p-6 space-y-4">
       <PageHeader
@@ -767,70 +1160,52 @@ export default function DashboardPage() {
 
       {/* ── Stat strip ── */}
       <div className="grid gap-3 lg:grid-cols-4">
-        <Card>
-          <Card.Header>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <Card.Title>Total Scans</Card.Title>
-                <Card.Description>
-                  {recentWindowAverage >= 10
-                    ? recentWindowAverage.toFixed(0)
-                    : recentWindowAverage.toFixed(1)}{' '}
-                  avg/day
-                </Card.Description>
-              </div>
-              <p className="text-xl font-bold">{stats.total_scans.toLocaleString()}</p>
-            </div>
-          </Card.Header>
-        </Card>
+        <StatDrilldownCard
+          title="Total Scans"
+          description={
+            <>
+              {recentWindowAverage >= 10
+                ? recentWindowAverage.toFixed(0)
+                : recentWindowAverage.toFixed(1)}{' '}
+              avg/day
+            </>
+          }
+          value={stats.total_scans.toLocaleString()}
+          onPress={() => openDrilldown('total')}
+        />
 
-        <Card>
-          <Card.Header>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <Card.Title>Completed Scans</Card.Title>
-                <Card.Description>{`${successRate}% success rate`}</Card.Description>
-              </div>
-              <p className="text-xl font-bold">{completedCount.toLocaleString()}</p>
-            </div>
-          </Card.Header>
-        </Card>
+        <StatDrilldownCard
+          title="Completed Scans"
+          description={`${successRate}% success rate`}
+          value={completedCount.toLocaleString()}
+          onPress={() => openDrilldown('completed')}
+        />
 
-        <Card>
-          <Card.Header>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <Card.Title>Needs Attention</Card.Title>
-                <Card.Description>
-                  <span className="flex items-center gap-2">
-                    {genericFailedCount > 0 && (
-                      <span style={{ color: '#f87171' }}>{genericFailedCount} failed</span>
-                    )}
-                    {blockedPolicyCount > 0 && (
-                      <span style={{ color: '#fb923c' }}>{blockedPolicyCount} blocked</span>
-                    )}
-                    {needsAttentionTotal === 0 && (
-                      <span style={{ color: 'var(--text-faint)' }}>all clear</span>
-                    )}
-                  </span>
-                </Card.Description>
-              </div>
-              <p className="text-xl font-bold">{needsAttentionTotal}</p>
-            </div>
-          </Card.Header>
-        </Card>
+        <StatDrilldownCard
+          title="Needs Attention"
+          description={
+            <span className="flex items-center gap-2">
+              {genericFailedCount > 0 && (
+                <span style={{ color: '#f87171' }}>{genericFailedCount} failed</span>
+              )}
+              {blockedPolicyCount > 0 && (
+                <span style={{ color: '#fb923c' }}>{blockedPolicyCount} blocked</span>
+              )}
+              {needsAttentionTotal === 0 && (
+                <span style={{ color: 'var(--text-faint)' }}>all clear</span>
+              )}
+            </span>
+          }
+          value={needsAttentionTotal}
+          onPress={() => openDrilldown('attention')}
+        />
 
-        <Card>
-          <Card.Header>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <Card.Title>Watchlist</Card.Title>
-                <Card.Description>{`${startedTodayCount} started today`}</Card.Description>
-              </div>
-              <p className="text-xl font-bold">{stats.watchlist_count.toLocaleString()}</p>
-            </div>
-          </Card.Header>
-        </Card>
+        <StatDrilldownCard
+          title="Watchlist"
+          description={`${startedTodayCount} started today`}
+          value={stats.watchlist_count.toLocaleString()}
+          onPress={() => openDrilldown('watchlist')}
+        />
       </div>
 
       <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest">Stats</p>
@@ -897,197 +1272,6 @@ export default function DashboardPage() {
             period={vulnTrendPeriod}
             onPeriod={handleVulnPeriodChange}
           />
-
-          <Card className="p-5">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div>
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Needs Attention
-                </h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
-                  {needsAttentionTotal > 0
-                    ? `${needsAttentionTotal} scan${needsAttentionTotal !== 1 ? 's' : ''} require intervention`
-                    : 'No items require intervention right now'}
-                </p>
-              </div>
-              <Link
-                href={triageHref}
-                className="text-xs shrink-0 transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-              >
-                Triage all →
-              </Link>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              {(
-                [
-                  {
-                    key: 'all' as const,
-                    label: 'All',
-                    count: needsAttentionTotal,
-                    activeBg: 'rgba(124,58,237,0.12)',
-                    activeBorder: 'rgba(124,58,237,0.3)',
-                    activeColor: '#a78bfa',
-                  },
-                  {
-                    key: 'failed' as const,
-                    label: 'Failed',
-                    count: genericFailedCount,
-                    activeBg: 'rgba(239,68,68,0.1)',
-                    activeBorder: 'rgba(239,68,68,0.3)',
-                    activeColor: '#f87171',
-                  },
-                  {
-                    key: 'blocked' as const,
-                    label: 'Policy blocked',
-                    count: blockedPolicyCount,
-                    activeBg: 'rgba(249,115,22,0.1)',
-                    activeBorder: 'rgba(249,115,22,0.3)',
-                    activeColor: '#fb923c',
-                  },
-                  {
-                    key: 'running' as const,
-                    label: 'Running',
-                    count: activeQueueCount,
-                    activeBg: 'rgba(59,130,246,0.1)',
-                    activeBorder: 'rgba(59,130,246,0.3)',
-                    activeColor: '#60a5fa',
-                  },
-                ] as const
-              ).map(({ key, label, count, activeBg, activeBorder, activeColor }) => {
-                const isActive = attentionFilter === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setAttentionFilter(key)}
-                    className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition-all"
-                    style={
-                      isActive
-                        ? {
-                            background: activeBg,
-                            border: `1px solid ${activeBorder}`,
-                            color: activeColor,
-                          }
-                        : {
-                            background: 'transparent',
-                            border: '1px solid var(--surface-border)',
-                            color: 'var(--text-faint)',
-                          }
-                    }
-                  >
-                    {label}
-                    <span className="tabular-nums opacity-70">{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {displayedAttentionScans.length === 0 ? (
-              <p className="py-10 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
-                {attentionFilter === 'all'
-                  ? 'No failed or blocked scans.'
-                  : `No ${attentionFilter === 'blocked' ? 'policy-blocked' : attentionFilter} scans.`}
-              </p>
-            ) : (
-              <>
-                <div className="mb-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                  Showing latest {displayedAttentionScans.length} of {totalAttentionForFilter}
-                </div>
-                <div className="max-h-[308px] space-y-0.5 overflow-y-auto pr-1 -mx-1">
-                  {displayedAttentionScans.map((scan) => (
-                    <RecentActivityRow key={scan.id} scan={scan} />
-                  ))}
-                </div>
-              </>
-            )}
-
-            {moreAttentionCount > 0 && (
-              <div className="mt-3 text-center">
-                <Link
-                  href={triageHref}
-                  className="text-xs transition-colors"
-                  style={{ color: 'var(--text-faint)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-faint)')}
-                >
-                  {moreAttentionCount} more →
-                </Link>
-              </div>
-            )}
-          </Card>
-
-          <Card className="p-5">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div>
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Recent Activity
-                </h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
-                  What got scanned in {recentActivityRangeLabel.toLowerCase()}
-                </p>
-              </div>
-              <Link
-                href={recentActivityHref}
-                className="text-xs shrink-0 transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-              >
-                Open feed →
-              </Link>
-            </div>
-
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <RecentActivityRangePicker
-                value={recentActivityRange}
-                onChange={setRecentActivityRange}
-              />
-              <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                {recentActivityTotal} event{recentActivityTotal !== 1 ? 's' : ''}
-              </span>
-            </div>
-
-            {recentActivityError ? (
-              <p className="py-8 text-center text-sm" style={{ color: '#f87171' }}>
-                {recentActivityError}
-              </p>
-            ) : recentActivityLoading ? (
-              <div className="space-y-1.5">
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <RecentScanRowSkeleton key={index} />
-                ))}
-              </div>
-            ) : recentActivityScans.length === 0 ? (
-              <p className="py-8 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
-                No scans started in {recentActivityRangeLabel.toLowerCase()}.
-              </p>
-            ) : (
-              <>
-                <div className="space-y-0.5 -mx-1">
-                  {recentActivityScans.map((scan) => (
-                    <RecentActivityRow key={scan.id} scan={scan} />
-                  ))}
-                </div>
-                {recentActivityTotal > recentActivityScans.length ? (
-                  <div className="mt-3 text-center">
-                    <Link
-                      href={recentActivityHref}
-                      className="text-xs transition-colors"
-                      style={{ color: 'var(--text-faint)' }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-faint)')}
-                    >
-                      {recentActivityTotal - recentActivityScans.length} more →
-                    </Link>
-                  </div>
-                ) : null}
-              </>
-            )}
-          </Card>
         </div>
 
         {/* Right column: Exposure + Scanner */}
@@ -1216,6 +1400,32 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
+
+      <DashboardDrilldownModal
+        state={drilldownModal}
+        activeCard={activeDrilldown}
+        totalScans={stats.total_scans}
+        completedCount={completedCount}
+        watchlistCount={stats.watchlist_count}
+        needsAttentionTotal={needsAttentionTotal}
+        attentionFilter={attentionFilter}
+        onAttentionFilterChange={setAttentionFilter}
+        recentActivityRange={recentActivityRange}
+        onRecentActivityRangeChange={handleRecentActivityRangeChange}
+        recentActivityRangeLabel={recentActivityRangeLabel}
+        totalAttentionForFilter={totalAttentionForFilter}
+        genericFailedCount={genericFailedCount}
+        blockedPolicyCount={blockedPolicyCount}
+        activeQueueCount={activeQueueCount}
+        scans={displayedModalScans}
+        scansLoading={modalScansLoading}
+        scansError={modalScansError}
+        watchlistItems={watchlistItems}
+        watchlistLoading={watchlistLoading}
+        watchlistError={watchlistError}
+        triageHref={triageHref}
+        recentActivityHref={recentActivityHref}
+      />
     </div>
   );
 }

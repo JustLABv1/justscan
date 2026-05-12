@@ -37,7 +37,10 @@ export function normalizeRecentActivityRange(value?: string | null): RecentActiv
   return '24h';
 }
 
-export function getRecentActivityBounds(range: RecentActivityRange, now = new Date()): { from: string; to: string } {
+export function getRecentActivityBounds(
+  range: RecentActivityRange,
+  now = new Date()
+): { from: string; to: string } {
   const end = new Date(now);
   const start = new Date(now);
 
@@ -78,7 +81,15 @@ export function scanContextLabel(scan: Scan): string {
   return 'Built-in scanner';
 }
 
-function SeverityPill({ count, label, tone }: { count: number; label: string; tone: { color: string; background: string; border: string } }) {
+function SeverityPill({
+  count,
+  label,
+  tone,
+}: {
+  count: number;
+  label: string;
+  tone: { color: string; background: string; border: string };
+}) {
   if (count <= 0) return null;
 
   return (
@@ -108,9 +119,19 @@ export function RecentActivityRangePicker({
           type="button"
           onClick={() => onClear?.()}
           className="rounded-lg px-2.5 py-1 text-xs font-medium transition-all duration-150"
-          style={value == null
-            ? { background: 'rgba(124,58,237,0.2)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.28)' }
-            : { background: 'var(--row-hover)', color: 'var(--text-muted)', border: '1px solid var(--surface-border)' }}
+          style={
+            value == null
+              ? {
+                  background: 'rgba(124,58,237,0.2)',
+                  color: '#a78bfa',
+                  border: '1px solid rgba(167,139,250,0.28)',
+                }
+              : {
+                  background: 'var(--row-hover)',
+                  color: 'var(--text-muted)',
+                  border: '1px solid var(--surface-border)',
+                }
+          }
           aria-pressed={value == null}
           aria-label={clearLabel}
           title={clearLabel}
@@ -128,9 +149,19 @@ export function RecentActivityRangePicker({
             type="button"
             onClick={() => onChange(option.id)}
             className="rounded-lg px-2.5 py-1 text-xs font-medium transition-all duration-150"
-            style={isActive
-              ? { background: 'rgba(124,58,237,0.2)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.28)' }
-              : { background: 'var(--row-hover)', color: 'var(--text-muted)', border: '1px solid var(--surface-border)' }}
+            style={
+              isActive
+                ? {
+                    background: 'rgba(124,58,237,0.2)',
+                    color: '#a78bfa',
+                    border: '1px solid rgba(167,139,250,0.28)',
+                  }
+                : {
+                    background: 'var(--row-hover)',
+                    color: 'var(--text-muted)',
+                    border: '1px solid var(--surface-border)',
+                  }
+            }
             aria-pressed={isActive}
             aria-label={option.label}
             title={option.label}
@@ -160,12 +191,12 @@ export function RecentActivityRow({ scan }: { scan: Scan }) {
         <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
           <StatusBadge status={scan.status} externalStatus={scan.external_status} />
           <span className="text-zinc-500">{scanContextLabel(scan)}</span>
-          <span className="text-zinc-400" title={fullDate(eventTime)}>{timeAgo(eventTime)}</span>
+          <span className="text-zinc-400" title={fullDate(eventTime)}>
+            {timeAgo(eventTime)}
+          </span>
         </div>
         {scan.error_message ? (
-          <p className="mt-1 line-clamp-2 text-[11px] text-red-400">
-            {scan.error_message}
-          </p>
+          <p className="mt-1 line-clamp-2 text-[11px] text-red-400">{scan.error_message}</p>
         ) : null}
       </div>
 

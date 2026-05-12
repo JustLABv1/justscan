@@ -27,7 +27,7 @@ import {
   ScannerHealth,
   WatchlistItem,
 } from '@/lib/api';
-import { Button, Card, Modal, useOverlayState } from '@heroui/react';
+import { Button, Card, Chip, Modal, useOverlayState } from '@heroui/react';
 import { Activity01Icon, Add01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -119,6 +119,38 @@ function formatChartDate(date: string, options?: Intl.DateTimeFormatOptions): st
     'en',
     options ?? { month: 'short', day: 'numeric' }
   );
+}
+
+function toTimestamp(value?: string | null): number | null {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function formatRelativeAge(value?: string | null): string {
+  const timestamp = toTimestamp(value);
+  if (!timestamp) return 'Never';
+  const diffMs = Date.now() - timestamp;
+  if (diffMs < 0) return 'Just now';
+
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < hour) {
+    const minutes = Math.max(1, Math.floor(diffMs / minute));
+    return `${minutes}m ago`;
+  }
+
+  if (diffMs < day) {
+    return `${Math.floor(diffMs / hour)}h ago`;
+  }
+
+  const days = Math.floor(diffMs / day);
+  if (days < 30) return `${days}d ago`;
+
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
 }
 
 function buildTrendSeries(
@@ -886,6 +918,153 @@ function VulnTrendChart({
   );
 }
 
+function WatchlistEffectivenessCard({
+  items,
+  activeWatchlistCount,
+  loading,
+  error,
+}: {
+  items: WatchlistItem[];
+  activeWatchlistCount: number;
+  loading: boolean;
+  error: string;
+}) {
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const weekMs = 7 * dayMs;
+
+  const enabledItems = items.filter((item) => item.enabled);
+  const scanned24hCount = enabledItems.filter((item) => {
+    const scannedAt = toTimestamp(item.last_scanned_at);
+    return scannedAt != null && now - scannedAt <= dayMs;
+  }).length;
+  const scanned7dCount = enabledItems.filter((item) => {
+    const scannedAt = toTimestamp(item.last_scanned_at);
+    return scannedAt != null && now - scannedAt <= weekMs;
+  }).length;
+  const staleEnabledItems = enabledItems
+    .filter((item) => {
+      const scannedAt = toTimestamp(item.last_scanned_at);
+      return scannedAt == null || now - scannedAt > weekMs;
+    })
+    .sort((left, right) => {
+      const leftTime = toTimestamp(left.last_scanned_at) ?? 0;
+      const rightTime = toTimestamp(right.last_scanned_at) ?? 0;
+      return leftTime - rightTime;
+    });
+  const neverScannedCount = enabledItems.filter(
+    (item) => !toTimestamp(item.last_scanned_at)
+  ).length;
+  const coverage7d =
+    activeWatchlistCount > 0 ? Math.round((scanned7dCount / activeWatchlistCount) * 100) : 0;
+
+  const scheduleCounts = enabledItems.reduce<Record<string, number>>((acc, item) => {
+    const schedule = item.schedule?.trim() || 'unscheduled';
+    acc[schedule] = (acc[schedule] ?? 0) + 1;
+    return acc;
+  }, {});
+  const topSchedule = Object.entries(scheduleCounts).sort((a, b) => b[1] - a[1])[0] ?? null;
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Watchlist Effectiveness
+          </h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
+            Coverage quality for scheduled watchlist scans
+          </p>
+        </div>
+        <Chip color="success">{coverage7d}% fresh</Chip>
+      </div>
+
+      {error ? (
+        <p className="text-xs" style={{ color: '#f87171' }}>
+          {error}
+        </p>
+      ) : loading ? (
+        <div className="space-y-2.5">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <RecentScanRowSkeleton key={index} />
+          ))}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2 text-[12px]">
+            <Card variant="secondary" className="px-3 py-2">
+              <p>Active schedules</p>
+              <p className="font-semibold">{activeWatchlistCount}</p>
+            </Card>
+            <Card variant="secondary" className="px-3 py-2">
+              <p>Scanned in 24h</p>
+              <p className="font-semibold" style={{ color: '#60a5fa' }}>
+                {scanned24hCount}
+              </p>
+            </Card>
+            <Card variant="secondary" className="px-3 py-2">
+              <p>Stale {'>'} 7d</p>
+              <p
+                className="font-semibold"
+                style={{ color: staleEnabledItems.length > 0 ? '#fb923c' : '#34d399' }}
+              >
+                {staleEnabledItems.length}
+              </p>
+            </Card>
+            <Card variant="secondary" className="px-3 py-2">
+              <p>Never scanned</p>
+              <p
+                className="font-semibold"
+                style={{ color: neverScannedCount > 0 ? '#f87171' : '#34d399' }}
+              >
+                {neverScannedCount}
+              </p>
+            </Card>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center justify-between gap-3 text-[11px]">
+              <span>
+                Most common schedule:{' '}
+                <span>{topSchedule ? `${topSchedule[0]} (${topSchedule[1]})` : 'n/a'}</span>
+              </span>
+              <Link href="/watchlist" className="font-medium" style={{ color: '#a78bfa' }}>
+                Open watchlist →
+              </Link>
+            </div>
+
+            {staleEnabledItems.length > 0 ? (
+              <div className="space-y-1.5">
+                {staleEnabledItems.slice(0, 3).map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"
+                    style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}
+                  >
+                    <p
+                      className="truncate text-[11px] font-mono"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {item.image_name}:{item.image_tag}
+                    </p>
+                    <span className="shrink-0 text-[10px]" style={{ color: '#f59e0b' }}>
+                      {formatRelativeAge(item.last_scanned_at)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px]" style={{ color: '#34d399' }}>
+                All active watchlist items were scanned within the last 7 days.
+              </p>
+            )}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
 // ── page ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const workScope = useWorkScope();
@@ -907,6 +1086,9 @@ export default function DashboardPage() {
   const [modalScans, setModalScans] = useState<Scan[]>([]);
   const [modalScansLoading, setModalScansLoading] = useState(false);
   const [modalScansError, setModalScansError] = useState('');
+  const [watchlistOverviewItems, setWatchlistOverviewItems] = useState<WatchlistItem[]>([]);
+  const [watchlistOverviewLoading, setWatchlistOverviewLoading] = useState(true);
+  const [watchlistOverviewError, setWatchlistOverviewError] = useState('');
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
   const [watchlistError, setWatchlistError] = useState('');
@@ -941,6 +1123,18 @@ export default function DashboardPage() {
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, [isAdmin, scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setWatchlistOverviewLoading(true);
+    setWatchlistOverviewError('');
+    listWatchlist()
+      .then((items) => setWatchlistOverviewItems(items))
+      .catch((watchlistLoadError: Error) => {
+        setWatchlistOverviewItems([]);
+        setWatchlistOverviewError(watchlistLoadError.message);
+      })
+      .finally(() => setWatchlistOverviewLoading(false));
+  }, [scopeKey]);
 
   useEffect(() => {
     if (!activeDrilldown || !drilldownModal.isOpen) return;
@@ -1274,17 +1468,22 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Right column: Exposure + Scanner */}
+        {/* Right column: Actionability + Runtime */}
         <div className="flex flex-col gap-3">
+          <WatchlistEffectivenessCard
+            items={watchlistOverviewItems}
+            activeWatchlistCount={stats.watchlist_count}
+            loading={watchlistOverviewLoading}
+            error={watchlistOverviewError}
+          />
+
           {/* Scanner */}
           <Card className="p-5">
             <div className="flex items-start justify-between gap-2 mb-3">
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                Scanner
-              </h2>
+              <h2 className="text-sm font-semibold">Scanner</h2>
               {activeXrayCount > 0 && (
                 <span
-                  className="text-[11px] font-semibold px-2 py-0.5 rounded-full tabular-nums"
+                  className="text-[11px] font-semibold px-2 py-0.5 tabular-nums"
                   style={{
                     background: 'rgba(96,165,250,0.12)',
                     border: '1px solid rgba(96,165,250,0.24)',

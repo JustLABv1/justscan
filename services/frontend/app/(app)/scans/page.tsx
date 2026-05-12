@@ -1,21 +1,20 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
-import { ImageChildren } from '@/components/scans/image-children';
+import { ImageScansTable } from '@/components/scans/image-scans-table';
 import {
-    getRecentActivityBounds,
-    RECENT_ACTIVITY_RANGE_OPTIONS,
-    RecentActivityRange,
-    RecentActivityRow,
+  getRecentActivityBounds,
+  RECENT_ACTIVITY_RANGE_OPTIONS,
+  RecentActivityRange,
+  RecentActivityRow,
 } from '@/components/scans/recent-activity';
 import { useToast } from '@/components/toast';
-import { OwnershipBadge, SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import {
-    heroSelectTriggerClassName,
-    joinClassNames,
-    nativeFieldClassName,
+  heroSelectTriggerClassName,
+  joinClassNames,
+  nativeFieldClassName,
 } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RecentScanRowSkeleton } from '@/components/ui/skeleton';
@@ -23,56 +22,52 @@ import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useOrgNameMap } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-    ArtifactoryRepository,
-    cancelScan,
-    createScans,
-    deleteScan,
-    getDefaultScannerCapabilities,
-    getWorkScope,
-    ImageSummary,
-    listArtifactoryRepositories,
-    listRegistriesWithCapabilities,
-    listScanImages,
-    listScans,
-    listTags,
-    RegistryWithHealth,
-    Scan,
-    ScannerCapabilities,
-    Tag,
+  ArtifactoryRepository,
+  cancelScan,
+  createScans,
+  deleteScan,
+  getDefaultScannerCapabilities,
+  getWorkScope,
+  ImageSummary,
+  listArtifactoryRepositories,
+  listRegistriesWithCapabilities,
+  listScanImages,
+  listScans,
+  listTags,
+  RegistryWithHealth,
+  Scan,
+  ScannerCapabilities,
+  Tag,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { fullDate, timeAgo } from '@/lib/time';
 import {
-    Autocomplete,
-    Button,
-    Card,
-    Checkbox,
-    Input,
-    Label,
-    ListBox,
-    Modal,
-    Pagination,
-    Popover,
-    SearchField,
-    Select,
-    Table,
-    TextArea,
-    useFilter,
-    useOverlayState,
+  Autocomplete,
+  Button,
+  Card,
+  Input,
+  Label,
+  ListBox,
+  Modal,
+  Pagination,
+  Popover,
+  SearchField,
+  Select,
+  TextArea,
+  useFilter,
+  useOverlayState,
 } from '@heroui/react';
 import {
-    ArrowDown01Icon,
-    ArrowRight01Icon,
-    Cancel01Icon,
-    FilterIcon,
-    GitCompareIcon,
-    PlusSignIcon,
-    Shield01Icon,
+  ArrowDown01Icon,
+  ArrowRight01Icon,
+  Cancel01Icon,
+  FilterIcon,
+  GitCompareIcon,
+  PlusSignIcon,
+  Shield01Icon,
 } from 'hugeicons-react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Key } from 'react';
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
@@ -1007,6 +1002,40 @@ export default function ScansPage() {
     window.open(`/reports/print?scans=${scanIds}`, '_blank');
   }
 
+  async function handleParentScanSelection(
+    imageName: string,
+    selected: boolean,
+    latestScanId: string,
+    visibleScanIds: string[]
+  ) {
+    let targetIds = visibleScanIds;
+
+    // If child rows have not reported visible IDs yet, fetch only the first child page
+    // so selection still maps to visible rows instead of selecting a hidden latest scan ID.
+    if (targetIds.length === 0) {
+      try {
+        const res = await listScans(1, 10, imageName, undefined, true);
+        targetIds = (res.data ?? []).map((scan) => scan.id);
+      } catch {
+        targetIds = [];
+      }
+    }
+
+    if (targetIds.length === 0) {
+      targetIds = [latestScanId];
+    }
+
+    setSelectedScans((previous) => {
+      const next = new Set(previous);
+      if (selected) {
+        targetIds.forEach((id) => next.add(id));
+      } else {
+        targetIds.forEach((id) => next.delete(id));
+      }
+      return next;
+    });
+  }
+
   const tagFilterOptions = useMemo(() => {
     const values = new Set<string>();
 
@@ -1274,7 +1303,7 @@ export default function ScansPage() {
 
       {/* Bulk action toolbar */}
       {!hasRecentWindow && selectedScans.size > 0 && (
-        <Card className="bg-surface-secondary rounded-2xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Card className="px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             {selectedScans.size} scan{selectedScans.size !== 1 ? 's' : ''} selected
           </span>
@@ -1388,398 +1417,36 @@ export default function ScansPage() {
         </Card>
       ) : (
         <>
-          {/* Mobile list */}
-          <div className="space-y-3 md:hidden">
-            {loading ? (
-              Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="surface-panel rounded-2xl p-4 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="size-4 rounded border border-zinc-400/50 mt-1" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 w-40 rounded skeleton" />
-                      <div className="h-3 w-28 rounded skeleton" />
-                    </div>
-                    <div className="size-8 rounded-lg skeleton" />
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {Array.from({ length: 4 }).map((__, sevIndex) => (
-                      <div key={sevIndex} className="h-14 rounded-xl skeleton" />
-                    ))}
-                  </div>
-                </div>
-              ))
-            ) : filteredImages.length === 0 ? (
-              <EmptyState
-                icon={<Shield01Icon size={28} />}
-                title={hasActiveFilters ? 'No images match your filters' : 'No scans yet'}
-                description={
-                  hasActiveFilters
-                    ? 'Try a different filter combination or clear filters.'
-                    : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.'
-                }
-                action={
-                  hasActiveFilters
-                    ? { label: 'Clear Filters', onClick: handleClearFilters }
-                    : { label: '+ New Scan', onClick: openCreateModal }
-                }
-              />
-            ) : (
-              filteredImages.map((img) => {
-                const isOpen = expanded.has(img.image_name);
-                return (
-                  <div key={img.image_name} className="surface-panel rounded-2xl overflow-hidden">
-                    <div className="p-4 space-y-4">
-                      <div className="flex items-start gap-3">
-                        <div className="pt-1" onClick={(event) => event.stopPropagation()}>
-                          <Checkbox
-                            isSelected={selectedScans.has(img.latest_scan_id)}
-                            onChange={(checked: boolean) => {
-                              if (checked) {
-                                setSelectedScans((previous) =>
-                                  new Set(previous).add(img.latest_scan_id)
-                                );
-                              } else {
-                                setSelectedScans((previous) => {
-                                  const next = new Set(previous);
-                                  next.delete(img.latest_scan_id);
-                                  return next;
-                                });
-                              }
-                            }}
-                          >
-                            <Checkbox.Control className="border border-zinc-500/50 data-[selected=true]:border-violet-500 data-[selected=true]:bg-violet-600">
-                              <Checkbox.Indicator />
-                            </Checkbox.Control>
-                          </Checkbox>
-                        </div>
-                        <div className="min-w-0 flex-1 space-y-2">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <ImageReferenceLabel imageName={img.image_name} />
-                              <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                                <span className="font-mono text-xs text-zinc-400">
-                                  :{img.latest_tag}
-                                </span>
-                                <StatusBadge
-                                  status={img.latest_status}
-                                  externalStatus={img.latest_external_status}
-                                />
-                                <OwnershipBadge
-                                  ownerType={img.owner_type}
-                                  ownerOrgId={img.owner_org_id}
-                                  orgNamesById={orgNamesById}
-                                />
-                              </div>
-                            </div>
-                            <span
-                              className="shrink-0 text-xs px-1.5 py-0.5 rounded-md font-medium"
-                              style={{
-                                background: 'rgba(124,58,237,0.1)',
-                                color: '#a78bfa',
-                                border: '1px solid rgba(167,139,250,0.2)',
-                              }}
-                            >
-                              {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3 text-xs text-zinc-500">
-                            <span title={fullDate(img.latest_scan_at)}>
-                              {timeAgo(img.latest_scan_at)}
-                            </span>
-                            <Link
-                              className="font-mono text-violet-500 hover:text-violet-400"
-                              href={`/scans/${img.latest_scan_id}`}
-                            >
-                              {img.latest_scan_id.slice(0, 8)}…
-                            </Link>
-                          </div>
-                        </div>
-                        <button
-                          aria-label={
-                            isOpen ? `Collapse ${img.image_name}` : `Expand ${img.image_name}`
-                          }
-                          className="flex size-9 shrink-0 items-center justify-center rounded-xl transition-all"
-                          onClick={() => toggleExpand(img.image_name)}
-                          style={{
-                            background: isOpen ? 'rgba(124,58,237,0.12)' : 'var(--row-hover)',
-                            border: '1px solid var(--surface-border)',
-                            color: 'var(--text-muted)',
-                          }}
-                          type="button"
-                        >
-                          {isOpen ? (
-                            <ArrowDown01Icon size={15} className="text-violet-400" />
-                          ) : (
-                            <ArrowRight01Icon size={15} />
-                          )}
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-4 gap-2">
-                        <MobileSevStat
-                          count={img.critical_count}
-                          label="Critical"
-                          tone="rgba(239,68,68,0.78)"
-                        />
-                        <MobileSevStat
-                          count={img.high_count}
-                          label="High"
-                          tone="rgba(249,115,22,0.78)"
-                        />
-                        <MobileSevStat
-                          count={img.medium_count}
-                          label="Medium"
-                          tone="rgba(234,179,8,0.82)"
-                        />
-                        <MobileSevStat
-                          count={img.low_count}
-                          label="Low"
-                          tone="rgba(59,130,246,0.82)"
-                        />
-                      </div>
-                    </div>
-
-                    {isOpen ? (
-                      <div className="px-4 pb-4">
-                        <ImageChildren
-                          imageName={img.image_name}
-                          key={`${img.image_name}-${childRefreshKey[img.image_name] ?? 0}-stacked`}
-                          mode="stacked"
-                          orgNamesById={orgNamesById}
-                          onCancel={(scanId) => handleCancel(scanId, img.image_name)}
-                          onDelete={(scanId) => handleDelete(scanId, img.image_name)}
-                          onSelectScan={(scanId, selected) => {
-                            if (selected) {
-                              setSelectedScans((previous) => new Set(previous).add(scanId));
-                            } else {
-                              setSelectedScans((previous) => {
-                                const next = new Set(previous);
-                                next.delete(scanId);
-                                return next;
-                              });
-                            }
-                          }}
-                          selectedScans={selectedScans}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })
-            )}
-          </div>
-
           {/* Tree table */}
-          <Table>
-            <Table.ScrollContainer>
-              <Table.Content aria-label="Scans by image" className="min-w-[980px]">
-                <Table.Header>
-                  <Table.Column className="w-8" />
-                  <Table.Column className="w-8" />
-                  <Table.Column isRowHeader>Image</Table.Column>
-                  <Table.Column>Metadata</Table.Column>
-                  <Table.Column>Latest</Table.Column>
-                  <Table.Column className="text-center" style={{ color: 'rgba(239,68,68,0.7)' }}>
-                    C
-                  </Table.Column>
-                  <Table.Column className="text-center" style={{ color: 'rgba(249,115,22,0.7)' }}>
-                    H
-                  </Table.Column>
-                  <Table.Column className="text-center" style={{ color: 'rgba(234,179,8,0.7)' }}>
-                    M
-                  </Table.Column>
-                  <Table.Column className="text-center" style={{ color: 'rgba(59,130,246,0.7)' }}>
-                    L
-                  </Table.Column>
-                </Table.Header>
-                <Table.Body>
-                  {loading ? (
-                    Array.from({ length: 5 }).map((_, i) => (
-                      <Table.Row key={`loading-${i}`} id={`loading-${i}`}>
-                        <Table.Cell colSpan={9}>
-                          <div className="px-4 py-3.5">
-                            <div className="h-8 rounded-md animate-pulse" />
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))
-                  ) : filteredImages.length === 0 ? (
-                    <Table.Row id="empty">
-                      <Table.Cell colSpan={9}>
-                        <div className="py-4">
-                          <EmptyState
-                            icon={<Shield01Icon size={28} />}
-                            title={
-                              hasActiveFilters ? 'No images match your filters' : 'No scans yet'
-                            }
-                            description={
-                              hasActiveFilters
-                                ? 'Try a different filter combination or clear filters.'
-                                : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.'
-                            }
-                            action={
-                              hasActiveFilters
-                                ? { label: 'Clear Filters', onClick: handleClearFilters }
-                                : { label: '+ New Scan', onClick: openCreateModal }
-                            }
-                          />
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ) : (
-                    filteredImages.map((img) => {
-                      const isOpen = expanded.has(img.image_name);
-                      return (
-                        <Fragment key={img.image_name}>
-                          <Table.Row
-                            id={img.image_name}
-                            className="cursor-pointer transition-colors"
-                          >
-                            <Table.Cell onClick={(e) => e.stopPropagation()}>
-                              <Checkbox
-                                isSelected={selectedScans.has(img.latest_scan_id)}
-                                onChange={(checked: boolean) => {
-                                  if (checked) {
-                                    setSelectedScans((prev) =>
-                                      new Set(prev).add(img.latest_scan_id)
-                                    );
-                                  } else {
-                                    setSelectedScans((prev) => {
-                                      const next = new Set(prev);
-                                      next.delete(img.latest_scan_id);
-                                      return next;
-                                    });
-                                  }
-                                }}
-                              >
-                                <Checkbox.Control className="border border-zinc-500/50 data-[selected=true]:border-violet-500 data-[selected=true]:bg-violet-600">
-                                  <Checkbox.Indicator />
-                                </Checkbox.Control>
-                              </Checkbox>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <button
-                                type="button"
-                                aria-label={
-                                  isOpen ? `Collapse ${img.image_name}` : `Expand ${img.image_name}`
-                                }
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  toggleExpand(img.image_name);
-                                }}
-                                className="flex size-7 items-center justify-center rounded-md transition-all duration-150"
-                                style={{
-                                  background: isOpen ? 'rgba(124,58,237,0.12)' : undefined,
-                                }}
-                              >
-                                {isOpen ? (
-                                  <ArrowDown01Icon size={13} className="text-violet-400" />
-                                ) : (
-                                  <ArrowRight01Icon size={13} />
-                                )}
-                              </button>
-                            </Table.Cell>
-
-                            <Table.Cell>
-                              <ImageReferenceLabel imageName={img.image_name} />
-                              <div className="flex items-center gap-2 mt-1.5">
-                                <span className="font-mono text-xs text-zinc-400">
-                                  :{img.latest_tag}
-                                </span>
-                                <StatusBadge
-                                  status={img.latest_status}
-                                  externalStatus={img.latest_external_status}
-                                />
-                                <span
-                                  className="text-xs text-zinc-500"
-                                  title={fullDate(img.latest_scan_at)}
-                                >
-                                  {timeAgo(img.latest_scan_at)}
-                                </span>
-                              </div>
-                            </Table.Cell>
-
-                            <Table.Cell>
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider whitespace-nowrap"
-                                  style={{
-                                    background: 'rgba(124,58,237,0.1)',
-                                    color: '#a78bfa',
-                                    border: '1px solid rgba(167,139,250,0.2)',
-                                  }}
-                                >
-                                  {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
-                                </div>
-                                <OwnershipBadge
-                                  ownerType={img.owner_type}
-                                  ownerOrgId={img.owner_org_id}
-                                  orgNamesById={orgNamesById}
-                                />
-                              </div>
-                            </Table.Cell>
-
-                            <Table.Cell>
-                              <Link
-                                href={`/scans/${img.latest_scan_id}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-xs text-zinc-500 hover:text-violet-400 transition-colors font-mono truncate max-w-[96px] inline-block"
-                                title="Open latest scan"
-                              >
-                                {img.latest_scan_id.slice(0, 8)}…
-                              </Link>
-                            </Table.Cell>
-
-                            <Table.Cell className="text-center">
-                              <SevCount count={img.critical_count} level="critical" />
-                            </Table.Cell>
-                            <Table.Cell className="text-center">
-                              <SevCount count={img.high_count} level="high" />
-                            </Table.Cell>
-                            <Table.Cell className="text-center">
-                              <SevCount count={img.medium_count} level="medium" />
-                            </Table.Cell>
-                            <Table.Cell className="text-center">
-                              <SevCount count={img.low_count} level="low" />
-                            </Table.Cell>
-                          </Table.Row>
-
-                          {isOpen && (
-                            <Table.Row id={`expanded-${img.image_name}`}>
-                              <Table.Cell colSpan={9} className="p-0">
-                                <div className="px-4 pb-4 pt-2">
-                                  <ImageChildren
-                                    key={`${img.image_name}-${childRefreshKey[img.image_name] ?? 0}`}
-                                    imageName={img.image_name}
-                                    mode="table"
-                                    orgNamesById={orgNamesById}
-                                    onDelete={(scanId) => handleDelete(scanId, img.image_name)}
-                                    onCancel={(scanId) => handleCancel(scanId, img.image_name)}
-                                    selectedScans={selectedScans}
-                                    onSelectScan={(scanId, selected) => {
-                                      if (selected) {
-                                        setSelectedScans((prev) => new Set(prev).add(scanId));
-                                      } else {
-                                        setSelectedScans((prev) => {
-                                          const next = new Set(prev);
-                                          next.delete(scanId);
-                                          return next;
-                                        });
-                                      }
-                                    }}
-                                  />
-                                </div>
-                              </Table.Cell>
-                            </Table.Row>
-                          )}
-                        </Fragment>
-                      );
-                    })
-                  )}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+          <ImageScansTable
+            childRefreshKey={childRefreshKey}
+            expanded={expanded}
+            hasActiveFilters={hasActiveFilters}
+            images={filteredImages}
+            loading={loading}
+            onCancel={(scanId, imageName) => handleCancel(scanId, imageName)}
+            onClearFilters={handleClearFilters}
+            onDelete={(scanId, imageName) => handleDelete(scanId, imageName)}
+            onExpandedChange={setExpanded}
+            onOpenCreateModal={openCreateModal}
+            onSelectedScansChange={setSelectedScans}
+            onSelectImageScans={(imageName, selected, latestScanId, visibleScanIds) =>
+              handleParentScanSelection(imageName, selected, latestScanId, visibleScanIds)
+            }
+            onSelectScan={(scanId, selected) => {
+              if (selected) {
+                setSelectedScans((previous) => new Set(previous).add(scanId));
+              } else {
+                setSelectedScans((previous) => {
+                  const next = new Set(previous);
+                  next.delete(scanId);
+                  return next;
+                });
+              }
+            }}
+            orgNamesById={orgNamesById}
+            selectedScans={selectedScans}
+          />
         </>
       )}
 

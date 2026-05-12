@@ -29,20 +29,26 @@ function ConfirmDialogUI({
   onCancel,
   loading,
 }: ConfirmDialogUIProps) {
-  const iconColor = variant === 'danger' ? '#f87171' : variant === 'warning' ? '#fbbf24' : '#a78bfa';
+  const iconColor =
+    variant === 'danger'
+      ? 'var(--color-danger-soft-foreground)'
+      : variant === 'warning'
+        ? 'var(--color-warning-soft-foreground)'
+        : 'var(--color-accent-soft-foreground)';
   const iconBg =
     variant === 'danger'
-      ? 'rgba(239,68,68,0.12)'
+      ? 'var(--color-danger-soft-hover)'
       : variant === 'warning'
-      ? 'rgba(245,158,11,0.12)'
-      : 'rgba(124,58,237,0.12)';
+        ? 'var(--color-warning-soft-hover)'
+        : 'var(--color-accent-soft-hover)';
   const iconBorder =
     variant === 'danger'
-      ? 'rgba(239,68,68,0.25)'
+      ? 'var(--color-danger-soft-foreground)'
       : variant === 'warning'
-      ? 'rgba(245,158,11,0.25)'
-      : 'rgba(124,58,237,0.25)';
-  const confirmClassName = variant === 'danger' ? 'btn-danger' : variant === 'warning' ? 'btn-warning' : 'btn-primary';
+        ? 'var(--color-warning-soft-foreground)'
+        : 'var(--color-accent-soft-foreground)';
+  const variantStyle =
+    variant === 'danger' ? 'danger' : variant === 'warning' ? 'tertiary' : 'primary';
 
   return (
     <Modal state={state}>
@@ -63,11 +69,19 @@ function ConfirmDialogUI({
                 </div>
               </div>
             </Modal.Body>
-            <Modal.Footer className="px-6 py-5 flex gap-3 justify-center" style={{ borderTop: 'none' }}>
-              <Button className="btn-secondary flex-1" onPress={onCancel}>
+            <Modal.Footer
+              className="px-6 py-5 flex gap-3 justify-center"
+              style={{ borderTop: 'none' }}
+            >
+              <Button className="flex-1" onPress={onCancel} variant="tertiary" isDisabled={loading}>
                 {cancelLabel}
               </Button>
-              <Button className={`${confirmClassName} flex-1`} isDisabled={loading} onPress={onConfirm}>
+              <Button
+                className="flex-1"
+                isDisabled={loading}
+                onPress={onConfirm}
+                variant={variantStyle}
+              >
                 {confirmLabel}
               </Button>
             </Modal.Footer>

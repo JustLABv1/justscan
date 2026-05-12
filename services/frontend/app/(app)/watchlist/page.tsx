@@ -688,37 +688,22 @@ export default function WatchlistPage() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
-                  Manage Watchlist Access
-                </Modal.Heading>
+            <Modal.Dialog className="overflow-hidden">
+              <Modal.Header>
+                <Modal.Heading className="font-semibold">Manage Watchlist Access</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5 space-y-4">
+              <Modal.Body className="py-5 space-y-4">
                 {shareError ? (
-                  <div
-                    className="rounded-xl px-3 py-2.5 text-sm"
-                    style={{
-                      background: 'rgba(239,68,68,0.1)',
-                      border: '1px solid rgba(239,68,68,0.2)',
-                      color: '#f87171',
-                    }}
-                  >
-                    {shareError}
-                  </div>
+                  <Alert status="danger" className="bg-danger-soft">
+                    <Alert.Indicator />
+                    <Alert.Content>
+                      <Alert.Title>{shareError}</Alert.Title>
+                    </Alert.Content>
+                  </Alert>
                 ) : null}
                 {shareTarget ? (
-                  <div
-                    className="rounded-xl px-4 py-3"
-                    style={{
-                      background: 'var(--row-hover)',
-                      border: '1px solid var(--surface-border)',
-                    }}
-                  >
+                  <div className="bg-surface-secondary rounded-xl px-4 py-3">
                     <p className="font-mono text-sm font-medium text-zinc-800 dark:text-zinc-100">
                       {shareTarget.image_name}:{shareTarget.image_tag}
                     </p>
@@ -734,9 +719,7 @@ export default function WatchlistPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-                      Current access
-                    </h3>
+                    <h3 className="text-sm font-semibold">Current access</h3>
                     <p className="text-xs text-zinc-500 mt-0.5">
                       Organizations listed here can trigger or manage this watchlist item.
                     </p>
@@ -752,32 +735,24 @@ export default function WatchlistPage() {
                       {shares.map((share) => (
                         <div
                           key={share.org_id}
-                          className="flex items-start justify-between gap-3 rounded-xl px-4 py-3"
-                          style={{
-                            background: 'var(--row-hover)',
-                            border: '1px solid var(--surface-border)',
-                          }}
+                          className="flex items-start justify-between gap-3 rounded-xl px-4 py-3 bg-surface-secondary"
                         >
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                              {share.org_name}
-                            </p>
-                            <p className="text-xs text-zinc-500 mt-0.5">
+                            <p className="text-sm font-medium">{share.org_name}</p>
+                            <p className="text-xs mt-0.5">
                               {share.is_owner ? 'Owner workspace' : 'Shared access'}
                             </p>
                           </div>
                           {share.is_owner ? (
-                            <span className="text-xs font-medium text-zinc-500">Locked</span>
+                            <span className="text-xs font-medium">Locked</span>
                           ) : (
                             <Button
-                              type="button"
                               onPress={() => {
                                 void handleRevokeShare(share.org_id);
                               }}
                               isDisabled={shareSaving}
-                              className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
                               isIconOnly
-                              variant="secondary"
+                              variant="danger-soft"
                             >
                               <Delete01Icon size={15} />
                             </Button>
@@ -790,19 +765,17 @@ export default function WatchlistPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-                      Grant access
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <h3 className="text-sm font-semibold">Grant access</h3>
+                    <p className="text-xs mt-0.5">
                       Share this watchlist item with another organization you manage.
                     </p>
                   </div>
                   {availableShareTargets.length === 0 ? (
-                    <p className="text-sm text-zinc-500">
+                    <p className="text-sm">
                       No additional organizations are available for sharing.
                     </p>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center">
                       <Select
                         value={shareOrgId || '__none__'}
                         onChange={(value) =>
@@ -810,7 +783,7 @@ export default function WatchlistPage() {
                         }
                         className="flex-1"
                       >
-                        <Select.Trigger className={selectTriggerCls}>
+                        <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
@@ -826,12 +799,10 @@ export default function WatchlistPage() {
                         </Select.Popover>
                       </Select>
                       <Button
-                        type="button"
                         onPress={() => {
                           void handleGrantShare();
                         }}
                         isDisabled={!shareOrgId || shareSaving}
-                        className="btn-primary disabled:opacity-60"
                         variant="primary"
                       >
                         Grant

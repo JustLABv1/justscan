@@ -35,15 +35,10 @@ export function StatCard({
   const labelNode = icon ? (
     <div className="flex min-w-0 items-center gap-2 text-zinc-600 dark:text-zinc-300">
       {icon}
-      <span className="truncate text-xs font-medium">{label}</span>
+      <span className="text-sm font-medium">{label}</span>
     </div>
   ) : (
-    <p
-      className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-widest"
-      style={{ color: 'var(--text-faint)' }}
-    >
-      {label}
-    </p>
+    <p className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-widest">{label}</p>
   );
 
   const valueNode = (
@@ -86,11 +81,7 @@ export function StatCard({
           {labelNode}
           {valueNode}
         </div>
-        {hint ? (
-          <div className="mt-1.5 text-[11px]" style={hintStyle ?? { color: 'var(--text-faint)' }}>
-            {hint}
-          </div>
-        ) : null}
+        {hint ? <div className="mt-1.5 text-[11px]">{hint}</div> : null}
       </Card.Content>
     </Card>
   );

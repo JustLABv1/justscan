@@ -1057,7 +1057,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                             <Dropdown.Menu
                               onAction={(key) => {
                                 if (key === 'settings') {
-                                  router.push('/settings');
+                                  router.push('/profile');
                                   mobileNav.close();
                                 }
                                 if (key === 'api-docs') {
@@ -1076,7 +1076,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                               <Dropdown.Item key="settings" id="settings" textValue="Settings">
                                 <div className="flex items-center gap-2">
                                   <Settings01Icon size={14} className="text-zinc-500" />
-                                  <Label>Settings</Label>
+                                  <Label>Profile</Label>
                                 </div>
                               </Dropdown.Item>
                               <Dropdown.Item key="theme" id="theme" textValue="Theme">
@@ -1216,7 +1216,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                   <Dropdown.Popover className="min-w-[200px]" placement="bottom end">
                     <Dropdown.Menu
                       onAction={(key) => {
-                        if (key === 'settings') router.push('/settings');
+                        if (key === 'settings') router.push('/profile');
                         if (key === 'api-docs') window.open('/swagger/index.html', '_blank');
                         if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
                         if (key === 'signout') handleLogout();
@@ -1225,7 +1225,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                       <Dropdown.Item key="settings" id="settings" textValue="Settings">
                         <div className="flex items-center gap-2">
                           <Settings01Icon size={14} className="text-zinc-500" />
-                          <Label>Settings</Label>
+                          <Label>Profile</Label>
                         </div>
                       </Dropdown.Item>
                       <Dropdown.Item key="theme" id="theme" textValue="Theme">

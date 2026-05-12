@@ -1,14 +1,14 @@
 'use client';
 
 import {
-    AlertDialog,
-    Avatar,
-    Button,
-    Card,
-    ListBox,
-    SearchField,
-    Select,
-    TextArea,
+  AlertDialog,
+  Avatar,
+  Button,
+  Card,
+  ListBox,
+  SearchField,
+  Select,
+  TextArea,
 } from '@heroui/react';
 import { Clock01Icon, PlusSignIcon } from 'hugeicons-react';
 import Link from 'next/link';
@@ -19,29 +19,29 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/toast';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import {
-    createAIConversation,
-    createScans,
-    deleteAIConversation,
-    getAIConversation,
-    getAISettings,
-    getScan,
-    getVulnerabilityContextAnalysis,
-    getWorkScope,
-    listAIConversations,
-    listAIProviders,
-    listArtifactoryRepositories,
-    listRegistriesWithCapabilities,
-    listVulnerabilities,
-    reScan,
-    sendAIConversationMessage,
-    type AIConversation,
-    type AIMessageSource,
-    type AIProviderSummary,
-    type AISettings,
-    type AIToolCall,
-    type RegistryWithHealth,
-    type Scan,
-    type Vulnerability,
+  createAIConversation,
+  createScans,
+  deleteAIConversation,
+  getAIConversation,
+  getAISettings,
+  getScan,
+  getVulnerabilityContextAnalysis,
+  getWorkScope,
+  listAIConversations,
+  listAIProviders,
+  listArtifactoryRepositories,
+  listRegistriesWithCapabilities,
+  listVulnerabilities,
+  reScan,
+  sendAIConversationMessage,
+  type AIConversation,
+  type AIMessageSource,
+  type AIProviderSummary,
+  type AISettings,
+  type AIToolCall,
+  type RegistryWithHealth,
+  type Scan,
+  type Vulnerability,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
@@ -1173,7 +1173,7 @@ async function buildScopeContext(
     title: 'Global workspace context',
     description: 'General JustScan routes and workflows.',
     context: [
-      'Core routes: /dashboard, /scans, /watchlist, /vulnkb, /suppressions, /registries, /tags, /orgs, /settings.',
+      'Core routes: /dashboard, /scans, /watchlist, /vulnkb, /suppressions, /registries, /tags, /orgs, /profile.',
       'Admin route: /admin for administrative users.',
       'New scan flow: /scans?new=1.',
       'Use /watchlist for recurring image monitoring, /vulnkb for vulnerability research, and /suppressions to review accepted risks.',
@@ -1239,14 +1239,12 @@ function buildScanContext(scan: Scan, vulnerabilities: Vulnerability[]): ScopeCo
         snippet: `Status ${scan.status}. Critical ${scan.critical_count}, High ${scan.high_count}, Medium ${scan.medium_count}.`,
         url: `/scans/${scan.id}`,
       },
-      ...vulnerabilities
-        .slice(0, 3)
-        .map((vulnerability) => ({
-          resourceType: 'vulnerability',
-          resourceId: vulnerability.id,
-          title: vulnerability.vuln_id,
-          snippet: `${vulnerability.severity} in ${vulnerability.pkg_name}. Fixed version: ${vulnerability.fixed_version || 'unavailable'}.`,
-        })),
+      ...vulnerabilities.slice(0, 3).map((vulnerability) => ({
+        resourceType: 'vulnerability',
+        resourceId: vulnerability.id,
+        title: vulnerability.vuln_id,
+        snippet: `${vulnerability.severity} in ${vulnerability.pkg_name}. Fixed version: ${vulnerability.fixed_version || 'unavailable'}.`,
+      })),
     ],
   };
 }
@@ -1481,7 +1479,8 @@ function resolveAssistantRoute(message: string, scopeContext: ScopeContext | nul
     [/^(?:\/open|open|go to|navigate to)\s+suppressions$/i, '/suppressions'],
     [/^(?:\/open|open|go to|navigate to)\s+tags$/i, '/tags'],
     [/^(?:\/open|open|go to|navigate to)\s+orgs?$/i, '/orgs'],
-    [/^(?:\/open|open|go to|navigate to)\s+settings$/i, '/settings'],
+    [/^(?:\/open|open|go to|navigate to)\s+settings$/i, '/profile'],
+    [/^(?:\/open|open|go to|navigate to)\s+profile$/i, '/profile'],
     [/^(?:\/open|open|go to|navigate to)\s+admin$/i, '/admin'],
     [/^(?:\/open|open|go to|navigate to)\s+admin ai$/i, '/admin/ai'],
     [/^(?:\/open|open|go to|navigate to)\s+admin notifications$/i, '/admin/notifications'],

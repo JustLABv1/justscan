@@ -16,7 +16,13 @@ export interface OrgPolicy {
 
 export type OrgRole = 'owner' | 'admin' | 'editor' | 'viewer';
 
-export type VulnerabilityViewSortBy = 'vuln_id' | 'pkg_name' | 'severity' | 'cvss_score' | 'installed_version' | 'fixed_version';
+export type VulnerabilityViewSortBy =
+  | 'vuln_id'
+  | 'pkg_name'
+  | 'severity'
+  | 'cvss_score'
+  | 'installed_version'
+  | 'fixed_version';
 export type VulnerabilityViewSortDir = 'asc' | 'desc';
 export type VulnerabilityViewSeverity = '' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN';
 
@@ -26,6 +32,7 @@ export interface VulnerabilityViewSettings {
   severity: VulnerabilityViewSeverity;
   min_cvss: number;
   has_fix: boolean;
+  xray_policy_first: boolean;
 }
 
 export interface VulnerabilityViewPreferenceResponse {

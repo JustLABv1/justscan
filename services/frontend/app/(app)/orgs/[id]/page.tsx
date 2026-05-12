@@ -12,44 +12,40 @@ import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import {
-    assignScanToOrg,
-    createOrgInvite,
-    createPolicy,
-    deletePolicy,
-    getComplianceTrend,
-    getOrg,
-    getOrgRiskScore,
-    getUser,
-    listOrgInvites,
-    listOrgMembers,
-    listOrgScans,
-    listScans,
-    Org,
-    OrgInvite,
-    OrgMember,
-    OrgPolicy,
-    OrgRiskScore,
-    OrgRole,
-    PolicyRule,
-    removeOrgMember,
-    removeScanFromOrg,
-    revokeOrgInvite,
-    Scan,
-    transferOrgOwnership,
-    TrendPoint,
-    updateOrg,
-    updateOrgMemberRole,
-    updateOrgVulnerabilityViewSettings,
-    updatePolicy,
-    VulnerabilityViewSettings,
+  assignScanToOrg,
+  createOrgInvite,
+  createPolicy,
+  deletePolicy,
+  getComplianceTrend,
+  getOrg,
+  getOrgRiskScore,
+  getUser,
+  listOrgInvites,
+  listOrgMembers,
+  listOrgScans,
+  listScans,
+  Org,
+  OrgInvite,
+  OrgMember,
+  OrgPolicy,
+  OrgRiskScore,
+  OrgRole,
+  PolicyRule,
+  removeOrgMember,
+  removeScanFromOrg,
+  revokeOrgInvite,
+  Scan,
+  transferOrgOwnership,
+  TrendPoint,
+  updateOrg,
+  updateOrgMemberRole,
+  updateOrgVulnerabilityViewSettings,
+  updatePolicy,
+  VulnerabilityViewSettings,
 } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
-import {
-    ArrowLeft01Icon,
-    Delete01Icon,
-    PlusSignIcon,
-} from 'hugeicons-react';
+import { ArrowLeft01Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -72,6 +68,7 @@ const DEFAULT_VULNERABILITY_VIEW_SETTINGS: VulnerabilityViewSettings = {
   severity: '',
   min_cvss: 0,
   has_fix: false,
+  xray_policy_first: false,
 };
 
 function emptyRule(): PolicyRule {
@@ -103,13 +100,15 @@ export default function OrgDetailPage() {
   const [riskScore, setRiskScore] = useState<OrgRiskScore | null>(null);
   const [activeTab, setActiveTab] = useState<OrgTabId>('overview');
   const [newPattern, setNewPattern] = useState('');
-  const [vulnerabilityViewSettings, setVulnerabilityViewSettings] = useState<VulnerabilityViewSettings>(DEFAULT_VULNERABILITY_VIEW_SETTINGS);
+  const [vulnerabilityViewSettings, setVulnerabilityViewSettings] =
+    useState<VulnerabilityViewSettings>(DEFAULT_VULNERABILITY_VIEW_SETTINGS);
   const [vulnerabilityViewSaving, setVulnerabilityViewSaving] = useState(false);
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [invites, setInvites] = useState<OrgInvite[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<Extract<OrgRole, 'admin' | 'editor' | 'viewer'>>('viewer');
+  const [inviteRole, setInviteRole] =
+    useState<Extract<OrgRole, 'admin' | 'editor' | 'viewer'>>('viewer');
   const [inviteSaving, setInviteSaving] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const inviteModal = useOverlayState();
@@ -129,7 +128,8 @@ export default function OrgDetailPage() {
   const [assignLoading, setAssignLoading] = useState(false);
   const assignModal = useOverlayState();
   const currentOrgRole = org?.current_user_role;
-  const canManageMembers = isSystemAdmin || currentOrgRole === 'owner' || currentOrgRole === 'admin';
+  const canManageMembers =
+    isSystemAdmin || currentOrgRole === 'owner' || currentOrgRole === 'admin';
   const canEditRoles = isSystemAdmin || currentOrgRole === 'owner';
   const canManageOrgSettings = canManageMembers;
 
@@ -149,7 +149,9 @@ export default function OrgDetailPage() {
     try {
       const data = await listOrgScans(id);
       setOrgScans(data as OrgScanItem[]);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [id]);
 
   const loadMembers = useCallback(async () => {
@@ -176,18 +178,25 @@ export default function OrgDetailPage() {
     load();
     loadOrgScans();
     loadMembers();
-    getComplianceTrend(id).then(setTrend).catch(() => {});
-    getOrgRiskScore(id).then(setRiskScore).catch(() => {});
+    getComplianceTrend(id)
+      .then(setTrend)
+      .catch(() => {});
+    getOrgRiskScore(id)
+      .then(setRiskScore)
+      .catch(() => {});
   }, [load, loadMembers, loadOrgScans, id]);
 
   useEffect(() => {
-    setVulnerabilityViewSettings(org?.vulnerability_view_settings ?? DEFAULT_VULNERABILITY_VIEW_SETTINGS);
+    setVulnerabilityViewSettings(
+      org?.vulnerability_view_settings ?? DEFAULT_VULNERABILITY_VIEW_SETTINGS
+    );
   }, [
     org?.vulnerability_view_settings?.sort_by,
     org?.vulnerability_view_settings?.sort_dir,
     org?.vulnerability_view_settings?.severity,
     org?.vulnerability_view_settings?.min_cvss,
     org?.vulnerability_view_settings?.has_fix,
+    org?.vulnerability_view_settings?.xray_policy_first,
   ]);
 
   useEffect(() => {
@@ -225,7 +234,10 @@ export default function OrgDetailPage() {
     }
   }
 
-  async function handleMemberRoleChange(member: OrgMember, nextRole: Extract<OrgRole, 'admin' | 'editor' | 'viewer'>) {
+  async function handleMemberRoleChange(
+    member: OrgMember,
+    nextRole: Extract<OrgRole, 'admin' | 'editor' | 'viewer'>
+  ) {
     if (member.role === nextRole) return;
     try {
       await updateOrgMemberRole(id, member.user_id, nextRole);
@@ -254,7 +266,8 @@ export default function OrgDetailPage() {
     const label = member.username || member.email || 'this member';
     const ok = await confirm({
       title: `Transfer ownership to ${label}?`,
-      message: 'The selected member will become the organization owner and the current owner will be demoted to admin.',
+      message:
+        'The selected member will become the organization owner and the current owner will be demoted to admin.',
       confirmLabel: 'Transfer',
       variant: 'warning',
     });
@@ -356,7 +369,9 @@ export default function OrgDetailPage() {
       const res = await listScans(1, 50);
       const assignedIds = new Set(orgScans.map((s) => s.id));
       setAllScans((res.data ?? []).filter((s) => !assignedIds.has(s.id)));
-    } catch { /* ignore */ } finally {
+    } catch {
+      /* ignore */
+    } finally {
       setAssignLoading(false);
     }
   }
@@ -371,7 +386,8 @@ export default function OrgDetailPage() {
   async function handleRemoveScan(scanId: string) {
     const ok = await confirm({
       title: 'Remove scan from organization?',
-      message: 'The scan will remain in the system but will no longer be part of this organization.',
+      message:
+        'The scan will remain in the system but will no longer be part of this organization.',
       confirmLabel: 'Remove',
       variant: 'warning',
     });
@@ -385,12 +401,15 @@ export default function OrgDetailPage() {
     if (!newPattern.trim() || !org) return;
     const patterns = [...(org.image_patterns ?? []), newPattern.trim()];
     const updated = await updateOrg(id, { image_patterns: patterns }).catch(() => null);
-    if (updated) { setOrg(updated); setNewPattern(''); }
+    if (updated) {
+      setOrg(updated);
+      setNewPattern('');
+    }
   }
 
   async function removePattern(p: string) {
     if (!org) return;
-    const patterns = (org.image_patterns ?? []).filter(x => x !== p);
+    const patterns = (org.image_patterns ?? []).filter((x) => x !== p);
     const updated = await updateOrg(id, { image_patterns: patterns }).catch(() => null);
     if (updated) setOrg(updated);
   }
@@ -401,10 +420,12 @@ export default function OrgDetailPage() {
     try {
       const result = await updateOrgVulnerabilityViewSettings(id, vulnerabilityViewSettings);
       setVulnerabilityViewSettings(result.settings);
-      setOrg((prev) => prev ? { ...prev, vulnerability_view_settings: result.settings } : prev);
+      setOrg((prev) => (prev ? { ...prev, vulnerability_view_settings: result.settings } : prev));
       toast.success('Vulnerability view defaults saved');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save vulnerability view defaults');
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to save vulnerability view defaults'
+      );
     } finally {
       setVulnerabilityViewSaving(false);
     }
@@ -421,8 +442,14 @@ export default function OrgDetailPage() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-xl px-4 py-3 text-sm"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+        <div
+          className="rounded-xl px-4 py-3 text-sm"
+          style={{
+            background: 'rgba(239,68,68,0.08)',
+            border: '1px solid rgba(239,68,68,0.18)',
+            color: '#f87171',
+          }}
+        >
           {error}
         </div>
       </div>
@@ -434,9 +461,10 @@ export default function OrgDetailPage() {
   function handleTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
     event.preventDefault();
-    const nextIndex = event.key === 'ArrowRight'
-      ? (index + 1) % ORG_TABS.length
-      : (index - 1 + ORG_TABS.length) % ORG_TABS.length;
+    const nextIndex =
+      event.key === 'ArrowRight'
+        ? (index + 1) % ORG_TABS.length
+        : (index - 1 + ORG_TABS.length) % ORG_TABS.length;
     handleTabChange(ORG_TABS[nextIndex].id);
   }
 
@@ -458,7 +486,9 @@ export default function OrgDetailPage() {
         breadcrumbs={[{ label: 'Organizations', href: '/orgs' }, { label: org.name }]}
         eyebrow="Organization workspace"
         title={org.name}
-        description={org.description || 'Manage organization risk, policies, members, and assigned assets.'}
+        description={
+          org.description || 'Manage organization risk, policies, members, and assigned assets.'
+        }
         actions={
           <button
             onClick={() => router.back()}
@@ -471,7 +501,11 @@ export default function OrgDetailPage() {
         }
       />
 
-      <div className="surface-panel rounded-2xl p-1.5" role="tablist" aria-label="Organization sections">
+      <div
+        className="surface-panel rounded-2xl p-1.5"
+        role="tablist"
+        aria-label="Organization sections"
+      >
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-1">
           {ORG_TABS.map((tab, index) => {
             const active = activeTab === tab.id;
@@ -486,14 +520,22 @@ export default function OrgDetailPage() {
                 onClick={() => handleTabChange(tab.id)}
                 onKeyDown={(event) => handleTabKeyDown(event, index)}
                 type="button"
-                style={active
-                  ? {
-                      background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                      boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.2), 0 2px 8px rgba(124,58,237,0.08)',
-                    }
-                  : { background: 'transparent' }}
+                style={
+                  active
+                    ? {
+                        background:
+                          'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                        boxShadow:
+                          'inset 0 0 0 1px rgba(167,139,250,0.2), 0 2px 8px rgba(124,58,237,0.08)',
+                      }
+                    : { background: 'transparent' }
+                }
               >
-                <p className={`text-sm font-semibold ${active ? 'text-violet-600 dark:text-violet-200' : 'text-zinc-700 dark:text-zinc-200'}`}>{tab.label}</p>
+                <p
+                  className={`text-sm font-semibold ${active ? 'text-violet-600 dark:text-violet-200' : 'text-zinc-700 dark:text-zinc-200'}`}
+                >
+                  {tab.label}
+                </p>
                 <p className="text-xs text-zinc-500 mt-1">{tab.description}</p>
               </button>
             );
@@ -560,7 +602,10 @@ export default function OrgDetailPage() {
         <Modal.Backdrop isDismissable>
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <Modal.Header
+                className="px-6 py-4"
+                style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              >
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
                   {editingPolicy ? 'Edit Policy' : 'New Policy'}
                 </Modal.Heading>
@@ -569,13 +614,21 @@ export default function OrgDetailPage() {
               <Modal.Body className="px-6 py-5 max-h-[60vh] overflow-y-auto">
                 <form id="policy-form" onSubmit={handleSavePolicy} className="space-y-5">
                   {policyError && (
-                    <div className="rounded-xl px-3 py-2.5 text-sm"
-                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+                    <div
+                      className="rounded-xl px-3 py-2.5 text-sm"
+                      style={{
+                        background: 'rgba(239,68,68,0.1)',
+                        border: '1px solid rgba(239,68,68,0.2)',
+                        color: '#f87171',
+                      }}
+                    >
                       {policyError}
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Policy Name <span className="text-red-400">*</span></label>
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                      Policy Name <span className="text-red-400">*</span>
+                    </label>
                     <input
                       className={inputCls}
                       placeholder="e.g. No Critical CVEs"
@@ -587,7 +640,9 @@ export default function OrgDetailPage() {
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Rules</label>
+                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                        Rules
+                      </label>
                       <button
                         type="button"
                         onClick={addRule}
@@ -599,15 +654,24 @@ export default function OrgDetailPage() {
                     </div>
 
                     {policyRules.map((rule, idx) => (
-                      <div key={idx} className="rounded-xl p-3 space-y-3"
-                        style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+                      <div
+                        key={idx}
+                        className="rounded-xl p-3 space-y-3"
+                        style={{
+                          background: 'var(--row-hover)',
+                          border: '1px solid var(--surface-border)',
+                        }}
+                      >
                         <div className="flex items-center justify-between gap-2">
-                          <Select value={rule.type} onChange={value => {
+                          <Select
+                            value={rule.type}
+                            onChange={(value) => {
                               const newType = value as PolicyRule['type'];
                               setPolicyRules((prev) =>
                                 prev.map((r, i) => (i === idx ? { type: newType } : r))
                               );
-                            }}>
+                            }}
+                          >
                             <Select.Trigger className={selectTriggerCls}>
                               <Select.Value />
                               <Select.Indicator />
@@ -615,7 +679,9 @@ export default function OrgDetailPage() {
                             <Select.Popover>
                               <ListBox>
                                 {Object.entries(RULE_TYPE_LABELS).map(([val, label]) => (
-                                  <ListBox.Item key={val} id={val}>{label}</ListBox.Item>
+                                  <ListBox.Item key={val} id={val}>
+                                    {label}
+                                  </ListBox.Item>
                                 ))}
                               </ListBox>
                             </Select.Popover>
@@ -631,14 +697,18 @@ export default function OrgDetailPage() {
 
                         {rule.type === 'max_cvss' && (
                           <div className="space-y-1">
-                            <label className="text-xs text-zinc-500">Max CVSS threshold (fail if ≥ this value)</label>
+                            <label className="text-xs text-zinc-500">
+                              Max CVSS threshold (fail if ≥ this value)
+                            </label>
                             <input
                               type="number"
                               min={0}
                               max={10}
                               step={0.1}
                               value={rule.value ?? 7}
-                              onChange={(e) => setRuleField(idx, 'value', parseFloat(e.target.value))}
+                              onChange={(e) =>
+                                setRuleField(idx, 'value', parseFloat(e.target.value))
+                              }
                               className={inputCls}
                             />
                           </div>
@@ -647,14 +717,21 @@ export default function OrgDetailPage() {
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
                               <label className="text-xs text-zinc-500">Severity</label>
-                              <Select value={rule.severity ?? 'CRITICAL'} onChange={value => setRuleField(idx, 'severity', String(value))}>
+                              <Select
+                                value={rule.severity ?? 'CRITICAL'}
+                                onChange={(value) => setRuleField(idx, 'severity', String(value))}
+                              >
                                 <Select.Trigger className={selectTriggerCls}>
                                   <Select.Value />
                                   <Select.Indicator />
                                 </Select.Trigger>
                                 <Select.Popover>
                                   <ListBox>
-                                    {SEV_OPTIONS.map((s) => <ListBox.Item key={s} id={s}>{s}</ListBox.Item>)}
+                                    {SEV_OPTIONS.map((s) => (
+                                      <ListBox.Item key={s} id={s}>
+                                        {s}
+                                      </ListBox.Item>
+                                    ))}
                                   </ListBox>
                                 </Select.Popover>
                               </Select>
@@ -665,7 +742,9 @@ export default function OrgDetailPage() {
                                 type="number"
                                 min={0}
                                 value={rule.value ?? 0}
-                                onChange={(e) => setRuleField(idx, 'value', parseInt(e.target.value))}
+                                onChange={(e) =>
+                                  setRuleField(idx, 'value', parseInt(e.target.value))
+                                }
                                 className={inputCls}
                               />
                             </div>
@@ -673,7 +752,9 @@ export default function OrgDetailPage() {
                         )}
                         {rule.type === 'max_total' && (
                           <div className="space-y-1">
-                            <label className="text-xs text-zinc-500">Max total vulnerabilities</label>
+                            <label className="text-xs text-zinc-500">
+                              Max total vulnerabilities
+                            </label>
                             <input
                               type="number"
                               min={0}
@@ -685,15 +766,24 @@ export default function OrgDetailPage() {
                         )}
                         {rule.type === 'require_fix' && (
                           <div className="space-y-1">
-                            <label className="text-xs text-zinc-500">Require fix for severity</label>
-                            <Select value={rule.severity ?? 'CRITICAL'} onChange={value => setRuleField(idx, 'severity', String(value))}>
+                            <label className="text-xs text-zinc-500">
+                              Require fix for severity
+                            </label>
+                            <Select
+                              value={rule.severity ?? 'CRITICAL'}
+                              onChange={(value) => setRuleField(idx, 'severity', String(value))}
+                            >
                               <Select.Trigger className={selectTriggerCls}>
                                 <Select.Value />
                                 <Select.Indicator />
                               </Select.Trigger>
                               <Select.Popover>
                                 <ListBox>
-                                  {SEV_OPTIONS.map((s) => <ListBox.Item key={s} id={s}>{s}</ListBox.Item>)}
+                                  {SEV_OPTIONS.map((s) => (
+                                    <ListBox.Item key={s} id={s}>
+                                      {s}
+                                    </ListBox.Item>
+                                  ))}
                                 </ListBox>
                               </Select.Popover>
                             </Select>
@@ -715,17 +805,18 @@ export default function OrgDetailPage() {
                     ))}
 
                     {policyRules.length === 0 && (
-                      <p className="text-xs text-zinc-500 text-center py-2">No rules. Add at least one rule.</p>
+                      <p className="text-xs text-zinc-500 text-center py-2">
+                        No rules. Add at least one rule.
+                      </p>
                     )}
                   </div>
                 </form>
               </Modal.Body>
-              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button
-                  onClick={policyModal.close}
-                  className="btn-secondary"
-                  type="button"
-                >
+              <Modal.Footer
+                className="px-6 py-4 flex gap-3 justify-end"
+                style={{ borderTop: '1px solid var(--border-subtle)' }}
+              >
+                <button onClick={policyModal.close} className="btn-secondary" type="button">
                   Cancel
                 </button>
                 <button
@@ -750,8 +841,13 @@ export default function OrgDetailPage() {
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Assign Scan</Modal.Heading>
+              <Modal.Header
+                className="px-6 py-4"
+                style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              >
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                  Assign Scan
+                </Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5 max-h-[60vh] overflow-y-auto">
@@ -770,16 +866,16 @@ export default function OrgDetailPage() {
                         key={scan.id}
                         onClick={() => handleAssign(scan.id)}
                         className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-colors text-left group"
-                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background = 'var(--row-hover)')
+                        }
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                       >
                         <div>
                           <p className="font-mono text-sm text-zinc-700 dark:text-zinc-300 group-hover:text-violet-500 dark:group-hover:text-violet-400 transition-colors">
                             {scan.image_name}:{scan.image_tag}
                           </p>
-                          <p className="text-xs text-zinc-500 mt-0.5">
-                            {timeAgo(scan.created_at)}
-                          </p>
+                          <p className="text-xs text-zinc-500 mt-0.5">{timeAgo(scan.created_at)}</p>
                         </div>
                         <StatusBadge status={scan.status} />
                       </button>
@@ -796,17 +892,41 @@ export default function OrgDetailPage() {
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Invite Member</Modal.Heading>
+              <Modal.Header
+                className="px-6 py-4"
+                style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              >
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                  Invite Member
+                </Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5">
                 <form id="invite-member-form" onSubmit={handleCreateInvite} className="space-y-4">
-                  {inviteError ? <FormAlert description={inviteError} title="Invite failed" /> : null}
-                  <FormField label="Email" onChange={(e) => setInviteEmail(e.target.value)} placeholder="teammate@example.com" required type="email" value={inviteEmail} />
+                  {inviteError ? (
+                    <FormAlert description={inviteError} title="Invite failed" />
+                  ) : null}
+                  <FormField
+                    label="Email"
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="teammate@example.com"
+                    required
+                    type="email"
+                    value={inviteEmail}
+                  />
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Role</label>
-                    <select className={inputCls} value={inviteRole} onChange={(e) => setInviteRole(e.target.value as Extract<OrgRole, 'admin' | 'editor' | 'viewer'>)}>
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                      Role
+                    </label>
+                    <select
+                      className={inputCls}
+                      value={inviteRole}
+                      onChange={(e) =>
+                        setInviteRole(
+                          e.target.value as Extract<OrgRole, 'admin' | 'editor' | 'viewer'>
+                        )
+                      }
+                    >
                       <option value="viewer">Viewer</option>
                       <option value="editor">Editor</option>
                       <option value="admin">Admin</option>
@@ -814,10 +934,22 @@ export default function OrgDetailPage() {
                   </div>
                 </form>
               </Modal.Body>
-              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={inviteModal.close} className="btn-secondary" type="button">Cancel</button>
-                <button type="submit" form="invite-member-form" disabled={inviteSaving} className="btn-primary inline-flex items-center gap-2">
-                  {inviteSaving && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              <Modal.Footer
+                className="px-6 py-4 flex gap-3 justify-end"
+                style={{ borderTop: '1px solid var(--border-subtle)' }}
+              >
+                <button onClick={inviteModal.close} className="btn-secondary" type="button">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="invite-member-form"
+                  disabled={inviteSaving}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
+                  {inviteSaving && (
+                    <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  )}
                   Create Invite
                 </button>
               </Modal.Footer>

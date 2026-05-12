@@ -1,5 +1,11 @@
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
-import type { Org, OrgPolicy, VulnerabilityViewSettings, VulnerabilityViewSeverity, VulnerabilityViewSortBy } from '@/lib/api';
+import type {
+  Org,
+  OrgPolicy,
+  VulnerabilityViewSettings,
+  VulnerabilityViewSeverity,
+  VulnerabilityViewSortBy,
+} from '@/lib/api';
 import { Label, ListBox, Select, Switch } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
 
@@ -67,12 +73,18 @@ export function OrgAutomationTab({
       <div className="surface-card relative rounded-2xl p-5 space-y-3">
         <div
           className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-          style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)' }}
+          style={{
+            background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)',
+          }}
         />
         <div>
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Auto-assign Patterns</h2>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
+            Auto-assign Patterns
+          </h2>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Scans matching these patterns are automatically assigned to this org. Use glob syntax: <code className="text-violet-500 dark:text-violet-400">nginx:*</code>, <code className="text-violet-500 dark:text-violet-400">docker.io/myapp:*</code>
+            Scans matching these patterns are automatically assigned to this org. Use glob syntax:{' '}
+            <code className="text-violet-500 dark:text-violet-400">nginx:*</code>,{' '}
+            <code className="text-violet-500 dark:text-violet-400">docker.io/myapp:*</code>
           </p>
         </div>
 
@@ -84,10 +96,18 @@ export function OrgAutomationTab({
               style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
             >
               {pattern}
-              <button onClick={() => void onRemovePattern(pattern)} className="text-zinc-400 hover:text-red-400 transition-colors ml-0.5" type="button">×</button>
+              <button
+                onClick={() => void onRemovePattern(pattern)}
+                className="text-zinc-400 hover:text-red-400 transition-colors ml-0.5"
+                type="button"
+              >
+                ×
+              </button>
             </span>
           ))}
-          {(org.image_patterns ?? []).length === 0 && <p className="text-xs text-zinc-500">No patterns configured.</p>}
+          {(org.image_patterns ?? []).length === 0 && (
+            <p className="text-xs text-zinc-500">No patterns configured.</p>
+          )}
         </div>
 
         <div className="flex gap-2">
@@ -99,7 +119,12 @@ export function OrgAutomationTab({
             placeholder="nginx:* or docker.io/myapp:*"
             className={`${inputClassName} font-mono`}
           />
-          <button onClick={() => void onAddPattern()} disabled={!newPattern.trim()} className="btn-primary" type="button">
+          <button
+            onClick={() => void onAddPattern()}
+            disabled={!newPattern.trim()}
+            className="btn-primary"
+            type="button"
+          >
             Add
           </button>
         </div>
@@ -108,11 +133,15 @@ export function OrgAutomationTab({
       <div className="surface-card relative rounded-2xl p-5 space-y-4">
         <div
           className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-          style={{ background: 'linear-gradient(90deg,transparent,rgba(14,165,233,0.18),transparent)' }}
+          style={{
+            background: 'linear-gradient(90deg,transparent,rgba(14,165,233,0.18),transparent)',
+          }}
         />
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Default vulnerability view</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
+              Default vulnerability view
+            </h2>
             <p className="text-xs text-zinc-500 mt-0.5">
               Applies to organization scans unless a user saves their own scan view preference.
             </p>
@@ -132,7 +161,11 @@ export function OrgAutomationTab({
             <label className="text-xs font-medium text-zinc-500">Sort by</label>
             <Select
               value={vulnerabilityViewSettings.sort_by}
-              onChange={value => updateVulnerabilityViewSettings({ sort_by: String(value) as VulnerabilityViewSortBy })}
+              onChange={(value) =>
+                updateVulnerabilityViewSettings({
+                  sort_by: String(value) as VulnerabilityViewSortBy,
+                })
+              }
               isDisabled={!canManageOrgSettings}
             >
               <Select.Trigger className={selectTriggerCls}>
@@ -141,7 +174,11 @@ export function OrgAutomationTab({
               </Select.Trigger>
               <Select.Popover>
                 <ListBox>
-                  {sortOptions.map((option) => <ListBox.Item key={option.id} id={option.id}>{option.label}</ListBox.Item>)}
+                  {sortOptions.map((option) => (
+                    <ListBox.Item key={option.id} id={option.id}>
+                      {option.label}
+                    </ListBox.Item>
+                  ))}
                 </ListBox>
               </Select.Popover>
             </Select>
@@ -151,7 +188,11 @@ export function OrgAutomationTab({
             <label className="text-xs font-medium text-zinc-500">Direction</label>
             <Select
               value={vulnerabilityViewSettings.sort_dir}
-              onChange={value => updateVulnerabilityViewSettings({ sort_dir: String(value) === 'desc' ? 'desc' : 'asc' })}
+              onChange={(value) =>
+                updateVulnerabilityViewSettings({
+                  sort_dir: String(value) === 'desc' ? 'desc' : 'asc',
+                })
+              }
               isDisabled={!canManageOrgSettings}
             >
               <Select.Trigger className={selectTriggerCls}>
@@ -171,7 +212,13 @@ export function OrgAutomationTab({
             <label className="text-xs font-medium text-zinc-500">Severity</label>
             <Select
               value={vulnerabilityViewSettings.severity || '__all__'}
-              onChange={value => updateVulnerabilityViewSettings({ severity: String(value === '__all__' ? '' : value ?? '') as VulnerabilityViewSeverity })}
+              onChange={(value) =>
+                updateVulnerabilityViewSettings({
+                  severity: String(
+                    value === '__all__' ? '' : (value ?? '')
+                  ) as VulnerabilityViewSeverity,
+                })
+              }
               isDisabled={!canManageOrgSettings}
             >
               <Select.Trigger className={selectTriggerCls}>
@@ -180,7 +227,11 @@ export function OrgAutomationTab({
               </Select.Trigger>
               <Select.Popover>
                 <ListBox>
-                  {severityOptions.map((option) => <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>{option.label}</ListBox.Item>)}
+                  {severityOptions.map((option) => (
+                    <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>
+                      {option.label}
+                    </ListBox.Item>
+                  ))}
                 </ListBox>
               </Select.Popover>
             </Select>
@@ -207,14 +258,31 @@ export function OrgAutomationTab({
 
         <Switch
           isSelected={vulnerabilityViewSettings.has_fix}
-          onChange={value => updateVulnerabilityViewSettings({ has_fix: value })}
+          onChange={(value) => updateVulnerabilityViewSettings({ has_fix: value })}
           isDisabled={!canManageOrgSettings}
         >
           <Switch.Control>
             <Switch.Thumb />
           </Switch.Control>
           <Switch.Content>
-            <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Only show vulnerabilities with a fix</Label>
+            <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              Only show vulnerabilities with a fix
+            </Label>
+          </Switch.Content>
+        </Switch>
+
+        <Switch
+          isSelected={vulnerabilityViewSettings.xray_policy_first}
+          onChange={(value) => updateVulnerabilityViewSettings({ xray_policy_first: value })}
+          isDisabled={!canManageOrgSettings}
+        >
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Switch.Content>
+            <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              Prioritize vulnerabilities with Xray policy matches
+            </Label>
           </Switch.Content>
         </Switch>
       </div>
@@ -222,7 +290,11 @@ export function OrgAutomationTab({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Policies</h2>
-          <button onClick={onCreatePolicy} className="btn-primary inline-flex items-center gap-2" type="button">
+          <button
+            onClick={onCreatePolicy}
+            className="btn-primary inline-flex items-center gap-2"
+            type="button"
+          >
             <PlusSignIcon size={14} />
             Add Policy
           </button>
@@ -235,9 +307,14 @@ export function OrgAutomationTab({
         ) : (
           <div className="space-y-2">
             {(org.policies ?? []).map((policy) => (
-              <div key={policy.id} className="surface-card rounded-2xl p-4 flex items-start justify-between gap-4">
+              <div
+                key={policy.id}
+                className="surface-card rounded-2xl p-4 flex items-start justify-between gap-4"
+              >
                 <div className="space-y-2 min-w-0">
-                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{policy.name}</p>
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                    {policy.name}
+                  </p>
                   {policy.rules.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {policy.rules.map((rule, index) => (
@@ -247,10 +324,20 @@ export function OrgAutomationTab({
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button onClick={() => onEditPolicy(policy)} className="text-zinc-400 dark:text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1" title="Edit policy" type="button">
+                  <button
+                    onClick={() => onEditPolicy(policy)}
+                    className="text-zinc-400 dark:text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1"
+                    title="Edit policy"
+                    type="button"
+                  >
                     <PencilEdit01Icon size={15} />
                   </button>
-                  <button onClick={() => void onDeletePolicy(policy.id)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1" title="Delete policy" type="button">
+                  <button
+                    onClick={() => void onDeletePolicy(policy.id)}
+                    className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1"
+                    title="Delete policy"
+                    type="button"
+                  >
                     <Delete01Icon size={15} />
                   </button>
                 </div>

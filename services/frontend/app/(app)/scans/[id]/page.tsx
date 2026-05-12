@@ -71,6 +71,7 @@ import {
   Button,
   Calendar,
   Card,
+  Chip,
   DateField,
   DatePicker,
   Dropdown,
@@ -109,7 +110,7 @@ import {
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
 
-type ScanTab = 'vulns' | 'policy' | 'sbom' | 'details' | 'timeline';
+type ScanTab = 'vulns' | 'sbom' | 'details' | 'timeline';
 
 const DEFAULT_VULNERABILITY_VIEW_SETTINGS: VulnerabilityViewSettings = {
   sort_by: 'severity',
@@ -117,6 +118,7 @@ const DEFAULT_VULNERABILITY_VIEW_SETTINGS: VulnerabilityViewSettings = {
   severity: '',
   min_cvss: 0,
   has_fix: false,
+  xray_policy_first: false,
 };
 
 const VULNERABILITY_SORT_LABELS: Record<VulnerabilityViewSettings['sort_by'], string> = {
@@ -133,6 +135,7 @@ function vulnerabilityViewSummary(settings: VulnerabilityViewSettings) {
     settings.severity ? settings.severity : 'All severities',
     settings.min_cvss > 0 ? `CVSS >= ${settings.min_cvss}` : '',
     settings.has_fix ? 'Has fix' : '',
+    settings.xray_policy_first ? 'Xray policy first' : '',
   ].filter(Boolean);
   return `${VULNERABILITY_SORT_LABELS[settings.sort_by]} ${settings.sort_dir === 'desc' ? 'descending' : 'ascending'} | ${filters.join(' | ')}`;
 }
@@ -146,7 +149,8 @@ function vulnerabilityViewSettingsEqual(
     a.sort_dir === b.sort_dir &&
     a.severity === b.severity &&
     a.min_cvss === b.min_cvss &&
-    a.has_fix === b.has_fix
+    a.has_fix === b.has_fix &&
+    a.xray_policy_first === b.xray_policy_first
   );
 }
 
@@ -302,6 +306,95 @@ function PolicyWatchList({
   );
 }
 
+type XrayWatchPolicyMatch = {
+  watchName: string;
+  watchID: string;
+  policy: string;
+  rule: string;
+  isBlocking: boolean;
+  isBuildFailed: boolean;
+  failPullRequest: boolean;
+};
+
+function isActiveXrayPolicyMatch(match: XrayWatchPolicyMatch): boolean {
+  return match.isBlocking || match.isBuildFailed || match.failPullRequest;
+}
+
+function parseXrayWatchPolicyMatches(vulnerability: Vulnerability): XrayWatchPolicyMatch[] {
+  const raw = vulnerability.xray_watch_policy_matches;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  const results: XrayWatchPolicyMatch[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue;
+    }
+
+    const row = item as Record<string, unknown>;
+    const watchName = typeof row.watch_name === 'string' ? row.watch_name.trim() : '';
+    const watchID = typeof row.watch_id === 'string' ? row.watch_id.trim() : '';
+    const policy = typeof row.policy === 'string' ? row.policy.trim() : '';
+    const rule = typeof row.rule === 'string' ? row.rule.trim() : '';
+    const isBlocking = row.is_blocking === true;
+    const isBuildFailed = row.is_build_failed === true;
+    const failPullRequest = row.fail_pull_request === true;
+
+    results.push({ watchName, watchID, policy, rule, isBlocking, isBuildFailed, failPullRequest });
+  }
+
+  const deduped = new Map<string, XrayWatchPolicyMatch>();
+  for (const match of results) {
+    const key = [
+      match.watchName.toLowerCase(),
+      match.watchID.toLowerCase(),
+      match.policy.toLowerCase(),
+      match.rule.toLowerCase(),
+      match.isBlocking ? '1' : '0',
+      match.isBuildFailed ? '1' : '0',
+      match.failPullRequest ? '1' : '0',
+    ].join('|');
+    if (!deduped.has(key)) {
+      deduped.set(key, match);
+    }
+  }
+
+  return Array.from(deduped.values());
+}
+
+function xrayWatchNames(vulnerability: Vulnerability): string[] {
+  const names = [...(vulnerability.xray_watch_names ?? []), vulnerability.xray_watch_name ?? '']
+    .map((name) => name.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(names));
+}
+
+function vulnerabilityHasXrayPolicy(vulnerability: Vulnerability): boolean {
+  const policyMatches = parseXrayWatchPolicyMatches(vulnerability);
+  return (
+    policyMatches.length > 0 ||
+    xrayWatchNames(vulnerability).length > 0 ||
+    policyMatches.some(isActiveXrayPolicyMatch) ||
+    vulnerability.xray_is_blocking === true
+  );
+}
+
+function prioritizeXrayPolicyVulnerabilities(vulnerabilities: Vulnerability[]): Vulnerability[] {
+  return vulnerabilities
+    .map((vulnerability, index) => ({ vulnerability, index }))
+    .sort((left, right) => {
+      const leftPriority = vulnerabilityHasXrayPolicy(left.vulnerability) ? 1 : 0;
+      const rightPriority = vulnerabilityHasXrayPolicy(right.vulnerability) ? 1 : 0;
+      if (leftPriority !== rightPriority) {
+        return rightPriority - leftPriority;
+      }
+      return left.index - right.index;
+    })
+    .map((entry) => entry.vulnerability);
+}
+
 function imageConfigObject(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
@@ -350,13 +443,7 @@ function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
 const LIMIT = 25;
 
 function isScanTab(value: string | null): value is ScanTab {
-  return (
-    value === 'vulns' ||
-    value === 'policy' ||
-    value === 'sbom' ||
-    value === 'details' ||
-    value === 'timeline'
-  );
+  return value === 'vulns' || value === 'sbom' || value === 'details' || value === 'timeline';
 }
 
 export default function ScanDetailPage() {
@@ -383,6 +470,7 @@ export default function ScanDetailPage() {
   const [pkgInput, setPkgInput] = useState('');
   const [minCvss, setMinCvss] = useState(0);
   const [hasFix, setHasFix] = useState(false);
+  const [xrayPolicyFirst, setXrayPolicyFirst] = useState(false);
   const [sortBy, setSortBy] = useState<VulnerabilityViewSettings['sort_by']>('severity');
   const [sortDir, setSortDir] = useState<VulnerabilityViewSettings['sort_dir']>('asc');
   const [viewSettingsReady, setViewSettingsReady] = useState(false);
@@ -432,9 +520,13 @@ export default function ScanDetailPage() {
   const [suppressionAccessOrgId, setSuppressionAccessOrgId] = useState('');
   const [suppressionAccessSaving, setSuppressionAccessSaving] = useState(false);
   const vulnerabilityDetailsModal = useOverlayState();
+  const xrayPolicyDetailsModal = useOverlayState();
   const scanAccessModal = useOverlayState();
   const suppressionAccessModal = useOverlayState();
   const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
+  const [selectedXrayVulnerability, setSelectedXrayVulnerability] = useState<Vulnerability | null>(
+    null
+  );
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanStatus = scan?.status;
@@ -443,13 +535,13 @@ export default function ScanDetailPage() {
     scan?.blocked_policy_details,
     scan?.error_message
   );
-  const hasPolicyTab = Boolean(blockedPolicyDetails);
   const currentVulnerabilityViewSettings: VulnerabilityViewSettings = {
     sort_by: sortBy,
     sort_dir: sortDir,
     severity: severityFilter,
     min_cvss: minCvss,
     has_fix: hasFix,
+    xray_policy_first: xrayPolicyFirst,
   };
   const effectiveVulnerabilityViewSettings =
     viewPreference?.settings ?? DEFAULT_VULNERABILITY_VIEW_SETTINGS;
@@ -494,6 +586,7 @@ export default function ScanDetailPage() {
       setSeverityFilter(preference.settings.severity);
       setMinCvss(preference.settings.min_cvss);
       setHasFix(preference.settings.has_fix);
+      setXrayPolicyFirst(preference.settings.xray_policy_first);
       setSortBy(preference.settings.sort_by);
       setSortDir(preference.settings.sort_dir);
       setPage(1);
@@ -510,6 +603,7 @@ export default function ScanDetailPage() {
     setSeverityFilter('');
     setMinCvss(0);
     setHasFix(false);
+    setXrayPolicyFirst(false);
     setSortBy('severity');
     setSortDir('asc');
     setPage(1);
@@ -563,7 +657,7 @@ export default function ScanDetailPage() {
     if (scan.status === 'pending' || scan.status === 'running') return;
 
     const requestedTab = searchParams.get('tab');
-    if (isScanTab(requestedTab) && (requestedTab !== 'policy' || blockedPolicyDetails)) {
+    if (isScanTab(requestedTab)) {
       setActiveTab(requestedTab);
       defaultTabInitializedRef.current = true;
       return;
@@ -693,20 +787,45 @@ export default function ScanDetailPage() {
     if (!scan || scan.status === 'pending' || scan.status === 'running' || !viewSettingsReady)
       return;
     setVulnLoading(true);
-    listVulnerabilities(
-      id,
-      page,
-      LIMIT,
+    const baseArgs = [
       severityFilter || undefined,
       pkgFilter || undefined,
       hasFix || undefined,
       minCvss || undefined,
       sortBy,
-      sortDir
-    )
+      sortDir,
+    ] as const;
+
+    const loadPromise = xrayPolicyFirst
+      ? (async () => {
+          const pageSize = 100;
+          let nextPage = 1;
+          let total = 0;
+          const all: Vulnerability[] = [];
+
+          for (;;) {
+            const res = await listVulnerabilities(id, nextPage, pageSize, ...baseArgs);
+            const rows = res.data ?? [];
+            total = res.total ?? total;
+            all.push(...rows);
+
+            if (rows.length === 0 || all.length >= total) {
+              break;
+            }
+            nextPage += 1;
+          }
+
+          const prioritized = prioritizeXrayPolicyVulnerabilities(all);
+          const start = (page - 1) * LIMIT;
+          const end = start + LIMIT;
+          return { data: prioritized.slice(start, end), total: prioritized.length || total };
+        })()
+      : listVulnerabilities(id, page, LIMIT, ...baseArgs);
+
+    loadPromise
       .then((res) => {
         setVulns(res.data ?? []);
-        setVulnTotal(res.total);
+        setVulnTotal(res.total ?? 0);
       })
       .catch(() => {})
       .finally(() => setVulnLoading(false));
@@ -723,6 +842,7 @@ export default function ScanDetailPage() {
     pkgFilter,
     minCvss,
     hasFix,
+    xrayPolicyFirst,
     sortBy,
     sortDir,
     viewSettingsReady,
@@ -1082,6 +1202,11 @@ export default function ScanDetailPage() {
   function openVulnerabilityDetails(vulnerability: Vulnerability) {
     setSelectedVulnerability(vulnerability);
     vulnerabilityDetailsModal.open();
+  }
+
+  function openXrayPolicyDetails(vulnerability: Vulnerability) {
+    setSelectedXrayVulnerability(vulnerability);
+    xrayPolicyDetailsModal.open();
   }
 
   if (loading) return <ScanDetailSkeleton />;
@@ -1511,8 +1636,8 @@ export default function ScanDetailPage() {
                     {blockedPolicyDetails.summary}
                   </p>
                   <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                    See the Policy Violations tab for the matched issues, watches, policies, and raw
-                    JFrog response.
+                    See vulnerability-level Xray policy details for matched watches, policies, and
+                    blocking status.
                   </p>
                 </div>
               ) : (
@@ -1557,16 +1682,6 @@ export default function ScanDetailPage() {
                   id: 'vulns',
                   label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities',
                 },
-                ...(hasPolicyTab
-                  ? [
-                      {
-                        id: 'policy' as const,
-                        label: blockedPolicyDetails?.totalViolations
-                          ? `Policy Violations (${blockedPolicyDetails.totalViolations})`
-                          : 'Policy Violations',
-                      },
-                    ]
-                  : []),
                 { id: 'sbom', label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
                 {
                   id: 'timeline',
@@ -1593,61 +1708,6 @@ export default function ScanDetailPage() {
           scanProvider={scan.scan_provider}
         />
       )}
-
-      {scan.status !== 'pending' &&
-        scan.status !== 'running' &&
-        activeTab === 'policy' &&
-        blockedPolicyDetails && (
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-                Policy Violations
-              </h2>
-              <p className="text-sm text-zinc-500">
-                Xray blocked this image by policy. When Xray also exposes artifact summary data, the
-                normal Vulnerabilities tab can still be populated; this tab keeps the
-                policy-specific context separate.
-              </p>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <DetailBlock label="Summary" value={blockedPolicyDetails.summary} />
-              <DetailBlock
-                label="Xray Violations"
-                value={
-                  blockedPolicyDetails.totalViolations
-                    ? String(blockedPolicyDetails.totalViolations)
-                    : undefined
-                }
-              />
-              <DetailBlock label="Manifest" value={blockedPolicyDetails.manifest} mono />
-              <DetailBlock label="Artifact" value={blockedPolicyDetails.artifact} mono />
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)]">
-              <PolicyWatchList watches={blockedPolicyDetails.matchedWatches} />
-              <div className="space-y-3">
-                <PolicyListSection
-                  label="Blocking Policies"
-                  items={blockedPolicyDetails.blockingPolicies}
-                />
-                <PolicyListSection
-                  label="Matched Policies"
-                  items={blockedPolicyDetails.matchedPolicies}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <PolicyListSection
-                label="Matched Issues"
-                items={blockedPolicyDetails.matchedIssues}
-              />
-              <DetailBlock label="JFrog Response" value={blockedPolicyDetails.jfrog} mono />
-            </div>
-          </div>
-        )}
-
       {/* SBOM tab */}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'sbom' && (
         <div className="space-y-3">
@@ -1891,6 +1951,16 @@ export default function ScanDetailPage() {
                 >
                   Has Fix
                 </Button>
+                <Button
+                  onPress={() => {
+                    setXrayPolicyFirst(!xrayPolicyFirst);
+                    setPage(1);
+                  }}
+                  className={`${xrayPolicyFirst ? 'btn-primary' : 'btn-secondary'} w-full shrink-0 md:w-auto`}
+                  variant={xrayPolicyFirst ? 'primary' : 'secondary'}
+                >
+                  Xray Policy First
+                </Button>
               </div>
             </div>
 
@@ -1932,7 +2002,7 @@ export default function ScanDetailPage() {
             </Card>
           </div>
 
-          <Card className="surface-panel rounded-2xl overflow-hidden">
+          <Card className="overflow-hidden">
             <Table variant="secondary">
               <Table.ScrollContainer>
                 <Table.Content aria-label="Scan vulnerabilities" className="min-w-[1120px]">
@@ -1982,12 +2052,13 @@ export default function ScanDetailPage() {
                       );
                     })}
                     <Table.Column className="text-left">First Seen</Table.Column>
+                    <Table.Column className="text-left">Xray Policy</Table.Column>
                     <Table.Column className="text-right">Notes</Table.Column>
                   </Table.Header>
                   <Table.Body>
                     {vulnLoading || vulns.length === 0 ? (
                       <Table.Row key="vuln-state" id="vuln-state">
-                        <Table.Cell colSpan={8}>
+                        <Table.Cell colSpan={9}>
                           {vulnLoading ? (
                             <div className="py-12 text-center">
                               <div className="flex justify-center">
@@ -2059,6 +2130,37 @@ export default function ScanDetailPage() {
                             <Table.Cell>
                               <FirstSeenBadge firstSeenAt={v.first_seen_at} />
                             </Table.Cell>
+                            <Table.Cell>
+                              {(() => {
+                                const policyMatches = parseXrayWatchPolicyMatches(v);
+                                const watchCount = xrayWatchNames(v).length;
+                                const hasDetails =
+                                  policyMatches.length > 0 ||
+                                  watchCount > 0 ||
+                                  !!v.xray_is_blocking;
+                                if (!hasDetails) {
+                                  return <span className="text-xs text-zinc-400">-</span>;
+                                }
+
+                                return (
+                                  <Button
+                                    onPress={() => openXrayPolicyDetails(v)}
+                                    className="inline-flex items-center gap-1.5"
+                                    variant="danger-soft"
+                                  >
+                                    Details
+                                    <Chip
+                                      className="font-semibold"
+                                      color="danger"
+                                      size="sm"
+                                      variant="soft"
+                                    >
+                                      {policyMatches.length || watchCount}
+                                    </Chip>
+                                  </Button>
+                                );
+                              })()}
+                            </Table.Cell>
                             <Table.Cell className="text-right">
                               <Button
                                 onPress={() => {
@@ -2083,7 +2185,7 @@ export default function ScanDetailPage() {
                           {expandedVuln === v.id && (
                             <Table.Row id={`${v.id}-expanded`}>
                               <Table.Cell
-                                colSpan={8}
+                                colSpan={9}
                                 className="p-4"
                                 style={{
                                   borderTop: '1px solid var(--border-subtle)',
@@ -3299,6 +3401,169 @@ export default function ScanDetailPage() {
           getVulnerabilityContextAnalysis(id, vulnerability.id)
         }
       />
+
+      <Modal state={xrayPolicyDetailsModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="lg" placement="center">
+            <Modal.Dialog className="surface-modal overflow-hidden rounded-[24px] w-[min(900px,calc(100vw-1.5rem))] max-w-none">
+              <Modal.Header>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                    Xray policy details
+                  </p>
+                  <Modal.Heading className="font-mono text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">
+                    {selectedXrayVulnerability?.vuln_id || 'Unnamed finding'}
+                  </Modal.Heading>
+                </div>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="space-y-4">
+                {(() => {
+                  if (!selectedXrayVulnerability) {
+                    return null;
+                  }
+
+                  const watchNames = xrayWatchNames(selectedXrayVulnerability);
+                  const policyMatches = parseXrayWatchPolicyMatches(selectedXrayVulnerability);
+                  const hasActiveBlocking =
+                    selectedXrayVulnerability.xray_is_blocking === true ||
+                    policyMatches.some(isActiveXrayPolicyMatch);
+
+                  return (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-zinc-500">Current block state:</span>
+                        <Chip
+                          className="border text-[11px] font-semibold"
+                          style={
+                            hasActiveBlocking
+                              ? {
+                                  borderColor: 'rgba(239,68,68,0.28)',
+                                  color: '#f87171',
+                                  background: 'rgba(239,68,68,0.12)',
+                                }
+                              : {
+                                  borderColor: 'var(--surface-border)',
+                                  color: 'var(--text-secondary)',
+                                  background: 'var(--app-bg)',
+                                }
+                          }
+                        >
+                          {hasActiveBlocking ? 'Blocking is active' : 'Blocking is not active'}
+                        </Chip>
+                      </div>
+
+                      {watchNames.length > 0 && (
+                        <div className="space-y-1.5">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            Watches
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {watchNames.map((watchName) => (
+                              <Chip key={watchName} variant="soft">
+                                {watchName}
+                              </Chip>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {policyMatches.length > 0 ? (
+                        <Card className="surface-panel rounded-2xl overflow-hidden">
+                          <Table variant="secondary">
+                            <Table.ScrollContainer>
+                              <Table.Content
+                                aria-label="Xray watch policy matches"
+                                className="min-w-[760px]"
+                              >
+                                <Table.Header>
+                                  <Table.Column isRowHeader>Watch</Table.Column>
+                                  <Table.Column>Policy</Table.Column>
+                                  <Table.Column>Rule</Table.Column>
+                                  <Table.Column className="text-right">Blocking</Table.Column>
+                                </Table.Header>
+                                <Table.Body>
+                                  {policyMatches.map((match, index) => (
+                                    <Table.Row
+                                      key={`${match.watchName}-${match.policy}-${match.rule}-${index}`}
+                                      id={`${match.watchName}-${match.policy}-${match.rule}-${index}`}
+                                    >
+                                      <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">
+                                        <div className="flex flex-col">
+                                          <span>{match.watchName || '-'}</span>
+                                          {match.watchID && (
+                                            <span className="text-[11px] text-zinc-500">
+                                              {match.watchID}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </Table.Cell>
+                                      <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">
+                                        {match.policy || '-'}
+                                      </Table.Cell>
+                                      <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">
+                                        {match.rule || '-'}
+                                      </Table.Cell>
+                                      <Table.Cell className="text-right">
+                                        <span
+                                          className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                                          style={
+                                            isActiveXrayPolicyMatch(match)
+                                              ? {
+                                                  borderColor: 'rgba(239,68,68,0.28)',
+                                                  color: '#f87171',
+                                                  background: 'rgba(239,68,68,0.12)',
+                                                }
+                                              : {
+                                                  borderColor: 'var(--surface-border)',
+                                                  color: 'var(--text-secondary)',
+                                                  background: 'var(--app-bg)',
+                                                }
+                                          }
+                                        >
+                                          {isActiveXrayPolicyMatch(match) ? 'Active' : 'Not active'}
+                                        </span>
+                                      </Table.Cell>
+                                    </Table.Row>
+                                  ))}
+                                </Table.Body>
+                              </Table.Content>
+                            </Table.ScrollContainer>
+                          </Table>
+                        </Card>
+                      ) : (
+                        <Alert status="warning" className="border border-warning">
+                          <Alert.Indicator />
+                          <Alert.Content>
+                            <Alert.Title>No watch-policy matches were persisted</Alert.Title>
+                            <Alert.Description>
+                              This vulnerability has Xray context, but no explicit watch-policy
+                              match rows were returned from the export details payload.
+                            </Alert.Description>
+                          </Alert.Content>
+                        </Alert>
+                      )}
+                    </>
+                  );
+                })()}
+              </Modal.Body>
+              <Modal.Footer
+                className="px-6 py-4 flex justify-end"
+                style={{ borderTop: '1px solid var(--border-subtle)' }}
+              >
+                <Button
+                  onPress={xrayPolicyDetailsModal.close}
+                  className="btn-secondary"
+                  type="button"
+                  variant="secondary"
+                >
+                  Close
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </div>
   );
 }

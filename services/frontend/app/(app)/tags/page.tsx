@@ -12,29 +12,42 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-    createTag,
-    deleteTag,
-    getTokenType,
-    getUser,
-    getWorkScope,
-    listTags,
-    listTagShares,
-    ResourceShare,
-    shareTag,
-    Tag,
-    unshareTag,
-    updateTag,
+  createTag,
+  deleteTag,
+  getTokenType,
+  getUser,
+  getWorkScope,
+  listTags,
+  listTagShares,
+  ResourceShare,
+  shareTag,
+  Tag,
+  unshareTag,
+  updateTag,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Button, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import {
-    Delete01Icon,
-    PencilEdit01Icon,
-    PlusSignIcon,
-    Shield01Icon,
-    Tag01Icon,
+  Button,
+  Card,
+  ColorField,
+  ColorPicker,
+  ColorSwatch,
+  ColorSwatchPicker,
+  Label,
+  ListBox,
+  Modal,
+  parseColor,
+  Select,
+  useOverlayState,
+} from '@heroui/react';
+import {
+  Delete01Icon,
+  PencilEdit01Icon,
+  PlusSignIcon,
+  Shield01Icon,
+  Tag01Icon,
 } from 'hugeicons-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const COLORS = [
   '#6366f1',
@@ -66,6 +79,13 @@ export default function TagsPage() {
   const [shareError, setShareError] = useState('');
   const [shareOrgId, setShareOrgId] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
+  const parsedColor = useMemo(() => {
+    try {
+      return parseColor(color);
+    } catch {
+      return parseColor(COLORS[0]);
+    }
+  }, [color]);
   const modal = useOverlayState();
   const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
@@ -255,94 +275,88 @@ export default function TagsPage() {
           action={{ label: '+ New Tag', onClick: openCreate }}
         />
       ) : (
-        <div className="surface-panel rounded-2xl overflow-hidden">
-          {tags.map((tag, i) => (
-            <div
-              key={tag.id}
-              className="flex items-center gap-4 px-4 py-3.5 transition-colors"
-              style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--row-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-            >
-              <div
-                className="size-4 rounded-full shrink-0"
-                style={{
-                  background: tag.color,
-                  boxShadow: `0 0 8px ${tag.color}88`,
-                  outline: `2px solid ${tag.color}40`,
-                  outlineOffset: 2,
-                }}
-              />
-              <span
-                className="text-xs font-medium px-2.5 py-0.5 rounded-full shrink-0"
-                style={{
-                  background: tag.color + '22',
-                  color: tag.color,
-                  border: `1px solid ${tag.color}44`,
-                }}
-              >
-                {tag.name}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate">
-                  {tag.name}
-                </p>
-                <div className="mt-1">
-                  <OwnershipBadge
-                    ownerType={tag.owner_type}
-                    ownerOrgId={tag.owner_org_id}
-                    orgNamesById={orgNamesById}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {tags.map((tag) => (
+            <Card key={tag.id}>
+              <Card.Content className="px-4 py-3.5">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="size-4 rounded-full shrink-0"
+                    style={{
+                      background: tag.color,
+                      boxShadow: `0 0 8px ${tag.color}88`,
+                      outline: `2px solid ${tag.color}40`,
+                      outlineOffset: 2,
+                    }}
                   />
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className="text-xs font-medium px-2.5 py-0.5 rounded-full shrink-0"
+                        style={{
+                          background: tag.color + '22',
+                          color: tag.color,
+                          border: `1px solid ${tag.color}44`,
+                        }}
+                      >
+                        {tag.name}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <OwnershipBadge
+                        ownerType={tag.owner_type}
+                        ownerOrgId={tag.owner_org_id}
+                        orgNamesById={orgNamesById}
+                      />
+                      <span className="font-mono text-xs text-zinc-500">{tag.color}</span>
+                    </div>
+                  </div>
+
+                  {canManageTag(tag) ? (
+                    <RowActionsMenu
+                      label={`Open actions menu for tag ${tag.name}`}
+                      items={[
+                        {
+                          id: 'share',
+                          label: 'Manage access',
+                          icon: <Shield01Icon size={15} />,
+                          onAction: () => openShareModal(tag),
+                        },
+                        {
+                          id: 'edit',
+                          label: 'Edit tag',
+                          icon: <PencilEdit01Icon size={15} />,
+                          onAction: () => openEdit(tag),
+                        },
+                        {
+                          id: 'delete',
+                          label: 'Delete tag',
+                          icon: <Delete01Icon size={15} />,
+                          variant: 'danger',
+                          onAction: () => {
+                            void handleDelete(tag.id);
+                          },
+                        },
+                      ]}
+                    />
+                  ) : null}
                 </div>
-              </div>
-              <span className="font-mono text-xs text-zinc-500">{tag.color}</span>
-              {canManageTag(tag) ? (
-                <RowActionsMenu
-                  label={`Open actions menu for tag ${tag.name}`}
-                  items={[
-                    {
-                      id: 'share',
-                      label: 'Manage access',
-                      icon: <Shield01Icon size={15} />,
-                      onAction: () => openShareModal(tag),
-                    },
-                    {
-                      id: 'edit',
-                      label: 'Edit tag',
-                      icon: <PencilEdit01Icon size={15} />,
-                      onAction: () => openEdit(tag),
-                    },
-                    {
-                      id: 'delete',
-                      label: 'Delete tag',
-                      icon: <Delete01Icon size={15} />,
-                      variant: 'danger',
-                      onAction: () => {
-                        void handleDelete(tag.id);
-                      },
-                    },
-                  ]}
-                />
-              ) : null}
-            </div>
+              </Card.Content>
+            </Card>
           ))}
         </div>
       )}
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
-          <Modal.Container size="sm" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
-                  {editing ? 'Edit Tag' : 'New Tag'}
-                </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{editing ? 'Edit Tag' : 'New Tag'}</Modal.Heading>
+                <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5">
+              <Modal.Body className="py-5">
                 <form id="tag-form" onSubmit={handleSubmit} className="space-y-4">
                   {formError ? <FormAlert description={formError} title="Tag save failed" /> : null}
                   <FormField
@@ -351,70 +365,59 @@ export default function TagsPage() {
                     placeholder="production"
                     required
                     value={name}
+                    className="bg-surface-secondary"
                   />
-                  <div className="space-y-2.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                  <div className="space-y-2.5 flex flex-col">
+                    <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                       Color
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {COLORS.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setColor(c)}
-                          className="size-7 rounded-full transition-all"
+                    </Label>
+                    <ColorPicker
+                      value={parsedColor}
+                      onChange={(nextColor) => setColor(nextColor.toString('hex'))}
+                    >
+                      <ColorPicker.Trigger className="flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <ColorSwatch size="md" />
+                          <span className="text-xs font-mono text-zinc-500">{color}</span>
+                        </div>
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full font-medium"
                           style={{
-                            background: c,
-                            boxShadow: color === c ? `0 0 10px ${c}99` : 'none',
-                            outline: color === c ? `2px solid ${c}` : `2px solid transparent`,
-                            outlineOffset: 2,
-                            transform: color === c ? 'scale(1.15)' : 'scale(1)',
+                            background: color + '22',
+                            color,
+                            border: `1px solid ${color}44`,
                           }}
-                        />
-                      ))}
-                      <input
-                        type="color"
-                        value={color}
-                        onChange={(e) => setColor(e.target.value)}
-                        className="size-7 rounded-full cursor-pointer border-0 p-0 bg-transparent"
-                        title="Custom color"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
-                      <span
-                        className="size-3.5 rounded-full shrink-0"
-                        style={{ background: color, boxShadow: `0 0 6px ${color}88` }}
-                      />
-                      <span className="text-xs font-mono text-zinc-500">{color}</span>
-                      <span
-                        className="text-xs px-2 py-0.5 rounded-full font-medium ml-1"
-                        style={{ background: color + '22', color, border: `1px solid ${color}44` }}
-                      >
-                        {name || 'preview'}
-                      </span>
-                    </div>
+                        >
+                          {name || 'preview'}
+                        </span>
+                      </ColorPicker.Trigger>
+                      <ColorPicker.Popover className="w-[min(320px,calc(100vw-3rem))] space-y-3 p-3">
+                        <ColorSwatchPicker size="sm" className="justify-center">
+                          {COLORS.map((c) => (
+                            <ColorSwatchPicker.Item key={c} color={c}>
+                              <ColorSwatchPicker.Swatch />
+                              <ColorSwatchPicker.Indicator />
+                            </ColorSwatchPicker.Item>
+                          ))}
+                        </ColorSwatchPicker>
+                        <ColorField aria-label="Tag color">
+                          <ColorField.Group variant="secondary">
+                            <ColorField.Prefix>
+                              <ColorSwatch size="xs" />
+                            </ColorField.Prefix>
+                            <ColorField.Input />
+                          </ColorField.Group>
+                        </ColorField>
+                      </ColorPicker.Popover>
+                    </ColorPicker>
                   </div>
                 </form>
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex gap-3 justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <Button
-                  onPress={modal.close}
-                  className="btn-secondary"
-                  type="button"
-                  variant="secondary"
-                >
+              <Modal.Footer>
+                <Button onPress={modal.close} variant="secondary">
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  form="tag-form"
-                  isDisabled={saving}
-                  className="btn-primary inline-flex items-center gap-2"
-                  variant="primary"
-                >
+                <Button type="submit" form="tag-form" isDisabled={saving} variant="primary">
                   {saving && (
                     <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   )}
@@ -428,48 +431,37 @@ export default function TagsPage() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
-                  Manage Tag Access
-                </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>Manage Tag Access</Modal.Heading>
+                <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5 space-y-4">
+              <Modal.Body className="mt-4 space-y-4">
                 {shareError ? (
                   <FormAlert description={shareError} title="Access update failed" />
                 ) : null}
                 {shareTarget ? (
-                  <div
-                    className="rounded-xl px-4 py-3"
-                    style={{
-                      background: 'var(--row-hover)',
-                      border: '1px solid var(--surface-border)',
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="size-4 rounded-full shrink-0"
-                        style={{
-                          background: shareTarget.color,
-                          boxShadow: `0 0 8px ${shareTarget.color}88`,
-                        }}
-                      />
-                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                        {shareTarget.name}
-                      </p>
-                    </div>
-                    <div className="mt-2">
+                  <Card className="bg-surface-secondary px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="size-4 rounded-full shrink-0"
+                          style={{
+                            background: shareTarget.color,
+                            boxShadow: `0 0 8px ${shareTarget.color}88`,
+                          }}
+                        />
+                        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                          {shareTarget.name}
+                        </p>
+                      </div>
                       <OwnershipBadge
                         ownerType={shareTarget.owner_type}
                         ownerOrgId={shareTarget.owner_org_id}
                         orgNamesById={orgNamesById}
                       />
                     </div>
-                  </div>
+                  </Card>
                 ) : null}
 
                 <div className="space-y-2">
@@ -490,39 +482,35 @@ export default function TagsPage() {
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
-                        <div
+                        <Card
                           key={share.org_id}
-                          className="flex items-start justify-between gap-3 rounded-xl px-4 py-3"
-                          style={{
-                            background: 'var(--row-hover)',
-                            border: '1px solid var(--surface-border)',
-                          }}
+                          className="flex bg-surface-secondary items-start justify-between gap-3 px-4 py-3"
                         >
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                              {share.org_name}
-                            </p>
-                            <p className="text-xs text-zinc-500 mt-0.5">
-                              {share.is_owner ? 'Owner workspace' : 'Shared access'}
-                            </p>
+                          <div className="flex flex-wrap items-center justify-between w-full">
+                            <div className="flex flex-col">
+                              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                                {share.org_name}
+                              </p>
+                              <p className="text-xs text-zinc-500 mt-0.5">
+                                {share.is_owner ? 'Owner workspace' : 'Shared access'}
+                              </p>
+                            </div>
+                            {share.is_owner ? (
+                              <span className="text-xs font-medium text-zinc-500">Locked</span>
+                            ) : (
+                              <Button
+                                onPress={() => {
+                                  void handleRevokeShare(share.org_id);
+                                }}
+                                isDisabled={shareSaving}
+                                isIconOnly
+                                variant="danger-soft"
+                              >
+                                <Delete01Icon size={15} />
+                              </Button>
+                            )}
                           </div>
-                          {share.is_owner ? (
-                            <span className="text-xs font-medium text-zinc-500">Locked</span>
-                          ) : (
-                            <Button
-                              type="button"
-                              onPress={() => {
-                                void handleRevokeShare(share.org_id);
-                              }}
-                              isDisabled={shareSaving}
-                              className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
-                              isIconOnly
-                              variant="secondary"
-                            >
-                              <Delete01Icon size={15} />
-                            </Button>
-                          )}
-                        </div>
+                        </Card>
                       ))}
                     </div>
                   )}
@@ -542,7 +530,7 @@ export default function TagsPage() {
                       No additional organizations are available for sharing.
                     </p>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Select
                         value={shareOrgId || '__none__'}
                         onChange={(value) =>
@@ -550,7 +538,7 @@ export default function TagsPage() {
                         }
                         className="flex-1"
                       >
-                        <Select.Trigger className={selectTriggerCls}>
+                        <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
@@ -580,16 +568,8 @@ export default function TagsPage() {
                   )}
                 </div>
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <Button
-                  onPress={shareModal.close}
-                  className="btn-secondary"
-                  type="button"
-                  variant="secondary"
-                >
+              <Modal.Footer>
+                <Button onPress={shareModal.close} variant="secondary">
                   Close
                 </Button>
               </Modal.Footer>

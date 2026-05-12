@@ -31,9 +31,19 @@ export function RowActionsMenu({ label, items }: { label: string; items: RowActi
           }}
         >
           {items.map((item) => (
-            <Dropdown.Item key={item.id} id={item.id} isDisabled={item.disabled} textValue={item.label} variant={item.variant}>
+            <Dropdown.Item
+              key={item.id}
+              id={item.id}
+              isDisabled={item.disabled}
+              textValue={item.label}
+              variant={item.variant}
+            >
               <div className="flex items-center gap-2">
-                {item.icon ? <span className="shrink-0">{item.icon}</span> : null}
+                {item.icon ? (
+                  <span className={`shrink-0 ${item.variant === 'danger' ? 'text-danger' : ''}`}>
+                    {item.icon}
+                  </span>
+                ) : null}
                 <Label>{item.label}</Label>
               </div>
             </Dropdown.Item>

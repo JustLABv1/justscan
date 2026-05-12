@@ -3,7 +3,7 @@ import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/u
 import { PageHeader } from '@/components/ui/page-header';
 import { getKBEntry, listKBEntries, VulnKBEntry } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Label, ListBox, Select, Switch, Table } from '@heroui/react';
+import { Input, Label, ListBox, Select, Switch, Table } from '@heroui/react';
 import { InformationCircleIcon, Shield01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -279,12 +279,12 @@ export default function VulnKBPage() {
           {/* Search */}
           <div className="flex-1 min-w-52">
             <label className="text-xs font-medium text-zinc-500 mb-1.5 block">Search</label>
-            <input
+            <Input
               type="text"
               value={queryInput}
               onChange={(e) => setQueryInput(e.target.value)}
               placeholder="CVE ID or description…"
-              className={`${inputCls} w-full`}
+              className={`w-full rounded-xl px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-violet-500/40`}
             />
           </div>
 

@@ -19,6 +19,7 @@ import {
   Drawer,
   Dropdown,
   Header,
+  Kbd,
   Label,
   Popover,
   Separator,
@@ -452,22 +453,19 @@ export function AppShell({ children, initialUser }: AppShellProps) {
         {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
         <div className="flex h-dvh app-bg overflow-hidden">
           <Card
-            className={`relative hidden rounded-none rounded-br-3xl md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
+            className={`relative hidden rounded-none rounded-br-3xl bg-surface md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
               desktopCollapsed ? 'w-[68px]' : 'w-72'
             }`}
+            style={{
+              border: 'none',
+              boxShadow: 'none',
+            }}
           >
-            <div
-              className="absolute -top-10 -left-10 size-40 rounded-full pointer-events-none"
-              style={{
-                background: 'radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%)',
-              }}
-            />
-            <div className="absolute inset-x-0 top-0 h-px pointer-events-none bg-gradient-to-r from-transparent via-violet-400/20 to-transparent" />
-            <div className="absolute inset-y-0 right-0 w-px pointer-events-none bg-gradient-to-b from-violet-500/10 via-transparent to-transparent" />
+            <div className="absolute -top-10 -left-10 size-40 rounded-full pointer-events-none" />
+            <div className="absolute inset-x-0 top-0 h-px pointer-events-none" />
 
             <div
-              className={`flex items-center py-5 shrink-0 ${desktopCollapsed ? 'justify-center px-0' : 'px-[18px]'}`}
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              className={`flex min-h-12 items-center gap-2.5 py-2 shrink-0 ${desktopCollapsed ? 'justify-center px-0' : 'px-3'}`}
             >
               <div
                 className="size-8 rounded-xl flex items-center justify-center shrink-0"
@@ -479,7 +477,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 <Logo size={16} className="text-white" />
               </div>
               <span
-                className="ml-3 font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300"
+                className={`font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300 ${desktopCollapsed ? 'ml-0' : 'ml-3'}`}
                 style={{
                   maxWidth: desktopCollapsed ? 0 : 120,
                   opacity: desktopCollapsed ? 0 : 1,
@@ -808,25 +806,19 @@ export function AppShell({ children, initialUser }: AppShellProps) {
           </Card>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="bg-surface flex min-h-12 items-center gap-2.5 px-3 py-2">
-              <button
+            <div className="bg-surface rounded-br-3xl flex min-h-12 items-center gap-2.5 px-3 py-2">
+              <Button
                 onClick={toggleCollapsed}
-                className="hidden h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-all duration-150 hover:text-zinc-900 md:inline-flex dark:hover:text-zinc-200"
-                onMouseEnter={(event) => {
-                  event.currentTarget.style.background = 'var(--row-hover)';
-                }}
-                onMouseLeave={(event) => {
-                  event.currentTarget.style.background = 'transparent';
-                }}
-                title={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                isIconOnly
+                variant="ghost"
                 aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
                 {desktopCollapsed ? (
-                  <SidebarRight01Icon size={20} />
+                  <SidebarRight01Icon size={24} />
                 ) : (
-                  <SidebarLeft01Icon size={20} />
+                  <SidebarLeft01Icon size={24} />
                 )}
-              </button>
+              </Button>
 
               <Drawer state={mobileNav}>
                 <Button
@@ -1176,7 +1168,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 {topbarHeader.actions ? (
                   <div className="hidden items-center gap-1.5 md:flex">{topbarHeader.actions}</div>
                 ) : null}
-                <Separator className="hidden h-5 md:block mr-1.5 ml-1.5" orientation="vertical" />
                 <Button
                   aria-label="Open search"
                   className="rounded-full text-zinc-700 dark:text-zinc-200 md:hidden"
@@ -1186,31 +1177,23 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                 >
                   <Search01Icon size={14} className="text-current" />
                 </Button>
-                <Button
-                  className="hidden rounded-full text-zinc-700 dark:text-zinc-200 md:inline-flex"
-                  onPress={() => setSearchOpen(true)}
-                  variant="secondary"
-                >
-                  <Search01Icon size={14} className="text-current" />
+
+                <Button onPress={() => setSearchOpen(true)} variant="tertiary">
+                  <div className="flex items-center gap-2">
+                    <Search01Icon size={14} />
+                    <Label className="hidden md:inline-flex">Search...</Label>
+                  </div>
+                  <Kbd>
+                    <Kbd.Abbr keyValue="command" />
+                    <Kbd.Content>K</Kbd.Content>
+                  </Kbd>
                 </Button>
 
                 <Dropdown>
                   <Dropdown.Trigger>
-                    <button
-                      type="button"
-                      className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 outline-none transition-all duration-150"
-                      aria-label="Open user menu"
-                      onMouseEnter={handleRowHoverEnter}
-                      onMouseLeave={handleRowHoverLeave}
-                    >
-                      <Avatar
-                        className="h-7 w-7 border border-violet-300/25 bg-violet-500/15 text-[11px] font-semibold text-violet-300"
-                        size="sm"
-                        variant="soft"
-                      >
-                        <Avatar.Fallback>{initials}</Avatar.Fallback>
-                      </Avatar>
-                    </button>
+                    <Avatar variant="soft" color="accent">
+                      <Avatar.Fallback>{initials}</Avatar.Fallback>
+                    </Avatar>
                   </Dropdown.Trigger>
 
                   <Dropdown.Popover className="min-w-[200px]" placement="bottom end">

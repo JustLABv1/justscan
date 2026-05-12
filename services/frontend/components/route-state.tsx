@@ -1,4 +1,4 @@
-import { Card } from '@heroui/react';
+import { Alert, Button, Card } from '@heroui/react';
 import Link from 'next/link';
 
 export function RouteLoadingState({
@@ -17,14 +17,21 @@ export function RouteLoadingState({
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="rounded-2xl p-5" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+            <div
+              key={index}
+              className="rounded-2xl p-5"
+              style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
+            >
               <div className="skeleton h-4 w-24 rounded" />
               <div className="skeleton h-8 w-20 rounded mt-3" />
               <div className="skeleton h-3 w-28 rounded mt-4" />
             </div>
           ))}
         </div>
-        <div className="rounded-2xl p-5 space-y-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}>
+        <div
+          className="rounded-2xl p-5 space-y-3"
+          style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
+        >
           <div className="skeleton h-4 w-40 rounded" />
           <div className="skeleton h-3 w-full rounded" />
           <div className="skeleton h-3 w-5/6 rounded" />
@@ -46,25 +53,23 @@ export function RouteErrorState({
 }) {
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <Card className="surface-card rounded-3xl p-8 space-y-4">
-        <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
-          Page error
-        </span>
-        <div>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white">{title}</h1>
-          <p className="mt-2 text-sm text-zinc-500">{message}</p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={onRetry}
-            className="btn-primary"
-          >
+      <Card className="p-8 space-y-4">
+        <Alert className="bg-danger-soft" status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>{title}</Alert.Title>
+            <Alert.Description>{message}</Alert.Description>
+          </Alert.Content>
+        </Alert>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button variant="outline">
+            <Link href="/dashboard" className="btn-secondary">
+              Back to dashboard
+            </Link>
+          </Button>
+          <Button onClick={onRetry} variant="primary">
             Retry
-          </button>
-          <Link href="/dashboard" className="btn-secondary">
-            Back to dashboard
-          </Link>
+          </Button>
         </div>
       </Card>
     </div>

@@ -12,31 +12,31 @@ import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-    createRegistry,
-    deleteRegistry,
-    getDefaultScannerCapabilities,
-    getTokenType,
-    getWorkScope,
-    listRegistriesWithCapabilities,
-    listRegistryShares,
-    RegistryWithHealth,
-    ResourceShare,
-    ScannerCapabilities,
-    shareRegistry,
-    testRegistry,
-    unshareRegistry,
-    updateRegistry,
+  createRegistry,
+  deleteRegistry,
+  getDefaultScannerCapabilities,
+  getTokenType,
+  getWorkScope,
+  listRegistriesWithCapabilities,
+  listRegistryShares,
+  RegistryWithHealth,
+  ResourceShare,
+  ScannerCapabilities,
+  shareRegistry,
+  testRegistry,
+  unshareRegistry,
+  updateRegistry,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
 import { Button, ListBox, Modal, Select, Table, useOverlayState } from '@heroui/react';
 import {
-    Delete01Icon,
-    PencilEdit01Icon,
-    PlusSignIcon,
-    ServerStack01Icon,
-    Shield01Icon,
-    TestTube01Icon,
+  Delete01Icon,
+  PencilEdit01Icon,
+  PlusSignIcon,
+  ServerStack01Icon,
+  Shield01Icon,
+  TestTube01Icon,
 } from 'hugeicons-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -521,17 +521,12 @@ export default function RegistriesPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
-                  {editing ? 'Edit Registry' : 'Add Registry'}
-                </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
+                <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5">
+              <Modal.Body className="py-5">
                 <form id="registry-form" onSubmit={handleSubmit} className="space-y-4">
                   {formError ? (
                     <FormAlert description={formError} title="Registry save failed" />
@@ -542,9 +537,10 @@ export default function RegistriesPage() {
                     placeholder="My Registry"
                     required
                     value={name}
+                    className="bg-surface-secondary"
                   />
                   <FormField
-                    className="font-mono"
+                    className="bg-surface-secondary"
                     label="URL"
                     onChange={(e) => setUrl(e.target.value)}
                     placeholder="https://registry.example.com"
@@ -552,14 +548,12 @@ export default function RegistriesPage() {
                     value={url}
                   />
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                      Scan Provider
-                    </label>
+                    <label className="text-sm font-medium">Scan Provider</label>
                     <Select
                       value={scanProvider}
                       onChange={(value) => setScanProvider(value as 'trivy' | 'artifactory_xray')}
                     >
-                      <Select.Trigger className={selectTriggerCls}>
+                      <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0">
                             <ServerStack01Icon size={15} />
@@ -589,7 +583,7 @@ export default function RegistriesPage() {
                   {scanProvider === 'artifactory_xray' && (
                     <>
                       <FormField
-                        className="font-mono"
+                        className="bg-surface-secondary"
                         description="Leave empty to reuse the registry URL. Set this when your Docker registry host differs from the JFrog platform/Xray host."
                         label="Xray Base URL"
                         onChange={(e) => setXrayUrl(e.target.value)}
@@ -597,6 +591,7 @@ export default function RegistriesPage() {
                         value={xrayUrl}
                       />
                       <FormField
+                        className="bg-surface-secondary"
                         description="This prefixes artifact summary paths in Xray. In most JFrog setups the correct value is default."
                         label="Artifactory ID"
                         onChange={(e) => setXrayArtifactoryId(e.target.value)}
@@ -604,7 +599,7 @@ export default function RegistriesPage() {
                         value={xrayArtifactoryId}
                       />
                       <FormField
-                        className="font-mono"
+                        className="bg-surface-secondary"
                         description="Optional default Docker repo key for this registry, for example docker-remote. JustScan will prepend it for Xray scans when users enter Docker Hub-style image names."
                         label="Default Artifactory Repo"
                         onChange={(e) => setXrayRepository(e.target.value)}
@@ -623,7 +618,7 @@ export default function RegistriesPage() {
                         setAuthType(value as 'none' | 'basic' | 'token' | 'aws_ecr')
                       }
                     >
-                      <Select.Trigger className={selectTriggerCls}>
+                      <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-zinc-400 shrink-0">
                             <Shield01Icon size={15} />
@@ -665,6 +660,7 @@ export default function RegistriesPage() {
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Optional"
                     value={username}
+                    className="bg-surface-secondary"
                   />
                   <FormField
                     autoComplete="off"
@@ -679,28 +675,15 @@ export default function RegistriesPage() {
                     placeholder={editing ? '••••••••' : 'Optional'}
                     type="password"
                     value={password}
+                    className="bg-surface-secondary"
                   />
                 </form>
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex gap-3 justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <Button
-                  onPress={modal.close}
-                  className="btn-secondary"
-                  type="button"
-                  variant="secondary"
-                >
+              <Modal.Footer>
+                <Button onPress={modal.close} type="button" variant="secondary">
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  form="registry-form"
-                  isDisabled={saving}
-                  className="btn-primary disabled:opacity-60"
-                  variant="primary"
-                >
+                <Button type="submit" form="registry-form" isDisabled={saving} variant="primary">
                   {saving && (
                     <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   )}

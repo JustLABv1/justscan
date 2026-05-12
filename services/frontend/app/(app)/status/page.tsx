@@ -4,54 +4,57 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge } from '@/components/ui/badges';
 import {
-    fieldLabelClassName,
-    heroFieldClassName,
-    heroSelectTriggerClassName,
-    heroTextAreaClassName,
+  fieldLabelClassName,
+  heroFieldClassName,
+  heroSelectTriggerClassName,
+  heroTextAreaClassName,
 } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-    createStatusPage,
-    deleteStatusPage,
-    getStatusPage,
-    getTokenType,
-    getUser,
-    getWorkScope,
-    listStatusPages,
-    listStatusPageShares,
-    listStatusPageTargetOptions,
-    ResourceShare,
-    shareStatusPage,
-    StatusPage,
-    StatusPagePayload,
-    StatusPageTarget,
-    StatusPageTargetOption,
-    unshareStatusPage,
-    updateStatusPage,
+  createStatusPage,
+  deleteStatusPage,
+  getStatusPage,
+  getTokenType,
+  getUser,
+  getWorkScope,
+  listStatusPages,
+  listStatusPageShares,
+  listStatusPageTargetOptions,
+  ResourceShare,
+  shareStatusPage,
+  StatusPage,
+  StatusPagePayload,
+  StatusPageTarget,
+  StatusPageTargetOption,
+  unshareStatusPage,
+  updateStatusPage,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
 import {
-    Button,
-    Card,
-    Input,
-    Label,
-    ListBox,
-    Modal,
-    Select,
-    Switch,
-    Table,
-    TextArea,
-    useOverlayState,
+  Alert,
+  Button,
+  Card,
+  Chip,
+  Input,
+  Label,
+  ListBox,
+  Modal,
+  Select,
+  Switch,
+  Table,
+  TextArea,
+  Tooltip,
+  useOverlayState,
 } from '@heroui/react';
 import {
-    Delete01Icon,
-    EyeIcon,
-    PencilEdit01Icon,
-    PlusSignIcon,
-    Shield01Icon,
+  Delete01Icon,
+  EyeIcon,
+  PencilEdit01Icon,
+  PlusSignIcon,
+  Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -187,27 +190,6 @@ export default function StatusPagesPage() {
       cancelled = true;
     };
   }, [scopeKey]);
-
-  useEffect(() => {
-    if (!modal.isOpen) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        modal.close();
-      }
-    };
-
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [modal]);
 
   const selectedTargets = useMemo(() => {
     const keys = Array.from(selectedTargetKeys).map(String);
@@ -507,746 +489,659 @@ export default function StatusPagesPage() {
           </p>
         </div>
       ) : (
-        <Card className="surface-panel rounded-2xl overflow-hidden">
-          <Table variant="secondary">
-            <Table.ScrollContainer>
-              <Table.Content aria-label="Status pages" className="min-w-[920px]">
-                <Table.Header>
-                  <Table.Column isRowHeader>Name</Table.Column>
-                  <Table.Column>Visibility</Table.Column>
-                  <Table.Column>Scope</Table.Column>
-                  <Table.Column>Slug</Table.Column>
-                  <Table.Column>Updated</Table.Column>
-                  <Table.Column className="text-right">Actions</Table.Column>
-                </Table.Header>
-                <Table.Body>
-                  {pages.map((page) => (
-                    <Table.Row key={page.id} id={page.id} className="hover:bg-[var(--row-hover)]">
-                      <Table.Cell>
-                        <div>
-                          <p className="font-medium text-zinc-800 dark:text-zinc-100">
-                            {page.name}
-                          </p>
-                          <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">
-                            {page.description || 'No description'}
-                          </p>
-                          <div className="mt-1.5">
-                            <OwnershipBadge
-                              ownerType={page.owner_type}
-                              ownerOrgId={page.owner_org_id}
-                              orgNamesById={orgNamesById}
-                            />
-                          </div>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize"
-                          style={
-                            page.visibility === 'public'
+        <Table>
+          <Table.ScrollContainer>
+            <Table.Content aria-label="Status pages" className="min-w-[920px]">
+              <Table.Header>
+                <Table.Column isRowHeader>Name</Table.Column>
+                <Table.Column>Visibility</Table.Column>
+                <Table.Column>Scope</Table.Column>
+                <Table.Column>Slug</Table.Column>
+                <Table.Column>Access</Table.Column>
+                <Table.Column>Updated</Table.Column>
+                <Table.Column className="text-right">Actions</Table.Column>
+              </Table.Header>
+              <Table.Body>
+                {pages.map((page) => (
+                  <Table.Row key={page.id} id={page.id} className="hover:bg-[var(--row-hover)]">
+                    <Table.Cell>
+                      <div>
+                        <p className="font-medium text-zinc-800 dark:text-zinc-100">{page.name}</p>
+                        <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">
+                          {page.description || 'No description'}
+                        </p>
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize"
+                        style={
+                          page.visibility === 'public'
+                            ? {
+                                background: 'rgba(34,197,94,0.12)',
+                                color: '#4ade80',
+                                border: '1px solid rgba(34,197,94,0.2)',
+                              }
+                            : page.visibility === 'authenticated'
                               ? {
-                                  background: 'rgba(34,197,94,0.12)',
-                                  color: '#4ade80',
-                                  border: '1px solid rgba(34,197,94,0.2)',
+                                  background: 'rgba(59,130,246,0.12)',
+                                  color: '#60a5fa',
+                                  border: '1px solid rgba(59,130,246,0.2)',
                                 }
-                              : page.visibility === 'authenticated'
-                                ? {
-                                    background: 'rgba(59,130,246,0.12)',
-                                    color: '#60a5fa',
-                                    border: '1px solid rgba(59,130,246,0.2)',
-                                  }
-                                : {
-                                    background: 'rgba(113,113,122,0.12)',
-                                    color: '#a1a1aa',
-                                    border: '1px solid rgba(113,113,122,0.2)',
-                                  }
-                          }
-                        >
-                          {page.visibility}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell className="text-xs text-zinc-500">
-                        {describeScope(page)}
-                      </Table.Cell>
-                      <Table.Cell className="font-mono text-xs text-zinc-600 dark:text-zinc-300">
-                        /status/{page.slug}
-                      </Table.Cell>
-                      <Table.Cell className="text-xs text-zinc-500">
-                        {timeAgo(page.updated_at)}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex items-center justify-end gap-1">
-                          <Link
-                            href={`/status/${page.slug}`}
-                            target="_blank"
-                            className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1.5"
-                            title="Open page"
-                          >
-                            <EyeIcon size={15} />
-                          </Link>
-                          {canManageStatusPage(page) && (
-                            <>
+                              : {
+                                  background: 'rgba(113,113,122,0.12)',
+                                  color: '#a1a1aa',
+                                  border: '1px solid rgba(113,113,122,0.2)',
+                                }
+                        }
+                      >
+                        {page.visibility}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell className="text-xs text-zinc-500">{describeScope(page)}</Table.Cell>
+                    <Table.Cell className="font-mono text-xs text-zinc-600 dark:text-zinc-300">
+                      /status/{page.slug}
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="mt-1.5">
+                        <OwnershipBadge
+                          ownerType={page.owner_type}
+                          ownerOrgId={page.owner_org_id}
+                          orgNamesById={orgNamesById}
+                        />
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell className="text-xs text-zinc-500">
+                      {timeAgo(page.updated_at)}
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex items-center justify-end gap-1">
+                        <Tooltip delay={0}>
+                          <Button variant="secondary">
+                            <Link href={`/status/${page.slug}`} target="_blank">
+                              <EyeIcon size={15} />
+                            </Link>
+                          </Button>
+                          <Tooltip.Content>
+                            <p>Open page</p>
+                          </Tooltip.Content>
+                        </Tooltip>
+                        {canManageStatusPage(page) && (
+                          <>
+                            <Tooltip delay={0}>
                               <Button
                                 onPress={() => openShareModal(page)}
-                                className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1.5"
                                 aria-label="Manage access"
-                                type="button"
-                                variant="secondary"
+                                variant="tertiary"
                                 isIconOnly
                               >
                                 <Shield01Icon size={15} />
                               </Button>
+                              <Tooltip.Content>
+                                <p>Manage Access</p>
+                              </Tooltip.Content>
+                            </Tooltip>
+                            <Tooltip delay={0}>
                               <Button
                                 onPress={() => openEdit(page)}
-                                className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors p-1.5"
                                 aria-label="Edit"
-                                type="button"
-                                variant="secondary"
+                                variant="tertiary"
                                 isIconOnly
                               >
                                 <PencilEdit01Icon size={15} />
                               </Button>
+                              <Tooltip.Content>
+                                <p>Edit</p>
+                              </Tooltip.Content>
+                            </Tooltip>
+                            <Tooltip delay={0}>
                               <Button
                                 onPress={() => handleDelete(page.id)}
-                                className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1.5"
                                 aria-label="Delete"
-                                type="button"
-                                variant="secondary"
+                                variant="danger-soft"
                                 isIconOnly
                               >
                                 <Delete01Icon size={15} />
                               </Button>
-                            </>
-                          )}
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
-        </Card>
+                              <Tooltip.Content>
+                                <p>Delete</p>
+                              </Tooltip.Content>
+                            </Tooltip>
+                          </>
+                        )}
+                      </div>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table>
       )}
 
-      {modal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-          <button
-            type="button"
-            aria-label="Close status page editor"
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={modal.close}
-          />
-
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="status-page-modal-heading"
-            className="surface-modal relative z-10 grid max-h-[calc(100dvh-2rem)] w-[min(1120px,calc(100vw-1.5rem))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl"
-          >
-            <div className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <div className="flex items-center justify-between gap-4">
-                <h2
-                  id="status-page-modal-heading"
-                  className="text-zinc-900 dark:text-white font-semibold"
-                >
-                  {editing ? 'Edit Status Page' : 'Create Status Page'}
-                </h2>
-                <button
-                  type="button"
-                  aria-label="Close"
-                  onClick={modal.close}
-                  className="rounded-md px-2 py-1 text-sm text-zinc-500 transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
-                >
-                  x
-                </button>
-              </div>
-            </div>
-
-            <div className="min-h-0 overflow-y-auto overscroll-contain px-6 py-5">
-              <form id="status-page-form" onSubmit={handleSubmit} className="space-y-4">
-                {formError && (
-                  <div
-                    className="rounded-xl px-3 py-2.5 text-sm"
-                    style={{
-                      background: 'rgba(239,68,68,0.1)',
-                      border: '1px solid rgba(239,68,68,0.2)',
-                      color: '#f87171',
-                    }}
-                  >
-                    {formError}
-                  </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                  <div className="space-y-1.5">
-                    <Label className={fieldLabelCls}>Name</Label>
-                    <Input
-                      className={fieldCls}
-                      placeholder="Production Containers"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className={fieldLabelCls}>Slug</Label>
-                    <Input
-                      className={`${fieldCls} font-mono`}
-                      placeholder="production-containers"
-                      value={slug}
-                      onChange={(event) => setSlug(event.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className={fieldLabelCls}>Description</Label>
-                  <TextArea
-                    className={textareaCls}
-                    placeholder="Share current security and scan freshness for externally visible workloads."
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                  <Select
-                    value={visibility}
-                    onChange={(value) => setVisibility(String(value) as StatusPage['visibility'])}
-                    className="w-full"
-                    placeholder="Select visibility"
-                  >
-                    <Label className={fieldLabelCls}>Visibility</Label>
-                    <Select.Trigger className={selectTriggerCls}>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {visibilityOptions.map((option) => (
-                          <ListBox.Item id={option} key={option} textValue={option}>
-                            {option}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                  <div className="space-y-1.5">
-                    <Label className={fieldLabelCls}>Stale After Hours</Label>
-                    <Input
-                      className={fieldCls}
-                      value={staleAfterHours}
-                      onChange={(event) => setStaleAfterHours(event.target.value)}
-                      inputMode="numeric"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className={fieldLabelCls}>Image Tag Scope</Label>
-                  <div
-                    className="rounded-xl border px-4 py-3 transition-colors"
-                    style={
-                      includeAllTags
-                        ? {
-                            borderColor: 'rgba(124,58,237,0.32)',
-                            background: 'rgba(124,58,237,0.12)',
-                            boxShadow:
-                              'inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 1px rgba(124,58,237,0.08)',
-                          }
-                        : {
-                            borderColor: 'var(--surface-border)',
-                            background: 'var(--row-hover)',
-                          }
-                    }
-                  >
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <Switch isSelected={includeAllTags} onChange={setIncludeAllTags}>
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                        <Switch.Content>
-                          <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                            Include all image tags
-                          </Label>
-                          <p className="text-xs text-zinc-500">
-                            Ignore the manual selection list and publish every tracked image tag on
-                            this page.
-                          </p>
-                        </Switch.Content>
-                      </Switch>
-                      <span
-                        className="shrink-0 self-start rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide md:self-center"
-                        style={
-                          includeAllTags
-                            ? { background: 'rgba(124,58,237,0.18)', color: '#c4b5fd' }
-                            : { background: 'rgba(113,113,122,0.12)', color: '#a1a1aa' }
-                        }
-                      >
-                        {includeAllTags ? 'On' : 'Off'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.95fr)]">
-                  <div
-                    className={`space-y-3 rounded-2xl border p-4${includeAllTags ? ' opacity-50' : ''}`}
-                    style={{ borderColor: 'var(--surface-border)', background: 'var(--input-bg)' }}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-                          Exact Image Tags
-                        </p>
-                        <p className="mt-1 text-xs leading-5 text-zinc-500">
-                          Pick individual `image:tag` entries for a tightly curated page.
-                        </p>
-                      </div>
-                      <span
-                        className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                        style={exactSelectionBadgeStyle}
-                      >
-                        {selectedTargets.length} selected
-                      </span>
-                    </div>
-
-                    <Input
-                      className={`${fieldCls} font-mono`}
-                      placeholder="Filter by image, tag, or status"
-                      value={targetQuery}
-                      onChange={(event) => setTargetQuery(event.target.value)}
-                      disabled={includeAllTags}
-                    />
-
-                    <div
-                      className="rounded-2xl border overflow-hidden"
-                      style={{
-                        borderColor: 'var(--surface-border)',
-                        background: 'var(--row-hover)',
-                      }}
-                    >
-                      {loadingOptions ? (
-                        <p className="p-4 text-sm text-zinc-500">Loading image tags…</p>
-                      ) : filteredTargetOptions.length === 0 ? (
-                        <p className="px-4 py-8 text-sm text-zinc-500">
-                          {targetQuery.trim()
-                            ? 'No image tags match the current filter.'
-                            : 'No tracked image tags are available yet.'}
-                        </p>
-                      ) : (
-                        <div className="max-h-80 overflow-y-auto divide-y">
-                          {filteredTargetOptions.map((option) => {
-                            const isSelected = selectedTargetKeys.has(option.id);
-                            return (
-                              <label
-                                key={option.id}
-                                className="flex items-start gap-3 p-3 cursor-pointer transition-colors"
-                                style={
-                                  isSelected ? { background: 'rgba(124,58,237,0.09)' } : undefined
-                                }
-                              >
-                                {/* Wrap the visual checkbox in a relative container so the
-                                      native input can be overlaid exactly on top of it.
-                                      This ensures that when the input receives focus after a click,
-                                      the browser's scroll-to-element moves to the exact spot the
-                                      user already clicked — resulting in zero scroll movement. */}
-                                <span
-                                  className="relative mt-1 flex size-4 shrink-0 items-center justify-center rounded border transition-colors"
-                                  style={
-                                    isSelected
-                                      ? { borderColor: '#7c3aed', background: '#7c3aed' }
-                                      : { borderColor: 'rgba(113,113,122,0.4)' }
-                                  }
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    disabled={includeAllTags}
-                                    className="absolute inset-0 cursor-pointer opacity-0"
-                                    onChange={(e) => {
-                                      const checked = e.target.checked;
-                                      setSelectedTargetKeys((current) => {
-                                        const next = new Set(current);
-                                        if (checked) {
-                                          next.add(option.id);
-                                        } else {
-                                          next.delete(option.id);
-                                        }
-                                        return next;
-                                      });
-                                    }}
-                                  />
-                                  {isSelected && (
-                                    <svg
-                                      className="size-3 text-white pointer-events-none"
-                                      viewBox="0 0 12 12"
-                                      fill="none"
-                                    >
-                                      <path
-                                        d="M2.5 6l2.5 2.5 4.5-5"
-                                        stroke="currentColor"
-                                        strokeWidth="1.5"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
-                                    </svg>
-                                  )}
-                                </span>
-
-                                <span className="min-w-0 flex-1 text-left">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <p className="font-mono text-sm break-all text-zinc-800 dark:text-zinc-100">
-                                      {option.label}
-                                    </p>
-                                    <span
-                                      className="rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize"
-                                      style={
-                                        option.latest_status === 'failed'
-                                          ? { background: 'rgba(239,68,68,0.12)', color: '#f87171' }
-                                          : option.latest_status === 'completed'
-                                            ? {
-                                                background: 'rgba(34,197,94,0.12)',
-                                                color: '#4ade80',
-                                              }
-                                            : {
-                                                background: 'rgba(59,130,246,0.12)',
-                                                color: '#93c5fd',
-                                              }
-                                      }
-                                    >
-                                      {option.latest_status}
-                                    </span>
-                                  </div>
-                                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                                    <span>Seen {timeAgo(option.observed_at)}</span>
-                                    <span
-                                      className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                                      style={{
-                                        background: 'rgba(239,68,68,0.1)',
-                                        color: '#f87171',
-                                      }}
-                                    >
-                                      C {option.critical_count}
-                                    </span>
-                                    <span
-                                      className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                                      style={{
-                                        background: 'rgba(249,115,22,0.1)',
-                                        color: '#fb923c',
-                                      }}
-                                    >
-                                      H {option.high_count}
-                                    </span>
-                                  </div>
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div
-                    className={`space-y-3 rounded-2xl border p-4${includeAllTags ? ' opacity-50' : ''}`}
-                    style={{ borderColor: 'var(--surface-border)', background: 'var(--input-bg)' }}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-                          Regex Include Patterns
-                        </p>
-                        <p className="mt-1 text-xs leading-5 text-zinc-500">
-                          One RE2-compatible regex per line. Patterns match against `image:tag`,
-                          image name, and tag.
-                        </p>
-                      </div>
-                      <span
-                        className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                        style={exactSelectionBadgeStyle}
-                      >
-                        {imagePatterns.length} active
-                      </span>
-                    </div>
-
-                    <TextArea
-                      className={`${textareaCls} min-h-40 font-mono`}
-                      placeholder={`^ghcr\\.io/acme/.+:prod-.*$\n^nginx$\n^.*:stable$`}
-                      value={imagePatternText}
-                      onChange={(event) => setImagePatternText(event.target.value)}
-                      disabled={includeAllTags}
-                    />
-
-                    <p className="text-xs leading-5 text-zinc-500">
-                      Use regex when the scope is tag-driven or too large to maintain manually.
-                      Invalid patterns block save.
-                    </p>
-
-                    {invalidImagePatterns.length > 0 && (
-                      <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-400">
-                        {invalidImagePatterns.map((pattern) => (
-                          <p key={pattern.pattern} className="font-mono break-all">
-                            {pattern.pattern}: {pattern.error}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-
-                    <div
-                      className="rounded-2xl border p-3"
-                      style={{
-                        borderColor: 'var(--surface-border)',
-                        background: 'var(--row-hover)',
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                          Preview
-                        </p>
-                        <span
-                          className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                          style={exactSelectionBadgeStyle}
-                        >
-                          {regexMatchedOptions.length} matching
-                        </span>
-                      </div>
-
-                      {imagePatterns.length === 0 ? (
-                        <p className="mt-3 text-xs leading-5 text-zinc-500">
-                          Add a pattern to preview the tracked tags it would include.
-                        </p>
-                      ) : regexMatchedOptions.length === 0 ? (
-                        <p className="mt-3 text-xs leading-5 text-zinc-500">
-                          Current patterns do not match any tracked image tags outside your exact
-                          selections.
-                        </p>
-                      ) : (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {regexMatchedOptions.slice(0, 10).map((option) => (
-                            <span
-                              key={option.id}
-                              className="rounded-full px-2.5 py-1 text-xs font-mono"
-                              style={{
-                                background: 'rgba(59,130,246,0.12)',
-                                border: '1px solid rgba(59,130,246,0.2)',
-                                color: '#93c5fd',
-                              }}
-                            >
-                              {option.label}
-                            </span>
-                          ))}
-                          {regexMatchedOptions.length > 10 && (
-                            <span
-                              className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500"
-                              style={{
-                                background: 'var(--status-pill-bg)',
-                                border: '1px solid var(--surface-border)',
-                              }}
-                            >
-                              +{regexMatchedOptions.length - 10} more
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-xs text-zinc-500">
-                  Choose one or more exact `image:tag` entries, add regex include patterns, or
-                  enable “Include all image tags”.
-                </p>
-
-                {!includeAllTags && (
-                  <div
-                    className="space-y-3 rounded-2xl border p-4 min-h-[8.5rem]"
-                    style={{
-                      borderColor: 'var(--surface-border)',
-                      background: 'var(--row-hover)',
-                      overflowAnchor: 'none',
-                    }}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-                          Publish Scope
-                        </p>
-                        <p className="mt-1 text-xs text-zinc-500">
-                          {selectedTargets.length} exact tag
-                          {selectedTargets.length === 1 ? '' : 's'} and {imagePatterns.length} regex
-                          pattern{imagePatterns.length === 1 ? '' : 's'} configured.
-                        </p>
-                      </div>
-                    </div>
-
-                    {selectedTargets.length > 0 && (
-                      <div className="max-h-24 overflow-y-auto [overflow-anchor:none]">
-                        <div className="flex flex-wrap gap-2">
-                          {selectedTargets.slice(0, 12).map((target) => (
-                            <span
-                              key={`${target.image_name}:${target.image_tag}`}
-                              className="rounded-full px-2.5 py-1 text-xs font-medium"
-                              style={exactSelectionBadgeStyle}
-                            >
-                              {target.image_name}:{target.image_tag}
-                            </span>
-                          ))}
-                          {selectedTargets.length > 12 && (
-                            <span
-                              className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500"
-                              style={{
-                                background: 'var(--status-pill-bg)',
-                                border: '1px solid var(--surface-border)',
-                              }}
-                            >
-                              +{selectedTargets.length - 12} more exact tags
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {imagePatterns.length > 0 && (
-                      <div className="max-h-24 overflow-y-auto [overflow-anchor:none]">
-                        <div className="flex flex-wrap gap-2">
-                          {imagePatterns.map((pattern) => (
-                            <span
-                              key={pattern}
-                              className="rounded-full px-2.5 py-1 text-xs font-mono"
-                              style={{
-                                background: 'rgba(59,130,246,0.12)',
-                                border: '1px solid rgba(59,130,246,0.2)',
-                                color: '#93c5fd',
-                              }}
-                            >
-                              {pattern}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {selectedTargets.length === 0 && imagePatterns.length === 0 && (
-                      <p className="text-xs leading-5 text-zinc-500">
-                        Selections and regex matches will appear here without changing the modal
-                        height.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {!includeAllTags && !loadingOptions && !scopeIsValid && (
-                  <p className="text-xs text-red-400">
-                    Select at least one exact image tag or add a regex include pattern.
-                  </p>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                  <div className="space-y-1.5">
-                    <Label className={fieldLabelCls}>Active Banner Title (optional)</Label>
-                    <Input
-                      className={fieldCls}
-                      value={updateTitle}
-                      onChange={(event) => setUpdateTitle(event.target.value)}
-                      placeholder="Database refresh in progress"
-                    />
-                  </div>
-                  <Select
-                    value={updateLevel}
-                    onChange={(value) =>
-                      setUpdateLevel(String(value) as (typeof updateLevelOptions)[number])
-                    }
-                    className="w-full"
-                    placeholder="Select a banner level"
-                  >
-                    <Label className={fieldLabelCls}>Banner Level</Label>
-                    <Select.Trigger className={selectTriggerCls}>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {updateLevelOptions.map((option) => (
-                          <ListBox.Item id={option} key={option} textValue={option}>
-                            {option}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className={fieldLabelCls}>Active Banner Message</Label>
-                  <TextArea
-                    className={textareaCls}
-                    value={updateBody}
-                    onChange={(event) => setUpdateBody(event.target.value)}
-                    placeholder="We are re-scanning images after a registry credential rotation. Short-lived stale states are expected."
-                  />
-                </div>
-              </form>
-            </div>
-
-            <div
-              className="px-6 py-4 flex gap-3 justify-end"
-              style={{ borderTop: '1px solid var(--border-subtle)' }}
-            >
-              <Button className="btn-secondary" onPress={modal.close}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                form="status-page-form"
-                isDisabled={saving || invalidImagePatterns.length > 0 || !scopeIsValid}
-                className="btn-primary"
-              >
-                {saving && (
-                  <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                )}
-                {editing ? 'Save' : 'Create'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-      <Modal state={shareModal}>
+      <Modal state={modal}>
         <Modal.Backdrop isDismissable>
-          <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
+          <Modal.Container size="cover" placement="center">
+            <Modal.Dialog>
+              <Modal.Header>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
-                  Manage Status Page Access
+                  {editing ? 'Edit Status Page' : 'Create Status Page'}
                 </Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5 space-y-4">
-                {shareError && (
-                  <div
-                    className="rounded-xl px-3 py-2.5 text-sm"
-                    style={{
-                      background: 'rgba(239,68,68,0.1)',
-                      border: '1px solid rgba(239,68,68,0.2)',
-                      color: '#f87171',
-                    }}
-                  >
-                    {shareError}
+
+              <Modal.Body className="min-h-0 overflow-y-auto overscroll-contain py-5">
+                <form id="status-page-form" onSubmit={handleSubmit} className="space-y-4">
+                  {formError && (
+                    <Alert status="danger">
+                      <Alert.Indicator />
+                      <Alert.Content>
+                        <Alert.Title>{formError}</Alert.Title>
+                      </Alert.Content>
+                    </Alert>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                    <div className="space-y-1.5">
+                      <Label className={fieldLabelCls}>Name</Label>
+                      <Input
+                        className={fieldCls + ' bg-surface-secondary'}
+                        placeholder="Production Containers"
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className={fieldLabelCls}>Slug</Label>
+                      <Input
+                        className={fieldCls + ' bg-surface-secondary'}
+                        placeholder="production-containers"
+                        value={slug}
+                        onChange={(event) => setSlug(event.target.value)}
+                      />
+                    </div>
                   </div>
+
+                  <div className="space-y-1.5">
+                    <Label className={fieldLabelCls}>Description</Label>
+                    <TextArea
+                      className={textareaCls + ' bg-surface-secondary'}
+                      placeholder="Share current security and scan freshness for externally visible workloads."
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                    <Select
+                      value={visibility}
+                      onChange={(value) => setVisibility(String(value) as StatusPage['visibility'])}
+                      className="w-full"
+                      placeholder="Select visibility"
+                    >
+                      <Label className={fieldLabelCls}>Visibility</Label>
+                      <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {visibilityOptions.map((option) => (
+                            <ListBox.Item id={option} key={option} textValue={option}>
+                              {option}
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <div className="space-y-1.5">
+                      <Label className={fieldLabelCls}>Stale After Hours</Label>
+                      <Input
+                        className={fieldCls + ' bg-surface-secondary'}
+                        value={staleAfterHours}
+                        onChange={(event) => setStaleAfterHours(event.target.value)}
+                        inputMode="numeric"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className={fieldLabelCls}>Image Tag Scope</Label>
+                    <Card className="px-4 py-3 bg-surface-secondary">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <Switch isSelected={includeAllTags} onChange={setIncludeAllTags}>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                          <Switch.Content>
+                            <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                              Include all image tags
+                            </Label>
+                            <p className="text-xs text-zinc-500">
+                              Ignore the manual selection list and publish every tracked image tag
+                              on this page.
+                            </p>
+                          </Switch.Content>
+                        </Switch>
+                        <Chip color={includeAllTags ? 'accent' : 'default'} variant="soft">
+                          {includeAllTags ? 'On' : 'Off'}
+                        </Chip>
+                      </div>
+                    </Card>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.95fr)]">
+                    <Card
+                      className={`space-y-3 bg-surface-secondary p-4${includeAllTags ? ' opacity-50' : ''}`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                            Exact Image Tags
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-zinc-500">
+                            Pick individual `image:tag` entries for a tightly curated page.
+                          </p>
+                        </div>
+                        <Chip color="accent" variant="soft">
+                          {selectedTargets.length} selected
+                        </Chip>
+                      </div>
+
+                      <Input
+                        className={`${fieldCls} font-mono`}
+                        placeholder="Filter by image, tag, or status"
+                        value={targetQuery}
+                        onChange={(event) => setTargetQuery(event.target.value)}
+                        disabled={includeAllTags}
+                      />
+
+                      <Card className="overflow-hidden">
+                        {loadingOptions ? (
+                          <p className="p-4 text-sm text-zinc-500">Loading image tags…</p>
+                        ) : filteredTargetOptions.length === 0 ? (
+                          <p className="px-4 py-8 text-sm text-zinc-500">
+                            {targetQuery.trim()
+                              ? 'No image tags match the current filter.'
+                              : 'No tracked image tags are available yet.'}
+                          </p>
+                        ) : (
+                          <div className="max-h-80 overflow-y-auto divide-y">
+                            {filteredTargetOptions.map((option) => {
+                              const isSelected = selectedTargetKeys.has(option.id);
+                              return (
+                                <label
+                                  key={option.id}
+                                  className="flex items-start gap-3 p-3 cursor-pointer transition-colors"
+                                  style={
+                                    isSelected ? { background: 'rgba(124,58,237,0.09)' } : undefined
+                                  }
+                                >
+                                  <span
+                                    className="relative mt-1 flex size-4 shrink-0 items-center justify-center rounded border transition-colors"
+                                    style={
+                                      isSelected
+                                        ? { borderColor: '#7c3aed', background: '#7c3aed' }
+                                        : { borderColor: 'rgba(113,113,122,0.4)' }
+                                    }
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      disabled={includeAllTags}
+                                      className="absolute inset-0 cursor-pointer opacity-0"
+                                      onChange={(e) => {
+                                        const checked = e.target.checked;
+                                        setSelectedTargetKeys((current) => {
+                                          const next = new Set(current);
+                                          if (checked) {
+                                            next.add(option.id);
+                                          } else {
+                                            next.delete(option.id);
+                                          }
+                                          return next;
+                                        });
+                                      }}
+                                    />
+                                    {isSelected && (
+                                      <svg
+                                        className="size-3 text-white pointer-events-none"
+                                        viewBox="0 0 12 12"
+                                        fill="none"
+                                      >
+                                        <path
+                                          d="M2.5 6l2.5 2.5 4.5-5"
+                                          stroke="currentColor"
+                                          strokeWidth="1.5"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
+                                      </svg>
+                                    )}
+                                  </span>
+
+                                  <span className="min-w-0 flex-1 text-left">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="font-mono text-sm break-all text-zinc-800 dark:text-zinc-100">
+                                        {option.label}
+                                      </p>
+                                      <span
+                                        className="rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize"
+                                        style={
+                                          option.latest_status === 'failed'
+                                            ? {
+                                                background: 'rgba(239,68,68,0.12)',
+                                                color: '#f87171',
+                                              }
+                                            : option.latest_status === 'completed'
+                                              ? {
+                                                  background: 'rgba(34,197,94,0.12)',
+                                                  color: '#4ade80',
+                                                }
+                                              : {
+                                                  background: 'rgba(59,130,246,0.12)',
+                                                  color: '#93c5fd',
+                                                }
+                                        }
+                                      >
+                                        {option.latest_status}
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                                      <span>Seen {timeAgo(option.observed_at)}</span>
+                                      <span
+                                        className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                                        style={{
+                                          background: 'rgba(239,68,68,0.1)',
+                                          color: '#f87171',
+                                        }}
+                                      >
+                                        C {option.critical_count}
+                                      </span>
+                                      <span
+                                        className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                                        style={{
+                                          background: 'rgba(249,115,22,0.1)',
+                                          color: '#fb923c',
+                                        }}
+                                      >
+                                        H {option.high_count}
+                                      </span>
+                                    </div>
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </Card>
+                    </Card>
+
+                    <Card
+                      className={`space-y-3 bg-surface-secondary p-4${includeAllTags ? ' opacity-50' : ''}`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                            Regex Include Patterns
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-zinc-500">
+                            One RE2-compatible regex per line. Patterns match against `image:tag`,
+                            image name, and tag.
+                          </p>
+                        </div>
+                        <Chip color="accent" variant="soft">
+                          {imagePatterns.length} active
+                        </Chip>
+                      </div>
+
+                      <TextArea
+                        className={`${textareaCls} min-h-40 font-mono`}
+                        placeholder={`^ghcr\\.io/acme/.+:prod-.*$\n^nginx$\n^.*:stable$`}
+                        value={imagePatternText}
+                        onChange={(event) => setImagePatternText(event.target.value)}
+                        disabled={includeAllTags}
+                      />
+
+                      <p className="text-xs leading-5 text-zinc-500">
+                        Use regex when the scope is tag-driven or too large to maintain manually.
+                        Invalid patterns block save.
+                      </p>
+
+                      {invalidImagePatterns.length > 0 && (
+                        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-400">
+                          {invalidImagePatterns.map((pattern) => (
+                            <p key={pattern.pattern} className="font-mono break-all">
+                              {pattern.pattern}: {pattern.error}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+
+                      <Card>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                            Preview
+                          </p>
+                          <Chip color="accent" variant="soft">
+                            {regexMatchedOptions.length} matching
+                          </Chip>
+                        </div>
+
+                        {imagePatterns.length === 0 ? (
+                          <p className="mt-3 text-xs leading-5 text-zinc-500">
+                            Add a pattern to preview the tracked tags it would include.
+                          </p>
+                        ) : regexMatchedOptions.length === 0 ? (
+                          <p className="mt-3 text-xs leading-5 text-zinc-500">
+                            Current patterns do not match any tracked image tags outside your exact
+                            selections.
+                          </p>
+                        ) : (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {regexMatchedOptions.slice(0, 10).map((option) => (
+                              <span
+                                key={option.id}
+                                className="rounded-full px-2.5 py-1 text-xs font-mono"
+                                style={{
+                                  background: 'rgba(59,130,246,0.12)',
+                                  border: '1px solid rgba(59,130,246,0.2)',
+                                  color: '#93c5fd',
+                                }}
+                              >
+                                {option.label}
+                              </span>
+                            ))}
+                            {regexMatchedOptions.length > 10 && (
+                              <span
+                                className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500"
+                                style={{
+                                  background: 'var(--status-pill-bg)',
+                                  border: '1px solid var(--surface-border)',
+                                }}
+                              >
+                                +{regexMatchedOptions.length - 10} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </Card>
+                    </Card>
+                  </div>
+
+                  <p className="text-xs text-zinc-500">
+                    Choose one or more exact `image:tag` entries, add regex include patterns, or
+                    enable “Include all image tags”.
+                  </p>
+
+                  {!includeAllTags && (
+                    <Card className="bg-surface-secondary">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                            Publish Scope
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-500">
+                            {selectedTargets.length} exact tag
+                            {selectedTargets.length === 1 ? '' : 's'} and {imagePatterns.length}{' '}
+                            regex pattern{imagePatterns.length === 1 ? '' : 's'} configured.
+                          </p>
+                        </div>
+                      </div>
+
+                      {selectedTargets.length > 0 && (
+                        <div className="max-h-24 overflow-y-auto [overflow-anchor:none]">
+                          <div className="flex flex-wrap gap-2">
+                            {selectedTargets.slice(0, 12).map((target) => (
+                              <Chip
+                                key={`${target.image_name}:${target.image_tag}`}
+                                color="accent"
+                                variant="soft"
+                              >
+                                {target.image_name}:{target.image_tag}
+                              </Chip>
+                            ))}
+                            {selectedTargets.length > 12 && (
+                              <span
+                                className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500"
+                                style={{
+                                  background: 'var(--status-pill-bg)',
+                                  border: '1px solid var(--surface-border)',
+                                }}
+                              >
+                                +{selectedTargets.length - 12} more exact tags
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {imagePatterns.length > 0 && (
+                        <div className="max-h-24 overflow-y-auto [overflow-anchor:none]">
+                          <div className="flex flex-wrap gap-2">
+                            {imagePatterns.map((pattern) => (
+                              <span
+                                key={pattern}
+                                className="rounded-full px-2.5 py-1 text-xs font-mono"
+                                style={{
+                                  background: 'rgba(59,130,246,0.12)',
+                                  border: '1px solid rgba(59,130,246,0.2)',
+                                  color: '#93c5fd',
+                                }}
+                              >
+                                {pattern}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedTargets.length === 0 && imagePatterns.length === 0 && (
+                        <p className="text-xs leading-5 text-zinc-500">
+                          Selections and regex matches will appear here without changing the modal
+                          height.
+                        </p>
+                      )}
+                    </Card>
+                  )}
+
+                  {!includeAllTags && !loadingOptions && !scopeIsValid && (
+                    <p className="text-xs text-red-400">
+                      Select at least one exact image tag or add a regex include pattern.
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-1 p-2 md:grid-cols-2 gap-4 items-start">
+                    <div className="space-y-1.5">
+                      <Label className={fieldLabelCls}>Active Banner Title (optional)</Label>
+                      <Input
+                        className={fieldCls + ' bg-surface-secondary'}
+                        value={updateTitle}
+                        onChange={(event) => setUpdateTitle(event.target.value)}
+                        placeholder="Database refresh in progress"
+                      />
+                    </div>
+                    <Select
+                      value={updateLevel}
+                      onChange={(value) =>
+                        setUpdateLevel(String(value) as (typeof updateLevelOptions)[number])
+                      }
+                      className="w-full"
+                      placeholder="Select a banner level"
+                    >
+                      <Label className={fieldLabelCls}>Banner Level</Label>
+                      <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {updateLevelOptions.map((option) => (
+                            <ListBox.Item id={option} key={option} textValue={option}>
+                              {option}
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5 p-2">
+                    <Label className={fieldLabelCls}>Active Banner Message</Label>
+                    <TextArea
+                      className={textareaCls + ' bg-surface-secondary'}
+                      value={updateBody}
+                      onChange={(event) => setUpdateBody(event.target.value)}
+                      placeholder="We are re-scanning images after a registry credential rotation. Short-lived stale states are expected."
+                    />
+                  </div>
+                </form>
+              </Modal.Body>
+
+              <Modal.Footer
+                className="px-6 py-4 flex gap-3 justify-end"
+                style={{ borderTop: '1px solid var(--border-subtle)' }}
+              >
+                <Button variant="secondary" onPress={modal.close}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  form="status-page-form"
+                  isDisabled={saving || invalidImagePatterns.length > 0 || !scopeIsValid}
+                  className="btn-primary"
+                >
+                  {saving && (
+                    <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  )}
+                  {editing ? 'Save' : 'Create'}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+      <Modal state={shareModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                  Manage Status Page Access
+                </Modal.Heading>
+                <Modal.CloseTrigger />
+              </Modal.Header>
+              <Modal.Body className="py-5 space-y-4">
+                {shareError && (
+                  <Alert status="danger">
+                    <Alert.Indicator />
+                    <Alert.Title>{shareError}</Alert.Title>
+                  </Alert>
                 )}
                 {shareTarget ? (
-                  <div
-                    className="rounded-xl px-4 py-3"
-                    style={{
-                      background: 'var(--row-hover)',
-                      border: '1px solid var(--surface-border)',
-                    }}
-                  >
+                  <Card className="py-3 bg-surface-secondary">
                     <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
                       {shareTarget.name}
                     </p>
@@ -1260,7 +1155,7 @@ export default function StatusPagesPage() {
                         orgNamesById={orgNamesById}
                       />
                     </div>
-                  </div>
+                  </Card>
                 ) : null}
 
                 <div className="space-y-2">
@@ -1281,15 +1176,11 @@ export default function StatusPagesPage() {
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
-                        <div
+                        <Card
                           key={share.org_id}
-                          className="flex items-start justify-between gap-3 rounded-xl px-4 py-3"
-                          style={{
-                            background: 'var(--row-hover)',
-                            border: '1px solid var(--surface-border)',
-                          }}
+                          className="flex flex-col items-start justify-between gap-3 px-4 py-3 bg-surface-secondary"
                         >
-                          <div className="min-w-0">
+                          <div>
                             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
                               {share.org_name}
                             </p>
@@ -1297,21 +1188,22 @@ export default function StatusPagesPage() {
                               {share.is_owner ? 'Owner workspace' : 'Shared access'}
                             </p>
                           </div>
-                          {share.is_owner ? (
-                            <span className="text-xs font-medium text-zinc-500">Locked</span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void handleRevokeShare(share.org_id);
-                              }}
-                              disabled={shareSaving}
-                              className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
-                            >
-                              <Delete01Icon size={15} />
-                            </button>
-                          )}
-                        </div>
+                          <div>
+                            {share.is_owner ? (
+                              <span className="text-xs font-medium text-zinc-500">Locked</span>
+                            ) : (
+                              <Button
+                                onClick={() => {
+                                  void handleRevokeShare(share.org_id);
+                                }}
+                                isDisabled={shareSaving}
+                                variant="danger-soft"
+                              >
+                                <Delete01Icon size={15} />
+                              </Button>
+                            )}
+                          </div>
+                        </Card>
                       ))}
                     </div>
                   )}
@@ -1331,9 +1223,9 @@ export default function StatusPagesPage() {
                       No additional organizations are available for sharing.
                     </p>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <select
-                        className={`${heroFieldClassName} flex-1`}
+                        className={`${heroFieldClassName} flex-1 bg-surface-secondary`}
                         value={shareOrgId}
                         onChange={(event) => setShareOrgId(event.target.value)}
                       >

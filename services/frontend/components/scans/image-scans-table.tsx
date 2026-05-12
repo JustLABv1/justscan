@@ -13,6 +13,7 @@ import {
   ArrowRight01Icon,
   Cancel01Icon,
   Delete01Icon,
+  FileSearchIcon,
   Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
@@ -368,8 +369,8 @@ function ImageScansTreeChildrenRows({
                     router.push(`/scans/${scan.id}`);
                   }}
                 >
+                  <FileSearchIcon size={14} aria-hidden />
                   Open
-                  <ArrowRight01Icon size={14} aria-hidden />
                 </Button>
                 {(scan.status === 'pending' || scan.status === 'running') && (
                   <Button

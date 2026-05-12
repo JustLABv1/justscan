@@ -2,11 +2,11 @@
 import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
 import { useToast } from '@/components/toast';
 import {
-    OwnershipBadge,
-    SeverityBadge,
-    SourceBadge,
-    StatusBadge,
-    SuppressionSourceBadge,
+  OwnershipBadge,
+  SeverityBadge,
+  SourceBadge,
+  StatusBadge,
+  SuppressionSourceBadge,
 } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
@@ -18,94 +18,94 @@ import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import type {
-    ComplianceResult,
-    Org,
-    ResourceShare,
-    SBOMComponent,
-    Scan,
-    Suppression,
-    Tag,
-    Vulnerability,
-    VulnerabilityViewPreferenceResponse,
-    VulnerabilityViewSettings,
+  ComplianceResult,
+  Org,
+  ResourceShare,
+  SBOMComponent,
+  Scan,
+  Suppression,
+  Tag,
+  Vulnerability,
+  VulnerabilityViewPreferenceResponse,
+  VulnerabilityViewSettings,
 } from '@/lib/api';
 import {
-    addTagToScan,
-    assignScanToOrg,
-    cancelScan,
-    createComment,
-    createShare,
-    deleteComment,
-    deleteShare,
-    deleteSuppression,
-    getScan,
-    getScanCompliance,
-    getScanSBOM,
-    getScanVulnerabilityViewSettings,
-    getTokenType,
-    getUser,
-    getVulnerabilityContextAnalysis,
-    grantScanOrgAccess,
-    listOrgs,
-    listScanOrgGrants,
-    listScans,
-    listSuppressionShares,
-    listTags,
-    listVulnerabilities,
-    reEvaluateCompliance,
-    removeScanFromOrg,
-    removeTagFromScan,
-    reScan,
-    resetScanVulnerabilityViewPreference,
-    revokeScanOrgAccess,
-    saveScanVulnerabilityViewPreference,
-    shareSuppression,
-    unshareSuppression,
-    upsertSuppression,
+  addTagToScan,
+  assignScanToOrg,
+  cancelScan,
+  createComment,
+  createShare,
+  deleteComment,
+  deleteShare,
+  deleteSuppression,
+  getScan,
+  getScanCompliance,
+  getScanSBOM,
+  getScanVulnerabilityViewSettings,
+  getTokenType,
+  getUser,
+  getVulnerabilityContextAnalysis,
+  grantScanOrgAccess,
+  listOrgs,
+  listScanOrgGrants,
+  listScans,
+  listSuppressionShares,
+  listTags,
+  listVulnerabilities,
+  reEvaluateCompliance,
+  removeScanFromOrg,
+  removeTagFromScan,
+  reScan,
+  resetScanVulnerabilityViewPreference,
+  revokeScanOrgAccess,
+  saveScanVulnerabilityViewPreference,
+  shareSuppression,
+  unshareSuppression,
+  upsertSuppression,
 } from '@/lib/api';
 import { formatIgnoreRuleStatusLabel, getBlockedPolicyDetails } from '@/lib/blocked-policy';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
-    Accordion,
-    Alert,
-    Button,
-    Calendar,
-    Card,
-    Chip,
-    DateField,
-    DatePicker,
-    Dropdown,
-    Label,
-    ListBox,
-    Modal,
-    Select,
-    Table,
-    useOverlayState,
+  Accordion,
+  Alert,
+  Button,
+  Calendar,
+  Card,
+  Chip,
+  DateField,
+  DatePicker,
+  Dropdown,
+  Label,
+  ListBox,
+  Modal,
+  Select,
+  Table,
+  useOverlayState,
 } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
 import {
-    ArrowLeft01Icon,
-    Cancel01Icon,
-    Comment01Icon,
-    CpuIcon,
-    Delete01Icon,
-    Delete02Icon,
-    FileExportIcon,
-    GitCompareIcon,
-    MoreVerticalIcon,
-    Refresh01Icon,
-    Share01Icon,
-    Shield01Icon,
-    ShieldKeyIcon,
+  ArrowLeft01Icon,
+  Cancel01Icon,
+  Comment01Icon,
+  CpuIcon,
+  Delete01Icon,
+  Delete02Icon,
+  FileExportIcon,
+  GitCompareIcon,
+  MoreVerticalIcon,
+  Refresh01Icon,
+  Share01Icon,
+  Shield01Icon,
+  ShieldKeyIcon,
 } from 'hugeicons-react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ScannerDatabaseCard,
-    ScanningAnimation,
-    ScanStepTimeline,
+  ScannerDatabaseCard,
+  ScanningAnimation,
+  ScanStepTimeline,
 } from '../../../../components/scans/scan-runtime';
 
 const inputCls = nativeFieldClassName;
@@ -1637,7 +1637,7 @@ export default function ScanDetailPage() {
 
       {/* Error banner - shown when scan failed */}
       {scan.status === 'failed' && scan.error_message && (
-        <Alert status="danger" className="border border-danger">
+        <Alert status="danger" className="border border-danger bg-danger-soft">
           <Alert.Indicator />
           <Alert.Content>
             <Alert.Title>

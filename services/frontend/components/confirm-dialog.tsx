@@ -54,8 +54,8 @@ function ConfirmDialogUI({
     <Modal state={state}>
       <Modal.Backdrop>
         <Modal.Container size="sm" placement="center">
-          <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-            <Modal.Body className="px-6 pt-6 pb-2">
+          <Modal.Dialog>
+            <Modal.Body className="px-6 pb-2">
               <div className="flex flex-col items-center text-center gap-4">
                 <div
                   className="size-12 rounded-2xl flex items-center justify-center shrink-0"
@@ -69,15 +69,12 @@ function ConfirmDialogUI({
                 </div>
               </div>
             </Modal.Body>
-            <Modal.Footer
-              className="px-6 py-5 flex gap-3 justify-center"
-              style={{ borderTop: 'none' }}
-            >
+            <Modal.Footer>
               <Button className="flex-1" onPress={onCancel} variant="tertiary" isDisabled={loading}>
                 {cancelLabel}
               </Button>
               <Button
-                className="flex-1"
+                className={`flex-1 ${variant === 'warning' ? 'bg-warning-soft-foreground' : ''}`}
                 isDisabled={loading}
                 onPress={onConfirm}
                 variant={variantStyle}

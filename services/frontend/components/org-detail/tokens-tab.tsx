@@ -5,9 +5,17 @@ import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { APIToken, createOrgToken, listOrgTokens, revokeOrgToken } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo, timeUntil } from '@/lib/time';
-import { Modal, useOverlayState } from '@heroui/react';
+import {
+  Button,
+  Card,
+  Modal,
+  SearchField,
+  Table,
+  useOverlayState,
+  type SortDescriptor,
+} from '@heroui/react';
 import { Copy01Icon, Delete01Icon, Key01Icon, PlusSignIcon } from 'hugeicons-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const EXPIRY_OPTIONS = [
   { label: '30 days', value: 30 * 24 * 60 * 60 },
@@ -16,6 +24,21 @@ const EXPIRY_OPTIONS = [
   { label: '1 year', value: 365 * 24 * 60 * 60 },
   { label: 'No expiry', value: 0 },
 ];
+
+function getTokenStatus(token: APIToken): 'active' | 'expired' | 'revoked' {
+  if (token.disabled) {
+    return 'revoked';
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(token.expires_at);
+  const isNoExpiry = expiresAt.getFullYear() - now.getFullYear() >= 4;
+  if (!isNoExpiry && expiresAt < now) {
+    return 'expired';
+  }
+
+  return 'active';
+}
 
 function OrgTokenStatusBadge({ token }: { token: APIToken }) {
   const now = new Date();
@@ -287,10 +310,50 @@ export function OrgTokensTab({ orgId, canManage }: OrgTokensTabProps) {
   const [tokens, setTokens] = useState<APIToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [rawToken, setRawToken] = useState('');
+  const [query, setQuery] = useState('');
+  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
+    column: 'created',
+    direction: 'descending',
+  });
   const createModal = useOverlayState();
   const revealModal = useOverlayState();
   const toast = useToast();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+
+  const filteredTokens = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) {
+      return tokens;
+    }
+
+    return tokens.filter((token) => {
+      const status = getTokenStatus(token);
+      return [token.description, status, timeAgo(token.created_at)].some((value) =>
+        value.toLowerCase().includes(normalized)
+      );
+    });
+  }, [query, tokens]);
+
+  const sortedTokens = useMemo(() => {
+    const direction = sortDescriptor.direction === 'descending' ? -1 : 1;
+    const column = String(sortDescriptor.column ?? 'created');
+
+    return [...filteredTokens].sort((a, b) => {
+      if (column === 'created') {
+        return (Date.parse(a.created_at) - Date.parse(b.created_at)) * direction;
+      }
+
+      if (column === 'expiry') {
+        return (Date.parse(a.expires_at) - Date.parse(b.expires_at)) * direction;
+      }
+
+      if (column === 'status') {
+        return getTokenStatus(a).localeCompare(getTokenStatus(b)) * direction;
+      }
+
+      return a.description.localeCompare(b.description) * direction;
+    });
+  }, [filteredTokens, sortDescriptor]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -330,26 +393,22 @@ export function OrgTokensTab({ orgId, canManage }: OrgTokensTabProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <Card>
       {confirmDialog}
 
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Org API Tokens</h2>
+          <h2 className="text-base font-semibold">Org API Tokens</h2>
           <p className="text-xs text-zinc-500 mt-0.5">
             Service-account tokens scoped to this organization. Use them for CI/CD pipelines and
             automated scanning.
           </p>
         </div>
         {canManage && (
-          <button
-            type="button"
-            onClick={() => createModal.open()}
-            className="btn-primary shrink-0 inline-flex items-center gap-2"
-          >
+          <Button onClick={() => createModal.open()}>
             <PlusSignIcon size={14} />
             New Token
-          </button>
+          </Button>
         )}
       </div>
 
@@ -377,78 +436,98 @@ export function OrgTokensTab({ orgId, canManage }: OrgTokensTabProps) {
               </p>
             </div>
             {canManage && (
-              <button
-                type="button"
-                onClick={() => createModal.open()}
-                className="btn-primary inline-flex items-center gap-2"
-              >
+              <Button onClick={() => createModal.open()}>
                 <PlusSignIcon size={14} />
                 Create first token
-              </button>
+              </Button>
             )}
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Created
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Expiry
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Status
-                </th>
-                {canManage && <th className="px-4 py-3" />}
-              </tr>
-            </thead>
-            <tbody>
-              {tokens.map((token, idx) => (
-                <tr
-                  key={token.id}
-                  style={
-                    idx < tokens.length - 1
-                      ? { borderBottom: '1px solid var(--border-subtle)' }
-                      : undefined
-                  }
-                  className="transition-colors hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30"
+          <div className="space-y-3 p-3">
+            <SearchField name="org-token-search" variant="secondary">
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input
+                  placeholder="Filter by token name or status..."
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
+
+            <Table variant="secondary">
+              <Table.ScrollContainer>
+                <Table.Content
+                  aria-label="Organization API tokens"
+                  className="min-w-[760px]"
+                  sortDescriptor={sortDescriptor}
+                  onSortChange={setSortDescriptor}
                 >
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-zinc-900 dark:text-white">
-                      {token.description}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-zinc-500">{timeAgo(token.created_at)}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <OrgTokenExpiry token={token} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <OrgTokenStatusBadge token={token} />
-                  </td>
-                  {canManage && (
-                    <td className="px-4 py-3 text-right">
-                      {!token.disabled && (
-                        <button
-                          type="button"
-                          onClick={() => void handleRevoke(token)}
-                          className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Revoke token"
-                        >
-                          <Delete01Icon size={15} />
-                        </button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  <Table.Header>
+                    <Table.Column id="name" allowsSorting isRowHeader>
+                      Name
+                    </Table.Column>
+                    <Table.Column id="created" allowsSorting>
+                      Created
+                    </Table.Column>
+                    <Table.Column id="expiry" allowsSorting>
+                      Expiry
+                    </Table.Column>
+                    <Table.Column id="status" allowsSorting>
+                      Status
+                    </Table.Column>
+                    {canManage ? <Table.Column className="text-right">Actions</Table.Column> : null}
+                  </Table.Header>
+                  <Table.Body>
+                    {sortedTokens.length === 0 ? (
+                      <Table.Row id="empty">
+                        <Table.Cell colSpan={canManage ? 5 : 4}>
+                          <div className="px-4 py-8 text-center text-sm text-zinc-500">
+                            No tokens match this filter.
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    ) : (
+                      sortedTokens.map((token) => (
+                        <Table.Row key={token.id} id={token.id}>
+                          <Table.Cell>
+                            <span className="font-medium text-zinc-900 dark:text-white">
+                              {token.description}
+                            </span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-zinc-500">{timeAgo(token.created_at)}</span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <OrgTokenExpiry token={token} />
+                          </Table.Cell>
+                          <Table.Cell>
+                            <OrgTokenStatusBadge token={token} />
+                          </Table.Cell>
+                          {canManage ? (
+                            <Table.Cell>
+                              <div className="flex justify-end">
+                                {!token.disabled && (
+                                  <Button
+                                    variant="danger-soft"
+                                    isIconOnly
+                                    onClick={() => void handleRevoke(token)}
+                                  >
+                                    <Delete01Icon size={15} />
+                                  </Button>
+                                )}
+                              </div>
+                            </Table.Cell>
+                          ) : null}
+                        </Table.Row>
+                      ))
+                    )}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </div>
         )}
       </div>
 
@@ -456,6 +535,6 @@ export function OrgTokensTab({ orgId, canManage }: OrgTokensTabProps) {
         <CreateOrgTokenDialog state={createModal} orgId={orgId} onCreated={handleCreated} />
       )}
       <TokenRevealDialog state={revealModal} rawToken={rawToken} />
-    </div>
+    </Card>
   );
 }

@@ -45,7 +45,7 @@ import {
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
-import { Button, Card, Input, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { Button, Card, Input, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { ArrowLeft01Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -255,7 +255,7 @@ export default function OrgDetailPage() {
       title: `Remove ${member.username || member.email || 'member'}?`,
       message: 'This user will lose access to this organization immediately.',
       confirmLabel: 'Remove',
-      variant: 'warning',
+      variant: 'danger',
     });
     if (!ok) return;
     await removeOrgMember(id, member.user_id).catch(() => {});
@@ -856,17 +856,12 @@ export default function OrgDetailPage() {
       <Modal state={inviteModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
-                  Invite Member
-                </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>Invite Member</Modal.Heading>
+                <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5">
+              <Modal.Body className="py-5">
                 <form id="invite-member-form" onSubmit={handleCreateInvite} className="space-y-4">
                   {inviteError ? (
                     <FormAlert description={inviteError} title="Invite failed" />
@@ -878,45 +873,43 @@ export default function OrgDetailPage() {
                     required
                     type="email"
                     value={inviteEmail}
+                    className="bg-surface-secondary"
                   />
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
                       Role
-                    </label>
-                    <select
-                      className={inputCls}
+                    </Label>
+                    <Select
                       value={inviteRole}
-                      onChange={(e) =>
-                        setInviteRole(
-                          e.target.value as Extract<OrgRole, 'admin' | 'editor' | 'viewer'>
-                        )
+                      onChange={(value) =>
+                        setInviteRole(value as Extract<OrgRole, 'admin' | 'editor' | 'viewer'>)
                       }
                     >
-                      <option value="viewer">Viewer</option>
-                      <option value="editor">Editor</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                      <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="viewer">Viewer</ListBox.Item>
+                          <ListBox.Item id="editor">Editor</ListBox.Item>
+                          <ListBox.Item id="admin">Admin</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
                   </div>
                 </form>
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex gap-3 justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <button onClick={inviteModal.close} className="btn-secondary" type="button">
+              <Modal.Footer>
+                <Button onClick={inviteModal.close} variant="secondary">
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  form="invite-member-form"
-                  disabled={inviteSaving}
-                  className="btn-primary inline-flex items-center gap-2"
-                >
+                </Button>
+                <Button type="submit" form="invite-member-form" isDisabled={inviteSaving}>
                   {inviteSaving && (
                     <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   )}
                   Create Invite
-                </button>
+                </Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

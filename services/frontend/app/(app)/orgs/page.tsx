@@ -6,26 +6,20 @@ import { FormField } from '@/components/ui/form-field';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
-    acceptOrgInvite,
-    createOrg,
-    declineOrgInvite,
-    deleteOrg,
-    getUser,
-    listMyOrgInvites,
-    listOrgs,
-    Org,
-    OrgInvite,
+  acceptOrgInvite,
+  createOrg,
+  declineOrgInvite,
+  deleteOrg,
+  getUser,
+  listMyOrgInvites,
+  listOrgs,
+  Org,
+  OrgInvite,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Modal, useOverlayState } from '@heroui/react';
-import {
-    ArrowRight01Icon,
-    Building04Icon,
-    Delete01Icon,
-    PlusSignIcon,
-    UserAdd01Icon,
-} from 'hugeicons-react';
-import Link from 'next/link';
+import { Button, Card, Modal, useOverlayState } from '@heroui/react';
+import { Building04Icon, Delete01Icon, PlusSignIcon, UserAdd01Icon } from 'hugeicons-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 interface OrgWithCount extends Org {
@@ -48,6 +42,7 @@ export default function OrgsPage() {
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
+  const router = useRouter();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,9 +130,9 @@ export default function OrgsPage() {
             : 'Manage organization workspaces, members, and invites.'
         }
         actions={
-          <button onClick={modal.open} className="btn-primary inline-flex items-center gap-2">
+          <Button onClick={modal.open} variant="primary">
             <PlusSignIcon size={15} /> New Organization
-          </button>
+          </Button>
         }
       />
 
@@ -145,7 +140,7 @@ export default function OrgsPage() {
       {inviteError ? <FormAlert description={inviteError} title="Invite action failed" /> : null}
 
       {pendingInvites.length > 0 && (
-        <section className="surface-panel rounded-2xl p-5 space-y-4">
+        <Card className="space-y-4">
           <div className="flex items-center gap-3">
             <div
               className="size-10 rounded-xl flex items-center justify-center shrink-0"
@@ -170,14 +165,7 @@ export default function OrgsPage() {
             {pendingInvites.map((invite) => {
               const busy = inviteActionId === invite.id;
               return (
-                <div
-                  key={invite.id}
-                  className="rounded-2xl p-4 space-y-3"
-                  style={{
-                    background: 'var(--row-hover)',
-                    border: '1px solid var(--surface-border)',
-                  }}
-                >
+                <Card key={invite.id} className="bg-surface-secondary">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -215,35 +203,34 @@ export default function OrgsPage() {
                   )}
 
                   <div className="flex items-center gap-2">
-                    <button
-                      className="btn-primary inline-flex items-center gap-2"
-                      disabled={busy}
+                    <Button
+                      variant="primary"
+                      isDisabled={busy}
                       onClick={() => {
                         void handleAcceptInvite(invite);
                       }}
-                      type="button"
                     >
                       {busy && (
                         <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       )}
                       Accept
-                    </button>
-                    <button
-                      className="btn-secondary"
-                      disabled={busy}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="border border-zinc-300 dark:border-zinc-700"
+                      isDisabled={busy}
                       onClick={() => {
                         void handleDeclineInvite(invite);
                       }}
-                      type="button"
                     >
                       Decline
-                    </button>
+                    </Button>
                   </div>
-                </div>
+                </Card>
               );
             })}
           </div>
-        </section>
+        </Card>
       )}
 
       {loading ? (
@@ -251,7 +238,7 @@ export default function OrgsPage() {
           <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
       ) : orgs.length === 0 ? (
-        <div className="surface-panel rounded-2xl py-20 flex flex-col items-center gap-3">
+        <Card className="py-20 flex flex-col items-center gap-3">
           <div
             className="size-14 rounded-2xl flex items-center justify-center"
             style={{
@@ -264,28 +251,21 @@ export default function OrgsPage() {
           <p className="text-sm text-zinc-500 text-center max-w-xs">
             No organizations yet. Create one to start managing compliance policies.
           </p>
-          <button onClick={modal.open} className="btn-secondary mt-1" type="button">
+          <Button onClick={modal.open} variant="secondary">
             Create organization →
-          </button>
-        </div>
+          </Button>
+        </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {orgs.map((org) => (
-            <div
+            <Card
               key={org.id}
-              className="surface-panel relative rounded-2xl p-5 flex flex-col gap-4 group transition-all duration-200 cursor-default"
-              onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(167,139,250,0.2)')}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--surface-border)')}
+              className="hover:bg-surface-secondary hover:cursor-pointer"
+              onClick={() => {
+                router.push(`/orgs/${org.id}`);
+              }}
             >
-              <div
-                className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-                style={{
-                  background:
-                    'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)',
-                }}
-              />
-
-              <div className="flex items-start gap-3">
+              <div className="flex items-center gap-3">
                 <div
                   className="size-10 rounded-xl flex items-center justify-center shrink-0"
                   style={{
@@ -304,46 +284,38 @@ export default function OrgsPage() {
                     {org.description || 'No description'}
                   </p>
                 </div>
-                <span
-                  className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full"
-                  style={{
-                    color: '#a78bfa',
-                    background: 'rgba(124,58,237,0.15)',
-                    border: '1px solid rgba(167,139,250,0.2)',
-                  }}
-                >
-                  {org.policy_count ?? 0} {org.policy_count === 1 ? 'policy' : 'policies'}
-                </span>
-              </div>
 
-              <div
-                className="flex items-center justify-between pt-1"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <Link
-                  href={`/orgs/${org.id}`}
-                  className="flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
-                >
-                  View details <ArrowRight01Icon size={13} />
-                </Link>
-                {isSystemAdmin || org.current_user_role === 'owner' ? (
-                  <RowActionsMenu
-                    label={`Open actions menu for ${org.name}`}
-                    items={[
-                      {
-                        id: 'delete',
-                        label: 'Delete organization',
-                        icon: <Delete01Icon size={15} />,
-                        variant: 'danger',
-                        onAction: () => {
-                          void handleDelete(org.id, org.name);
+                <div className="flex items-center gap-2">
+                  <span
+                    className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full"
+                    style={{
+                      color: '#a78bfa',
+                      background: 'rgba(124,58,237,0.15)',
+                      border: '1px solid rgba(167,139,250,0.2)',
+                    }}
+                  >
+                    {org.policy_count ?? 0} {org.policy_count === 1 ? 'policy' : 'policies'}
+                  </span>
+
+                  {isSystemAdmin || org.current_user_role === 'owner' ? (
+                    <RowActionsMenu
+                      label={`Open actions menu for ${org.name}`}
+                      items={[
+                        {
+                          id: 'delete',
+                          label: 'Delete organization',
+                          icon: <Delete01Icon size={15} />,
+                          variant: 'danger',
+                          onAction: () => {
+                            void handleDelete(org.id, org.name);
+                          },
                         },
-                      },
-                    ]}
-                  />
-                ) : null}
+                      ]}
+                    />
+                  ) : null}
+                </div>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -351,17 +323,12 @@ export default function OrgsPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
-                  New Organization
-                </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>New Organization</Modal.Heading>
+                <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5">
+              <Modal.Body className="py-5">
                 <form id="create-org-form" onSubmit={handleCreate} className="space-y-4">
                   {createError ? (
                     <FormAlert description={createError} title="Organization creation failed" />
@@ -372,33 +339,27 @@ export default function OrgsPage() {
                     placeholder="e.g. Production"
                     required
                     value={name}
+                    className="bg-surface-secondary"
                   />
                   <FormField
                     label="Description"
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Optional description"
                     value={description}
+                    className="bg-surface-secondary"
                   />
                 </form>
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex gap-3 justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <button onClick={modal.close} className="btn-secondary" type="button">
+              <Modal.Footer>
+                <Button onClick={modal.close} variant="tertiary">
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  form="create-org-form"
-                  disabled={creating}
-                  className="btn-primary inline-flex items-center gap-2"
-                >
+                </Button>
+                <Button type="submit" form="create-org-form" isDisabled={creating}>
                   {creating && (
                     <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   )}
                   Create
-                </button>
+                </Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

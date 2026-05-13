@@ -12,40 +12,40 @@ import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import {
-    assignScanToOrg,
-    createOrgInvite,
-    createPolicy,
-    deletePolicy,
-    getComplianceTrend,
-    getOrg,
-    getOrgRiskScore,
-    getUser,
-    listOrgInvites,
-    listOrgMembers,
-    listOrgScans,
-    listScans,
-    Org,
-    OrgInvite,
-    OrgMember,
-    OrgPolicy,
-    OrgRiskScore,
-    OrgRole,
-    PolicyRule,
-    removeOrgMember,
-    removeScanFromOrg,
-    revokeOrgInvite,
-    Scan,
-    transferOrgOwnership,
-    TrendPoint,
-    updateOrg,
-    updateOrgMemberRole,
-    updateOrgVulnerabilityViewSettings,
-    updatePolicy,
-    VulnerabilityViewSettings,
+  assignScanToOrg,
+  createOrgInvite,
+  createPolicy,
+  deletePolicy,
+  getComplianceTrend,
+  getOrg,
+  getOrgRiskScore,
+  getUser,
+  listOrgInvites,
+  listOrgMembers,
+  listOrgScans,
+  listScans,
+  Org,
+  OrgInvite,
+  OrgMember,
+  OrgPolicy,
+  OrgRiskScore,
+  OrgRole,
+  PolicyRule,
+  removeOrgMember,
+  removeScanFromOrg,
+  revokeOrgInvite,
+  Scan,
+  transferOrgOwnership,
+  TrendPoint,
+  updateOrg,
+  updateOrgMemberRole,
+  updateOrgVulnerabilityViewSettings,
+  updatePolicy,
+  VulnerabilityViewSettings,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
-import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { Button, Card, Input, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { ArrowLeft01Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -484,31 +484,22 @@ export default function OrgDetailPage() {
   return (
     <div className="p-6 space-y-6">
       <PageHeader
-        breadcrumbs={[{ label: 'Organizations', href: '/orgs' }, { label: org.name }]}
         eyebrow="Organization workspace"
         title={org.name}
         description={
           org.description || 'Manage organization risk, policies, members, and assigned assets.'
         }
         actions={
-          <button
-            onClick={() => router.back()}
-            className="btn-secondary inline-flex items-center gap-1.5"
-            type="button"
-          >
+          <Button onClick={() => router.back()} variant="secondary">
             <ArrowLeft01Icon size={15} />
             Back to organizations
-          </button>
+          </Button>
         }
       />
 
-      <div
-        className="surface-panel rounded-2xl p-1.5"
-        role="tablist"
-        aria-label="Organization sections"
-      >
+      <Card role="tablist" aria-label="Organization sections">
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-1">
-          {ORG_TABS.map((tab, index) => {
+          {ORG_TABS.map((tab, index): any => {
             const active = activeTab === tab.id;
             return (
               <button
@@ -542,7 +533,7 @@ export default function OrgDetailPage() {
             );
           })}
         </div>
-      </div>
+      </Card>
 
       <div id={`${activeTab}-panel`} role="tabpanel" aria-labelledby={`${activeTab}-tab`}>
         {activeTab === 'overview' && <OrgOverviewTab riskScore={riskScore} trend={trend} />}
@@ -602,17 +593,12 @@ export default function OrgDetailPage() {
       <Modal state={policyModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
-                  {editingPolicy ? 'Edit Policy' : 'New Policy'}
-                </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{editingPolicy ? 'Edit Policy' : 'New Policy'}</Modal.Heading>
+                <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5 max-h-[60vh] overflow-y-auto">
+              <Modal.Body className="py-5 max-h-[60vh] overflow-y-auto">
                 <form id="policy-form" onSubmit={handleSavePolicy} className="space-y-5">
                   {policyError && (
                     <div
@@ -626,11 +612,11 @@ export default function OrgDetailPage() {
                       {policyError}
                     </div>
                   )}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium">
                       Policy Name <span className="text-red-400">*</span>
                     </label>
-                    <input
+                    <Input
                       className={inputCls}
                       placeholder="e.g. No Critical CVEs"
                       value={policyName}
@@ -639,30 +625,19 @@ export default function OrgDetailPage() {
                     />
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                         Rules
                       </label>
-                      <button
-                        type="button"
-                        onClick={addRule}
-                        className="flex items-center gap-1 text-xs text-violet-500 dark:text-violet-400 hover:text-violet-400 dark:hover:text-violet-300 transition-colors"
-                      >
+                      <Button type="button" onClick={addRule} size="sm" variant="secondary">
                         <PlusSignIcon size={12} />
                         Add Rule
-                      </button>
+                      </Button>
                     </div>
 
                     {policyRules.map((rule, idx) => (
-                      <div
-                        key={idx}
-                        className="rounded-xl p-3 space-y-3"
-                        style={{
-                          background: 'var(--row-hover)',
-                          border: '1px solid var(--surface-border)',
-                        }}
-                      >
+                      <Card key={idx} className="bg-surface-secondary p-3 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <Select
                             value={rule.type}
@@ -672,6 +647,7 @@ export default function OrgDetailPage() {
                                 prev.map((r, i) => (i === idx ? { type: newType } : r))
                               );
                             }}
+                            className="min-w-0 flex-1"
                           >
                             <Select.Trigger className={selectTriggerCls}>
                               <Select.Value />
@@ -687,21 +663,17 @@ export default function OrgDetailPage() {
                               </ListBox>
                             </Select.Popover>
                           </Select>
-                          <button
-                            type="button"
-                            onClick={() => removeRule(idx)}
-                            className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors shrink-0 p-1"
-                          >
+                          <Button onClick={() => removeRule(idx)} variant="danger-soft" isIconOnly>
                             <Delete01Icon size={15} />
-                          </button>
+                          </Button>
                         </div>
 
                         {rule.type === 'max_cvss' && (
-                          <div className="space-y-1">
-                            <label className="text-xs text-zinc-500">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-xs">
                               Max CVSS threshold (fail if ≥ this value)
                             </label>
-                            <input
+                            <Input
                               type="number"
                               min={0}
                               max={10}
@@ -710,7 +682,7 @@ export default function OrgDetailPage() {
                               onChange={(e) =>
                                 setRuleField(idx, 'value', parseFloat(e.target.value))
                               }
-                              className={inputCls}
+                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-violet-500/40"
                             />
                           </div>
                         )}
@@ -739,14 +711,14 @@ export default function OrgDetailPage() {
                             </div>
                             <div className="space-y-1">
                               <label className="text-xs text-zinc-500">Max count</label>
-                              <input
+                              <Input
                                 type="number"
                                 min={0}
                                 value={rule.value ?? 0}
                                 onChange={(e) =>
                                   setRuleField(idx, 'value', parseInt(e.target.value))
                                 }
-                                className={inputCls}
+                                className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-violet-500/40"
                               />
                             </div>
                           </div>
@@ -756,12 +728,12 @@ export default function OrgDetailPage() {
                             <label className="text-xs text-zinc-500">
                               Max total vulnerabilities
                             </label>
-                            <input
+                            <Input
                               type="number"
                               min={0}
                               value={rule.value ?? 0}
                               onChange={(e) => setRuleField(idx, 'value', parseInt(e.target.value))}
-                              className={inputCls}
+                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-violet-500/40"
                             />
                           </div>
                         )}
@@ -793,16 +765,16 @@ export default function OrgDetailPage() {
                         {rule.type === 'blocked_cve' && (
                           <div className="space-y-1">
                             <label className="text-xs text-zinc-500">CVE ID</label>
-                            <input
+                            <Input
                               type="text"
                               value={rule.cve_id ?? ''}
                               onChange={(e) => setRuleField(idx, 'cve_id', e.target.value)}
                               placeholder="CVE-2024-12345"
-                              className={inputCls}
+                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-violet-500/40"
                             />
                           </div>
                         )}
-                      </div>
+                      </Card>
                     ))}
 
                     {policyRules.length === 0 && (
@@ -813,24 +785,16 @@ export default function OrgDetailPage() {
                   </div>
                 </form>
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex gap-3 justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <button onClick={policyModal.close} className="btn-secondary" type="button">
+              <Modal.Footer>
+                <Button onClick={policyModal.close} variant="secondary">
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  form="policy-form"
-                  disabled={policySaving}
-                  className="btn-primary inline-flex items-center gap-2"
-                >
+                </Button>
+                <Button type="submit" form="policy-form" isDisabled={policySaving}>
                   {policySaving && (
                     <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   )}
                   {editingPolicy ? 'Save Changes' : 'Create Policy'}
-                </button>
+                </Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

@@ -17,7 +17,7 @@ export function RowActionsMenu({ label, items }: { label: string; items: RowActi
   return (
     <Dropdown>
       <Dropdown.Trigger>
-        <Button aria-label={label} className="btn-icon-subtle" isIconOnly variant="secondary">
+        <Button aria-label={label} isIconOnly variant="tertiary">
           <MoreVerticalIcon size={15} />
         </Button>
       </Dropdown.Trigger>

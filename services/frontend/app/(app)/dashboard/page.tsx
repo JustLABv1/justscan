@@ -1,31 +1,31 @@
 'use client';
 import SplitText from '@/components/SplitText';
 import {
-    buildRecentActivityHref,
-    getRecentActivityBounds,
-    RECENT_ACTIVITY_RANGE_OPTIONS,
-    RecentActivityRange,
-    RecentActivityRangePicker,
-    RecentActivityRow,
+  buildRecentActivityHref,
+  getRecentActivityBounds,
+  RECENT_ACTIVITY_RANGE_OPTIONS,
+  RecentActivityRange,
+  RecentActivityRangePicker,
+  RecentActivityRow,
 } from '@/components/scans/recent-activity';
 import { PageHeader } from '@/components/ui/page-header';
 import { ChartSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-    DashboardStats,
-    DashboardTrendPoint,
-    DashboardVulnTrendPoint,
-    getDashboardTrends,
-    getDashboardVulnTrends,
-    getScannerHealth,
-    getStats,
-    getTokenType,
-    getUser,
-    listScans,
-    listWatchlist,
-    Scan,
-    ScannerHealth,
-    WatchlistItem,
+  DashboardStats,
+  DashboardTrendPoint,
+  DashboardVulnTrendPoint,
+  getDashboardTrends,
+  getDashboardVulnTrends,
+  getScannerHealth,
+  getStats,
+  getTokenType,
+  getUser,
+  listScans,
+  listWatchlist,
+  Scan,
+  ScannerHealth,
+  WatchlistItem,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { Button, Card, Chip, Modal, useOverlayState } from '@heroui/react';
@@ -33,14 +33,14 @@ import { Activity01Icon, Add01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
-    Area,
-    AreaChart,
-    CartesianGrid,
-    Line,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis,
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts';
 
 // ── severity config ──────────────────────────────────────────────────
@@ -81,19 +81,6 @@ const SEV = [
     grad: 'linear-gradient(90deg,#3f3f46,#a1a1aa)',
   },
 ];
-
-// ── helpers ──────────────────────────────────────────────────────────
-function surfaceCard(tint?: string): React.CSSProperties {
-  return {
-    background: tint
-      ? `linear-gradient(145deg, ${tint} 0%, var(--surface-bg-tint-end) 70%)`
-      : 'var(--surface-bg)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid var(--surface-border)',
-    boxShadow: 'var(--surface-shadow)',
-  };
-}
 
 function formatDbAge(hours?: number | null): string {
   if (hours == null || Number.isNaN(hours)) return 'Unknown';

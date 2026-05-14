@@ -33,11 +33,15 @@ import {
   ColorPicker,
   ColorSwatch,
   ColorSwatchPicker,
+  Input,
   Label,
   ListBox,
   Modal,
+  Pagination,
   parseColor,
   Select,
+  type SortDescriptor,
+  Table,
   useOverlayState,
 } from '@heroui/react';
 import {
@@ -79,6 +83,13 @@ export default function TagsPage() {
   const [shareError, setShareError] = useState('');
   const [shareOrgId, setShareOrgId] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
+  const [filterQuery, setFilterQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
+    column: 'name',
+    direction: 'ascending',
+  });
+  const PAGE_SIZE = 10;
   const parsedColor = useMemo(() => {
     try {
       return parseColor(color);
@@ -195,6 +206,68 @@ export default function TagsPage() {
           !shares.some((share) => share.org_id === org.id)
       )
     : [];
+  const visibleTags = useMemo(() => {
+    const query = filterQuery.trim().toLowerCase();
+    const filtered = query
+      ? tags.filter((tag) => {
+          const ownerLabel =
+            tag.owner_type === 'org'
+              ? `org ${(tag.owner_org_id ? orgNamesById[tag.owner_org_id] : '') ?? ''}`
+              : tag.owner_type === 'system'
+                ? 'system'
+                : 'personal';
+          return (
+            tag.name.toLowerCase().includes(query) ||
+            tag.color.toLowerCase().includes(query) ||
+            ownerLabel.toLowerCase().includes(query)
+          );
+        })
+      : tags;
+
+    const sorted = [...filtered].sort((a, b) => {
+      const column = sortDescriptor.column as string;
+      const direction = sortDescriptor.direction === 'descending' ? -1 : 1;
+
+      if (column === 'owner') {
+        const ownerA =
+          a.owner_type === 'org'
+            ? (orgNamesById[a.owner_org_id ?? ''] ?? 'Org workspace')
+            : a.owner_type === 'system'
+              ? 'System'
+              : 'Personal';
+        const ownerB =
+          b.owner_type === 'org'
+            ? (orgNamesById[b.owner_org_id ?? ''] ?? 'Org workspace')
+            : b.owner_type === 'system'
+              ? 'System'
+              : 'Personal';
+        return ownerA.localeCompare(ownerB, undefined, { sensitivity: 'base' }) * direction;
+      }
+
+      const valueA = column === 'color' ? a.color : a.name;
+      const valueB = column === 'color' ? b.color : b.name;
+      return valueA.localeCompare(valueB, undefined, { sensitivity: 'base' }) * direction;
+    });
+
+    return sorted;
+  }, [filterQuery, tags, sortDescriptor, orgNamesById]);
+  const totalPages = Math.max(1, Math.ceil(visibleTags.length / PAGE_SIZE));
+  const effectivePage = Math.min(page, totalPages);
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const items: Array<number | 'ellipsis'> = [1];
+    if (effectivePage > 3) items.push('ellipsis');
+    const start = Math.max(2, effectivePage - 1);
+    const end = Math.min(totalPages - 1, effectivePage + 1);
+    for (let i = start; i <= end; i += 1) items.push(i);
+    if (effectivePage < totalPages - 2) items.push('ellipsis');
+    items.push(totalPages);
+    return items;
+  }, [effectivePage, totalPages]);
+  const pagedTags = useMemo(() => {
+    const start = (effectivePage - 1) * PAGE_SIZE;
+    return visibleTags.slice(start, start + PAGE_SIZE);
+  }, [effectivePage, visibleTags]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -234,9 +307,12 @@ export default function TagsPage() {
   return (
     <div className="p-6 space-y-5">
       <PageHeader
-        eyebrow="Organization"
         title="Tags"
-        description="Organize your scans with color-coded labels."
+        description={
+          tags.length > 0
+            ? `${tags.length} ${tags.length === 1 ? 'tag' : 'tags'} organized for filtering.`
+            : 'Organize your scans with color-coded labels.'
+        }
         actions={
           <Button
             onPress={openCreate}
@@ -247,6 +323,19 @@ export default function TagsPage() {
           </Button>
         }
       />
+      <div className="max-w-md">
+        <Input
+          aria-label="Filter tags"
+          placeholder="Filter tags by name, owner, or color..."
+          value={filterQuery}
+          onChange={(event) => {
+            setFilterQuery(event.target.value);
+            setPage(1);
+          }}
+          variant="secondary"
+          fullWidth
+        />
+      </div>
 
       {error ? <FormAlert description={error} title="Tag loading failed" /> : null}
 
@@ -275,77 +364,141 @@ export default function TagsPage() {
           action={{ label: '+ New Tag', onClick: openCreate }}
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {tags.map((tag) => (
-            <Card key={tag.id}>
-              <Card.Content className="px-4 py-3.5">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="size-4 rounded-full shrink-0"
-                    style={{
-                      background: tag.color,
-                      boxShadow: `0 0 8px ${tag.color}88`,
-                      outline: `2px solid ${tag.color}40`,
-                      outlineOffset: 2,
-                    }}
-                  />
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
+        <Table>
+          <Table.ScrollContainer>
+            <Table.Content
+              aria-label="Tags table"
+              className="min-w-[720px]"
+              sortDescriptor={sortDescriptor}
+              onSortChange={setSortDescriptor}
+            >
+              <Table.Header>
+                <Table.Column id="name" allowsSorting isRowHeader>
+                  Tag
+                </Table.Column>
+                <Table.Column id="owner" allowsSorting>
+                  Owner
+                </Table.Column>
+                <Table.Column id="color" allowsSorting>
+                  Color
+                </Table.Column>
+                <Table.Column className="text-right">Actions</Table.Column>
+              </Table.Header>
+              <Table.Body
+                items={pagedTags}
+                renderEmptyState={() => (
+                  <div className="py-10 text-center text-sm text-zinc-500">
+                    No tags match your filter.
+                  </div>
+                )}
+              >
+                {(tag) => (
+                  <Table.Row key={tag.id} id={tag.id}>
+                    <Table.Cell>
                       <span
-                        className="text-xs font-medium px-2.5 py-0.5 rounded-full shrink-0"
+                        className="inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-xs font-medium"
                         style={{
                           background: tag.color + '22',
                           color: tag.color,
-                          border: `1px solid ${tag.color}44`,
+                          borderColor: tag.color + '44',
                         }}
+                        title={tag.name}
                       >
-                        {tag.name}
+                        <span className="truncate">{tag.name}</span>
                       </span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                    </Table.Cell>
+                    <Table.Cell>
                       <OwnershipBadge
                         ownerType={tag.owner_type}
                         ownerOrgId={tag.owner_org_id}
                         orgNamesById={orgNamesById}
                       />
+                    </Table.Cell>
+                    <Table.Cell>
                       <span className="font-mono text-xs text-zinc-500">{tag.color}</span>
-                    </div>
-                  </div>
-
-                  {canManageTag(tag) ? (
-                    <RowActionsMenu
-                      label={`Open actions menu for tag ${tag.name}`}
-                      items={[
-                        {
-                          id: 'share',
-                          label: 'Manage access',
-                          icon: <Shield01Icon size={15} />,
-                          onAction: () => openShareModal(tag),
-                        },
-                        {
-                          id: 'edit',
-                          label: 'Edit tag',
-                          icon: <PencilEdit01Icon size={15} />,
-                          onAction: () => openEdit(tag),
-                        },
-                        {
-                          id: 'delete',
-                          label: 'Delete tag',
-                          icon: <Delete01Icon size={15} />,
-                          variant: 'danger',
-                          onAction: () => {
-                            void handleDelete(tag.id);
-                          },
-                        },
-                      ]}
-                    />
-                  ) : null}
-                </div>
-              </Card.Content>
-            </Card>
-          ))}
-        </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex items-center justify-end">
+                        {canManageTag(tag) ? (
+                          <RowActionsMenu
+                            label={`Open actions menu for tag ${tag.name}`}
+                            items={[
+                              {
+                                id: 'share',
+                                label: 'Manage access',
+                                icon: <Shield01Icon size={15} />,
+                                onAction: () => openShareModal(tag),
+                              },
+                              {
+                                id: 'edit',
+                                label: 'Edit tag',
+                                icon: <PencilEdit01Icon size={15} />,
+                                onAction: () => openEdit(tag),
+                              },
+                              {
+                                id: 'delete',
+                                label: 'Delete tag',
+                                icon: <Delete01Icon size={15} />,
+                                variant: 'danger',
+                                onAction: () => {
+                                  void handleDelete(tag.id);
+                                },
+                              },
+                            ]}
+                          />
+                        ) : (
+                          <span className="text-xs text-zinc-500">Read only</span>
+                        )}
+                      </div>
+                    </Table.Cell>
+                  </Table.Row>
+                )}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+          <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
+            <span className="text-xs text-zinc-500 whitespace-nowrap">
+              Showing {visibleTags.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
+              {Math.min(effectivePage * PAGE_SIZE, visibleTags.length)} of {visibleTags.length}
+            </span>
+            <Pagination size="sm" className="justify-self-center">
+              <Pagination.Content>
+                <Pagination.Item>
+                  <Pagination.Previous
+                    isDisabled={effectivePage === 1}
+                    onPress={() => setPage((previous) => Math.max(1, previous - 1))}
+                  >
+                    <Pagination.PreviousIcon />
+                    <span>Previous</span>
+                  </Pagination.Previous>
+                </Pagination.Item>
+                {paginationItems.map((item, index) =>
+                  item === 'ellipsis' ? (
+                    <Pagination.Item key={`tags-ellipsis-${index}`}>
+                      <Pagination.Ellipsis />
+                    </Pagination.Item>
+                  ) : (
+                    <Pagination.Item key={`tags-page-${item}`}>
+                      <Pagination.Link isActive={item === effectivePage} onPress={() => setPage(item)}>
+                        {item}
+                      </Pagination.Link>
+                    </Pagination.Item>
+                  )
+                )}
+                <Pagination.Item>
+                  <Pagination.Next
+                    isDisabled={effectivePage === totalPages}
+                    onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
+                  >
+                    <span>Next</span>
+                    <Pagination.NextIcon />
+                  </Pagination.Next>
+                </Pagination.Item>
+              </Pagination.Content>
+            </Pagination>
+            <div />
+          </Table.Footer>
+        </Table>
       )}
 
       <Modal state={modal}>

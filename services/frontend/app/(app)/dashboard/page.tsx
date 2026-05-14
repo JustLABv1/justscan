@@ -1305,7 +1305,6 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-4">
       <PageHeader
-        eyebrow="Operations overview"
         title={`Welcome back, `}
         titleCom={
           <SplitText
@@ -1339,8 +1338,6 @@ export default function DashboardPage() {
           </Link>
         }
       />
-
-      <p className="text-xl font-bold">Dashboard</p>
 
       {/* ── Stat strip ── */}
       <div className="grid gap-3 lg:grid-cols-4">

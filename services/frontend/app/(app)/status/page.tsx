@@ -453,7 +453,6 @@ export default function StatusPagesPage() {
   return (
     <div className="p-6 space-y-5">
       <PageHeader
-        eyebrow="Sharing"
         title="Status Pages"
         description="Publish current image-tag health internally or externally."
         actions={

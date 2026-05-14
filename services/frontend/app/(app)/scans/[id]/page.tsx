@@ -1312,6 +1312,7 @@ export default function ScanDetailPage() {
     <div className="p-6 space-y-5">
       <PageHeader
         title="Scan details"
+        description="Inspect vulnerability results, runtime signals, and sharing controls for this scan."
         breadcrumbs={[{ label: 'Scans', href: '/scans' }, { label: 'Scan details' }]}
       />
 

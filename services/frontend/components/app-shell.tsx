@@ -23,6 +23,7 @@ import {
   Label,
   Popover,
   Separator,
+  Text,
   Tooltip,
   useOverlayState,
 } from '@heroui/react';
@@ -343,15 +344,21 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const scopeLabel =
     workScope.kind === 'org' ? (workScope.orgName ?? 'Organization') : 'Personal workspace';
   const workspaceTitle = `Workspace: ${scopeLabel}`;
+  const workspaceInitial = scopeLabel.trim().charAt(0).toUpperCase() || 'W';
+  type WorkspaceAvatarColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
+  const workspaceColors: WorkspaceAvatarColor[] = ['accent', 'success', 'warning', 'danger'];
+  const hashWorkspaceName = (name: string) =>
+    Array.from(name).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const workspaceColorFor = (kind: 'personal' | 'org', name: string): WorkspaceAvatarColor =>
+    kind === 'personal'
+      ? 'default'
+      : workspaceColors[hashWorkspaceName(name) % workspaceColors.length];
+  const activeWorkspaceColor = workspaceColorFor(
+    workScope.kind,
+    workScope.kind === 'org' ? (workScope.orgName ?? workScope.orgId) : 'personal'
+  );
   const isAdminRoute = Boolean(user?.role === 'admin' && isActiveRoute(pathname, '/admin'));
   const desktopCollapsed = collapsed;
-  const workspaceMarkerStyle =
-    workScope.kind === 'org'
-      ? {
-          background: 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)',
-          boxShadow: '0 0 0 1px rgba(255,255,255,0.65)',
-        }
-      : { background: 'rgba(113,113,122,0.72)', boxShadow: '0 0 0 1px rgba(255,255,255,0.5)' };
   const navigationGroups = isAdminRoute
     ? [
         ...navGroups,
@@ -369,6 +376,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     group.items.map(({ href, label }) => ({ href, label }))
   );
   const topbarHeader = pageHeader ?? resolveFallbackHeader(pathname, navItems);
+  const contentRailClass = 'px-4 md:px-6';
   const pageHeaderContextValue = useMemo(() => ({ setHeader: setPageHeader }), []);
 
   function cancelNavPopoverClose() {
@@ -464,35 +472,99 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             <div className="absolute -top-10 -left-10 size-40 rounded-full pointer-events-none" />
             <div className="absolute inset-x-0 top-0 h-px pointer-events-none" />
 
-            <div
-              className={`flex min-h-12 items-center gap-2.5 py-2 shrink-0 ${desktopCollapsed ? 'justify-center px-0' : 'px-3'}`}
-            >
-              <div
-                className="size-8 rounded-xl flex items-center justify-center shrink-0"
-                style={{
-                  background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                  boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
-                }}
-              >
-                <Logo size={16} className="text-white" />
-              </div>
-              <span
-                className={`font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300 ${desktopCollapsed ? 'ml-0' : 'ml-3'}`}
-                style={{
-                  maxWidth: desktopCollapsed ? 0 : 120,
-                  opacity: desktopCollapsed ? 0 : 1,
-                  color: 'var(--text-primary)',
-                }}
-              >
-                JustScan
-              </span>
+            <div className="shrink-0 px-2 pb-1 pt-2">
+              <Dropdown>
+                <Dropdown.Trigger
+                  className={`group w-full flex items-center rounded-xl transition-all duration-150 outline-none ${desktopCollapsed ? 'justify-center py-1.5' : 'gap-2 px-2 py-1.5'}`}
+                  style={{
+                    background: desktopCollapsed
+                      ? 'transparent'
+                      : 'linear-gradient(135deg, rgba(124,58,237,0.1) 0%, rgba(109,40,217,0.04) 100%)',
+                    border: desktopCollapsed ? 'none' : '1px solid rgba(167,139,250,0.2)',
+                    boxShadow: desktopCollapsed ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.05)',
+                  }}
+                  aria-label={workspaceTitle}
+                  onMouseEnter={handleRowHoverEnter}
+                  onMouseLeave={handleRowHoverLeave}
+                >
+                  <div
+                    className="relative shrink-0"
+                    title={desktopCollapsed ? workspaceTitle : undefined}
+                  >
+                    <Avatar
+                      className="size-7 rounded-lg"
+                      color={activeWorkspaceColor}
+                      variant="soft"
+                    >
+                      <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
+                    </Avatar>
+                  </div>
+                  {!desktopCollapsed ? (
+                    <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                      <p className="min-w-0 flex-1 truncate text-sm font-medium tracking-tight text-zinc-700 dark:text-zinc-100">
+                        {scopeLabel}
+                      </p>
+                      <ArrowDown01Icon
+                        size={14}
+                        className="shrink-0 text-zinc-500 transition-transform duration-150 group-data-[pressed=true]:translate-y-[1px]"
+                      />
+                    </div>
+                  ) : null}
+                </Dropdown.Trigger>
+
+                <Dropdown.Popover
+                  className="min-w-[220px]"
+                  placement={desktopCollapsed ? 'right top' : 'bottom start'}
+                >
+                  <Dropdown.Menu
+                    onAction={(key) => handleScopeChange(key as string)}
+                    selectionMode="single"
+                    selectedKeys={
+                      new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])
+                    }
+                  >
+                    <Dropdown.Item id="personal" textValue="Personal workspace">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="size-6 rounded-lg" color="default" variant="soft">
+                          <Avatar.Fallback>P</Avatar.Fallback>
+                        </Avatar>
+                        <Label>Personal workspace</Label>
+                      </div>
+                    </Dropdown.Item>
+                    {orgs.length > 0 && (
+                      <Dropdown.Section>
+                        <Header>Organizations</Header>
+                        {orgs.map((org) => (
+                          <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
+                            <div className="flex items-center gap-2">
+                              <Avatar
+                                className="size-6 rounded-lg"
+                                color={workspaceColorFor('org', org.name)}
+                                variant="soft"
+                              >
+                                <Avatar.Fallback>
+                                  {org.name.trim().charAt(0).toUpperCase() || 'O'}
+                                </Avatar.Fallback>
+                              </Avatar>
+                              <Label>{org.name}</Label>
+                            </div>
+                          </Dropdown.Item>
+                        ))}
+                      </Dropdown.Section>
+                    )}
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
             </div>
 
             <nav
               className={`flex-1 overflow-y-auto overflow-x-hidden pb-2 pt-1.5${desktopCollapsed ? '' : ' px-2'}`}
             >
               {navigationGroups.map(({ label, items }) => (
-                <div key={label} className="mb-1">
+                <div
+                  key={label}
+                  className="mb-1 border-b border-white/5 pb-2 last:border-b-0 last:pb-0"
+                >
                   <div
                     className="nav-section-label px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-[0.1em] leading-none transition-all duration-300 overflow-hidden"
                     style={{
@@ -521,13 +593,13 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                             <Popover>
                               <Popover.Trigger aria-label={itemLabel} className="block w-full">
                                 <button
-                                  className={`relative flex w-full h-10 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                                  className={`relative flex w-full h-10 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap group ${active ? 'text-violet-500 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
                                   style={
                                     active
                                       ? {
                                           background:
-                                            'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.28)',
+                                            'linear-gradient(135deg, rgba(124,58,237,0.22) 0%, rgba(109,40,217,0.12) 100%)',
+                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.36)',
                                         }
                                       : undefined
                                   }
@@ -541,7 +613,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                                   <Icon
                                     size={18}
                                     className="shrink-0 relative z-10"
-                                    style={{ color: active ? '#8b5cf6' : 'var(--text-faint)' }}
+                                    style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }}
                                   />
                                 </button>
                               </Popover.Trigger>
@@ -577,13 +649,13 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                               <Tooltip.Trigger aria-label={itemLabel} className="block w-full">
                                 <Link
                                   href={href}
-                                  className={`relative flex w-full h-10 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                                  className={`relative flex w-full h-10 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap group ${active ? 'text-violet-500 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
                                   style={
                                     active
                                       ? {
                                           background:
-                                            'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.28)',
+                                            'linear-gradient(135deg, rgba(124,58,237,0.22) 0%, rgba(109,40,217,0.12) 100%)',
+                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.36)',
                                         }
                                       : undefined
                                   }
@@ -597,7 +669,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                                   <Icon
                                     size={18}
                                     className="shrink-0 relative z-10"
-                                    style={{ color: active ? '#8b5cf6' : 'var(--text-faint)' }}
+                                    style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }}
                                   />
                                 </Link>
                               </Tooltip.Trigger>
@@ -611,13 +683,14 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                         <Link
                           key={href}
                           href={href}
-                          className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                          className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-500 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
                           style={
                             active
                               ? {
                                   background:
-                                    'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                                  boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
+                                    'linear-gradient(135deg, rgba(124,58,237,0.22) 0%, rgba(109,40,217,0.12) 100%)',
+                                  boxShadow:
+                                    'inset 0 0 0 1px rgba(167,139,250,0.34), 0 0 0 1px rgba(124,58,237,0.12)',
                                 }
                               : undefined
                           }
@@ -630,14 +703,14 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                           )}
                           {active && (
                             <span
-                              className="absolute left-0 inset-y-2 w-0.5 rounded-full"
-                              style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
+                              className="absolute left-0 inset-y-2 w-1 rounded-r-full"
+                              style={{ background: 'linear-gradient(180deg, #c4b5fd, #7c3aed)' }}
                             />
                           )}
                           <Icon
                             size={18}
                             className="shrink-0 relative z-10"
-                            style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }}
+                            style={{ color: active ? '#c4b5fd' : 'var(--text-faint)' }}
                           />
                           <span
                             className="flex-1 overflow-hidden transition-all duration-300 relative z-10"
@@ -705,82 +778,35 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             ) : null}
 
             <div
-              className="shrink-0 px-2 pb-3 pt-2 space-y-1.5"
+              className={`flex min-h-12 items-center gap-2.5 py-2 shrink-0 ${desktopCollapsed ? 'justify-center px-0' : 'px-3'}`}
               style={{ borderTop: '1px solid var(--border-subtle)' }}
             >
-              <Dropdown>
-                <Dropdown.Trigger
-                  className={`w-full flex items-center rounded-xl transition-all duration-150 outline-none ${desktopCollapsed ? 'justify-center py-2' : 'gap-2.5 p-2.5'}`}
-                  style={{ background: 'transparent' }}
-                  aria-label={workspaceTitle}
-                  onMouseEnter={handleRowHoverEnter}
-                  onMouseLeave={handleRowHoverLeave}
-                >
-                  <div
-                    className="relative shrink-0"
-                    title={desktopCollapsed ? workspaceTitle : undefined}
-                  >
-                    <div
-                      className="flex size-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
-                      style={{
-                        background: 'rgba(124,58,237,0.08)',
-                        border: '1px solid rgba(124,58,237,0.12)',
-                      }}
-                    >
-                      <GridTableIcon size={16} />
-                    </div>
-                    <span
-                      className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full"
-                      style={workspaceMarkerStyle}
-                    />
-                  </div>
-                  {!desktopCollapsed && (
-                    <>
-                      <div className="flex min-w-0 flex-1 flex-col justify-center pr-1 text-left">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                          Workspace
-                        </p>
-                        <p className="mt-0.5 truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                          {scopeLabel}
-                        </p>
-                      </div>
-                      <ArrowDown01Icon size={14} className="shrink-0 text-zinc-500" />
-                    </>
-                  )}
-                </Dropdown.Trigger>
-
-                <Dropdown.Popover
-                  className="min-w-[220px]"
-                  placement={desktopCollapsed ? 'right bottom' : 'top start'}
-                >
-                  <Dropdown.Menu
-                    onAction={(key) => handleScopeChange(key as string)}
-                    selectionMode="single"
-                    selectedKeys={
-                      new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])
-                    }
-                  >
-                    <Dropdown.Item id="personal" textValue="Personal workspace">
-                      <Label>Personal workspace</Label>
-                    </Dropdown.Item>
-                    {orgs.length > 0 && (
-                      <Dropdown.Section>
-                        <Header>Organizations</Header>
-                        {orgs.map((org) => (
-                          <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
-                            <Label>{org.name}</Label>
-                          </Dropdown.Item>
-                        ))}
-                      </Dropdown.Section>
-                    )}
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
-              </Dropdown>
+              <div
+                className="size-8 rounded-xl flex items-center justify-center shrink-0"
+                style={{
+                  background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                  boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
+                }}
+              >
+                <Logo size={16} className="text-white" />
+              </div>
+              <span
+                className={`font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300 ${desktopCollapsed ? 'ml-0' : 'ml-3'}`}
+                style={{
+                  maxWidth: desktopCollapsed ? 0 : 120,
+                  opacity: desktopCollapsed ? 0 : 1,
+                  color: 'var(--text-primary)',
+                }}
+              >
+                JustScan
+              </span>
             </div>
           </Card>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="bg-surface rounded-br-3xl flex min-h-12 items-center gap-2.5 px-3 py-2">
+            <div
+              className={`bg-surface rounded-br-3xl flex min-h-11 items-center gap-2.5 py-1.5 ${contentRailClass}`}
+            >
               <Button
                 onClick={toggleCollapsed}
                 isIconOnly
@@ -847,19 +873,13 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                             >
                               <div className="flex min-w-0 flex-1 items-center gap-2.5">
                                 <div className="relative shrink-0">
-                                  <div
-                                    className="flex size-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
-                                    style={{
-                                      background: 'rgba(124,58,237,0.08)',
-                                      border: '1px solid rgba(124,58,237,0.12)',
-                                    }}
+                                  <Avatar
+                                    className="size-8 rounded-xl"
+                                    color={activeWorkspaceColor}
+                                    variant="soft"
                                   >
-                                    <GridTableIcon size={16} />
-                                  </div>
-                                  <span
-                                    className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full"
-                                    style={workspaceMarkerStyle}
-                                  />
+                                    <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
+                                  </Avatar>
                                 </div>
                                 <div className="flex flex-col min-w-0 flex-1">
                                   <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
@@ -881,14 +901,34 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                                 }
                               >
                                 <Dropdown.Item id="personal" textValue="Personal workspace">
-                                  <Label>Personal workspace</Label>
+                                  <div className="flex items-center gap-2">
+                                    <Avatar
+                                      className="size-6 rounded-lg"
+                                      color="default"
+                                      variant="soft"
+                                    >
+                                      <Avatar.Fallback>P</Avatar.Fallback>
+                                    </Avatar>
+                                    <Label>Personal workspace</Label>
+                                  </div>
                                 </Dropdown.Item>
                                 {orgs.length > 0 && (
                                   <Dropdown.Section>
                                     <Header>Organizations</Header>
                                     {orgs.map((org) => (
                                       <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
-                                        <Label>{org.name}</Label>
+                                        <div className="flex items-center gap-2">
+                                          <Avatar
+                                            className="size-6 rounded-lg"
+                                            color={workspaceColorFor('org', org.name)}
+                                            variant="soft"
+                                          >
+                                            <Avatar.Fallback>
+                                              {org.name.trim().charAt(0).toUpperCase() || 'O'}
+                                            </Avatar.Fallback>
+                                          </Avatar>
+                                          <Label>{org.name}</Label>
+                                        </div>
                                       </Dropdown.Item>
                                     ))}
                                   </Dropdown.Section>
@@ -1089,59 +1129,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                   </Drawer.Content>
                 </Drawer.Backdrop>
               </Drawer>
-              <div className="min-w-0 flex-1 space-y-0.5">
-                {topbarHeader.breadcrumbs && topbarHeader.breadcrumbs.length > 0 ? (
-                  <nav
-                    aria-label="Breadcrumb"
-                    className="flex flex-wrap items-center gap-1 text-[10px] font-medium"
-                  >
-                    {topbarHeader.breadcrumbs.map((item, index) => {
-                      const isCurrent = index === topbarHeader.breadcrumbs!.length - 1;
-
-                      return (
-                        <span
-                          key={`${item.label}-${index}`}
-                          className="inline-flex items-center gap-1.5"
-                        >
-                          {item.href && !isCurrent ? (
-                            <Link
-                              href={item.href}
-                              className="transition-colors hover:text-zinc-900 dark:hover:text-white"
-                              style={{ color: 'var(--text-faint)' }}
-                            >
-                              {item.label}
-                            </Link>
-                          ) : (
-                            <span
-                              aria-current={isCurrent ? 'page' : undefined}
-                              style={{
-                                color: isCurrent ? 'var(--text-primary)' : 'var(--text-faint)',
-                              }}
-                            >
-                              {item.label}
-                            </span>
-                          )}
-                          {!isCurrent ? (
-                            <span style={{ color: 'var(--text-faint)' }}>/</span>
-                          ) : null}
-                        </span>
-                      );
-                    })}
-                  </nav>
-                ) : null}
-
-                <div>
-                  <h1 className="flex flex-wrap items-center gap-1 text-base font-semibold tracking-tight md:text-base">
-                    {topbarHeader.title}
-                    {topbarHeader.titleCom}
-                  </h1>
-                </div>
-              </div>
-
               <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                {topbarHeader.actions ? (
-                  <div className="hidden items-center gap-1.5 md:flex">{topbarHeader.actions}</div>
-                ) : null}
                 <Button
                   aria-label="Open search"
                   className="rounded-full text-zinc-700 dark:text-zinc-200 md:hidden"
@@ -1152,10 +1140,14 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                   <Search01Icon size={14} className="text-current" />
                 </Button>
 
-                <Button onPress={() => setSearchOpen(true)} variant="tertiary">
+                <Button
+                  onPress={() => setSearchOpen(true)}
+                  variant="tertiary"
+                  className="hidden md:flex md:w-[250px] lg:w-[280px] justify-between"
+                >
                   <div className="flex items-center gap-2">
                     <Search01Icon size={14} />
-                    <Label className="hidden md:inline-flex">Search...</Label>
+                    <Label className="inline-flex">Search...</Label>
                   </div>
                   <Kbd>
                     <Kbd.Abbr keyValue="command" />
@@ -1165,7 +1157,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
                 <Dropdown>
                   <Dropdown.Trigger>
-                    <Avatar variant="soft" color="accent">
+                    <Avatar variant="soft" color="accent" className="size-9">
                       <Avatar.Fallback>{initials}</Avatar.Fallback>
                     </Avatar>
                   </Dropdown.Trigger>
@@ -1222,7 +1214,69 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               </div>
             </div>
 
-            <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
+            <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+              <div className={`border-b border-white/5 py-1.5 md:py-2 ${contentRailClass}`}>
+                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <h1 className="flex flex-wrap items-center gap-1.5 text-lg font-semibold tracking-tight md:text-xl">
+                      {topbarHeader.title}
+                      {topbarHeader.titleCom}
+                    </h1>
+                    {topbarHeader.description ? (
+                      <Text.Paragraph className="mt-0.5 text-muted" size="xs">
+                        {topbarHeader.description}
+                      </Text.Paragraph>
+                    ) : null}
+                    {topbarHeader.breadcrumbs && topbarHeader.breadcrumbs.length > 1 ? (
+                      <nav
+                        aria-label="Breadcrumb"
+                        className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-medium"
+                      >
+                        {topbarHeader.breadcrumbs.map((item, index) => {
+                          const isCurrent = index === topbarHeader.breadcrumbs!.length - 1;
+
+                          return (
+                            <span
+                              key={`${item.label}-${index}`}
+                              className="inline-flex items-center gap-1.5"
+                            >
+                              {item.href && !isCurrent ? (
+                                <Link
+                                  href={item.href}
+                                  className="transition-colors hover:text-zinc-900 dark:hover:text-white"
+                                  style={{ color: 'var(--text-faint)' }}
+                                >
+                                  {item.label}
+                                </Link>
+                              ) : (
+                                <span
+                                  aria-current={isCurrent ? 'page' : undefined}
+                                  style={{
+                                    color: isCurrent ? 'var(--text-muted)' : 'var(--text-faint)',
+                                  }}
+                                >
+                                  {item.label}
+                                </span>
+                              )}
+                              {!isCurrent ? (
+                                <span style={{ color: 'var(--text-faint)' }}>/</span>
+                              ) : null}
+                            </span>
+                          );
+                        })}
+                      </nav>
+                    ) : null}
+                  </div>
+
+                  {topbarHeader.actions ? (
+                    <div className="flex shrink-0 items-center gap-1.5 sm:justify-end">
+                      {topbarHeader.actions}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              {children}
+            </main>
           </div>
         </div>
       </PageHeaderContext.Provider>

@@ -1121,7 +1121,6 @@ export default function ScansPage() {
   return (
     <div className="p-6 space-y-5">
       <PageHeader
-        eyebrow="Scan operations"
         title="Scans"
         description={headerDescription}
         actions={

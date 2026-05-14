@@ -484,7 +484,6 @@ export default function OrgDetailPage() {
   return (
     <div className="p-6 space-y-6">
       <PageHeader
-        eyebrow="Organization workspace"
         title={org.name}
         description={
           org.description || 'Manage organization risk, policies, members, and assigned assets.'

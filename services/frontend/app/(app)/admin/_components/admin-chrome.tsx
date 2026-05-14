@@ -21,14 +21,16 @@ export function AdminChrome({ actions }: AdminChromeProps) {
   const description = activeTab === 'overview'
     ? 'Manage operations, access, integrations, and governance from a single admin workspace.'
     : activeMeta.blurb;
-  const eyebrow = activeTab === 'overview' ? 'Admin Control Plane' : activeArea.label;
+  const areaDescription = activeArea.label ? `Area: ${activeArea.label}.` : '';
+  const mergedDescription = areaDescription
+    ? `${areaDescription} ${description}`
+    : description;
 
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow={eyebrow}
         title={title}
-        description={description}
+        description={mergedDescription}
         actions={actions}
       />
     </div>

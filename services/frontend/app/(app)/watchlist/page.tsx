@@ -294,7 +294,6 @@ export default function WatchlistPage() {
   return (
     <div className="p-6 space-y-5">
       <PageHeader
-        eyebrow="Scheduled scans"
         title="Watchlist"
         description="Auto-scan images on a schedule."
         actions={

@@ -205,7 +205,6 @@ export default function SuppressionsPage() {
   return (
     <div className="p-6 space-y-5">
       <PageHeader
-        eyebrow="Security workflow"
         title="Suppressions"
         description={
           total > 0

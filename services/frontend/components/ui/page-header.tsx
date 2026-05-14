@@ -11,7 +11,6 @@ export interface PageHeaderConfig {
   title: string;
   titleCom?: ReactNode;
   description?: string;
-  eyebrow?: string;
   actions?: ReactNode;
   breadcrumbs?: BreadcrumbItem[];
 }
@@ -28,7 +27,6 @@ export function PageHeader({
   title,
   titleCom,
   description,
-  eyebrow,
   actions,
   breadcrumbs,
 }: PageHeaderProps) {
@@ -45,7 +43,6 @@ export function PageHeader({
       title,
       titleCom,
       description,
-      eyebrow,
       actions,
       breadcrumbs,
     });
@@ -54,7 +51,7 @@ export function PageHeader({
     // ReactNode props like actions/titleCom are often recreated every render.
     // Depending on their identity causes recursive setState loops via AppShell.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [breadcrumbsKey, context, description, eyebrow, title]);
+  }, [breadcrumbsKey, context, description, title]);
 
   return null;
 }

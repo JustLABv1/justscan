@@ -345,7 +345,6 @@ export default function RegistriesPage() {
   return (
     <div className="p-6 space-y-5">
       <PageHeader
-        eyebrow="Registry management"
         title="Registries"
         description="Configure private Docker registries and choose the scan provider per registry."
         actions={

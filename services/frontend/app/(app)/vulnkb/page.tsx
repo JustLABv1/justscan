@@ -268,7 +268,6 @@ export default function VulnKBPage() {
   return (
     <div className="p-6 space-y-5">
       <PageHeader
-        eyebrow="Security intelligence"
         title="Vulnerability Knowledge Base"
         description="Enriched CVE data from NVD, GHSA, OSV, and other sources via Trivy."
       />

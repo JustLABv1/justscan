@@ -122,7 +122,6 @@ export default function OrgsPage() {
   return (
     <div className="p-6 space-y-5">
       <PageHeader
-        eyebrow="Workspace management"
         title="Organizations"
         description={
           orgs.length > 0

@@ -29,7 +29,7 @@ import {
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
-import { Button, ListBox, Modal, Select, Table, useOverlayState } from '@heroui/react';
+import { Button, Card, ListBox, Modal, SearchField, Select, Table, useOverlayState } from '@heroui/react';
 import {
   Delete01Icon,
   PencilEdit01Icon,
@@ -38,7 +38,7 @@ import {
   Shield01Icon,
   TestTube01Icon,
 } from 'hugeicons-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const selectTriggerCls = heroSelectTriggerClassName;
 
@@ -158,6 +158,8 @@ export default function RegistriesPage() {
   const [shareError, setShareError] = useState('');
   const [shareOrgId, setShareOrgId] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [providerFilter, setProviderFilter] = useState<'all' | 'trivy' | 'artifactory_xray'>('all');
   const modal = useOverlayState();
   const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
@@ -341,6 +343,17 @@ export default function RegistriesPage() {
           !shares.some((share) => share.org_id === org.id)
       )
     : [];
+  const filteredRegistries = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return registries.filter((registry) => {
+      const providerMatches = providerFilter === 'all' || (registry.scan_provider ?? 'trivy') === providerFilter;
+      if (!providerMatches) return false;
+      if (!query) return true;
+      return [registry.name, registry.url, registry.username]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(query));
+    });
+  }, [providerFilter, registries, searchQuery]);
 
   return (
     <div className="p-6 space-y-5">
@@ -361,6 +374,42 @@ export default function RegistriesPage() {
 
       {error ? <FormAlert description={error} title="Registry loading failed" /> : null}
 
+      <Card className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <SearchField name="registries-search" variant="secondary" className="w-full sm:max-w-sm">
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search registry, URL, or username..."
+              />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
+          <Select
+            value={providerFilter}
+            onChange={(value) =>
+              setProviderFilter(
+                value === 'artifactory_xray' ? 'artifactory_xray' : value === 'trivy' ? 'trivy' : 'all'
+              )
+            }
+            className="w-full sm:w-[180px]"
+            variant="secondary"
+          >
+            <Select.Trigger className={selectTriggerCls}>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all">All providers</ListBox.Item>
+                <ListBox.Item id="trivy">Trivy</ListBox.Item>
+                <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </div>
       {loading ? (
         <div className="surface-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
@@ -396,15 +445,23 @@ export default function RegistriesPage() {
             </tbody>
           </table>
         </div>
-      ) : registries.length === 0 ? (
+      ) : filteredRegistries.length === 0 ? (
         <EmptyState
           icon={<ServerStack01Icon size={28} />}
-          title="No registries configured"
-          description="Add a private Docker registry and choose whether JustScan should use its local Trivy scanner or the Artifactory Xray provider for that registry."
-          action={{ label: '+ Add Registry', onClick: openCreate }}
+          title={registries.length > 0 ? 'No registries match your filters' : 'No registries configured'}
+          description={
+            registries.length > 0
+              ? 'Try a different search or provider filter.'
+              : 'Add a private Docker registry and choose whether JustScan should use its local Trivy scanner or the Artifactory Xray provider for that registry.'
+          }
+          action={
+            registries.length > 0
+              ? { label: 'Clear filters', onClick: () => { setSearchQuery(''); setProviderFilter('all'); } }
+              : { label: '+ Add Registry', onClick: openCreate }
+          }
         />
       ) : (
-        <Table>
+        <Table variant="secondary">
           <Table.ScrollContainer>
             <Table.Content aria-label="Configured registries" className="min-w-[980px]">
               <Table.Header>
@@ -417,7 +474,7 @@ export default function RegistriesPage() {
                 <Table.Column>Actions</Table.Column>
               </Table.Header>
               <Table.Body>
-                {registries.map((r) => (
+                {filteredRegistries.map((r) => (
                   <Table.Row key={r.id} id={r.id}>
                     <Table.Cell>
                       <div className="space-y-1">
@@ -516,6 +573,7 @@ export default function RegistriesPage() {
           </Table.ScrollContainer>
         </Table>
       )}
+      </Card>
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>

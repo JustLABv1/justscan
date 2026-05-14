@@ -33,12 +33,12 @@ import {
   ColorPicker,
   ColorSwatch,
   ColorSwatchPicker,
-  Input,
   Label,
   ListBox,
   Modal,
   Pagination,
   parseColor,
+  SearchField,
   Select,
   type SortDescriptor,
   Table,
@@ -323,39 +323,43 @@ export default function TagsPage() {
           </Button>
         }
       />
-      <div className="max-w-md">
-        <Input
-          aria-label="Filter tags"
-          placeholder="Filter tags by name, owner, or color..."
-          value={filterQuery}
-          onChange={(event) => {
-            setFilterQuery(event.target.value);
-            setPage(1);
-          }}
-          variant="secondary"
-          fullWidth
-        />
-      </div>
 
       {error ? <FormAlert description={error} title="Tag loading failed" /> : null}
 
       {loading ? (
-        <div className="surface-panel rounded-2xl overflow-hidden">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-4 px-4 py-3.5"
-              style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-            >
-              <Skeleton className="size-8 rounded-lg shrink-0" />
-              <Skeleton className="h-4 w-28 rounded" />
-              <div className="flex-1" />
-              <Skeleton className="h-4 w-16 rounded" />
-              <Skeleton className="size-7 rounded-lg" />
-              <Skeleton className="size-7 rounded-lg" />
-            </div>
-          ))}
-        </div>
+        <Card className="space-y-4">
+          <SearchField name="tags-search" variant="secondary" className="w-full xl:max-w-md">
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                aria-label="Filter tags"
+                placeholder="Filter tags by name, owner, or color..."
+                value={filterQuery}
+                onChange={(event) => {
+                  setFilterQuery(event.target.value);
+                  setPage(1);
+                }}
+              />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
+          <div className="surface-panel rounded-2xl overflow-hidden">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-4 px-4 py-3.5"
+                style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+              >
+                <Skeleton className="size-8 rounded-lg shrink-0" />
+                <Skeleton className="h-4 w-28 rounded" />
+                <div className="flex-1" />
+                <Skeleton className="h-4 w-16 rounded" />
+                <Skeleton className="size-7 rounded-lg" />
+                <Skeleton className="size-7 rounded-lg" />
+              </div>
+            ))}
+          </div>
+        </Card>
       ) : tags.length === 0 ? (
         <EmptyState
           icon={<Tag01Icon size={28} />}
@@ -364,14 +368,30 @@ export default function TagsPage() {
           action={{ label: '+ New Tag', onClick: openCreate }}
         />
       ) : (
-        <Table>
-          <Table.ScrollContainer>
-            <Table.Content
-              aria-label="Tags table"
-              className="min-w-[720px]"
-              sortDescriptor={sortDescriptor}
-              onSortChange={setSortDescriptor}
-            >
+        <Card className="space-y-4">
+          <SearchField name="tags-search" variant="secondary" className="w-full xl:max-w-md">
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                aria-label="Filter tags"
+                placeholder="Filter tags by name, owner, or color..."
+                value={filterQuery}
+                onChange={(event) => {
+                  setFilterQuery(event.target.value);
+                  setPage(1);
+                }}
+              />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
+          <Table variant="secondary">
+            <Table.ScrollContainer>
+              <Table.Content
+                aria-label="Tags table"
+                className="min-w-[720px]"
+                sortDescriptor={sortDescriptor}
+                onSortChange={setSortDescriptor}
+              >
               <Table.Header>
                 <Table.Column id="name" allowsSorting isRowHeader>
                   Tag
@@ -454,9 +474,9 @@ export default function TagsPage() {
                   </Table.Row>
                 )}
               </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-          <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
+              </Table.Content>
+            </Table.ScrollContainer>
+            <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
             <span className="text-xs text-zinc-500 whitespace-nowrap">
               Showing {visibleTags.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
               {Math.min(effectivePage * PAGE_SIZE, visibleTags.length)} of {visibleTags.length}
@@ -497,8 +517,9 @@ export default function TagsPage() {
               </Pagination.Content>
             </Pagination>
             <div />
-          </Table.Footer>
-        </Table>
+            </Table.Footer>
+          </Table>
+        </Card>
       )}
 
       <Modal state={modal}>

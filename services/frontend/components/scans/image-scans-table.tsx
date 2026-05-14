@@ -2,6 +2,7 @@
 
 import { OwnershipBadge, SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { ImageSummary, listScans, Scan } from '@/lib/api';
@@ -362,37 +363,41 @@ function ImageScansTreeChildrenRows({
               <SevCount count={scan.low_count} level="low" />
             </Table.Cell>
             <Table.Cell>
-              <div className="flex items-center justify-end gap-2">
-                <Button
-                  variant="secondary"
-                  onPress={() => {
-                    router.push(`/scans/${scan.id}`);
-                  }}
-                >
-                  <FileSearchIcon size={14} aria-hidden />
-                  Open
-                </Button>
-                {(scan.status === 'pending' || scan.status === 'running') && (
-                  <Button
-                    variant="danger-soft"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void onCancel(scan.id, imageName);
-                    }}
-                  >
-                    <Cancel01Icon size={14} aria-hidden />
-                    Cancel scan
-                  </Button>
-                )}
-                <Button
-                  variant="danger-soft"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void onDelete(scan.id, imageName);
-                  }}
-                >
-                  <Delete01Icon size={14} aria-hidden />
-                </Button>
+              <div className="flex justify-end">
+                <RowActionsMenu
+                  label={`Open actions menu for scan ${scan.id}`}
+                  items={[
+                    {
+                      id: 'open',
+                      label: 'Open scan',
+                      icon: <FileSearchIcon size={14} aria-hidden />,
+                      onAction: () => {
+                        router.push(`/scans/${scan.id}`);
+                      },
+                    },
+                    ...(scan.status === 'pending' || scan.status === 'running'
+                      ? [
+                          {
+                            id: 'cancel',
+                            label: 'Cancel scan',
+                            icon: <Cancel01Icon size={14} aria-hidden />,
+                            onAction: () => {
+                              void onCancel(scan.id, imageName);
+                            },
+                          },
+                        ]
+                      : []),
+                    {
+                      id: 'delete',
+                      label: 'Delete scan',
+                      icon: <Delete01Icon size={14} aria-hidden />,
+                      variant: 'danger' as const,
+                      onAction: () => {
+                        void onDelete(scan.id, imageName);
+                      },
+                    },
+                  ]}
+                />
               </div>
             </Table.Cell>
           </Table.Row>

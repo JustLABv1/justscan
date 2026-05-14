@@ -3,7 +3,6 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, SuppressionSourceBadge } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
-import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -20,9 +19,19 @@ import {
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, ListBox, Modal, Select, Table, useOverlayState } from '@heroui/react';
+import {
+  Button,
+  Card,
+  ListBox,
+  Modal,
+  Pagination,
+  SearchField,
+  Select,
+  Table,
+  useOverlayState,
+} from '@heroui/react';
 import { Delete01Icon, SecurityLockIcon, Shield01Icon } from 'hugeicons-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const STATUS_STYLE: Record<string, React.CSSProperties> = {
   accepted: {
@@ -193,6 +202,17 @@ export default function SuppressionsPage() {
   }
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const items: Array<number | 'ellipsis'> = [1];
+    if (page > 3) items.push('ellipsis');
+    const start = Math.max(2, page - 1);
+    const end = Math.min(totalPages - 1, page + 1);
+    for (let i = start; i <= end; i += 1) items.push(i);
+    if (page < totalPages - 2) items.push('ellipsis');
+    items.push(totalPages);
+    return items;
+  }, [page, totalPages]);
   const availableShareTargets = shareTarget
     ? orgs.filter(
         (org) =>
@@ -211,58 +231,61 @@ export default function SuppressionsPage() {
             ? `${total} active suppression${total !== 1 ? 's' : ''}`
             : 'Manage vulnerability suppressions across all images.'
         }
-        actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            <FormField
-              hideLabel
-              label="Search CVE ID"
-              className="w-48"
-              containerClassName="w-48"
-              placeholder="Search CVE ID..."
-              value={searchQuery}
-              onChange={(e) => {
-                const v = e.target.value;
-                setSearchQuery(v);
-                if (debounceRef.current) clearTimeout(debounceRef.current);
-                debounceRef.current = setTimeout(() => {
-                  setPage(1);
-                  load(1, statusFilter, v);
-                }, 300);
-              }}
-            />
-            <Select
-              value={statusFilter || '__all__'}
-              onChange={(value) => {
-                const v = String(value === '__all__' ? '' : (value ?? ''));
-                setStatusFilter(v);
-                setPage(1);
-                load(1, v, searchQuery);
-              }}
-              className="w-44"
-            >
-              <Select.Trigger className={selectTriggerCls}>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="__all__">All Statuses</ListBox.Item>
-                  <ListBox.Item id="accepted">Accepted Risk</ListBox.Item>
-                  <ListBox.Item id="wont_fix">Won&apos;t Fix</ListBox.Item>
-                  <ListBox.Item id="false_positive">False Positive</ListBox.Item>
-                  <ListBox.Item id="xray_ignore">Xray Ignore</ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
-        }
       />
 
       {error && <FormAlert description={error} title="Suppressions loading failed" />}
 
-      <Table variant="secondary">
-        <Table.ScrollContainer>
-          <Table.Content aria-label="Suppressions" className="min-w-[1100px]">
+      <Card className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <SearchField name="suppressions-search" variant="secondary" className="w-full sm:max-w-sm">
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                placeholder="Search CVE ID..."
+                value={searchQuery}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSearchQuery(v);
+                  if (debounceRef.current) clearTimeout(debounceRef.current);
+                  debounceRef.current = setTimeout(() => {
+                    setPage(1);
+                    load(1, statusFilter, v);
+                  }, 300);
+                }}
+              />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
+          <Select
+            value={statusFilter || '__all__'}
+            onChange={(value) => {
+              const v = String(value === '__all__' ? '' : (value ?? ''));
+              setStatusFilter(v);
+              setPage(1);
+              load(1, v, searchQuery);
+            }}
+            className="w-full sm:w-44"
+            variant="secondary"
+          >
+            <Select.Trigger className={selectTriggerCls}>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="__all__">All Statuses</ListBox.Item>
+                <ListBox.Item id="accepted">Accepted Risk</ListBox.Item>
+                <ListBox.Item id="wont_fix">Won&apos;t Fix</ListBox.Item>
+                <ListBox.Item id="false_positive">False Positive</ListBox.Item>
+                <ListBox.Item id="xray_ignore">Xray Ignore</ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </div>
+
+        <Table variant="secondary">
+          <Table.ScrollContainer>
+            <Table.Content aria-label="Suppressions" className="min-w-[1100px]">
             <Table.Header>
               <Table.Column isRowHeader>CVE ID</Table.Column>
               <Table.Column>Image Digest</Table.Column>
@@ -276,7 +299,7 @@ export default function SuppressionsPage() {
             </Table.Header>
             <Table.Body>
               {loading ? (
-                <Table.Row id="loading">
+                <Table.Row key="loading-row" id="loading">
                   <Table.Cell colSpan={9}>
                     <div className="py-16 text-center">
                       <div className="flex justify-center">
@@ -286,7 +309,7 @@ export default function SuppressionsPage() {
                   </Table.Cell>
                 </Table.Row>
               ) : suppressions.length === 0 ? (
-                <Table.Row id="empty">
+                <Table.Row key="empty-row" id="empty">
                   <Table.Cell colSpan={9}>
                     <div className="flex flex-col items-center gap-3 py-16 text-center">
                       <SecurityLockIcon size={32} className="text-zinc-400 dark:text-zinc-600" />
@@ -405,38 +428,53 @@ export default function SuppressionsPage() {
                 ))
               )}
             </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-zinc-500">{total} total</span>
-          <div className="flex items-center gap-2">
-            <Button
-              isDisabled={page <= 1}
-              onPress={() => setPage((p) => p - 1)}
-              className="btn-secondary"
-              type="button"
-              variant="secondary"
-            >
-              ← Prev
-            </Button>
-            <span className="text-sm text-zinc-500 px-2">
-              {page} / {totalPages}
-            </span>
-            <Button
-              isDisabled={page >= totalPages}
-              onPress={() => setPage((p) => p + 1)}
-              className="btn-secondary"
-              type="button"
-              variant="secondary"
-            >
-              Next →
-            </Button>
-          </div>
-        </div>
-      )}
+            </Table.Content>
+          </Table.ScrollContainer>
+          {totalPages > 1 ? (
+            <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
+              <span className="text-xs text-zinc-500 whitespace-nowrap">
+                Showing {total === 0 ? 0 : (page - 1) * LIMIT + 1}-{Math.min(page * LIMIT, total)} of {total}
+              </span>
+              <Pagination size="sm" className="justify-self-center">
+                <Pagination.Content>
+                  <Pagination.Item>
+                    <Pagination.Previous
+                      isDisabled={page === 1}
+                      onPress={() => setPage((previous) => Math.max(1, previous - 1))}
+                    >
+                      <Pagination.PreviousIcon />
+                      <span>Previous</span>
+                    </Pagination.Previous>
+                  </Pagination.Item>
+                  {paginationItems.map((item, index) =>
+                    item === 'ellipsis' ? (
+                      <Pagination.Item key={`suppressions-ellipsis-${index}`}>
+                        <Pagination.Ellipsis />
+                      </Pagination.Item>
+                    ) : (
+                      <Pagination.Item key={`suppressions-page-${item}`}>
+                        <Pagination.Link isActive={item === page} onPress={() => setPage(item)}>
+                          {item}
+                        </Pagination.Link>
+                      </Pagination.Item>
+                    )
+                  )}
+                  <Pagination.Item>
+                    <Pagination.Next
+                      isDisabled={page === totalPages}
+                      onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
+                    >
+                      <span>Next</span>
+                      <Pagination.NextIcon />
+                    </Pagination.Next>
+                  </Pagination.Item>
+                </Pagination.Content>
+              </Pagination>
+              <div />
+            </Table.Footer>
+          ) : null}
+        </Table>
+      </Card>
 
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable>

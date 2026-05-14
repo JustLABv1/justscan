@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -34,13 +35,14 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   Alert,
   Button,
+  Card,
   Label,
   ListBox,
   Modal,
+  SearchField,
   Select,
   Switch,
   Table,
-  Tooltip,
   useOverlayState,
 } from '@heroui/react';
 import {
@@ -53,7 +55,7 @@ import {
   PlusSignIcon,
 } from 'hugeicons-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const selectTriggerCls = heroSelectTriggerClassName;
 const TIMEZONE_OPTIONS =
@@ -91,6 +93,8 @@ export default function WatchlistPage() {
   const [shareError, setShareError] = useState('');
   const [shareOrgId, setShareOrgId] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const modal = useOverlayState();
   const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
@@ -290,6 +294,19 @@ export default function WatchlistPage() {
     : [];
 
   const schedulePreview = cronToHuman(schedule, { timezone, hourCycle });
+  const filteredItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return items.filter((item) => {
+      const statusMatches =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' ? item.enabled : !item.enabled);
+      if (!statusMatches) return false;
+      if (!query) return true;
+      return [item.image_name, item.image_tag]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(query));
+    });
+  }, [items, searchQuery, statusFilter]);
 
   return (
     <div className="p-6 space-y-5">
@@ -333,6 +350,41 @@ export default function WatchlistPage() {
         </div>
       )}
 
+      <Card className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <SearchField name="watchlist-search" variant="secondary" className="w-full sm:max-w-sm">
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search image or tag..."
+              />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
+          <Select
+            value={statusFilter}
+            onChange={(value) =>
+              setStatusFilter(value === 'disabled' ? 'disabled' : value === 'active' ? 'active' : 'all')
+            }
+            className="w-full sm:w-[160px]"
+            variant="secondary"
+          >
+            <Select.Trigger className={selectTriggerCls}>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all">All statuses</ListBox.Item>
+                <ListBox.Item id="active">Active</ListBox.Item>
+                <ListBox.Item id="disabled">Disabled</ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </div>
+
       {loading ? (
         <div className="surface-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
@@ -366,15 +418,23 @@ export default function WatchlistPage() {
             </tbody>
           </table>
         </div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <EmptyState
           icon={<EyeIcon size={28} />}
-          title="No images being watched"
-          description="Add a Docker image to auto-scan it on a recurring schedule and get notified when new vulnerabilities appear."
-          action={{ label: '+ Add Image', onClick: openCreate }}
+          title={items.length > 0 ? 'No watchlist items match your filters' : 'No images being watched'}
+          description={
+            items.length > 0
+              ? 'Try a different search or status filter.'
+              : 'Add a Docker image to auto-scan it on a recurring schedule and get notified when new vulnerabilities appear.'
+          }
+          action={
+            items.length > 0
+              ? { label: 'Clear filters', onClick: () => { setSearchQuery(''); setStatusFilter('all'); } }
+              : { label: '+ Add Image', onClick: openCreate }
+          }
         />
       ) : (
-        <Table>
+        <Table variant="secondary">
           <Table.ScrollContainer>
             <Table.Content aria-label="Watchlist images" className="min-w-[1080px]">
               <Table.Header>
@@ -387,7 +447,7 @@ export default function WatchlistPage() {
                 <Table.Column className="justify-end flex">Actions</Table.Column>
               </Table.Header>
               <Table.Body>
-                {items.map((item) => {
+                {filteredItems.map((item) => {
                   const reg = registries.find((r) => r.id === item.registry_id);
                   return (
                     <Table.Row key={item.id} id={item.id} className="hover:bg-[var(--row-hover)]">
@@ -472,58 +532,51 @@ export default function WatchlistPage() {
                         </span>
                       </Table.Cell>
                       <Table.Cell>
-                        <div className="flex items-center justify-end gap-1">
-                          <Tooltip delay={0}>
-                            <Button
-                              onPress={() => handleTrigger(item.id)}
-                              isDisabled={triggering === item.id}
-                              isIconOnly
-                              variant="secondary"
-                            >
-                              {triggering === item.id ? (
-                                <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-400 rounded-full animate-spin" />
-                              ) : (
-                                <PlayIcon size={15} />
-                              )}
-                            </Button>
-                            <Tooltip.Content>
-                              <p>Scan now</p>
-                            </Tooltip.Content>
-                          </Tooltip>
-                          <Tooltip delay={0}>
-                            <Button onPress={() => openEdit(item)} isIconOnly variant="tertiary">
-                              <PencilEdit01Icon size={15} />
-                            </Button>
-                            <Tooltip.Content>
-                              <p>Edit</p>
-                            </Tooltip.Content>
-                          </Tooltip>
-                          {canManageAccess(item) && (
-                            <Tooltip delay={0}>
-                              <Button
-                                onPress={() => openShareModal(item)}
-                                isIconOnly
-                                variant="tertiary"
-                              >
-                                <BiometricAccessIcon size={15} />
-                              </Button>
-                              <Tooltip.Content>
-                                <p>Manage access</p>
-                              </Tooltip.Content>
-                            </Tooltip>
-                          )}
-                          <Tooltip delay={0}>
-                            <Button
-                              onPress={() => handleDelete(item.id)}
-                              isIconOnly
-                              variant="danger-soft"
-                            >
-                              <Delete01Icon size={15} />
-                            </Button>
-                            <Tooltip.Content>
-                              <p>Delete</p>
-                            </Tooltip.Content>
-                          </Tooltip>
+                        <div className="flex justify-end">
+                          <RowActionsMenu
+                            label={`Open actions menu for ${item.image_name}:${item.image_tag}`}
+                            items={[
+                              {
+                                id: 'scan-now',
+                                label: triggering === item.id ? 'Scanning…' : 'Scan now',
+                                icon:
+                                  triggering === item.id ? (
+                                    <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-400 rounded-full animate-spin" />
+                                  ) : (
+                                    <PlayIcon size={15} />
+                                  ),
+                                disabled: triggering === item.id,
+                                onAction: () => {
+                                  void handleTrigger(item.id);
+                                },
+                              },
+                              {
+                                id: 'edit',
+                                label: 'Edit watchlist item',
+                                icon: <PencilEdit01Icon size={15} />,
+                                onAction: () => openEdit(item),
+                              },
+                              ...(canManageAccess(item)
+                                ? [
+                                    {
+                                      id: 'share',
+                                      label: 'Manage access',
+                                      icon: <BiometricAccessIcon size={15} />,
+                                      onAction: () => openShareModal(item),
+                                    },
+                                  ]
+                                : []),
+                              {
+                                id: 'delete',
+                                label: 'Delete watchlist item',
+                                icon: <Delete01Icon size={15} />,
+                                variant: 'danger',
+                                onAction: () => {
+                                  void handleDelete(item.id);
+                                },
+                              },
+                            ]}
+                          />
                         </div>
                       </Table.Cell>
                     </Table.Row>
@@ -534,6 +587,7 @@ export default function WatchlistPage() {
           </Table.ScrollContainer>
         </Table>
       )}
+      </Card>
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>

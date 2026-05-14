@@ -10,6 +10,7 @@ import {
   heroTextAreaClassName,
 } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
@@ -42,11 +43,11 @@ import {
   Label,
   ListBox,
   Modal,
+  SearchField,
   Select,
   Switch,
   Table,
   TextArea,
-  Tooltip,
   useOverlayState,
 } from '@heroui/react';
 import {
@@ -56,7 +57,6 @@ import {
   PlusSignIcon,
   Shield01Icon,
 } from 'hugeicons-react';
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const fieldCls = heroFieldClassName;
@@ -132,6 +132,8 @@ export default function StatusPagesPage() {
   const [updateLevel, setUpdateLevel] = useState<(typeof updateLevelOptions)[number]>('info');
   const [shareTarget, setShareTarget] = useState<StatusPage | null>(null);
   const [shares, setShares] = useState<ResourceShare[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [visibilityFilter, setVisibilityFilter] = useState<'all' | StatusPage['visibility']>('all');
   const [shareOrgId, setShareOrgId] = useState('');
   const [shareError, setShareError] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
@@ -147,6 +149,17 @@ export default function StatusPagesPage() {
       .filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin')
       .map((org) => org.id)
   );
+  const filteredPages = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return pages.filter((page) => {
+      const visibilityMatches = visibilityFilter === 'all' || page.visibility === visibilityFilter;
+      if (!visibilityMatches) return false;
+      if (!query) return true;
+      return [page.name, page.description, page.slug]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(query));
+    });
+  }, [pages, searchQuery, visibilityFilter]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -475,20 +488,60 @@ export default function StatusPagesPage() {
         </div>
       )}
 
+      <Card className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <SearchField name="status-pages-search" variant="secondary" className="w-full sm:max-w-sm">
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search name, slug, or description..."
+              />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
+          <Select
+            value={visibilityFilter}
+            onChange={(value) =>
+              setVisibilityFilter(
+                value === 'private' || value === 'authenticated' || value === 'public'
+                  ? value
+                  : 'all'
+              )
+            }
+            className="w-full sm:w-[180px]"
+            variant="secondary"
+          >
+            <Select.Trigger className={selectTriggerCls}>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all">All visibility</ListBox.Item>
+                <ListBox.Item id="private">Private</ListBox.Item>
+                <ListBox.Item id="authenticated">Authenticated</ListBox.Item>
+                <ListBox.Item id="public">Public</ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </div>
       {loading ? (
         <div className="flex justify-center py-16">
           <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
         </div>
-      ) : pages.length === 0 ? (
+      ) : filteredPages.length === 0 ? (
         <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3 text-center">
           <EyeIcon size={32} color="rgba(113,113,122,0.5)" />
           <p className="text-sm text-zinc-500 max-w-lg">
-            No status pages yet. Create one to share the latest status of all image tags or a
-            curated subset.
+            {pages.length > 0
+              ? 'No status pages match your filters.'
+              : 'No status pages yet. Create one to share the latest status of all image tags or a curated subset.'}
           </p>
         </div>
       ) : (
-        <Table>
+        <Table variant="secondary">
           <Table.ScrollContainer>
             <Table.Content aria-label="Status pages" className="min-w-[920px]">
               <Table.Header>
@@ -501,7 +554,7 @@ export default function StatusPagesPage() {
                 <Table.Column className="text-right">Actions</Table.Column>
               </Table.Header>
               <Table.Body>
-                {pages.map((page) => (
+                {filteredPages.map((page) => (
                   <Table.Row key={page.id} id={page.id} className="hover:bg-[var(--row-hover)]">
                     <Table.Cell>
                       <div>
@@ -554,60 +607,43 @@ export default function StatusPagesPage() {
                       {timeAgo(page.updated_at)}
                     </Table.Cell>
                     <Table.Cell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Tooltip delay={0}>
-                          <Button variant="secondary">
-                            <Link href={`/status/${page.slug}`} target="_blank">
-                              <EyeIcon size={15} />
-                            </Link>
-                          </Button>
-                          <Tooltip.Content>
-                            <p>Open page</p>
-                          </Tooltip.Content>
-                        </Tooltip>
-                        {canManageStatusPage(page) && (
-                          <>
-                            <Tooltip delay={0}>
-                              <Button
-                                onPress={() => openShareModal(page)}
-                                aria-label="Manage access"
-                                variant="tertiary"
-                                isIconOnly
-                              >
-                                <Shield01Icon size={15} />
-                              </Button>
-                              <Tooltip.Content>
-                                <p>Manage Access</p>
-                              </Tooltip.Content>
-                            </Tooltip>
-                            <Tooltip delay={0}>
-                              <Button
-                                onPress={() => openEdit(page)}
-                                aria-label="Edit"
-                                variant="tertiary"
-                                isIconOnly
-                              >
-                                <PencilEdit01Icon size={15} />
-                              </Button>
-                              <Tooltip.Content>
-                                <p>Edit</p>
-                              </Tooltip.Content>
-                            </Tooltip>
-                            <Tooltip delay={0}>
-                              <Button
-                                onPress={() => handleDelete(page.id)}
-                                aria-label="Delete"
-                                variant="danger-soft"
-                                isIconOnly
-                              >
-                                <Delete01Icon size={15} />
-                              </Button>
-                              <Tooltip.Content>
-                                <p>Delete</p>
-                              </Tooltip.Content>
-                            </Tooltip>
-                          </>
-                        )}
+                      <div className="flex justify-end">
+                        <RowActionsMenu
+                          label={`Open actions menu for ${page.name}`}
+                          items={[
+                            {
+                              id: 'open',
+                              label: 'Open page',
+                              icon: <EyeIcon size={15} />,
+                              onAction: () => window.open(`/status/${page.slug}`, '_blank'),
+                            },
+                            ...(canManageStatusPage(page)
+                              ? [
+                                  {
+                                    id: 'share',
+                                    label: 'Manage access',
+                                    icon: <Shield01Icon size={15} />,
+                                    onAction: () => openShareModal(page),
+                                  },
+                                  {
+                                    id: 'edit',
+                                    label: 'Edit status page',
+                                    icon: <PencilEdit01Icon size={15} />,
+                                    onAction: () => openEdit(page),
+                                  },
+                                  {
+                                    id: 'delete',
+                                    label: 'Delete status page',
+                                    icon: <Delete01Icon size={15} />,
+                                    variant: 'danger' as const,
+                                    onAction: () => {
+                                      void handleDelete(page.id);
+                                    },
+                                  },
+                                ]
+                              : []),
+                          ]}
+                        />
                       </div>
                     </Table.Cell>
                   </Table.Row>
@@ -617,6 +653,7 @@ export default function StatusPagesPage() {
           </Table.ScrollContainer>
         </Table>
       )}
+      </Card>
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>

@@ -124,6 +124,7 @@ export function FormField({
           heroFieldClassName,
           className,
         )}
+        variant="secondary"
         disabled={disabled}
         id={fieldId}
         name={name}

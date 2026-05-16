@@ -15,5 +15,6 @@ func Helm(router *gin.RouterGroup, db *bun.DB) {
 		h.POST("/scan", helm.CreateScans(db))
 		h.GET("/runs", helm.ListRuns(db))
 		h.GET("/runs/:id", helm.GetRun(db))
+		h.DELETE("/runs/:id", helm.DeleteRun(db))
 	}
 }

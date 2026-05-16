@@ -6,8 +6,8 @@ import {
   RECENT_ACTIVITY_RANGE_OPTIONS,
   RecentActivityRange,
   RecentActivityRangePicker,
-  RecentActivityRow,
 } from '@/components/scans/recent-activity';
+import { StatusBadge } from '@/components/ui/badges';
 import { PageHeader } from '@/components/ui/page-header';
 import { ChartSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -28,8 +28,9 @@ import {
   WatchlistItem,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Button, Card, Chip, Modal, useOverlayState } from '@heroui/react';
-import { Activity01Icon, Add01Icon } from 'hugeicons-react';
+import { fullDate, timeAgo } from '@/lib/time';
+import { Button, Card, Modal, useOverlayState } from '@heroui/react';
+import { Add01Icon, ArrowRight01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -82,13 +83,6 @@ const SEV = [
   },
 ];
 
-function formatDbAge(hours?: number | null): string {
-  if (hours == null || Number.isNaN(hours)) return 'Unknown';
-  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m`;
-  if (hours < 24) return `${hours >= 10 ? hours.toFixed(0) : hours.toFixed(1)}h`;
-  return `${(hours / 24).toFixed(1)}d`;
-}
-
 function buildScansHref(filters?: {
   status?: string;
   image?: string;
@@ -115,32 +109,6 @@ function toTimestamp(value?: string | null): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-function formatRelativeAge(value?: string | null): string {
-  const timestamp = toTimestamp(value);
-  if (!timestamp) return 'Never';
-  const diffMs = Date.now() - timestamp;
-  if (diffMs < 0) return 'Just now';
-
-  const minute = 60 * 1000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-
-  if (diffMs < hour) {
-    const minutes = Math.max(1, Math.floor(diffMs / minute));
-    return `${minutes}m ago`;
-  }
-
-  if (diffMs < day) {
-    return `${Math.floor(diffMs / hour)}h ago`;
-  }
-
-  const days = Math.floor(diffMs / day);
-  if (days < 30) return `${days}d ago`;
-
-  const months = Math.floor(days / 30);
-  return `${months}mo ago`;
-}
-
 function buildTrendSeries(
   trends: DashboardTrendPoint[],
   days: number,
@@ -165,6 +133,226 @@ function sumAvgFindings(point: DashboardVulnTrendPoint): number {
 }
 
 type DashboardDrilldownKey = 'total' | 'completed' | 'attention' | 'watchlist';
+type PostureTone = 'success' | 'warning' | 'danger' | 'accent' | 'neutral';
+
+type PostureSummary = {
+  label: string;
+  title: string;
+  description: string;
+  tone: PostureTone;
+};
+
+type WatchlistCoverage = {
+  enabledCount: number;
+  scanned24hCount: number;
+  scanned7dCount: number;
+  staleItems: WatchlistItem[];
+  neverScannedCount: number;
+  coverage7d: number;
+  topSchedule: [string, number] | null;
+};
+
+const TONE_STYLES: Record<
+  PostureTone,
+  { color: string; bg: string; border: string; softBg: string }
+> = {
+  success: {
+    color: '#34d399',
+    bg: 'rgba(52,211,153,0.14)',
+    border: 'rgba(52,211,153,0.28)',
+    softBg: 'rgba(52,211,153,0.07)',
+  },
+  warning: {
+    color: '#fbbf24',
+    bg: 'rgba(251,191,36,0.14)',
+    border: 'rgba(251,191,36,0.28)',
+    softBg: 'rgba(251,191,36,0.07)',
+  },
+  danger: {
+    color: '#f87171',
+    bg: 'rgba(248,113,113,0.14)',
+    border: 'rgba(248,113,113,0.28)',
+    softBg: 'rgba(248,113,113,0.07)',
+  },
+  accent: {
+    color: '#a78bfa',
+    bg: 'rgba(167,139,250,0.14)',
+    border: 'rgba(167,139,250,0.28)',
+    softBg: 'rgba(167,139,250,0.07)',
+  },
+  neutral: {
+    color: 'var(--text-muted)',
+    bg: 'var(--row-hover)',
+    border: 'var(--surface-border)',
+    softBg: 'rgba(161,161,170,0.07)',
+  },
+};
+
+function formatCompactNumber(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}m`;
+  if (value >= 10_000) return `${Math.round(value / 1000)}k`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+  return value.toLocaleString();
+}
+
+function getWatchlistCoverage(
+  items: WatchlistItem[],
+  activeWatchlistCount: number
+): WatchlistCoverage {
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const weekMs = 7 * dayMs;
+  const enabledItems = items.filter((item) => item.enabled);
+  const scanned24hCount = enabledItems.filter((item) => {
+    const scannedAt = toTimestamp(item.last_scanned_at);
+    return scannedAt != null && now - scannedAt <= dayMs;
+  }).length;
+  const scanned7dCount = enabledItems.filter((item) => {
+    const scannedAt = toTimestamp(item.last_scanned_at);
+    return scannedAt != null && now - scannedAt <= weekMs;
+  }).length;
+  const staleItems = enabledItems
+    .filter((item) => {
+      const scannedAt = toTimestamp(item.last_scanned_at);
+      return scannedAt == null || now - scannedAt > weekMs;
+    })
+    .sort((left, right) => {
+      const leftTime = toTimestamp(left.last_scanned_at) ?? 0;
+      const rightTime = toTimestamp(right.last_scanned_at) ?? 0;
+      return leftTime - rightTime;
+    });
+  const neverScannedCount = enabledItems.filter(
+    (item) => !toTimestamp(item.last_scanned_at)
+  ).length;
+  const scheduleCounts = enabledItems.reduce<Record<string, number>>((acc, item) => {
+    const schedule = item.schedule?.trim() || 'unscheduled';
+    acc[schedule] = (acc[schedule] ?? 0) + 1;
+    return acc;
+  }, {});
+  let topSchedule: [string, number] | null = null;
+  for (const entry of Object.entries(scheduleCounts)) {
+    if (!topSchedule || entry[1] > topSchedule[1]) {
+      topSchedule = entry;
+    }
+  }
+
+  return {
+    enabledCount: enabledItems.length,
+    scanned24hCount,
+    scanned7dCount,
+    staleItems,
+    neverScannedCount,
+    coverage7d:
+      activeWatchlistCount > 0 ? Math.round((scanned7dCount / activeWatchlistCount) * 100) : 0,
+    topSchedule,
+  };
+}
+
+function getCriticalHighTrend(data: DashboardVulnTrendPoint[]): number {
+  let previous: { date: string; value: number } | null = null;
+  let latest: { date: string; value: number } | null = null;
+
+  for (const point of data) {
+    const value = point.critical + point.high;
+    if (value <= 0) continue;
+
+    if (!latest || point.date > latest.date) {
+      previous = latest;
+      latest = { date: point.date, value };
+    } else if (!previous || point.date > previous.date) {
+      previous = { date: point.date, value };
+    }
+  }
+
+  return latest && previous ? latest.value - previous.value : 0;
+}
+
+function getRiskSummary({
+  criticalHighCount,
+  needsAttentionTotal,
+  blockedPolicyCount,
+  criticalHighTrend,
+}: {
+  criticalHighCount: number;
+  needsAttentionTotal: number;
+  blockedPolicyCount: number;
+  criticalHighTrend: number;
+}): PostureSummary {
+  if (criticalHighCount === 0 && needsAttentionTotal === 0) {
+    return {
+      label: 'Low risk',
+      title: 'No critical or high exposure is visible',
+      description: 'Current finalized scan data is not showing urgent vulnerability exposure.',
+      tone: 'success',
+    };
+  }
+
+  if (blockedPolicyCount > 0 || criticalHighCount >= 1000 || criticalHighTrend > 0) {
+    return {
+      label: 'Elevated risk',
+      title: 'Critical/high exposure needs review',
+      description:
+        blockedPolicyCount > 0
+          ? 'Policy-blocked scans and severe findings should be reviewed first.'
+          : 'Severe findings are present and the latest risk signal is moving up.',
+      tone: 'danger',
+    };
+  }
+
+  return {
+    label: 'Managed risk',
+    title: 'Severe findings exist but are not accelerating',
+    description: 'Keep an eye on critical and high findings while current coverage remains active.',
+    tone: 'warning',
+  };
+}
+
+function getReadinessSummary({
+  coverage7d,
+  successRate,
+  activeQueueCount,
+  scannerHealth,
+  scannerHealthError,
+  staleCount,
+}: {
+  coverage7d: number;
+  successRate: number;
+  activeQueueCount: number;
+  scannerHealth: ScannerHealth | null;
+  scannerHealthError: string;
+  staleCount: number;
+}): PostureSummary {
+  const scannerDegraded =
+    Boolean(scannerHealthError) ||
+    Boolean(scannerHealth?.local_scanner_enabled && scannerHealth.stale_workers > 0) ||
+    Boolean(scannerHealth?.local_scanner_enabled && scannerHealth.error_workers > 0);
+
+  if (scannerDegraded || staleCount > 0 || successRate < 70) {
+    return {
+      label: 'Readiness degraded',
+      title: 'Coverage confidence needs attention',
+      description:
+        'Stale schedules, scanner health, or scan failures may reduce trust in coverage.',
+      tone: 'warning',
+    };
+  }
+
+  if (coverage7d >= 90 && successRate >= 85 && activeQueueCount === 0) {
+    return {
+      label: 'Ready',
+      title: 'Coverage is current and stable',
+      description: 'Watchlist scans are fresh and the scanner queue is clear.',
+      tone: 'success',
+    };
+  }
+
+  return {
+    label: 'Monitoring',
+    title: 'Coverage is active with some movement',
+    description: 'Scanning is running, but the readiness signal is not fully settled yet.',
+    tone: 'accent',
+  };
+}
 
 function mergeUniqueScans(groups: Scan[][]): Scan[] {
   const seen = new Set<string>();
@@ -185,36 +373,405 @@ function mergeUniqueScans(groups: Scan[][]): Scan[] {
   });
 }
 
-function StatDrilldownCard({
-  title,
-  description,
+function PosturePill({ summary }: { summary: PostureSummary }) {
+  const tone = TONE_STYLES[summary.tone];
+
+  return (
+    <span
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+      style={{ background: tone.bg, borderColor: tone.border, color: tone.color }}
+    >
+      {summary.label}
+    </span>
+  );
+}
+
+function BriefingMetric({
+  label,
   value,
+  detail,
+  tone = 'neutral',
   onPress,
+  className,
 }: {
-  title: string;
-  description: React.ReactNode;
+  label: string;
   value: React.ReactNode;
-  onPress: () => void;
+  detail: React.ReactNode;
+  tone?: PostureTone;
+  onPress?: () => void;
+  className?: string;
 }) {
+  const toneStyle = TONE_STYLES[tone];
+  const content = (
+    <Card className={`${className ?? ''}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p
+            className="text-[10px] font-medium uppercase tracking-wide"
+            style={{ color: 'var(--text-faint)' }}
+          >
+            {label}
+          </p>
+          <p
+            className="mt-0.5 text-lg font-semibold tabular-nums"
+            style={{ color: toneStyle.color }}
+          >
+            {value}
+          </p>
+        </div>
+        <span
+          className="mt-1.5 size-1.5 rounded-full"
+          style={{ background: toneStyle.color, opacity: 0.9 }}
+        />
+      </div>
+      <p className="mt-0.5 text-[11px] leading-4" style={{ color: 'var(--text-muted)' }}>
+        {detail}
+      </p>
+    </Card>
+  );
+
+  if (!onPress) return content;
+
   return (
     <button
       type="button"
       onClick={onPress}
-      className="group w-full text-left"
+      className="group h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
       aria-haspopup="dialog"
     >
-      <Card className="transition-transform duration-150 group-hover:-translate-y-0.5 group-focus-visible:-translate-y-0.5 group-focus-visible:outline-none group-focus-visible:ring-2 group-focus-visible:ring-violet-400/70">
-        <Card.Header>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <Card.Title>{title}</Card.Title>
-              <Card.Description>{description}</Card.Description>
-            </div>
-            <p className="text-xl font-bold">{value}</p>
-          </div>
-        </Card.Header>
-      </Card>
+      {content}
     </button>
+  );
+}
+
+function ExecutivePostureCard({
+  risk,
+  readiness,
+  criticalHighCount,
+  totalVulns,
+  needsAttentionTotal,
+  coverage7d,
+  successRate,
+  onOpenAttention,
+  onOpenWatchlist,
+  onOpenCompleted,
+}: {
+  risk: PostureSummary;
+  readiness: PostureSummary;
+  criticalHighCount: number;
+  totalVulns: number;
+  needsAttentionTotal: number;
+  coverage7d: number;
+  successRate: number;
+  onOpenAttention: () => void;
+  onOpenWatchlist: () => void;
+  onOpenCompleted: () => void;
+}) {
+  const riskTone = TONE_STYLES[risk.tone];
+  const readinessTone = TONE_STYLES[readiness.tone];
+
+  return (
+    <section className="space-y-3 rounded-2xl px-1 py-1">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p
+              className="text-[11px] font-semibold uppercase tracking-widest"
+              style={{ color: 'var(--text-faint)' }}
+            >
+              Security briefing
+            </p>
+            <PosturePill summary={risk} />
+            <PosturePill summary={readiness} />
+          </div>
+          <p className="mt-2 max-w-4xl text-sm leading-6" style={{ color: 'var(--text-muted)' }}>
+            <span className="font-medium" style={{ color: riskTone.color }}>
+              {risk.title}.
+            </span>{' '}
+            <span className="font-medium" style={{ color: readinessTone.color }}>
+              {readiness.title}.
+            </span>{' '}
+            {risk.description}
+          </p>
+        </div>
+        {needsAttentionTotal > 0 && (
+          <Button onPress={onOpenAttention} variant="secondary">
+            Review
+          </Button>
+        )}
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <BriefingMetric
+          label="Critical + high"
+          value={formatCompactNumber(criticalHighCount)}
+          detail={`${formatCompactNumber(totalVulns)} total findings`}
+          tone={risk.tone}
+          onPress={onOpenAttention}
+        />
+        <BriefingMetric
+          label="Attention"
+          value={needsAttentionTotal.toLocaleString()}
+          detail="failed or policy-blocked scans"
+          tone={needsAttentionTotal > 0 ? 'danger' : 'success'}
+          onPress={onOpenAttention}
+        />
+        <BriefingMetric
+          label="Freshness"
+          value={`${coverage7d}%`}
+          detail="watchlist scanned in 7 days"
+          tone={coverage7d >= 90 ? 'success' : 'warning'}
+          onPress={onOpenWatchlist}
+        />
+        <BriefingMetric
+          label="Success"
+          value={`${successRate}%`}
+          detail="completed scans overall"
+          tone={successRate >= 85 ? 'success' : 'warning'}
+          onPress={onOpenCompleted}
+        />
+      </div>
+    </section>
+  );
+}
+function DashboardSectionHeader({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          {title}
+        </h2>
+        {description && (
+          <p className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>
+            {description}
+          </p>
+        )}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function AttentionQueueCard({
+  genericFailedCount,
+  blockedPolicyCount,
+  activeQueueCount,
+  staleItems,
+  onOpenAttention,
+}: {
+  genericFailedCount: number;
+  blockedPolicyCount: number;
+  activeQueueCount: number;
+  staleItems: WatchlistItem[];
+  onOpenAttention: () => void;
+}) {
+  const items = [
+    {
+      key: 'blocked',
+      label: 'Policy blocks',
+      value: blockedPolicyCount,
+      detail: 'Xray policy decisions awaiting review',
+      tone: 'danger' as const,
+    },
+    {
+      key: 'failed',
+      label: 'Failed scans',
+      value: genericFailedCount,
+      detail: 'Scans that did not complete cleanly',
+      tone: 'danger' as const,
+    },
+    {
+      key: 'stale',
+      label: 'Stale watchlist',
+      value: staleItems.length,
+      detail: 'Scheduled images not scanned in 7 days',
+      tone: 'warning' as const,
+    },
+    {
+      key: 'running',
+      label: 'In flight',
+      value: activeQueueCount,
+      detail: 'Queued or running scan work',
+      tone: 'accent' as const,
+    },
+  ].filter((item) => item.value > 0);
+
+  return (
+    <Card>
+      <DashboardSectionHeader
+        title="Needs attention"
+        description="Prioritized by executive impact"
+        action={
+          <Button onClick={onOpenAttention} variant="secondary">
+            Open triage
+            <ArrowRight01Icon />
+          </Button>
+        }
+      />
+
+      {items.length === 0 ? (
+        <div
+          className="mt-4 rounded-2xl border px-4 py-5"
+          style={{
+            background: TONE_STYLES.success.softBg,
+            borderColor: TONE_STYLES.success.border,
+          }}
+        >
+          <p className="text-sm font-medium" style={{ color: '#34d399' }}>
+            No urgent scan or coverage items right now.
+          </p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>
+            Failed scans, policy blocks, and stale schedules will surface here.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-2">
+          {items.map((item) => {
+            const tone = TONE_STYLES[item.tone];
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={onOpenAttention}
+                className="group flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
+                style={{ background: tone.softBg, borderColor: tone.border }}
+                aria-haspopup="dialog"
+              >
+                <span>
+                  <span
+                    className="block text-sm font-semibold"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {item.label}
+                  </span>
+                  <span className="mt-0.5 block text-xs" style={{ color: 'var(--text-faint)' }}>
+                    {item.detail}
+                  </span>
+                </span>
+                <span
+                  className="text-base font-semibold tabular-nums"
+                  style={{ color: tone.color }}
+                >
+                  {item.value.toLocaleString()}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function ReadinessPanel({
+  coverage,
+  activeQueueCount,
+  startedTodayCount,
+  scannerHealth,
+  scannerHealthError,
+  isAdmin,
+  watchlistLoading,
+  watchlistError,
+}: {
+  coverage: WatchlistCoverage;
+  activeQueueCount: number;
+  startedTodayCount: number;
+  scannerHealth: ScannerHealth | null;
+  scannerHealthError: string;
+  isAdmin: boolean;
+  watchlistLoading: boolean;
+  watchlistError: string;
+}) {
+  const scannerReady =
+    !isAdmin ||
+    (!scannerHealthError &&
+      (!scannerHealth?.local_scanner_enabled ||
+        (scannerHealth.healthy_workers > 0 &&
+          scannerHealth.stale_workers === 0 &&
+          scannerHealth.error_workers === 0)));
+
+  return (
+    <Card className="p-4">
+      <DashboardSectionHeader
+        title="Readiness confidence"
+        description="Signals that determine how much trust to place in current coverage"
+      />
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card variant="secondary">
+          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            Watchlist freshness
+          </p>
+          <p
+            className="mt-2 text-2xl font-semibold tabular-nums"
+            style={{ color: coverage.coverage7d >= 90 ? '#34d399' : '#fbbf24' }}
+          >
+            {coverage.coverage7d}%
+          </p>
+          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            {watchlistLoading
+              ? 'Refreshing watchlist coverage'
+              : watchlistError
+                ? watchlistError
+                : `${coverage.scanned7dCount} of ${coverage.enabledCount || 0} active schedules scanned in 7d`}
+          </p>
+        </Card>
+        <Card variant="secondary">
+          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            Scanner state
+          </p>
+          <p
+            className="mt-2 text-lg font-semibold"
+            style={{ color: scannerReady ? '#34d399' : '#fbbf24' }}
+          >
+            {scannerReady ? 'Healthy' : 'Needs review'}
+          </p>
+          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            {scannerHealthError ||
+              scannerHealth?.message ||
+              (scannerHealth?.local_scanner_enabled
+                ? `${scannerHealth.healthy_workers} healthy workers`
+                : 'External scanner coverage')}
+          </p>
+        </Card>
+        <Card variant="secondary">
+          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            In-flight work
+          </p>
+          <p className="mt-2 text-2xl font-semibold tabular-nums" style={{ color: '#60a5fa' }}>
+            {activeQueueCount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            queued or running scans
+          </p>
+        </Card>
+        <Card variant="secondary">
+          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            Started today
+          </p>
+          <p
+            className="mt-2 text-2xl font-semibold tabular-nums"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            {startedTodayCount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            {coverage.neverScannedCount > 0
+              ? `${coverage.neverScannedCount} watchlist items never scanned`
+              : coverage.topSchedule
+                ? `Common schedule ${coverage.topSchedule[0]}`
+                : 'recent scan volume signal'}
+          </p>
+        </Card>
+      </div>
+    </Card>
   );
 }
 
@@ -251,6 +808,89 @@ function WatchlistModalRow({ item }: { item: WatchlistItem }) {
         {item.enabled ? 'Active' : 'Paused'}
       </span>
     </div>
+  );
+}
+
+function formatImageDisplayName(imageName: string): string {
+  const slashIndex = imageName.indexOf('/');
+  const withoutRegistry = slashIndex >= 0 ? imageName.slice(slashIndex + 1) : imageName;
+  const segments = withoutRegistry.split('/').filter(Boolean);
+  if (segments.length <= 3) return withoutRegistry;
+  return `.../${segments.slice(-3).join('/')}`;
+}
+
+function CompactScanRow({ scan }: { scan: Scan }) {
+  const eventTime = scan.started_at ?? scan.created_at;
+  const displayName = formatImageDisplayName(scan.image_name);
+
+  return (
+    <Link
+      href={`/scans/${scan.id}`}
+      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-2.5 transition-colors duration-150"
+      onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
+      onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
+    >
+      <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+
+      <div className="min-w-0 flex items-center gap-1.5 overflow-hidden">
+        <p
+          className="truncate font-mono text-sm"
+          style={{ color: 'var(--text-secondary)' }}
+          title={scan.image_name}
+        >
+          {displayName}
+        </p>
+        <span className="shrink-0 font-mono text-sm" style={{ color: 'var(--text-secondary)' }}>
+          :{scan.image_tag}
+        </span>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <span
+          className="text-[11px]"
+          style={{ color: 'var(--text-faint)' }}
+          title={fullDate(eventTime)}
+        >
+          {timeAgo(eventTime)}
+        </span>
+        {scan.critical_count > 0 && (
+          <span
+            className="rounded-md px-1.5 py-0.5 text-[10px] font-mono"
+            style={{
+              color: '#f87171',
+              background: 'rgba(239,68,68,0.12)',
+              border: '1px solid rgba(239,68,68,0.2)',
+            }}
+          >
+            C:{scan.critical_count}
+          </span>
+        )}
+        {scan.high_count > 0 && (
+          <span
+            className="rounded-md px-1.5 py-0.5 text-[10px] font-mono"
+            style={{
+              color: '#fb923c',
+              background: 'rgba(249,115,22,0.12)',
+              border: '1px solid rgba(249,115,22,0.2)',
+            }}
+          >
+            H:{scan.high_count}
+          </span>
+        )}
+        {scan.medium_count > 0 && (
+          <span
+            className="rounded-md px-1.5 py-0.5 text-[10px] font-mono"
+            style={{
+              color: '#fbbf24',
+              background: 'rgba(245,158,11,0.12)',
+              border: '1px solid rgba(245,158,11,0.2)',
+            }}
+          >
+            M:{scan.medium_count}
+          </span>
+        )}
+      </div>
+    </Link>
   );
 }
 
@@ -479,7 +1119,7 @@ function DashboardDrilldownModal({
                   ) : (
                     <div className="max-h-[60vh] space-y-0.5 overflow-y-auto pr-1 -mx-1">
                       {scans.map((scan) => (
-                        <RecentActivityRow key={scan.id} scan={scan} />
+                        <CompactScanRow key={scan.id} scan={scan} />
                       ))}
                     </div>
                   )}
@@ -684,7 +1324,7 @@ function VulnTrendChart({
   const PERIODS = [7, 14, 30] as const;
 
   return (
-    <Card className="relative rounded-2xl p-5 z-10">
+    <Card className="relative z-10 rounded-2xl p-4">
       <div
         className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
         style={{
@@ -693,37 +1333,24 @@ function VulnTrendChart({
       />
 
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-3">
-          <div
-            className="size-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{
-              background: 'rgba(124,58,237,0.2)',
-              boxShadow: '0 0 14px rgba(124,58,237,0.3)',
-            }}
-          >
-            <Activity01Icon size={17} color="#a78bfa" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
-              Avg. Findings per Scan
-            </h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Average vulnerabilities per finalized scan, by day
-            </p>
-            <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-              {latestActivePoint ? (
-                <>
-                  <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
-                    {latestActivePoint.total}
-                  </span>{' '}
-                  on {formatChartDate(latestActivePoint.date)}
-                </>
-              ) : (
-                `No finalized scans in the last ${period} days`
-              )}
-            </p>
-          </div>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Risk trend</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Average findings per finalized scan, by severity
+          </p>
+          <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            {latestActivePoint ? (
+              <>
+                <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                  {latestActivePoint.total}
+                </span>{' '}
+                on {formatChartDate(latestActivePoint.date)}
+              </>
+            ) : (
+              `No finalized scans in the last ${period} days`
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {PERIODS.map((d) => (
@@ -769,9 +1396,17 @@ function VulnTrendChart({
             No finalized scans in this period
           </div>
         ) : (
-          <div className="h-[220px] w-full">
+          <div className="h-[240px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <defs>
+                  {series.map(({ key, color, opacity }) => (
+                    <linearGradient key={key} id={`risk-grad-${key}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={color} stopOpacity={Math.min(opacity, 0.34)} />
+                      <stop offset="100%" stopColor={color} stopOpacity="0" />
+                    </linearGradient>
+                  ))}
+                </defs>
                 <CartesianGrid
                   vertical={false}
                   stroke="rgba(161,161,170,0.16)"
@@ -881,8 +1516,9 @@ function VulnTrendChart({
                     dataKey={key}
                     stackId="avg-findings"
                     stroke={color}
-                    fill={color}
-                    fillOpacity={opacity}
+                    strokeWidth={1.8}
+                    fill={`url(#risk-grad-${key})`}
+                    fillOpacity={1}
                     dot={false}
                     isAnimationActive={false}
                     activeDot={{ r: 4, fill: color, stroke: '#fff', strokeWidth: 1.5 }}
@@ -901,153 +1537,6 @@ function VulnTrendChart({
             {peakAverage}
           </span>
         </p>
-      )}
-    </Card>
-  );
-}
-
-function WatchlistEffectivenessCard({
-  items,
-  activeWatchlistCount,
-  loading,
-  error,
-}: {
-  items: WatchlistItem[];
-  activeWatchlistCount: number;
-  loading: boolean;
-  error: string;
-}) {
-  const [now] = useState(() => Date.now());
-  const dayMs = 24 * 60 * 60 * 1000;
-  const weekMs = 7 * dayMs;
-
-  const enabledItems = items.filter((item) => item.enabled);
-  const scanned24hCount = enabledItems.filter((item) => {
-    const scannedAt = toTimestamp(item.last_scanned_at);
-    return scannedAt != null && now - scannedAt <= dayMs;
-  }).length;
-  const scanned7dCount = enabledItems.filter((item) => {
-    const scannedAt = toTimestamp(item.last_scanned_at);
-    return scannedAt != null && now - scannedAt <= weekMs;
-  }).length;
-  const staleEnabledItems = enabledItems
-    .filter((item) => {
-      const scannedAt = toTimestamp(item.last_scanned_at);
-      return scannedAt == null || now - scannedAt > weekMs;
-    })
-    .sort((left, right) => {
-      const leftTime = toTimestamp(left.last_scanned_at) ?? 0;
-      const rightTime = toTimestamp(right.last_scanned_at) ?? 0;
-      return leftTime - rightTime;
-    });
-  const neverScannedCount = enabledItems.filter(
-    (item) => !toTimestamp(item.last_scanned_at)
-  ).length;
-  const coverage7d =
-    activeWatchlistCount > 0 ? Math.round((scanned7dCount / activeWatchlistCount) * 100) : 0;
-
-  const scheduleCounts = enabledItems.reduce<Record<string, number>>((acc, item) => {
-    const schedule = item.schedule?.trim() || 'unscheduled';
-    acc[schedule] = (acc[schedule] ?? 0) + 1;
-    return acc;
-  }, {});
-  const topSchedule = Object.entries(scheduleCounts).sort((a, b) => b[1] - a[1])[0] ?? null;
-
-  return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Watchlist Effectiveness
-          </h2>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
-            Coverage quality for scheduled watchlist scans
-          </p>
-        </div>
-        <Chip color="success">{coverage7d}% fresh</Chip>
-      </div>
-
-      {error ? (
-        <p className="text-xs" style={{ color: '#f87171' }}>
-          {error}
-        </p>
-      ) : loading ? (
-        <div className="space-y-2.5">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <RecentScanRowSkeleton key={index} />
-          ))}
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-2 text-[12px]">
-            <Card variant="secondary" className="px-3 py-2">
-              <p>Active schedules</p>
-              <p className="font-semibold">{activeWatchlistCount}</p>
-            </Card>
-            <Card variant="secondary" className="px-3 py-2">
-              <p>Scanned in 24h</p>
-              <p className="font-semibold" style={{ color: '#60a5fa' }}>
-                {scanned24hCount}
-              </p>
-            </Card>
-            <Card variant="secondary" className="px-3 py-2">
-              <p>Stale {'>'} 7d</p>
-              <p
-                className="font-semibold"
-                style={{ color: staleEnabledItems.length > 0 ? '#fb923c' : '#34d399' }}
-              >
-                {staleEnabledItems.length}
-              </p>
-            </Card>
-            <Card variant="secondary" className="px-3 py-2">
-              <p>Never scanned</p>
-              <p
-                className="font-semibold"
-                style={{ color: neverScannedCount > 0 ? '#f87171' : '#34d399' }}
-              >
-                {neverScannedCount}
-              </p>
-            </Card>
-          </div>
-
-          <div className="mt-3 space-y-2">
-            <div className="flex items-center justify-between gap-3 text-[11px]">
-              <span>
-                Most common schedule:{' '}
-                <span>{topSchedule ? `${topSchedule[0]} (${topSchedule[1]})` : 'n/a'}</span>
-              </span>
-              <Link href="/watchlist" className="font-medium" style={{ color: '#a78bfa' }}>
-                Open watchlist →
-              </Link>
-            </div>
-
-            {staleEnabledItems.length > 0 ? (
-              <div className="space-y-1.5">
-                {staleEnabledItems.slice(0, 3).map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"
-                    style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}
-                  >
-                    <p
-                      className="truncate text-[11px] font-mono"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
-                      {item.image_name}:{item.image_tag}
-                    </p>
-                    <span className="shrink-0 text-[10px]" style={{ color: '#f59e0b' }}>
-                      {formatRelativeAge(item.last_scanned_at)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-[11px]" style={{ color: '#34d399' }}>
-                All active watchlist items were scanned within the last 7 days.
-              </p>
-            )}
-          </div>
-        </>
       )}
     </Card>
   );
@@ -1228,6 +1717,8 @@ export default function DashboardPage() {
   if (!stats) return null;
 
   const totalVulns = Object.values(stats.severity_totals).reduce((a, b) => a + b, 0);
+  const criticalHighCount =
+    (stats.severity_totals.critical ?? 0) + (stats.severity_totals.high ?? 0);
   const todayKey = new Date().toISOString().slice(0, 10);
   const startedTodayCount =
     [...trends].reverse().find((point) => point.date === todayKey)?.total ?? 0;
@@ -1242,9 +1733,22 @@ export default function DashboardPage() {
   const needsAttentionTotal = genericFailedCount + blockedPolicyCount;
   const successRate =
     stats.total_scans > 0 ? Math.round((completedCount / stats.total_scans) * 100) : 0;
-  const recentWindowAverage =
-    scanVolumeTrend.reduce((sum, point) => sum + point.value, 0) /
-    Math.max(scanVolumeTrend.length, 1);
+  const watchlistCoverage = getWatchlistCoverage(watchlistOverviewItems, stats.watchlist_count);
+  const criticalHighTrend = getCriticalHighTrend(vulnTrends);
+  const riskSummary = getRiskSummary({
+    criticalHighCount,
+    needsAttentionTotal,
+    blockedPolicyCount,
+    criticalHighTrend,
+  });
+  const readinessSummary = getReadinessSummary({
+    coverage7d: watchlistCoverage.coverage7d,
+    successRate,
+    activeQueueCount,
+    scannerHealth,
+    scannerHealthError,
+    staleCount: watchlistCoverage.staleItems.length,
+  });
   const totalAttentionForFilter =
     attentionFilter === 'failed'
       ? genericFailedCount
@@ -1339,252 +1843,85 @@ export default function DashboardPage() {
         }
       />
 
-      {/* ── Stat strip ── */}
-      <div className="grid gap-3 lg:grid-cols-4">
-        <StatDrilldownCard
-          title="Total Scans"
-          description={
-            <>
-              {recentWindowAverage >= 10
-                ? recentWindowAverage.toFixed(0)
-                : recentWindowAverage.toFixed(1)}{' '}
-              avg/day
-            </>
-          }
-          value={stats.total_scans.toLocaleString()}
-          onPress={() => openDrilldown('total')}
-        />
+      <ExecutivePostureCard
+        risk={riskSummary}
+        readiness={readinessSummary}
+        criticalHighCount={criticalHighCount}
+        totalVulns={totalVulns}
+        needsAttentionTotal={needsAttentionTotal}
+        coverage7d={watchlistCoverage.coverage7d}
+        successRate={successRate}
+        onOpenAttention={() => openDrilldown('attention')}
+        onOpenWatchlist={() => openDrilldown('watchlist')}
+        onOpenCompleted={() => openDrilldown('completed')}
+      />
 
-        <StatDrilldownCard
-          title="Completed Scans"
-          description={`${successRate}% success rate`}
-          value={completedCount.toLocaleString()}
-          onPress={() => openDrilldown('completed')}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+        <VulnTrendChart
+          data={vulnTrends}
+          period={vulnTrendPeriod}
+          onPeriod={handleVulnPeriodChange}
         />
-
-        <StatDrilldownCard
-          title="Needs Attention"
-          description={
-            <span className="flex items-center gap-2">
-              {genericFailedCount > 0 && (
-                <span style={{ color: '#f87171' }}>{genericFailedCount} failed</span>
-              )}
-              {blockedPolicyCount > 0 && (
-                <span style={{ color: '#fb923c' }}>{blockedPolicyCount} blocked</span>
-              )}
-              {needsAttentionTotal === 0 && (
-                <span style={{ color: 'var(--text-faint)' }}>all clear</span>
-              )}
-            </span>
-          }
-          value={needsAttentionTotal}
-          onPress={() => openDrilldown('attention')}
-        />
-
-        <StatDrilldownCard
-          title="Watchlist"
-          description={`${startedTodayCount} started today`}
-          value={stats.watchlist_count.toLocaleString()}
-          onPress={() => openDrilldown('watchlist')}
+        <AttentionQueueCard
+          genericFailedCount={genericFailedCount}
+          blockedPolicyCount={blockedPolicyCount}
+          activeQueueCount={activeQueueCount}
+          staleItems={watchlistCoverage.staleItems}
+          onOpenAttention={() => openDrilldown('attention')}
         />
       </div>
 
-      <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest">Stats</p>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.45fr)]">
+        <ReadinessPanel
+          coverage={watchlistCoverage}
+          activeQueueCount={activeQueueCount}
+          startedTodayCount={startedTodayCount}
+          scannerHealth={scannerHealth}
+          scannerHealthError={scannerHealthError}
+          isAdmin={isAdmin}
+          watchlistLoading={watchlistOverviewLoading}
+          watchlistError={watchlistOverviewError}
+        />
 
-      {/* ── Zone 2: Action + Context ── */}
-      <div className="grid gap-3 lg:grid-cols-2">
-        <div className="flex flex-col gap-3">
-          {/* Exposure Snapshot */}
-          <Card className="p-5">
-            <div className="flex items-start justify-between gap-2 mb-4">
-              <div>
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Exposure Snapshot
-                </h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
-                  Across all finalized scan results
-                </p>
-              </div>
-              <div className="text-right shrink-0">
-                <p
-                  className="text-xl font-bold tabular-nums"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  {totalVulns.toLocaleString()}
-                </p>
-                <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>
-                  total
-                </p>
-              </div>
-            </div>
-            <div className="space-y-2.5">
-              {SEV.map(({ key, label, hex }) => {
-                const count = stats.severity_totals[key] ?? 0;
-                const pct = totalVulns > 0 ? (count / totalVulns) * 100 : 0;
-                return (
-                  <div key={key} className="flex items-center gap-3">
-                    <span className="text-[11px] font-medium w-12 shrink-0" style={{ color: hex }}>
-                      {label}
-                    </span>
-                    <div
-                      className="flex-1 h-[5px] rounded-full overflow-hidden"
-                      style={{ background: 'var(--row-divider)' }}
-                    >
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: `${pct}%`, background: hex, transition: 'width 0.6s ease' }}
-                      />
-                    </div>
-                    <span
-                      className="text-[11px] font-mono w-10 text-right shrink-0 tabular-nums"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      {count.toLocaleString()}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-
-          {/* Avg findings per scan */}
-          <VulnTrendChart
-            data={vulnTrends}
-            period={vulnTrendPeriod}
-            onPeriod={handleVulnPeriodChange}
-          />
-        </div>
-
-        {/* Right column: Actionability + Runtime */}
-        <div className="flex flex-col gap-3">
-          <WatchlistEffectivenessCard
-            items={watchlistOverviewItems}
-            activeWatchlistCount={stats.watchlist_count}
-            loading={watchlistOverviewLoading}
-            error={watchlistOverviewError}
-          />
-
-          {/* Scanner */}
-          <Card className="p-5">
-            <div className="flex items-start justify-between gap-2 mb-3">
-              <h2 className="text-sm font-semibold">Scanner</h2>
-              {activeXrayCount > 0 && (
-                <span
-                  className="text-[11px] font-semibold px-2 py-0.5 tabular-nums"
-                  style={{
-                    background: 'rgba(96,165,250,0.12)',
-                    border: '1px solid rgba(96,165,250,0.24)',
-                    color: '#60a5fa',
-                  }}
-                >
-                  {activeXrayCount} Xray in flight
-                </span>
-              )}
-            </div>
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between text-[12px]">
-                <span style={{ color: 'var(--text-muted)' }}>In-flight</span>
-                <span style={{ color: activeQueueCount > 0 ? '#60a5fa' : 'var(--text-muted)' }}>
-                  {activeQueueCount}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[12px]">
-                <span style={{ color: 'var(--text-muted)' }}>Started today</span>
-                <span style={{ color: 'var(--text-secondary)' }}>{startedTodayCount}</span>
-              </div>
-              {isAdmin && scannerHealthError && (
-                <p className="text-xs pt-1" style={{ color: '#f87171' }}>
-                  {scannerHealthError}
-                </p>
-              )}
-              {isAdmin &&
-                !scannerHealthError &&
-                scannerHealth &&
-                (scannerHealth.local_scanner_enabled ? (
-                  <>
-                    <div className="flex items-center justify-between text-[12px]">
-                      <span style={{ color: 'var(--text-muted)' }}>Workers</span>
-                      <span
-                        className="flex items-center gap-1.5"
-                        style={{ color: 'var(--text-secondary)' }}
-                      >
-                        <span
-                          className="size-1.5 rounded-full shrink-0"
-                          style={{ background: '#34d399' }}
-                        />
-                        {scannerHealth.healthy_workers} healthy
-                        {scannerHealth.stale_workers > 0
-                          ? `, ${scannerHealth.stale_workers} stale`
-                          : ''}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[12px]">
-                      <span style={{ color: 'var(--text-muted)' }}>Vuln DB</span>
-                      <span style={{ color: 'var(--text-secondary)' }}>
-                        {formatDbAge(scannerHealth.oldest_vuln_db_age_hours)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[12px]">
-                      <span style={{ color: 'var(--text-muted)' }}>Java DB</span>
-                      <span style={{ color: 'var(--text-secondary)' }}>
-                        {formatDbAge(scannerHealth.oldest_java_db_age_hours)}
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-xs pt-1" style={{ color: 'var(--text-faint)' }}>
-                    {scannerHealth.message || 'Local scanner disabled.'}
-                  </p>
-                ))}
-            </div>
-          </Card>
-
-          {/* Scan volume */}
-          <Card className="flex min-h-[280px] flex-col p-5">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div>
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Scan Volume
-                </h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
-                  Total scans per day - last 30 days
-                </p>
-                <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                  <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
-                    {scanVolumeTrend.reduce((sum, point) => sum + point.value, 0).toLocaleString()}
-                  </span>{' '}
-                  total over 30 days
-                </p>
-              </div>
-              <Link
-                href="/scans"
-                className="text-xs transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-              >
+        <Card className="flex min-h-[240px] flex-col p-5">
+          <DashboardSectionHeader
+            title="Scan volume"
+            description="Total scans per day, last 30 days"
+            action={
+              <Link href="/scans" className="text-xs font-medium" style={{ color: '#a78bfa' }}>
                 View all →
               </Link>
+            }
+          />
+          <p className="mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
+              {scanVolumeTrend.reduce((sum, point) => sum + point.value, 0).toLocaleString()}
+            </span>{' '}
+            total over 30 days
+          </p>
+          {scanVolumeTrend.length >= 2 ? (
+            <div className="mt-4 flex-1">
+              <MiniSparkline
+                data={scanVolumeTrend}
+                color="#a78bfa"
+                id="scan-volume"
+                valueLabel="scans"
+              />
             </div>
-            {scanVolumeTrend.length >= 2 ? (
-              <div className="flex-1">
-                <MiniSparkline
-                  data={scanVolumeTrend}
-                  color="#a78bfa"
-                  id="scan-volume"
-                  valueLabel="scans"
-                />
-              </div>
-            ) : (
-              <div
-                className="flex items-center justify-center py-8 text-sm"
-                style={{ color: 'var(--text-faint)' }}
-              >
-                No trend data yet
-              </div>
-            )}
-          </Card>
-        </div>
+          ) : (
+            <div
+              className="flex flex-1 items-center justify-center py-8 text-sm"
+              style={{ color: 'var(--text-faint)' }}
+            >
+              No trend data yet
+            </div>
+          )}
+          {activeXrayCount > 0 && (
+            <p className="mt-3 text-xs" style={{ color: '#60a5fa' }}>
+              {activeXrayCount} Xray scan{activeXrayCount === 1 ? '' : 's'} in flight
+            </p>
+          )}
+        </Card>
       </div>
 
       <DashboardDrilldownModal

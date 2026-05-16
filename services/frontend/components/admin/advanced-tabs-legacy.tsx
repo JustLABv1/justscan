@@ -26,7 +26,7 @@ import type {
     ScannerHealth,
     ScannerSettings,
     Tag,
-    XRayRequestLog,
+    AdminXRayRequestLog,
     XRayRequestLogFilters,
     XRayUsageStats,
 } from '@/lib/api';
@@ -108,8 +108,7 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AdminChrome } from './admin-chrome';
-import { resolveAdminTab } from './admin-tabs';
+import { resolveAdminTab } from '@/app/(app)/admin/_components/admin-tabs';
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
 
@@ -4661,7 +4660,7 @@ export function InsightsTab() {
   }
 
   // ── xRay request logs ─────────────────────────────────────────────
-  const [xrayLogs, setXrayLogs] = useState<XRayRequestLog[]>([]);
+  const [xrayLogs, setXrayLogs] = useState<AdminXRayRequestLog[]>([]);
   const [xrayTotal, setXrayTotal] = useState(0);
   const [xrayPage, setXrayPage] = useState(1);
   const [xrayLoading, setXrayLoading] = useState(true);
@@ -4749,7 +4748,7 @@ export function InsightsTab() {
     setXrayExporting(true);
     setXrayError('');
     try {
-      const rows: XRayRequestLog[] = [];
+      const rows: AdminXRayRequestLog[] = [];
       let p = 1;
       let total = 0;
       do {
@@ -7956,7 +7955,6 @@ export default function AdminPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <AdminChrome />
 
       {activeTab === 'overview' && <OverviewTab />}
       {activeTab === 'settings' && <SettingsTab />}

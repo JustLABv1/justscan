@@ -197,7 +197,7 @@ export default function PublicHelmRunDetailPage() {
   );
 
   useEffect(() => {
-    return deferEffect(() => loadRun().catch(() => null));
+    return deferEffect(() => loadRun().catch(() => {}));
   }, [loadRun]);
 
   const items = useMemo(() => detail?.items ?? [], [detail]);

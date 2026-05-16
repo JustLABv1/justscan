@@ -1,10 +1,10 @@
-import { AdminShell } from '../_components/admin-shell';
-import { IdentityProvidersTab } from '../_components/legacy-admin-page';
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
+import { IdentityProvidersTab } from '../_components/advanced-tabs';
 
 export default function AdminIdentityPage() {
 	return (
-		<AdminShell>
+		<AdminPageShell>
 			<IdentityProvidersTab />
-		</AdminShell>
+		</AdminPageShell>
 	);
 }

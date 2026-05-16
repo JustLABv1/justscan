@@ -32,7 +32,7 @@ import {
 } from '@heroui/react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { AdminShell } from '../_components/admin-shell';
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
 
 const selectTriggerCls = heroSelectTriggerClassName;
 
@@ -410,7 +410,7 @@ export default function AdminAIPage() {
       : `${providers.length} provider${providers.length === 1 ? '' : 's'} configured.`;
 
   return (
-    <AdminShell>
+    <AdminPageShell>
       <div className="space-y-6">
         <div
           className="flex flex-wrap items-start justify-between gap-4 rounded-[28px] border p-5 sm:px-6"
@@ -1380,6 +1380,6 @@ export default function AdminAIPage() {
           </AlertDialog.Backdrop>
         </AlertDialog>
       </div>
-    </AdminShell>
+    </AdminPageShell>
   );
 }

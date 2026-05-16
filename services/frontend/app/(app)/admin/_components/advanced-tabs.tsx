@@ -1,23 +1,29 @@
 'use client';
 
-import LegacyAdminPage from './legacy-admin-page';
+import {
+  GlobalRegistriesTab as GlobalRegistriesTabContent,
+  IdentityProvidersTab as IdentityProvidersTabContent,
+  InsightsTab as InsightsTabContent,
+  NotificationsTab as NotificationsTabContent,
+  ScansTab as ScansTabContent,
+} from '@/components/admin/advanced-tabs-legacy';
 
 export function NotificationsTab() {
-  return <LegacyAdminPage />;
+  return <NotificationsTabContent />;
 }
 
 export function ScansTab() {
-  return <LegacyAdminPage />;
+  return <ScansTabContent />;
 }
 
 export function InsightsTab() {
-  return <LegacyAdminPage />;
+  return <InsightsTabContent />;
 }
 
 export function IdentityProvidersTab() {
-  return <LegacyAdminPage />;
+  return <IdentityProvidersTabContent />;
 }
 
 export function GlobalRegistriesTab() {
-  return <LegacyAdminPage />;
+  return <GlobalRegistriesTabContent />;
 }

@@ -403,7 +403,7 @@ export default function SuppressionsPage() {
                             <Button
                               onPress={() => openShareModal(s)}
                               className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1"
-                              title="Manage access"
+                              aria-label="Manage access"
                               type="button"
                               isIconOnly
                               variant="secondary"
@@ -414,7 +414,7 @@ export default function SuppressionsPage() {
                           <Button
                             onPress={() => handleDelete(s)}
                             className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1"
-                            title="Remove suppression"
+                            aria-label="Remove suppression"
                             type="button"
                             isIconOnly
                             variant="secondary"

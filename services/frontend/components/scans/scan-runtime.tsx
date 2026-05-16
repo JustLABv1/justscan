@@ -1,6 +1,7 @@
 'use client';
 
-import { getScanXrayRequestLogs, type ScanStepLog, type XRayRequestLog } from '@/lib/api';
+import { getScanXrayRequestLogs } from '@/lib/api/scans';
+import type { ScanStepLog, XRayRequestLog } from '@/lib/api/types/scans';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Button, Card, Modal, useOverlayState } from '@heroui/react';
 import { motion } from 'motion/react';
@@ -1435,13 +1436,13 @@ export function ScanStepTimeline({
                       </p>
                       <Button
                         size="sm"
-                        variant="light"
+                        variant="secondary"
                         onPress={() => {
                           void loadXrayLogs();
                         }}
-                        isLoading={xrayLogsLoading}
+                        isDisabled={xrayLogsLoading}
                       >
-                        Refresh
+                        {xrayLogsLoading ? 'Refreshing…' : 'Refresh'}
                       </Button>
                     </div>
                     {xrayLogsError && (

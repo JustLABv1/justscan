@@ -392,131 +392,134 @@ export default function TagsPage() {
                 sortDescriptor={sortDescriptor}
                 onSortChange={setSortDescriptor}
               >
-              <Table.Header>
-                <Table.Column id="name" allowsSorting isRowHeader>
-                  Tag
-                </Table.Column>
-                <Table.Column id="owner" allowsSorting>
-                  Owner
-                </Table.Column>
-                <Table.Column id="color" allowsSorting>
-                  Color
-                </Table.Column>
-                <Table.Column className="text-right">Actions</Table.Column>
-              </Table.Header>
-              <Table.Body
-                items={pagedTags}
-                renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-zinc-500">
-                    No tags match your filter.
-                  </div>
-                )}
-              >
-                {(tag) => (
-                  <Table.Row key={tag.id} id={tag.id}>
-                    <Table.Cell>
-                      <span
-                        className="inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-xs font-medium"
-                        style={{
-                          background: tag.color + '22',
-                          color: tag.color,
-                          borderColor: tag.color + '44',
-                        }}
-                        title={tag.name}
-                      >
-                        <span className="truncate">{tag.name}</span>
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <OwnershipBadge
-                        ownerType={tag.owner_type}
-                        ownerOrgId={tag.owner_org_id}
-                        orgNamesById={orgNamesById}
-                      />
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span className="font-mono text-xs text-zinc-500">{tag.color}</span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex items-center justify-end">
-                        {canManageTag(tag) ? (
-                          <RowActionsMenu
-                            label={`Open actions menu for tag ${tag.name}`}
-                            items={[
-                              {
-                                id: 'share',
-                                label: 'Manage access',
-                                icon: <Shield01Icon size={15} />,
-                                onAction: () => openShareModal(tag),
-                              },
-                              {
-                                id: 'edit',
-                                label: 'Edit tag',
-                                icon: <PencilEdit01Icon size={15} />,
-                                onAction: () => openEdit(tag),
-                              },
-                              {
-                                id: 'delete',
-                                label: 'Delete tag',
-                                icon: <Delete01Icon size={15} />,
-                                variant: 'danger',
-                                onAction: () => {
-                                  void handleDelete(tag.id);
+                <Table.Header>
+                  <Table.Column id="name" allowsSorting isRowHeader>
+                    Tag
+                  </Table.Column>
+                  <Table.Column id="owner" allowsSorting>
+                    Owner
+                  </Table.Column>
+                  <Table.Column id="color" allowsSorting>
+                    Color
+                  </Table.Column>
+                  <Table.Column className="text-right">Actions</Table.Column>
+                </Table.Header>
+                <Table.Body
+                  items={pagedTags}
+                  renderEmptyState={() => (
+                    <div className="py-10 text-center text-sm text-zinc-500">
+                      No tags match your filter.
+                    </div>
+                  )}
+                >
+                  {(tag) => (
+                    <Table.Row key={tag.id} id={tag.id}>
+                      <Table.Cell>
+                        <span
+                          className="inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-xs font-medium"
+                          style={{
+                            background: tag.color + '22',
+                            color: tag.color,
+                            borderColor: tag.color + '44',
+                          }}
+                          title={tag.name}
+                        >
+                          <span className="truncate">{tag.name}</span>
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <OwnershipBadge
+                          ownerType={tag.owner_type}
+                          ownerOrgId={tag.owner_org_id}
+                          orgNamesById={orgNamesById}
+                        />
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span className="font-mono text-xs text-zinc-500">{tag.color}</span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="flex items-center justify-end">
+                          {canManageTag(tag) ? (
+                            <RowActionsMenu
+                              label={`Open actions menu for tag ${tag.name}`}
+                              items={[
+                                {
+                                  id: 'share',
+                                  label: 'Manage access',
+                                  icon: <Shield01Icon size={15} />,
+                                  onAction: () => openShareModal(tag),
                                 },
-                              },
-                            ]}
-                          />
-                        ) : (
-                          <span className="text-xs text-zinc-500">Read only</span>
-                        )}
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                )}
-              </Table.Body>
+                                {
+                                  id: 'edit',
+                                  label: 'Edit tag',
+                                  icon: <PencilEdit01Icon size={15} />,
+                                  onAction: () => openEdit(tag),
+                                },
+                                {
+                                  id: 'delete',
+                                  label: 'Delete tag',
+                                  icon: <Delete01Icon size={15} />,
+                                  variant: 'danger',
+                                  onAction: () => {
+                                    void handleDelete(tag.id);
+                                  },
+                                },
+                              ]}
+                            />
+                          ) : (
+                            <span className="text-xs text-zinc-500">Read only</span>
+                          )}
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  )}
+                </Table.Body>
               </Table.Content>
             </Table.ScrollContainer>
             <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-            <span className="text-xs text-zinc-500 whitespace-nowrap">
-              Showing {visibleTags.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
-              {Math.min(effectivePage * PAGE_SIZE, visibleTags.length)} of {visibleTags.length}
-            </span>
-            <Pagination size="sm" className="justify-self-center">
-              <Pagination.Content>
-                <Pagination.Item>
-                  <Pagination.Previous
-                    isDisabled={effectivePage === 1}
-                    onPress={() => setPage((previous) => Math.max(1, previous - 1))}
-                  >
-                    <Pagination.PreviousIcon />
-                    <span>Previous</span>
-                  </Pagination.Previous>
-                </Pagination.Item>
-                {paginationItems.map((item, index) =>
-                  item === 'ellipsis' ? (
-                    <Pagination.Item key={`tags-ellipsis-${index}`}>
-                      <Pagination.Ellipsis />
-                    </Pagination.Item>
-                  ) : (
-                    <Pagination.Item key={`tags-page-${item}`}>
-                      <Pagination.Link isActive={item === effectivePage} onPress={() => setPage(item)}>
-                        {item}
-                      </Pagination.Link>
-                    </Pagination.Item>
-                  )
-                )}
-                <Pagination.Item>
-                  <Pagination.Next
-                    isDisabled={effectivePage === totalPages}
-                    onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-                  >
-                    <span>Next</span>
-                    <Pagination.NextIcon />
-                  </Pagination.Next>
-                </Pagination.Item>
-              </Pagination.Content>
-            </Pagination>
-            <div />
+              <span className="text-xs text-zinc-500 whitespace-nowrap">
+                Showing {visibleTags.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
+                {Math.min(effectivePage * PAGE_SIZE, visibleTags.length)} of {visibleTags.length}
+              </span>
+              <Pagination size="sm" className="justify-self-center">
+                <Pagination.Content>
+                  <Pagination.Item>
+                    <Pagination.Previous
+                      isDisabled={effectivePage === 1}
+                      onPress={() => setPage((previous) => Math.max(1, previous - 1))}
+                    >
+                      <Pagination.PreviousIcon />
+                      <span>Previous</span>
+                    </Pagination.Previous>
+                  </Pagination.Item>
+                  {paginationItems.map((item, index) =>
+                    item === 'ellipsis' ? (
+                      <Pagination.Item key={`tags-ellipsis-${index}`}>
+                        <Pagination.Ellipsis />
+                      </Pagination.Item>
+                    ) : (
+                      <Pagination.Item key={`tags-page-${item}`}>
+                        <Pagination.Link
+                          isActive={item === effectivePage}
+                          onPress={() => setPage(item)}
+                        >
+                          {item}
+                        </Pagination.Link>
+                      </Pagination.Item>
+                    )
+                  )}
+                  <Pagination.Item>
+                    <Pagination.Next
+                      isDisabled={effectivePage === totalPages}
+                      onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
+                    >
+                      <span>Next</span>
+                      <Pagination.NextIcon />
+                    </Pagination.Next>
+                  </Pagination.Item>
+                </Pagination.Content>
+              </Pagination>
+              <div />
             </Table.Footer>
           </Table>
         </Card>

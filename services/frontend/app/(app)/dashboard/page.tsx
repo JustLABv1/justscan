@@ -1832,13 +1832,11 @@ export default function DashboardPage() {
           day: 'numeric',
         })}
         actions={
-          <Link
-            href="/scans"
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
-            style={{ background: '#7c3aed' }}
-          >
-            <Add01Icon size={14} />
-            New Scan
+          <Link href="/scans">
+            <Button>
+              <Add01Icon size={14} />
+              New Scan
+            </Button>
           </Link>
         }
       />

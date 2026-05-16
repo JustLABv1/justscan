@@ -23,6 +23,7 @@ import {
   Avatar,
   Button,
   Card,
+  Chip,
   ListBox,
   Modal,
   SearchField,
@@ -522,16 +523,9 @@ export default function OrgsPage() {
                           )}
                         </Table.Cell>
                         <Table.Cell onClick={() => router.push(`/orgs/${org.id}`)}>
-                          <span
-                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-                            style={{
-                              color: '#a78bfa',
-                              background: 'rgba(124,58,237,0.15)',
-                              border: '1px solid rgba(167,139,250,0.2)',
-                            }}
-                          >
+                          <Chip variant="soft">
                             {org.policy_count ?? 0} {org.policy_count === 1 ? 'policy' : 'policies'}
-                          </span>
+                          </Chip>
                         </Table.Cell>
                         <Table.Cell
                           className="text-xs text-zinc-500"

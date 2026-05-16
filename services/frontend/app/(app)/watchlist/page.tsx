@@ -298,8 +298,7 @@ export default function WatchlistPage() {
     const query = searchQuery.trim().toLowerCase();
     return items.filter((item) => {
       const statusMatches =
-        statusFilter === 'all' ||
-        (statusFilter === 'active' ? item.enabled : !item.enabled);
+        statusFilter === 'all' || (statusFilter === 'active' ? item.enabled : !item.enabled);
       if (!statusMatches) return false;
       if (!query) return true;
       return [item.image_name, item.image_tag]
@@ -366,7 +365,9 @@ export default function WatchlistPage() {
           <Select
             value={statusFilter}
             onChange={(value) =>
-              setStatusFilter(value === 'disabled' ? 'disabled' : value === 'active' ? 'active' : 'all')
+              setStatusFilter(
+                value === 'disabled' ? 'disabled' : value === 'active' ? 'active' : 'all'
+              )
             }
             className="w-full sm:w-[160px]"
             variant="secondary"
@@ -385,208 +386,221 @@ export default function WatchlistPage() {
           </Select>
         </div>
 
-      {loading ? (
-        <div className="surface-panel rounded-2xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Image
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Schedule
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Timezone
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Registry
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Last Scan
-                </th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: 4 }).map((_, i) => (
-                <TableRowSkeleton key={i} cols={7} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : filteredItems.length === 0 ? (
-        <EmptyState
-          icon={<EyeIcon size={28} />}
-          title={items.length > 0 ? 'No watchlist items match your filters' : 'No images being watched'}
-          description={
-            items.length > 0
-              ? 'Try a different search or status filter.'
-              : 'Add a Docker image to auto-scan it on a recurring schedule and get notified when new vulnerabilities appear.'
-          }
-          action={
-            items.length > 0
-              ? { label: 'Clear filters', onClick: () => { setSearchQuery(''); setStatusFilter('all'); } }
-              : { label: '+ Add Image', onClick: openCreate }
-          }
-        />
-      ) : (
-        <Table variant="secondary">
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Watchlist images" className="min-w-[1080px]">
-              <Table.Header>
-                <Table.Column isRowHeader>Image</Table.Column>
-                <Table.Column>Schedule</Table.Column>
-                <Table.Column>Timezone</Table.Column>
-                <Table.Column>Registry</Table.Column>
-                <Table.Column>Status</Table.Column>
-                <Table.Column>Last Scan</Table.Column>
-                <Table.Column className="justify-end flex">Actions</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {filteredItems.map((item) => {
-                  const reg = registries.find((r) => r.id === item.registry_id);
-                  return (
-                    <Table.Row key={item.id} id={item.id} className="hover:bg-[var(--row-hover)]">
-                      <Table.Cell>
-                        <div className="space-y-1">
-                          <p className="font-mono text-xs text-zinc-700 dark:text-zinc-200">
-                            {item.image_name}:{item.image_tag}
-                          </p>
-                          <OwnershipBadge
-                            ownerType={item.owner_type}
-                            ownerOrgId={item.owner_org_id}
-                            orgNamesById={orgNamesById}
-                          />
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div
-                          className="flex items-center gap-1.5 text-xs"
-                          style={{ color: 'rgba(167,139,250,0.8)' }}
-                          title={item.schedule}
-                        >
-                          <Clock01Icon
-                            size={12}
-                            color="rgba(113,113,122,0.7)"
-                            className="shrink-0"
-                          />
-                          {cronToHuman(item.schedule ?? '', { timezone: item.timezone, hourCycle })}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span className="text-xs text-zinc-500 font-mono">
-                          {item.timezone || 'UTC'}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span className="text-xs text-zinc-500">
-                          {reg?.name ?? <span className="text-zinc-400 dark:text-zinc-700">-</span>}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span
-                          className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full"
-                          style={
-                            item.enabled
-                              ? {
-                                  color: '#34d399',
-                                  background: 'rgba(16,185,129,0.12)',
-                                  border: '1px solid rgba(16,185,129,0.22)',
-                                }
-                              : {
-                                  color: '#71717a',
-                                  background: 'rgba(113,113,122,0.08)',
-                                  border: '1px solid rgba(113,113,122,0.15)',
-                                }
-                          }
-                        >
+        {loading ? (
+          <div className="surface-panel rounded-2xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                    Image
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                    Schedule
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                    Timezone
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                    Registry
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                    Last Scan
+                  </th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <TableRowSkeleton key={i} cols={7} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <EmptyState
+            icon={<EyeIcon size={28} />}
+            title={
+              items.length > 0 ? 'No watchlist items match your filters' : 'No images being watched'
+            }
+            description={
+              items.length > 0
+                ? 'Try a different search or status filter.'
+                : 'Add a Docker image to auto-scan it on a recurring schedule and get notified when new vulnerabilities appear.'
+            }
+            action={
+              items.length > 0
+                ? {
+                    label: 'Clear filters',
+                    onClick: () => {
+                      setSearchQuery('');
+                      setStatusFilter('all');
+                    },
+                  }
+                : { label: '+ Add Image', onClick: openCreate }
+            }
+          />
+        ) : (
+          <Table variant="secondary">
+            <Table.ScrollContainer>
+              <Table.Content aria-label="Watchlist images" className="min-w-[1080px]">
+                <Table.Header>
+                  <Table.Column isRowHeader>Image</Table.Column>
+                  <Table.Column>Schedule</Table.Column>
+                  <Table.Column>Timezone</Table.Column>
+                  <Table.Column>Registry</Table.Column>
+                  <Table.Column>Status</Table.Column>
+                  <Table.Column>Last Scan</Table.Column>
+                  <Table.Column className="justify-end flex">Actions</Table.Column>
+                </Table.Header>
+                <Table.Body>
+                  {filteredItems.map((item) => {
+                    const reg = registries.find((r) => r.id === item.registry_id);
+                    return (
+                      <Table.Row key={item.id} id={item.id} className="hover:bg-[var(--row-hover)]">
+                        <Table.Cell>
+                          <div className="space-y-1">
+                            <p className="font-mono text-xs text-zinc-700 dark:text-zinc-200">
+                              {item.image_name}:{item.image_tag}
+                            </p>
+                            <OwnershipBadge
+                              ownerType={item.owner_type}
+                              ownerOrgId={item.owner_org_id}
+                              orgNamesById={orgNamesById}
+                            />
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div
+                            className="flex items-center gap-1.5 text-xs"
+                            style={{ color: 'rgba(167,139,250,0.8)' }}
+                            title={item.schedule}
+                          >
+                            <Clock01Icon
+                              size={12}
+                              color="rgba(113,113,122,0.7)"
+                              className="shrink-0"
+                            />
+                            {cronToHuman(item.schedule ?? '', {
+                              timezone: item.timezone,
+                              hourCycle,
+                            })}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <span className="text-xs text-zinc-500 font-mono">
+                            {item.timezone || 'UTC'}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <span className="text-xs text-zinc-500">
+                            {reg?.name ?? (
+                              <span className="text-zinc-400 dark:text-zinc-700">-</span>
+                            )}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell>
                           <span
-                            className={`size-1.5 rounded-full bg-current ${item.enabled ? 'animate-pulse' : ''}`}
-                          />
-                          {item.enabled ? 'Active' : 'Disabled'}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span className="text-xs text-zinc-500">
-                          {item.last_scan_id ? (
-                            <Link
-                              href={`/scans/${item.last_scan_id}`}
-                              className="hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
-                              title={fullDate(item.last_scanned_at, {
-                                hourCycle,
-                                timeZone: item.timezone,
-                              })}
-                            >
-                              {timeAgo(item.last_scanned_at, {
-                                hourCycle,
-                                timeZone: item.timezone,
-                              })}
-                            </Link>
-                          ) : (
-                            <span className="text-zinc-400 dark:text-zinc-700">Never</span>
-                          )}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex justify-end">
-                          <RowActionsMenu
-                            label={`Open actions menu for ${item.image_name}:${item.image_tag}`}
-                            items={[
-                              {
-                                id: 'scan-now',
-                                label: triggering === item.id ? 'Scanning…' : 'Scan now',
-                                icon:
-                                  triggering === item.id ? (
-                                    <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-400 rounded-full animate-spin" />
-                                  ) : (
-                                    <PlayIcon size={15} />
-                                  ),
-                                disabled: triggering === item.id,
-                                onAction: () => {
-                                  void handleTrigger(item.id);
+                            className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full"
+                            style={
+                              item.enabled
+                                ? {
+                                    color: '#34d399',
+                                    background: 'rgba(16,185,129,0.12)',
+                                    border: '1px solid rgba(16,185,129,0.22)',
+                                  }
+                                : {
+                                    color: '#71717a',
+                                    background: 'rgba(113,113,122,0.08)',
+                                    border: '1px solid rgba(113,113,122,0.15)',
+                                  }
+                            }
+                          >
+                            <span
+                              className={`size-1.5 rounded-full bg-current ${item.enabled ? 'animate-pulse' : ''}`}
+                            />
+                            {item.enabled ? 'Active' : 'Disabled'}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <span className="text-xs text-zinc-500">
+                            {item.last_scan_id ? (
+                              <Link
+                                href={`/scans/${item.last_scan_id}`}
+                                className="hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
+                                title={fullDate(item.last_scanned_at, {
+                                  hourCycle,
+                                  timeZone: item.timezone,
+                                })}
+                              >
+                                {timeAgo(item.last_scanned_at, {
+                                  hourCycle,
+                                  timeZone: item.timezone,
+                                })}
+                              </Link>
+                            ) : (
+                              <span className="text-zinc-400 dark:text-zinc-700">Never</span>
+                            )}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="flex justify-end">
+                            <RowActionsMenu
+                              label={`Open actions menu for ${item.image_name}:${item.image_tag}`}
+                              items={[
+                                {
+                                  id: 'scan-now',
+                                  label: triggering === item.id ? 'Scanning…' : 'Scan now',
+                                  icon:
+                                    triggering === item.id ? (
+                                      <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-400 rounded-full animate-spin" />
+                                    ) : (
+                                      <PlayIcon size={15} />
+                                    ),
+                                  disabled: triggering === item.id,
+                                  onAction: () => {
+                                    void handleTrigger(item.id);
+                                  },
                                 },
-                              },
-                              {
-                                id: 'edit',
-                                label: 'Edit watchlist item',
-                                icon: <PencilEdit01Icon size={15} />,
-                                onAction: () => openEdit(item),
-                              },
-                              ...(canManageAccess(item)
-                                ? [
-                                    {
-                                      id: 'share',
-                                      label: 'Manage access',
-                                      icon: <BiometricAccessIcon size={15} />,
-                                      onAction: () => openShareModal(item),
-                                    },
-                                  ]
-                                : []),
-                              {
-                                id: 'delete',
-                                label: 'Delete watchlist item',
-                                icon: <Delete01Icon size={15} />,
-                                variant: 'danger',
-                                onAction: () => {
-                                  void handleDelete(item.id);
+                                {
+                                  id: 'edit',
+                                  label: 'Edit watchlist item',
+                                  icon: <PencilEdit01Icon size={15} />,
+                                  onAction: () => openEdit(item),
                                 },
-                              },
-                            ]}
-                          />
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
-      )}
+                                ...(canManageAccess(item)
+                                  ? [
+                                      {
+                                        id: 'share',
+                                        label: 'Manage access',
+                                        icon: <BiometricAccessIcon size={15} />,
+                                        onAction: () => openShareModal(item),
+                                      },
+                                    ]
+                                  : []),
+                                {
+                                  id: 'delete',
+                                  label: 'Delete watchlist item',
+                                  icon: <Delete01Icon size={15} />,
+                                  variant: 'danger',
+                                  onAction: () => {
+                                    void handleDelete(item.id);
+                                  },
+                                },
+                              ]}
+                            />
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        )}
       </Card>
 
       <Modal state={modal}>

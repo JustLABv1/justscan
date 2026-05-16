@@ -23,7 +23,7 @@ import {
   Label,
   Popover,
   Separator,
-  Text,
+  Typography,
   Tooltip,
   useOverlayState,
 } from '@heroui/react';
@@ -130,6 +130,7 @@ function resolveFallbackHeader(
 export function AppShell({ children, initialUser }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const isAssistantRoute = pathname.startsWith('/assistant');
   const { resolvedTheme, setTheme } = useTheme();
   const [user, setUser] = useState(initialUser);
   const [collapsed, setCollapsed] = useState(false);
@@ -593,13 +594,15 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                             <Popover>
                               <Popover.Trigger aria-label={itemLabel} className="block w-full">
                                 <button
-                                  className={`relative flex w-full h-10 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap group ${active ? 'text-violet-500 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                                  className={`relative flex w-full h-10 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap group ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
                                   style={
                                     active
                                       ? {
+                                          color: 'var(--accent-soft-foreground)',
                                           background:
-                                            'linear-gradient(135deg, rgba(124,58,237,0.22) 0%, rgba(109,40,217,0.12) 100%)',
-                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.36)',
+                                            'linear-gradient(135deg, color-mix(in oklab, var(--accent) 22%, transparent) 0%, color-mix(in oklab, var(--accent) 12%, transparent) 100%)',
+                                          boxShadow:
+                                            'inset 0 0 0 1px color-mix(in oklab, var(--accent) 36%, transparent)',
                                         }
                                       : undefined
                                   }
@@ -613,7 +616,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                                   <Icon
                                     size={18}
                                     className="shrink-0 relative z-10"
-                                    style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }}
+                                    style={{
+                                      color: active
+                                        ? 'var(--accent-soft-foreground)'
+                                        : 'var(--text-faint)',
+                                    }}
                                   />
                                 </button>
                               </Popover.Trigger>
@@ -649,13 +656,15 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                               <Tooltip.Trigger aria-label={itemLabel} className="block w-full">
                                 <Link
                                   href={href}
-                                  className={`relative flex w-full h-10 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap group ${active ? 'text-violet-500 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                                  className={`relative flex w-full h-10 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap group ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
                                   style={
                                     active
                                       ? {
+                                          color: 'var(--accent-soft-foreground)',
                                           background:
-                                            'linear-gradient(135deg, rgba(124,58,237,0.22) 0%, rgba(109,40,217,0.12) 100%)',
-                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.36)',
+                                            'linear-gradient(135deg, color-mix(in oklab, var(--accent) 22%, transparent) 0%, color-mix(in oklab, var(--accent) 12%, transparent) 100%)',
+                                          boxShadow:
+                                            'inset 0 0 0 1px color-mix(in oklab, var(--accent) 36%, transparent)',
                                         }
                                       : undefined
                                   }
@@ -669,7 +678,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                                   <Icon
                                     size={18}
                                     className="shrink-0 relative z-10"
-                                    style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }}
+                                    style={{
+                                      color: active
+                                        ? 'var(--accent-soft-foreground)'
+                                        : 'var(--text-faint)',
+                                    }}
                                   />
                                 </Link>
                               </Tooltip.Trigger>
@@ -683,14 +696,15 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                         <Link
                           key={href}
                           href={href}
-                          className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-500 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                          className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
                           style={
                             active
                               ? {
+                                  color: 'var(--accent-soft-foreground)',
                                   background:
-                                    'linear-gradient(135deg, rgba(124,58,237,0.22) 0%, rgba(109,40,217,0.12) 100%)',
+                                    'linear-gradient(135deg, color-mix(in oklab, var(--accent) 22%, transparent) 0%, color-mix(in oklab, var(--accent) 12%, transparent) 100%)',
                                   boxShadow:
-                                    'inset 0 0 0 1px rgba(167,139,250,0.34), 0 0 0 1px rgba(124,58,237,0.12)',
+                                    'inset 0 0 0 1px color-mix(in oklab, var(--accent) 34%, transparent), 0 0 0 1px color-mix(in oklab, var(--accent) 12%, transparent)',
                                 }
                               : undefined
                           }
@@ -704,13 +718,20 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                           {active && (
                             <span
                               className="absolute left-0 inset-y-2 w-1 rounded-r-full"
-                              style={{ background: 'linear-gradient(180deg, #c4b5fd, #7c3aed)' }}
+                              style={{
+                                background:
+                                  'linear-gradient(180deg, color-mix(in oklab, var(--accent) 52%, white), var(--accent))',
+                              }}
                             />
                           )}
                           <Icon
                             size={18}
                             className="shrink-0 relative z-10"
-                            style={{ color: active ? '#c4b5fd' : 'var(--text-faint)' }}
+                            style={{
+                              color: active
+                                ? 'var(--accent-soft-foreground)'
+                                : 'var(--text-faint)',
+                            }}
                           />
                           <span
                             className="flex-1 overflow-hidden transition-all duration-300 relative z-10"
@@ -784,8 +805,9 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               <div
                 className="size-8 rounded-xl flex items-center justify-center shrink-0"
                 style={{
-                  background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                  boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
+                  background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)',
+                  boxShadow:
+                    '0 0 12px color-mix(in oklab, var(--accent) 50%, transparent), inset 0 1px 0 rgba(255,255,255,0.15)',
                 }}
               >
                 <Logo size={16} className="text-white" />
@@ -840,9 +862,10 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                           <div
                             className="size-9 rounded-xl flex items-center justify-center shrink-0"
                             style={{
-                              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                              background:
+                                'linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)',
                               boxShadow:
-                                '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
+                                '0 0 12px color-mix(in oklab, var(--accent) 50%, transparent), inset 0 1px 0 rgba(255,255,255,0.15)',
                             }}
                           >
                             <Logo size={18} className="text-white" />
@@ -992,16 +1015,18 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                                       href={href}
                                       className={`flex items-center gap-3 rounded-xl p-3 text-sm font-medium transition-all ${
                                         active
-                                          ? 'text-violet-600 dark:text-violet-100'
+                                          ? ''
                                           : 'text-zinc-700 dark:text-zinc-300'
                                       }`}
                                       onClick={() => mobileNav.close()}
                                       style={
                                         active
                                           ? {
+                                              color: 'var(--accent-soft-foreground)',
                                               background:
-                                                'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                                              boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
+                                                'linear-gradient(135deg, color-mix(in oklab, var(--accent) 15%, transparent) 0%, color-mix(in oklab, var(--accent) 8%, transparent) 100%)',
+                                              boxShadow:
+                                                'inset 0 0 0 1px color-mix(in oklab, var(--accent) 18%, transparent)',
                                             }
                                           : { background: 'var(--row-hover)' }
                                       }
@@ -1009,7 +1034,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                                       <Icon
                                         size={18}
                                         className="shrink-0"
-                                        style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }}
+                                        style={{
+                                          color: active
+                                            ? 'var(--accent-soft-foreground)'
+                                            : 'var(--text-faint)',
+                                        }}
                                       />
                                       <span className="flex-1">{itemLabel}</span>
                                       {href === '/orgs' && pendingInviteCount > 0 && (
@@ -1041,9 +1070,10 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                               <div
                                 className="size-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
                                 style={{
-                                  background: 'rgba(124,58,237,0.12)',
-                                  color: '#a78bfa',
-                                  border: '1px solid rgba(124,58,237,0.18)',
+                                  background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
+                                  color: 'var(--accent-soft-foreground)',
+                                  border:
+                                    '1px solid color-mix(in oklab, var(--accent) 18%, transparent)',
                                 }}
                               >
                                 {initials}
@@ -1214,8 +1244,13 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               </div>
             </div>
 
-            <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-              <div className={`border-b border-white/5 py-1.5 md:py-2 ${contentRailClass}`}>
+            <main
+              className={`min-h-0 flex-1 overflow-x-hidden ${
+                isAssistantRoute ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
+              }`}
+            >
+              {!isAssistantRoute ? (
+                <div className={`border-b border-white/5 py-1.5 md:py-2 ${contentRailClass}`}>
                 <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 flex-1">
                     <h1 className="flex flex-wrap items-center gap-1.5 text-lg font-semibold tracking-tight md:text-xl">
@@ -1223,9 +1258,9 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                       {topbarHeader.titleCom}
                     </h1>
                     {topbarHeader.description ? (
-                      <Text.Paragraph className="mt-0.5 text-muted" size="xs">
+                      <Typography.Paragraph className="mt-0.5" color="muted" size="xs">
                         {topbarHeader.description}
-                      </Text.Paragraph>
+                      </Typography.Paragraph>
                     ) : null}
                     {topbarHeader.breadcrumbs && topbarHeader.breadcrumbs.length > 1 ? (
                       <nav
@@ -1274,8 +1309,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                     </div>
                   ) : null}
                 </div>
+                </div>
+              ) : null}
+              <div className={isAssistantRoute ? 'min-h-0 flex-1 overflow-hidden' : ''}>
+                {children}
               </div>
-              {children}
             </main>
           </div>
         </div>

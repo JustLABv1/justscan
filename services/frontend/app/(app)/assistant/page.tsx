@@ -5,19 +5,20 @@ import {
   Avatar,
   Button,
   Card,
+  Chip,
   ListBox,
-  SearchField,
+  ScrollShadow,
   Select,
+  Skeleton,
   TextArea,
 } from '@heroui/react';
-import { Clock01Icon, PlusSignIcon } from 'hugeicons-react';
+import { Clock01Icon, PlusSignIcon, Rocket01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useToast } from '@/components/toast';
-import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import {
   createAIConversation,
   createScans,
@@ -46,9 +47,7 @@ import {
 import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
 
-const selectTriggerCls = `${heroSelectTriggerClassName.replace('rounded-xl', 'rounded-2xl')} min-h-10 py-2.5 text-sm`;
-const composerInputCls =
-  'surface-input min-h-11 max-h-48 w-full rounded-2xl px-4 py-3 text-sm resize-none overflow-hidden';
+const composerInputCls = 'min-h-24 max-h-56 w-full resize-none overflow-hidden text-sm';
 
 type ScopeContext = {
   title: string;
@@ -132,35 +131,13 @@ function filterStarterSections(sections: StarterSection[], query: string) {
     );
 }
 
-function AnimatedAssistantOrb({ className = '' }: { className?: string }) {
-  return (
-    <div aria-hidden="true" className={`assistant-orb ${className}`.trim()}>
-      <div className="assistant-orb__halo" />
-      <div className="assistant-orb__charge assistant-orb__charge--outer" />
-      <div className="assistant-orb__charge assistant-orb__charge--inner" />
-      <div className="assistant-orb__ring" />
-      <div className="assistant-orb__core" />
-    </div>
-  );
-}
-
 function MessageAvatar({ role }: { role: 'user' | 'assistant' }) {
   return role === 'assistant' ? (
-    <Avatar
-      className="size-10 shrink-0 border border-white/10 shadow-[0_0_30px_rgba(96,165,250,0.22),0_0_70px_rgba(124,58,237,0.16)]"
-      color="accent"
-      size="md"
-      variant="soft"
-    >
+    <Avatar className="size-10 shrink-0" color="accent" size="md" variant="soft">
       <Avatar.Fallback>AI</Avatar.Fallback>
     </Avatar>
   ) : (
-    <Avatar
-      className="size-10 shrink-0 border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
-      color="default"
-      size="md"
-      variant="soft"
-    >
+    <Avatar className="size-10 shrink-0" color="default" size="md" variant="soft">
       <Avatar.Fallback>ME</Avatar.Fallback>
     </Avatar>
   );
@@ -529,18 +506,6 @@ export default function AssistantPage() {
       : conversations;
     return visibleConversations.slice(0, 6);
   }, [conversations, normalizedRailQuery]);
-  const topConversationTabs = useMemo(() => {
-    const ordered: AIConversation[] = [];
-    if (conversation) {
-      ordered.push(conversation);
-    }
-    for (const item of conversations) {
-      if (!ordered.some((candidate) => candidate.id === item.id)) {
-        ordered.push(item);
-      }
-    }
-    return ordered.slice(0, 3);
-  }, [conversation, conversations]);
   function handleStarterPick(prompt: string) {
     setMessage(prompt);
   }
@@ -548,212 +513,146 @@ export default function AssistantPage() {
   function renderConversationList() {
     if (loading) {
       return (
-        <div
-          className="rounded-2xl border px-4 py-5 text-sm text-zinc-500"
-          style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}
-        >
-          Loading conversations…
+        <div className="space-y-2">
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="h-16 rounded-xl" />
         </div>
       );
     }
 
     if (filteredConversations.length === 0) {
       return (
-        <div
-          className="rounded-2xl border px-4 py-5 text-sm text-zinc-500"
-          style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}
-        >
+        <Card className="p-4" variant="secondary">
           {normalizedRailQuery
             ? 'No threads match this search.'
             : 'No conversations yet for this scope.'}
-        </div>
+        </Card>
       );
     }
 
     return filteredConversations.map((item) => (
-      <div
+      <Card
         key={item.id}
-        className="flex items-center gap-2 rounded-2xl border p-3 transition-colors"
-        style={{
-          borderColor:
-            conversation?.id === item.id ? 'rgba(124,58,237,0.42)' : 'var(--surface-border)',
-          background: conversation?.id === item.id ? 'rgba(124,58,237,0.12)' : 'var(--row-hover)',
-        }}
+        className="p-3"
+        variant={conversation?.id === item.id ? 'tertiary' : 'secondary'}
       >
-        <button
-          type="button"
-          className="min-w-0 flex-1 text-left"
-          onClick={() => {
-            void handleOpenConversation(item.id);
-          }}
-        >
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
-              {item.title}
-            </p>
-            <div
-              className="mt-1 flex items-center gap-1.5 text-[11px]"
-              style={{ color: 'var(--text-faint)' }}
-            >
-              <Clock01Icon size={11} />
-              <span>Updated {timeAgo(item.updatedAt)}</span>
-            </div>
-          </div>
-        </button>
-        {conversation?.id === item.id ? (
-          <span
-            className="inline-flex shrink-0 items-center rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
-            style={{
-              borderColor: 'rgba(124,58,237,0.25)',
-              background: 'rgba(124,58,237,0.12)',
-              color: '#c4b5fd',
+        <div className="flex items-center gap-2">
+          <Button
+            className="min-w-0 flex-1 justify-start"
+            variant="ghost"
+            onPress={() => {
+              void handleOpenConversation(item.id);
             }}
           >
-            Open
-          </span>
-        ) : null}
-        <button
-          className="shrink-0 text-[11px] font-medium text-rose-300 transition-colors hover:text-rose-200"
-          onClick={() => setConversationPendingDelete(item)}
-          type="button"
-        >
-          Delete
-        </button>
-      </div>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="truncate text-sm font-semibold">{item.title}</p>
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+                <Clock01Icon size={11} />
+                <span>Updated {timeAgo(item.updatedAt)}</span>
+              </div>
+            </div>
+          </Button>
+          {conversation?.id === item.id ? (
+            <Chip color="accent" size="sm">
+              Open
+            </Chip>
+          ) : null}
+          <Button size="sm" variant="danger" onPress={() => setConversationPendingDelete(item)}>
+            Delete
+          </Button>
+        </div>
+      </Card>
     ));
   }
 
-  function renderUtilityRail() {
-    return (
-      <div className="flex h-full min-h-0 flex-col p-5">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <AnimatedAssistantOrb className="size-7" />
-            <div className="min-w-0">
-              <p className="truncate text-lg font-semibold text-zinc-950 dark:text-zinc-50">
-                JustScan AI
-              </p>
-            </div>
-          </div>
-
-          <SearchField name="surface-assistant-rail-search" variant="secondary">
-            <SearchField.Group className="surface-input flex min-h-11 items-center gap-2 rounded-2xl px-3">
-              <SearchField.SearchIcon />
-              <SearchField.Input
-                placeholder="Search"
-                value={railQuery}
-                onChange={(event) => setRailQuery(event.target.value)}
-              />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
-        </div>
-
-        <div className="mt-5 space-y-1.5">
-          <button
-            className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-colors hover:text-zinc-950 dark:hover:text-white"
-            style={{ background: 'var(--row-hover)', color: 'var(--text-secondary)' }}
-            onClick={() => startNewConversation()}
-            type="button"
-          >
-            <PlusSignIcon size={15} />
-            <span>Home</span>
-          </button>
-        </div>
-
-        <div className="mt-8 flex-1 space-y-6 overflow-y-auto pr-1">
-          {filteredStarterSections.length === 0 ? (
-            <div
-              className="rounded-2xl border p-4 text-sm text-zinc-500"
-              style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}
-            >
-              No prompt starters match this search.
-            </div>
-          ) : (
-            filteredStarterSections.map((section) => (
-              <div key={section.id} className="space-y-2.5">
-                <p
-                  className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
-                  style={{ color: 'var(--text-faint)' }}
-                >
-                  {section.title}
-                </p>
-                <div className="space-y-1.5">
-                  {section.prompts.map((prompt) => (
-                    <button
-                      key={prompt}
-                      className="w-full rounded-2xl px-3 py-2.5 text-left text-sm transition-colors hover:text-zinc-950 dark:hover:text-white"
-                      style={{ background: 'var(--row-hover)', color: 'var(--text-secondary)' }}
-                      onClick={() => handleStarterPick(prompt)}
-                      type="button"
-                    >
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-
-          <div className="space-y-2.5">
-            <p
-              className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
-              style={{ color: 'var(--text-faint)' }}
-            >
-              Recent
-            </p>
-            <div className="space-y-1.5">{renderConversationList()}</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const composerPanel = (
-    <div className="surface-assistant-composer overflow-hidden rounded-[32px] p-4 md:px-5 md:py-5">
+    <Card className="p-4 md:p-5" variant="secondary">
       <div className="flex items-end gap-3">
-        <TextArea
-          ref={composerRef}
-          className={composerInputCls}
-          onKeyDown={handleComposerKeyDown}
-          placeholder="Initiate a query or send a command to the AI..."
-          rows={1}
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-        />
-        <Button
-          className="btn-primary shrink-0"
-          isDisabled={sending || !message.trim()}
-          onPress={handleSend}
-          variant="primary"
-        >
+        <div className="flex-1">
+          <TextArea
+            ref={composerRef}
+            className={composerInputCls}
+            onKeyDown={handleComposerKeyDown}
+            placeholder="Initiate a query or send a command to the AI..."
+            rows={3}
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+          />
+        </div>
+        <Button className="shrink-0" isDisabled={sending || !message.trim()} onPress={handleSend}>
           {sending ? 'Working...' : 'Send'}
         </Button>
       </div>
-      <div
-        className="mt-4 flex flex-col gap-3 border-t pt-4 md:flex-row md:items-center md:justify-between"
-        style={{ borderColor: 'var(--surface-border)' }}
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            className="btn-secondary"
-            onPress={() => handleStarterPick(suggestions[0] ?? 'How do I start a new scan?')}
-            variant="secondary"
-          >
-            Scope
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-divider pt-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button isIconOnly size="sm" variant="ghost" onPress={startNewConversation}>
+            <PlusSignIcon size={14} />
           </Button>
-          <Button
-            className="btn-secondary"
-            onPress={() =>
-              handleStarterPick(scopeContext?.rescanId ? 'rescan this scan' : 'open scans')
-            }
-            variant="secondary"
+          <Select
+            aria-label="Select AI provider"
+            value={providerSelectedKey}
+            onChange={(value) => setProviderKey(String(value === '__none__' ? '' : (value ?? '')))}
           >
-            Command
+            <Select.Trigger className="flex items-center" aria-label="Provider">
+              <Rocket01Icon size={14} />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {providers.map((provider) => (
+                  <ListBox.Item id={provider.key} key={provider.key} textValue={provider.label}>
+                    <div className="flex flex-col">
+                      <span>{provider.label}</span>
+                      <span className="text-xs text-zinc-500">
+                        {provider.default ? 'Default provider' : provider.key}
+                      </span>
+                    </div>
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+          <Select
+            aria-label="Select recent chat"
+            value={conversation?.id ?? '__none__'}
+            onChange={(value) => {
+              const id = String(value ?? '__none__');
+              if (id === '__none__') {
+                startNewConversation();
+                return;
+              }
+              void handleOpenConversation(id);
+            }}
+            placeholder="Recent chats"
+          >
+            <Select.Trigger className="h-8 w-[18rem] max-w-[38vw] px-2" aria-label="Recent chats">
+              <Select.Value className="truncate" />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="__none__" textValue="New chat">
+                  New chat
+                </ListBox.Item>
+                {filteredConversations.map((item) => (
+                  <ListBox.Item id={item.id} key={item.id} textValue={item.title}>
+                    {item.title}
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+          <Button
+            size="sm"
+            variant="danger"
+            isDisabled={!conversation}
+            onPress={() => conversation && setConversationPendingDelete(conversation)}
+          >
+            Delete
           </Button>
         </div>
       </div>
-    </div>
+    </Card>
   );
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -767,16 +666,9 @@ export default function AssistantPage() {
   }
 
   return (
-    <div className="app-bg flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="surface-assistant-shell flex min-h-0 w-full flex-1 overflow-hidden">
-        <aside
-          className="surface-assistant-rail hidden min-h-0 w-[280px] shrink-0 border-r lg:flex lg:flex-col"
-          style={{ borderColor: 'var(--surface-border)' }}
-        >
-          {renderUtilityRail()}
-        </aside>
-
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 pb-2 pt-0 md:px-6">
+      <div className="flex h-full min-h-0 w-full flex-1 gap-4 overflow-hidden">
+        <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
           <AlertDialog
             isOpen={Boolean(conversationPendingDelete)}
             onOpenChange={(isOpen) => {
@@ -787,8 +679,8 @@ export default function AssistantPage() {
           >
             <AlertDialog.Backdrop variant="blur">
               <AlertDialog.Container placement="center">
-                <AlertDialog.Dialog className="surface-modal overflow-hidden rounded-3xl sm:max-w-[420px]">
-                  <AlertDialog.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <AlertDialog.Dialog className="sm:max-w-[420px]">
+                  <AlertDialog.CloseTrigger />
                   <AlertDialog.Header>
                     <AlertDialog.Icon status="danger" />
                     <AlertDialog.Heading>Delete conversation?</AlertDialog.Heading>
@@ -823,165 +715,47 @@ export default function AssistantPage() {
             </AlertDialog.Backdrop>
           </AlertDialog>
 
-          <div
-            className="border-b px-4 py-3 md:px-6"
-            style={{ borderColor: 'var(--surface-border)' }}
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1">
-                <button
-                  type="button"
-                  className="flex size-10 shrink-0 items-center justify-center rounded-2xl border transition-colors"
-                  style={{
-                    borderColor: 'var(--surface-border)',
-                    background: 'var(--row-hover)',
-                    color: 'var(--text-secondary)',
-                  }}
-                  onClick={() => startNewConversation()}
-                >
-                  <PlusSignIcon size={14} />
-                </button>
-                {topConversationTabs.length === 0 ? (
-                  <div
-                    className="inline-flex shrink-0 items-center rounded-2xl border px-4 py-2 text-sm font-medium"
-                    style={{
-                      borderColor: 'rgba(167,139,250,0.22)',
-                      background: 'rgba(124,58,237,0.14)',
-                      color: '#ede9fe',
-                    }}
-                  >
-                    Fresh thread
-                  </div>
-                ) : (
-                  topConversationTabs.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="inline-flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2 text-sm transition-colors"
-                      style={
-                        conversation?.id === item.id
-                          ? {
-                              borderColor: 'rgba(167,139,250,0.24)',
-                              background: 'rgba(124,58,237,0.14)',
-                              color: '#ede9fe',
-                            }
-                          : {
-                              borderColor: 'var(--surface-border)',
-                              background: 'var(--row-hover)',
-                              color: 'var(--text-secondary)',
-                            }
-                      }
-                      onClick={() => {
-                        void handleOpenConversation(item.id);
-                      }}
-                    >
-                      <span className="max-w-[12rem] truncate">{item.title}</span>
-                    </button>
-                  ))
-                )}
-              </div>
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <div className="min-w-[10rem]">
-                  <Select
-                    aria-label="Select AI provider"
-                    value={providerSelectedKey}
-                    onChange={(value) =>
-                      setProviderKey(String(value === '__none__' ? '' : (value ?? '')))
-                    }
-                  >
-                    <Select.Trigger className={`${selectTriggerCls} min-w-[10rem]`}>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {providers.map((provider) => (
-                          <ListBox.Item
-                            id={provider.key}
-                            key={provider.key}
-                            textValue={provider.label}
-                          >
-                            <div className="flex flex-col">
-                              <span>{provider.label}</span>
-                              <span className="text-xs text-zinc-500">
-                                {provider.default ? 'Default provider' : provider.key}
-                              </span>
-                            </div>
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {!settings?.enabled ? (
-              <div
-                className="m-4 rounded-3xl border px-5 py-6 text-sm text-zinc-500 md:m-6"
-                style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}
-              >
+              <Card className="p-5 text-sm text-muted" variant="secondary">
                 AI is disabled on this instance.
-              </div>
+              </Card>
             ) : providers.length === 0 ? (
-              <div
-                className="m-4 rounded-3xl border px-5 py-6 text-sm text-zinc-500 md:m-6"
-                style={{ borderColor: 'var(--surface-border)', background: 'var(--row-hover)' }}
-              >
+              <Card className="p-5 text-sm text-muted" variant="secondary">
                 No enabled provider is configured. Ask an administrator to configure one in{' '}
-                <Link href="/admin/ai" className="text-violet-300 hover:text-violet-200">
+                <Link href="/admin/ai" className="text-accent hover:text-accent/80">
                   Admin → AI
                 </Link>
                 .
-              </div>
+              </Card>
             ) : (
               <>
-                <div className="relative flex-1 overflow-y-auto p-4 md:px-8 md:py-7">
-                  <div
-                    className="pointer-events-none absolute left-[8%] top-[12%] size-48 rounded-full blur-3xl"
-                    style={{ background: 'rgba(59,130,246,0.12)' }}
-                  />
-                  <div
-                    className="pointer-events-none absolute right-[10%] top-[28%] size-56 rounded-full blur-3xl"
-                    style={{ background: 'rgba(167,139,250,0.12)' }}
-                  />
+                <ScrollShadow className="min-h-0 flex-1 overflow-y-auto px-2 md:px-4">
                   <div className="flex min-h-full w-full flex-col">
                     {hasMessages ? (
-                      <div
-                        className="mb-5 flex items-center gap-3 text-xs"
-                        style={{ color: 'var(--text-faint)' }}
-                      >
+                      <div className="mb-5 flex items-center gap-2 text-xs text-muted">
                         <span>{hasMeaningfulContext ? scopeLabel : 'JustScan workspace'}</span>
+                        <span>•</span>
                         {currentProvider ? <span>{currentProvider.label}</span> : null}
                       </div>
                     ) : null}
 
                     {!hasMessages ? (
                       <div className="flex min-h-full flex-1 flex-col items-center justify-center py-10 text-center">
-                        <AnimatedAssistantOrb className="mb-8 size-32" />
-                        <p
-                          className="text-sm font-medium tracking-[0.08em]"
-                          style={{ color: 'var(--text-muted)' }}
-                        >
+                        <Avatar className="mb-6 size-14" color="accent" variant="soft">
+                          <Avatar.Fallback>AI</Avatar.Fallback>
+                        </Avatar>
+                        <p className="text-sm font-medium tracking-[0.08em] text-muted">
                           {greetingLabel}
                         </p>
-                        <h2
-                          className="mt-4 max-w-3xl text-balance text-4xl font-semibold tracking-tight md:text-5xl"
-                          style={{ color: 'var(--text-primary)' }}
-                        >
+                        <h2 className="mt-4 max-w-3xl text-balance text-4xl font-semibold tracking-tight md:text-5xl">
                           {hasMeaningfulContext
                             ? `How can I help with ${scopeLabel}?`
                             : 'How can I assist with JustScan today?'}
                         </h2>
-                        <p
-                          className="mt-4 max-w-xl text-sm leading-7"
-                          style={{ color: 'var(--text-faint)' }}
-                        >
+                        <p className="mt-4 max-w-xl text-sm leading-7 text-muted">
                           {scopeDescription}
                         </p>
-                        <div className="mt-8 w-full max-w-[52rem]">{composerPanel}</div>
                       </div>
                     ) : (
                       <div className="space-y-5 pb-4">
@@ -992,29 +766,19 @@ export default function AssistantPage() {
                           >
                             {item.role === 'assistant' ? <MessageAvatar role="assistant" /> : null}
                             <Card
-                              className={`w-full max-w-[min(100%,52rem)] overflow-hidden rounded-[28px] shadow-none ${item.role === 'user' ? 'rounded-br-[0.9rem]' : 'rounded-bl-[0.9rem]'}`}
+                              className={`w-full max-w-[min(100%,52rem)] overflow-hidden rounded-[28px] ${item.role === 'user' ? 'rounded-br-[0.9rem]' : 'rounded-bl-[0.9rem]'}`}
                               variant={item.role === 'user' ? 'tertiary' : 'secondary'}
                             >
                               <Card.Content className="px-5 py-4">
                                 {item.role === 'assistant' && !item.thinking ? (
                                   <div className="mb-3 flex items-center gap-2">
-                                    <span
-                                      className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
-                                      style={{
-                                        borderColor: 'rgba(167,139,250,0.18)',
-                                        background: 'rgba(124,58,237,0.1)',
-                                        color: '#c4b5fd',
-                                      }}
-                                    >
+                                    <Chip color="accent" size="sm">
                                       {scopeType}
-                                    </span>
+                                    </Chip>
                                   </div>
                                 ) : null}
                                 {item.thinking ? (
-                                  <div
-                                    className="flex items-center gap-2 py-2 text-sm"
-                                    style={{ color: 'var(--text-faint)' }}
-                                  >
+                                  <div className="flex items-center gap-2 py-2 text-sm text-muted">
                                     <span>Thinking</span>
                                     <span className="flex gap-1">
                                       <span className="size-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:0ms]" />
@@ -1036,11 +800,6 @@ export default function AssistantPage() {
                                       return (
                                         <div className="space-y-1" key={key}>
                                           <Button
-                                            className={
-                                              status === 'completed'
-                                                ? 'btn-secondary'
-                                                : 'btn-primary'
-                                            }
                                             isDisabled={
                                               status === 'running' ||
                                               status === 'completed' ||
@@ -1074,19 +833,11 @@ export default function AssistantPage() {
                     )}
                     <div ref={messagesEndRef} />
                   </div>
-                </div>
+                </ScrollShadow>
 
-                {hasMessages ? (
-                  <div
-                    className="border-t px-4 pb-4 pt-4 md:px-8 md:pb-6"
-                    style={{
-                      borderColor: 'var(--surface-border)',
-                      background: 'var(--surface-bg)',
-                    }}
-                  >
-                    <div className="w-full">{composerPanel}</div>
-                  </div>
-                ) : null}
+                <div className="shrink-0 px-2 pb-2 pt-4 md:px-4">
+                  <div className="w-full">{composerPanel}</div>
+                </div>
               </>
             )}
           </div>

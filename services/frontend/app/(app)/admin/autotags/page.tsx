@@ -1,10 +1,10 @@
 import { AdminPageShell } from '@/components/admin/admin-page-shell';
-import { AutoTagsTab } from '../_components/primary-tabs';
+import { AutoTagsTab } from '@/components/admin/autotags-tab';
 
 export default function AdminAutoTagsPage() {
-	return (
-		<AdminPageShell>
-			<AutoTagsTab />
-		</AdminPageShell>
-	);
+  return (
+    <AdminPageShell>
+      <AutoTagsTab />
+    </AdminPageShell>
+  );
 }

@@ -432,7 +432,7 @@ export default function VulnKBPage() {
         )}
 
         <div className="overflow-hidden">
-          <Table>
+          <Table variant="secondary">
             <Table.ScrollContainer>
               <Table.Content aria-label="Vulnerability KB entries" className="min-w-[860px]">
                 <Table.Header>

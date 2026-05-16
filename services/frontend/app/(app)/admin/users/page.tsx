@@ -1,5 +1,5 @@
 import { AdminPageShell } from '@/components/admin/admin-page-shell';
-import { UsersTab } from '../_components/primary-tabs';
+import { UsersTab } from '@/components/admin/users-tab';
 
 export default function AdminUsersPage() {
 	return (

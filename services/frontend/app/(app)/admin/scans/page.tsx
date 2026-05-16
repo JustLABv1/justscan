@@ -1,10 +1,10 @@
 import { AdminPageShell } from '@/components/admin/admin-page-shell';
-import { ScansTab } from '../_components/advanced-tabs';
+import { ScansTab } from '@/components/admin/scans-tab';
 
 export default function AdminScansPage() {
-	return (
-		<AdminPageShell>
-			<ScansTab />
-		</AdminPageShell>
-	);
+  return (
+    <AdminPageShell>
+      <ScansTab />
+    </AdminPageShell>
+  );
 }

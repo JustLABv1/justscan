@@ -378,13 +378,13 @@ export function OverviewTab() {
               </Card.Description>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Chip variant="soft" size="sm">
+              <Chip variant="soft" color="success" size="sm">
                 {completedScans} completed
               </Chip>
-              <Chip variant="soft" size="sm">
+              <Chip variant="soft" color="danger" size="sm">
                 {failedScans} failed
               </Chip>
-              <Chip variant="soft" size="sm">
+              <Chip variant="soft" color="success" size="sm">
                 {successRate}% success
               </Chip>
             </div>

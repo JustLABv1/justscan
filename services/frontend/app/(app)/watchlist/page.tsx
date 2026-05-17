@@ -1,7 +1,7 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
-import { OwnershipBadge } from '@/components/ui/badges';
+import { OwnershipBadge, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
@@ -33,9 +33,15 @@ import { cronToHuman, type HourCyclePreference } from '@/lib/cron';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
+  getWatchlistPolicyAttentionItems,
+  getWatchlistPosture,
+  type WatchlistPosture,
+} from '@/lib/watchlist-posture';
+import {
   Alert,
   Button,
   Card,
+  Chip,
   Label,
   ListBox,
   Modal,
@@ -65,13 +71,147 @@ function getBrowserTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 }
 
+const postureChipColor: Record<
+  WatchlistPosture['tone'],
+  'success' | 'warning' | 'danger' | 'accent' | 'default'
+> = {
+  success: 'success',
+  warning: 'warning',
+  danger: 'danger',
+  accent: 'accent',
+  neutral: 'default',
+};
+
+function WatchlistPostureSummary({
+  activeCount,
+  attentionCount,
+  neverScannedCount,
+  staleCount,
+}: {
+  activeCount: number;
+  attentionCount: number;
+  neverScannedCount: number;
+  staleCount: number;
+}) {
+  const cards = [
+    {
+      label: 'Active schedules',
+      value: activeCount,
+      detail: 'images monitored automatically',
+      hintClassName: 'text-muted-foreground',
+    },
+    {
+      label: 'Need policy attention',
+      value: attentionCount,
+      detail: 'blocked, failed, or non-compliant',
+      hintClassName: attentionCount > 0 ? 'text-danger' : 'text-muted-foreground',
+    },
+    {
+      label: 'Never scanned',
+      value: neverScannedCount,
+      detail: 'no baseline result yet',
+      hintClassName: neverScannedCount > 0 ? 'text-warning' : 'text-muted-foreground',
+    },
+    {
+      label: 'Stale',
+      value: staleCount,
+      detail: 'last scan older than 7 days',
+      hintClassName: staleCount > 0 ? 'text-warning' : 'text-muted-foreground',
+    },
+  ];
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {cards.map((card) => (
+        <Card key={card.label} variant="default" className="h-full border border-divider/70">
+          <Card.Content className="gap-1">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              {card.label}
+            </p>
+            <p className="text-2xl font-bold tabular-nums tracking-tight">
+              {card.value.toLocaleString()}
+            </p>
+            <p className={`text-xs ${card.hintClassName}`}>{card.detail}</p>
+          </Card.Content>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function LastScanState({
+  item,
+  hourCycle,
+}: {
+  item: WatchlistItem;
+  hourCycle: HourCyclePreference;
+}) {
+  if (!item.last_scan_id) {
+    return <span className="text-xs text-zinc-400 dark:text-zinc-700">Never scanned</span>;
+  }
+
+  const timestamp =
+    item.last_scanned_at ?? item.last_scan?.completed_at ?? item.last_scan?.created_at;
+  return (
+    <div className="space-y-1.5">
+      {item.last_scan ? (
+        <StatusBadge
+          status={item.last_scan.status}
+          externalStatus={item.last_scan.external_status}
+        />
+      ) : (
+        <Chip color="default" variant="soft" size="sm">
+          Unknown
+        </Chip>
+      )}
+      <div className="text-xs text-zinc-500">
+        <Link
+          href={`/scans/${item.last_scan_id}`}
+          className="hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
+          title={fullDate(timestamp, {
+            hourCycle,
+            timeZone: item.timezone,
+          })}
+        >
+          {timeAgo(timestamp, {
+            hourCycle,
+            timeZone: item.timezone,
+          })}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function PolicyPostureCell({ posture, item }: { posture: WatchlistPosture; item: WatchlistItem }) {
+  const failedPolicies = item.compliance_summary?.failed_policy_names ?? [];
+  const allPolicies = item.compliance_summary?.policy_names ?? [];
+  const policyTitle =
+    failedPolicies.length > 0
+      ? failedPolicies.join(', ')
+      : allPolicies.length > 0
+        ? allPolicies.join(', ')
+        : posture.description;
+
+  return (
+    <div className="max-w-[240px] space-y-1.5">
+      <Chip color={postureChipColor[posture.tone]} variant="soft" size="sm">
+        {posture.label}
+      </Chip>
+      <p className="truncate text-xs text-zinc-500" title={policyTitle}>
+        {posture.description}
+      </p>
+    </div>
+  );
+}
+
 export default function WatchlistPage() {
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const { orgs, orgNamesById } = useOrgDirectory();
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
-  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(() =>
     getDefaultScannerCapabilities()
   );
   const [loading, setLoading] = useState(true);
@@ -95,6 +235,7 @@ export default function WatchlistPage() {
   const [shareSaving, setShareSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
+  const [postureNow] = useState(() => Date.now());
   const modal = useOverlayState();
   const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
@@ -296,16 +437,39 @@ export default function WatchlistPage() {
   const schedulePreview = cronToHuman(schedule, { timezone, hourCycle });
   const filteredItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return items.filter((item) => {
-      const statusMatches =
-        statusFilter === 'all' || (statusFilter === 'active' ? item.enabled : !item.enabled);
-      if (!statusMatches) return false;
-      if (!query) return true;
-      return [item.image_name, item.image_tag]
-        .filter((value): value is string => Boolean(value))
-        .some((value) => value.toLowerCase().includes(query));
-    });
+    return items
+      .filter((item) => {
+        const statusMatches =
+          statusFilter === 'all' || (statusFilter === 'active' ? item.enabled : !item.enabled);
+        if (!statusMatches) return false;
+        if (!query) return true;
+        return [item.image_name, item.image_tag]
+          .filter((value): value is string => Boolean(value))
+          .some((value) => value.toLowerCase().includes(query));
+      })
+      .sort((left, right) => {
+        const rank = (item: WatchlistItem) => {
+          const kind = getWatchlistPosture(item).kind;
+          if (kind === 'blocked') return 0;
+          if (kind === 'policy_failed') return 1;
+          if (kind === 'scan_failed') return 2;
+          if (kind === 'never_scanned') return 3;
+          if (kind === 'running') return 4;
+          return 5;
+        };
+        const rankDiff = rank(left) - rank(right);
+        if (rankDiff !== 0) return rankDiff;
+        return Date.parse(right.created_at) - Date.parse(left.created_at);
+      });
   }, [items, searchQuery, statusFilter]);
+  const attentionItems = getWatchlistPolicyAttentionItems(items);
+  const activeItems = items.filter((item) => item.enabled);
+  const neverScannedCount = activeItems.filter((item) => !item.last_scan_id).length;
+  const staleCount = activeItems.filter((item) => {
+    if (!item.last_scanned_at || postureNow === 0) return false;
+    const scannedAt = Date.parse(item.last_scanned_at);
+    return !Number.isNaN(scannedAt) && postureNow - scannedAt > 7 * 24 * 60 * 60 * 1000;
+  }).length;
 
   return (
     <div className="p-6 space-y-5">
@@ -334,6 +498,13 @@ export default function WatchlistPage() {
             </Button>
           </div>
         }
+      />
+
+      <WatchlistPostureSummary
+        activeCount={activeItems.length}
+        attentionCount={attentionItems.length}
+        neverScannedCount={neverScannedCount}
+        staleCount={staleCount}
       />
 
       {error && (
@@ -407,14 +578,17 @@ export default function WatchlistPage() {
                     Status
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    Last Scan
+                    Last Scan State
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                    Policy Posture
                   </th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <TableRowSkeleton key={i} cols={7} />
+                  <TableRowSkeleton key={i} cols={8} />
                 ))}
               </tbody>
             </table>
@@ -445,19 +619,21 @@ export default function WatchlistPage() {
         ) : (
           <Table variant="secondary">
             <Table.ScrollContainer>
-              <Table.Content aria-label="Watchlist images" className="min-w-[1080px]">
+              <Table.Content aria-label="Watchlist images" className="min-w-[1200px]">
                 <Table.Header>
                   <Table.Column isRowHeader>Image</Table.Column>
                   <Table.Column>Schedule</Table.Column>
                   <Table.Column>Timezone</Table.Column>
                   <Table.Column>Registry</Table.Column>
                   <Table.Column>Status</Table.Column>
-                  <Table.Column>Last Scan</Table.Column>
+                  <Table.Column>Last Scan State</Table.Column>
+                  <Table.Column>Policy Posture</Table.Column>
                   <Table.Column className="justify-end flex">Actions</Table.Column>
                 </Table.Header>
                 <Table.Body>
                   {filteredItems.map((item) => {
                     const reg = registries.find((r) => r.id === item.registry_id);
+                    const posture = getWatchlistPosture(item);
                     return (
                       <Table.Row key={item.id} id={item.id} className="hover:bg-[var(--row-hover)]">
                         <Table.Cell>
@@ -525,25 +701,10 @@ export default function WatchlistPage() {
                           </span>
                         </Table.Cell>
                         <Table.Cell>
-                          <span className="text-xs text-zinc-500">
-                            {item.last_scan_id ? (
-                              <Link
-                                href={`/scans/${item.last_scan_id}`}
-                                className="hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
-                                title={fullDate(item.last_scanned_at, {
-                                  hourCycle,
-                                  timeZone: item.timezone,
-                                })}
-                              >
-                                {timeAgo(item.last_scanned_at, {
-                                  hourCycle,
-                                  timeZone: item.timezone,
-                                })}
-                              </Link>
-                            ) : (
-                              <span className="text-zinc-400 dark:text-zinc-700">Never</span>
-                            )}
-                          </span>
+                          <LastScanState item={item} hourCycle={hourCycle} />
+                        </Table.Cell>
+                        <Table.Cell>
+                          <PolicyPostureCell posture={posture} item={item} />
                         </Table.Cell>
                         <Table.Cell>
                           <div className="flex justify-end">

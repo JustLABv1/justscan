@@ -29,6 +29,7 @@ import {
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
+import { getWatchlistPolicyAttentionItems, getWatchlistPosture } from '@/lib/watchlist-posture';
 import { Button, Card, Modal, useOverlayState } from '@heroui/react';
 import { Add01Icon, ArrowRight01Icon } from 'hugeicons-react';
 import Link from 'next/link';
@@ -450,6 +451,7 @@ function ExecutivePostureCard({
   criticalHighCount,
   totalVulns,
   needsAttentionTotal,
+  watchlistPolicyAttentionCount,
   coverage7d,
   successRate,
   onOpenAttention,
@@ -461,6 +463,7 @@ function ExecutivePostureCard({
   criticalHighCount: number;
   totalVulns: number;
   needsAttentionTotal: number;
+  watchlistPolicyAttentionCount: number;
   coverage7d: number;
   successRate: number;
   onOpenAttention: () => void;
@@ -501,7 +504,7 @@ function ExecutivePostureCard({
         )}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <BriefingMetric
           label="Critical + high"
           value={formatCompactNumber(criticalHighCount)}
@@ -515,6 +518,13 @@ function ExecutivePostureCard({
           detail="failed or policy-blocked scans"
           tone={needsAttentionTotal > 0 ? 'danger' : 'success'}
           onPress={onOpenAttention}
+        />
+        <BriefingMetric
+          label="Watched policy"
+          value={watchlistPolicyAttentionCount.toLocaleString()}
+          detail="images non-compliant"
+          tone={watchlistPolicyAttentionCount > 0 ? 'danger' : 'success'}
+          onPress={onOpenWatchlist}
         />
         <BriefingMetric
           label="Freshness"
@@ -563,23 +573,36 @@ function DashboardSectionHeader({
 function AttentionQueueCard({
   genericFailedCount,
   blockedPolicyCount,
+  watchlistPolicyAttentionCount,
   activeQueueCount,
   staleItems,
   onOpenAttention,
+  onOpenWatchlist,
 }: {
   genericFailedCount: number;
   blockedPolicyCount: number;
+  watchlistPolicyAttentionCount: number;
   activeQueueCount: number;
   staleItems: WatchlistItem[];
   onOpenAttention: () => void;
+  onOpenWatchlist: () => void;
 }) {
   const items = [
+    {
+      key: 'watchlist-policy',
+      label: 'Watched policy issues',
+      value: watchlistPolicyAttentionCount,
+      detail: 'Watched images blocked or failing org policy',
+      tone: 'danger' as const,
+      onPress: onOpenWatchlist,
+    },
     {
       key: 'blocked',
       label: 'Policy blocks',
       value: blockedPolicyCount,
       detail: 'Xray policy decisions awaiting review',
       tone: 'danger' as const,
+      onPress: onOpenAttention,
     },
     {
       key: 'failed',
@@ -587,6 +610,7 @@ function AttentionQueueCard({
       value: genericFailedCount,
       detail: 'Scans that did not complete cleanly',
       tone: 'danger' as const,
+      onPress: onOpenAttention,
     },
     {
       key: 'stale',
@@ -594,6 +618,7 @@ function AttentionQueueCard({
       value: staleItems.length,
       detail: 'Scheduled images not scanned in 7 days',
       tone: 'warning' as const,
+      onPress: onOpenWatchlist,
     },
     {
       key: 'running',
@@ -601,6 +626,7 @@ function AttentionQueueCard({
       value: activeQueueCount,
       detail: 'Queued or running scan work',
       tone: 'accent' as const,
+      onPress: onOpenAttention,
     },
   ].filter((item) => item.value > 0);
 
@@ -640,7 +666,7 @@ function AttentionQueueCard({
               <button
                 key={item.key}
                 type="button"
-                onClick={onOpenAttention}
+                onClick={item.onPress}
                 className="group flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
                 style={{ background: tone.softBg, borderColor: tone.border }}
                 aria-haspopup="dialog"
@@ -673,6 +699,7 @@ function AttentionQueueCard({
 
 function ReadinessPanel({
   coverage,
+  watchlistPolicyAttentionCount,
   activeQueueCount,
   startedTodayCount,
   scannerHealth,
@@ -682,6 +709,7 @@ function ReadinessPanel({
   watchlistError,
 }: {
   coverage: WatchlistCoverage;
+  watchlistPolicyAttentionCount: number;
   activeQueueCount: number;
   startedTodayCount: number;
   scannerHealth: ScannerHealth | null;
@@ -704,7 +732,7 @@ function ReadinessPanel({
         title="Readiness confidence"
         description="Signals that determine how much trust to place in current coverage"
       />
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Card variant="secondary">
           <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
             Watchlist freshness
@@ -721,6 +749,20 @@ function ReadinessPanel({
               : watchlistError
                 ? watchlistError
                 : `${coverage.scanned7dCount} of ${coverage.enabledCount || 0} active schedules scanned in 7d`}
+          </p>
+        </Card>
+        <Card variant="secondary">
+          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            Watchlist posture
+          </p>
+          <p
+            className="mt-2 text-2xl font-semibold tabular-nums"
+            style={{ color: watchlistPolicyAttentionCount > 0 ? '#f87171' : '#34d399' }}
+          >
+            {watchlistPolicyAttentionCount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            watched images failing policy checks
           </p>
         </Card>
         <Card variant="secondary">
@@ -776,6 +818,9 @@ function ReadinessPanel({
 }
 
 function WatchlistModalRow({ item }: { item: WatchlistItem }) {
+  const posture = getWatchlistPosture(item);
+  const tone = TONE_STYLES[posture.tone];
+
   return (
     <div
       className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
@@ -788,25 +833,23 @@ function WatchlistModalRow({ item }: { item: WatchlistItem }) {
         <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
           {item.enabled ? `Scheduled ${item.schedule}` : 'Paused'} · {item.timezone}
         </p>
+        {item.last_scan_id ? (
+          <p className="mt-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Last scan {timeAgo(item.last_scanned_at ?? item.last_scan?.completed_at)}
+          </p>
+        ) : null}
       </div>
-      <span
-        className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-        style={
-          item.enabled
-            ? {
-                background: 'rgba(52,211,153,0.12)',
-                border: '1px solid rgba(52,211,153,0.22)',
-                color: '#34d399',
-              }
-            : {
-                background: 'rgba(161,161,170,0.12)',
-                border: '1px solid rgba(161,161,170,0.22)',
-                color: 'var(--text-muted)',
-              }
-        }
-      >
-        {item.enabled ? 'Active' : 'Paused'}
-      </span>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span
+          className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+          style={{ background: tone.bg, border: `1px solid ${tone.border}`, color: tone.color }}
+        >
+          {posture.label}
+        </span>
+        <Link href={`/watchlist`} className="text-[11px] font-medium" style={{ color: '#a78bfa' }}>
+          Open
+        </Link>
+      </div>
     </div>
   );
 }
@@ -977,6 +1020,23 @@ function DashboardDrilldownModal({
     : isWatchlist
       ? 'Open watchlist'
       : 'Open full list';
+  const displayedWatchlistItems = isWatchlist
+    ? watchlistItems.toSorted((left, right) => {
+        const rank = (item: WatchlistItem) => {
+          const kind = getWatchlistPosture(item).kind;
+          if (kind === 'blocked') return 0;
+          if (kind === 'policy_failed') return 1;
+          if (kind === 'scan_failed') return 2;
+          if (kind === 'never_scanned') return 3;
+          return 4;
+        };
+        const rankDiff = rank(left) - rank(right);
+        if (rankDiff !== 0) return rankDiff;
+        const leftTime = Date.parse(left.last_scanned_at ?? left.created_at);
+        const rightTime = Date.parse(right.last_scanned_at ?? right.created_at);
+        return rightTime - leftTime;
+      })
+    : [];
 
   return (
     <Modal state={state}>
@@ -1014,7 +1074,7 @@ function DashboardDrilldownModal({
                     </p>
                   ) : (
                     <div className="space-y-2">
-                      {watchlistItems.map((item) => (
+                      {displayedWatchlistItems.map((item) => (
                         <WatchlistModalRow key={item.id} item={item} />
                       ))}
                     </div>
@@ -1734,6 +1794,8 @@ export default function DashboardPage() {
   const successRate =
     stats.total_scans > 0 ? Math.round((completedCount / stats.total_scans) * 100) : 0;
   const watchlistCoverage = getWatchlistCoverage(watchlistOverviewItems, stats.watchlist_count);
+  const watchlistPolicyAttentionItems = getWatchlistPolicyAttentionItems(watchlistOverviewItems);
+  const watchlistPolicyAttentionCount = watchlistPolicyAttentionItems.length;
   const criticalHighTrend = getCriticalHighTrend(vulnTrends);
   const riskSummary = getRiskSummary({
     criticalHighCount,
@@ -1847,6 +1909,7 @@ export default function DashboardPage() {
         criticalHighCount={criticalHighCount}
         totalVulns={totalVulns}
         needsAttentionTotal={needsAttentionTotal}
+        watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
         coverage7d={watchlistCoverage.coverage7d}
         successRate={successRate}
         onOpenAttention={() => openDrilldown('attention')}
@@ -1863,15 +1926,18 @@ export default function DashboardPage() {
         <AttentionQueueCard
           genericFailedCount={genericFailedCount}
           blockedPolicyCount={blockedPolicyCount}
+          watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
           activeQueueCount={activeQueueCount}
           staleItems={watchlistCoverage.staleItems}
           onOpenAttention={() => openDrilldown('attention')}
+          onOpenWatchlist={() => openDrilldown('watchlist')}
         />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.45fr)]">
         <ReadinessPanel
           coverage={watchlistCoverage}
+          watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
           activeQueueCount={activeQueueCount}
           startedTodayCount={startedTodayCount}
           scannerHealth={scannerHealth}

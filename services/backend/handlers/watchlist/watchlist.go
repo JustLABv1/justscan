@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -37,8 +38,162 @@ func ListWatchlist(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list watchlist"})
 			return
 		}
+		if err := attachWatchlistPosture(c.Request.Context(), db, items, isAdmin, accessibleOrgIDs); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load watchlist scan posture"})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{"data": items})
 	}
+}
+
+func attachWatchlistPosture(ctx context.Context, db *bun.DB, items []models.WatchlistItem, isAdmin bool, accessibleOrgIDs []uuid.UUID) error {
+	scanIDs := make([]uuid.UUID, 0, len(items))
+	seenScanIDs := make(map[uuid.UUID]struct{}, len(items))
+	for _, item := range items {
+		if item.LastScanID == nil {
+			continue
+		}
+		if _, ok := seenScanIDs[*item.LastScanID]; ok {
+			continue
+		}
+		seenScanIDs[*item.LastScanID] = struct{}{}
+		scanIDs = append(scanIDs, *item.LastScanID)
+	}
+	if len(scanIDs) == 0 {
+		return nil
+	}
+
+	var scans []models.Scan
+	if err := db.NewSelect().Model(&scans).Where("id IN (?)", bun.In(scanIDs)).Scan(ctx); err != nil {
+		return err
+	}
+	scansByID := make(map[uuid.UUID]*models.Scan, len(scans))
+	for index := range scans {
+		scansByID[scans[index].ID] = &scans[index]
+	}
+	for index := range items {
+		if items[index].LastScanID != nil {
+			items[index].LastScan = scansByID[*items[index].LastScanID]
+		}
+	}
+
+	var complianceRows []models.ComplianceResult
+	complianceQuery := db.NewSelect().Model(&complianceRows).Where("scan_id IN (?)", bun.In(scanIDs))
+	if !isAdmin {
+		if len(accessibleOrgIDs) == 0 {
+			return nil
+		}
+		complianceQuery = complianceQuery.Where("org_id IN (?)", bun.In(accessibleOrgIDs))
+	}
+	if err := complianceQuery.Scan(ctx); err != nil {
+		return err
+	}
+	if len(complianceRows) == 0 {
+		return nil
+	}
+
+	policyIDs := make([]uuid.UUID, 0)
+	orgIDs := make([]uuid.UUID, 0)
+	seenPolicyIDs := map[uuid.UUID]struct{}{}
+	seenOrgIDs := map[uuid.UUID]struct{}{}
+	for _, row := range complianceRows {
+		if _, ok := seenPolicyIDs[row.PolicyID]; !ok {
+			seenPolicyIDs[row.PolicyID] = struct{}{}
+			policyIDs = append(policyIDs, row.PolicyID)
+		}
+		if _, ok := seenOrgIDs[row.OrgID]; !ok {
+			seenOrgIDs[row.OrgID] = struct{}{}
+			orgIDs = append(orgIDs, row.OrgID)
+		}
+	}
+
+	policyNames := make(map[uuid.UUID]string, len(policyIDs))
+	if len(policyIDs) > 0 {
+		var policies []models.OrgPolicy
+		if err := db.NewSelect().Model(&policies).Where("id IN (?)", bun.In(policyIDs)).Scan(ctx); err != nil {
+			return err
+		}
+		for _, policy := range policies {
+			policyNames[policy.ID] = policy.Name
+		}
+	}
+
+	orgNames := make(map[uuid.UUID]string, len(orgIDs))
+	if len(orgIDs) > 0 {
+		var orgs []models.Org
+		if err := db.NewSelect().Model(&orgs).Where("id IN (?)", bun.In(orgIDs)).Scan(ctx); err != nil {
+			return err
+		}
+		for _, org := range orgs {
+			orgNames[org.ID] = org.Name
+		}
+	}
+
+	summaries := make(map[uuid.UUID]*models.WatchlistComplianceSummary, len(scanIDs))
+	policiesByScan := make(map[uuid.UUID]map[string]struct{}, len(scanIDs))
+	failedPoliciesByScan := make(map[uuid.UUID]map[string]struct{}, len(scanIDs))
+	orgsByScan := make(map[uuid.UUID]map[string]struct{}, len(scanIDs))
+	for _, row := range complianceRows {
+		summary := summaries[row.ScanID]
+		if summary == nil {
+			summary = &models.WatchlistComplianceSummary{Status: "pass"}
+			summaries[row.ScanID] = summary
+		}
+		if row.Status == "fail" {
+			summary.FailCount++
+			summary.Status = "fail"
+		} else {
+			summary.PassCount++
+		}
+		if summary.EvaluatedAt == nil || row.EvaluatedAt.After(*summary.EvaluatedAt) {
+			evaluatedAt := row.EvaluatedAt
+			summary.EvaluatedAt = &evaluatedAt
+		}
+
+		policyName := strings.TrimSpace(policyNames[row.PolicyID])
+		if policyName != "" {
+			if policiesByScan[row.ScanID] == nil {
+				policiesByScan[row.ScanID] = map[string]struct{}{}
+			}
+			policiesByScan[row.ScanID][policyName] = struct{}{}
+			if row.Status == "fail" {
+				if failedPoliciesByScan[row.ScanID] == nil {
+					failedPoliciesByScan[row.ScanID] = map[string]struct{}{}
+				}
+				failedPoliciesByScan[row.ScanID][policyName] = struct{}{}
+			}
+		}
+
+		orgName := strings.TrimSpace(orgNames[row.OrgID])
+		if orgName != "" {
+			if orgsByScan[row.ScanID] == nil {
+				orgsByScan[row.ScanID] = map[string]struct{}{}
+			}
+			orgsByScan[row.ScanID][orgName] = struct{}{}
+		}
+	}
+
+	for scanID, summary := range summaries {
+		summary.PolicyNames = sortedSetValues(policiesByScan[scanID])
+		summary.FailedPolicyNames = sortedSetValues(failedPoliciesByScan[scanID])
+		summary.OrgNames = sortedSetValues(orgsByScan[scanID])
+	}
+	for index := range items {
+		if items[index].LastScanID == nil {
+			continue
+		}
+		items[index].ComplianceSummary = summaries[*items[index].LastScanID]
+	}
+	return nil
+}
+
+func sortedSetValues(values map[string]struct{}) []string {
+	result := make([]string, 0, len(values))
+	for value := range values {
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func CreateWatchlistItem(db *bun.DB) gin.HandlerFunc {

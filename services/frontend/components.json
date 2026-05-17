@@ -33,6 +33,7 @@
       "headers": {
         "Authorization": "Bearer ${REACTBITS_LICENSE_KEY}"
       }
-    }
+    },
+    "@react-bits": "https://reactbits.dev/r/{name}.json"
   }
 }

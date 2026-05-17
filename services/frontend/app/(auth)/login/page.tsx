@@ -49,7 +49,7 @@ export default function LoginPage() {
   if (!availabilityLoaded) {
     return (
       <div className="flex items-center justify-center h-32">
-        <div className="size-6 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
+        <div className="size-6 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
       </div>
     );
   }
@@ -59,11 +59,11 @@ export default function LoginPage() {
   return (
     <AuthCard
       title="JustScan"
-      subtitle="Sign in to your account"
+      subtitle="Great to see you again. Sign in to continue."
       footer={localAuthEnabled ? (
         <>
           No account?{' '}
-          <Link href="/register" className="text-violet-500 hover:text-violet-400 dark:text-violet-400 dark:hover:text-violet-300 font-medium transition-colors">
+          <Link href="/register" className="font-medium text-accent transition-colors hover:opacity-80">
             Register
           </Link>
         </>
@@ -106,9 +106,15 @@ export default function LoginPage() {
         <>
           {localAuthEnabled ? (
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-px" style={{ background: 'rgba(167,139,250,0.15)' }} />
+              <div
+                className="h-px flex-1"
+                style={{ background: 'color-mix(in oklab,var(--accent) 20%,transparent)' }}
+              />
               <span className="text-xs" style={{ color: 'var(--text-faint)' }}>or</span>
-              <div className="flex-1 h-px" style={{ background: 'rgba(167,139,250,0.15)' }} />
+              <div
+                className="h-px flex-1"
+                style={{ background: 'color-mix(in oklab,var(--accent) 20%,transparent)' }}
+              />
             </div>
           ) : null}
           <div className="space-y-2">
@@ -118,8 +124,14 @@ export default function LoginPage() {
                 href={`${API}/api/v1/auth/oidc/${encodeURIComponent(provider.name)}/login`}
                 className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98]"
                 style={{
-                  background: provider.button_color ? `${provider.button_color}1a` : 'rgba(124,58,237,0.12)',
-                  border: `1px solid ${provider.button_color ? `${provider.button_color}4d` : 'rgba(124,58,237,0.3)'}`,
+                  background: provider.button_color
+                    ? `${provider.button_color}1a`
+                    : 'color-mix(in oklab,var(--accent) 12%,transparent)',
+                  border: `1px solid ${
+                    provider.button_color
+                      ? `${provider.button_color}4d`
+                      : 'color-mix(in oklab,var(--accent) 30%,transparent)'
+                  }`,
                   color: 'var(--text-primary)',
                 }}
               >
@@ -151,4 +163,3 @@ export default function LoginPage() {
     </AuthCard>
   );
 }
-

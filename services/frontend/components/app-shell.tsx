@@ -16,6 +16,7 @@ import {
   Avatar,
   Button,
   Card,
+  Chip,
   Drawer,
   Dropdown,
   Header,
@@ -52,7 +53,7 @@ import {
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type ComponentType, type CSSProperties, useEffect, useMemo, useState } from 'react';
 
 import { AdminSidebarTree } from '@/components/admin-sidebar-tree';
 import { Logo } from '@/components/logo';
@@ -127,6 +128,98 @@ function resolveFallbackHeader(
   };
 }
 
+type SidebarIcon = ComponentType<{
+  size?: number;
+  className?: string;
+  style?: CSSProperties;
+}>;
+
+const activeNavStyle = {
+  color: 'var(--accent-soft-foreground)',
+  background:
+    'linear-gradient(135deg, color-mix(in oklab, var(--accent) 22%, transparent) 0%, color-mix(in oklab, var(--accent) 12%, transparent) 100%)',
+  boxShadow:
+    'inset 0 0 0 1px color-mix(in oklab, var(--accent) 34%, transparent), 0 0 0 1px color-mix(in oklab, var(--accent) 12%, transparent)',
+} as const;
+
+function InviteCountChip({ count, className = '' }: { count: number; className?: string }) {
+  if (count <= 0) return null;
+
+  return (
+    <Chip
+      className={`relative z-10 min-w-6 justify-center px-2 text-[11px] font-semibold ${className}`}
+      color="warning"
+      size="sm"
+      variant="soft"
+    >
+      {count}
+    </Chip>
+  );
+}
+
+function SidebarNavLink({
+  href,
+  itemLabel,
+  Icon,
+  mode,
+  active,
+  inviteCount,
+  onNavigate,
+}: {
+  href: string;
+  itemLabel: string;
+  Icon: SidebarIcon;
+  mode: 'desktop' | 'collapsed' | 'mobile';
+  active: boolean;
+  inviteCount: number;
+  onNavigate?: () => void;
+}) {
+  const iconOnly = mode === 'collapsed';
+  const isMobile = mode === 'mobile';
+
+  return (
+    <Link
+      href={href}
+      aria-current={active ? 'page' : undefined}
+      aria-label={iconOnly ? itemLabel : undefined}
+      className={
+        iconOnly
+          ? `group relative flex h-10 w-full items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`
+          : `group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${isMobile ? 'p-3' : 'overflow-hidden px-3 py-2.5 whitespace-nowrap'} ${active ? '' : 'text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100'}`
+      }
+      onClick={onNavigate}
+      style={active ? activeNavStyle : isMobile ? { background: 'var(--row-hover)' } : undefined}
+    >
+      {!active && !isMobile ? (
+        <span
+          className="absolute inset-0 rounded-xl opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+          style={{ background: 'var(--row-hover)' }}
+        />
+      ) : null}
+      {active && !iconOnly && !isMobile ? (
+        <span
+          className="absolute left-0 inset-y-2 w-1 rounded-r-full"
+          style={{
+            background:
+              'linear-gradient(180deg, color-mix(in oklab, var(--accent) 52%, white), var(--accent))',
+          }}
+        />
+      ) : null}
+      <Icon
+        size={18}
+        className="relative z-10 shrink-0"
+        style={{ color: active ? 'var(--accent-soft-foreground)' : 'var(--text-faint)' }}
+      />
+      {!iconOnly ? (
+        <span className={`relative z-10 flex-1 ${isMobile ? '' : 'truncate'}`}>{itemLabel}</span>
+      ) : null}
+      {href === '/orgs' && !iconOnly ? (
+        <InviteCountChip count={inviteCount} className="ml-auto" />
+      ) : null}
+    </Link>
+  );
+}
+
 export function AppShell({ children, initialUser }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -145,14 +238,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   );
   const mobileNav = useOverlayState();
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
-  const [hoveredNavPopover, setHoveredNavPopover] = useState<string | null>(null);
-  const [hoveredNavPopoverAnchor, setHoveredNavPopoverAnchor] = useState<{
-    top: number;
-    left: number;
-    maxHeight: number;
-  } | null>(null);
   const [pageHeader, setPageHeader] = useState<PageHeaderConfig | null>(null);
-  const navPopoverCloseTimer = useRef<number | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -162,21 +248,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   useEffect(() => {
     mobileNav.close();
   }, [mobileNav, pathname]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setHoveredNavPopover(null);
-    setHoveredNavPopoverAnchor(null);
-  }, [pathname]);
-
-  useEffect(
-    () => () => {
-      if (navPopoverCloseTimer.current !== null) {
-        window.clearTimeout(navPopoverCloseTimer.current);
-      }
-    },
-    []
-  );
 
   useEffect(() => {
     if (localStorage.getItem('sidebar_collapsed') === 'true') {
@@ -358,62 +429,19 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     workScope.kind,
     workScope.kind === 'org' ? (workScope.orgName ?? workScope.orgId) : 'personal'
   );
-  const isAdminRoute = Boolean(user?.role === 'admin' && isActiveRoute(pathname, '/admin'));
   const desktopCollapsed = collapsed;
-  const navigationGroups = isAdminRoute
-    ? [
-        ...navGroups,
-        ...(user?.role === 'admin'
-          ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
-          : []),
-      ]
-    : [
-        ...navGroups,
-        ...(user?.role === 'admin'
-          ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
-          : []),
-      ];
+  const navigationGroups = [
+    ...navGroups,
+    ...(user?.role === 'admin'
+      ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
+      : []),
+  ];
   const navItems = navigationGroups.flatMap((group) =>
     group.items.map(({ href, label }) => ({ href, label }))
   );
   const topbarHeader = pageHeader ?? resolveFallbackHeader(pathname, navItems);
   const contentRailClass = 'px-4 md:px-6';
   const pageHeaderContextValue = useMemo(() => ({ setHeader: setPageHeader }), []);
-
-  function cancelNavPopoverClose() {
-    if (navPopoverCloseTimer.current !== null) {
-      window.clearTimeout(navPopoverCloseTimer.current);
-      navPopoverCloseTimer.current = null;
-    }
-  }
-
-  function openAnchoredNavPopover(key: string, rect: DOMRect) {
-    cancelNavPopoverClose();
-    const top = Math.max(12, rect.top - 8);
-    const maxHeight = Math.max(240, window.innerHeight - top - 16);
-    setHoveredNavPopover(key);
-    setHoveredNavPopoverAnchor({
-      top,
-      left: rect.right,
-      maxHeight,
-    });
-  }
-
-  function scheduleNavPopoverClose() {
-    cancelNavPopoverClose();
-    navPopoverCloseTimer.current = window.setTimeout(() => {
-      setHoveredNavPopover(null);
-      setHoveredNavPopoverAnchor(null);
-    }, 220);
-  }
-
-  function handleRowHoverEnter(event: MouseEvent<HTMLElement>) {
-    event.currentTarget.style.background = 'var(--row-hover)';
-  }
-
-  function handleRowHoverLeave(event: MouseEvent<HTMLElement>) {
-    event.currentTarget.style.background = 'transparent';
-  }
 
   if (onboardingStatus === 'checking') {
     return (
@@ -479,14 +507,14 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                   className={`group w-full flex items-center rounded-xl transition-all duration-150 outline-none ${desktopCollapsed ? 'justify-center py-1.5' : 'gap-2 px-2 py-1.5'}`}
                   style={{
                     background: desktopCollapsed
-                      ? 'transparent'
-                      : 'linear-gradient(135deg, rgba(124,58,237,0.1) 0%, rgba(109,40,217,0.04) 100%)',
-                    border: desktopCollapsed ? 'none' : '1px solid rgba(167,139,250,0.2)',
+                      ? undefined
+                      : 'linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, transparent) 0%, color-mix(in oklab, var(--accent) 5%, transparent) 100%)',
+                    border: desktopCollapsed
+                      ? 'none'
+                      : '1px solid color-mix(in oklab, var(--accent) 24%, transparent)',
                     boxShadow: desktopCollapsed ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.05)',
                   }}
                   aria-label={workspaceTitle}
-                  onMouseEnter={handleRowHoverEnter}
-                  onMouseLeave={handleRowHoverLeave}
                 >
                   <div
                     className="relative shrink-0"
@@ -582,7 +610,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                     {items.map(({ href, label: itemLabel, Icon }) => {
                       const showAdminTree = href === '/admin';
                       const active = isActiveRoute(pathname, href);
-                      const popoverKey = `desktop:${href}`;
 
                       if (showAdminTree && !desktopCollapsed) {
                         return <AdminSidebarTree key="admin-tree-desktop" showLabel={false} />;
@@ -593,19 +620,13 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                           <div key={href}>
                             <Popover>
                               <Popover.Trigger aria-label={itemLabel} className="block w-full">
-                                <button
-                                  className={`relative flex w-full h-10 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap group ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                                  style={
-                                    active
-                                      ? {
-                                          color: 'var(--accent-soft-foreground)',
-                                          background:
-                                            'linear-gradient(135deg, color-mix(in oklab, var(--accent) 22%, transparent) 0%, color-mix(in oklab, var(--accent) 12%, transparent) 100%)',
-                                          boxShadow:
-                                            'inset 0 0 0 1px color-mix(in oklab, var(--accent) 36%, transparent)',
-                                        }
-                                      : undefined
-                                  }
+                                <Button
+                                  aria-current={active ? 'page' : undefined}
+                                  aria-label={itemLabel}
+                                  className={`group relative h-10 w-full rounded-xl ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                                  isIconOnly
+                                  style={active ? activeNavStyle : undefined}
+                                  variant="ghost"
                                 >
                                   {!active && (
                                     <span
@@ -622,7 +643,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                                         : 'var(--text-faint)',
                                     }}
                                   />
-                                </button>
+                                </Button>
                               </Popover.Trigger>
                               <Popover.Content
                                 placement="right top"
@@ -654,37 +675,14 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                           <div key={href}>
                             <Tooltip delay={0}>
                               <Tooltip.Trigger aria-label={itemLabel} className="block w-full">
-                                <Link
+                                <SidebarNavLink
                                   href={href}
-                                  className={`relative flex w-full h-10 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap group ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                                  style={
-                                    active
-                                      ? {
-                                          color: 'var(--accent-soft-foreground)',
-                                          background:
-                                            'linear-gradient(135deg, color-mix(in oklab, var(--accent) 22%, transparent) 0%, color-mix(in oklab, var(--accent) 12%, transparent) 100%)',
-                                          boxShadow:
-                                            'inset 0 0 0 1px color-mix(in oklab, var(--accent) 36%, transparent)',
-                                        }
-                                      : undefined
-                                  }
-                                >
-                                  {!active && (
-                                    <span
-                                      className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                                      style={{ background: 'var(--row-hover)' }}
-                                    />
-                                  )}
-                                  <Icon
-                                    size={18}
-                                    className="shrink-0 relative z-10"
-                                    style={{
-                                      color: active
-                                        ? 'var(--accent-soft-foreground)'
-                                        : 'var(--text-faint)',
-                                    }}
-                                  />
-                                </Link>
+                                  itemLabel={itemLabel}
+                                  Icon={Icon}
+                                  mode="collapsed"
+                                  active={active}
+                                  inviteCount={pendingInviteCount}
+                                />
                               </Tooltip.Trigger>
                               <Tooltip.Content placement="right">{itemLabel}</Tooltip.Content>
                             </Tooltip>
@@ -693,110 +691,21 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                       }
 
                       return (
-                        <Link
+                        <SidebarNavLink
                           key={href}
                           href={href}
-                          className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                          style={
-                            active
-                              ? {
-                                  color: 'var(--accent-soft-foreground)',
-                                  background:
-                                    'linear-gradient(135deg, color-mix(in oklab, var(--accent) 22%, transparent) 0%, color-mix(in oklab, var(--accent) 12%, transparent) 100%)',
-                                  boxShadow:
-                                    'inset 0 0 0 1px color-mix(in oklab, var(--accent) 34%, transparent), 0 0 0 1px color-mix(in oklab, var(--accent) 12%, transparent)',
-                                }
-                              : undefined
-                          }
-                        >
-                          {!active && (
-                            <span
-                              className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                              style={{ background: 'var(--row-hover)' }}
-                            />
-                          )}
-                          {active && (
-                            <span
-                              className="absolute left-0 inset-y-2 w-1 rounded-r-full"
-                              style={{
-                                background:
-                                  'linear-gradient(180deg, color-mix(in oklab, var(--accent) 52%, white), var(--accent))',
-                              }}
-                            />
-                          )}
-                          <Icon
-                            size={18}
-                            className="shrink-0 relative z-10"
-                            style={{
-                              color: active
-                                ? 'var(--accent-soft-foreground)'
-                                : 'var(--text-faint)',
-                            }}
-                          />
-                          <span
-                            className="flex-1 overflow-hidden transition-all duration-300 relative z-10"
-                            style={{
-                              maxWidth: desktopCollapsed ? 0 : 160,
-                              opacity: desktopCollapsed ? 0 : 1,
-                            }}
-                          >
-                            {itemLabel}
-                          </span>
-                          {href === '/orgs' && pendingInviteCount > 0 && !desktopCollapsed && (
-                            <span
-                              className="relative z-10 ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
-                              style={{ background: 'rgba(245, 158, 11, 0.16)' }}
-                            >
-                              {pendingInviteCount}
-                            </span>
-                          )}
-                        </Link>
+                          itemLabel={itemLabel}
+                          Icon={Icon}
+                          mode="desktop"
+                          active={active}
+                          inviteCount={pendingInviteCount}
+                        />
                       );
                     })}
                   </div>
                 </div>
               ))}
             </nav>
-
-            {desktopCollapsed &&
-            hoveredNavPopover === 'desktop:/admin' &&
-            hoveredNavPopoverAnchor ? (
-              <div
-                className="fixed z-[70] hidden pl-2 md:block"
-                style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
-                onMouseEnter={cancelNavPopoverClose}
-                onMouseLeave={scheduleNavPopoverClose}
-              >
-                <div
-                  className="surface-modal w-[320px] overflow-hidden rounded-[24px] p-3"
-                  style={{
-                    borderColor: 'var(--modal-border)',
-                    maxHeight: hoveredNavPopoverAnchor.maxHeight,
-                  }}
-                >
-                  <div
-                    className="space-y-2 overflow-y-auto pr-1"
-                    style={{ maxHeight: hoveredNavPopoverAnchor.maxHeight - 32 }}
-                  >
-                    <p
-                      className="px-1 text-[11px] uppercase tracking-[0.18em]"
-                      style={{ color: 'var(--text-faint)' }}
-                    >
-                      Admin
-                    </p>
-                    <AdminSidebarTree
-                      condensed
-                      showLabel={false}
-                      showRoot={false}
-                      onNavigate={() => {
-                        setHoveredNavPopover(null);
-                        setHoveredNavPopoverAnchor(null);
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : null}
 
             <div
               className={`flex min-h-12 items-center gap-2.5 py-2 shrink-0 ${desktopCollapsed ? 'justify-center px-0' : 'px-3'}`}
@@ -830,8 +739,8 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               className={`bg-surface rounded-br-3xl flex min-h-11 items-center gap-2.5 py-1.5 ${contentRailClass}`}
             >
               <Button
-                onClick={toggleCollapsed}
                 isIconOnly
+                onPress={toggleCollapsed}
                 variant="ghost"
                 aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
@@ -966,8 +875,9 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                               className="flex items-center justify-between rounded-xl p-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
                               onClick={() => mobileNav.close()}
                               style={{
-                                background: 'rgba(245, 158, 11, 0.08)',
-                                border: '1px solid rgba(245, 158, 11, 0.18)',
+                                background: 'color-mix(in oklab, var(--warning) 10%, transparent)',
+                                border:
+                                  '1px solid color-mix(in oklab, var(--warning) 24%, transparent)',
                               }}
                             >
                               <div>
@@ -976,12 +886,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                                   Review organization access requests
                                 </p>
                               </div>
-                              <span
-                                className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
-                                style={{ background: 'rgba(245, 158, 11, 0.16)' }}
-                              >
-                                {pendingInviteCount}
-                              </span>
+                              <InviteCountChip count={pendingInviteCount} />
                             </Link>
                           )}
 
@@ -996,7 +901,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                               <div className="space-y-1">
                                 {items.map(({ href, label: itemLabel, Icon }) => {
                                   const showAdminTree = href === '/admin';
-                                  const active = isActiveRoute(pathname, href);
 
                                   if (showAdminTree) {
                                     return (
@@ -1010,46 +914,16 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                                   }
 
                                   return (
-                                    <Link
+                                    <SidebarNavLink
                                       key={href}
                                       href={href}
-                                      className={`flex items-center gap-3 rounded-xl p-3 text-sm font-medium transition-all ${
-                                        active
-                                          ? ''
-                                          : 'text-zinc-700 dark:text-zinc-300'
-                                      }`}
-                                      onClick={() => mobileNav.close()}
-                                      style={
-                                        active
-                                          ? {
-                                              color: 'var(--accent-soft-foreground)',
-                                              background:
-                                                'linear-gradient(135deg, color-mix(in oklab, var(--accent) 15%, transparent) 0%, color-mix(in oklab, var(--accent) 8%, transparent) 100%)',
-                                              boxShadow:
-                                                'inset 0 0 0 1px color-mix(in oklab, var(--accent) 18%, transparent)',
-                                            }
-                                          : { background: 'var(--row-hover)' }
-                                      }
-                                    >
-                                      <Icon
-                                        size={18}
-                                        className="shrink-0"
-                                        style={{
-                                          color: active
-                                            ? 'var(--accent-soft-foreground)'
-                                            : 'var(--text-faint)',
-                                        }}
-                                      />
-                                      <span className="flex-1">{itemLabel}</span>
-                                      {href === '/orgs' && pendingInviteCount > 0 && (
-                                        <span
-                                          className="ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
-                                          style={{ background: 'rgba(245, 158, 11, 0.16)' }}
-                                        >
-                                          {pendingInviteCount}
-                                        </span>
-                                      )}
-                                    </Link>
+                                      itemLabel={itemLabel}
+                                      Icon={Icon}
+                                      mode="mobile"
+                                      active={isActiveRoute(pathname, href)}
+                                      inviteCount={pendingInviteCount}
+                                      onNavigate={() => mobileNav.close()}
+                                    />
                                   );
                                 })}
                               </div>
@@ -1251,64 +1125,64 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             >
               {!isAssistantRoute ? (
                 <div className={`border-b border-white/5 py-1.5 md:py-2 ${contentRailClass}`}>
-                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <h1 className="flex flex-wrap items-center gap-1.5 text-lg font-semibold tracking-tight md:text-xl">
-                      {topbarHeader.title}
-                      {topbarHeader.titleCom}
-                    </h1>
-                    {topbarHeader.description ? (
-                      <Typography.Paragraph className="mt-0.5" color="muted" size="xs">
-                        {topbarHeader.description}
-                      </Typography.Paragraph>
-                    ) : null}
-                    {topbarHeader.breadcrumbs && topbarHeader.breadcrumbs.length > 1 ? (
-                      <nav
-                        aria-label="Breadcrumb"
-                        className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-medium"
-                      >
-                        {topbarHeader.breadcrumbs.map((item, index) => {
-                          const isCurrent = index === topbarHeader.breadcrumbs!.length - 1;
+                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <h1 className="flex flex-wrap items-center gap-1.5 text-lg font-semibold tracking-tight md:text-xl">
+                        {topbarHeader.title}
+                        {topbarHeader.titleCom}
+                      </h1>
+                      {topbarHeader.description ? (
+                        <Typography.Paragraph className="mt-0.5" color="muted" size="xs">
+                          {topbarHeader.description}
+                        </Typography.Paragraph>
+                      ) : null}
+                      {topbarHeader.breadcrumbs && topbarHeader.breadcrumbs.length > 1 ? (
+                        <nav
+                          aria-label="Breadcrumb"
+                          className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-medium"
+                        >
+                          {topbarHeader.breadcrumbs.map((item, index) => {
+                            const isCurrent = index === topbarHeader.breadcrumbs!.length - 1;
 
-                          return (
-                            <span
-                              key={`${item.label}-${index}`}
-                              className="inline-flex items-center gap-1.5"
-                            >
-                              {item.href && !isCurrent ? (
-                                <Link
-                                  href={item.href}
-                                  className="transition-colors hover:text-zinc-900 dark:hover:text-white"
-                                  style={{ color: 'var(--text-faint)' }}
-                                >
-                                  {item.label}
-                                </Link>
-                              ) : (
-                                <span
-                                  aria-current={isCurrent ? 'page' : undefined}
-                                  style={{
-                                    color: isCurrent ? 'var(--text-muted)' : 'var(--text-faint)',
-                                  }}
-                                >
-                                  {item.label}
-                                </span>
-                              )}
-                              {!isCurrent ? (
-                                <span style={{ color: 'var(--text-faint)' }}>/</span>
-                              ) : null}
-                            </span>
-                          );
-                        })}
-                      </nav>
+                            return (
+                              <span
+                                key={`${item.label}-${index}`}
+                                className="inline-flex items-center gap-1.5"
+                              >
+                                {item.href && !isCurrent ? (
+                                  <Link
+                                    href={item.href}
+                                    className="transition-colors hover:text-zinc-900 dark:hover:text-white"
+                                    style={{ color: 'var(--text-faint)' }}
+                                  >
+                                    {item.label}
+                                  </Link>
+                                ) : (
+                                  <span
+                                    aria-current={isCurrent ? 'page' : undefined}
+                                    style={{
+                                      color: isCurrent ? 'var(--text-muted)' : 'var(--text-faint)',
+                                    }}
+                                  >
+                                    {item.label}
+                                  </span>
+                                )}
+                                {!isCurrent ? (
+                                  <span style={{ color: 'var(--text-faint)' }}>/</span>
+                                ) : null}
+                              </span>
+                            );
+                          })}
+                        </nav>
+                      ) : null}
+                    </div>
+
+                    {topbarHeader.actions ? (
+                      <div className="flex shrink-0 items-center gap-1.5 sm:justify-end">
+                        {topbarHeader.actions}
+                      </div>
                     ) : null}
                   </div>
-
-                  {topbarHeader.actions ? (
-                    <div className="flex shrink-0 items-center gap-1.5 sm:justify-end">
-                      {topbarHeader.actions}
-                    </div>
-                  ) : null}
-                </div>
                 </div>
               ) : null}
               <div className={isAssistantRoute ? 'min-h-0 flex-1 overflow-hidden' : ''}>

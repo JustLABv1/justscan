@@ -2,23 +2,24 @@
 
 import { Disclosure } from '@heroui/react';
 import {
-    ArrowRight01Icon,
-    Home12Icon,
-    Key01Icon,
-    LinkSquare02Icon,
-    Setting07Icon,
-    Settings01Icon,
-    Shield01Icon,
+  ArrowRight01Icon,
+  Home12Icon,
+  Key01Icon,
+  LinkSquare02Icon,
+  Setting07Icon,
+  Settings01Icon,
+  Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import {
-    ADMIN_AREAS,
-    type AdminArea,
-    getAdminAreaForTab,
-    resolveAdminTab,
+  ADMIN_AREAS,
+  type AdminArea,
+  type AdminTab,
+  getAdminAreaForTab,
+  resolveAdminTab,
 } from '@/app/(app)/admin/_components/admin-tabs';
 import { deferEffect } from '@/lib/defer-effect';
 
@@ -36,6 +37,70 @@ const areaIcons = {
   integrations: LinkSquare02Icon,
   governance: Setting07Icon,
 } as const;
+
+const activeTextClass = 'text-accent';
+const inactiveTextClass = 'text-zinc-600 dark:text-zinc-300';
+const activeIconColor = 'var(--accent-soft-foreground)';
+const activeRowStyle = {
+  background:
+    'linear-gradient(135deg, color-mix(in oklab, var(--accent) 18%, transparent) 0%, color-mix(in oklab, var(--accent) 9%, transparent) 100%)',
+  boxShadow: 'inset 0 0 0 1px color-mix(in oklab, var(--accent) 24%, transparent)',
+} as const;
+
+function AdminAreaTabLinks({
+  areaValue,
+  activeTab,
+  onNavigate,
+}: {
+  areaValue: AdminArea;
+  activeTab: AdminTab;
+  onNavigate?: () => void;
+}) {
+  const area = ADMIN_AREAS.find((a) => a.value === areaValue)!;
+
+  return area.tabs.map((tab) => {
+    const isActiveTab = tab.value === activeTab;
+
+    return (
+      <Link
+        key={tab.value}
+        href={tab.href}
+        onClick={onNavigate}
+        aria-current={isActiveTab ? 'page' : undefined}
+        className={`group relative flex min-h-9 items-center rounded-lg px-3 text-sm transition-all duration-150 ${
+          isActiveTab
+            ? activeTextClass
+            : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100'
+        }`}
+        style={
+          isActiveTab
+            ? {
+                background:
+                  'linear-gradient(135deg, color-mix(in oklab, var(--accent) 15%, transparent) 0%, color-mix(in oklab, var(--accent) 7%, transparent) 100%)',
+              }
+            : undefined
+        }
+      >
+        {!isActiveTab && (
+          <span
+            className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+            style={{ background: 'var(--row-hover)' }}
+          />
+        )}
+        {isActiveTab && (
+          <span
+            className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full"
+            style={{
+              background:
+                'linear-gradient(180deg, color-mix(in oklab, var(--accent) 52%, white), var(--accent))',
+            }}
+          />
+        )}
+        <span className="relative z-10 truncate">{tab.label}</span>
+      </Link>
+    );
+  });
+}
 
 export function AdminSidebarTree({
   onNavigate,
@@ -89,57 +154,6 @@ export function AdminSidebarTree({
     });
   }
 
-  const activeTextClass = 'text-violet-700 dark:text-violet-100';
-  const inactiveTextClass = 'text-zinc-600 dark:text-zinc-300';
-  const activeIconColor = '#8b5cf6';
-  const activeRowStyle = {
-    background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-    boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
-  } as const;
-
-  // Shared tab leaf link
-  function renderTabs(areaValue: AdminArea) {
-    const area = ADMIN_AREAS.find((a) => a.value === areaValue)!;
-    return area.tabs.map((tab) => {
-      const isActiveTab = tab.value === activeTab;
-      return (
-        <Link
-          key={tab.value}
-          href={tab.href}
-          onClick={onNavigate}
-          aria-current={isActiveTab ? 'page' : undefined}
-          className={`group relative flex min-h-9 items-center rounded-lg px-3 text-sm transition-all duration-150 ${
-            isActiveTab
-              ? activeTextClass
-              : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100'
-          }`}
-          style={
-            isActiveTab
-              ? {
-                  background:
-                    'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(109,40,217,0.06) 100%)',
-                }
-              : undefined
-          }
-        >
-          {!isActiveTab && (
-            <span
-              className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-              style={{ background: 'var(--row-hover)' }}
-            />
-          )}
-          {isActiveTab && (
-            <span
-              className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full"
-              style={{ background: 'linear-gradient(180deg, #c4b5fd 0%, #7c3aed 100%)' }}
-            />
-          )}
-          <span className="relative z-10 truncate">{tab.label}</span>
-        </Link>
-      );
-    });
-  }
-
   // Area-level Disclosure rows (shared between root and rootless renders)
   const areaRows = ADMIN_AREAS.map((area) => {
     const isActiveArea = area.value === activeArea.value;
@@ -166,7 +180,10 @@ export function AdminSidebarTree({
             {isActiveArea && (
               <span
                 className="absolute left-0 inset-y-2 w-0.5 rounded-full"
-                style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
+                style={{
+                  background:
+                    'linear-gradient(180deg, color-mix(in oklab, var(--accent) 52%, white), var(--accent))',
+                }}
               />
             )}
             <Icon
@@ -182,7 +199,11 @@ export function AdminSidebarTree({
         </Disclosure.Heading>
         <Disclosure.Content>
           <div className="ml-4 border-l pl-3 pb-1 space-y-0.5 border-surface-tertiary">
-            {renderTabs(area.value)}
+            <AdminAreaTabLinks
+              areaValue={area.value}
+              activeTab={activeTab}
+              onNavigate={onNavigate}
+            />
           </div>
         </Disclosure.Content>
       </Disclosure>
@@ -227,7 +248,10 @@ export function AdminSidebarTree({
             {isAdminRoute && (
               <span
                 className="absolute left-0 inset-y-2 w-0.5 rounded-full"
-                style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
+                style={{
+                  background:
+                    'linear-gradient(180deg, color-mix(in oklab, var(--accent) 52%, white), var(--accent))',
+                }}
               />
             )}
             <Settings01Icon

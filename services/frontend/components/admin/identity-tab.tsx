@@ -1,0 +1,1034 @@
+'use client';
+
+import { useConfirmDialog } from '@/components/confirm-dialog';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import {
+  adminCreateGroupMapping,
+  adminCreateOIDCProvider,
+  adminCreateOIDCRoleOverride,
+  adminDeleteGroupMapping,
+  adminDeleteOIDCProvider,
+  adminDeleteOIDCRoleOverride,
+  adminListGroupMappings,
+  adminListOIDCProviders,
+  adminListOIDCRoleOverrides,
+  adminPreviewOIDCClaimSync,
+  adminUpdateGroupMapping,
+  adminUpdateOIDCProvider,
+  adminUpdateOIDCRoleOverride,
+} from '@/lib/api/admin';
+import { listOrgs } from '@/lib/api/orgs';
+import type {
+  OIDCClaimSyncPreview,
+  OIDCGroupMapping,
+  OIDCOrgRoleOverride,
+  OIDCProviderAdmin,
+} from '@/lib/api/types/registries';
+import type { Org } from '@/lib/api/types/orgs';
+import { deferEffect } from '@/lib/defer-effect';
+import {
+  Button,
+  Card,
+  Chip,
+  Input,
+  ListBox,
+  Modal,
+  SearchField,
+  Select,
+  Switch,
+  Table,
+  TextArea,
+  useOverlayState,
+} from '@heroui/react';
+import { Delete01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+function parseDelimitedList(value: string) {
+  return value
+    .split(/[\n,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function Banner({ type, text }: { type: 'success' | 'error'; text: string }) {
+  return (
+    <Card
+      className={
+        type === 'success'
+          ? 'border border-success/30 bg-success/10'
+          : 'border border-danger/30 bg-danger/10'
+      }
+    >
+      <Card.Content>
+        <p className={type === 'success' ? 'text-sm text-success' : 'text-sm text-danger'}>{text}</p>
+      </Card.Content>
+    </Card>
+  );
+}
+
+export function IdentityTab() {
+  const [providers, setProviders] = useState<OIDCProviderAdmin[]>([]);
+  const [orgs, setOrgs] = useState<Org[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [search, setSearch] = useState('');
+
+  const [selectedProvider, setSelectedProvider] = useState<OIDCProviderAdmin | null>(null);
+  const [mappings, setMappings] = useState<OIDCGroupMapping[]>([]);
+  const [roleOverrides, setRoleOverrides] = useState<OIDCOrgRoleOverride[]>([]);
+
+  const [previewGroupsInput, setPreviewGroupsInput] = useState('');
+  const [previewRolesInput, setPreviewRolesInput] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [preview, setPreview] = useState<OIDCClaimSyncPreview | null>(null);
+
+  const providerModal = useOverlayState();
+  const mappingModal = useOverlayState();
+  const overrideModal = useOverlayState();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
+
+  const [editingProvider, setEditingProvider] = useState<OIDCProviderAdmin | null>(null);
+  const [providerSaving, setProviderSaving] = useState(false);
+  const [providerName, setProviderName] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [buttonColor, setButtonColor] = useState('');
+  const [issuerUrl, setIssuerUrl] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [redirectUri, setRedirectUri] = useState('');
+  const [scopesInput, setScopesInput] = useState('openid, profile, email');
+  const [adminGroupsInput, setAdminGroupsInput] = useState('');
+  const [adminRolesInput, setAdminRolesInput] = useState('');
+  const [includedGroupsInput, setIncludedGroupsInput] = useState('');
+  const [excludedGroupsInput, setExcludedGroupsInput] = useState('');
+  const [includedOrgNamesInput, setIncludedOrgNamesInput] = useState('');
+  const [excludedOrgNamesInput, setExcludedOrgNamesInput] = useState('');
+  const [groupsClaim, setGroupsClaim] = useState('groups');
+  const [rolesClaim, setRolesClaim] = useState('roles');
+  const [providerEnabled, setProviderEnabled] = useState(true);
+  const [sortOrder, setSortOrder] = useState('0');
+  const [providerFormError, setProviderFormError] = useState('');
+  const [providerStep, setProviderStep] = useState(0);
+
+  const [editingMapping, setEditingMapping] = useState<OIDCGroupMapping | null>(null);
+  const [mappingSaving, setMappingSaving] = useState(false);
+  const [mappingFormError, setMappingFormError] = useState('');
+  const [mappingEffect, setMappingEffect] = useState<'allow' | 'exclude'>('allow');
+  const [mappingClaimType, setMappingClaimType] = useState<'group' | 'role'>('group');
+  const [mappingMatchType, setMappingMatchType] = useState<'exact' | 'prefix'>('exact');
+  const [mappingMatchValue, setMappingMatchValue] = useState('');
+  const [mappingProvisioningMode, setMappingProvisioningMode] = useState<'existing_org' | 'create_org'>('existing_org');
+  const [mappingOrgId, setMappingOrgId] = useState('');
+  const [mappingOrgNameTemplate, setMappingOrgNameTemplate] = useState('{claim}');
+  const [mappingRole, setMappingRole] = useState<'viewer' | 'editor' | 'admin'>('viewer');
+  const [mappingRecreateMissingOrg, setMappingRecreateMissingOrg] = useState(false);
+  const [mappingRemoveOnUnsync, setMappingRemoveOnUnsync] = useState(true);
+
+  const [editingOverride, setEditingOverride] = useState<OIDCOrgRoleOverride | null>(null);
+  const [overrideSaving, setOverrideSaving] = useState(false);
+  const [overrideFormError, setOverrideFormError] = useState('');
+  const [overrideClaimType, setOverrideClaimType] = useState<'group' | 'role'>('group');
+  const [overrideMatchType, setOverrideMatchType] = useState<'exact' | 'prefix'>('exact');
+  const [overrideMatchValue, setOverrideMatchValue] = useState('');
+  const [overrideTargetType, setOverrideTargetType] = useState<'org_id' | 'rendered_name'>('org_id');
+  const [overrideOrgId, setOverrideOrgId] = useState('');
+  const [overrideOrgNameTemplate, setOverrideOrgNameTemplate] = useState('{claim}');
+  const [overrideRole, setOverrideRole] = useState<'viewer' | 'editor' | 'admin'>('admin');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [providerData, orgData] = await Promise.all([adminListOIDCProviders(), listOrgs()]);
+      setProviders(providerData);
+      setOrgs(orgData);
+      setSelectedProvider((current) =>
+        current ? providerData.find((provider) => provider.name === current.name) ?? null : null
+      );
+    } catch (loadError: unknown) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load identity providers');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadSelectedDetails = useCallback(async () => {
+    if (!selectedProvider) {
+      setMappings([]);
+      setRoleOverrides([]);
+      return;
+    }
+    try {
+      const [nextMappings, nextOverrides] = await Promise.all([
+        adminListGroupMappings(selectedProvider.name),
+        adminListOIDCRoleOverrides(selectedProvider.name),
+      ]);
+      setMappings(nextMappings);
+      setRoleOverrides(nextOverrides);
+    } catch (detailError: unknown) {
+      setError(detailError instanceof Error ? detailError.message : 'Failed to load provider details');
+    }
+  }, [selectedProvider]);
+
+  useEffect(() => deferEffect(load), [load]);
+  useEffect(() => deferEffect(loadSelectedDetails), [loadSelectedDetails]);
+
+  const filteredProviders = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return providers.filter((provider) =>
+      q.length === 0 ||
+      provider.name.toLowerCase().includes(q) ||
+      provider.display_name.toLowerCase().includes(q) ||
+      provider.issuer_url.toLowerCase().includes(q)
+    );
+  }, [providers, search]);
+
+  function openCreateProvider() {
+    setEditingProvider(null);
+    setProviderName('');
+    setDisplayName('');
+    setButtonColor('');
+    setIssuerUrl('');
+    setClientId('');
+    setClientSecret('');
+    setRedirectUri('');
+    setScopesInput('openid, profile, email');
+    setAdminGroupsInput('');
+    setAdminRolesInput('');
+    setIncludedGroupsInput('');
+    setExcludedGroupsInput('');
+    setIncludedOrgNamesInput('');
+    setExcludedOrgNamesInput('');
+    setGroupsClaim('groups');
+    setRolesClaim('roles');
+    setProviderEnabled(true);
+    setSortOrder(String(providers.length));
+    setProviderFormError('');
+    setProviderStep(0);
+    providerModal.open();
+  }
+
+  function openEditProvider(provider: OIDCProviderAdmin) {
+    setEditingProvider(provider);
+    setProviderName(provider.name);
+    setDisplayName(provider.display_name);
+    setButtonColor(provider.button_color ?? '');
+    setIssuerUrl(provider.issuer_url);
+    setClientId(provider.client_id);
+    setClientSecret('');
+    setRedirectUri(provider.redirect_uri);
+    setScopesInput((provider.scopes ?? []).join(', '));
+    setAdminGroupsInput((provider.admin_groups ?? []).join(', '));
+    setAdminRolesInput((provider.admin_roles ?? []).join(', '));
+    setIncludedGroupsInput((provider.included_groups ?? []).join(', '));
+    setExcludedGroupsInput((provider.excluded_groups ?? []).join(', '));
+    setIncludedOrgNamesInput((provider.included_org_names ?? []).join(', '));
+    setExcludedOrgNamesInput((provider.excluded_org_names ?? []).join(', '));
+    setGroupsClaim(provider.groups_claim || 'groups');
+    setRolesClaim(provider.roles_claim || 'roles');
+    setProviderEnabled(provider.enabled);
+    setSortOrder(String(provider.sort_order ?? 0));
+    setProviderFormError('');
+    setProviderStep(0);
+    providerModal.open();
+  }
+
+  function validateProviderStep(step: number) {
+    if (step === 0) {
+      if (!providerName.trim() || !displayName.trim() || !issuerUrl.trim() || !clientId.trim() || !redirectUri.trim()) {
+        return 'Please complete all required connection fields.';
+      }
+      if (!editingProvider && !clientSecret.trim()) {
+        return 'Client secret is required when creating a provider.';
+      }
+    }
+    if (step === 1) {
+      if (parseDelimitedList(scopesInput).length === 0) {
+        return 'At least one scope is required.';
+      }
+    }
+    return '';
+  }
+
+  function requiredLabel(text: string) {
+    return (
+      <span>
+        {text} <span className="text-danger">*</span>
+      </span>
+    );
+  }
+
+  function goToNextProviderStep() {
+    const nextError = validateProviderStep(providerStep);
+    if (nextError) {
+      setProviderFormError(nextError);
+      return;
+    }
+    setProviderFormError('');
+    setProviderStep((current) => Math.min(current + 1, 2));
+  }
+
+  function handlePrimaryProviderAction() {
+    if (providerStep < 2) {
+      goToNextProviderStep();
+      return;
+    }
+    const form = document.getElementById('identity-provider-form') as HTMLFormElement | null;
+    form?.requestSubmit();
+  }
+
+  async function handleProviderSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setProviderSaving(true);
+    setProviderFormError('');
+    try {
+      const payload = {
+        name: providerName.trim(),
+        display_name: displayName.trim(),
+        button_color: buttonColor.trim() || undefined,
+        issuer_url: issuerUrl.trim(),
+        client_id: clientId.trim(),
+        ...(clientSecret.trim() ? { client_secret: clientSecret.trim() } : {}),
+        redirect_uri: redirectUri.trim(),
+        scopes: parseDelimitedList(scopesInput),
+        admin_groups: parseDelimitedList(adminGroupsInput),
+        admin_roles: parseDelimitedList(adminRolesInput),
+        included_groups: parseDelimitedList(includedGroupsInput),
+        excluded_groups: parseDelimitedList(excludedGroupsInput),
+        included_org_names: parseDelimitedList(includedOrgNamesInput),
+        excluded_org_names: parseDelimitedList(excludedOrgNamesInput),
+        groups_claim: groupsClaim.trim() || 'groups',
+        roles_claim: rolesClaim.trim() || 'roles',
+        enabled: providerEnabled,
+        sort_order: Number.parseInt(sortOrder, 10) || 0,
+      };
+
+      if (editingProvider) {
+        await adminUpdateOIDCProvider(editingProvider.name, payload);
+      } else {
+        if (!payload.name || !clientSecret.trim()) {
+          throw new Error('Name and client secret are required when creating a provider');
+        }
+        await adminCreateOIDCProvider(payload);
+      }
+
+      providerModal.close();
+      await load();
+      setSuccess(editingProvider ? 'Provider updated' : 'Provider created');
+      setTimeout(() => setSuccess(''), 2500);
+    } catch (saveError: unknown) {
+      setProviderFormError(saveError instanceof Error ? saveError.message : 'Failed to save provider');
+    } finally {
+      setProviderSaving(false);
+    }
+  }
+
+  async function handleToggleEnabled(provider: OIDCProviderAdmin) {
+    try {
+      await adminUpdateOIDCProvider(provider.name, { enabled: !provider.enabled });
+      await load();
+    } catch (toggleError: unknown) {
+      setError(toggleError instanceof Error ? toggleError.message : 'Failed to update provider state');
+    }
+  }
+
+  async function handleDeleteProvider(name: string) {
+    const ok = await confirm({
+      title: 'Delete OIDC Provider',
+      message: `Remove provider "${name}"? This will break logins using this provider.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await adminDeleteOIDCProvider(name);
+      if (selectedProvider?.name === name) setSelectedProvider(null);
+      await load();
+    } catch (deleteError: unknown) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete provider');
+    }
+  }
+
+  function openCreateMapping() {
+    if (!selectedProvider) return;
+    setEditingMapping(null);
+    setMappingEffect('allow');
+    setMappingClaimType('group');
+    setMappingMatchType('exact');
+    setMappingMatchValue('');
+    setMappingProvisioningMode(orgs.length > 0 ? 'existing_org' : 'create_org');
+    setMappingOrgId(orgs[0]?.id ?? '');
+    setMappingOrgNameTemplate('{claim}');
+    setMappingRole(orgs.length > 0 ? 'viewer' : 'admin');
+    setMappingRecreateMissingOrg(false);
+    setMappingRemoveOnUnsync(true);
+    setMappingFormError('');
+    mappingModal.open();
+  }
+
+  function openEditMapping(mapping: OIDCGroupMapping) {
+    setEditingMapping(mapping);
+    setMappingEffect(mapping.effect);
+    setMappingClaimType(mapping.claim_type);
+    setMappingMatchType(mapping.match_type);
+    setMappingMatchValue(mapping.match_value);
+    setMappingProvisioningMode(mapping.provisioning_mode);
+    setMappingOrgId(mapping.org_id ?? '');
+    setMappingOrgNameTemplate(mapping.org_name_template || '{claim}');
+    setMappingRole((mapping.role as 'viewer' | 'editor' | 'admin') || 'viewer');
+    setMappingRecreateMissingOrg(mapping.recreate_missing_org);
+    setMappingRemoveOnUnsync(mapping.remove_on_unsync);
+    setMappingFormError('');
+    mappingModal.open();
+  }
+
+  async function handleMappingSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedProvider) return;
+    setMappingSaving(true);
+    setMappingFormError('');
+    try {
+      const payload = {
+        effect: mappingEffect,
+        claim_type: mappingClaimType,
+        match_type: mappingMatchType,
+        match_value: mappingMatchValue.trim(),
+        provisioning_mode: mappingEffect === 'exclude' ? undefined : mappingProvisioningMode,
+        org_id: mappingEffect === 'exclude' ? undefined : mappingProvisioningMode === 'existing_org' ? mappingOrgId : undefined,
+        org_name_template:
+          mappingEffect === 'exclude'
+            ? ''
+            : mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg
+            ? mappingOrgNameTemplate.trim()
+            : '',
+        role: mappingEffect === 'exclude' ? undefined : mappingRole,
+        recreate_missing_org:
+          mappingEffect === 'exclude' || mappingProvisioningMode !== 'existing_org'
+            ? false
+            : mappingRecreateMissingOrg,
+        remove_on_unsync: mappingEffect === 'exclude' ? undefined : mappingRemoveOnUnsync,
+      };
+
+      if (editingMapping) {
+        await adminUpdateGroupMapping(selectedProvider.name, editingMapping.id, payload);
+      } else {
+        await adminCreateGroupMapping(selectedProvider.name, payload);
+      }
+      mappingModal.close();
+      await loadSelectedDetails();
+    } catch (saveError: unknown) {
+      setMappingFormError(saveError instanceof Error ? saveError.message : 'Failed to save mapping');
+    } finally {
+      setMappingSaving(false);
+    }
+  }
+
+  async function handleDeleteMapping(mappingId: string) {
+    if (!selectedProvider) return;
+    const ok = await confirm({
+      title: 'Delete Claim Mapping',
+      message: 'Remove this OIDC claim mapping rule?',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await adminDeleteGroupMapping(selectedProvider.name, mappingId);
+      await loadSelectedDetails();
+    } catch (deleteError: unknown) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete mapping');
+    }
+  }
+
+  function openCreateOverride() {
+    if (!selectedProvider) return;
+    setEditingOverride(null);
+    setOverrideClaimType('group');
+    setOverrideMatchType('exact');
+    setOverrideMatchValue('');
+    setOverrideTargetType(orgs.length > 0 ? 'org_id' : 'rendered_name');
+    setOverrideOrgId(orgs[0]?.id ?? '');
+    setOverrideOrgNameTemplate('{claim}');
+    setOverrideRole('admin');
+    setOverrideFormError('');
+    overrideModal.open();
+  }
+
+  function openEditOverride(override: OIDCOrgRoleOverride) {
+    setEditingOverride(override);
+    setOverrideClaimType(override.claim_type);
+    setOverrideMatchType(override.match_type);
+    setOverrideMatchValue(override.match_value);
+    setOverrideTargetType(override.target_type);
+    setOverrideOrgId(override.org_id ?? '');
+    setOverrideOrgNameTemplate(override.org_name_template || '{claim}');
+    setOverrideRole(override.role);
+    setOverrideFormError('');
+    overrideModal.open();
+  }
+
+  async function handleOverrideSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedProvider) return;
+    setOverrideSaving(true);
+    setOverrideFormError('');
+    try {
+      const payload = {
+        claim_type: overrideClaimType,
+        match_type: overrideMatchType,
+        match_value: overrideMatchValue.trim(),
+        target_type: overrideTargetType,
+        org_id: overrideTargetType === 'org_id' ? overrideOrgId : undefined,
+        org_name_template: overrideTargetType === 'rendered_name' ? overrideOrgNameTemplate.trim() : '',
+        role: overrideRole,
+      };
+      if (editingOverride) {
+        await adminUpdateOIDCRoleOverride(selectedProvider.name, editingOverride.id, payload);
+      } else {
+        await adminCreateOIDCRoleOverride(selectedProvider.name, payload);
+      }
+      overrideModal.close();
+      await loadSelectedDetails();
+    } catch (saveError: unknown) {
+      setOverrideFormError(saveError instanceof Error ? saveError.message : 'Failed to save role override');
+    } finally {
+      setOverrideSaving(false);
+    }
+  }
+
+  async function handleDeleteOverride(overrideId: string) {
+    if (!selectedProvider) return;
+    const ok = await confirm({
+      title: 'Delete Role Override',
+      message: 'Remove this role override rule?',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await adminDeleteOIDCRoleOverride(selectedProvider.name, overrideId);
+      await loadSelectedDetails();
+    } catch (deleteError: unknown) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete role override');
+    }
+  }
+
+  async function handlePreview(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedProvider) return;
+    setPreviewLoading(true);
+    try {
+      const result = await adminPreviewOIDCClaimSync(selectedProvider.name, {
+        groups: parseDelimitedList(previewGroupsInput),
+        roles: parseDelimitedList(previewRolesInput),
+      });
+      setPreview(result);
+    } catch (previewError: unknown) {
+      setError(previewError instanceof Error ? previewError.message : 'Failed to preview claim sync');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {error && <Banner type="error" text={error} />}
+      {success && <Banner type="success" text={success} />}
+
+      <Card className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <SearchField name="admin-identity-provider-search" variant="secondary" className="w-full sm:max-w-sm">
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                placeholder="Filter providers by name, display name, or issuer..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
+          <Button variant="secondary" onPress={openCreateProvider}>
+            <PlusSignIcon size={15} />
+            Add Provider
+          </Button>
+        </div>
+
+        <Table variant="secondary">
+          <Table.ScrollContainer>
+            <Table.Content aria-label="OIDC providers" className="min-w-[1100px]">
+              <Table.Header>
+                <Table.Column>Select</Table.Column>
+                <Table.Column isRowHeader>Provider</Table.Column>
+                <Table.Column>Issuer</Table.Column>
+                <Table.Column>Status</Table.Column>
+                <Table.Column>Mappings</Table.Column>
+                <Table.Column>Overrides</Table.Column>
+                <Table.Column className="text-right">Actions</Table.Column>
+              </Table.Header>
+              <Table.Body
+                renderEmptyState={() => (
+                  <div className="py-10 text-center text-sm text-zinc-500">
+                    {loading ? 'Loading providers...' : 'No providers found.'}
+                  </div>
+                )}
+              >
+                {filteredProviders.map((provider) => (
+                  <Table.Row
+                    key={provider.name}
+                    id={provider.name}
+                    className={provider.name === selectedProvider?.name ? 'bg-[var(--row-hover)]' : 'hover:bg-[var(--row-hover)]'}
+                  >
+                    <Table.Cell>
+                      <Button
+                        size="sm"
+                        variant={provider.name === selectedProvider?.name ? 'primary' : 'secondary'}
+                        onPress={() => setSelectedProvider(provider)}
+                      >
+                        {provider.name === selectedProvider?.name ? 'Selected' : 'Select'}
+                      </Button>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <button className="text-left" onClick={() => setSelectedProvider(provider)} type="button">
+                        <p className="font-medium underline-offset-4 hover:underline">{provider.display_name}</p>
+                        <p className="text-xs text-zinc-500 font-mono">{provider.name}</p>
+                      </button>
+                    </Table.Cell>
+                    <Table.Cell className="text-xs text-zinc-500 font-mono">{provider.issuer_url}</Table.Cell>
+                    <Table.Cell>
+                      <Chip size="sm" variant="soft" color={provider.enabled ? 'success' : 'default'}>
+                        {provider.enabled ? 'Enabled' : 'Disabled'}
+                      </Chip>
+                    </Table.Cell>
+                    <Table.Cell className="text-xs text-zinc-500">{provider.name === selectedProvider?.name ? mappings.length : '-'}</Table.Cell>
+                    <Table.Cell className="text-xs text-zinc-500">{provider.name === selectedProvider?.name ? roleOverrides.length : '-'}</Table.Cell>
+                    <Table.Cell>
+                      <div className="flex justify-end">
+                        <RowActionsMenu
+                          label={`Open actions for provider ${provider.display_name}`}
+                          items={[
+                            {
+                              id: 'toggle',
+                              label: provider.enabled ? 'Disable provider' : 'Enable provider',
+                              onAction: () => {
+                                void handleToggleEnabled(provider);
+                              },
+                            },
+                            {
+                              id: 'edit',
+                              label: 'Edit provider',
+                              icon: <PencilEdit01Icon size={15} />,
+                              onAction: () => openEditProvider(provider),
+                            },
+                            {
+                              id: 'delete',
+                              label: 'Delete provider',
+                              icon: <Delete01Icon size={15} />,
+                              variant: 'danger',
+                              onAction: () => {
+                                void handleDeleteProvider(provider.name);
+                              },
+                            },
+                          ]}
+                        />
+                      </div>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table>
+      </Card>
+
+      {!selectedProvider && (
+        <Card className="border border-divider/60 bg-content2/30">
+          <Card.Content>
+            <p className="text-sm text-zinc-500">
+              Select a provider row above to configure claim mappings, role overrides, and claim sync preview.
+            </p>
+          </Card.Content>
+        </Card>
+      )}
+
+      {selectedProvider && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Card className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold">Claim Mappings</h3>
+              <Button size="sm" variant="secondary" onPress={openCreateMapping}>Add Mapping</Button>
+            </div>
+            <Table variant="secondary">
+              <Table.Content aria-label="Claim mappings">
+                <Table.Header>
+                  <Table.Column isRowHeader>Claim</Table.Column>
+                  <Table.Column>Target</Table.Column>
+                  <Table.Column>Role</Table.Column>
+                  <Table.Column className="text-right">Actions</Table.Column>
+                </Table.Header>
+                <Table.Body renderEmptyState={() => <div className="py-6 text-center text-sm text-zinc-500">No mappings configured.</div>}>
+                  {mappings.map((mapping) => (
+                    <Table.Row key={mapping.id} id={mapping.id}>
+                      <Table.Cell>
+                        <p className="font-mono text-xs">{mapping.match_value}</p>
+                        <p className="text-xs text-zinc-500">{mapping.claim_type} · {mapping.match_type} · {mapping.effect}</p>
+                      </Table.Cell>
+                      <Table.Cell className="text-xs text-zinc-500">{mapping.org_name ?? mapping.org_id ?? 'Derived'}</Table.Cell>
+                      <Table.Cell className="text-xs uppercase tracking-[0.12em] text-zinc-500">{mapping.effect === 'exclude' ? '—' : mapping.role}</Table.Cell>
+                      <Table.Cell>
+                        <div className="flex justify-end">
+                          <RowActionsMenu
+                            label={`Open actions for mapping ${mapping.match_value}`}
+                            items={[
+                              {
+                                id: 'edit',
+                                label: 'Edit mapping',
+                                icon: <PencilEdit01Icon size={15} />,
+                                onAction: () => openEditMapping(mapping),
+                              },
+                              {
+                                id: 'delete',
+                                label: 'Delete mapping',
+                                icon: <Delete01Icon size={15} />,
+                                variant: 'danger',
+                                onAction: () => {
+                                  void handleDeleteMapping(mapping.id);
+                                },
+                              },
+                            ]}
+                          />
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Content>
+            </Table>
+          </Card>
+
+          <Card className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold">Role Overrides</h3>
+              <Button size="sm" variant="secondary" onPress={openCreateOverride}>Add Override</Button>
+            </div>
+            <Table variant="secondary">
+              <Table.Content aria-label="Role overrides">
+                <Table.Header>
+                  <Table.Column isRowHeader>Claim</Table.Column>
+                  <Table.Column>Target</Table.Column>
+                  <Table.Column>Role</Table.Column>
+                  <Table.Column className="text-right">Actions</Table.Column>
+                </Table.Header>
+                <Table.Body renderEmptyState={() => <div className="py-6 text-center text-sm text-zinc-500">No overrides configured.</div>}>
+                  {roleOverrides.map((override) => (
+                    <Table.Row key={override.id} id={override.id}>
+                      <Table.Cell>
+                        <p className="font-mono text-xs">{override.match_value}</p>
+                        <p className="text-xs text-zinc-500">{override.claim_type} · {override.match_type}</p>
+                      </Table.Cell>
+                      <Table.Cell className="text-xs text-zinc-500">{override.org_name ?? override.org_id ?? override.org_name_template}</Table.Cell>
+                      <Table.Cell className="text-xs uppercase tracking-[0.12em] text-zinc-500">{override.role}</Table.Cell>
+                      <Table.Cell>
+                        <div className="flex justify-end">
+                          <RowActionsMenu
+                            label={`Open actions for override ${override.match_value}`}
+                            items={[
+                              {
+                                id: 'edit',
+                                label: 'Edit override',
+                                icon: <PencilEdit01Icon size={15} />,
+                                onAction: () => openEditOverride(override),
+                              },
+                              {
+                                id: 'delete',
+                                label: 'Delete override',
+                                icon: <Delete01Icon size={15} />,
+                                variant: 'danger',
+                                onAction: () => {
+                                  void handleDeleteOverride(override.id);
+                                },
+                              },
+                            ]}
+                          />
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Content>
+            </Table>
+          </Card>
+        </div>
+      )}
+
+      {selectedProvider && (
+        <Card className="space-y-4">
+          <h3 className="text-base font-semibold">Claim Sync Preview</h3>
+          <form className="grid gap-3 lg:grid-cols-[1fr_1fr_auto] lg:items-end" onSubmit={handlePreview}>
+            <TextArea
+              value={previewGroupsInput}
+              onChange={(event) => setPreviewGroupsInput(event.target.value)}
+              variant="secondary"
+              placeholder="groups (comma or newline separated)"
+              rows={4}
+            />
+            <TextArea
+              value={previewRolesInput}
+              onChange={(event) => setPreviewRolesInput(event.target.value)}
+              variant="secondary"
+              placeholder="roles (comma or newline separated)"
+              rows={4}
+            />
+            <Button type="submit" variant="secondary" isDisabled={previewLoading}>
+              {previewLoading ? 'Running...' : 'Run Preview'}
+            </Button>
+          </form>
+
+          {preview && (
+            <Table variant="secondary">
+              <Table.Content aria-label="Preview memberships">
+                <Table.Header>
+                  <Table.Column isRowHeader>Org</Table.Column>
+                  <Table.Column>Claim</Table.Column>
+                  <Table.Column>Role</Table.Column>
+                  <Table.Column>Behavior</Table.Column>
+                </Table.Header>
+                <Table.Body renderEmptyState={() => <div className="py-6 text-center text-sm text-zinc-500">No memberships.</div>}>
+                  {preview.final_memberships.map((membership, index) => (
+                    <Table.Row key={`${membership.mapping_id}-${membership.org_name}-${index}`} id={`${membership.mapping_id}-${index}`}>
+                      <Table.Cell>{membership.org_name}</Table.Cell>
+                      <Table.Cell className="font-mono text-xs text-zinc-500">{membership.claim}</Table.Cell>
+                      <Table.Cell className="text-xs text-zinc-500">{membership.base_role} → {membership.final_role}</Table.Cell>
+                      <Table.Cell className="text-xs text-zinc-500">{membership.provisioning_mode === 'create_org' ? 'Create org' : 'Existing org'}{membership.override_applied ? ' · Override applied' : ''}</Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Content>
+            </Table>
+          )}
+        </Card>
+      )}
+
+      <Modal state={providerModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="lg" placement="center">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{editingProvider ? 'Edit Provider' : 'Add Provider'}</Modal.Heading>
+                <Modal.CloseTrigger />
+              </Modal.Header>
+              <Modal.Body>
+                <div className="space-y-4">
+                  <p className="text-sm text-zinc-500">
+                    Configure identity provider details in three steps. {editingProvider ? 'Update connection details and policy controls.' : 'Create a new OIDC provider with claim governance defaults.'}
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Chip variant={providerStep === 0 ? 'primary' : 'soft'} color={providerStep === 0 ? 'accent' : 'default'}>1. Basics</Chip>
+                    <Chip variant={providerStep === 1 ? 'primary' : 'soft'} color={providerStep === 1 ? 'accent' : 'default'}>2. Access Rules</Chip>
+                    <Chip variant={providerStep === 2 ? 'primary' : 'soft'} color={providerStep === 2 ? 'accent' : 'default'}>3. Claims & Order</Chip>
+                  </div>
+
+                  <form id="identity-provider-form" className="space-y-4" onSubmit={handleProviderSubmit}>
+                    {providerFormError && <p className="text-sm text-danger">{providerFormError}</p>}
+
+                    {providerStep === 0 && (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">{requiredLabel('Provider Name')}</p><Input variant="secondary" placeholder="e.g. keycloak-main" value={providerName} onChange={(event) => setProviderName(event.target.value)} required /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">{requiredLabel('Display Name')}</p><Input variant="secondary" placeholder="Shown on login button" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">{requiredLabel('Issuer URL')}</p><Input variant="secondary" placeholder="https://issuer.example.com/realms/main" value={issuerUrl} onChange={(event) => setIssuerUrl(event.target.value)} required /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">{requiredLabel('Client ID')}</p><Input variant="secondary" placeholder="OIDC client identifier" value={clientId} onChange={(event) => setClientId(event.target.value)} required /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">{editingProvider ? 'Client Secret' : requiredLabel('Client Secret')}</p><Input type="password" variant="secondary" placeholder={editingProvider ? 'Leave blank to keep current secret' : 'Client secret'} value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} required={!editingProvider} /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">{requiredLabel('Redirect URI')}</p><Input variant="secondary" placeholder="https://app.example.com/auth/callback" value={redirectUri} onChange={(event) => setRedirectUri(event.target.value)} required /></div>
+                      </div>
+                    )}
+
+                    {providerStep === 1 && (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="space-y-1 md:col-span-2"><p className="text-xs text-zinc-500">{requiredLabel('Scopes')}</p><Input variant="secondary" placeholder="openid, profile, email" value={scopesInput} onChange={(event) => setScopesInput(event.target.value)} required /><p className="text-xs text-zinc-500">Comma-separated scopes requested during sign-in.</p></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">Admin Groups</p><Input variant="secondary" placeholder="platform-admins, secops" value={adminGroupsInput} onChange={(event) => setAdminGroupsInput(event.target.value)} /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">Admin Roles</p><Input variant="secondary" placeholder="admin, superuser" value={adminRolesInput} onChange={(event) => setAdminRolesInput(event.target.value)} /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">Included Groups</p><Input variant="secondary" placeholder="Only allow these groups" value={includedGroupsInput} onChange={(event) => setIncludedGroupsInput(event.target.value)} /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">Excluded Groups</p><Input variant="secondary" placeholder="Always deny these groups" value={excludedGroupsInput} onChange={(event) => setExcludedGroupsInput(event.target.value)} /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">Included Org Names</p><Input variant="secondary" placeholder="engineering, ops" value={includedOrgNamesInput} onChange={(event) => setIncludedOrgNamesInput(event.target.value)} /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">Excluded Org Names</p><Input variant="secondary" placeholder="contractors, archived" value={excludedOrgNamesInput} onChange={(event) => setExcludedOrgNamesInput(event.target.value)} /></div>
+                      </div>
+                    )}
+
+                    {providerStep === 2 && (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">Groups Claim</p><Input variant="secondary" placeholder="groups" value={groupsClaim} onChange={(event) => setGroupsClaim(event.target.value)} /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">Roles Claim</p><Input variant="secondary" placeholder="roles" value={rolesClaim} onChange={(event) => setRolesClaim(event.target.value)} /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">Button Color</p><Input variant="secondary" placeholder="#7C3AED (optional)" value={buttonColor} onChange={(event) => setButtonColor(event.target.value)} /></div>
+                        <div className="space-y-1"><p className="text-xs text-zinc-500">Sort Order</p><Input type="number" variant="secondary" placeholder="0" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} /></div>
+                        <div className="md:col-span-2 rounded-medium border border-divider/60 bg-content2/20 p-3">
+                          <Switch isSelected={providerEnabled} onChange={setProviderEnabled}>
+                            <Switch.Control><Switch.Thumb /></Switch.Control>
+                            <Switch.Content>Provider enabled</Switch.Content>
+                          </Switch>
+                          <p className="mt-1 text-xs text-zinc-500">Disabled providers stay configured but are hidden from the login screen.</p>
+                        </div>
+                      </div>
+                    )}
+                  </form>
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button type="button" variant="secondary" onPress={providerModal.close}>Cancel</Button>
+                {providerStep > 0 && (
+                  <Button type="button" variant="secondary" onPress={() => setProviderStep((current) => Math.max(current - 1, 0))}>
+                    Back
+                  </Button>
+                )}
+                {providerStep < 2 ? (
+                  <Button type="button" variant="primary" onPress={handlePrimaryProviderAction}>
+                    Next
+                  </Button>
+                ) : (
+                  <Button type="button" variant="primary" isDisabled={providerSaving} onPress={handlePrimaryProviderAction}>
+                    {providerSaving ? 'Saving...' : editingProvider ? 'Save Provider' : 'Create Provider'}
+                  </Button>
+                )}
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal state={mappingModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{editingMapping ? 'Edit Mapping' : 'Add Mapping'}</Modal.Heading>
+                <Modal.CloseTrigger />
+              </Modal.Header>
+              <Modal.Body>
+                <form id="identity-mapping-form" className="space-y-3" onSubmit={handleMappingSubmit}>
+                  {mappingFormError && <p className="text-sm text-danger">{mappingFormError}</p>}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Select value={mappingEffect} onChange={(value) => setMappingEffect(value as 'allow' | 'exclude')} variant="secondary">
+                      <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                      <Select.Popover><ListBox><ListBox.Item id="allow">Allow</ListBox.Item><ListBox.Item id="exclude">Exclude</ListBox.Item></ListBox></Select.Popover>
+                    </Select>
+                    <Select value={mappingClaimType} onChange={(value) => setMappingClaimType(value as 'group' | 'role')} variant="secondary">
+                      <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                      <Select.Popover><ListBox><ListBox.Item id="group">Group</ListBox.Item><ListBox.Item id="role">Role</ListBox.Item></ListBox></Select.Popover>
+                    </Select>
+                    <Select value={mappingMatchType} onChange={(value) => setMappingMatchType(value as 'exact' | 'prefix')} variant="secondary">
+                      <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                      <Select.Popover><ListBox><ListBox.Item id="exact">Exact</ListBox.Item><ListBox.Item id="prefix">Prefix</ListBox.Item></ListBox></Select.Popover>
+                    </Select>
+                    <Input variant="secondary" placeholder="Claim value" value={mappingMatchValue} onChange={(event) => setMappingMatchValue(event.target.value)} required />
+                  </div>
+                  {mappingEffect !== 'exclude' && (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Select value={mappingProvisioningMode} onChange={(value) => setMappingProvisioningMode(value as 'existing_org' | 'create_org')} variant="secondary">
+                          <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                          <Select.Popover><ListBox><ListBox.Item id="existing_org">Use existing org</ListBox.Item><ListBox.Item id="create_org">Create org</ListBox.Item></ListBox></Select.Popover>
+                        </Select>
+                        <Select value={mappingRole} onChange={(value) => setMappingRole(value as 'viewer' | 'editor' | 'admin')} variant="secondary">
+                          <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                          <Select.Popover><ListBox><ListBox.Item id="viewer">Viewer</ListBox.Item><ListBox.Item id="editor">Editor</ListBox.Item><ListBox.Item id="admin">Admin</ListBox.Item></ListBox></Select.Popover>
+                        </Select>
+                      </div>
+                      {mappingProvisioningMode === 'existing_org' && (
+                        <Select value={mappingOrgId} onChange={(value) => setMappingOrgId(String(value))} variant="secondary">
+                        <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {orgs.map((org) => (
+                                <ListBox.Item key={org.id} id={org.id}>{org.name}</ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      )}
+                      <Input variant="secondary" placeholder="Org template" value={mappingOrgNameTemplate} onChange={(event) => setMappingOrgNameTemplate(event.target.value)} />
+                      <div className="grid gap-2">
+                        <Switch isSelected={mappingRecreateMissingOrg} onChange={setMappingRecreateMissingOrg}>
+                          <Switch.Control><Switch.Thumb /></Switch.Control>
+                          <Switch.Content>Recreate missing org</Switch.Content>
+                        </Switch>
+                        <Switch isSelected={mappingRemoveOnUnsync} onChange={setMappingRemoveOnUnsync}>
+                          <Switch.Control><Switch.Thumb /></Switch.Control>
+                          <Switch.Content>Remove on unsync</Switch.Content>
+                        </Switch>
+                      </div>
+                    </>
+                  )}
+                </form>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="secondary" onPress={mappingModal.close}>Cancel</Button>
+                <Button type="submit" form="identity-mapping-form" variant="primary" isDisabled={mappingSaving}>
+                  {mappingSaving ? 'Saving...' : editingMapping ? 'Save Mapping' : 'Create Mapping'}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal state={overrideModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{editingOverride ? 'Edit Override' : 'Add Override'}</Modal.Heading>
+                <Modal.CloseTrigger />
+              </Modal.Header>
+              <Modal.Body>
+                <form id="identity-override-form" className="space-y-3" onSubmit={handleOverrideSubmit}>
+                  {overrideFormError && <p className="text-sm text-danger">{overrideFormError}</p>}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Select value={overrideClaimType} onChange={(value) => setOverrideClaimType(value as 'group' | 'role')} variant="secondary">
+                      <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                      <Select.Popover><ListBox><ListBox.Item id="group">Group</ListBox.Item><ListBox.Item id="role">Role</ListBox.Item></ListBox></Select.Popover>
+                    </Select>
+                    <Select value={overrideMatchType} onChange={(value) => setOverrideMatchType(value as 'exact' | 'prefix')} variant="secondary">
+                      <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                      <Select.Popover><ListBox><ListBox.Item id="exact">Exact</ListBox.Item><ListBox.Item id="prefix">Prefix</ListBox.Item></ListBox></Select.Popover>
+                    </Select>
+                    <Input variant="secondary" placeholder="Claim value" value={overrideMatchValue} onChange={(event) => setOverrideMatchValue(event.target.value)} required />
+                    <Select value={overrideTargetType} onChange={(value) => setOverrideTargetType(value as 'org_id' | 'rendered_name')} variant="secondary">
+                      <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                      <Select.Popover><ListBox><ListBox.Item id="org_id">Organization</ListBox.Item><ListBox.Item id="rendered_name">Rendered name</ListBox.Item></ListBox></Select.Popover>
+                    </Select>
+                  </div>
+                  {overrideTargetType === 'org_id' ? (
+                    <Select value={overrideOrgId} onChange={(value) => setOverrideOrgId(String(value))} variant="secondary">
+                      <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {orgs.map((org) => (
+                            <ListBox.Item key={org.id} id={org.id}>{org.name}</ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  ) : (
+                    <Input variant="secondary" placeholder="Org template" value={overrideOrgNameTemplate} onChange={(event) => setOverrideOrgNameTemplate(event.target.value)} />
+                  )}
+                  <Select value={overrideRole} onChange={(value) => setOverrideRole(value as 'viewer' | 'editor' | 'admin')} variant="secondary">
+                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                    <Select.Popover><ListBox><ListBox.Item id="viewer">Viewer</ListBox.Item><ListBox.Item id="editor">Editor</ListBox.Item><ListBox.Item id="admin">Admin</ListBox.Item></ListBox></Select.Popover>
+                  </Select>
+                </form>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="secondary" onPress={overrideModal.close}>Cancel</Button>
+                <Button type="submit" form="identity-override-form" variant="primary" isDisabled={overrideSaving}>
+                  {overrideSaving ? 'Saving...' : editingOverride ? 'Save Override' : 'Create Override'}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      {confirmDialog}
+    </div>
+  );
+}

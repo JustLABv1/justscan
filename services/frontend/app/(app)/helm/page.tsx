@@ -1,44 +1,58 @@
 'use client';
+import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
-import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { PageHeader } from '@/components/ui/page-header';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import { useWorkScope } from '@/hooks/use-work-scope';
+import type { Key } from '@heroui/react';
 import {
-    createHelmScans,
-    createShare,
-    extractHelmImages,
-    getDefaultScannerCapabilities,
-    getTokenType,
-    getWorkScope,
-    HelmExtractResponse,
-    HelmScanRunSummary,
-    listHelmScanRuns,
-    listRegistriesWithCapabilities,
-    listTags,
-    RegistryWithHealth,
-    ScannerCapabilities,
-    Tag,
+  createHelmScans,
+  createShare,
+  deleteHelmScanRun,
+  extractHelmImages,
+  getDefaultScannerCapabilities,
+  getHelmScanRun,
+  getTokenType,
+  getWorkScope,
+  HelmExtractResponse,
+  HelmScanRunSummary,
+  listHelmScanRuns,
+  listRegistriesWithCapabilities,
+  listTags,
+  RegistryWithHealth,
+  ScannerCapabilities,
+  Tag,
 } from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import {
-    createEditableHelmImages,
-    EditableHelmImage,
-    getHelmImageSourceLabel,
-    parseHelmImageRef,
+  createEditableHelmImages,
+  EditableHelmImage,
+  getHelmImageSourceLabel,
+  parseHelmImageRef,
 } from '@/lib/helm-image-overrides';
 import { timeAgo } from '@/lib/time';
-import { ListBox, Select } from '@heroui/react';
 import {
-    ArrowLeft01Icon,
-    CheckmarkSquare02Icon,
-    Globe02Icon,
-    PackageIcon,
-    Refresh01Icon,
-    SquareIcon,
-} from 'hugeicons-react';
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Chip,
+  Description,
+  Input,
+  Label,
+  ListBox,
+  Pagination,
+  SearchField,
+  Select,
+  Switch,
+  Table,
+  TextField,
+  type SortDescriptor,
+} from '@heroui/react';
+import { ArrowLeft01Icon, PackageIcon, Refresh01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
-
-const inputCls = nativeFieldClassName;
-const selectTriggerCls = heroSelectTriggerClassName;
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type Step = 'input' | 'preview';
 
@@ -59,9 +73,26 @@ const PROVIDER_LABEL: Record<string, string> = {
   artifactory_xray: 'Artifactory Xray',
 };
 
+type HelmRunHistoryStatus = 'all' | 'running' | 'completed' | 'failed';
+type HelmRunHistorySortKey =
+  | 'chart'
+  | 'status'
+  | 'images'
+  | 'completed'
+  | 'failed'
+  | 'high'
+  | 'critical'
+  | 'started'
+  | 'owner';
+
+const HELM_RUN_HISTORY_PAGE_SIZE = 10;
+
 export default function HelmPage() {
   const router = useRouter();
   const toast = useToast();
+  const workScope = useWorkScope();
+  const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   const [step, setStep] = useState<Step>('input');
   const [chartURL, setChartURL] = useState('');
@@ -77,19 +108,24 @@ export default function HelmPage() {
   const [registryId, setRegistryId] = useState('');
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
-  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(
+    getDefaultScannerCapabilities()
+  );
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [scanning, setScanning] = useState(false);
   const [makePublic, setMakePublic] = useState(false);
 
   const [helmRuns, setHelmRuns] = useState<HelmScanRunSummary[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin] = useState(() => getTokenType() === 'admin');
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyActionRunId, setHistoryActionRunId] = useState<string | null>(null);
 
   const isOCI = chartURL.trim().startsWith('oci://');
   const selectedImages = editableImages.filter((img) => selected.has(img.id));
   const hasInvalidSelection = selectedImages.some((img) => img.edited_ref.trim() === '');
-  const selectableRegistries = registries.filter((registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy);
+  const selectableRegistries = registries.filter(
+    (registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy
+  );
   const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
 
   const loadTags = useCallback(async () => {
@@ -113,16 +149,17 @@ export default function HelmPage() {
   }, []);
 
   useEffect(() => {
-    setIsAdmin(getTokenType() === 'admin');
-    loadTags();
-    loadHistory();
-    listRegistriesWithCapabilities()
-      .then((response) => {
-        setRegistries(response.data);
-        setCapabilities(response.capabilities);
-      })
-      .catch(() => {});
-  }, [loadHistory, loadTags]);
+    return deferEffect(() => {
+      void loadTags();
+      void loadHistory();
+      void listRegistriesWithCapabilities()
+        .then((response) => {
+          setRegistries(response.data);
+          setCapabilities(response.capabilities);
+        })
+        .catch(() => {});
+    });
+  }, [loadHistory, loadTags, scopeKey]);
 
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault();
@@ -140,7 +177,7 @@ export default function HelmPage() {
       const result = await extractHelmImages(
         url,
         chartName.trim() || undefined,
-        chartVersion.trim() || undefined,
+        chartVersion.trim() || undefined
       );
       const images = Array.isArray(result.images) ? result.images : [];
       const nextImages = createEditableHelmImages(images);
@@ -184,17 +221,19 @@ export default function HelmPage() {
         extracted.chart_name,
         extracted.chart_version,
         registryId || undefined,
-        currentScope.kind === 'org' ? currentScope.orgId : undefined,
+        currentScope.kind === 'org' ? currentScope.orgId : undefined
       );
 
       if (makePublic && (result.scans?.length ?? 0) > 0) {
         await Promise.all(
-          result.scans.map((scan) => createShare(scan.id, 'public').catch(() => null)),
+          result.scans.map((scan) => createShare(scan.id, 'public').catch(() => null))
         );
       }
 
       await loadHistory();
-      toast.success(`${result.scans.length} image${result.scans.length === 1 ? '' : 's'} queued in Helm run ${result.run.id.slice(0, 8)}`);
+      toast.success(
+        `${result.scans.length} image${result.scans.length === 1 ? '' : 's'} queued in Helm run ${result.run.id.slice(0, 8)}`
+      );
       router.push(`/helm/runs/${result.run.id}`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to create scans');
@@ -222,431 +261,865 @@ export default function HelmPage() {
   }
 
   function updateEditedRef(id: string, value: string) {
-    setEditableImages((prev) => prev.map((image) => (
-      image.id === id ? { ...image, edited_ref: value } : image
-    )));
+    setEditableImages((prev) =>
+      prev.map((image) => (image.id === id ? { ...image, edited_ref: value } : image))
+    );
   }
 
-  function toggleTag(id: string) {
-    setSelectedTagIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  async function shareHelmRun(run: HelmScanRunSummary, copyLink = false) {
+    setHistoryActionRunId(run.id);
+    try {
+      const detail = await getHelmScanRun(run.id);
+      const scans = detail.items
+        .map((item) => item.latest_scan)
+        .filter((scan) => scan.status === 'completed' || scan.status === 'failed');
+      if (scans.length === 0) {
+        toast.error('No completed or failed scans are available to share yet.');
+        return;
+      }
+
+      const tokens = await Promise.all(
+        scans.map(async (scan) => {
+          if (scan.share_token) return scan.share_token;
+          const share = await createShare(scan.id, 'public');
+          return share.share_token;
+        })
+      );
+
+      await loadHistory();
+      toast.success(`Shared ${scans.length} scan${scans.length === 1 ? '' : 's'}`);
+
+      if (copyLink && tokens.length > 0) {
+        const [first, ...rest] = tokens;
+        const base = `${window.location.origin}/shared/helm/${first}`;
+        const url = rest.length > 0 ? `${base}?tokens=${rest.join(',')}` : base;
+        await navigator.clipboard.writeText(url);
+        toast.success('Share link copied');
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to share Helm run');
+    } finally {
+      setHistoryActionRunId(null);
+    }
+  }
+
+  async function deleteHelmRun(run: HelmScanRunSummary) {
+    const ok = await confirm({
+      title: 'Delete Helm run?',
+      message: `This will delete ${run.total_images} scan${run.total_images === 1 ? '' : 's'} from this Helm run in the current workspace.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
     });
+    if (!ok) return;
+
+    setHistoryActionRunId(run.id);
+    try {
+      await deleteHelmScanRun(run.id);
+      toast.success('Helm run deleted');
+      await loadHistory();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete Helm run');
+    } finally {
+      setHistoryActionRunId(null);
+    }
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center gap-3 justify-between">
-        <div className="flex items-center gap-3">
-          <PackageIcon size={22} className="text-violet-500 shrink-0" />
-          <div>
-            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Helm Scan Runs</h1>
-            <p className="text-sm text-zinc-500 mt-0.5">
-              Queue a chart run once, keep it as a first-class record, and drill into the child scans by run ID.
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={loadHistory}
-          disabled={historyLoading}
-          className="btn-secondary inline-flex items-center gap-1.5"
-        >
-          <Refresh01Icon size={14} className={historyLoading ? 'animate-spin' : ''} />
-          Refresh history
-        </button>
-      </div>
+    <div className="p-6 space-y-6">
+      <PageHeader
+        title="Helm Scan Runs"
+        description="Queue a chart run once, keep it as a first-class record, and drill into the child scans by run ID."
+        breadcrumbs={[{ label: 'Helm' }]}
+        actions={
+          <Button
+            type="button"
+            variant="secondary"
+            onPress={loadHistory}
+            isDisabled={historyLoading}
+          >
+            <Refresh01Icon size={14} className={historyLoading ? 'animate-spin' : ''} />
+            Refresh history
+          </Button>
+        }
+      />
 
       <StepBar current={step} />
 
       {step === 'input' && (
-        <div
-          className="glass-panel rounded-2xl p-6 space-y-5"
-        >
-          <form onSubmit={handleExtract} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                Chart URL <span className="text-zinc-400 font-normal text-xs">(OCI or HTTP repository)</span>
-              </label>
-              <input
-                className={inputCls}
-                placeholder="oci://ghcr.io/org/charts/mychart   or   https://charts.bitnami.com/bitnami"
-                value={chartURL}
-                onChange={(e) => setChartURL(e.target.value)}
-                required
-              />
-              <p className="mt-1 text-xs text-zinc-400">
-                OCI: <code className="font-mono">oci://registry/path/chartname</code> &nbsp;·&nbsp;
-                HTTP: provide the repo URL and the chart name below
-              </p>
-            </div>
+        <Card>
+          <Card.Header>
+            <Card.Title className="flex items-center gap-2">
+              <PackageIcon size={18} />
+              Chart
+            </Card.Title>
+            <Card.Description>
+              Extract container images from an OCI chart or HTTP chart repository.
+            </Card.Description>
+          </Card.Header>
+          <Card.Content>
+            <form onSubmit={handleExtract} className="space-y-4">
+              <TextField fullWidth isRequired value={chartURL} onChange={setChartURL}>
+                <Label>Chart URL</Label>
+                <Input
+                  variant="secondary"
+                  placeholder="oci://ghcr.io/org/charts/mychart or https://charts.bitnami.com/bitnami"
+                  value={chartURL}
+                  onChange={(e) => setChartURL(e.target.value)}
+                  required
+                />
+                <Description>
+                  OCI: <code className="font-mono">oci://registry/path/chartname</code>{' '}
+                  &nbsp;·&nbsp; HTTP: provide the repo URL and the chart name below
+                </Description>
+              </TextField>
 
-            {!isOCI && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                    Chart Name <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    className={inputCls}
-                    placeholder="nginx"
-                    value={chartName}
-                    onChange={(e) => setChartName(e.target.value)}
-                  />
+              {!isOCI && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <TextField fullWidth isRequired value={chartName} onChange={setChartName}>
+                    <Label>Chart Name</Label>
+                    <Input
+                      variant="secondary"
+                      placeholder="nginx"
+                      value={chartName}
+                      onChange={(e) => setChartName(e.target.value)}
+                    />
+                  </TextField>
+                  <TextField fullWidth value={chartVersion} onChange={setChartVersion}>
+                    <Label>Version</Label>
+                    <Input
+                      variant="secondary"
+                      placeholder="15.3.0"
+                      value={chartVersion}
+                      onChange={(e) => setChartVersion(e.target.value)}
+                    />
+                    <Description>Optional</Description>
+                  </TextField>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                    Version <span className="text-zinc-400 font-normal text-xs">(optional)</span>
-                  </label>
-                  <input
-                    className={inputCls}
-                    placeholder="15.3.0"
+              )}
+
+              {isOCI && (
+                <TextField fullWidth value={chartVersion} onChange={setChartVersion}>
+                  <Label>Version</Label>
+                  <Input
+                    variant="secondary"
+                    placeholder="1.0.0"
                     value={chartVersion}
                     onChange={(e) => setChartVersion(e.target.value)}
                   />
-                </div>
+                  <Description>Optional</Description>
+                </TextField>
+              )}
+
+              {extractError && (
+                <Alert status="danger">
+                  <Alert.Indicator />
+                  <Alert.Content>
+                    <Alert.Title>Image extraction failed</Alert.Title>
+                    <Alert.Description>{extractError}</Alert.Description>
+                  </Alert.Content>
+                </Alert>
+              )}
+
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  isDisabled={extracting || !chartURL.trim()}
+                  isPending={extracting}
+                >
+                  Extract Images
+                </Button>
               </div>
-            )}
-
-            {isOCI && (
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  Version <span className="text-zinc-400 font-normal text-xs">(optional)</span>
-                </label>
-                <input
-                  className={inputCls}
-                  placeholder="1.0.0"
-                  value={chartVersion}
-                  onChange={(e) => setChartVersion(e.target.value)}
-                />
-              </div>
-            )}
-
-            {extractError && (
-              <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
-                {extractError}
-              </p>
-            )}
-
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={extracting || !chartURL.trim()}
-                className="btn-primary"
-              >
-                {extracting ? 'Extracting images…' : 'Extract Images'}
-              </button>
-            </div>
-          </form>
-        </div>
+            </form>
+          </Card.Content>
+        </Card>
       )}
 
       {step === 'input' && (
-        <HelmRunHistory runs={helmRuns} isAdmin={isAdmin} loading={historyLoading} />
+        <HelmRunHistory
+          runs={helmRuns}
+          isAdmin={isAdmin}
+          loading={historyLoading}
+          actionRunId={historyActionRunId}
+          onDeleteRun={deleteHelmRun}
+          onShareRun={(run) => shareHelmRun(run)}
+          onCopyShareLink={(run) => shareHelmRun(run, true)}
+        />
       )}
 
       {step === 'preview' && extracted && (
         <div className="space-y-4">
-          <div
-            className="glass-panel rounded-2xl px-5 py-4 flex items-center justify-between gap-4"
-          >
-            <div>
-              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                {extracted.chart_name}
-                {extracted.chart_version && (
-                  <span className="ml-2 text-xs font-normal text-zinc-400">v{extracted.chart_version}</span>
-                )}
-              </p>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                Found {extracted.images.length} image{extracted.images.length !== 1 ? 's' : ''} &nbsp;·&nbsp;
-                <span className="text-violet-500 font-medium">{selected.size} selected</span>
-              </p>
-            </div>
-            <button
-              onClick={() => setStep('input')}
-              className="btn-secondary inline-flex items-center gap-1.5"
-            >
-              <ArrowLeft01Icon size={14} />
-              Change chart
-            </button>
-          </div>
-
-          <div
-            className="glass-panel rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4"
-          >
-            <div className="flex items-center gap-2 min-w-[260px]">
-              <label className="text-xs text-zinc-500 whitespace-nowrap">Registry</label>
-              <Select
-                value={registryId || '__auto__'}
-                onChange={(value) => setRegistryId(String(value === '__auto__' ? '' : value ?? ''))}
+          <Card>
+            <Card.Content className="grid w-full gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">
+                  {extracted.chart_name}
+                  {extracted.chart_version && (
+                    <span className="ml-2 text-xs font-normal text-muted">
+                      v{extracted.chart_version}
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-muted mt-0.5">
+                  Found {extracted.images.length} image{extracted.images.length !== 1 ? 's' : ''}{' '}
+                  &nbsp;·&nbsp;
+                  <span className="font-medium">{selected.size} selected</span>
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="justify-self-start sm:justify-self-end"
+                onPress={() => setStep('input')}
               >
-                <Select.Trigger className={selectTriggerCls}>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="__auto__">{capabilities.enable_trivy ? 'Auto-match from image hostname' : 'Auto-match from configured Xray registries'}</ListBox.Item>
-                    {selectableRegistries.map((registry) => (
-                      <ListBox.Item key={registry.id} id={registry.id}>
-                        {registry.name} · {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
+                <ArrowLeft01Icon size={14} />
+                Change chart
+              </Button>
+            </Card.Content>
+          </Card>
+
+          <Card>
+            <Card.Content className="grid w-full gap-4 lg:grid-cols-[minmax(280px,380px)_minmax(180px,240px)_minmax(0,1fr)_auto] lg:items-end">
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <Label className="text-xs">Registry</Label>
+                <Select
+                  className="w-full"
+                  value={registryId || '__auto__'}
+                  onChange={(value) =>
+                    setRegistryId(String(value === '__auto__' ? '' : (value ?? '')))
+                  }
+                  variant="secondary"
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="__auto__">
+                        {capabilities.enable_trivy
+                          ? 'Auto-match from image hostname'
+                          : 'Auto-match from configured Xray registries'}
                       </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-            </div>
+                      {selectableRegistries.map((registry) => (
+                        <ListBox.Item key={registry.id} id={registry.id}>
+                          {registry.name} ·{' '}
+                          {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </div>
 
-            {xrayOnlyWithoutRegistries && (
-              <p className="text-xs" style={{ color: '#f59e0b' }}>
-                No Artifactory Xray registry is configured yet, so this Helm run cannot be queued until one is added.
-              </p>
-            )}
+              {xrayOnlyWithoutRegistries && (
+                <Alert status="warning" className="w-full">
+                  <Alert.Indicator />
+                  <Alert.Content>
+                    <Alert.Description>
+                      No Artifactory Xray registry is configured yet, so this Helm run cannot be
+                      queued until one is added.
+                    </Alert.Description>
+                  </Alert.Content>
+                </Alert>
+              )}
 
-            <div className="flex items-center gap-2 min-w-[200px]">
-              <label className="text-xs text-zinc-500 whitespace-nowrap">Platform</label>
-              <Select
-                value={platform || '__auto__'}
-                onChange={(value) => setPlatform(String(value === '__auto__' ? '' : value ?? ''))}
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <Label className="text-xs">Platform</Label>
+                <Select
+                  className="w-full"
+                  value={platform || '__auto__'}
+                  onChange={(value) =>
+                    setPlatform(String(value === '__auto__' ? '' : (value ?? '')))
+                  }
+                  variant="secondary"
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {PLATFORMS.map((platformOption) => (
+                        <ListBox.Item key={platformOption.id} id={platformOption.id}>
+                          {platformOption.label}
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </div>
+
+              {availableTags.length > 0 && (
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  <Select
+                    className="w-full"
+                    placeholder="Select tags"
+                    selectionMode="multiple"
+                    value={Array.from(selectedTagIds)}
+                    onChange={(keys) =>
+                      setSelectedTagIds(new Set((keys as Key[]).map((key) => String(key))))
+                    }
+                    variant="secondary"
+                  >
+                    <Label className="text-xs">Tags</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox selectionMode="multiple">
+                        {availableTags.map((tag) => (
+                          <ListBox.Item key={tag.id} id={tag.id} textValue={tag.name}>
+                            {tag.name}
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                  {selectedTagIds.size > 0 && (
+                    <p className="text-xs text-muted">
+                      {selectedTagIds.size} tag{selectedTagIds.size === 1 ? '' : 's'} selected
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <Switch
+                className="justify-self-start lg:justify-self-end"
+                isSelected={makePublic}
+                onChange={setMakePublic}
               >
-                <Select.Trigger className={selectTriggerCls}>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {PLATFORMS.map((platformOption) => (
-                      <ListBox.Item key={platformOption.id} id={platformOption.id}>
-                        {platformOption.label}
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-            </div>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                <Switch.Content>
+                  <Label className="text-xs">Share publicly</Label>
+                </Switch.Content>
+              </Switch>
+            </Card.Content>
+          </Card>
 
-            {availableTags.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <label className="text-xs text-zinc-500 whitespace-nowrap">Tags</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {availableTags.map((tag) => {
-                    const active = selectedTagIds.has(tag.id);
+          <Table>
+            <Table.ScrollContainer>
+              <Table.Content aria-label="Extracted Helm images" className="min-w-[840px]">
+                <Table.Header>
+                  <Table.Column className="w-10">
+                    <Checkbox
+                      aria-label={
+                        selected.size === extracted.images.length ? 'Deselect all' : 'Select all'
+                      }
+                      isSelected={selected.size === extracted.images.length}
+                      isIndeterminate={selected.size > 0 && selected.size < extracted.images.length}
+                      slot="selection"
+                      onChange={toggleAll}
+                    >
+                      <Checkbox.Control>
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                    </Checkbox>
+                  </Table.Column>
+                  <Table.Column isRowHeader>Image</Table.Column>
+                  <Table.Column>Tag</Table.Column>
+                  <Table.Column>Source</Table.Column>
+                </Table.Header>
+                <Table.Body>
+                  {editableImages.map((img) => {
+                    const checked = selected.has(img.id);
+                    const parsed = parseHelmImageRef(img.edited_ref);
                     return (
-                      <button
-                        key={tag.id}
-                        type="button"
-                        onClick={() => toggleTag(tag.id)}
-                        className="text-xs px-2.5 py-1 rounded-full font-medium border transition-all"
-                        style={{
-                          background: active ? tag.color + '22' : 'transparent',
-                          borderColor: active ? tag.color : 'var(--border-subtle)',
-                          color: active ? tag.color : 'var(--text-muted)',
-                        }}
+                      <Table.Row
+                        key={img.id}
+                        id={img.id}
+                        className="cursor-pointer hover:bg-[var(--row-hover)]"
+                        onClick={() => toggleRow(img.id)}
                       >
-                        {tag.name}
-                      </button>
+                        <Table.Cell onClick={(event) => event.stopPropagation()}>
+                          <Checkbox
+                            aria-label={`Select ${img.edited_ref || 'image'}`}
+                            isSelected={checked}
+                            slot="selection"
+                            onChange={() => toggleRow(img.id)}
+                          >
+                            <Checkbox.Control>
+                              <Checkbox.Indicator />
+                            </Checkbox.Control>
+                          </Checkbox>
+                        </Table.Cell>
+                        <Table.Cell className="min-w-[420px]">
+                          <div className="w-full space-y-1">
+                            <Input
+                              variant="secondary"
+                              value={img.edited_ref}
+                              onChange={(event) => updateEditedRef(img.id, event.target.value)}
+                              onClick={(event) => event.stopPropagation()}
+                              placeholder="registry.example.com/org/image:tag"
+                              className="w-full font-mono"
+                            />
+                            <p className="truncate text-xs text-muted">
+                              {parsed.name || 'Enter an image reference'}
+                            </p>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell className="font-mono text-xs text-muted">
+                          {parsed.tag || '-'}
+                        </Table.Cell>
+                        <Table.Cell className="text-xs text-muted">
+                          <span title={getHelmImageSourceLabel(img)}>{img.source_file}</span>
+                        </Table.Cell>
+                      </Table.Row>
                     );
                   })}
-                </div>
-              </div>
-            )}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
 
-            <div className="ml-auto flex items-center gap-2">
-              <Globe02Icon size={14} className={makePublic ? 'text-violet-500' : 'text-zinc-400'} />
-              <button
-                type="button"
-                onClick={() => setMakePublic((value) => !value)}
-                className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none"
-                style={{ background: makePublic ? '#7c3aed' : 'var(--border-subtle)' }}
-                title={makePublic ? 'Result scans will be shared publicly' : 'Create public share links after queueing'}
-              >
-                <span
-                  className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform"
-                  style={{ transform: makePublic ? 'translateX(18px)' : 'translateX(2px)' }}
-                />
-              </button>
-              <label className="text-xs text-zinc-500 cursor-pointer" onClick={() => setMakePublic((value) => !value)}>
-                Share publicly
-              </label>
-            </div>
-          </div>
-
-          <div className="glass-panel rounded-2xl overflow-hidden">
-            <div
-              className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide"
-              style={{ background: 'var(--row-hover)', borderBottom: '1px solid var(--border-subtle)' }}
-            >
-              <button
-                type="button"
-                onClick={toggleAll}
-                className="shrink-0 hover:text-violet-500 transition-colors"
-                title={selected.size === extracted.images.length ? 'Deselect all' : 'Select all'}
-              >
-                {selected.size === extracted.images.length ? (
-                  <CheckmarkSquare02Icon size={16} className="text-violet-500" />
-                ) : (
-                  <SquareIcon size={16} />
-                )}
-              </button>
-              <span className="flex-1">Image</span>
-              <span className="w-32">Tag</span>
-              <span className="w-48 hidden sm:block">Source</span>
-            </div>
-
-            {editableImages.map((img) => {
-              const checked = selected.has(img.id);
-              const parsed = parseHelmImageRef(img.edited_ref);
-              return (
-                <div
-                  key={img.id}
-                  className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
-                  style={{
-                    borderBottom: '1px solid var(--border-subtle)',
-                    background: checked ? 'rgba(124,58,237,0.04)' : 'transparent',
-                  }}
-                  onClick={() => toggleRow(img.id)}
-                >
-                  <span className="shrink-0">
-                    {checked ? (
-                      <CheckmarkSquare02Icon size={16} className="text-violet-500" />
-                    ) : (
-                      <SquareIcon size={16} className="text-zinc-400" />
-                    )}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <input
-                      type="text"
-                      value={img.edited_ref}
-                      onChange={(event) => updateEditedRef(img.id, event.target.value)}
-                      onClick={(event) => event.stopPropagation()}
-                      className="w-full bg-transparent text-sm font-mono text-zinc-800 dark:text-zinc-200 outline-none"
-                      placeholder="registry.example.com/org/image:tag"
-                    />
-                    <p className="mt-1 text-xs text-zinc-400 truncate">
-                      {parsed.name || 'Enter an image reference'}
-                    </p>
-                  </div>
-                  <span className="w-32 text-xs font-mono text-zinc-500 truncate">{parsed.tag || '—'}</span>
-                  <span className="w-48 hidden sm:block text-xs text-zinc-400 truncate" title={getHelmImageSourceLabel(img)}>
-                    {img.source_file}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <p className="text-xs text-zinc-500">
-            Override any extracted image reference before queueing. The selected rows will use the edited values.
+          <p className="text-xs text-muted">
+            Override any extracted image reference before queueing. The selected rows will use the
+            edited values.
           </p>
 
           <div className="flex items-center justify-between gap-4 pt-1">
-            <button
-              type="button"
-              onClick={() => setStep('input')}
-              className="btn-secondary inline-flex items-center gap-1.5"
-            >
+            <Button type="button" variant="secondary" onPress={() => setStep('input')}>
               <ArrowLeft01Icon size={14} />
               Back
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              onClick={handleScan}
-              disabled={scanning || selected.size === 0 || hasInvalidSelection || xrayOnlyWithoutRegistries}
-              className="btn-primary"
+              variant="primary"
+              onPress={handleScan}
+              isDisabled={
+                scanning || selected.size === 0 || hasInvalidSelection || xrayOnlyWithoutRegistries
+              }
+              isPending={scanning}
             >
-              {scanning ? 'Queuing Helm run…' : `Queue ${selected.size} selected image${selected.size !== 1 ? '' : 's'}`}
-            </button>
+              Queue {selected.size} selected image{selected.size !== 1 ? 's' : ''}
+            </Button>
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }
 
-function statusDot(status: string) {
+function statusColor(status: string): 'default' | 'success' | 'warning' | 'danger' | 'accent' {
   switch (status) {
     case 'completed':
-      return 'bg-emerald-500';
+      return 'success';
     case 'failed':
-      return 'bg-red-500';
+      return 'danger';
     case 'running':
-      return 'bg-blue-400 animate-pulse';
+      return 'accent';
     default:
-      return 'bg-zinc-400 animate-pulse';
+      return 'default';
   }
 }
 
-function HelmRunHistory({ runs, isAdmin, loading }: { runs: HelmScanRunSummary[]; isAdmin: boolean; loading: boolean }) {
-  if (loading) {
-    return <div className="text-xs text-zinc-400 text-center py-4">Loading Helm runs…</div>;
-  }
+function getRunStatus(run: HelmScanRunSummary): Exclude<HelmRunHistoryStatus, 'all'> {
+  if (run.active_images > 0) return 'running';
+  if (run.failed_images > 0) return 'failed';
+  return 'completed';
+}
 
-  return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Recent Helm runs</h2>
-        <span className="text-xs text-zinc-400">{runs.length} visible</span>
-      </div>
+function getRunChartLabel(run: HelmScanRunSummary) {
+  return run.chart_name || run.chart_url.replace(/^oci:\/\//, '');
+}
 
-      {runs.length === 0 ? (
-        <div
-          className="glass-panel rounded-2xl px-5 py-8 text-center text-sm text-zinc-400"
-        >
-          No Helm runs yet. Queue one above to start tracking chart history by run ID.
-        </div>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {runs.map((run) => (
-            <Link
-              key={run.id}
-              href={`/helm/runs/${run.id}`}
-              className="glass-panel rounded-2xl p-4 transition-colors hover:bg-violet-500/5"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate" title={run.chart_name || run.chart_url}>
-                    {run.chart_name || run.chart_url.replace(/^oci:\/\//, '')}
-                  </p>
-                  <p className="text-xs text-zinc-500 mt-1 truncate" title={run.chart_url}>
-                    {run.chart_url.replace(/^oci:\/\//, '')}
-                  </p>
-                </div>
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusDot(run.active_images > 0 ? 'running' : run.failed_images > 0 ? 'failed' : 'completed')}`} />
-              </div>
+function HelmRunHistory({
+  runs,
+  isAdmin,
+  loading,
+  actionRunId,
+  onDeleteRun,
+  onShareRun,
+  onCopyShareLink,
+}: {
+  runs: HelmScanRunSummary[];
+  isAdmin: boolean;
+  loading: boolean;
+  actionRunId: string | null;
+  onDeleteRun: (run: HelmScanRunSummary) => void;
+  onShareRun: (run: HelmScanRunSummary) => void;
+  onCopyShareLink: (run: HelmScanRunSummary) => void;
+}) {
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<HelmRunHistoryStatus>('all');
+  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
+    column: 'started',
+    direction: 'descending',
+  });
+  const [page, setPage] = useState(1);
 
-              <div className="flex items-center gap-2 mt-3 text-xs text-zinc-500 flex-wrap">
-                {run.chart_version && <span>v{run.chart_version}</span>}
-                <span>{run.total_images} image{run.total_images === 1 ? '' : 's'}</span>
-                <span>Started {timeAgo(run.created_at)}</span>
-              </div>
+  const filteredRuns = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
 
-              <div className="grid grid-cols-4 gap-2 mt-4 text-center">
-                <RunMetric label="Done" value={run.completed_images} tone="text-emerald-400" />
-                <RunMetric label="Fail" value={run.failed_images} tone="text-red-400" />
-                <RunMetric label="High" value={run.high_count} tone="text-orange-400" />
-                <RunMetric label="Crit" value={run.critical_count} tone="text-red-400 font-bold" />
-              </div>
+    return runs.filter((run) => {
+      const status = getRunStatus(run);
+      if (statusFilter !== 'all' && status !== statusFilter) return false;
+      if (!query) return true;
 
-              <div className="flex items-center justify-between gap-2 mt-4 text-xs text-zinc-400">
-                <span className="font-mono">Run {run.id.slice(0, 8)}</span>
-                {isAdmin && run.owner_username ? <span>{run.owner_username}</span> : <span>Open run →</span>}
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
-    </section>
+      return [run.id, run.chart_name, run.chart_url, run.chart_version, run.owner_username, status]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(query));
+    });
+  }, [runs, searchQuery, statusFilter]);
+
+  const sortedRuns = useMemo(() => {
+    const direction = sortDescriptor.direction === 'descending' ? -1 : 1;
+    const column = String(sortDescriptor.column || 'started') as HelmRunHistorySortKey;
+    const statusRank: Record<Exclude<HelmRunHistoryStatus, 'all'>, number> = {
+      running: 0,
+      failed: 1,
+      completed: 2,
+    };
+
+    return [...filteredRuns].sort((first, second) => {
+      if (column === 'status') {
+        return (statusRank[getRunStatus(first)] - statusRank[getRunStatus(second)]) * direction;
+      }
+
+      if (column === 'images') {
+        return (first.total_images - second.total_images) * direction;
+      }
+
+      if (column === 'completed') {
+        return (first.completed_images - second.completed_images) * direction;
+      }
+
+      if (column === 'failed') {
+        return (first.failed_images - second.failed_images) * direction;
+      }
+
+      if (column === 'high') {
+        return (first.high_count - second.high_count) * direction;
+      }
+
+      if (column === 'critical') {
+        return (first.critical_count - second.critical_count) * direction;
+      }
+
+      if (column === 'started') {
+        return (
+          ((Date.parse(first.created_at || '') || 0) - (Date.parse(second.created_at || '') || 0)) *
+          direction
+        );
+      }
+
+      if (column === 'owner') {
+        return (first.owner_username || '').localeCompare(second.owner_username || '') * direction;
+      }
+
+      return getRunChartLabel(first).localeCompare(getRunChartLabel(second)) * direction;
+    });
+  }, [filteredRuns, sortDescriptor]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedRuns.length / HELM_RUN_HISTORY_PAGE_SIZE));
+  const effectivePage = Math.min(page, totalPages);
+  const pagedRuns = sortedRuns.slice(
+    (effectivePage - 1) * HELM_RUN_HISTORY_PAGE_SIZE,
+    effectivePage * HELM_RUN_HISTORY_PAGE_SIZE
   );
-}
+  const visibleStart =
+    sortedRuns.length === 0 ? 0 : (effectivePage - 1) * HELM_RUN_HISTORY_PAGE_SIZE + 1;
+  const visibleEnd = Math.min(effectivePage * HELM_RUN_HISTORY_PAGE_SIZE, sortedRuns.length);
 
-function RunMetric({ label, value, tone }: { label: string; value: number; tone: string }) {
+  if (loading) {
+    return (
+      <Card>
+        <Card.Content className="px-5 py-8 text-center text-sm text-muted">
+          Loading Helm runs...
+        </Card.Content>
+      </Card>
+    );
+  }
+
+  const columnCount = isAdmin ? 10 : 9;
+
   return (
-    <div className="rounded-xl px-2 py-2" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-      <div className={`text-sm font-semibold ${value > 0 ? tone : 'text-zinc-400'}`}>{value}</div>
-      <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
-    </div>
+    <Card>
+      <Card.Header>
+        <Card.Title>Recent Helm runs</Card.Title>
+        <Card.Description>Search, filter, and sort recent chart scan runs.</Card.Description>
+      </Card.Header>
+      <Card.Content className="gap-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <SearchField name="helm-run-search" variant="secondary" className="w-full sm:max-w-sm">
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search chart, URL, owner, or run ID..."
+              />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
+
+          <Select
+            aria-label="Filter Helm runs by status"
+            className="w-full sm:w-[180px]"
+            value={statusFilter}
+            variant="secondary"
+            onChange={(value) => {
+              setStatusFilter(
+                value === 'running' || value === 'completed' || value === 'failed' ? value : 'all'
+              );
+              setPage(1);
+            }}
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all">All statuses</ListBox.Item>
+                <ListBox.Item id="running">Running</ListBox.Item>
+                <ListBox.Item id="completed">Completed</ListBox.Item>
+                <ListBox.Item id="failed">Failed</ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </div>
+
+        <Table variant="secondary">
+          <Table.ScrollContainer>
+            <Table.Content
+              aria-label="Recent Helm runs"
+              className="min-w-[1080px]"
+              sortDescriptor={sortDescriptor}
+              onSortChange={setSortDescriptor}
+            >
+              <Table.Header>
+                <Table.Column id="chart" allowsSorting isRowHeader>
+                  Chart
+                </Table.Column>
+                <Table.Column id="status" allowsSorting>
+                  Status
+                </Table.Column>
+                <Table.Column id="images" allowsSorting className="text-right">
+                  Images
+                </Table.Column>
+                <Table.Column id="completed" allowsSorting className="text-right">
+                  Done
+                </Table.Column>
+                <Table.Column id="failed" allowsSorting className="text-right">
+                  Failed
+                </Table.Column>
+                <Table.Column id="high" allowsSorting className="text-right">
+                  High
+                </Table.Column>
+                <Table.Column id="critical" allowsSorting className="text-right">
+                  Critical
+                </Table.Column>
+                <Table.Column id="started" allowsSorting>
+                  Started
+                </Table.Column>
+                {isAdmin ? (
+                  <Table.Column id="owner" allowsSorting>
+                    Owner
+                  </Table.Column>
+                ) : null}
+                <Table.Column className="text-right">Action</Table.Column>
+              </Table.Header>
+              <Table.Body>
+                {sortedRuns.length === 0 ? (
+                  <Table.Row id="empty">
+                    <Table.Cell colSpan={columnCount}>
+                      <div className="px-4 py-10 text-center text-sm text-muted">
+                        {runs.length === 0
+                          ? 'No Helm runs yet. Queue one above to start tracking chart history by run ID.'
+                          : 'No Helm runs match your search or filter.'}
+                      </div>
+                    </Table.Cell>
+                  </Table.Row>
+                ) : (
+                  pagedRuns.map((run) => {
+                    const status = getRunStatus(run);
+                    return (
+                      <Table.Row key={run.id} id={run.id} className="hover:bg-[var(--row-hover)]">
+                        <Table.Cell>
+                          <div className="min-w-0 space-y-1">
+                            <Link
+                              href={`/helm/runs/${run.id}`}
+                              className="block truncate text-sm font-semibold"
+                              title={run.chart_name || run.chart_url}
+                            >
+                              {getRunChartLabel(run)}
+                            </Link>
+                            <p className="truncate text-xs text-muted" title={run.chart_url}>
+                              {run.chart_url.replace(/^oci:\/\//, '')}
+                            </p>
+                            {run.chart_version ? (
+                              <Chip size="sm" variant="secondary">
+                                v{run.chart_version}
+                              </Chip>
+                            ) : null}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Chip color={statusColor(status)} size="sm" variant="soft">
+                            {status}
+                          </Chip>
+                        </Table.Cell>
+                        <Table.Cell className="text-right font-mono text-xs text-muted">
+                          {run.total_images}
+                        </Table.Cell>
+                        <Table.Cell className="text-right">
+                          <Chip
+                            color={run.completed_images > 0 ? 'success' : 'default'}
+                            size="sm"
+                            variant="soft"
+                          >
+                            {run.completed_images}
+                          </Chip>
+                        </Table.Cell>
+                        <Table.Cell className="text-right">
+                          <Chip
+                            color={run.failed_images > 0 ? 'danger' : 'default'}
+                            size="sm"
+                            variant="soft"
+                          >
+                            {run.failed_images}
+                          </Chip>
+                        </Table.Cell>
+                        <Table.Cell className="text-right">
+                          <Chip
+                            color={run.high_count > 0 ? 'warning' : 'default'}
+                            size="sm"
+                            variant="soft"
+                          >
+                            {run.high_count}
+                          </Chip>
+                        </Table.Cell>
+                        <Table.Cell className="text-right">
+                          <Chip
+                            color={run.critical_count > 0 ? 'danger' : 'default'}
+                            size="sm"
+                            variant="soft"
+                          >
+                            {run.critical_count}
+                          </Chip>
+                        </Table.Cell>
+                        <Table.Cell className="text-xs text-muted">
+                          {timeAgo(run.created_at)}
+                        </Table.Cell>
+                        {isAdmin ? (
+                          <Table.Cell className="text-xs text-muted">
+                            {run.owner_username || '-'}
+                          </Table.Cell>
+                        ) : null}
+                        <Table.Cell className="text-right">
+                          <div className="flex justify-end">
+                            <RowActionsMenu
+                              label={`Open actions for ${getRunChartLabel(run)}`}
+                              items={[
+                                {
+                                  id: 'open',
+                                  label: 'Open run',
+                                  onAction: () => router.push(`/helm/runs/${run.id}`),
+                                },
+                                {
+                                  id: 'report',
+                                  label: 'Generate report',
+                                  disabled: run.active_images > 0 || run.total_images === 0,
+                                  onAction: () =>
+                                    router.push(
+                                      `/reports/print?helmRun=${encodeURIComponent(run.id)}`
+                                    ),
+                                },
+                                {
+                                  id: 'share',
+                                  label: actionRunId === run.id ? 'Sharing...' : 'Share all scans',
+                                  disabled:
+                                    actionRunId === run.id ||
+                                    run.total_images === 0 ||
+                                    (run.completed_images === 0 && run.failed_images === 0),
+                                  onAction: () => onShareRun(run),
+                                },
+                                {
+                                  id: 'copy-share-link',
+                                  label:
+                                    actionRunId === run.id
+                                      ? 'Preparing link...'
+                                      : 'Copy share link',
+                                  disabled:
+                                    actionRunId === run.id ||
+                                    run.total_images === 0 ||
+                                    (run.completed_images === 0 && run.failed_images === 0),
+                                  onAction: () => onCopyShareLink(run),
+                                },
+                                {
+                                  id: 'delete',
+                                  label: actionRunId === run.id ? 'Deleting...' : 'Delete run',
+                                  variant: 'danger',
+                                  disabled: actionRunId === run.id,
+                                  onAction: () => onDeleteRun(run),
+                                },
+                              ]}
+                            />
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })
+                )}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+          <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
+            <span className="text-xs text-muted whitespace-nowrap">
+              Showing {visibleStart}-{visibleEnd} of {sortedRuns.length}
+            </span>
+            <Pagination size="sm" className="justify-self-center">
+              <Pagination.Content>
+                <Pagination.Item>
+                  <Pagination.Previous
+                    isDisabled={effectivePage === 1}
+                    onPress={() => setPage((previous) => Math.max(1, previous - 1))}
+                  >
+                    <Pagination.PreviousIcon />
+                    <span>Previous</span>
+                  </Pagination.Previous>
+                </Pagination.Item>
+                {Array.from({ length: totalPages }).map((_, index) => {
+                  const nextPage = index + 1;
+                  return (
+                    <Pagination.Item key={nextPage}>
+                      <Pagination.Link
+                        isActive={nextPage === effectivePage}
+                        onPress={() => setPage(nextPage)}
+                      >
+                        {nextPage}
+                      </Pagination.Link>
+                    </Pagination.Item>
+                  );
+                })}
+                <Pagination.Item>
+                  <Pagination.Next
+                    isDisabled={effectivePage === totalPages}
+                    onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
+                  >
+                    <span>Next</span>
+                    <Pagination.NextIcon />
+                  </Pagination.Next>
+                </Pagination.Item>
+              </Pagination.Content>
+            </Pagination>
+            <span className="justify-self-end text-xs text-muted whitespace-nowrap">
+              {runs.length} total
+            </span>
+          </Table.Footer>
+        </Table>
+      </Card.Content>
+    </Card>
   );
 }
 
@@ -661,27 +1134,13 @@ function StepBar({ current }: { current: Step }) {
     <div className="flex items-center gap-2">
       {steps.map((step, index) => (
         <div key={step.key} className="flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <div
-              className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
-              style={{
-                background: index <= idx ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'var(--row-hover)',
-                color: index <= idx ? '#fff' : 'var(--text-muted)',
-                border: index <= idx ? 'none' : '1px solid var(--border-subtle)',
-              }}
-            >
-              {index + 1}
-            </div>
-            <span
-              className="text-sm font-medium hidden sm:block"
-              style={{ color: index <= idx ? 'var(--text-primary)' : 'var(--text-muted)' }}
-            >
-              {step.label}
-            </span>
-          </div>
-          {index < steps.length - 1 && (
-            <div className="h-px flex-1 min-w-[24px]" style={{ background: index < idx ? '#7c3aed' : 'var(--border-subtle)' }} />
-          )}
+          <Chip
+            color={index <= idx ? 'accent' : 'default'}
+            variant={index <= idx ? 'soft' : 'secondary'}
+          >
+            {index + 1}. {step.label}
+          </Chip>
+          {index < steps.length - 1 && <div className="h-px w-8 bg-border" />}
         </div>
       ))}
     </div>

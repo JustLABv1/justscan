@@ -1,4 +1,5 @@
 import { req } from './core';
+import { appendScope } from './scope';
 import type { HelmExtractResponse, HelmScanRunDetail, HelmScanRunSummary } from './types/helm';
 import type { Scan } from './types/scans';
 
@@ -17,7 +18,7 @@ export const createHelmScans = (
   chartName?: string,
   chartVersion?: string,
   registryId?: string,
-  orgId?: string,
+  orgId?: string
 ) =>
   req<{ run: import('./types/helm').HelmScanRun; scans: Scan[] }>('POST', '/api/v1/helm/scan', {
     chart_url: chartUrl,
@@ -33,8 +34,23 @@ export const createHelmScans = (
 export const listHelmScanRuns = (page = 1, limit = 20, chartUrl?: string) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (chartUrl) params.set('chart_url', chartUrl);
+  appendScope(params);
   return req<{ data: HelmScanRunSummary[]; total: number }>('GET', `/api/v1/helm/runs?${params}`);
 };
 
-export const getHelmScanRun = (id: string) =>
-  req<HelmScanRunDetail>('GET', `/api/v1/helm/runs/${id}`);
+export const getHelmScanRun = (id: string) => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const query = params.toString();
+  return req<HelmScanRunDetail>('GET', `/api/v1/helm/runs/${id}${query ? `?${query}` : ''}`);
+};
+
+export const deleteHelmScanRun = (id: string) => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const query = params.toString();
+  return req<{ deleted_scans: number; deleted_run: boolean }>(
+    'DELETE',
+    `/api/v1/helm/runs/${id}${query ? `?${query}` : ''}`
+  );
+};

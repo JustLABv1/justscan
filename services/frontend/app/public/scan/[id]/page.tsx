@@ -1,13 +1,22 @@
 'use client';
 import { Logo } from '@/components/logo';
 import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
-import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { FormField } from '@/components/ui/form-field';
+import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type { Scan, Vulnerability } from '@/lib/api';
-import { getPublicScan, getPublicVulnerabilityContextAnalysis, getToken, listPublicVulnerabilities, reScanPublic } from '@/lib/api';
+import {
+    getPublicScan,
+    getPublicVulnerabilityContextAnalysis,
+    getToken,
+    listPublicVulnerabilities,
+    reScanPublic,
+} from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, ListBox, Select, useOverlayState } from '@heroui/react';
+import { Button, Card, ListBox, Select, Table, useOverlayState } from '@heroui/react';
 import { ArrowLeft01Icon, CpuIcon, FileExportIcon, Refresh01Icon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -16,17 +25,44 @@ import { useEffect, useRef, useState } from 'react';
 import { ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
 
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  CRITICAL: { label: 'Critical', color: 'text-red-500 dark:text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20' },
-  HIGH:     { label: 'High',     color: 'text-orange-500 dark:text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
-  MEDIUM:   { label: 'Medium',   color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
-  LOW:      { label: 'Low',      color: 'text-blue-500 dark:text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20' },
-  UNKNOWN:  { label: 'Unknown',  color: 'text-zinc-500',  bg: 'bg-zinc-500/10',   border: 'border-zinc-500/20' },
+  CRITICAL: {
+    label: 'Critical',
+    color: 'text-red-500 dark:text-red-400',
+    bg: 'bg-red-500/10',
+    border: 'border-red-500/20',
+  },
+  HIGH: {
+    label: 'High',
+    color: 'text-orange-500 dark:text-orange-400',
+    bg: 'bg-orange-500/10',
+    border: 'border-orange-500/20',
+  },
+  MEDIUM: {
+    label: 'Medium',
+    color: 'text-yellow-600 dark:text-yellow-400',
+    bg: 'bg-yellow-500/10',
+    border: 'border-yellow-500/20',
+  },
+  LOW: {
+    label: 'Low',
+    color: 'text-blue-500 dark:text-blue-400',
+    bg: 'bg-blue-500/10',
+    border: 'border-blue-500/20',
+  },
+  UNKNOWN: {
+    label: 'Unknown',
+    color: 'text-zinc-500',
+    bg: 'bg-zinc-500/10',
+    border: 'border-zinc-500/20',
+  },
 };
 
 function SeverityBadge({ severity }: { severity: string }) {
   const cfg = SEV_CONFIG[severity] ?? SEV_CONFIG.UNKNOWN;
   return (
-    <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+    <span
+      className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}
+    >
       {cfg.label}
     </span>
   );
@@ -40,12 +76,29 @@ function SourceBadge({ source }: { source?: string }) {
   return (
     <span
       className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0"
-      style={isOSV
-        ? { background: 'rgba(59,130,246,0.14)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.24)' }
-        : isXray
-          ? { background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.22)' }
-          : { background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.22)' }}
-      title={source || (isOSV ? 'OSV supplemental finding' : isXray ? 'JFrog Xray finding' : 'Scanner finding')}
+      style={
+        isOSV
+          ? {
+              background: 'rgba(59,130,246,0.14)',
+              color: '#60a5fa',
+              border: '1px solid rgba(59,130,246,0.24)',
+            }
+          : isXray
+            ? {
+                background: 'rgba(245,158,11,0.12)',
+                color: '#f59e0b',
+                border: '1px solid rgba(245,158,11,0.22)',
+              }
+            : {
+                background: 'rgba(124,58,237,0.12)',
+                color: '#a78bfa',
+                border: '1px solid rgba(124,58,237,0.22)',
+              }
+      }
+      title={
+        source ||
+        (isOSV ? 'OSV supplemental finding' : isXray ? 'JFrog Xray finding' : 'Scanner finding')
+      }
     >
       {label}
     </span>
@@ -62,12 +115,25 @@ function ScannerDatabaseCard({
   downloadedAt?: string | null;
 }) {
   return (
-    <div className="rounded-2xl border p-4" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-      <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
-      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }} title={updatedAt ? fullDate(updatedAt) : ''}>
+    <div
+      className="rounded-2xl border p-4"
+      style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
+    >
+      <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+        {label}
+      </p>
+      <p
+        className="text-sm font-medium"
+        style={{ color: 'var(--text-primary)' }}
+        title={updatedAt ? fullDate(updatedAt) : ''}
+      >
         {updatedAt ? `${timeAgo(updatedAt)} (${fullDate(updatedAt)})` : 'Unknown'}
       </p>
-      <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }} title={downloadedAt ? fullDate(downloadedAt) : ''}>
+      <p
+        className="text-xs mt-1"
+        style={{ color: 'var(--text-faint)' }}
+        title={downloadedAt ? fullDate(downloadedAt) : ''}
+      >
         Downloaded {downloadedAt ? timeAgo(downloadedAt) : 'unknown'}
       </p>
     </div>
@@ -79,22 +145,52 @@ function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
-  if (!mounted) return <div className="w-9 h-9" />;
+  if (!mounted) return <div className="size-9" />;
   const isDark = resolvedTheme === 'dark';
   return (
     <button
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
-      style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
+      className="size-9 flex items-center justify-center rounded-xl transition-colors"
+      style={{
+        background: 'var(--row-hover)',
+        border: '1px solid var(--border-subtle)',
+        color: 'var(--text-muted)',
+      }}
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
       {isDark ? (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" />
+          <line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
         </svg>
       ) : (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
         </svg>
       )}
     </button>
@@ -124,19 +220,17 @@ export default function PublicScanResultPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [vulnLoading, setVulnLoading] = useState(false);
   const [reScanning, setReScanning] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn] = useState(() => !!getToken());
   const [activeTab, setActiveTab] = useState<ResultTab>('overview');
   const vulnerabilityDetailsModal = useOverlayState();
   const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => setIsLoggedIn(!!getToken()), []);
-
   useEffect(() => {
     function fetchScan() {
       getPublicScan(id)
-        .then(s => {
+        .then((s) => {
           setScan(s);
           setActionError('');
           if (s.status === 'completed' || s.status === 'failed') {
@@ -151,30 +245,56 @@ export default function PublicScanResultPage() {
             });
           }
         })
-        .catch(e => {
+        .catch((e) => {
           setError(e.message);
           if (pollRef.current) clearInterval(pollRef.current);
         });
     }
     fetchScan();
     pollRef.current = setInterval(fetchScan, 2500);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, [id]);
 
   useEffect(() => {
     if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
-    pkgDebounceRef.current = setTimeout(() => { setPkgFilter(pkgInput); setPage(1); }, 400);
-    return () => { if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current); };
+    pkgDebounceRef.current = setTimeout(() => {
+      setPkgFilter(pkgInput);
+      setPage(1);
+    }, 400);
+    return () => {
+      if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
+    };
   }, [pkgInput]);
 
   useEffect(() => {
-    if (!scan || (scan.status !== 'completed' && scan.external_status !== 'blocked_by_xray_policy')) return;
-    setVulnLoading(true);
-    listPublicVulnerabilities(id, page, LIMIT, severityFilter || undefined, pkgFilter || undefined, hasFix || undefined, minCvss || undefined, sortBy, sortDir)
-      .then(res => { setVulns(res.data ?? []); setVulnTotal(res.total); })
-      .catch(() => {})
-      .finally(() => setVulnLoading(false));
-  }, [id, scan?.status, scan?.external_status, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
+    return deferEffect(() => {
+      if (
+        !scan ||
+        (scan.status !== 'completed' && scan.external_status !== 'blocked_by_xray_policy')
+      )
+        return;
+      setVulnLoading(true);
+      listPublicVulnerabilities(
+        id,
+        page,
+        LIMIT,
+        severityFilter || undefined,
+        pkgFilter || undefined,
+        hasFix || undefined,
+        minCvss || undefined,
+        sortBy,
+        sortDir
+      )
+        .then((res) => {
+          setVulns(res.data ?? []);
+          setVulnTotal(res.total);
+        })
+        .catch(() => {})
+        .finally(() => setVulnLoading(false));
+    });
+  }, [id, scan, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir]);
 
   async function handleRescan() {
     setReScanning(true);
@@ -189,7 +309,6 @@ export default function PublicScanResultPage() {
     }
   }
 
-  const inputCls = nativeFieldClassName;
   const selectTriggerCls = heroSelectTriggerClassName;
 
   function openVulnerabilityDetails(vulnerability: Vulnerability) {
@@ -202,19 +321,32 @@ export default function PublicScanResultPage() {
     setSelectedVulnerability(null);
   }
 
-  if (error) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
-      <div className="text-center space-y-3">
-        <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>
-        <Link href="/public/scan/image" className="text-violet-600 dark:text-violet-400 text-sm hover:underline">← Try another scan</Link>
+  if (error)
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: 'var(--app-bg)' }}
+      >
+        <div className="text-center space-y-3">
+          <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>
+          <Link
+            href="/public/scan/image"
+            className="text-violet-600 dark:text-violet-400 text-sm hover:underline"
+          >
+            ← Try another scan
+          </Link>
+        </div>
       </div>
-    </div>
-  );
+    );
 
   const isScanning = !scan || scan.status === 'pending' || scan.status === 'running';
   const isBlockedByXrayPolicy = scan?.external_status === 'blocked_by_xray_policy';
-  const showResultTabs = Boolean(scan && !isScanning && (scan.status === 'completed' || scan.status === 'failed'));
-  const showRecoveredOverview = Boolean(scan && (scan.status === 'completed' || isBlockedByXrayPolicy));
+  const showResultTabs = Boolean(
+    scan && !isScanning && (scan.status === 'completed' || scan.status === 'failed')
+  );
+  const showRecoveredOverview = Boolean(
+    scan && (scan.status === 'completed' || isBlockedByXrayPolicy)
+  );
   const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
   const imageName = scan ? `${scan.image_name}:${scan.image_tag}` : '…';
 
@@ -226,17 +358,27 @@ export default function PublicScanResultPage() {
         style={{ background: 'var(--app-bg)', borderBottom: '1px solid var(--border-subtle)' }}
       >
         <Link href="/public/scan/image" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 12px rgba(124,58,237,0.4)' }}>
+          <div
+            className="size-8 rounded-xl flex items-center justify-center"
+            style={{
+              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+              boxShadow: '0 0 12px rgba(124,58,237,0.4)',
+            }}
+          >
             <Logo size={16} className="text-white" />
           </div>
-          <span className="font-semibold text-[15px] tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</span>
+          <span
+            className="font-semibold text-[15px] tracking-tight"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            JustScan
+          </span>
         </Link>
 
         <div className="flex items-center gap-2">
           <ThemeToggle />
           {isLoggedIn ? (
-            <Link href="/scans"
-              className="btn-secondary">
+            <Link href="/scans" className="btn-secondary">
               Dashboard →
             </Link>
           ) : (
@@ -249,15 +391,26 @@ export default function PublicScanResultPage() {
 
       <main className="max-w-[1500px] mx-auto px-4 py-8 space-y-6">
         {actionError && (
-          <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
+          <div
+            className="rounded-2xl px-4 py-3 text-sm"
+            style={{
+              background: 'rgba(239,68,68,0.08)',
+              border: '1px solid rgba(239,68,68,0.18)',
+              color: '#f87171',
+            }}
+          >
             {actionError}
           </div>
         )}
 
         <ScanDetailHeader
-          navigation={(
+          navigation={
             <>
-              <Button className="btn-secondary" onPress={() => router.push('/public/scan/image')} variant="secondary">
+              <Button
+                className="btn-secondary"
+                onPress={() => router.push('/public/scan/image')}
+                variant="secondary"
+              >
                 <ArrowLeft01Icon size={15} />
                 New scan
               </Button>
@@ -272,21 +425,32 @@ export default function PublicScanResultPage() {
                 </Button>
               )}
             </>
-          )}
+          }
           title={imageName}
           subtitle={scan?.image_digest ? <span>{scan.image_digest}</span> : undefined}
-          meta={scan?.architecture ? (
-            <p className="text-xs mt-1 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-              <CpuIcon size={12} />
-              {scan.architecture} · {scan.os_family} {scan.os_name}
-            </p>
-          ) : undefined}
-          actions={(
-            <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Public scan actions">
+          meta={
+            scan?.architecture ? (
+              <p
+                className="text-xs mt-1 flex items-center gap-1"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <CpuIcon size={12} />
+                {scan.architecture} · {scan.os_family} {scan.os_name}
+              </p>
+            ) : undefined
+          }
+          actions={
+            <div
+              className="flex flex-wrap items-center gap-2"
+              role="toolbar"
+              aria-label="Public scan actions"
+            >
               {(scan?.status === 'completed' || isBlockedByXrayPolicy) && (
                 <Button
                   className="btn-secondary"
-                  onPress={() => window.open(`/reports/print?scans=${id}`, '_blank', 'noopener,noreferrer')}
+                  onPress={() =>
+                    window.open(`/reports/print?scans=${id}`, '_blank', 'noopener,noreferrer')
+                  }
                   variant="secondary"
                 >
                   <FileExportIcon size={15} />
@@ -294,15 +458,22 @@ export default function PublicScanResultPage() {
                 </Button>
               )}
               {(scan?.status === 'completed' || scan?.status === 'failed') && (
-                <Button className="btn-primary" isDisabled={reScanning} onPress={handleRescan} variant="primary">
-                  {reScanning
-                    ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
-                    : <Refresh01Icon size={15} />}
+                <Button
+                  className="btn-primary"
+                  isDisabled={reScanning}
+                  onPress={handleRescan}
+                  variant="primary"
+                >
+                  {reScanning ? (
+                    <span className="size-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+                  ) : (
+                    <Refresh01Icon size={15} />
+                  )}
                   Re-scan
                 </Button>
               )}
             </div>
-          )}
+          }
         />
 
         {isScanning && (
@@ -318,42 +489,72 @@ export default function PublicScanResultPage() {
 
         {showResultTabs && (
           <div className="w-full overflow-x-auto pb-1">
-            <div className="segmented-control min-w-max">
-              {([
+            <SegmentedControl
+              ariaLabel="Result tabs"
+              className="min-w-max"
+              options={[
                 { id: 'overview', label: showRecoveredOverview ? 'Overview' : 'Status' },
-                { id: 'timeline', label: scan?.step_logs?.length ? `Timeline (${scan.step_logs.length})` : 'Timeline' },
-              ] as { id: ResultTab; label: string }[]).map(({ id, label }) => (
-                <button
-                  key={id}
-                  onClick={() => setActiveTab(id)}
-                  className="segmented-control-item"
-                  data-active={activeTab === id ? 'true' : 'false'}
-                  type="button"
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+                {
+                  id: 'timeline',
+                  label: scan?.step_logs?.length
+                    ? `Timeline (${scan.step_logs.length})`
+                    : 'Timeline',
+                },
+              ]}
+              value={activeTab}
+              onChange={setActiveTab}
+            />
           </div>
         )}
 
         {scan?.status === 'failed' && activeTab === 'overview' && !isBlockedByXrayPolicy && (
           <>
-            <div className="rounded-2xl px-6 py-5 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <div
+              className="rounded-2xl px-6 py-5 text-center"
+              style={{
+                background: 'rgba(239,68,68,0.08)',
+                border: '1px solid rgba(239,68,68,0.2)',
+              }}
+            >
               <p className="text-red-500 dark:text-red-400 font-medium">Scan failed</p>
-              {scan.error_message && <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{scan.error_message}</p>}
-              <Link href="/public/scan/image" className="inline-block mt-3 text-sm text-violet-600 dark:text-violet-400 hover:underline">Try another image →</Link>
+              {scan.error_message && (
+                <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                  {scan.error_message}
+                </p>
+              )}
+              <Link
+                href="/public/scan/image"
+                className="inline-block mt-3 text-sm text-violet-600 dark:text-violet-400 hover:underline"
+              >
+                Try another image →
+              </Link>
             </div>
           </>
         )}
 
         {isBlockedByXrayPolicy && activeTab === 'overview' && (
-          <div className="rounded-2xl px-6 py-5" style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.22)' }}>
-            <p className="font-medium" style={{ color: '#f59e0b' }}>Blocked by Xray policy</p>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-              Xray blocked the normal scan path, but JustScan recovered any findings the provider still exposed. The results below reflect that recovered data.
+          <div
+            className="rounded-2xl px-6 py-5"
+            style={{
+              background: 'rgba(245,158,11,0.10)',
+              border: '1px solid rgba(245,158,11,0.22)',
+            }}
+          >
+            <p className="font-medium" style={{ color: '#f59e0b' }}>
+              Blocked by Xray policy
             </p>
-            {scan?.error_message && <p className="text-sm mt-3 whitespace-pre-wrap break-all" style={{ color: 'var(--text-faint)' }}>{scan.error_message}</p>}
+            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+              Xray blocked the normal scan path, but JustScan recovered any findings the provider
+              still exposed. The results below reflect that recovered data.
+            </p>
+            {scan?.error_message && (
+              <p
+                className="text-sm mt-3 whitespace-pre-wrap break-all"
+                style={{ color: 'var(--text-faint)' }}
+              >
+                {scan.error_message}
+              </p>
+            )}
           </div>
         )}
 
@@ -373,32 +574,61 @@ export default function PublicScanResultPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { ...SEV_CONFIG.CRITICAL, count: scan.critical_count },
-                { ...SEV_CONFIG.HIGH,     count: scan.high_count },
-                { ...SEV_CONFIG.MEDIUM,   count: scan.medium_count },
-                { ...SEV_CONFIG.LOW,      count: scan.low_count },
+                { ...SEV_CONFIG.HIGH, count: scan.high_count },
+                { ...SEV_CONFIG.MEDIUM, count: scan.medium_count },
+                { ...SEV_CONFIG.LOW, count: scan.low_count },
               ].map(({ label, count, color, border }) => (
-                <div
+                <Card
                   key={label}
                   className={`rounded-2xl border ${border} p-4 cursor-pointer transition-all hover:scale-105`}
-                  style={{ background: 'var(--glass-bg)', backdropFilter: 'blur(20px)' }}
-                  onClick={() => { setSeverityFilter(f => f === label.toUpperCase() ? '' : label.toUpperCase()); setPage(1); }}
+                  variant="default"
+                  onClick={() => {
+                    setSeverityFilter((f) =>
+                      f === label.toUpperCase() ? '' : label.toUpperCase()
+                    );
+                    setPage(1);
+                  }}
                 >
-                  <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
-                  <p className={`text-2xl font-bold ${color}`}>{count ?? 0}</p>
-                </div>
+                  <Card.Content className="p-0">
+                    <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+                      {label}
+                    </p>
+                    <p className={`text-2xl font-bold ${color}`}>{count ?? 0}</p>
+                  </Card.Content>
+                </Card>
               ))}
             </div>
 
-            {(scan.trivy_version || scan.grype_version || scan.trivy_vuln_db_updated_at || scan.trivy_java_db_updated_at) && (
+            {(scan.trivy_version ||
+              scan.grype_version ||
+              scan.trivy_vuln_db_updated_at ||
+              scan.trivy_java_db_updated_at) && (
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                <div className="rounded-2xl border p-4" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-                  <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Scanner</p>
-                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Trivy {scan.trivy_version || 'unknown'}</p>
+                <div
+                  className="rounded-2xl border p-4"
+                  style={{
+                    background: 'var(--surface-bg)',
+                    border: '1px solid var(--surface-border)',
+                  }}
+                >
+                  <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+                    Scanner
+                  </p>
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                    Trivy {scan.trivy_version || 'unknown'}
+                  </p>
                   {scan.grype_version && (
-                    <p className="text-sm font-medium mt-1" style={{ color: 'var(--text-primary)' }}>Grype {scan.grype_version}</p>
+                    <p
+                      className="text-sm font-medium mt-1"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      Grype {scan.grype_version}
+                    </p>
                   )}
                   <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>
-                    {scan.completed_at ? `DB snapshot captured ${timeAgo(scan.completed_at)}` : 'DB snapshot captured when this scan completed'}
+                    {scan.completed_at
+                      ? `DB snapshot captured ${timeAgo(scan.completed_at)}`
+                      : 'DB snapshot captured when this scan completed'}
                   </p>
                 </div>
                 <ScannerDatabaseCard
@@ -419,10 +649,23 @@ export default function PublicScanResultPage() {
               <div className="space-y-3">
                 <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
                   Vulnerabilities
-                  {vulnTotal > 0 && <span className="text-sm font-normal ml-2" style={{ color: 'var(--text-muted)' }}>{vulnTotal} found</span>}
+                  {vulnTotal > 0 && (
+                    <span
+                      className="text-sm font-normal ml-2"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      {vulnTotal} found
+                    </span>
+                  )}
                 </h2>
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                  <Select value={severityFilter || '__all__'} onChange={value => { setSeverityFilter(String(value === '__all__' ? '' : value ?? '')); setPage(1); }}>
+                  <Select
+                    value={severityFilter || '__all__'}
+                    onChange={(value) => {
+                      setSeverityFilter(String(value === '__all__' ? '' : (value ?? '')));
+                      setPage(1);
+                    }}
+                  >
                     <Select.Trigger className={selectTriggerCls}>
                       <Select.Value />
                       <Select.Indicator />
@@ -438,128 +681,208 @@ export default function PublicScanResultPage() {
                     </Select.Popover>
                   </Select>
                   <div className="flex w-full flex-col gap-2 md:flex-row md:items-end xl:w-auto xl:justify-end">
-                    <input
+                    <FormField
+                      hideLabel
+                      label="Filter by package"
                       type="text"
                       value={pkgInput}
-                      onChange={e => setPkgInput(e.target.value)}
-                      placeholder="Package…"
-                      className={`${inputCls} min-w-[220px] flex-1 md:min-w-[280px] xl:w-[320px] xl:flex-none`}
+                      onChange={(e) => setPkgInput(e.target.value)}
+                      placeholder="Package..."
+                      className="min-w-[220px] flex-1 md:min-w-[280px] xl:w-[320px] xl:flex-none"
+                      containerClassName="min-w-[220px] flex-1 md:min-w-[280px] xl:w-[320px] xl:flex-none"
                     />
                     <div className="flex shrink-0 flex-col gap-1.5">
-                      <label className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>Min CVSS</label>
-                      <input
+                      <FormField
+                        hideLabel
+                        label="Minimum CVSS"
                         type="number"
                         min={0}
                         max={10}
                         step={0.1}
                         value={minCvssInput}
-                        onChange={e => {
+                        onChange={(e) => {
                           setMinCvssInput(e.target.value);
                           const v = parseFloat(e.target.value);
                           setMinCvss(isNaN(v) ? 0 : v);
                           setPage(1);
                         }}
                         placeholder="0"
-                        className={`${inputCls} w-full min-w-[5.5rem] md:w-24`}
+                        className="w-full min-w-[5.5rem] md:w-24"
+                        containerClassName="w-full min-w-[5.5rem] md:w-24"
                       />
                     </div>
-                    <button
-                      onClick={() => { setHasFix(!hasFix); setPage(1); }}
+                    <Button
+                      onPress={() => {
+                        setHasFix(!hasFix);
+                        setPage(1);
+                      }}
                       className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full shrink-0 md:w-auto`}
+                      variant={hasFix ? 'primary' : 'secondary'}
                     >
                       Has Fix
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
 
               {/* Table */}
-              <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-                <div className="overflow-x-auto">
-                <table className="w-full min-w-[920px] text-sm">
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                      {([
-                        { label: 'CVE ID', key: 'vuln_id' },
-                        { label: 'Package', key: 'pkg_name' },
-                        { label: 'Installed', key: 'installed_version' },
-                        { label: 'Fixed In', key: 'fixed_version' },
-                        { label: 'Severity', key: 'severity' },
-                        { label: 'CVSS', key: 'cvss_score' },
-                      ] as { label: string; key: string }[]).map(({ label, key }) => {
-                        const active = sortBy === key;
-                        return (
-                          <th
-                            key={key}
-                            onClick={() => { if (active) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortBy(key); setSortDir('asc'); } setPage(1); }}
-                            className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer select-none"
-                            style={{ color: active ? '#7c3aed' : 'var(--text-faint)' }}
-                          >
-                            <span className="inline-flex items-center gap-1">
-                              {label}
-                              {active && <span>{sortDir === 'desc' ? '↓' : '↑'}</span>}
-                            </span>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vulnLoading ? (
-                      <tr><td colSpan={6} className="py-12 text-center">
-                        <div className="flex justify-center"><div className="w-6 h-6 rounded-full border-2 border-t-violet-500 animate-spin" style={{ borderColor: 'var(--border-subtle)', borderTopColor: '#7c3aed' }} /></div>
-                      </td></tr>
-                    ) : vulns.length === 0 ? (
-                      <tr><td colSpan={6} className="py-12 text-center text-sm" style={{ color: 'var(--text-faint)' }}>
-                        {vulnTotal === 0 ? 'No vulnerabilities found.' : 'No results match your filters.'}
-                      </td></tr>
-                    ) : vulns.map((v, i) => (
-                      <tr
-                        key={v.id}
-                        style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <td className="px-4 py-3">
-                          {v.vuln_id ? (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <button type="button" onClick={() => openVulnerabilityDetails(v)}
-                                className="font-mono text-xs text-violet-600 dark:text-violet-400 hover:underline transition-colors">
-                                {v.vuln_id}
+              <div
+                className="rounded-2xl overflow-hidden"
+                style={{
+                  background: 'var(--surface-bg)',
+                  border: '1px solid var(--surface-border)',
+                }}
+              >
+                <Table>
+                  <Table.ScrollContainer>
+                    <Table.Content
+                      aria-label="Public scan vulnerabilities"
+                      className="min-w-[920px]"
+                    >
+                      <Table.Header>
+                        {(
+                          [
+                            { label: 'CVE ID', key: 'vuln_id' },
+                            { label: 'Package', key: 'pkg_name' },
+                            { label: 'Installed', key: 'installed_version' },
+                            { label: 'Fixed In', key: 'fixed_version' },
+                            { label: 'Severity', key: 'severity' },
+                            { label: 'CVSS', key: 'cvss_score' },
+                          ] as { label: string; key: string }[]
+                        ).map(({ label, key }) => {
+                          const active = sortBy === key;
+                          return (
+                            <Table.Column key={key} isRowHeader={key === 'vuln_id'}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (active) {
+                                    setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+                                  } else {
+                                    setSortBy(key);
+                                    setSortDir('asc');
+                                  }
+                                  setPage(1);
+                                }}
+                                className="inline-flex items-center gap-1 cursor-pointer select-none"
+                                style={{ color: active ? '#7c3aed' : 'var(--text-faint)' }}
+                              >
+                                <span>{label}</span>
+                                {active && <span>{sortDir === 'desc' ? '↓' : '↑'}</span>}
                               </button>
-                              <SourceBadge source={v.data_source} />
-                            </div>
-                          ) : <span style={{ color: 'var(--text-faint)' }}>—</span>}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{v.pkg_name}</td>
-                        <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{v.installed_version}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-emerald-600 dark:text-emerald-500">
-                          {v.fixed_version || <span style={{ color: 'var(--text-faint)' }}>—</span>}
-                        </td>
-                        <td className="px-4 py-3"><SeverityBadge severity={v.severity} /></td>
-                        <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
-                          {v.cvss_score ? v.cvss_score.toFixed(1) : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                </div>
+                            </Table.Column>
+                          );
+                        })}
+                      </Table.Header>
+                      <Table.Body>
+                        {vulnLoading ? (
+                          <Table.Row id="loading">
+                            <Table.Cell colSpan={6}>
+                              <div className="py-12 text-center">
+                                <div className="flex justify-center">
+                                  <div
+                                    className="size-6 rounded-full border-2 border-t-violet-500 animate-spin"
+                                    style={{
+                                      borderColor: 'var(--border-subtle)',
+                                      borderTopColor: '#7c3aed',
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </Table.Cell>
+                          </Table.Row>
+                        ) : vulns.length === 0 ? (
+                          <Table.Row id="empty">
+                            <Table.Cell colSpan={6}>
+                              <div
+                                className="py-12 text-center text-sm"
+                                style={{ color: 'var(--text-faint)' }}
+                              >
+                                {vulnTotal === 0
+                                  ? 'No vulnerabilities found.'
+                                  : 'No results match your filters.'}
+                              </div>
+                            </Table.Cell>
+                          </Table.Row>
+                        ) : (
+                          vulns.map((v) => (
+                            <Table.Row key={v.id} id={v.id} className="hover:bg-[var(--row-hover)]">
+                              <Table.Cell>
+                                {v.vuln_id ? (
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <button
+                                      type="button"
+                                      onClick={() => openVulnerabilityDetails(v)}
+                                      className="font-mono text-xs text-violet-600 dark:text-violet-400 hover:underline transition-colors"
+                                    >
+                                      {v.vuln_id}
+                                    </button>
+                                    <SourceBadge source={v.data_source} />
+                                  </div>
+                                ) : (
+                                  <span style={{ color: 'var(--text-faint)' }}>-</span>
+                                )}
+                              </Table.Cell>
+                              <Table.Cell
+                                className="font-mono text-xs"
+                                style={{ color: 'var(--text-secondary)' }}
+                              >
+                                {v.pkg_name}
+                              </Table.Cell>
+                              <Table.Cell
+                                className="font-mono text-xs"
+                                style={{ color: 'var(--text-muted)' }}
+                              >
+                                {v.installed_version}
+                              </Table.Cell>
+                              <Table.Cell className="font-mono text-xs text-emerald-600 dark:text-emerald-500">
+                                {v.fixed_version || (
+                                  <span style={{ color: 'var(--text-faint)' }}>-</span>
+                                )}
+                              </Table.Cell>
+                              <Table.Cell>
+                                <SeverityBadge severity={v.severity} />
+                              </Table.Cell>
+                              <Table.Cell
+                                className="font-mono text-xs"
+                                style={{ color: 'var(--text-muted)' }}
+                              >
+                                {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
+                              </Table.Cell>
+                            </Table.Row>
+                          ))
+                        )}
+                      </Table.Body>
+                    </Table.Content>
+                  </Table.ScrollContainer>
+                </Table>
               </div>
 
               {totalPages > 1 && (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{vulnTotal} total</span>
+                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                    {vulnTotal} total
+                  </span>
                   <div className="flex items-center gap-2">
-                    <button
-                      disabled={page <= 1} onClick={() => setPage(p => p - 1)}
+                    <Button
+                      isDisabled={page <= 1}
+                      onPress={() => setPage((p) => p - 1)}
                       className="btn-secondary"
-                    >← Prev</button>
-                    <span className="text-sm px-2" style={{ color: 'var(--text-muted)' }}>{page} / {totalPages}</span>
-                    <button
-                      disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
+                      variant="secondary"
+                    >
+                      ← Prev
+                    </Button>
+                    <span className="text-sm px-2" style={{ color: 'var(--text-muted)' }}>
+                      {page} / {totalPages}
+                    </span>
+                    <Button
+                      isDisabled={page >= totalPages}
+                      onPress={() => setPage((p) => p + 1)}
                       className="btn-secondary"
-                    >Next →</button>
+                      variant="secondary"
+                    >
+                      Next →
+                    </Button>
                   </div>
                 </div>
               )}
@@ -568,16 +891,20 @@ export default function PublicScanResultPage() {
             {/* Sign-in CTA */}
             <div
               className="rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-              style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(167,139,250,0.15)' }}
+              style={{
+                background: 'rgba(124,58,237,0.06)',
+                border: '1px solid rgba(167,139,250,0.15)',
+              }}
             >
               <div>
-                <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>Want more features?</p>
-                <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>Sign in to track scans, add tags, suppress findings, and more.</p>
+                <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Want more features?
+                </p>
+                <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Sign in to track scans, add tags, suppress findings, and more.
+                </p>
               </div>
-              <Link
-                href="/login"
-                className="btn-primary"
-              >
+              <Link href="/login" className="btn-primary">
                 Sign in →
               </Link>
             </div>
@@ -588,7 +915,9 @@ export default function PublicScanResultPage() {
           vulnerability={selectedVulnerability}
           state={vulnerabilityDetailsModal}
           onClose={closeVulnerabilityDetails}
-          loadContextAnalysis={(vulnerability) => getPublicVulnerabilityContextAnalysis(id, vulnerability.id)}
+          loadContextAnalysis={(vulnerability) =>
+            getPublicVulnerabilityContextAnalysis(id, vulnerability.id)
+          }
         />
       </main>
     </div>

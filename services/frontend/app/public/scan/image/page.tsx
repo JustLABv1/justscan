@@ -26,8 +26,8 @@ function CopyButton({ url }: { url: string }) {
         });
       }}
       title="Copy link"
-      className="shrink-0 flex items-center justify-center w-6 h-6 rounded-md transition-all opacity-0 group-hover:opacity-100 hover:!opacity-100"
-      style={{ color: copied ? '#34d399' : 'var(--text-muted)', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}
+      className="shrink-0 flex items-center justify-center size-6 rounded-md transition-all opacity-0 group-hover:opacity-100 hover:!opacity-100"
+      style={{ color: copied ? '#34d399' : 'var(--text-muted)', background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
     >
       {copied ? (
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -74,7 +74,7 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
       onKeyDown={e => { if (e.key === 'Enter') router.push(`/public/scan/${record.id}`); }}
       className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors group cursor-pointer"
       style={{ background: 'var(--row-hover)' }}
-      onMouseEnter={e => (e.currentTarget.style.background = 'var(--glass-bg)')}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-bg)')}
       onMouseLeave={e => (e.currentTarget.style.background = 'var(--row-hover)')}
     >
       <div className="flex-1 min-w-0">
@@ -90,7 +90,7 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
       </div>
 
       <div className={`flex items-center gap-1.5 text-xs font-medium shrink-0 ${st.color}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${st.dot} ${isActive ? 'animate-pulse' : ''}`} />
+        <span className={`size-1.5 rounded-full ${st.dot} ${isActive ? 'animate-pulse' : ''}`} />
         {record.status}
       </div>
 
@@ -222,9 +222,9 @@ export default function PublicImageScanPage() {
             100% { transform: translateY(100vh); opacity: 0; }
           }
         `}</style>
-        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full"
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 size-[600px] rounded-full"
           style={{ background: isDark ? 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 65%)' : 'radial-gradient(circle, rgba(124,58,237,0.09) 0%, transparent 65%)' }} />
-        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] rounded-full"
+        <div className="absolute bottom-0 right-1/4 size-[400px] rounded-full"
           style={{ background: isDark ? 'radial-gradient(circle, rgba(109,40,217,0.1) 0%, transparent 65%)' : 'radial-gradient(circle, rgba(109,40,217,0.05) 0%, transparent 65%)' }} />
         <div className="absolute inset-0"
           style={{
@@ -248,7 +248,7 @@ export default function PublicImageScanPage() {
       {/* Nav */}
       <header className="relative z-10 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+          <div className="size-8 rounded-xl flex items-center justify-center"
             style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 12px rgba(124,58,237,0.5)' }}>
             <Logo size={16} className="text-white" />
           </div>
@@ -268,7 +268,7 @@ export default function PublicImageScanPage() {
           {mounted && (
             <button
               onClick={() => setTheme(isDark ? 'light' : 'dark')}
-              className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
+              className="size-9 flex items-center justify-center rounded-xl transition-colors"
               style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
               title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
             >
@@ -296,7 +296,7 @@ export default function PublicImageScanPage() {
           {/* Hero */}
           <div className="text-center space-y-4">
             <div className="flex justify-center">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+              <div className="size-16 rounded-2xl flex items-center justify-center"
                 style={{
                   background: isDark ? 'linear-gradient(135deg, rgba(124,58,237,0.25) 0%, rgba(109,40,217,0.12) 100%)' : 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(109,40,217,0.06) 100%)',
                   border: '1px solid rgba(167,139,250,0.25)',
@@ -327,7 +327,7 @@ export default function PublicImageScanPage() {
           ) : (
             <form onSubmit={handleScan} className="space-y-2">
               <div className="flex items-center gap-2 p-2 rounded-2xl"
-                style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
+                style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)', boxShadow: 'var(--surface-shadow)' }}>
                 <div className="pl-2 shrink-0" style={{ color: 'var(--text-faint)' }}>
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/><line x1="15" y1="9" x2="15" y2="21"/>
@@ -351,7 +351,7 @@ export default function PublicImageScanPage() {
                 >
                   {loading ? (
                     <span className="flex items-center gap-2">
-                      <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      <span className="size-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                       Starting…
                     </span>
                   ) : 'Scan'}
@@ -412,7 +412,7 @@ export default function PublicImageScanPage() {
                 </button>
               </div>
               <div className="rounded-2xl overflow-hidden space-y-px p-2"
-                style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
                 {history.map(record => (
                   <HistoryRow key={record.id} record={record} />
                 ))}

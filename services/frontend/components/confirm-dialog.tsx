@@ -29,30 +29,36 @@ function ConfirmDialogUI({
   onCancel,
   loading,
 }: ConfirmDialogUIProps) {
-  const iconColor = variant === 'danger' ? '#f87171' : variant === 'warning' ? '#fbbf24' : '#a78bfa';
+  const iconColor =
+    variant === 'danger'
+      ? 'var(--color-danger-soft-foreground)'
+      : variant === 'warning'
+        ? 'var(--color-warning-soft-foreground)'
+        : 'var(--color-accent-soft-foreground)';
   const iconBg =
     variant === 'danger'
-      ? 'rgba(239,68,68,0.12)'
+      ? 'var(--color-danger-soft-hover)'
       : variant === 'warning'
-      ? 'rgba(245,158,11,0.12)'
-      : 'rgba(124,58,237,0.12)';
+        ? 'var(--color-warning-soft-hover)'
+        : 'var(--color-accent-soft-hover)';
   const iconBorder =
     variant === 'danger'
-      ? 'rgba(239,68,68,0.25)'
+      ? 'var(--color-danger-soft-foreground)'
       : variant === 'warning'
-      ? 'rgba(245,158,11,0.25)'
-      : 'rgba(124,58,237,0.25)';
-  const confirmClassName = variant === 'danger' ? 'btn-danger' : variant === 'warning' ? 'btn-warning' : 'btn-primary';
+        ? 'var(--color-warning-soft-foreground)'
+        : 'var(--color-accent-soft-foreground)';
+  const variantStyle =
+    variant === 'danger' ? 'danger' : variant === 'warning' ? 'tertiary' : 'primary';
 
   return (
     <Modal state={state}>
       <Modal.Backdrop>
         <Modal.Container size="sm" placement="center">
-          <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
-            <Modal.Body className="px-6 pt-6 pb-2">
+          <Modal.Dialog>
+            <Modal.Body className="px-6 pb-2">
               <div className="flex flex-col items-center text-center gap-4">
                 <div
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+                  className="size-12 rounded-2xl flex items-center justify-center shrink-0"
                   style={{ background: iconBg, border: `1px solid ${iconBorder}` }}
                 >
                   <AlertCircleIcon size={22} color={iconColor} />
@@ -63,11 +69,16 @@ function ConfirmDialogUI({
                 </div>
               </div>
             </Modal.Body>
-            <Modal.Footer className="px-6 py-5 flex gap-3 justify-center" style={{ borderTop: 'none' }}>
-              <Button className="btn-secondary flex-1" onPress={onCancel}>
+            <Modal.Footer>
+              <Button className="flex-1" onPress={onCancel} variant="tertiary" isDisabled={loading}>
                 {cancelLabel}
               </Button>
-              <Button className={`${confirmClassName} flex-1`} isDisabled={loading} onPress={onConfirm}>
+              <Button
+                className={`flex-1 ${variant === 'warning' ? 'bg-warning-soft-foreground' : ''}`}
+                isDisabled={loading}
+                onPress={onConfirm}
+                variant={variantStyle}
+              >
                 {confirmLabel}
               </Button>
             </Modal.Footer>

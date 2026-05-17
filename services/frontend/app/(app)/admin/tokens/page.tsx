@@ -1,10 +1,10 @@
-import { AdminShell } from '../_components/admin-shell';
-import { TokensTab } from '../_components/primary-tabs';
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
+import { TokensTab } from '@/components/admin/tokens-tab';
 
 export default function AdminTokensPage() {
 	return (
-		<AdminShell>
+		<AdminPageShell>
 			<TokensTab />
-		</AdminShell>
+		</AdminPageShell>
 	);
 }

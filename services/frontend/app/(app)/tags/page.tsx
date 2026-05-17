@@ -5,19 +5,65 @@ import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
-import { createTag, deleteTag, getTokenType, getUser, getWorkScope, listTags, listTagShares, ResourceShare, shareTag, Tag, unshareTag, updateTag } from '@/lib/api';
-import { Modal, useOverlayState } from '@heroui/react';
-import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon, Tag01Icon } from 'hugeicons-react';
-import { useCallback, useEffect, useState } from 'react';
+import {
+  createTag,
+  deleteTag,
+  getTokenType,
+  getUser,
+  getWorkScope,
+  listTags,
+  listTagShares,
+  ResourceShare,
+  shareTag,
+  Tag,
+  unshareTag,
+  updateTag,
+} from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
+import {
+  Button,
+  Card,
+  ColorField,
+  ColorPicker,
+  ColorSwatch,
+  ColorSwatchPicker,
+  Label,
+  ListBox,
+  Modal,
+  Pagination,
+  parseColor,
+  SearchField,
+  Select,
+  type SortDescriptor,
+  Table,
+  useOverlayState,
+} from '@heroui/react';
+import {
+  Delete01Icon,
+  PencilEdit01Icon,
+  PlusSignIcon,
+  Shield01Icon,
+  Tag01Icon,
+} from 'hugeicons-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#14b8a6'];
-const inputCls = nativeFieldClassName;
+const COLORS = [
+  '#6366f1',
+  '#ec4899',
+  '#f59e0b',
+  '#10b981',
+  '#3b82f6',
+  '#ef4444',
+  '#8b5cf6',
+  '#14b8a6',
+];
+const selectTriggerCls = heroSelectTriggerClassName;
 
 export default function TagsPage() {
   const workScope = useWorkScope();
@@ -37,25 +83,59 @@ export default function TagsPage() {
   const [shareError, setShareError] = useState('');
   const [shareOrgId, setShareOrgId] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
+  const [filterQuery, setFilterQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
+    column: 'name',
+    direction: 'ascending',
+  });
+  const PAGE_SIZE = 10;
+  const parsedColor = useMemo(() => {
+    try {
+      return parseColor(color);
+    } catch {
+      return parseColor(COLORS[0]);
+    }
+  }, [color]);
   const modal = useOverlayState();
   const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
   const isPlatformAdmin = getTokenType() === 'admin';
   const currentUserId = getUser()?.id as string | undefined;
-  const manageableOrgIds = new Set(orgs.filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin').map((org) => org.id));
+  const manageableOrgIds = new Set(
+    orgs
+      .filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin')
+      .map((org) => org.id)
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setTags(await listTags()); }
-    catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load'); }
-    finally { setLoading(false); }
+    try {
+      setTags(await listTags());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load, scopeKey]);
+  useEffect(() => deferEffect(load), [load, scopeKey]);
 
-  function openCreate() { setEditing(null); setName(''); setColor(COLORS[0]); setFormError(''); modal.open(); }
-  function openEdit(tag: Tag) { setEditing(tag); setName(tag.name); setColor(tag.color); setFormError(''); modal.open(); }
+  function openCreate() {
+    setEditing(null);
+    setName('');
+    setColor(COLORS[0]);
+    setFormError('');
+    modal.open();
+  }
+  function openEdit(tag: Tag) {
+    setEditing(tag);
+    setName(tag.name);
+    setColor(tag.color);
+    setFormError('');
+    modal.open();
+  }
 
   function canManageTag(tag: Tag) {
     if (tag.owner_type === 'system') return isPlatformAdmin;
@@ -119,21 +199,96 @@ export default function TagsPage() {
   }
 
   const availableShareTargets = shareTarget
-    ? orgs.filter((org) => (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id && !shares.some((share) => share.org_id === org.id))
+    ? orgs.filter(
+        (org) =>
+          (isPlatformAdmin || manageableOrgIds.has(org.id)) &&
+          org.id !== shareTarget.owner_org_id &&
+          !shares.some((share) => share.org_id === org.id)
+      )
     : [];
+  const visibleTags = useMemo(() => {
+    const query = filterQuery.trim().toLowerCase();
+    const filtered = query
+      ? tags.filter((tag) => {
+          const ownerLabel =
+            tag.owner_type === 'org'
+              ? `org ${(tag.owner_org_id ? orgNamesById[tag.owner_org_id] : '') ?? ''}`
+              : tag.owner_type === 'system'
+                ? 'system'
+                : 'personal';
+          return (
+            tag.name.toLowerCase().includes(query) ||
+            tag.color.toLowerCase().includes(query) ||
+            ownerLabel.toLowerCase().includes(query)
+          );
+        })
+      : tags;
+
+    const sorted = [...filtered].sort((a, b) => {
+      const column = sortDescriptor.column as string;
+      const direction = sortDescriptor.direction === 'descending' ? -1 : 1;
+
+      if (column === 'owner') {
+        const ownerA =
+          a.owner_type === 'org'
+            ? (orgNamesById[a.owner_org_id ?? ''] ?? 'Org workspace')
+            : a.owner_type === 'system'
+              ? 'System'
+              : 'Personal';
+        const ownerB =
+          b.owner_type === 'org'
+            ? (orgNamesById[b.owner_org_id ?? ''] ?? 'Org workspace')
+            : b.owner_type === 'system'
+              ? 'System'
+              : 'Personal';
+        return ownerA.localeCompare(ownerB, undefined, { sensitivity: 'base' }) * direction;
+      }
+
+      const valueA = column === 'color' ? a.color : a.name;
+      const valueB = column === 'color' ? b.color : b.name;
+      return valueA.localeCompare(valueB, undefined, { sensitivity: 'base' }) * direction;
+    });
+
+    return sorted;
+  }, [filterQuery, tags, sortDescriptor, orgNamesById]);
+  const totalPages = Math.max(1, Math.ceil(visibleTags.length / PAGE_SIZE));
+  const effectivePage = Math.min(page, totalPages);
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const items: Array<number | 'ellipsis'> = [1];
+    if (effectivePage > 3) items.push('ellipsis');
+    const start = Math.max(2, effectivePage - 1);
+    const end = Math.min(totalPages - 1, effectivePage + 1);
+    for (let i = start; i <= end; i += 1) items.push(i);
+    if (effectivePage < totalPages - 2) items.push('ellipsis');
+    items.push(totalPages);
+    return items;
+  }, [effectivePage, totalPages]);
+  const pagedTags = useMemo(() => {
+    const start = (effectivePage - 1) * PAGE_SIZE;
+    return visibleTags.slice(start, start + PAGE_SIZE);
+  }, [effectivePage, visibleTags]);
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault(); setFormError(''); setSaving(true);
+    e.preventDefault();
+    setFormError('');
+    setSaving(true);
     try {
       const currentScope = getWorkScope();
-      if (editing) { await updateTag(editing.id, name, color); toast.success('Tag updated'); }
-      else {
+      if (editing) {
+        await updateTag(editing.id, name, color);
+        toast.success('Tag updated');
+      } else {
         await createTag(name, color, currentScope.kind === 'org' ? currentScope.orgId : undefined);
         toast.success(`Tag "${name}" created`);
       }
-      modal.close(); await load();
-    } catch (err: unknown) { setFormError(err instanceof Error ? err.message : 'Failed to save'); }
-    finally { setSaving(false); }
+      modal.close();
+      await load();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleDelete(id: string) {
@@ -150,37 +305,61 @@ export default function TagsPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
-    <PageHeader
-      eyebrow="Organization"
-      title="Tags"
-      description="Organize your scans with color-coded labels."
-      actions={
-        <button
-          onClick={openCreate}
-          className="btn-primary inline-flex items-center gap-2"
-        >
-          <PlusSignIcon size={15} /> New Tag
-        </button>
-      }
-    />
+    <div className="p-6 space-y-5">
+      <PageHeader
+        title="Tags"
+        description={
+          tags.length > 0
+            ? `${tags.length} ${tags.length === 1 ? 'tag' : 'tags'} organized for filtering.`
+            : 'Organize your scans with color-coded labels.'
+        }
+        actions={
+          <Button
+            onPress={openCreate}
+            className="btn-primary inline-flex items-center gap-2"
+            variant="primary"
+          >
+            <PlusSignIcon size={15} /> New Tag
+          </Button>
+        }
+      />
 
       {error ? <FormAlert description={error} title="Tag loading failed" /> : null}
 
       {loading ? (
-        <div className="glass-panel rounded-2xl overflow-hidden">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4 px-4 py-3.5"
-              style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}>
-              <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
-              <Skeleton className="h-4 w-28 rounded" />
-              <div className="flex-1" />
-              <Skeleton className="h-4 w-16 rounded" />
-              <Skeleton className="h-7 w-7 rounded-lg" />
-              <Skeleton className="h-7 w-7 rounded-lg" />
-            </div>
-          ))}
-        </div>
+        <Card className="space-y-4">
+          <SearchField name="tags-search" variant="secondary" className="w-full xl:max-w-md">
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                aria-label="Filter tags"
+                placeholder="Filter tags by name, owner, or color..."
+                value={filterQuery}
+                onChange={(event) => {
+                  setFilterQuery(event.target.value);
+                  setPage(1);
+                }}
+              />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
+          <div className="surface-panel rounded-2xl overflow-hidden">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-4 px-4 py-3.5"
+                style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+              >
+                <Skeleton className="size-8 rounded-lg shrink-0" />
+                <Skeleton className="h-4 w-28 rounded" />
+                <div className="flex-1" />
+                <Skeleton className="h-4 w-16 rounded" />
+                <Skeleton className="size-7 rounded-lg" />
+                <Skeleton className="size-7 rounded-lg" />
+              </div>
+            ))}
+          </div>
+        </Card>
       ) : tags.length === 0 ? (
         <EmptyState
           icon={<Tag01Icon size={28} />}
@@ -189,94 +368,238 @@ export default function TagsPage() {
           action={{ label: '+ New Tag', onClick: openCreate }}
         />
       ) : (
-        <div className="glass-panel rounded-2xl overflow-hidden">
-          {tags.map((tag, i) => (
-            <div
-              key={tag.id}
-              className="flex items-center gap-4 px-4 py-3.5 transition-colors"
-              style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            >
-              <div
-                className="w-4 h-4 rounded-full shrink-0"
-                style={{ background: tag.color, boxShadow: `0 0 8px ${tag.color}88`, outline: `2px solid ${tag.color}40`, outlineOffset: 2 }}
+        <Card className="space-y-4">
+          <SearchField name="tags-search" variant="secondary" className="w-full xl:max-w-md">
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                aria-label="Filter tags"
+                placeholder="Filter tags by name, owner, or color..."
+                value={filterQuery}
+                onChange={(event) => {
+                  setFilterQuery(event.target.value);
+                  setPage(1);
+                }}
               />
-              <span
-                className="text-xs font-medium px-2.5 py-0.5 rounded-full shrink-0"
-                style={{ background: tag.color + '22', color: tag.color, border: `1px solid ${tag.color}44` }}
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
+          <Table variant="secondary">
+            <Table.ScrollContainer>
+              <Table.Content
+                aria-label="Tags table"
+                className="min-w-[720px]"
+                sortDescriptor={sortDescriptor}
+                onSortChange={setSortDescriptor}
               >
-                {tag.name}
+                <Table.Header>
+                  <Table.Column id="name" allowsSorting isRowHeader>
+                    Tag
+                  </Table.Column>
+                  <Table.Column id="owner" allowsSorting>
+                    Owner
+                  </Table.Column>
+                  <Table.Column id="color" allowsSorting>
+                    Color
+                  </Table.Column>
+                  <Table.Column className="text-right">Actions</Table.Column>
+                </Table.Header>
+                <Table.Body
+                  items={pagedTags}
+                  renderEmptyState={() => (
+                    <div className="py-10 text-center text-sm text-zinc-500">
+                      No tags match your filter.
+                    </div>
+                  )}
+                >
+                  {(tag) => (
+                    <Table.Row key={tag.id} id={tag.id}>
+                      <Table.Cell>
+                        <span
+                          className="inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-xs font-medium"
+                          style={{
+                            background: tag.color + '22',
+                            color: tag.color,
+                            borderColor: tag.color + '44',
+                          }}
+                          title={tag.name}
+                        >
+                          <span className="truncate">{tag.name}</span>
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <OwnershipBadge
+                          ownerType={tag.owner_type}
+                          ownerOrgId={tag.owner_org_id}
+                          orgNamesById={orgNamesById}
+                        />
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span className="font-mono text-xs text-zinc-500">{tag.color}</span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="flex items-center justify-end">
+                          {canManageTag(tag) ? (
+                            <RowActionsMenu
+                              label={`Open actions menu for tag ${tag.name}`}
+                              items={[
+                                {
+                                  id: 'share',
+                                  label: 'Manage access',
+                                  icon: <Shield01Icon size={15} />,
+                                  onAction: () => openShareModal(tag),
+                                },
+                                {
+                                  id: 'edit',
+                                  label: 'Edit tag',
+                                  icon: <PencilEdit01Icon size={15} />,
+                                  onAction: () => openEdit(tag),
+                                },
+                                {
+                                  id: 'delete',
+                                  label: 'Delete tag',
+                                  icon: <Delete01Icon size={15} />,
+                                  variant: 'danger',
+                                  onAction: () => {
+                                    void handleDelete(tag.id);
+                                  },
+                                },
+                              ]}
+                            />
+                          ) : (
+                            <span className="text-xs text-zinc-500">Read only</span>
+                          )}
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  )}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+            <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
+              <span className="text-xs text-zinc-500 whitespace-nowrap">
+                Showing {visibleTags.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
+                {Math.min(effectivePage * PAGE_SIZE, visibleTags.length)} of {visibleTags.length}
               </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate">{tag.name}</p>
-                <div className="mt-1">
-                  <OwnershipBadge ownerType={tag.owner_type} ownerOrgId={tag.owner_org_id} orgNamesById={orgNamesById} />
-                </div>
-              </div>
-              <span className="font-mono text-xs text-zinc-500">{tag.color}</span>
-              {canManageTag(tag) ? (
-                <RowActionsMenu
-                  label={`Open actions menu for tag ${tag.name}`}
-                  items={[
-                    { id: 'share', label: 'Manage access', icon: <Shield01Icon size={15} />, onAction: () => openShareModal(tag) },
-                    { id: 'edit', label: 'Edit tag', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(tag) },
-                    { id: 'delete', label: 'Delete tag', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(tag.id); } },
-                  ]}
-                />
-              ) : null}
-            </div>
-          ))}
-        </div>
+              <Pagination size="sm" className="justify-self-center">
+                <Pagination.Content>
+                  <Pagination.Item>
+                    <Pagination.Previous
+                      isDisabled={effectivePage === 1}
+                      onPress={() => setPage((previous) => Math.max(1, previous - 1))}
+                    >
+                      <Pagination.PreviousIcon />
+                      <span>Previous</span>
+                    </Pagination.Previous>
+                  </Pagination.Item>
+                  {paginationItems.map((item, index) =>
+                    item === 'ellipsis' ? (
+                      <Pagination.Item key={`tags-ellipsis-${index}`}>
+                        <Pagination.Ellipsis />
+                      </Pagination.Item>
+                    ) : (
+                      <Pagination.Item key={`tags-page-${item}`}>
+                        <Pagination.Link
+                          isActive={item === effectivePage}
+                          onPress={() => setPage(item)}
+                        >
+                          {item}
+                        </Pagination.Link>
+                      </Pagination.Item>
+                    )
+                  )}
+                  <Pagination.Item>
+                    <Pagination.Next
+                      isDisabled={effectivePage === totalPages}
+                      onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
+                    >
+                      <span>Next</span>
+                      <Pagination.NextIcon />
+                    </Pagination.Next>
+                  </Pagination.Item>
+                </Pagination.Content>
+              </Pagination>
+              <div />
+            </Table.Footer>
+          </Table>
+        </Card>
       )}
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
-          <Modal.Container size="sm" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editing ? 'Edit Tag' : 'New Tag'}</Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{editing ? 'Edit Tag' : 'New Tag'}</Modal.Heading>
+                <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5">
+              <Modal.Body className="py-5">
                 <form id="tag-form" onSubmit={handleSubmit} className="space-y-4">
                   {formError ? <FormAlert description={formError} title="Tag save failed" /> : null}
-                  <FormField label="Name" onChange={(e) => setName(e.target.value)} placeholder="production" required value={name} />
-                  <div className="space-y-2.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Color</label>
-                    <div className="flex flex-wrap gap-2">
-                      {COLORS.map((c) => (
-                        <button key={c} type="button" onClick={() => setColor(c)}
-                          className="w-7 h-7 rounded-full transition-all"
+                  <FormField
+                    label="Name"
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="production"
+                    required
+                    value={name}
+                    className="bg-surface-secondary"
+                  />
+                  <div className="space-y-2.5 flex flex-col">
+                    <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                      Color
+                    </Label>
+                    <ColorPicker
+                      value={parsedColor}
+                      onChange={(nextColor) => setColor(nextColor.toString('hex'))}
+                    >
+                      <ColorPicker.Trigger className="flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <ColorSwatch size="md" />
+                          <span className="text-xs font-mono text-zinc-500">{color}</span>
+                        </div>
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full font-medium"
                           style={{
-                            background: c,
-                            boxShadow: color === c ? `0 0 10px ${c}99` : 'none',
-                            outline: color === c ? `2px solid ${c}` : `2px solid transparent`,
-                            outlineOffset: 2,
-                            transform: color === c ? 'scale(1.15)' : 'scale(1)',
-                          }} />
-                      ))}
-                      <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
-                        className="w-7 h-7 rounded-full cursor-pointer border-0 p-0 bg-transparent" title="Custom color" />
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
-                      <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ background: color, boxShadow: `0 0 6px ${color}88` }} />
-                      <span className="text-xs font-mono text-zinc-500">{color}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium ml-1"
-                        style={{ background: color + '22', color, border: `1px solid ${color}44` }}>
-                        {name || 'preview'}
-                      </span>
-                    </div>
+                            background: color + '22',
+                            color,
+                            border: `1px solid ${color}44`,
+                          }}
+                        >
+                          {name || 'preview'}
+                        </span>
+                      </ColorPicker.Trigger>
+                      <ColorPicker.Popover className="w-[min(320px,calc(100vw-3rem))] space-y-3 p-3">
+                        <ColorSwatchPicker size="sm" className="justify-center">
+                          {COLORS.map((c) => (
+                            <ColorSwatchPicker.Item key={c} color={c}>
+                              <ColorSwatchPicker.Swatch />
+                              <ColorSwatchPicker.Indicator />
+                            </ColorSwatchPicker.Item>
+                          ))}
+                        </ColorSwatchPicker>
+                        <ColorField aria-label="Tag color">
+                          <ColorField.Group variant="secondary">
+                            <ColorField.Prefix>
+                              <ColorSwatch size="xs" />
+                            </ColorField.Prefix>
+                            <ColorField.Input />
+                          </ColorField.Group>
+                        </ColorField>
+                      </ColorPicker.Popover>
+                    </ColorPicker>
                   </div>
                 </form>
               </Modal.Body>
-              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="btn-secondary" type="button">Cancel</button>
-                <button type="submit" form="tag-form" disabled={saving}
-                  className="btn-primary inline-flex items-center gap-2">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              <Modal.Footer>
+                <Button onPress={modal.close} variant="secondary">
+                  Cancel
+                </Button>
+                <Button type="submit" form="tag-form" isDisabled={saving} variant="primary">
+                  {saving && (
+                    <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  )}
                   {editing ? 'Save' : 'Create'}
-                </button>
+                </Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>
@@ -285,52 +608,86 @@ export default function TagsPage() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Tag Access</Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>Manage Tag Access</Modal.Heading>
+                <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5 space-y-4">
-                {shareError ? <FormAlert description={shareError} title="Access update failed" /> : null}
+              <Modal.Body className="mt-4 space-y-4">
+                {shareError ? (
+                  <FormAlert description={shareError} title="Access update failed" />
+                ) : null}
                 {shareTarget ? (
-                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                    <div className="flex items-center gap-3">
-                      <span className="w-4 h-4 rounded-full shrink-0" style={{ background: shareTarget.color, boxShadow: `0 0 8px ${shareTarget.color}88` }} />
-                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{shareTarget.name}</p>
+                  <Card className="bg-surface-secondary px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="size-4 rounded-full shrink-0"
+                          style={{
+                            background: shareTarget.color,
+                            boxShadow: `0 0 8px ${shareTarget.color}88`,
+                          }}
+                        />
+                        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                          {shareTarget.name}
+                        </p>
+                      </div>
+                      <OwnershipBadge
+                        ownerType={shareTarget.owner_type}
+                        ownerOrgId={shareTarget.owner_org_id}
+                        orgNamesById={orgNamesById}
+                      />
                     </div>
-                    <div className="mt-2">
-                      <OwnershipBadge ownerType={shareTarget.owner_type} ownerOrgId={shareTarget.owner_org_id} orgNamesById={orgNamesById} />
-                    </div>
-                  </div>
+                  </Card>
                 ) : null}
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Current access</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Organizations listed here can apply this tag to scans they manage.</p>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      Current access
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Organizations listed here can apply this tag to scans they manage.
+                    </p>
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
-                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
-                            <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>
+                        <Card
+                          key={share.org_id}
+                          className="flex bg-surface-secondary items-start justify-between gap-3 px-4 py-3"
+                        >
+                          <div className="flex flex-wrap items-center justify-between w-full">
+                            <div className="flex flex-col">
+                              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                                {share.org_name}
+                              </p>
+                              <p className="text-xs text-zinc-500 mt-0.5">
+                                {share.is_owner ? 'Owner workspace' : 'Shared access'}
+                              </p>
+                            </div>
+                            {share.is_owner ? (
+                              <span className="text-xs font-medium text-zinc-500">Locked</span>
+                            ) : (
+                              <Button
+                                onPress={() => {
+                                  void handleRevokeShare(share.org_id);
+                                }}
+                                isDisabled={shareSaving}
+                                isIconOnly
+                                variant="danger-soft"
+                              >
+                                <Delete01Icon size={15} />
+                              </Button>
+                            )}
                           </div>
-                          {share.is_owner ? (
-                            <span className="text-xs font-medium text-zinc-500">Locked</span>
-                          ) : (
-                            <button type="button" onClick={() => { void handleRevokeShare(share.org_id); }} disabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50">
-                              <Delete01Icon size={15} />
-                            </button>
-                          )}
-                        </div>
+                        </Card>
                       ))}
                     </div>
                   )}
@@ -338,28 +695,60 @@ export default function TagsPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Grant access</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Share this tag with another organization you manage.</p>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      Grant access
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Share this tag with another organization you manage.
+                    </p>
                   </div>
                   {availableShareTargets.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
+                    <p className="text-sm text-zinc-500">
+                      No additional organizations are available for sharing.
+                    </p>
                   ) : (
-                    <div className="flex gap-2">
-                      <select className={inputCls + ' flex-1'} value={shareOrgId} onChange={(event) => setShareOrgId(event.target.value)}>
-                        <option value="">Select an organization</option>
-                        {availableShareTargets.map((org) => (
-                          <option key={org.id} value={org.id}>{org.name}</option>
-                        ))}
-                      </select>
-                      <button type="button" onClick={() => { void handleGrantShare(); }} disabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Select
+                        value={shareOrgId || '__none__'}
+                        onChange={(value) =>
+                          setShareOrgId(String(value === '__none__' ? '' : (value ?? '')))
+                        }
+                        className="flex-1"
+                      >
+                        <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="__none__">Select an organization</ListBox.Item>
+                            {availableShareTargets.map((org) => (
+                              <ListBox.Item key={org.id} id={org.id}>
+                                {org.name}
+                              </ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                      <Button
+                        type="button"
+                        onPress={() => {
+                          void handleGrantShare();
+                        }}
+                        isDisabled={!shareOrgId || shareSaving}
+                        className="btn-primary disabled:opacity-60"
+                        variant="primary"
+                      >
                         Grant
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
               </Modal.Body>
-              <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={shareModal.close} className="btn-secondary" type="button">Close</button>
+              <Modal.Footer>
+                <Button onPress={shareModal.close} variant="secondary">
+                  Close
+                </Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

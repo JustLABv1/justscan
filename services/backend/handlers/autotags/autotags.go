@@ -24,9 +24,8 @@ func List(db *bun.DB) gin.HandlerFunc {
 		var rules []models.AutoTagRule
 		query := db.NewSelect().
 			Model(&rules).
-			Join("JOIN tags AS tag ON tag.id = auto_tag_rule.tag_id").
 			Relation("Tag").
-			OrderExpr("auto_tag_rule.created_at DESC")
+			OrderExpr("created_at DESC")
 		if !isAdmin {
 			roles, err := authz.LoadUserOrgRoles(c.Request.Context(), db, userID)
 			if err != nil {
@@ -40,9 +39,15 @@ func List(db *bun.DB) gin.HandlerFunc {
 				}
 			}
 			query = query.WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
-				q = q.Where("tag.owner_user_id = ?", userID)
+				q = q.Where(
+					"tag_id IN (SELECT id FROM tags WHERE owner_user_id = ?)",
+					userID,
+				)
 				if len(manageableOrgIDs) > 0 {
-					q = q.WhereOr("tag.owner_org_id IN (?)", bun.In(manageableOrgIDs))
+					q = q.WhereOr(
+						"tag_id IN (SELECT id FROM tags WHERE owner_org_id IN (?))",
+						bun.In(manageableOrgIDs),
+					)
 				}
 				return q
 			})

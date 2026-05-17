@@ -5,28 +5,70 @@ import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
-import { createRegistry, deleteRegistry, getDefaultScannerCapabilities, getTokenType, getWorkScope, listRegistriesWithCapabilities, listRegistryShares, RegistryWithHealth, ResourceShare, ScannerCapabilities, shareRegistry, testRegistry, unshareRegistry, updateRegistry } from '@/lib/api';
+import {
+  createRegistry,
+  deleteRegistry,
+  getDefaultScannerCapabilities,
+  getTokenType,
+  getWorkScope,
+  listRegistriesWithCapabilities,
+  listRegistryShares,
+  RegistryWithHealth,
+  ResourceShare,
+  ScannerCapabilities,
+  shareRegistry,
+  testRegistry,
+  unshareRegistry,
+  updateRegistry,
+} from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
-import { ListBox, Modal, Select, useOverlayState } from '@heroui/react';
-import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, ServerStack01Icon, Shield01Icon, TestTube01Icon } from 'hugeicons-react';
-import { useCallback, useEffect, useState } from 'react';
+import { Button, Card, ListBox, Modal, SearchField, Select, Table, useOverlayState } from '@heroui/react';
+import {
+  Delete01Icon,
+  PencilEdit01Icon,
+  PlusSignIcon,
+  ServerStack01Icon,
+  Shield01Icon,
+  TestTube01Icon,
+} from 'hugeicons-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-const inputCls = nativeFieldClassName;
+const selectTriggerCls = heroSelectTriggerClassName;
 
 const AUTH_TYPE_LABEL: Record<string, string> = {
-  none: 'Public', basic: 'Basic auth', token: 'Token', aws_ecr: 'AWS ECR',
+  none: 'Public',
+  basic: 'Basic auth',
+  token: 'Token',
+  aws_ecr: 'AWS ECR',
 };
 const AUTH_TYPE_STYLE: Record<string, React.CSSProperties> = {
-  none:    { color: '#a1a1aa', background: 'rgba(161,161,170,0.08)', border: '1px solid rgba(161,161,170,0.15)' },
-  basic:   { color: '#60a5fa', background: 'rgba(59,130,246,0.1)',   border: '1px solid rgba(59,130,246,0.2)'  },
-  token:   { color: '#a78bfa', background: 'rgba(124,58,237,0.1)',   border: '1px solid rgba(124,58,237,0.2)'  },
-  aws_ecr: { color: '#fb923c', background: 'rgba(249,115,22,0.1)',   border: '1px solid rgba(249,115,22,0.2)'  },
+  none: {
+    color: '#a1a1aa',
+    background: 'rgba(161,161,170,0.08)',
+    border: '1px solid rgba(161,161,170,0.15)',
+  },
+  basic: {
+    color: '#60a5fa',
+    background: 'rgba(59,130,246,0.1)',
+    border: '1px solid rgba(59,130,246,0.2)',
+  },
+  token: {
+    color: '#a78bfa',
+    background: 'rgba(124,58,237,0.1)',
+    border: '1px solid rgba(124,58,237,0.2)',
+  },
+  aws_ecr: {
+    color: '#fb923c',
+    background: 'rgba(249,115,22,0.1)',
+    border: '1px solid rgba(249,115,22,0.2)',
+  },
 };
 
 const PROVIDER_LABEL: Record<string, string> = {
@@ -35,19 +77,53 @@ const PROVIDER_LABEL: Record<string, string> = {
 };
 
 const PROVIDER_STYLE: Record<string, React.CSSProperties> = {
-  trivy: { color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' },
-  artifactory_xray: { color: '#f59e0b', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' },
+  trivy: {
+    color: '#22c55e',
+    background: 'rgba(34,197,94,0.1)',
+    border: '1px solid rgba(34,197,94,0.2)',
+  },
+  artifactory_xray: {
+    color: '#f59e0b',
+    background: 'rgba(245,158,11,0.1)',
+    border: '1px solid rgba(245,158,11,0.2)',
+  },
 };
 
 function HealthBadge({ status, message }: { status: string; message: string }) {
-  const cfg = ({
-    healthy:   { color: '#34d399', bg: 'rgba(16,185,129,0.1)',   border: 'rgba(16,185,129,0.2)',   label: 'Healthy'   },
-    unhealthy: { color: '#f87171', bg: 'rgba(239,68,68,0.1)',    border: 'rgba(239,68,68,0.2)',    label: 'Unhealthy' },
-    unknown:   { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)', label: 'Unknown'   },
-  } as Record<string, { color: string; bg: string; border: string; label: string }>)[status] ?? { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)', label: status };
+  const cfg = (
+    {
+      healthy: {
+        color: '#34d399',
+        bg: 'rgba(16,185,129,0.1)',
+        border: 'rgba(16,185,129,0.2)',
+        label: 'Healthy',
+      },
+      unhealthy: {
+        color: '#f87171',
+        bg: 'rgba(239,68,68,0.1)',
+        border: 'rgba(239,68,68,0.2)',
+        label: 'Unhealthy',
+      },
+      unknown: {
+        color: '#a1a1aa',
+        bg: 'rgba(161,161,170,0.08)',
+        border: 'rgba(161,161,170,0.15)',
+        label: 'Unknown',
+      },
+    } as Record<string, { color: string; bg: string; border: string; label: string }>
+  )[status] ?? {
+    color: '#a1a1aa',
+    bg: 'rgba(161,161,170,0.08)',
+    border: 'rgba(161,161,170,0.15)',
+    label: status,
+  };
   return (
-    <span className="flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full" style={{color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`}} title={message}>
-      <span className="w-1.5 h-1.5 rounded-full" style={{background: cfg.color}} />
+    <span
+      className="flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full"
+      style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}
+      title={message}
+    >
+      <span className="size-1.5 rounded-full" style={{ background: cfg.color }} />
       {cfg.label}
     </span>
   );
@@ -58,7 +134,9 @@ export default function RegistriesPage() {
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const { orgs, orgNamesById } = useOrgDirectory();
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
-  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(getDefaultScannerCapabilities());
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(
+    getDefaultScannerCapabilities()
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<RegistryWithHealth | null>(null);
@@ -80,12 +158,18 @@ export default function RegistriesPage() {
   const [shareError, setShareError] = useState('');
   const [shareOrgId, setShareOrgId] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [providerFilter, setProviderFilter] = useState<'all' | 'trivy' | 'artifactory_xray'>('all');
   const modal = useOverlayState();
   const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
   const isPlatformAdmin = getTokenType() === 'admin';
-  const manageableOrgIds = new Set(orgs.filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin').map((org) => org.id));
+  const manageableOrgIds = new Set(
+    orgs
+      .filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin')
+      .map((org) => org.id)
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -93,42 +177,77 @@ export default function RegistriesPage() {
       const response = await listRegistriesWithCapabilities();
       setRegistries(response.data);
       setCapabilities(response.capabilities);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setLoading(false);
     }
-    catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load'); }
-    finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load, scopeKey]);
+  useEffect(() => deferEffect(load), [load, scopeKey]);
 
   function openCreate() {
-    setEditing(null); setName(''); setUrl(''); setXrayUrl(''); setXrayArtifactoryId('default'); setXrayRepository(''); setAuthType('none'); setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray'); setUsername(''); setPassword(''); setFormError('');
+    setEditing(null);
+    setName('');
+    setUrl('');
+    setXrayUrl('');
+    setXrayArtifactoryId('default');
+    setXrayRepository('');
+    setAuthType('none');
+    setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray');
+    setUsername('');
+    setPassword('');
+    setFormError('');
     modal.open();
   }
   function openEdit(r: RegistryWithHealth) {
-    setEditing(r); setName(r.name); setUrl(r.url); setXrayUrl(r.xray_url ?? ''); setXrayArtifactoryId(r.xray_artifactory_id ?? 'default'); setXrayRepository(r.xray_repository ?? ''); setAuthType(r.auth_type ?? 'none'); setScanProvider(r.scan_provider ?? 'trivy'); setUsername(r.username ?? ''); setPassword(''); setFormError('');
+    setEditing(r);
+    setName(r.name);
+    setUrl(r.url);
+    setXrayUrl(r.xray_url ?? '');
+    setXrayArtifactoryId(r.xray_artifactory_id ?? 'default');
+    setXrayRepository(r.xray_repository ?? '');
+    setAuthType(r.auth_type ?? 'none');
+    setScanProvider(r.scan_provider ?? 'trivy');
+    setUsername(r.username ?? '');
+    setPassword('');
+    setFormError('');
     modal.open();
   }
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault(); setFormError(''); setSaving(true);
+    e.preventDefault();
+    setFormError('');
+    setSaving(true);
     try {
       const currentScope = getWorkScope();
       const payload = {
         name,
         url,
         xray_url: scanProvider === 'artifactory_xray' ? xrayUrl || undefined : undefined,
-        xray_artifactory_id: scanProvider === 'artifactory_xray' ? xrayArtifactoryId || 'default' : undefined,
-        xray_repository: scanProvider === 'artifactory_xray' ? xrayRepository.trim() || undefined : undefined,
+        xray_artifactory_id:
+          scanProvider === 'artifactory_xray' ? xrayArtifactoryId || 'default' : undefined,
+        xray_repository:
+          scanProvider === 'artifactory_xray' ? xrayRepository.trim() || undefined : undefined,
         auth_type: authType,
         scan_provider: scanProvider,
         username,
         ...(password ? { password } : {}),
         ...(currentScope.kind === 'org' ? { org_id: currentScope.orgId } : {}),
       };
-      if (editing) { await updateRegistry(editing.id, payload); toast.success('Registry updated'); }
-      else { await createRegistry(payload); toast.success('Registry added'); }
-      modal.close(); await load();
-    } catch (err: unknown) { setFormError(err instanceof Error ? err.message : 'Failed to save'); }
-    finally { setSaving(false); }
+      if (editing) {
+        await updateRegistry(editing.id, payload);
+        toast.success('Registry updated');
+      } else {
+        await createRegistry(payload);
+        toast.success('Registry added');
+      }
+      modal.close();
+      await load();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
   }
   async function handleDelete(id: string) {
     const ok = await confirm({
@@ -151,7 +270,9 @@ export default function RegistriesPage() {
     } catch {
       toast.error('Connection test failed');
       await load();
-    } finally { setTesting(null); }
+    } finally {
+      setTesting(null);
+    }
   }
 
   function canManageAccess(registry: RegistryWithHealth) {
@@ -215,151 +336,294 @@ export default function RegistriesPage() {
   }
 
   const availableShareTargets = shareTarget
-    ? orgs.filter((org) => (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id && !shares.some((share) => share.org_id === org.id))
+    ? orgs.filter(
+        (org) =>
+          (isPlatformAdmin || manageableOrgIds.has(org.id)) &&
+          org.id !== shareTarget.owner_org_id &&
+          !shares.some((share) => share.org_id === org.id)
+      )
     : [];
+  const filteredRegistries = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return registries.filter((registry) => {
+      const providerMatches = providerFilter === 'all' || (registry.scan_provider ?? 'trivy') === providerFilter;
+      if (!providerMatches) return false;
+      if (!query) return true;
+      return [registry.name, registry.url, registry.username]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(query));
+    });
+  }, [providerFilter, registries, searchQuery]);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
-    <PageHeader
-      eyebrow="Registry management"
-      title="Registries"
-      description="Configure private Docker registries and choose the scan provider per registry."
-      actions={
-        <button
-          onClick={openCreate}
-          className="btn-primary inline-flex items-center gap-2"
-          type="button"
-        >
-          <PlusSignIcon size={15} /> Add Registry
-        </button>
-      }
-    />
+    <div className="p-6 space-y-5">
+      <PageHeader
+        title="Registries"
+        description="Configure private Docker registries and choose the scan provider per registry."
+        actions={
+          <Button
+            onPress={openCreate}
+            className="btn-primary inline-flex items-center gap-2"
+            type="button"
+            variant="primary"
+          >
+            <PlusSignIcon size={15} /> Add Registry
+          </Button>
+        }
+      />
 
       {error ? <FormAlert description={error} title="Registry loading failed" /> : null}
 
-      {loading ? (
-        <div className="glass-panel rounded-2xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">URL</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Provider</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Username</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Health</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: 3 }).map((_, i) => <TableRowSkeleton key={i} cols={7} />)}
-            </tbody>
-          </table>
+      <Card className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <SearchField name="registries-search" variant="secondary" className="w-full sm:max-w-sm">
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search registry, URL, or username..."
+              />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
+          <Select
+            value={providerFilter}
+            onChange={(value) =>
+              setProviderFilter(
+                value === 'artifactory_xray' ? 'artifactory_xray' : value === 'trivy' ? 'trivy' : 'all'
+              )
+            }
+            className="w-full sm:w-[180px]"
+            variant="secondary"
+          >
+            <Select.Trigger className={selectTriggerCls}>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all">All providers</ListBox.Item>
+                <ListBox.Item id="trivy">Trivy</ListBox.Item>
+                <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
         </div>
-      ) : registries.length === 0 ? (
-        <EmptyState
-          icon={<ServerStack01Icon size={28} />}
-          title="No registries configured"
-          description="Add a private Docker registry and choose whether JustScan should use its local Trivy scanner or the Artifactory Xray provider for that registry."
-          action={{ label: '+ Add Registry', onClick: openCreate }}
-        />
-      ) : (
-        <div className="glass-panel rounded-2xl overflow-hidden">
+      {loading ? (
+        <div className="surface-panel rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">URL</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Provider</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Auth</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Username</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Health</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                  Name
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                  URL
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                  Provider
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                  Auth
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                  Username
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                  Health
+                </th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
-              {registries.map((r, i) => (
-                <tr key={r.id} style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--row-hover)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                  <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      <p className="font-medium text-zinc-700 dark:text-zinc-200">{r.name}</p>
-                      <OwnershipBadge ownerType={r.owner_type} ownerOrgId={r.owner_org_id} orgNamesById={orgNamesById} />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-500">{r.url}</td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-md"
-                      style={PROVIDER_STYLE[r.scan_provider ?? 'trivy']}>
-                      {PROVIDER_LABEL[r.scan_provider ?? 'trivy']}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-md"
-                      style={AUTH_TYPE_STYLE[r.auth_type ?? 'none']}>
-                      {AUTH_TYPE_LABEL[r.auth_type ?? 'none']}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">{r.username || <span className="text-zinc-400 dark:text-zinc-700">—</span>}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-1">
-                      <HealthBadge status={r.health_status ?? 'unknown'} message={r.health_message ?? ''} />
-                      {r.last_health_check_at && (
-                        <span className="text-[10px] text-zinc-500">
-                          {timeAgo(r.last_health_check_at)}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end">
-                      <RowActionsMenu
-                        label={`Open actions menu for ${r.name}`}
-                        items={[
-                          { id: 'test', label: testing === r.id ? 'Testing…' : 'Test connection', icon: <TestTube01Icon size={15} />, disabled: testing === r.id, onAction: () => { void handleTest(r.id); } },
-                          ...(canManageAccess(r)
-                            ? [{ id: 'share', label: 'Manage access', icon: <Shield01Icon size={15} />, onAction: () => openShareModal(r) }]
-                            : []),
-                          { id: 'edit', label: 'Edit registry', icon: <PencilEdit01Icon size={15} />, onAction: () => openEdit(r) },
-                          { id: 'delete', label: 'Delete registry', icon: <Delete01Icon size={15} />, variant: 'danger', onAction: () => { void handleDelete(r.id); } },
-                        ]}
-                      />
-                    </div>
-                  </td>
-                </tr>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <TableRowSkeleton key={i} cols={7} />
               ))}
             </tbody>
           </table>
         </div>
+      ) : filteredRegistries.length === 0 ? (
+        <EmptyState
+          icon={<ServerStack01Icon size={28} />}
+          title={registries.length > 0 ? 'No registries match your filters' : 'No registries configured'}
+          description={
+            registries.length > 0
+              ? 'Try a different search or provider filter.'
+              : 'Add a private Docker registry and choose whether JustScan should use its local Trivy scanner or the Artifactory Xray provider for that registry.'
+          }
+          action={
+            registries.length > 0
+              ? { label: 'Clear filters', onClick: () => { setSearchQuery(''); setProviderFilter('all'); } }
+              : { label: '+ Add Registry', onClick: openCreate }
+          }
+        />
+      ) : (
+        <Table variant="secondary">
+          <Table.ScrollContainer>
+            <Table.Content aria-label="Configured registries" className="min-w-[980px]">
+              <Table.Header>
+                <Table.Column isRowHeader>Name</Table.Column>
+                <Table.Column>URL</Table.Column>
+                <Table.Column>Provider</Table.Column>
+                <Table.Column>Auth</Table.Column>
+                <Table.Column>Username</Table.Column>
+                <Table.Column>Health</Table.Column>
+                <Table.Column>Actions</Table.Column>
+              </Table.Header>
+              <Table.Body>
+                {filteredRegistries.map((r) => (
+                  <Table.Row key={r.id} id={r.id}>
+                    <Table.Cell>
+                      <div className="space-y-1">
+                        <p className="font-medium text-zinc-700 dark:text-zinc-200">{r.name}</p>
+                        <OwnershipBadge
+                          ownerType={r.owner_type}
+                          ownerOrgId={r.owner_org_id}
+                          orgNamesById={orgNamesById}
+                        />
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="font-mono text-xs text-zinc-500">{r.url}</span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span
+                        className="text-xs font-medium px-2 py-0.5 rounded-md"
+                        style={PROVIDER_STYLE[r.scan_provider ?? 'trivy']}
+                      >
+                        {PROVIDER_LABEL[r.scan_provider ?? 'trivy']}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span
+                        className="text-xs font-medium px-2 py-0.5 rounded-md"
+                        style={AUTH_TYPE_STYLE[r.auth_type ?? 'none']}
+                      >
+                        {AUTH_TYPE_LABEL[r.auth_type ?? 'none']}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                        {r.username || <span className="text-zinc-400 dark:text-zinc-700">-</span>}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex flex-col gap-1">
+                        <HealthBadge
+                          status={r.health_status ?? 'unknown'}
+                          message={r.health_message ?? ''}
+                        />
+                        {r.last_health_check_at && (
+                          <span className="text-[10px] text-zinc-500">
+                            {timeAgo(r.last_health_check_at)}
+                          </span>
+                        )}
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex items-center justify-end">
+                        <RowActionsMenu
+                          label={`Open actions menu for ${r.name}`}
+                          items={[
+                            {
+                              id: 'test',
+                              label: testing === r.id ? 'Testing…' : 'Test connection',
+                              icon: <TestTube01Icon size={15} />,
+                              disabled: testing === r.id,
+                              onAction: () => {
+                                void handleTest(r.id);
+                              },
+                            },
+                            ...(canManageAccess(r)
+                              ? [
+                                  {
+                                    id: 'share',
+                                    label: 'Manage access',
+                                    icon: <Shield01Icon size={15} />,
+                                    onAction: () => openShareModal(r),
+                                  },
+                                ]
+                              : []),
+                            {
+                              id: 'edit',
+                              label: 'Edit registry',
+                              icon: <PencilEdit01Icon size={15} />,
+                              onAction: () => openEdit(r),
+                            },
+                            {
+                              id: 'delete',
+                              label: 'Delete registry',
+                              icon: <Delete01Icon size={15} />,
+                              variant: 'danger',
+                              onAction: () => {
+                                void handleDelete(r.id);
+                              },
+                            },
+                          ]}
+                        />
+                      </div>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table>
       )}
+      </Card>
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
+                <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5">
+              <Modal.Body className="py-5">
                 <form id="registry-form" onSubmit={handleSubmit} className="space-y-4">
-                  {formError ? <FormAlert description={formError} title="Registry save failed" /> : null}
-                  <FormField label="Name" onChange={(e) => setName(e.target.value)} placeholder="My Registry" required value={name} />
-                  <FormField className="font-mono" label="URL" onChange={(e) => setUrl(e.target.value)} placeholder="https://registry.example.com" required value={url} />
+                  {formError ? (
+                    <FormAlert description={formError} title="Registry save failed" />
+                  ) : null}
+                  <FormField
+                    label="Name"
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="My Registry"
+                    required
+                    value={name}
+                    className="bg-surface-secondary"
+                  />
+                  <FormField
+                    className="bg-surface-secondary"
+                    label="URL"
+                    onChange={(e) => setUrl(e.target.value)}
+                    placeholder="https://registry.example.com"
+                    required
+                    value={url}
+                  />
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Scan Provider</label>
-                    <Select value={scanProvider} onChange={value => setScanProvider(value as 'trivy' | 'artifactory_xray')}>
-                      <Select.Trigger className={inputCls}>
+                    <label className="text-sm font-medium">Scan Provider</label>
+                    <Select
+                      value={scanProvider}
+                      onChange={(value) => setScanProvider(value as 'trivy' | 'artifactory_xray')}
+                    >
+                      <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="text-zinc-400 shrink-0"><ServerStack01Icon size={15} /></span>
+                          <span className="text-zinc-400 shrink-0">
+                            <ServerStack01Icon size={15} />
+                          </span>
                           <Select.Value />
                         </div>
                         <Select.Indicator />
                       </Select.Trigger>
                       <Select.Popover>
                         <ListBox>
-                          <ListBox.Item id="trivy" isDisabled={!capabilities.enable_trivy}>Trivy (built-in JustScan scanner)</ListBox.Item>
+                          <ListBox.Item id="trivy" isDisabled={!capabilities.enable_trivy}>
+                            Trivy (built-in JustScan scanner)
+                          </ListBox.Item>
                           <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
                         </ListBox>
                       </Select.Popover>
@@ -376,7 +640,7 @@ export default function RegistriesPage() {
                   {scanProvider === 'artifactory_xray' && (
                     <>
                       <FormField
-                        className="font-mono"
+                        className="bg-surface-secondary"
                         description="Leave empty to reuse the registry URL. Set this when your Docker registry host differs from the JFrog platform/Xray host."
                         label="Xray Base URL"
                         onChange={(e) => setXrayUrl(e.target.value)}
@@ -384,6 +648,7 @@ export default function RegistriesPage() {
                         value={xrayUrl}
                       />
                       <FormField
+                        className="bg-surface-secondary"
                         description="This prefixes artifact summary paths in Xray. In most JFrog setups the correct value is default."
                         label="Artifactory ID"
                         onChange={(e) => setXrayArtifactoryId(e.target.value)}
@@ -391,7 +656,7 @@ export default function RegistriesPage() {
                         value={xrayArtifactoryId}
                       />
                       <FormField
-                        className="font-mono"
+                        className="bg-surface-secondary"
                         description="Optional default Docker repo key for this registry, for example docker-remote. JustScan will prepend it for Xray scans when users enter Docker Hub-style image names."
                         label="Default Artifactory Repo"
                         onChange={(e) => setXrayRepository(e.target.value)}
@@ -401,11 +666,20 @@ export default function RegistriesPage() {
                     </>
                   )}
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Auth Type</label>
-                    <Select value={authType} onChange={value => setAuthType(value as 'none' | 'basic' | 'token' | 'aws_ecr')}>
-                      <Select.Trigger className={inputCls}>
+                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                      Auth Type
+                    </label>
+                    <Select
+                      value={authType}
+                      onChange={(value) =>
+                        setAuthType(value as 'none' | 'basic' | 'token' | 'aws_ecr')
+                      }
+                    >
+                      <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
                         <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="text-zinc-400 shrink-0"><Shield01Icon size={15} /></span>
+                          <span className="text-zinc-400 shrink-0">
+                            <Shield01Icon size={15} />
+                          </span>
                           <Select.Value />
                         </div>
                         <Select.Indicator />
@@ -421,32 +695,57 @@ export default function RegistriesPage() {
                     </Select>
                   </div>
                   {scanProvider === 'artifactory_xray' && (
-                    <div className="rounded-xl px-3 py-2.5 text-xs"
-                      style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)', color: '#d97706' }}>
-                      Xray scans require image references that map cleanly to an Artifactory repository path, for example <span className="font-mono">test-images/debian:12-slim</span> or <span className="font-mono">registry.example.com/test-images/debian:12-slim</span>.
+                    <div
+                      className="rounded-xl px-3 py-2.5 text-xs"
+                      style={{
+                        background: 'rgba(245,158,11,0.08)',
+                        border: '1px solid rgba(245,158,11,0.18)',
+                        color: '#d97706',
+                      }}
+                    >
+                      Xray scans require image references that map cleanly to an Artifactory
+                      repository path, for example{' '}
+                      <span className="font-mono">test-images/debian:12-slim</span> or{' '}
+                      <span className="font-mono">
+                        registry.example.com/test-images/debian:12-slim
+                      </span>
+                      .
                     </div>
                   )}
-                  <FormField label="Username" onChange={(e) => setUsername(e.target.value)} placeholder="Optional" value={username} />
+                  <FormField
+                    label="Username"
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Optional"
+                    value={username}
+                    className="bg-surface-secondary"
+                  />
                   <FormField
                     autoComplete="off"
-                    description={editing ? 'Leave blank to keep the stored password unchanged.' : 'Optional unless your registry provider requires credentials.'}
+                    description={
+                      editing
+                        ? 'Leave blank to keep the stored password unchanged.'
+                        : 'Optional unless your registry provider requires credentials.'
+                    }
                     label="Password"
                     name="registry-password"
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder={editing ? '••••••••' : 'Optional'}
                     type="password"
                     value={password}
+                    className="bg-surface-secondary"
                   />
                 </form>
               </Modal.Body>
-              <Modal.Footer className="px-6 py-4 flex gap-3 justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={modal.close} className="btn-secondary" type="button">
+              <Modal.Footer>
+                <Button onPress={modal.close} type="button" variant="secondary">
                   Cancel
-                </button>
-                <button type="submit" form="registry-form" disabled={saving} className="btn-primary disabled:opacity-60">
-                  {saving && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                </Button>
+                <Button type="submit" form="registry-form" isDisabled={saving} variant="primary">
+                  {saving && (
+                    <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  )}
                   {editing ? 'Save' : 'Add'}
-                </button>
+                </Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>
@@ -455,47 +754,90 @@ export default function RegistriesPage() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="glass-modal rounded-2xl overflow-hidden">
-              <Modal.Header className="px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">Manage Registry Access</Modal.Heading>
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
+              <Modal.Header
+                className="px-6 py-4"
+                style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              >
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                  Manage Registry Access
+                </Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5 space-y-4">
-                {shareError ? <FormAlert description={shareError} title="Access update failed" /> : null}
+                {shareError ? (
+                  <FormAlert description={shareError} title="Access update failed" />
+                ) : null}
                 {shareTarget ? (
-                  <div className="rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{shareTarget.name}</p>
+                  <div
+                    className="rounded-xl px-4 py-3"
+                    style={{
+                      background: 'var(--row-hover)',
+                      border: '1px solid var(--surface-border)',
+                    }}
+                  >
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                      {shareTarget.name}
+                    </p>
                     <div className="mt-2">
-                      <OwnershipBadge ownerType={shareTarget.owner_type} ownerOrgId={shareTarget.owner_org_id} orgNamesById={orgNamesById} />
+                      <OwnershipBadge
+                        ownerType={shareTarget.owner_type}
+                        ownerOrgId={shareTarget.owner_org_id}
+                        orgNamesById={orgNamesById}
+                      />
                     </div>
                   </div>
                 ) : null}
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Current access</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Organizations listed here can use this registry.</p>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      Current access
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Organizations listed here can use this registry.
+                    </p>
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
-                        <div key={share.org_id} className="flex items-start justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
+                        <div
+                          key={share.org_id}
+                          className="flex items-start justify-between gap-3 rounded-xl px-4 py-3"
+                          style={{
+                            background: 'var(--row-hover)',
+                            border: '1px solid var(--surface-border)',
+                          }}
+                        >
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{share.org_name}</p>
-                            <p className="text-xs text-zinc-500 mt-0.5">{share.is_owner ? 'Owner workspace' : 'Shared access'}</p>
+                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                              {share.org_name}
+                            </p>
+                            <p className="text-xs text-zinc-500 mt-0.5">
+                              {share.is_owner ? 'Owner workspace' : 'Shared access'}
+                            </p>
                           </div>
                           {share.is_owner ? (
                             <span className="text-xs font-medium text-zinc-500">Locked</span>
                           ) : (
-                            <button type="button" onClick={() => { void handleRevokeShare(share.org_id); }} disabled={shareSaving} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50">
+                            <Button
+                              type="button"
+                              onPress={() => {
+                                void handleRevokeShare(share.org_id);
+                              }}
+                              isDisabled={shareSaving}
+                              className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
+                              isIconOnly
+                              variant="secondary"
+                            >
                               <Delete01Icon size={15} />
-                            </button>
+                            </Button>
                           )}
                         </div>
                       ))}
@@ -505,28 +847,68 @@ export default function RegistriesPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Grant access</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Share this registry with another organization you manage.</p>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      Grant access
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Share this registry with another organization you manage.
+                    </p>
                   </div>
                   {availableShareTargets.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No additional organizations are available for sharing.</p>
+                    <p className="text-sm text-zinc-500">
+                      No additional organizations are available for sharing.
+                    </p>
                   ) : (
                     <div className="flex gap-2">
-                      <select className={inputCls + ' flex-1'} value={shareOrgId} onChange={(event) => setShareOrgId(event.target.value)}>
-                        <option value="">Select an organization</option>
-                        {availableShareTargets.map((org) => (
-                          <option key={org.id} value={org.id}>{org.name}</option>
-                        ))}
-                      </select>
-                      <button type="button" onClick={() => { void handleGrantShare(); }} disabled={!shareOrgId || shareSaving} className="btn-primary disabled:opacity-60">
+                      <Select
+                        value={shareOrgId || '__none__'}
+                        onChange={(value) =>
+                          setShareOrgId(String(value === '__none__' ? '' : (value ?? '')))
+                        }
+                        className="flex-1"
+                      >
+                        <Select.Trigger className={selectTriggerCls}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="__none__">Select an organization</ListBox.Item>
+                            {availableShareTargets.map((org) => (
+                              <ListBox.Item key={org.id} id={org.id}>
+                                {org.name}
+                              </ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                      <Button
+                        type="button"
+                        onPress={() => {
+                          void handleGrantShare();
+                        }}
+                        isDisabled={!shareOrgId || shareSaving}
+                        className="btn-primary disabled:opacity-60"
+                        variant="primary"
+                      >
                         Grant
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
               </Modal.Body>
-              <Modal.Footer className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={shareModal.close} className="btn-secondary" type="button">Close</button>
+              <Modal.Footer
+                className="px-6 py-4 flex justify-end"
+                style={{ borderTop: '1px solid var(--border-subtle)' }}
+              >
+                <Button
+                  onPress={shareModal.close}
+                  className="btn-secondary"
+                  type="button"
+                  variant="secondary"
+                >
+                  Close
+                </Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

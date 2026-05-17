@@ -149,13 +149,13 @@ function ScannerAnimation({ isDark }: { isDark: boolean }) {
           }} />
 
         {/* Corner brackets */}
-        <div className="absolute top-2 left-2 w-4 h-4"
+        <div className="absolute top-2 left-2 size-4"
           style={{ borderTop: '2px solid rgba(167,139,250,0.8)', borderLeft: '2px solid rgba(167,139,250,0.8)', borderRadius: '3px 0 0 0' }} />
-        <div className="absolute top-2 right-2 w-4 h-4"
+        <div className="absolute top-2 right-2 size-4"
           style={{ borderTop: '2px solid rgba(167,139,250,0.8)', borderRight: '2px solid rgba(167,139,250,0.8)', borderRadius: '0 3px 0 0' }} />
-        <div className="absolute bottom-2 left-2 w-4 h-4"
+        <div className="absolute bottom-2 left-2 size-4"
           style={{ borderBottom: '2px solid rgba(167,139,250,0.8)', borderLeft: '2px solid rgba(167,139,250,0.8)', borderRadius: '0 0 0 3px' }} />
-        <div className="absolute bottom-2 right-2 w-4 h-4"
+        <div className="absolute bottom-2 right-2 size-4"
           style={{ borderBottom: '2px solid rgba(167,139,250,0.8)', borderRight: '2px solid rgba(167,139,250,0.8)', borderRadius: '0 0 3px 0' }} />
 
         {/*
@@ -292,9 +292,9 @@ export default function LandingPage() {
             100% { transform: translateY(100vh); opacity: 0; }
           }
         `}</style>
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full"
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 size-[700px] rounded-full"
           style={{ background: isDark ? 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 65%)' : 'radial-gradient(circle, rgba(124,58,237,0.09) 0%, transparent 65%)' }} />
-        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] rounded-full"
+        <div className="absolute bottom-0 right-1/4 size-[400px] rounded-full"
           style={{ background: isDark ? 'radial-gradient(circle, rgba(109,40,217,0.1) 0%, transparent 65%)' : 'radial-gradient(circle, rgba(109,40,217,0.05) 0%, transparent 65%)' }} />
         <div className="absolute inset-0"
           style={{
@@ -319,7 +319,7 @@ export default function LandingPage() {
       <header className="relative z-10 flex items-center justify-between px-6 py-4"
         style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+          <div className="size-8 rounded-xl flex items-center justify-center"
             style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 16px rgba(124,58,237,0.45)' }}>
             <Logo size={16} className="text-white" />
           </div>
@@ -328,7 +328,7 @@ export default function LandingPage() {
         <div className="flex items-center gap-2">
           {mounted && (
             <button onClick={() => setTheme(isDark ? 'light' : 'dark')}
-              className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
+              className="size-9 flex items-center justify-center rounded-xl transition-colors"
               style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
               {isDark ? (
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -365,7 +365,7 @@ export default function LandingPage() {
           <div className="flex-1 max-w-xl text-center lg:text-left space-y-6">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium"
               style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
               Free public scans · Trivy + Artifactory/Xray support
             </div>
 
@@ -426,11 +426,11 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {FEATURES.map(({ Icon, title, desc }) => (
               <div key={title} className="rounded-2xl p-5 space-y-2 transition-all"
-                style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}
+                style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
                 onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(167,139,250,0.35)')}
-                onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.borderColor = 'var(--glass-border)')}>
+                onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.borderColor = 'var(--surface-border)')}>
                 <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                  className="size-14 rounded-2xl flex items-center justify-center"
                   style={{
                     background: isDark ? 'rgba(124,58,237,0.16)' : 'rgba(124,58,237,0.08)',
                     border: '1px solid rgba(167,139,250,0.22)',
@@ -455,7 +455,7 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row items-start gap-6">
             {STEPS.map(({ n, title, desc }) => (
               <div key={n} className="flex sm:flex-col items-start sm:items-center sm:text-center gap-4 sm:gap-3 flex-1">
-                <div className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white"
+                <div className="shrink-0 size-10 rounded-xl flex items-center justify-center text-sm font-bold text-white"
                   style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}>
                   {n}
                 </div>
@@ -478,7 +478,7 @@ export default function LandingPage() {
               border: '1px solid rgba(167,139,250,0.25)',
               boxShadow: '0 0 60px rgba(124,58,237,0.12)',
             }}>
-            <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center text-[#a78bfa]"
+            <div className="size-12 rounded-2xl mx-auto flex items-center justify-center text-[#a78bfa]"
               style={{ background: isDark ? 'rgba(124,58,237,0.2)' : 'rgba(124,58,237,0.1)', border: '1px solid rgba(167,139,250,0.3)' }}>
               <Logo size={22} />
             </div>

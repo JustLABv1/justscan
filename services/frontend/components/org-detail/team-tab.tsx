@@ -1,6 +1,8 @@
 import { OrgInvite, OrgMember, OrgRole } from '@/lib/api';
 import { timeAgo, timeUntil } from '@/lib/time';
+import { Avatar, Button, Card, SearchField, Table, type SortDescriptor } from '@heroui/react';
 import { Delete01Icon, PlusSignIcon } from 'hugeicons-react';
+import { useMemo, useState } from 'react';
 
 interface OrgTeamTabProps {
   canEditRoles: boolean;
@@ -13,11 +15,29 @@ interface OrgTeamTabProps {
   members: OrgMember[];
   membersLoading: boolean;
   onCopyInviteLink: (invite: OrgInvite) => void | Promise<void>;
-  onMemberRoleChange: (member: OrgMember, nextRole: Extract<OrgRole, 'admin' | 'editor' | 'viewer'>) => void | Promise<void>;
+  onMemberRoleChange: (
+    member: OrgMember,
+    nextRole: Extract<OrgRole, 'admin' | 'editor' | 'viewer'>
+  ) => void | Promise<void>;
   onOpenInviteModal: () => void;
   onRemoveMember: (member: OrgMember) => void | Promise<void>;
   onRevokeInvite: (invite: OrgInvite) => void | Promise<void>;
   onTransferOwnership: (member: OrgMember) => void | Promise<void>;
+}
+
+function memberInitials(member: OrgMember) {
+  const base = member.username || member.email || member.user_id;
+  const words = base
+    .replace(/@.*/, '')
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (words.length === 0) {
+    return 'U';
+  }
+
+  return words.map((word) => word[0]?.toUpperCase() || '').join('');
 }
 
 export function OrgTeamTab({
@@ -37,103 +57,204 @@ export function OrgTeamTab({
   onRevokeInvite,
   onTransferOwnership,
 }: OrgTeamTabProps) {
+  const [memberSearch, setMemberSearch] = useState('');
+  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
+    column: 'user',
+    direction: 'ascending',
+  });
+
+  const filteredMembers = useMemo(() => {
+    const query = memberSearch.trim().toLowerCase();
+    if (!query) {
+      return members;
+    }
+
+    return members.filter((member) => {
+      const displayName = member.username || member.email || member.user_id;
+      return [displayName, member.email, member.user_id, member.role]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(query));
+    });
+  }, [memberSearch, members]);
+
+  const sortedMembers = useMemo(() => {
+    const direction = sortDescriptor.direction === 'descending' ? -1 : 1;
+    const column = String(sortDescriptor.column ?? 'user');
+
+    return [...filteredMembers].sort((a, b) => {
+      if (column === 'joined') {
+        const first = Date.parse(a.joined_at || '') || 0;
+        const second = Date.parse(b.joined_at || '') || 0;
+        return (first - second) * direction;
+      }
+
+      const first =
+        column === 'role' ? a.role : (a.username || a.email || a.user_id).toLocaleLowerCase();
+      const second =
+        column === 'role' ? b.role : (b.username || b.email || b.user_id).toLocaleLowerCase();
+
+      return first.localeCompare(second) * direction;
+    });
+  }, [filteredMembers, sortDescriptor]);
+
   return (
     <div className="space-y-6">
-      <div className="space-y-3">
+      <Card>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Members</h2>
+            <h2 className="text-base font-semibold">Members</h2>
             <p className="text-xs text-zinc-500 mt-0.5">
-              {currentOrgRole ? `Your role: ${currentOrgRole}` : isSystemAdmin ? 'Platform admin access' : 'Organization members'}
+              {currentOrgRole
+                ? `Your role: ${currentOrgRole}`
+                : isSystemAdmin
+                  ? 'Platform admin access'
+                  : 'Organization members'}
             </p>
           </div>
           {canManageMembers && (
-            <button onClick={onOpenInviteModal} className="btn-primary inline-flex items-center gap-2" type="button">
+            <Button onClick={onOpenInviteModal}>
               <PlusSignIcon size={14} />
               Invite Member
-            </button>
+            </Button>
           )}
         </div>
 
-        <div className="glass-panel rounded-2xl overflow-hidden">
+        <div>
           {membersLoading ? (
             <div className="flex justify-center py-8">
-              <div className="w-6 h-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+              <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
             </div>
           ) : members.length === 0 ? (
             <div className="px-6 py-8 text-sm text-zinc-500 text-center">No members found.</div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">User</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Joined</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {members.map((member, index) => (
-                  <tr
-                    key={member.user_id}
-                    style={{ borderTop: index > 0 ? '1px solid var(--row-divider)' : undefined }}
-                    onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
-                    onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
+            <div className="space-y-3">
+              <SearchField name="org-members-search" variant="secondary">
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    placeholder="Search members by name, email, role..."
+                    value={memberSearch}
+                    onChange={(event) => setMemberSearch(event.target.value)}
+                  />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+
+              <Table variant="secondary">
+                <Table.ScrollContainer>
+                  <Table.Content
+                    aria-label="Organization members"
+                    className="min-w-[720px]"
+                    sortDescriptor={sortDescriptor}
+                    onSortChange={setSortDescriptor}
                   >
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="font-medium text-zinc-800 dark:text-zinc-200">{member.username || member.email || member.user_id}</p>
-                        {member.email && <p className="text-xs text-zinc-500 mt-0.5">{member.email}</p>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {canEditRoles && member.role !== 'owner' ? (
-                        <select
-                          className={`${inputClassName} py-2 px-3 max-w-[140px] text-sm`}
-                          value={member.role}
-                          onChange={(event) => void onMemberRoleChange(member, event.target.value as Extract<OrgRole, 'admin' | 'editor' | 'viewer'>)}
-                        >
-                          <option value="viewer">viewer</option>
-                          <option value="editor">editor</option>
-                          <option value="admin">admin</option>
-                        </select>
+                    <Table.Header>
+                      <Table.Column id="user" allowsSorting isRowHeader>
+                        User
+                      </Table.Column>
+                      <Table.Column id="role" allowsSorting>
+                        Role
+                      </Table.Column>
+                      <Table.Column id="joined" allowsSorting>
+                        Joined
+                      </Table.Column>
+                      <Table.Column className="text-right">Actions</Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {sortedMembers.length === 0 ? (
+                        <Table.Row id="empty">
+                          <Table.Cell colSpan={4}>
+                            <div className="px-4 py-8 text-center text-sm text-zinc-500">
+                              No members match this search.
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-violet-500/10 text-violet-400 border-violet-500/20">
-                          {member.role}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-zinc-500">{timeAgo(member.joined_at)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {canTransferOwnership && member.role !== 'owner' && (
-                          <button
-                            onClick={() => void onTransferOwnership(member)}
-                            className="btn-secondary text-xs px-3 py-1.5"
-                            type="button"
+                        sortedMembers.map((member) => (
+                          <Table.Row
+                            key={member.user_id}
+                            id={member.user_id}
+                            className="transition-colors hover:bg-[var(--row-hover)]"
                           >
-                            Make owner
-                          </button>
-                        )}
-                        {canManageMembers && member.role !== 'owner' && (
-                          <button onClick={() => void onRemoveMember(member)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors" title="Remove member" type="button">
-                            <Delete01Icon size={15} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                            <Table.Cell>
+                              <div className="flex items-center gap-3">
+                                <Avatar color="accent" size="sm" variant="soft">
+                                  <Avatar.Fallback>{memberInitials(member)}</Avatar.Fallback>
+                                </Avatar>
+                                <div>
+                                  <p className="font-medium text-zinc-800 dark:text-zinc-200">
+                                    {member.username || member.email || member.user_id}
+                                  </p>
+                                  {member.email && (
+                                    <p className="text-xs text-zinc-500 mt-0.5">{member.email}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </Table.Cell>
+                            <Table.Cell>
+                              {canEditRoles && member.role !== 'owner' ? (
+                                <select
+                                  className={`${inputClassName} py-2 px-3 max-w-[140px] text-sm`}
+                                  value={member.role}
+                                  onChange={(event) =>
+                                    void onMemberRoleChange(
+                                      member,
+                                      event.target.value as Extract<
+                                        OrgRole,
+                                        'admin' | 'editor' | 'viewer'
+                                      >
+                                    )
+                                  }
+                                >
+                                  <option value="viewer">viewer</option>
+                                  <option value="editor">editor</option>
+                                  <option value="admin">admin</option>
+                                </select>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-violet-500/10 text-violet-400 border-violet-500/20">
+                                  {member.role}
+                                </span>
+                              )}
+                            </Table.Cell>
+                            <Table.Cell className="text-xs text-zinc-500">
+                              {timeAgo(member.joined_at)}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <div className="flex items-center justify-end gap-2">
+                                {canTransferOwnership && member.role !== 'owner' && (
+                                  <Button
+                                    onClick={() => void onTransferOwnership(member)}
+                                    variant="secondary"
+                                  >
+                                    Make owner
+                                  </Button>
+                                )}
+                                {canManageMembers && member.role !== 'owner' && (
+                                  <Button
+                                    onClick={() => void onRemoveMember(member)}
+                                    variant="danger-soft"
+                                    isIconOnly
+                                  >
+                                    <Delete01Icon size={15} />
+                                  </Button>
+                                )}
+                              </div>
+                            </Table.Cell>
+                          </Table.Row>
+                        ))
+                      )}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </div>
           )}
         </div>
-      </div>
+      </Card>
 
-      <div className="glass-panel relative rounded-2xl p-5 space-y-3">
-        <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none" style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)' }} />
+      <Card>
         <div>
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Pending Invites</h3>
+          <h3 className="text-base font-semibold">Pending Invites</h3>
           <p className="text-xs text-zinc-500 mt-0.5">Active invite links for this organization.</p>
         </div>
         {invites.length === 0 ? (
@@ -141,24 +262,34 @@ export function OrgTeamTab({
         ) : (
           <div className="space-y-2">
             {invites.map((invite) => (
-              <div key={invite.id} className="rounded-xl px-4 py-3 flex items-center justify-between gap-3" style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">{invite.email}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">{invite.role} · expires {timeUntil(invite.expires_at)}</p>
+              <Card key={invite.id} className="bg-surface-secondary">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{invite.email}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      {invite.role} · expires {timeUntil(invite.expires_at)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button onClick={() => void onCopyInviteLink(invite)} variant="secondary">
+                      Copy link
+                    </Button>
+                    {canManageMembers && (
+                      <Button
+                        onClick={() => void onRevokeInvite(invite)}
+                        isIconOnly
+                        variant="danger-soft"
+                      >
+                        <Delete01Icon size={15} />
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button onClick={() => void onCopyInviteLink(invite)} className="btn-secondary text-xs px-3 py-1.5" type="button">Copy link</button>
-                  {canManageMembers && (
-                    <button onClick={() => void onRevokeInvite(invite)} className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors" title="Revoke invite" type="button">
-                      <Delete01Icon size={15} />
-                    </button>
-                  )}
-                </div>
-              </div>
+              </Card>
             ))}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

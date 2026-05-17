@@ -11,7 +11,7 @@ type FormAlertProps = {
 
 export function FormAlert({ title, description, status = 'danger' }: FormAlertProps) {
   return (
-    <Alert className="rounded-xl" status={status}>
+    <Alert className={`rounded-xl bg-${status}-soft border border-${status}`} status={status}>
       <Alert.Indicator />
       <Alert.Content>
         {title ? <Alert.Title>{title}</Alert.Title> : null}

@@ -27,7 +27,7 @@ export default function AcceptOrgInvitePage() {
   }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-5">
+    <div className="p-6 space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Organization Invite</h1>
         <p className="text-sm text-zinc-500 mt-1">Accept this invite to join the organization in your signed-in account.</p>
@@ -35,7 +35,7 @@ export default function AcceptOrgInvitePage() {
 
       {error ? <FormAlert title="Invite acceptance failed" description={error} /> : null}
 
-      <div className="glass-panel rounded-2xl p-6 space-y-4">
+      <div className="surface-panel rounded-2xl p-6 space-y-4">
         {accepted ? (
           <>
             <p className="text-sm text-zinc-600 dark:text-zinc-300">
@@ -55,7 +55,7 @@ export default function AcceptOrgInvitePage() {
             </p>
             <div className="flex gap-3">
               <button className="btn-primary inline-flex items-center gap-2" disabled={loading} onClick={() => { void handleAccept(); }} type="button">
-                {loading && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                {loading && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 Accept invite
               </button>
               <Link href="/orgs" className="btn-secondary">Cancel</Link>

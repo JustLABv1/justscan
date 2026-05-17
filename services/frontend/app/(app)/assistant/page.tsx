@@ -1,14 +1,24 @@
 'use client';
 
-import { AlertDialog, Avatar, Button, Card, ListBox, SearchField, Select, TextArea } from '@heroui/react';
-import { Clock01Icon, PlusSignIcon } from 'hugeicons-react';
+import {
+  AlertDialog,
+  Avatar,
+  Button,
+  Card,
+  Chip,
+  ListBox,
+  ScrollShadow,
+  Select,
+  Skeleton,
+  TextArea,
+} from '@heroui/react';
+import { Clock01Icon, PlusSignIcon, Rocket01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useToast } from '@/components/toast';
-import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import {
   createAIConversation,
   createScans,
@@ -32,12 +42,12 @@ import {
   type AIToolCall,
   type RegistryWithHealth,
   type Scan,
-  type Vulnerability
+  type Vulnerability,
 } from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
 
-const selectTriggerCls = `${heroSelectTriggerClassName.replace('rounded-xl', 'rounded-2xl')} min-h-10 py-2.5 text-sm`;
-const composerInputCls = 'glass-input min-h-11 max-h-48 w-full rounded-2xl px-4 py-3 text-sm resize-none overflow-hidden';
+const composerInputCls = 'min-h-24 max-h-56 w-full resize-none overflow-hidden text-sm';
 
 type ScopeContext = {
   title: string;
@@ -104,7 +114,9 @@ function filterStarterSections(sections: StarterSection[], query: string) {
 
   return sections
     .map((section) => {
-      const matchesSection = `${section.title} ${section.description}`.toLowerCase().includes(query);
+      const matchesSection = `${section.title} ${section.description}`
+        .toLowerCase()
+        .includes(query);
       return {
         ...section,
         prompts: matchesSection
@@ -112,28 +124,20 @@ function filterStarterSections(sections: StarterSection[], query: string) {
           : section.prompts.filter((prompt) => prompt.toLowerCase().includes(query)),
       };
     })
-    .filter((section) => section.prompts.length > 0 || `${section.title} ${section.description}`.toLowerCase().includes(query));
-}
-
-function AnimatedAssistantOrb({ className = '' }: { className?: string }) {
-  return (
-    <div aria-hidden="true" className={`assistant-orb ${className}`.trim()}>
-      <div className="assistant-orb__halo" />
-      <div className="assistant-orb__charge assistant-orb__charge--outer" />
-      <div className="assistant-orb__charge assistant-orb__charge--inner" />
-      <div className="assistant-orb__ring" />
-      <div className="assistant-orb__core" />
-    </div>
-  );
+    .filter(
+      (section) =>
+        section.prompts.length > 0 ||
+        `${section.title} ${section.description}`.toLowerCase().includes(query)
+    );
 }
 
 function MessageAvatar({ role }: { role: 'user' | 'assistant' }) {
   return role === 'assistant' ? (
-    <Avatar className="h-10 w-10 shrink-0 border border-white/10 shadow-[0_0_30px_rgba(96,165,250,0.22),0_0_70px_rgba(124,58,237,0.16)]" color="accent" size="md" variant="soft">
+    <Avatar className="size-10 shrink-0" color="accent" size="md" variant="soft">
       <Avatar.Fallback>AI</Avatar.Fallback>
     </Avatar>
   ) : (
-    <Avatar className="h-10 w-10 shrink-0 border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]" color="default" size="md" variant="soft">
+    <Avatar className="size-10 shrink-0" color="default" size="md" variant="soft">
       <Avatar.Fallback>ME</Avatar.Fallback>
     </Avatar>
   );
@@ -148,15 +152,21 @@ export default function AssistantPage() {
   const [providerKey, setProviderKey] = useState('');
   const [conversations, setConversations] = useState<AIConversation[]>([]);
   const [conversation, setConversation] = useState<AIConversation | null>(null);
-  const [conversationPendingDelete, setConversationPendingDelete] = useState<AIConversation | null>(null);
+  const [conversationPendingDelete, setConversationPendingDelete] = useState<AIConversation | null>(
+    null
+  );
   const [scopeContext, setScopeContext] = useState<ScopeContext | null>(null);
   const [message, setMessage] = useState('');
   const [railQuery, setRailQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [rescanning, setRescanning] = useState(false);
-  const [toolCallState, setToolCallState] = useState<Record<string, { status: string; error?: string }>>({});
-  const [localAssistantPrompt, setLocalAssistantPrompt] = useState<LocalAssistantPrompt | null>(null);
+  const [toolCallState, setToolCallState] = useState<
+    Record<string, { status: string; error?: string }>
+  >({});
+  const [localAssistantPrompt, setLocalAssistantPrompt] = useState<LocalAssistantPrompt | null>(
+    null
+  );
   const [pendingChat, setPendingChat] = useState<PendingChatState | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -166,21 +176,29 @@ export default function AssistantPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [conversation?.messages?.length, localAssistantPrompt?.id, pendingChat?.userMessage, pendingChat?.awaitingAssistant]);
+  }, [
+    conversation?.messages?.length,
+    localAssistantPrompt?.id,
+    pendingChat?.userMessage,
+    pendingChat?.awaitingAssistant,
+  ]);
 
   useEffect(() => {
     async function loadAssistant() {
       setLoading(true);
       try {
-        const [nextSettings, nextProviders, nextConversations, nextScopeContext] = await Promise.all([
-          getAISettings(),
-          listAIProviders(),
-          listAIConversations(scopeType, scopeRef || undefined),
-          buildScopeContext(scopeType, scopeRef),
-        ]);
+        const [nextSettings, nextProviders, nextConversations, nextScopeContext] =
+          await Promise.all([
+            getAISettings(),
+            listAIProviders(),
+            listAIConversations(scopeType, scopeRef || undefined),
+            buildScopeContext(scopeType, scopeRef),
+          ]);
         setSettings(nextSettings);
         setProviders(nextProviders);
-        setProviderKey(nextProviders.find((provider) => provider.default)?.key ?? nextProviders[0]?.key ?? '');
+        setProviderKey(
+          nextProviders.find((provider) => provider.default)?.key ?? nextProviders[0]?.key ?? ''
+        );
         setConversations(nextConversations);
         setScopeContext(nextScopeContext);
 
@@ -198,10 +216,12 @@ export default function AssistantPage() {
     }
 
     void loadAssistant();
-  }, [scopeRef, scopeType]);
+  }, [scopeRef, scopeType, toast]);
 
   useEffect(() => {
-    setLocalAssistantPrompt(null);
+    return deferEffect(() => {
+      setLocalAssistantPrompt(null);
+    });
   }, [conversation?.id, scopeRef, scopeType]);
 
   useEffect(() => {
@@ -394,24 +414,32 @@ export default function AssistantPage() {
     ...currentMessages
       .filter((item) => item.role === 'user' || item.role === 'assistant')
       .map((item) => ({
-      id: item.id,
-      role: item.role === 'user' ? 'user' as const : 'assistant' as const,
-      content: item.content,
-      toolCalls: item.toolCalls,
-    })),
-    ...(pendingChat ? [{
-      id: 'pending-user',
-      role: 'user' as const,
-      content: pendingChat.userMessage,
-      toolCalls: [],
-    }] : []),
-    ...(pendingChat?.awaitingAssistant ? [{
-      id: 'pending-assistant',
-      role: 'assistant' as const,
-      content: '',
-      toolCalls: [],
-      thinking: true,
-    }] : []),
+        id: item.id,
+        role: item.role === 'user' ? ('user' as const) : ('assistant' as const),
+        content: item.content,
+        toolCalls: item.toolCalls,
+      })),
+    ...(pendingChat
+      ? [
+          {
+            id: 'pending-user',
+            role: 'user' as const,
+            content: pendingChat.userMessage,
+            toolCalls: [],
+          },
+        ]
+      : []),
+    ...(pendingChat?.awaitingAssistant
+      ? [
+          {
+            id: 'pending-assistant',
+            role: 'assistant' as const,
+            content: '',
+            toolCalls: [],
+            thinking: true,
+          },
+        ]
+      : []),
     ...(localAssistantPrompt ? [localAssistantPrompt] : []),
   ];
   const hasMessages = displayMessages.length > 0;
@@ -420,7 +448,11 @@ export default function AssistantPage() {
   const conversationLabel = conversation?.title?.trim() || 'New conversation';
   const hasMeaningfulContext = scopeType !== 'global' || Boolean(scopeRef);
   const providerSelectedKey = providerKey || providers[0]?.key || '__none__';
-  const currentProvider = providers.find((provider) => provider.key === providerSelectedKey) ?? providers.find((provider) => provider.default) ?? providers[0] ?? null;
+  const currentProvider =
+    providers.find((provider) => provider.key === providerSelectedKey) ??
+    providers.find((provider) => provider.default) ??
+    providers[0] ??
+    null;
   const normalizedRailQuery = railQuery.trim().toLowerCase();
   const greetingLabel = useMemo(() => greetingForHour(), []);
   const starterSections = useMemo<StarterSection[]>(() => {
@@ -445,7 +477,9 @@ export default function AssistantPage() {
       {
         id: 'scope',
         title: hasMeaningfulContext ? 'For this scope' : 'Workspace starters',
-        description: hasMeaningfulContext ? 'Use the current context as the starting point.' : 'Start with broad JustScan help.',
+        description: hasMeaningfulContext
+          ? 'Use the current context as the starting point.'
+          : 'Start with broad JustScan help.',
         prompts: suggestions,
       },
       {
@@ -464,7 +498,7 @@ export default function AssistantPage() {
   }, [hasMeaningfulContext, scopeContext?.rescanId, scopeLabel, suggestions]);
   const filteredStarterSections = useMemo(
     () => filterStarterSections(starterSections, normalizedRailQuery),
-    [normalizedRailQuery, starterSections],
+    [normalizedRailQuery, starterSections]
   );
   const filteredConversations = useMemo(() => {
     const visibleConversations = normalizedRailQuery
@@ -472,18 +506,6 @@ export default function AssistantPage() {
       : conversations;
     return visibleConversations.slice(0, 6);
   }, [conversations, normalizedRailQuery]);
-  const topConversationTabs = useMemo(() => {
-    const ordered: AIConversation[] = [];
-    if (conversation) {
-      ordered.push(conversation);
-    }
-    for (const item of conversations) {
-      if (!ordered.some((candidate) => candidate.id === item.id)) {
-        ordered.push(item);
-      }
-    }
-    return ordered.slice(0, 3);
-  }, [conversation, conversations]);
   function handleStarterPick(prompt: string) {
     setMessage(prompt);
   }
@@ -491,138 +513,146 @@ export default function AssistantPage() {
   function renderConversationList() {
     if (loading) {
       return (
-        <div className="rounded-2xl border px-4 py-5 text-sm text-zinc-500" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-          Loading conversations...
+        <div className="space-y-2">
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="h-16 rounded-xl" />
         </div>
       );
     }
 
     if (filteredConversations.length === 0) {
       return (
-        <div className="rounded-2xl border px-4 py-5 text-sm text-zinc-500" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-          {normalizedRailQuery ? 'No threads match this search.' : 'No conversations yet for this scope.'}
-        </div>
+        <Card className="p-4" variant="secondary">
+          {normalizedRailQuery
+            ? 'No threads match this search.'
+            : 'No conversations yet for this scope.'}
+        </Card>
       );
     }
 
     return filteredConversations.map((item) => (
-      <div key={item.id} className="flex items-center gap-2 rounded-2xl border px-3 py-3 transition-colors" style={{ borderColor: conversation?.id === item.id ? 'rgba(124,58,237,0.42)' : 'var(--glass-border)', background: conversation?.id === item.id ? 'rgba(124,58,237,0.12)' : 'var(--row-hover)' }}>
-        <button
-          type="button"
-          className="min-w-0 flex-1 text-left"
-          onClick={() => {
-            void handleOpenConversation(item.id);
-          }}
-        >
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{item.title}</p>
-            <div className="mt-1 flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-              <Clock01Icon size={11} />
-              <span>Updated {timeAgo(item.updatedAt)}</span>
+      <Card
+        key={item.id}
+        className="p-3"
+        variant={conversation?.id === item.id ? 'tertiary' : 'secondary'}
+      >
+        <div className="flex items-center gap-2">
+          <Button
+            className="min-w-0 flex-1 justify-start"
+            variant="ghost"
+            onPress={() => {
+              void handleOpenConversation(item.id);
+            }}
+          >
+            <div className="min-w-0 flex-1 text-left">
+              <p className="truncate text-sm font-semibold">{item.title}</p>
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+                <Clock01Icon size={11} />
+                <span>Updated {timeAgo(item.updatedAt)}</span>
+              </div>
             </div>
-          </div>
-        </button>
-        {conversation?.id === item.id ? (
-          <span className="inline-flex shrink-0 items-center rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ borderColor: 'rgba(124,58,237,0.25)', background: 'rgba(124,58,237,0.12)', color: '#c4b5fd' }}>
-            Open
-          </span>
-        ) : null}
-        <button
-          className="shrink-0 text-[11px] font-medium text-rose-300 transition-colors hover:text-rose-200"
-          onClick={() => setConversationPendingDelete(item)}
-          type="button"
-        >
-          Delete
-        </button>
-      </div>
+          </Button>
+          {conversation?.id === item.id ? (
+            <Chip color="accent" size="sm">
+              Open
+            </Chip>
+          ) : null}
+          <Button size="sm" variant="danger" onPress={() => setConversationPendingDelete(item)}>
+            Delete
+          </Button>
+        </div>
+      </Card>
     ));
   }
 
-  function renderUtilityRail() {
-    return (
-      <div className="flex h-full min-h-0 flex-col px-5 py-5">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <AnimatedAssistantOrb className="h-7 w-7" />
-            <div className="min-w-0">
-              <p className="truncate text-lg font-semibold text-zinc-950 dark:text-zinc-50">JustScan AI</p>
-            </div>
-          </div>
-
-          <SearchField name="assistant-rail-search" variant="secondary">
-            <SearchField.Group className="glass-input flex min-h-11 items-center gap-2 rounded-2xl px-3">
-              <SearchField.SearchIcon />
-              <SearchField.Input placeholder="Search" value={railQuery} onChange={(event) => setRailQuery(event.target.value)} />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
-        </div>
-
-        <div className="mt-5 space-y-1.5">
-          <button className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-colors hover:text-zinc-950 dark:hover:text-white" style={{ background: 'var(--row-hover)', color: 'var(--text-secondary)' }} onClick={() => startNewConversation()} type="button">
-            <PlusSignIcon size={15} />
-            <span>Home</span>
-          </button>
-        </div>
-
-        <div className="mt-8 flex-1 space-y-6 overflow-y-auto pr-1">
-          {filteredStarterSections.length === 0 ? (
-            <div className="rounded-2xl border px-4 py-4 text-sm text-zinc-500" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-              No prompt starters match this search.
-            </div>
-          ) : filteredStarterSections.map((section) => (
-            <div key={section.id} className="space-y-2.5">
-              <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>{section.title}</p>
-              <div className="space-y-1.5">
-                {section.prompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    className="w-full rounded-2xl px-3 py-2.5 text-left text-sm transition-colors hover:text-zinc-950 dark:hover:text-white"
-                    style={{ background: 'var(--row-hover)', color: 'var(--text-secondary)' }}
-                    onClick={() => handleStarterPick(prompt)}
-                    type="button"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          <div className="space-y-2.5">
-            <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>Recent</p>
-            <div className="space-y-1.5">
-              {renderConversationList()}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const composerPanel = (
-    <div className="assistant-composer overflow-hidden rounded-[32px] px-4 py-4 md:px-5 md:py-5">
-        <div className="flex items-end gap-3">
-        <TextArea
-          ref={composerRef}
-          className={composerInputCls}
-          onKeyDown={handleComposerKeyDown}
-          placeholder="Initiate a query or send a command to the AI..."
-          rows={1}
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-        />
-          <Button className="btn-primary shrink-0" isDisabled={sending || !message.trim()} onPress={handleSend} variant="primary">
-            {sending ? 'Working...' : 'Send'}
+    <Card className="p-4 md:p-5" variant="secondary">
+      <div className="flex items-end gap-3">
+        <div className="flex-1">
+          <TextArea
+            ref={composerRef}
+            className={composerInputCls}
+            onKeyDown={handleComposerKeyDown}
+            placeholder="Initiate a query or send a command to the AI..."
+            rows={3}
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+          />
+        </div>
+        <Button className="shrink-0" isDisabled={sending || !message.trim()} onPress={handleSend}>
+          {sending ? 'Working...' : 'Send'}
+        </Button>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-divider pt-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button isIconOnly size="sm" variant="ghost" onPress={startNewConversation}>
+            <PlusSignIcon size={14} />
+          </Button>
+          <Select
+            aria-label="Select AI provider"
+            value={providerSelectedKey}
+            onChange={(value) => setProviderKey(String(value === '__none__' ? '' : (value ?? '')))}
+          >
+            <Select.Trigger className="flex items-center" aria-label="Provider">
+              <Rocket01Icon size={14} />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {providers.map((provider) => (
+                  <ListBox.Item id={provider.key} key={provider.key} textValue={provider.label}>
+                    <div className="flex flex-col">
+                      <span>{provider.label}</span>
+                      <span className="text-xs text-zinc-500">
+                        {provider.default ? 'Default provider' : provider.key}
+                      </span>
+                    </div>
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+          <Select
+            aria-label="Select recent chat"
+            value={conversation?.id ?? '__none__'}
+            onChange={(value) => {
+              const id = String(value ?? '__none__');
+              if (id === '__none__') {
+                startNewConversation();
+                return;
+              }
+              void handleOpenConversation(id);
+            }}
+            placeholder="Recent chats"
+          >
+            <Select.Trigger className="h-8 w-[18rem] max-w-[38vw] px-2" aria-label="Recent chats">
+              <Select.Value className="truncate" />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="__none__" textValue="New chat">
+                  New chat
+                </ListBox.Item>
+                {filteredConversations.map((item) => (
+                  <ListBox.Item id={item.id} key={item.id} textValue={item.title}>
+                    {item.title}
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+          <Button
+            size="sm"
+            variant="danger"
+            isDisabled={!conversation}
+            onPress={() => conversation && setConversationPendingDelete(conversation)}
+          >
+            Delete
           </Button>
         </div>
-        <div className="mt-4 flex flex-col gap-3 border-t pt-4 md:flex-row md:items-center md:justify-between" style={{ borderColor: 'var(--glass-border)' }}>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button className="btn-secondary" onPress={() => handleStarterPick(suggestions[0] ?? 'How do I start a new scan?')} variant="secondary">Scope</Button>
-            <Button className="btn-secondary" onPress={() => handleStarterPick(scopeContext?.rescanId ? 'rescan this scan' : 'open scans')} variant="secondary">Command</Button>
-          </div>
-        </div>
-    </div>
+      </div>
+    </Card>
   );
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -636,33 +666,36 @@ export default function AssistantPage() {
   }
 
   return (
-    <div className="app-bg flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="assistant-shell mx-auto flex min-h-0 w-full max-w-[132rem] flex-1 overflow-hidden">
-        <aside className="assistant-rail hidden min-h-0 w-[280px] shrink-0 border-r lg:flex lg:flex-col" style={{ borderColor: 'var(--glass-border)' }}>
-          {renderUtilityRail()}
-        </aside>
-
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <AlertDialog isOpen={Boolean(conversationPendingDelete)} onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              setConversationPendingDelete(null);
-            }
-          }}>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 pb-2 pt-0 md:px-6">
+      <div className="flex h-full min-h-0 w-full flex-1 gap-4 overflow-hidden">
+        <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+          <AlertDialog
+            isOpen={Boolean(conversationPendingDelete)}
+            onOpenChange={(isOpen) => {
+              if (!isOpen) {
+                setConversationPendingDelete(null);
+              }
+            }}
+          >
             <AlertDialog.Backdrop variant="blur">
               <AlertDialog.Container placement="center">
-                <AlertDialog.Dialog className="glass-modal overflow-hidden rounded-3xl sm:max-w-[420px]">
-                  <AlertDialog.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <AlertDialog.Dialog className="sm:max-w-[420px]">
+                  <AlertDialog.CloseTrigger />
                   <AlertDialog.Header>
                     <AlertDialog.Icon status="danger" />
                     <AlertDialog.Heading>Delete conversation?</AlertDialog.Heading>
                   </AlertDialog.Header>
                   <AlertDialog.Body>
                     <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                      This removes <strong>{conversationPendingDelete?.title ?? 'this conversation'}</strong> and its message history from this scope.
+                      This removes{' '}
+                      <strong>{conversationPendingDelete?.title ?? 'this conversation'}</strong> and
+                      its message history from this scope.
                     </p>
                   </AlertDialog.Body>
                   <AlertDialog.Footer>
-                    <Button slot="close" variant="tertiary">Cancel</Button>
+                    <Button slot="close" variant="tertiary">
+                      Cancel
+                    </Button>
                     <Button
                       onPress={() => {
                         if (!conversationPendingDelete) {
@@ -682,121 +715,75 @@ export default function AssistantPage() {
             </AlertDialog.Backdrop>
           </AlertDialog>
 
-          <div className="border-b px-4 py-3 md:px-6" style={{ borderColor: 'var(--glass-border)' }}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1">
-                <button
-                  type="button"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition-colors"
-                  style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)', color: 'var(--text-secondary)' }}
-                  onClick={() => startNewConversation()}
-                >
-                  <PlusSignIcon size={14} />
-                </button>
-                {topConversationTabs.length === 0 ? (
-                  <div className="inline-flex shrink-0 items-center rounded-2xl border px-4 py-2 text-sm font-medium" style={{ borderColor: 'rgba(167,139,250,0.22)', background: 'rgba(124,58,237,0.14)', color: '#ede9fe' }}>
-                    Fresh thread
-                  </div>
-                ) : topConversationTabs.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="inline-flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2 text-sm transition-colors"
-                    style={conversation?.id === item.id
-                      ? { borderColor: 'rgba(167,139,250,0.24)', background: 'rgba(124,58,237,0.14)', color: '#ede9fe' }
-                      : { borderColor: 'var(--glass-border)', background: 'var(--row-hover)', color: 'var(--text-secondary)' }}
-                    onClick={() => {
-                      void handleOpenConversation(item.id);
-                    }}
-                  >
-                    <span className="max-w-[12rem] truncate">{item.title}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <div className="min-w-[10rem]">
-                  <Select
-                    aria-label="Select AI provider"
-                    value={providerSelectedKey}
-                    onChange={(value) => setProviderKey(String(value === '__none__' ? '' : value ?? ''))}
-                  >
-                    <Select.Trigger className={`${selectTriggerCls} min-w-[10rem]`}>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {providers.map((provider) => (
-                          <ListBox.Item id={provider.key} key={provider.key} textValue={provider.label}>
-                            <div className="flex flex-col">
-                              <span>{provider.label}</span>
-                              <span className="text-xs text-zinc-500">{provider.default ? 'Default provider' : provider.key}</span>
-                            </div>
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {!settings?.enabled ? (
-              <div className="m-4 rounded-3xl border px-5 py-6 text-sm text-zinc-500 md:m-6" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
+              <Card className="p-5 text-sm text-muted" variant="secondary">
                 AI is disabled on this instance.
-              </div>
+              </Card>
             ) : providers.length === 0 ? (
-              <div className="m-4 rounded-3xl border px-5 py-6 text-sm text-zinc-500 md:m-6" style={{ borderColor: 'var(--glass-border)', background: 'var(--row-hover)' }}>
-                No enabled provider is configured. Ask an administrator to configure one in <Link href="/admin/ai" className="text-violet-300 hover:text-violet-200">Admin → AI</Link>.
-              </div>
+              <Card className="p-5 text-sm text-muted" variant="secondary">
+                No enabled provider is configured. Ask an administrator to configure one in{' '}
+                <Link href="/admin/ai" className="text-accent hover:text-accent/80">
+                  Admin → AI
+                </Link>
+                .
+              </Card>
             ) : (
               <>
-                <div className="relative flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-7">
-                  <div className="pointer-events-none absolute left-[8%] top-[12%] h-48 w-48 rounded-full blur-3xl" style={{ background: 'rgba(59,130,246,0.12)' }} />
-                  <div className="pointer-events-none absolute right-[10%] top-[28%] h-56 w-56 rounded-full blur-3xl" style={{ background: 'rgba(167,139,250,0.12)' }} />
-                  <div className="mx-auto flex min-h-full w-full max-w-[78rem] flex-col">
+                <ScrollShadow className="min-h-0 flex-1 overflow-y-auto px-2 md:px-4">
+                  <div className="flex min-h-full w-full flex-col">
                     {hasMessages ? (
-                      <div className="mb-5 flex items-center gap-3 text-xs" style={{ color: 'var(--text-faint)' }}>
+                      <div className="mb-5 flex items-center gap-2 text-xs text-muted">
                         <span>{hasMeaningfulContext ? scopeLabel : 'JustScan workspace'}</span>
+                        <span>•</span>
                         {currentProvider ? <span>{currentProvider.label}</span> : null}
                       </div>
                     ) : null}
 
                     {!hasMessages ? (
                       <div className="flex min-h-full flex-1 flex-col items-center justify-center py-10 text-center">
-                        <AnimatedAssistantOrb className="mb-8 h-32 w-32" />
-                        <p className="text-sm font-medium tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>{greetingLabel}</p>
-                        <h2 className="mt-4 max-w-3xl text-balance text-4xl font-semibold tracking-tight md:text-5xl" style={{ color: 'var(--text-primary)' }}>
-                          {hasMeaningfulContext ? `How can I help with ${scopeLabel}?` : 'How can I assist with JustScan today?'}
+                        <Avatar className="mb-6 size-14" color="accent" variant="soft">
+                          <Avatar.Fallback>AI</Avatar.Fallback>
+                        </Avatar>
+                        <p className="text-sm font-medium tracking-[0.08em] text-muted">
+                          {greetingLabel}
+                        </p>
+                        <h2 className="mt-4 max-w-3xl text-balance text-4xl font-semibold tracking-tight md:text-5xl">
+                          {hasMeaningfulContext
+                            ? `How can I help with ${scopeLabel}?`
+                            : 'How can I assist with JustScan today?'}
                         </h2>
-                        <p className="mt-4 max-w-xl text-sm leading-7" style={{ color: 'var(--text-faint)' }}>{scopeDescription}</p>
-                        <div className="mt-8 w-full max-w-[52rem]">{composerPanel}</div>
+                        <p className="mt-4 max-w-xl text-sm leading-7 text-muted">
+                          {scopeDescription}
+                        </p>
                       </div>
                     ) : (
                       <div className="space-y-5 pb-4">
                         {displayMessages.map((item) => (
-                          <div key={item.id} className={`flex items-end gap-3 ${item.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div
+                            key={item.id}
+                            className={`flex items-end gap-3 ${item.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                          >
                             {item.role === 'assistant' ? <MessageAvatar role="assistant" /> : null}
-                            <Card className="w-full max-w-[min(100%,52rem)] overflow-hidden rounded-[28px] shadow-none" style={item.role === 'user'
-                              ? { borderColor: 'rgba(167,139,250,0.18)', background: 'linear-gradient(180deg, rgba(124,58,237,0.16) 0%, rgba(91,33,182,0.1) 100%)', borderBottomRightRadius: '0.9rem' }
-                              : { borderColor: 'var(--glass-border)', background: 'var(--glass-bg)', borderBottomLeftRadius: '0.9rem' }}>
+                            <Card
+                              className={`w-full max-w-[min(100%,52rem)] overflow-hidden rounded-[28px] ${item.role === 'user' ? 'rounded-br-[0.9rem]' : 'rounded-bl-[0.9rem]'}`}
+                              variant={item.role === 'user' ? 'tertiary' : 'secondary'}
+                            >
                               <Card.Content className="px-5 py-4">
                                 {item.role === 'assistant' && !item.thinking ? (
                                   <div className="mb-3 flex items-center gap-2">
-                                    <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium" style={{ borderColor: 'rgba(167,139,250,0.18)', background: 'rgba(124,58,237,0.1)', color: '#c4b5fd' }}>
+                                    <Chip color="accent" size="sm">
                                       {scopeType}
-                                    </span>
+                                    </Chip>
                                   </div>
                                 ) : null}
                                 {item.thinking ? (
-                                  <div className="flex items-center gap-2 py-2 text-sm" style={{ color: 'var(--text-faint)' }}>
+                                  <div className="flex items-center gap-2 py-2 text-sm text-muted">
                                     <span>Thinking</span>
                                     <span className="flex gap-1">
-                                      <span className="h-2 w-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:0ms]" />
-                                      <span className="h-2 w-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:150ms]" />
-                                      <span className="h-2 w-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:300ms]" />
+                                      <span className="size-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:0ms]" />
+                                      <span className="size-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:150ms]" />
+                                      <span className="size-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:300ms]" />
                                     </span>
                                   </div>
                                 ) : (
@@ -813,16 +800,25 @@ export default function AssistantPage() {
                                       return (
                                         <div className="space-y-1" key={key}>
                                           <Button
-                                            className={status === 'completed' ? 'btn-secondary' : 'btn-primary'}
-                                            isDisabled={status === 'running' || status === 'completed' || status === 'needs-input'}
+                                            isDisabled={
+                                              status === 'running' ||
+                                              status === 'completed' ||
+                                              status === 'needs-input'
+                                            }
                                             onPress={() => {
                                               void handleToolCall(toolCall, item.id, index);
                                             }}
-                                            variant={status === 'completed' ? 'secondary' : 'primary'}
+                                            variant={
+                                              status === 'completed' ? 'secondary' : 'primary'
+                                            }
                                           >
                                             {toolCallLabel(toolCall, status)}
                                           </Button>
-                                          {execution?.error ? <p className="text-xs text-rose-500">{execution.error}</p> : null}
+                                          {execution?.error ? (
+                                            <p className="text-xs text-rose-500">
+                                              {execution.error}
+                                            </p>
+                                          ) : null}
                                         </div>
                                       );
                                     })}
@@ -837,13 +833,11 @@ export default function AssistantPage() {
                     )}
                     <div ref={messagesEndRef} />
                   </div>
-                </div>
+                </ScrollShadow>
 
-                {hasMessages ? (
-                  <div className="border-t px-4 pb-4 pt-4 md:px-8 md:pb-6" style={{ borderColor: 'var(--glass-border)', background: 'var(--glass-bg)' }}>
-                    <div className="mx-auto max-w-[78rem]">{composerPanel}</div>
-                  </div>
-                ) : null}
+                <div className="shrink-0 px-2 pb-2 pt-4 md:px-4">
+                  <div className="w-full">{composerPanel}</div>
+                </div>
               </>
             )}
           </div>
@@ -853,10 +847,26 @@ export default function AssistantPage() {
   );
 }
 
-async function buildScopeContext(scopeType: string, scopeRef: string): Promise<ScopeContext | null> {
+async function buildScopeContext(
+  scopeType: string,
+  scopeRef: string
+): Promise<ScopeContext | null> {
   if (scopeType === 'scan' && scopeRef) {
     const scan = await getScan(scopeRef);
-    const vulnerabilities = (await listVulnerabilities(scopeRef, 1, 12, undefined, undefined, undefined, undefined, 'severity', 'desc')).data ?? [];
+    const vulnerabilities =
+      (
+        await listVulnerabilities(
+          scopeRef,
+          1,
+          12,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          'severity',
+          'desc'
+        )
+      ).data ?? [];
     return buildScanContext(scan, vulnerabilities);
   }
 
@@ -868,13 +878,17 @@ async function buildScopeContext(scopeType: string, scopeRef: string): Promise<S
     if (!vulnerability) {
       return buildScanContext(scan, vulnerabilities.slice(0, 12));
     }
-    const analysis = await getVulnerabilityContextAnalysis(scanId, vulnerabilityId).catch(() => null);
+    const analysis = await getVulnerabilityContextAnalysis(scanId, vulnerabilityId).catch(
+      () => null
+    );
     const summaryLines = [
       `Scan image: ${scan.image_name}:${scan.image_tag}`,
       `Finding: ${vulnerability.vuln_id}`,
       `Package: ${vulnerability.pkg_name}`,
       `Severity: ${vulnerability.severity}`,
-      vulnerability.fixed_version ? `Fixed version: ${vulnerability.fixed_version}` : 'Fixed version: none reported',
+      vulnerability.fixed_version
+        ? `Fixed version: ${vulnerability.fixed_version}`
+        : 'Fixed version: none reported',
       vulnerability.title ? `Title: ${vulnerability.title}` : '',
       vulnerability.description ? `Description: ${truncate(vulnerability.description, 900)}` : '',
       analysis?.summary ? `Context analysis: ${analysis.summary}` : '',
@@ -886,8 +900,22 @@ async function buildScopeContext(scopeType: string, scopeRef: string): Promise<S
       context: summaryLines.join('\n'),
       openHref: `/scans/${scanId}`,
       sources: [
-        { resourceType: 'scan', resourceId: scan.id, title: `${scan.image_name}:${scan.image_tag}`, snippet: `Status ${scan.status}. ${scan.critical_count} critical, ${scan.high_count} high.`, url: `/scans/${scan.id}` },
-        { resourceType: 'vulnerability', resourceId: vulnerability.id, title: vulnerability.vuln_id, snippet: truncate(vulnerability.description || vulnerability.title || 'No description available', 180) },
+        {
+          resourceType: 'scan',
+          resourceId: scan.id,
+          title: `${scan.image_name}:${scan.image_tag}`,
+          snippet: `Status ${scan.status}. ${scan.critical_count} critical, ${scan.high_count} high.`,
+          url: `/scans/${scan.id}`,
+        },
+        {
+          resourceType: 'vulnerability',
+          resourceId: vulnerability.id,
+          title: vulnerability.vuln_id,
+          snippet: truncate(
+            vulnerability.description || vulnerability.title || 'No description available',
+            180
+          ),
+        },
       ],
     };
   }
@@ -896,15 +924,33 @@ async function buildScopeContext(scopeType: string, scopeRef: string): Promise<S
     title: 'Global workspace context',
     description: 'General JustScan routes and workflows.',
     context: [
-      'Core routes: /dashboard, /scans, /watchlist, /vulnkb, /suppressions, /registries, /tags, /orgs, /settings.',
+      'Core routes: /dashboard, /scans, /watchlist, /vulnkb, /suppressions, /registries, /tags, /orgs, /profile.',
       'Admin route: /admin for administrative users.',
       'New scan flow: /scans?new=1.',
       'Use /watchlist for recurring image monitoring, /vulnkb for vulnerability research, and /suppressions to review accepted risks.',
     ].join('\n'),
     sources: [
-      { resourceType: 'route', resourceId: 'scans', title: 'Scans', snippet: 'Create, inspect, compare, and re-run image scans.', url: '/scans' },
-      { resourceType: 'route', resourceId: 'registries', title: 'Registries', snippet: 'Manage registry connectivity and credentials.', url: '/registries' },
-      { resourceType: 'route', resourceId: 'vulnkb', title: 'Vulnerability KB', snippet: 'Look up curated vulnerability details.', url: '/vulnkb' },
+      {
+        resourceType: 'route',
+        resourceId: 'scans',
+        title: 'Scans',
+        snippet: 'Create, inspect, compare, and re-run image scans.',
+        url: '/scans',
+      },
+      {
+        resourceType: 'route',
+        resourceId: 'registries',
+        title: 'Registries',
+        snippet: 'Manage registry connectivity and credentials.',
+        url: '/registries',
+      },
+      {
+        resourceType: 'route',
+        resourceId: 'vulnkb',
+        title: 'Vulnerability KB',
+        snippet: 'Look up curated vulnerability details.',
+        url: '/vulnkb',
+      },
     ],
   };
 }
@@ -924,7 +970,9 @@ function buildScanContext(scan: Scan, vulnerabilities: Vulnerability[]): ScopeCo
   if (vulnerabilities.length > 0) {
     lines.push('Top findings:');
     for (const vulnerability of vulnerabilities.slice(0, 8)) {
-      lines.push(`- ${vulnerability.vuln_id} | ${vulnerability.severity} | ${vulnerability.pkg_name} | fixed ${vulnerability.fixed_version || 'unavailable'}`);
+      lines.push(
+        `- ${vulnerability.vuln_id} | ${vulnerability.severity} | ${vulnerability.pkg_name} | fixed ${vulnerability.fixed_version || 'unavailable'}`
+      );
     }
   }
 
@@ -935,8 +983,19 @@ function buildScanContext(scan: Scan, vulnerabilities: Vulnerability[]): ScopeCo
     openHref: `/scans/${scan.id}`,
     rescanId: scan.id,
     sources: [
-      { resourceType: 'scan', resourceId: scan.id, title: `${scan.image_name}:${scan.image_tag}`, snippet: `Status ${scan.status}. Critical ${scan.critical_count}, High ${scan.high_count}, Medium ${scan.medium_count}.`, url: `/scans/${scan.id}` },
-      ...vulnerabilities.slice(0, 3).map((vulnerability) => ({ resourceType: 'vulnerability', resourceId: vulnerability.id, title: vulnerability.vuln_id, snippet: `${vulnerability.severity} in ${vulnerability.pkg_name}. Fixed version: ${vulnerability.fixed_version || 'unavailable'}.` })),
+      {
+        resourceType: 'scan',
+        resourceId: scan.id,
+        title: `${scan.image_name}:${scan.image_tag}`,
+        snippet: `Status ${scan.status}. Critical ${scan.critical_count}, High ${scan.high_count}, Medium ${scan.medium_count}.`,
+        url: `/scans/${scan.id}`,
+      },
+      ...vulnerabilities.slice(0, 3).map((vulnerability) => ({
+        resourceType: 'vulnerability',
+        resourceId: vulnerability.id,
+        title: vulnerability.vuln_id,
+        snippet: `${vulnerability.severity} in ${vulnerability.pkg_name}. Fixed version: ${vulnerability.fixed_version || 'unavailable'}.`,
+      })),
     ],
   };
 }
@@ -957,7 +1016,10 @@ function renderMessageContent(content: string) {
     .map((block, index) => {
       if (/^#{1,6}\s+/.test(block)) {
         return (
-          <p className="text-base font-semibold text-zinc-900 dark:text-zinc-50" key={`${block}-${index}`}>
+          <p
+            className="text-base font-semibold text-zinc-900 dark:text-zinc-50"
+            key={`${block}-${index}`}
+          >
             {renderInlineMarkdown(block.replace(/^#{1,6}\s+/, ''))}
           </p>
         );
@@ -968,13 +1030,19 @@ function renderMessageContent(content: string) {
         return (
           <ul className="list-disc space-y-1 pl-5" key={`${block}-${index}`}>
             {lines.map((line, itemIndex) => (
-              <li key={`${line}-${itemIndex}`}>{renderInlineMarkdown(line.trim().replace(/^[-*]\s+/, ''))}</li>
+              <li key={`${line}-${itemIndex}`}>
+                {renderInlineMarkdown(line.trim().replace(/^[-*]\s+/, ''))}
+              </li>
             ))}
           </ul>
         );
       }
 
-      return <p className="whitespace-pre-wrap" key={`${block}-${index}`}>{renderInlineMarkdown(block)}</p>;
+      return (
+        <p className="whitespace-pre-wrap" key={`${block}-${index}`}>
+          {renderInlineMarkdown(block)}
+        </p>
+      );
     });
 }
 
@@ -992,9 +1060,23 @@ function renderInlineMarkdown(value: string): ReactNode[] {
     }
 
     if (match[2]) {
-      result.push(<strong className="font-semibold text-zinc-900 dark:text-zinc-50" key={`${fullMatch}-${start}`}>{match[2]}</strong>);
+      result.push(
+        <strong
+          className="font-semibold text-zinc-900 dark:text-zinc-50"
+          key={`${fullMatch}-${start}`}
+        >
+          {match[2]}
+        </strong>
+      );
     } else if (match[3]) {
-      result.push(<code className="rounded bg-zinc-950/5 px-1.5 py-0.5 font-mono text-[0.95em] text-zinc-900 dark:bg-white/10 dark:text-zinc-50" key={`${fullMatch}-${start}`}>{match[3]}</code>);
+      result.push(
+        <code
+          className="rounded bg-zinc-950/5 px-1.5 py-0.5 font-mono text-[0.95em] text-zinc-900 dark:bg-white/10 dark:text-zinc-50"
+          key={`${fullMatch}-${start}`}
+        >
+          {match[3]}
+        </code>
+      );
     } else if (match[4] && match[5]) {
       result.push(renderLinkNode(match[5], match[4], `${fullMatch}-${start}`));
     } else {
@@ -1013,10 +1095,28 @@ function renderInlineMarkdown(value: string): ReactNode[] {
 
 function renderLinkNode(href: string, label: string, key: string) {
   if (/^\/[a-z0-9?=/_-]+$/i.test(href)) {
-    return <Link className="text-violet-500 hover:text-violet-400 dark:text-violet-300 dark:hover:text-violet-200" href={href} key={key}>{label}</Link>;
+    return (
+      <Link
+        className="text-violet-500 hover:text-violet-400 dark:text-violet-300 dark:hover:text-violet-200"
+        href={href}
+        key={key}
+      >
+        {label}
+      </Link>
+    );
   }
   if (/^https?:\/\//i.test(href)) {
-    return <a className="text-violet-500 hover:text-violet-400 dark:text-violet-300 dark:hover:text-violet-200" href={href} key={key} rel="noreferrer" target="_blank">{label}</a>;
+    return (
+      <a
+        className="text-violet-500 hover:text-violet-400 dark:text-violet-300 dark:hover:text-violet-200"
+        href={href}
+        key={key}
+        rel="noreferrer"
+        target="_blank"
+      >
+        {label}
+      </a>
+    );
   }
   return <span key={key}>{label}</span>;
 }
@@ -1028,7 +1128,10 @@ type AssistantActionContext = {
   onQueuedRescan: () => void;
 };
 
-async function runAssistantAction(message: string, context: AssistantActionContext): Promise<AssistantActionResult> {
+async function runAssistantAction(
+  message: string,
+  context: AssistantActionContext
+): Promise<AssistantActionResult> {
   const directToolCall = parseDirectAssistantToolCall(message, context.scopeContext);
   if (directToolCall) {
     return executeAssistantToolCall(directToolCall, context);
@@ -1037,7 +1140,10 @@ async function runAssistantAction(message: string, context: AssistantActionConte
   return { kind: 'ignored' };
 }
 
-function parseDirectAssistantToolCall(message: string, scopeContext: ScopeContext | null): AIToolCall | null {
+function parseDirectAssistantToolCall(
+  message: string,
+  scopeContext: ScopeContext | null
+): AIToolCall | null {
   const scanIntent = extractScanIntent(message);
   if (scanIntent) {
     return {
@@ -1052,7 +1158,12 @@ function parseDirectAssistantToolCall(message: string, scopeContext: ScopeContex
     };
   }
 
-  if (scopeContext?.rescanId && /^(?:\/rescan|rescan(?: this| current)? scan|rerun(?: this| current)? scan|run this scan again)$/i.test(message.trim())) {
+  if (
+    scopeContext?.rescanId &&
+    /^(?:\/rescan|rescan(?: this| current)? scan|rerun(?: this| current)? scan|run this scan again)$/i.test(
+      message.trim()
+    )
+  ) {
     return {
       name: 'rescan_scope',
       status: 'pending',
@@ -1077,7 +1188,9 @@ function parseDirectAssistantToolCall(message: string, scopeContext: ScopeContex
 function extractScanIntent(message: string): ScanIntent | null {
   const trimmed = message.trim();
   const wantsXray = /\b(?:xray|artifactory)\b/i.test(trimmed);
-  const match = trimmed.match(/^(?:(?:\/scan|scan|start scan|run scan|create scan)(?:\s+(?:for\s+)?)?|(?:start |run |create )?xray scan\s+)(.+)$/i);
+  const match = trimmed.match(
+    /^(?:(?:\/scan|scan|start scan|run scan|create scan)(?:\s+(?:for\s+)?)?|(?:start |run |create )?xray scan\s+)(.+)$/i
+  );
   if (!match?.[1]) {
     return null;
   }
@@ -1086,9 +1199,12 @@ function extractScanIntent(message: string): ScanIntent | null {
   const repositoryMatch = requestBody.match(/\b(?:repo|repository)\s+([a-z0-9._/-]+)\b/i);
   const xrayRepository = repositoryMatch?.[1]?.trim();
   if (repositoryMatch) {
-    requestBody = `${requestBody.slice(0, repositoryMatch.index).trim()} ${requestBody.slice((repositoryMatch.index ?? 0) + repositoryMatch[0].length).trim()}`.trim();
+    requestBody =
+      `${requestBody.slice(0, repositoryMatch.index).trim()} ${requestBody.slice((repositoryMatch.index ?? 0) + repositoryMatch[0].length).trim()}`.trim();
   }
-  requestBody = requestBody.replace(/\b(?:with|via|using)\s+(?:artifactory\s+)?xray\b/gi, '').trim();
+  requestBody = requestBody
+    .replace(/\b(?:with|via|using)\s+(?:artifactory\s+)?xray\b/gi, '')
+    .trim();
 
   const images = requestBody
     .split(/[\n,]+/)
@@ -1114,7 +1230,8 @@ function resolveAssistantRoute(message: string, scopeContext: ScopeContext | nul
     [/^(?:\/open|open|go to|navigate to)\s+suppressions$/i, '/suppressions'],
     [/^(?:\/open|open|go to|navigate to)\s+tags$/i, '/tags'],
     [/^(?:\/open|open|go to|navigate to)\s+orgs?$/i, '/orgs'],
-    [/^(?:\/open|open|go to|navigate to)\s+settings$/i, '/settings'],
+    [/^(?:\/open|open|go to|navigate to)\s+settings$/i, '/profile'],
+    [/^(?:\/open|open|go to|navigate to)\s+profile$/i, '/profile'],
     [/^(?:\/open|open|go to|navigate to)\s+admin$/i, '/admin'],
     [/^(?:\/open|open|go to|navigate to)\s+admin ai$/i, '/admin/ai'],
     [/^(?:\/open|open|go to|navigate to)\s+admin notifications$/i, '/admin/notifications'],
@@ -1131,10 +1248,15 @@ function resolveAssistantRoute(message: string, scopeContext: ScopeContext | nul
   if (/^(?:\/open|open|go to|navigate to)\s+(?:current scope|this scope)$/i.test(normalized)) {
     return scopeContext?.openHref ?? '';
   }
-  if (/^(?:\/open|open|go to|navigate to)\s+(?:current scan|this scan)$/i.test(normalized) && scopeContext?.openHref?.startsWith('/scans/')) {
+  if (
+    /^(?:\/open|open|go to|navigate to)\s+(?:current scan|this scan)$/i.test(normalized) &&
+    scopeContext?.openHref?.startsWith('/scans/')
+  ) {
     return scopeContext.openHref;
   }
-  const scanMatch = normalized.match(/^(?:\/open|open|go to|navigate to)\s+scan\s+([0-9a-f-]{36})$/i);
+  const scanMatch = normalized.match(
+    /^(?:\/open|open|go to|navigate to)\s+scan\s+([0-9a-f-]{36})$/i
+  );
   if (scanMatch?.[1]) {
     return `/scans/${scanMatch[1]}`;
   }
@@ -1142,9 +1264,13 @@ function resolveAssistantRoute(message: string, scopeContext: ScopeContext | nul
   return '';
 }
 
-async function executeAssistantToolCall(toolCall: AIToolCall, context: AssistantActionContext): Promise<AssistantActionResult> {
+async function executeAssistantToolCall(
+  toolCall: AIToolCall,
+  context: AssistantActionContext
+): Promise<AssistantActionResult> {
   if (toolCall.name === 'open_route') {
-    const route = typeof toolCall.arguments?.route === 'string' ? toolCall.arguments.route.trim() : '';
+    const route =
+      typeof toolCall.arguments?.route === 'string' ? toolCall.arguments.route.trim() : '';
     if (!route.startsWith('/')) {
       return { kind: 'ignored' };
     }
@@ -1154,15 +1280,23 @@ async function executeAssistantToolCall(toolCall: AIToolCall, context: Assistant
 
   if (toolCall.name === 'start_scan') {
     const images = Array.isArray(toolCall.arguments?.images)
-      ? toolCall.arguments.images.map((value) => (typeof value === 'string' ? value.trim() : '')).filter(Boolean)
+      ? toolCall.arguments.images
+          .map((value) => (typeof value === 'string' ? value.trim() : ''))
+          .filter(Boolean)
       : [];
     if (images.length === 0) {
       return { kind: 'ignored' };
     }
 
     const wantsXray = toolCall.arguments?.wantsXray === true;
-    const explicitRegistryID = typeof toolCall.arguments?.registryId === 'string' ? toolCall.arguments.registryId.trim() : '';
-    const explicitXrayRepository = typeof toolCall.arguments?.xrayRepository === 'string' ? toolCall.arguments.xrayRepository.trim() : '';
+    const explicitRegistryID =
+      typeof toolCall.arguments?.registryId === 'string'
+        ? toolCall.arguments.registryId.trim()
+        : '';
+    const explicitXrayRepository =
+      typeof toolCall.arguments?.xrayRepository === 'string'
+        ? toolCall.arguments.xrayRepository.trim()
+        : '';
     const { data: registries, capabilities } = await listRegistriesWithCapabilities();
     const selectedRegistry = await resolveAssistantScanRegistry({
       capabilities,
@@ -1185,7 +1319,10 @@ async function executeAssistantToolCall(toolCall: AIToolCall, context: Assistant
           xrayRepository = selectedRegistry.registry.xray_repository?.trim() || '';
         }
         if (!xrayRepository) {
-          const repositoryResolution = await resolveAssistantXrayRepository(selectedRegistry.registry, images);
+          const repositoryResolution = await resolveAssistantXrayRepository(
+            selectedRegistry.registry,
+            images
+          );
           if (repositoryResolution.kind === 'follow-up') {
             return repositoryResolution;
           }
@@ -1201,7 +1338,7 @@ async function executeAssistantToolCall(toolCall: AIToolCall, context: Assistant
       undefined,
       undefined,
       workScope.kind === 'org' ? workScope.orgId : undefined,
-      xrayRepository || undefined,
+      xrayRepository || undefined
     );
     const createdScans = Array.isArray(result.scans) ? result.scans : [];
     if (createdScans.length === 0) {
@@ -1228,9 +1365,13 @@ async function resolveAssistantScanRegistry(input: {
   images: string[];
   registries: RegistryWithHealth[];
   wantsXray: boolean;
-}): Promise<{ kind: 'resolved'; registry: RegistryWithHealth | null } | { kind: 'follow-up'; prompt: LocalAssistantPrompt }> {
+}): Promise<
+  | { kind: 'resolved'; registry: RegistryWithHealth | null }
+  | { kind: 'follow-up'; prompt: LocalAssistantPrompt }
+> {
   if (input.explicitRegistryID) {
-    const explicitRegistry = input.registries.find((registry) => registry.id === input.explicitRegistryID) ?? null;
+    const explicitRegistry =
+      input.registries.find((registry) => registry.id === input.explicitRegistryID) ?? null;
     return { kind: 'resolved', registry: explicitRegistry };
   }
 
@@ -1238,7 +1379,9 @@ async function resolveAssistantScanRegistry(input: {
     return { kind: 'resolved', registry: null };
   }
 
-  const xrayRegistries = input.registries.filter((registry) => registry.scan_provider === 'artifactory_xray');
+  const xrayRegistries = input.registries.filter(
+    (registry) => registry.scan_provider === 'artifactory_xray'
+  );
   const defaultRegistry = xrayRegistries.find((registry) => registry.is_default) ?? null;
   if (defaultRegistry) {
     return { kind: 'resolved', registry: defaultRegistry };
@@ -1252,9 +1395,19 @@ async function resolveAssistantScanRegistry(input: {
       prompt: buildAssistantPrompt(
         `I can't start ${describeImages(input.images)} through Xray yet because no accessible Artifactory Xray registry is configured in this workspace.`,
         [
-          { name: 'open_route', status: 'pending', arguments: { route: '/registries' }, confirmationRequired: false },
-          { name: 'open_route', status: 'pending', arguments: { route: '/scans?new=1' }, confirmationRequired: false },
-        ],
+          {
+            name: 'open_route',
+            status: 'pending',
+            arguments: { route: '/registries' },
+            confirmationRequired: false,
+          },
+          {
+            name: 'open_route',
+            status: 'pending',
+            arguments: { route: '/scans?new=1' },
+            confirmationRequired: false,
+          },
+        ]
       ),
     };
   }
@@ -1264,30 +1417,37 @@ async function resolveAssistantScanRegistry(input: {
     prompt: buildAssistantPrompt(
       `Local Trivy scanning is unavailable here, so I need an Artifactory Xray registry for ${describeImages(input.images)}. Which registry should I use?`,
       [
-        ...xrayRegistries.slice(0, 6).map((registry): AIToolCall => ({
-          name: 'start_scan',
-          status: 'pending',
-          arguments: {
-            images: input.images,
-            registryId: registry.id,
-            registryLabel: registry.name,
-            wantsXray: true,
-            xrayRepository: registry.xray_repository,
-          },
-          confirmationRequired: false,
-        })),
+        ...xrayRegistries.slice(0, 6).map(
+          (registry): AIToolCall => ({
+            name: 'start_scan',
+            status: 'pending',
+            arguments: {
+              images: input.images,
+              registryId: registry.id,
+              registryLabel: registry.name,
+              wantsXray: true,
+              xrayRepository: registry.xray_repository,
+            },
+            confirmationRequired: false,
+          })
+        ),
         {
           name: 'open_route',
           status: 'pending',
           arguments: { route: '/registries' },
           confirmationRequired: false,
         },
-      ],
+      ]
     ),
   };
 }
 
-async function resolveAssistantXrayRepository(registry: RegistryWithHealth, images: string[]): Promise<{ kind: 'resolved'; xrayRepository: string } | { kind: 'follow-up'; prompt: LocalAssistantPrompt }> {
+async function resolveAssistantXrayRepository(
+  registry: RegistryWithHealth,
+  images: string[]
+): Promise<
+  { kind: 'resolved'; xrayRepository: string } | { kind: 'follow-up'; prompt: LocalAssistantPrompt }
+> {
   const repositories = await listArtifactoryRepositories(registry.id).catch(() => []);
   if (repositories.length === 1) {
     return { kind: 'resolved', xrayRepository: repositories[0].key };
@@ -1298,25 +1458,27 @@ async function resolveAssistantXrayRepository(registry: RegistryWithHealth, imag
       prompt: buildAssistantPrompt(
         `${registry.name} does not have a default Artifactory repo for ${describeImages(images)}. Which repo should I use?`,
         [
-          ...repositories.slice(0, 6).map((repository): AIToolCall => ({
-            name: 'start_scan',
-            status: 'pending',
-            arguments: {
-              images,
-              registryId: registry.id,
-              registryLabel: registry.name,
-              wantsXray: true,
-              xrayRepository: repository.key,
-            },
-            confirmationRequired: false,
-          })),
+          ...repositories.slice(0, 6).map(
+            (repository): AIToolCall => ({
+              name: 'start_scan',
+              status: 'pending',
+              arguments: {
+                images,
+                registryId: registry.id,
+                registryLabel: registry.name,
+                wantsXray: true,
+                xrayRepository: repository.key,
+              },
+              confirmationRequired: false,
+            })
+          ),
           {
             name: 'open_route',
             status: 'pending',
             arguments: { route: '/registries' },
             confirmationRequired: false,
           },
-        ],
+        ]
       ),
     };
   }
@@ -1325,7 +1487,14 @@ async function resolveAssistantXrayRepository(registry: RegistryWithHealth, imag
     kind: 'follow-up',
     prompt: buildAssistantPrompt(
       `${registry.name} needs an Artifactory repo before I can queue ${describeImages(images)} through Xray. Reply with something like \`scan ${images[0]} with xray repo docker-remote\`, or open Registries to verify the repo key.`,
-      [{ name: 'open_route', status: 'pending', arguments: { route: '/registries' }, confirmationRequired: false }],
+      [
+        {
+          name: 'open_route',
+          status: 'pending',
+          arguments: { route: '/registries' },
+          confirmationRequired: false,
+        },
+      ]
     ),
   };
 }
@@ -1366,17 +1535,27 @@ function toolCallLabel(toolCall: AIToolCall, status: string) {
 
   if (toolCall.name === 'start_scan') {
     const images = Array.isArray(toolCall.arguments?.images)
-      ? toolCall.arguments.images.map((value) => (typeof value === 'string' ? value.trim() : '')).filter(Boolean)
+      ? toolCall.arguments.images
+          .map((value) => (typeof value === 'string' ? value.trim() : ''))
+          .filter(Boolean)
       : [];
-    const registryLabel = typeof toolCall.arguments?.registryLabel === 'string' ? toolCall.arguments.registryLabel.trim() : '';
-    const xrayRepository = typeof toolCall.arguments?.xrayRepository === 'string' ? toolCall.arguments.xrayRepository.trim() : '';
+    const registryLabel =
+      typeof toolCall.arguments?.registryLabel === 'string'
+        ? toolCall.arguments.registryLabel.trim()
+        : '';
+    const xrayRepository =
+      typeof toolCall.arguments?.xrayRepository === 'string'
+        ? toolCall.arguments.xrayRepository.trim()
+        : '';
     if (registryLabel && xrayRepository) {
       return `Use ${registryLabel} / ${xrayRepository}`;
     }
     if (registryLabel) {
       return `Use ${registryLabel}`;
     }
-    return images.length > 1 ? `Start ${images.length} scans` : `Start scan${images[0] ? `: ${images[0]}` : ''}`;
+    return images.length > 1
+      ? `Start ${images.length} scans`
+      : `Start scan${images[0] ? `: ${images[0]}` : ''}`;
   }
   if (toolCall.name === 'open_route') {
     const route = typeof toolCall.arguments?.route === 'string' ? toolCall.arguments.route : '';

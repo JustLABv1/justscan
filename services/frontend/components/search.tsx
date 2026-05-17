@@ -1,7 +1,14 @@
 'use client';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { search, SearchImageResult, SearchScanResult, SearchVulnResult } from '@/lib/api';
-import { Cancel01Icon, Search01Icon, Shield01Icon, ShieldKeyIcon, TaskDone02Icon } from 'hugeicons-react';
+import { deferEffect } from '@/lib/defer-effect';
+import {
+    Cancel01Icon,
+    Search01Icon,
+    Shield01Icon,
+    ShieldKeyIcon,
+    TaskDone02Icon,
+} from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -16,7 +23,7 @@ const SEV_COLOR: Record<string, string> = {
 type ResultItem =
   | { kind: 'image'; data: SearchImageResult }
   | { kind: 'scan'; data: SearchScanResult }
-  | { kind: 'vuln';  data: SearchVulnResult  };
+  | { kind: 'vuln'; data: SearchVulnResult };
 
 export function SearchModal({ onClose }: { onClose: () => void }) {
   const workScope = useWorkScope();
@@ -25,7 +32,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [images, setImages] = useState<SearchImageResult[]>([]);
   const [scans, setScans] = useState<SearchScanResult[]>([]);
-  const [vulns,  setVulns]  = useState<SearchVulnResult[]>([]);
+  const [vulns, setVulns] = useState<SearchVulnResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
 
@@ -69,8 +76,10 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
-    if (query.trim().length < 2) return;
-    void doSearch(query);
+    return deferEffect(() => {
+      if (query.trim().length < 2) return;
+      void doSearch(query);
+    });
   }, [doSearch, query, scopeKey]);
 
   function handleChange(val: string) {
@@ -81,9 +90,9 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   }
 
   const allItems: ResultItem[] = [
-    ...images.map(d => ({ kind: 'image' as const, data: d })),
-    ...scans.map(d => ({ kind: 'scan' as const, data: d })),
-    ...vulns.map(d  => ({ kind: 'vuln'  as const, data: d })),
+    ...images.map((d) => ({ kind: 'image' as const, data: d })),
+    ...scans.map((d) => ({ kind: 'scan' as const, data: d })),
+    ...vulns.map((d) => ({ kind: 'vuln' as const, data: d })),
   ];
 
   function navigate(item: ResultItem) {
@@ -101,10 +110,10 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     if (allItems.length === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveIdx(i => Math.min(i + 1, allItems.length - 1));
+      setActiveIdx((i) => Math.min(i + 1, allItems.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setActiveIdx(i => Math.max(i - 1, 0));
+      setActiveIdx((i) => Math.max(i - 1, 0));
     } else if (e.key === 'Enter' && activeIdx >= 0) {
       e.preventDefault();
       navigate(allItems[activeIdx]!);
@@ -112,7 +121,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   }
 
   const hasResults = images.length > 0 || scans.length > 0 || vulns.length > 0;
-  const showEmpty  = query.trim().length >= 2 && !loading && !hasResults;
+  const showEmpty = query.trim().length >= 2 && !loading && !hasResults;
 
   return (
     <>
@@ -133,24 +142,31 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
         <div
           className="rounded-2xl overflow-hidden"
           style={{
-            background: 'var(--glass-bg)',
+            background: 'var(--surface-bg)',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
-            border: '1px solid var(--glass-border)',
+            border: '1px solid var(--surface-border)',
             boxShadow: '0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(167,139,250,0.08)',
           }}
         >
           {/* Input row */}
-          <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-            {loading
-              ? <div className="w-4 h-4 rounded-full border-2 border-zinc-500 border-t-violet-400 animate-spin shrink-0" aria-label="Searching" />
-              : <Search01Icon size={16} className="text-zinc-500 shrink-0" aria-hidden />
-            }
+          <div
+            className="flex items-center gap-3 px-4 py-3.5"
+            style={{ borderBottom: '1px solid var(--border-subtle)' }}
+          >
+            {loading ? (
+              <div
+                className="size-4 rounded-full border-2 border-zinc-500 border-t-violet-400 animate-spin shrink-0"
+                aria-label="Searching"
+              />
+            ) : (
+              <Search01Icon size={16} className="text-zinc-500 shrink-0" aria-hidden />
+            )}
             <input
               ref={inputRef}
               type="search"
               value={query}
-              onChange={e => handleChange(e.target.value)}
+              onChange={(e) => handleChange(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search images, CVEs, packages…"
               autoComplete="off"
@@ -181,17 +197,22 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
             {showEmpty && (
               <p className="px-4 py-6 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
-                No results for <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>&ldquo;{query}&rdquo;</span>
+                No results for{' '}
+                <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                  &ldquo;{query}&rdquo;
+                </span>
               </p>
             )}
 
             {hasResults && (
               <div className="py-2 max-h-[60vh] overflow-y-auto">
-
                 {/* Images group */}
                 {images.length > 0 && (
                   <div>
-                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                    <p
+                      className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
                       Images
                     </p>
                     {images.map((img, i) => {
@@ -209,15 +230,27 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                           onMouseEnter={() => setActiveIdx(globalIdx)}
                         >
                           <div
-                            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-                            style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(167,139,250,0.15)' }}
+                            className="size-7 rounded-lg flex items-center justify-center shrink-0"
+                            style={{
+                              background: 'rgba(124,58,237,0.15)',
+                              border: '1px solid rgba(167,139,250,0.15)',
+                            }}
                           >
                             <Shield01Icon size={14} color="#a78bfa" />
                           </div>
-                          <span className="flex-1 font-mono text-sm truncate" style={{ color: 'var(--text-primary)' }}>{img.image_name}</span>
+                          <span
+                            className="flex-1 font-mono text-sm truncate"
+                            style={{ color: 'var(--text-primary)' }}
+                          >
+                            {img.image_name}
+                          </span>
                           <span
                             className="text-[10px] font-mono px-1.5 py-0.5 rounded-md shrink-0"
-                            style={{ color: 'var(--text-muted)', background: 'var(--row-divider)', border: '1px solid var(--glass-border)' }}
+                            style={{
+                              color: 'var(--text-muted)',
+                              background: 'var(--row-divider)',
+                              border: '1px solid var(--surface-border)',
+                            }}
                           >
                             {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
                           </span>
@@ -229,7 +262,10 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
                 {scans.length > 0 && (
                   <div className={images.length > 0 ? 'mt-1' : ''}>
-                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                    <p
+                      className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
                       Scans
                     </p>
                     {scans.map((scan, i) => {
@@ -247,15 +283,27 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                           onMouseEnter={() => setActiveIdx(globalIdx)}
                         >
                           <div
-                            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-                            style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(96,165,250,0.2)' }}
+                            className="size-7 rounded-lg flex items-center justify-center shrink-0"
+                            style={{
+                              background: 'rgba(59,130,246,0.12)',
+                              border: '1px solid rgba(96,165,250,0.2)',
+                            }}
                           >
                             <TaskDone02Icon size={14} color="#60a5fa" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-mono text-sm truncate" style={{ color: 'var(--text-primary)' }}>{scan.image_name}:{scan.image_tag}</p>
-                            <p className="text-[11px] truncate" style={{ color: 'var(--text-secondary)' }}>
-                              {scan.status} · {scan.critical_count} critical · {scan.high_count} high
+                            <p
+                              className="font-mono text-sm truncate"
+                              style={{ color: 'var(--text-primary)' }}
+                            >
+                              {scan.image_name}:{scan.image_tag}
+                            </p>
+                            <p
+                              className="text-[11px] truncate"
+                              style={{ color: 'var(--text-secondary)' }}
+                            >
+                              {scan.status} · {scan.critical_count} critical · {scan.high_count}{' '}
+                              high
                             </p>
                           </div>
                         </button>
@@ -267,7 +315,10 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 {/* Vulns group */}
                 {vulns.length > 0 && (
                   <div className={images.length > 0 || scans.length > 0 ? 'mt-1' : ''}>
-                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                    <p
+                      className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
                       CVEs &amp; Packages
                     </p>
                     {vulns.map((v, i) => {
@@ -286,18 +337,32 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                           onMouseEnter={() => setActiveIdx(globalIdx)}
                         >
                           <div
-                            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-                            style={{ background: `${sevColor}1a`, border: `1px solid ${sevColor}30` }}
+                            className="size-7 rounded-lg flex items-center justify-center shrink-0"
+                            style={{
+                              background: `${sevColor}1a`,
+                              border: `1px solid ${sevColor}30`,
+                            }}
                           >
                             <ShieldKeyIcon size={14} color={sevColor} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-mono text-sm truncate" style={{ color: sevColor }}>{v.vuln_id}</p>
-                            <p className="text-[11px] truncate" style={{ color: 'var(--text-secondary)' }}>{v.pkg_name}</p>
+                            <p className="font-mono text-sm truncate" style={{ color: sevColor }}>
+                              {v.vuln_id}
+                            </p>
+                            <p
+                              className="text-[11px] truncate"
+                              style={{ color: 'var(--text-secondary)' }}
+                            >
+                              {v.pkg_name}
+                            </p>
                           </div>
                           <span
                             className="text-[10px] font-mono px-1.5 py-0.5 rounded-md shrink-0"
-                            style={{ color: sevColor, background: `${sevColor}18`, border: `1px solid ${sevColor}30` }}
+                            style={{
+                              color: sevColor,
+                              background: `${sevColor}18`,
+                              border: `1px solid ${sevColor}30`,
+                            }}
                           >
                             {v.severity.charAt(0).toUpperCase() + v.severity.slice(1).toLowerCase()}
                           </span>
@@ -315,9 +380,15 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 className="flex items-center gap-3 px-4 py-2 text-[10px]"
                 style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)' }}
               >
-                <span><kbd className="font-mono">↑↓</kbd> navigate</span>
-                <span><kbd className="font-mono">↵</kbd> open</span>
-                <span><kbd className="font-mono">Esc</kbd> close</span>
+                <span>
+                  <kbd className="font-mono">↑↓</kbd> navigate
+                </span>
+                <span>
+                  <kbd className="font-mono">↵</kbd> open
+                </span>
+                <span>
+                  <kbd className="font-mono">Esc</kbd> close
+                </span>
               </div>
             )}
           </div>

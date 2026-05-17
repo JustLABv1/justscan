@@ -1,10 +1,10 @@
-import { AdminShell } from '../_components/admin-shell';
-import { SettingsTab } from '../_components/primary-tabs';
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
+import { SettingsTab } from '@/components/admin/settings-tab';
 
 export default function AdminSettingsPage() {
-	return (
-		<AdminShell>
-			<SettingsTab />
-		</AdminShell>
-	);
+  return (
+    <AdminPageShell>
+      <SettingsTab />
+    </AdminPageShell>
+  );
 }

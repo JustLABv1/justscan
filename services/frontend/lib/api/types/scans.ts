@@ -13,6 +13,23 @@ export interface ScanStepLog {
   output_count?: number;
 }
 
+export interface XRayRequestLog {
+  id: string;
+  scan_id?: string | null;
+  registry_id?: string | null;
+  method: string;
+  endpoint: string;
+  request_url?: string;
+  status_code: number;
+  duration_ms: number;
+  error?: string | null;
+  request_headers?: Record<string, unknown>;
+  request_body?: string;
+  response_headers?: Record<string, unknown>;
+  response_body?: string;
+  created_at: string;
+}
+
 export type BlockedPolicyIgnoreRuleStatus = 'active_ignore' | 'no_ignore' | 'status_unavailable';
 
 export interface BlockedPolicyMatchedWatch {
@@ -146,6 +163,19 @@ export interface Vulnerability {
   cvss_score: number;
   data_source?: string;
   external_component_id?: string;
+  xray_issue_id?: string;
+  xray_violation_id?: string;
+  xray_watch_name?: string;
+  xray_watch_names?: string[];
+  xray_watch_policy_matches?: Array<Record<string, unknown>>;
+  xray_matched_policies?: Array<Record<string, unknown>>;
+  xray_violation_paths?: string[];
+  xray_component_physical_paths?: string[];
+  xray_source?: string;
+  xray_source_version?: string;
+  xray_source_id?: string;
+  xray_is_blocking?: boolean;
+  xray_violation_raw?: Record<string, unknown>;
   references: string[];
   suppression?: Suppression | null;
   comments?: Comment[];

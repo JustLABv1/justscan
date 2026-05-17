@@ -1,10 +1,10 @@
-import { AdminShell } from '../_components/admin-shell';
-import { GlobalRegistriesTab } from '../_components/legacy-admin-page';
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
+import { RegistriesTab } from '@/components/admin/registries-tab';
 
 export default function AdminRegistriesPage() {
-	return (
-		<AdminShell>
-			<GlobalRegistriesTab />
-		</AdminShell>
-	);
+  return (
+    <AdminPageShell>
+      <RegistriesTab />
+    </AdminPageShell>
+  );
 }

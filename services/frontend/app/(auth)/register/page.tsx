@@ -33,11 +33,11 @@ export default function RegisterPage() {
   return (
     <AuthCard
       title="JustScan"
-      subtitle="Create a new account"
+      subtitle="Let's get you set up with a new account."
       footer={
         <>
           Already have an account?{' '}
-          <Link href="/login" className="text-violet-500 hover:text-violet-400 dark:text-violet-400 dark:hover:text-violet-300 font-medium transition-colors">
+          <Link href="/login" className="font-medium text-accent transition-colors hover:opacity-80">
             Sign In
           </Link>
         </>

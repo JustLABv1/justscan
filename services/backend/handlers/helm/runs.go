@@ -1,7 +1,6 @@
 package helm
 
 import (
-	"context"
 	"net/http"
 	"sort"
 	"strconv"
@@ -73,18 +72,19 @@ func ListRuns(db *bun.DB) gin.HandlerFunc {
 		}
 		offset := (page - 1) * limit
 
-		visibleRunIDs, err := visibleHelmRunIDs(c.Request.Context(), db, userID, isAdmin, accessibleOrgIDs)
+		restrictByRunIDs := !isAdmin || c.Query("scope") != ""
+		visibleRunIDs, err := visibleHelmRunIDs(c, db, userID, isAdmin, accessibleOrgIDs)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve Helm run visibility"})
 			return
 		}
-		if !isAdmin && len(visibleRunIDs) == 0 {
+		if restrictByRunIDs && len(visibleRunIDs) == 0 {
 			c.JSON(http.StatusOK, gin.H{"data": []HelmRunSummary{}, "total": 0, "page": page, "limit": limit})
 			return
 		}
 
 		countQuery := db.NewSelect().Model((*models.HelmScanRun)(nil))
-		if !isAdmin {
+		if restrictByRunIDs {
 			countQuery = countQuery.Where("id IN (?)", bun.In(visibleRunIDs))
 		}
 		if chartURL := c.Query("chart_url"); chartURL != "" {
@@ -99,7 +99,7 @@ func ListRuns(db *bun.DB) gin.HandlerFunc {
 
 		var runs []models.HelmScanRun
 		listQuery := db.NewSelect().Model(&runs)
-		if !isAdmin {
+		if restrictByRunIDs {
 			listQuery = listQuery.Where("id IN (?)", bun.In(visibleRunIDs))
 		}
 		if chartURL := c.Query("chart_url"); chartURL != "" {
@@ -238,9 +238,10 @@ func GetRun(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Helm run not found"})
 			return
 		}
-		if !isAdmin {
+		if !isAdmin || c.Query("scope") != "" {
 			visibleQuery := db.NewSelect().TableExpr("scans").ColumnExpr("1").Where("helm_scan_run_id = ?", runID)
 			visibleQuery = authz.ApplyOwnershipVisibility(visibleQuery, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+			visibleQuery = authz.ApplyWorkspaceScope(c, visibleQuery, "", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 			visible, err := visibleQuery.Exists(c.Request.Context())
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve Helm run visibility"})
@@ -253,11 +254,13 @@ func GetRun(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var scans []models.Scan
-		if err := db.NewSelect().
+		scanQuery := db.NewSelect().
 			Model(&scans).
 			Where("helm_scan_run_id = ?", runID).
-			OrderExpr("created_at DESC").
-			Scan(c.Request.Context()); err != nil {
+			OrderExpr("created_at DESC")
+		scanQuery = authz.ApplyOwnershipVisibility(scanQuery, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		scanQuery = authz.ApplyWorkspaceScope(c, scanQuery, "", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
+		if err := scanQuery.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load Helm run scans"})
 			return
 		}
@@ -279,6 +282,128 @@ func GetRun(db *bun.DB) gin.HandlerFunc {
 			Items: items,
 		})
 	}
+}
+
+func DeleteRun(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+
+		runID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Helm run ID"})
+			return
+		}
+
+		var run models.HelmScanRun
+		if err := db.NewSelect().Model(&run).Where("id = ?", runID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Helm run not found"})
+			return
+		}
+
+		var scans []models.Scan
+		if err := db.NewSelect().
+			Model(&scans).
+			Where("helm_scan_run_id = ?", runID).
+			Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load Helm run scans"})
+			return
+		}
+
+		roles, err := authz.LoadUserOrgRoles(c.Request.Context(), db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve organization access"})
+			return
+		}
+
+		scanIDs := make([]uuid.UUID, 0, len(scans))
+		for _, scan := range scans {
+			if canDeleteHelmRunScan(c, scan, userID, isAdmin, roles) {
+				scanIDs = append(scanIDs, scan.ID)
+			}
+		}
+		if len(scanIDs) == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Helm run not found"})
+			return
+		}
+
+		ctx := c.Request.Context()
+		for _, table := range []string{
+			"comments",
+			"vulnerabilities",
+			"sbom_components",
+			"scan_tags",
+			"org_scans",
+			"scan_manual_findings",
+			"scan_step_logs",
+			"xray_request_logs",
+			"xray_suppressions",
+		} {
+			db.NewDelete().TableExpr(table).Where("scan_id IN (?)", bun.In(scanIDs)).Exec(ctx) //nolint:errcheck
+		}
+
+		if _, err := db.NewDelete().
+			Model((*models.Scan)(nil)).
+			Where("id IN (?)", bun.In(scanIDs)).
+			Exec(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete Helm run scans"})
+			return
+		}
+
+		remaining, err := db.NewSelect().
+			Model((*models.Scan)(nil)).
+			Where("helm_scan_run_id = ?", runID).
+			Count(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check Helm run scans"})
+			return
+		}
+
+		deletedRun := false
+		if remaining == 0 {
+			if _, err := db.NewDelete().Model((*models.HelmScanRun)(nil)).Where("id = ?", runID).Exec(ctx); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete Helm run"})
+				return
+			}
+			deletedRun = true
+		}
+
+		c.JSON(http.StatusOK, gin.H{"deleted_scans": len(scanIDs), "deleted_run": deletedRun})
+	}
+}
+
+func canDeleteHelmRunScan(c *gin.Context, scan models.Scan, userID uuid.UUID, isAdmin bool, roles map[uuid.UUID]string) bool {
+	if isAdmin {
+		return true
+	}
+
+	scope := c.Query("scope")
+	if scope == "personal" {
+		return scan.OwnerUserID != nil && *scan.OwnerUserID == userID
+	}
+	if scope != "" {
+		orgID, err := uuid.Parse(scope)
+		if err != nil {
+			return false
+		}
+		if scan.OwnerOrgID == nil || *scan.OwnerOrgID != orgID {
+			return false
+		}
+		return authz.HasOrgRoleAtLeast(roles, orgID, models.OrgRoleEditor)
+	}
+
+	if scan.UserID != nil && *scan.UserID == userID {
+		return true
+	}
+	if scan.OwnerUserID != nil && *scan.OwnerUserID == userID {
+		return true
+	}
+	if scan.OwnerOrgID == nil {
+		return false
+	}
+	return authz.HasOrgRoleAtLeast(roles, *scan.OwnerOrgID, models.OrgRoleEditor)
 }
 
 func buildHelmRunItems(scans []models.Scan) []HelmRunItem {
@@ -323,11 +448,7 @@ func helmRunItemKey(scan models.Scan) string {
 	return scan.ImageName + "|" + scan.ImageTag
 }
 
-func visibleHelmRunIDs(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) ([]uuid.UUID, error) {
-	if isAdmin {
-		return nil, nil
-	}
-
+func visibleHelmRunIDs(c *gin.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) ([]uuid.UUID, error) {
 	type row struct {
 		RunID uuid.UUID `bun:"helm_scan_run_id"`
 	}
@@ -335,7 +456,8 @@ func visibleHelmRunIDs(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmi
 	var rows []row
 	query := db.NewSelect().TableExpr("scans").ColumnExpr("DISTINCT helm_scan_run_id").Where("helm_scan_run_id IS NOT NULL")
 	query = authz.ApplyOwnershipVisibility(query, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
-	if err := query.Scan(ctx, &rows); err != nil {
+	query = authz.ApplyWorkspaceScope(c, query, "", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
+	if err := query.Scan(c.Request.Context(), &rows); err != nil {
 		return nil, err
 	}
 

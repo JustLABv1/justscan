@@ -1,6 +1,6 @@
 import { req } from './core';
 import { getDefaultScannerCapabilities } from './registries';
-import type { APIRequestLog, APIRequestLogFilters, APIUsageStats, AdminDashboard, AdminToken, AdminUser, AuditLog, AuditLogFilters, NotificationChannel, NotificationDelivery, XRayRequestLog, XRayRequestLogFilters, XRayUsageStats } from './types/admin';
+import type { APIRequestLog, APIRequestLogFilters, APIUsageStats, AdminDashboard, AdminToken, AdminUser, AdminXRayRequestLog, AuditLog, AuditLogFilters, NotificationChannel, NotificationDelivery, XRayRequestLogFilters, XRayUsageStats } from './types/admin';
 import type { AIProviderAdmin, AIProviderTestResult, AISettings, AISupportedProvider } from './types/ai';
 import type { AutoTagRule, OIDCClaimSyncPreview, OIDCGroupMapping, OIDCOrgRoleOverride, OIDCProviderAdmin, Registry, RegistryListResponse, ScannerSettings } from './types/registries';
 import type { AdminScan } from './types/scans';
@@ -182,7 +182,10 @@ export const listXRayRequestLogs = (page = 1, limit = 50, filters?: XRayRequestL
   if (filters?.status) params.set('status', filters.status);
   if (filters?.from) params.set('from', filters.from);
   if (filters?.to) params.set('to', filters.to);
-  return req<{ data: XRayRequestLog[]; total: number }>('GET', `/api/v1/admin/xray-logs?${params}`);
+  return req<{ data: AdminXRayRequestLog[]; total: number }>(
+    'GET',
+    `/api/v1/admin/xray-logs?${params}`
+  );
 };
 
 export const updateAPILogRetention = (days: number) =>

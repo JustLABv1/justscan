@@ -1,0 +1,12 @@
+[mcp_servers.heroui-react]
+command = "npx"
+args = ["-y", "@heroui/react-mcp@latest"]
+
+[mcp_servers.heroui-react.tools.get_component_docs]
+approval_mode = "approve"
+
+[mcp_servers.heroui-react.tools.get_theme_variables]
+approval_mode = "approve"
+
+[mcp_servers.heroui-react.tools.list_components]
+approval_mode = "approve"

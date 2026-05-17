@@ -1,10 +1,10 @@
-import { AdminShell } from '../_components/admin-shell';
-import { AuditLogTab } from '../_components/primary-tabs';
+import { AuditTab } from '@/components/admin/audit-tab';
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
 
 export default function AdminAuditPage() {
-	return (
-		<AdminShell>
-			<AuditLogTab />
-		</AdminShell>
-	);
+  return (
+    <AdminPageShell>
+      <AuditTab />
+    </AdminPageShell>
+  );
 }

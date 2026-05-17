@@ -167,7 +167,7 @@ export interface XRayRequestLogFilters {
   to?: string;
 }
 
-export interface XRayRequestLog {
+export interface AdminXRayRequestLog {
   id: string;
   scan_id?: string;
   registry_id?: string;

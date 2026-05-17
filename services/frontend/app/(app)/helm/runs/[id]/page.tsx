@@ -1,66 +1,82 @@
 'use client';
 import { useToast } from '@/components/toast';
+import { PageHeader } from '@/components/ui/page-header';
 import {
-    createHelmScans,
-    createShare,
-    deleteShare,
-    extractHelmImages,
-    getHelmScanRun,
-    HelmRunItem,
-    HelmScanRunDetail,
-    reScan,
+  createHelmScans,
+  createShare,
+  deleteShare,
+  extractHelmImages,
+  getHelmScanRun,
+  HelmRunItem,
+  HelmScanRunDetail,
+  reScan,
 } from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
+import { Alert, Button, Card, Chip, Dropdown, Label, Spinner, Table } from '@heroui/react';
 import {
-    ArrowLeft01Icon,
-    PackageIcon,
-    Refresh01Icon,
-    Share01Icon,
+  ArrowLeft01Icon,
+  CopyLinkIcon,
+  FileValidationIcon,
+  MoreVerticalIcon,
+  PackageIcon,
+  Refresh01Icon,
+  Share01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-const SEV: Record<string, string> = {
-  critical: 'text-red-400 font-bold',
-  high: 'text-orange-400',
-  medium: 'text-yellow-400',
-  low: 'text-blue-400',
-};
-
-const STATUS_STYLE: Record<string, { color: string; bg: string; border: string; label?: string }> = {
-  completed: { color: '#34d399', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.22)' },
-  failed: { color: '#f87171', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.22)' },
-  running: { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.22)' },
-  pending: { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)', border: 'rgba(161,161,170,0.15)', label: 'queued' },
-  cancelled: { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.20)' },
-};
+type ChipColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
 
 function StatusBadge({ status }: { status: string }) {
-  const state = STATUS_STYLE[status] ?? STATUS_STYLE.pending;
+  const color: ChipColor =
+    status === 'completed'
+      ? 'success'
+      : status === 'failed'
+        ? 'danger'
+        : status === 'running'
+          ? 'accent'
+          : status === 'cancelled'
+            ? 'warning'
+            : 'default';
+  const label = status === 'pending' ? 'queued' : status;
+
   return (
-    <span
-      className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap"
-      style={{ color: state.color, background: state.bg, border: `1px solid ${state.border}` }}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`} />
-      {state.label ?? status}
-    </span>
+    <Chip color={color} size="sm" variant="soft">
+      {label}
+    </Chip>
   );
 }
 
-function SevCount({ count, cls }: { count: number; cls: string }) {
-  return <span className={`font-mono text-sm ${count ? cls : 'text-zinc-400 dark:text-zinc-700'}`}>{count || '—'}</span>;
+function SeverityCount({ count, color }: { count: number; color: ChipColor }) {
+  if (!count) return <span className="text-xs text-muted">-</span>;
+
+  return (
+    <Chip color={color} size="sm" variant="soft">
+      {count}
+    </Chip>
+  );
 }
 
-function StatBox({ label, value, color }: { label: string; value: string | number; color?: string }) {
+function StatBox({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string | number;
+  color?: ChipColor;
+}) {
   return (
-    <div
-      className="glass-panel flex flex-col gap-0.5 px-4 py-3 rounded-xl"
-    >
-      <span className="text-xs text-zinc-500">{label}</span>
-      <span className={`text-xl font-bold font-mono ${color ?? 'text-zinc-900 dark:text-zinc-100'}`}>{value}</span>
-    </div>
+    <Card>
+      <Card.Content className="flex flex-row items-center justify-between gap-3 px-4 py-3">
+        <span className="text-xs text-muted">{label}</span>
+        <Chip color={color ?? 'default'} size="sm" variant={color ? 'soft' : 'secondary'}>
+          {value}
+        </Chip>
+      </Card.Content>
+    </Card>
   );
 }
 
@@ -84,32 +100,41 @@ export default function HelmRunDetailPage() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
-  const loadRun = useCallback(async (silent = false) => {
-    if (!runId) return;
-    if (!silent) setLoading(true);
-    else setRefreshing(true);
+  const loadRun = useCallback(
+    async (silent = false) => {
+      if (!runId) return;
+      if (!silent) setLoading(true);
+      else setRefreshing(true);
 
-    try {
-      setDetail(await getHelmScanRun(runId));
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load Helm run');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [runId, toast]);
+      try {
+        setDetail(await getHelmScanRun(runId));
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Failed to load Helm run');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [runId, toast]
+  );
 
   useEffect(() => {
-    loadRun();
+    return deferEffect(loadRun);
   }, [loadRun]);
 
   const items = useMemo(() => detail?.items ?? [], [detail]);
   const latestScans = items.map((item) => item.latest_scan);
-  const shareableScans = latestScans.filter((scan) => scan.status === 'completed' || scan.status === 'failed');
+  const shareableScans = latestScans.filter(
+    (scan) => scan.status === 'completed' || scan.status === 'failed'
+  );
   const sharedScans = shareableScans.filter((scan) => scan.share_token);
 
   useEffect(() => {
-    if (!items.some((item) => item.latest_scan.status === 'pending' || item.latest_scan.status === 'running')) {
+    if (
+      !items.some(
+        (item) => item.latest_scan.status === 'pending' || item.latest_scan.status === 'running'
+      )
+    ) {
       return;
     }
     const timer = setInterval(() => loadRun(true), 5000);
@@ -123,7 +148,9 @@ export default function HelmRunDetailPage() {
   const totalImages = items.length;
   const completed = latestScans.filter((scan) => scan.status === 'completed').length;
   const failed = latestScans.filter((scan) => scan.status === 'failed').length;
-  const pending = latestScans.filter((scan) => scan.status === 'pending' || scan.status === 'running').length;
+  const pending = latestScans.filter(
+    (scan) => scan.status === 'pending' || scan.status === 'running'
+  ).length;
   const totalCritical = latestScans.reduce((sum, scan) => sum + (scan.critical_count ?? 0), 0);
   const totalHigh = latestScans.reduce((sum, scan) => sum + (scan.high_count ?? 0), 0);
   const totalMedium = latestScans.reduce((sum, scan) => sum + (scan.medium_count ?? 0), 0);
@@ -165,7 +192,7 @@ export default function HelmRunDetailPage() {
       const extracted = await extractHelmImages(
         latestRun.chart_url,
         isOCI ? undefined : chartName,
-        latestRun.chart_version || undefined,
+        latestRun.chart_version || undefined
       );
       const images = (extracted.images ?? []).map((img) => ({
         full_ref: img.full_ref,
@@ -185,10 +212,12 @@ export default function HelmRunDetailPage() {
         extracted.chart_name || chartName || undefined,
         extracted.chart_version || latestRun.chart_version || undefined,
         undefined,
-        inheritedOrgId || undefined,
+        inheritedOrgId || undefined
       );
 
-      toast.success(`Queued ${images.length} image${images.length === 1 ? '' : 's'} in new Helm run`);
+      toast.success(
+        `Queued ${images.length} image${images.length === 1 ? '' : 's'} in new Helm run`
+      );
       router.push(`/helm/runs/${created.run.id}`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to re-scan chart');
@@ -201,9 +230,13 @@ export default function HelmRunDetailPage() {
     if (shareableScans.length === 0) return;
     setShareLoading(true);
     try {
-      await Promise.all(shareableScans.map((scan) => createShare(scan.id, 'public').catch(() => null)));
+      await Promise.all(
+        shareableScans.map((scan) => createShare(scan.id, 'public').catch(() => null))
+      );
       await loadRun(true);
-      toast.success(`Shared ${shareableScans.length} scan${shareableScans.length === 1 ? '' : 's'}`);
+      toast.success(
+        `Shared ${shareableScans.length} scan${shareableScans.length === 1 ? '' : 's'}`
+      );
     } finally {
       setShareLoading(false);
     }
@@ -215,7 +248,9 @@ export default function HelmRunDetailPage() {
     try {
       await Promise.all(sharedScans.map((scan) => deleteShare(scan.id).catch(() => null)));
       await loadRun(true);
-      toast.success(`Disabled sharing for ${sharedScans.length} scan${sharedScans.length === 1 ? '' : 's'}`);
+      toast.success(
+        `Disabled sharing for ${sharedScans.length} scan${sharedScans.length === 1 ? '' : 's'}`
+      );
     } finally {
       setShareLoading(false);
     }
@@ -225,262 +260,346 @@ export default function HelmRunDetailPage() {
     if (sharedScans.length === 0) return;
     const [first, ...rest] = sharedScans;
     const base = `${window.location.origin}/shared/helm/${first.share_token}`;
-    const url = rest.length > 0
-      ? `${base}?tokens=${rest.map((scan) => scan.share_token).join(',')}`
-      : base;
+    const url =
+      rest.length > 0 ? `${base}?tokens=${rest.map((scan) => scan.share_token).join(',')}` : base;
     await navigator.clipboard.writeText(url);
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 1500);
   }
 
   if (!runId) {
-    return <div className="p-6 text-sm text-zinc-400">Invalid Helm run ID.</div>;
+    return (
+      <div className="p-6">
+        <PageHeader
+          title="Helm Run"
+          description="Invalid Helm run ID."
+          breadcrumbs={[{ label: 'Helm', href: '/helm' }, { label: 'Run' }]}
+        />
+        <Alert status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Invalid Helm run ID</Alert.Title>
+            <Alert.Description>The requested Helm run could not be resolved.</Alert.Description>
+          </Alert.Content>
+        </Alert>
+      </div>
+    );
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
-      <div>
-        <button
-          onClick={() => router.push('/helm')}
-          className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors mb-3"
-        >
-          <ArrowLeft01Icon size={15} />
-          Back to Helm runs
-        </button>
+    <div className="p-6 space-y-5">
+      <PageHeader
+        title={latestRun?.chart_name || displayUrl || 'Helm run'}
+        titleCom={
+          latestRun ? (
+            <Chip color={isOCI ? 'accent' : 'default'} size="sm" variant="soft">
+              {isOCI ? 'OCI' : 'HTTP'}
+            </Chip>
+          ) : null
+        }
+        description={displayUrl || 'Loading Helm run details.'}
+        breadcrumbs={[{ label: 'Helm', href: '/helm' }, { label: latestRun?.chart_name || 'Run' }]}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <Button type="button" variant="secondary" onPress={() => router.push('/helm')}>
+              <ArrowLeft01Icon size={15} />
+              Back
+            </Button>
+            <Dropdown>
+              <Dropdown.Trigger>
+                <Button aria-label="Open Helm run actions" isIconOnly variant="secondary">
+                  <MoreVerticalIcon size={15} />
+                </Button>
+              </Dropdown.Trigger>
+              <Dropdown.Popover className="min-w-[220px]">
+                <Dropdown.Menu
+                  onAction={(key) => {
+                    if (key === 'report' && canGenerateReport) {
+                      router.push(`/reports/print?helmRun=${encodeURIComponent(runId)}`);
+                    }
+                    if (key === 'refresh') {
+                      void loadRun(true);
+                    }
+                    if (key === 'share') {
+                      void handleShareAll();
+                    }
+                    if (key === 'copy') {
+                      void handleCopyGroupLink();
+                    }
+                    if (key === 'disable-shares') {
+                      void handleDisableShares();
+                    }
+                  }}
+                >
+                  <Dropdown.Item
+                    id="report"
+                    isDisabled={!canGenerateReport}
+                    textValue="Generate report"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileValidationIcon size={14} />
+                      <Label>Generate report</Label>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item id="refresh" isDisabled={refreshing} textValue="Refresh">
+                    <div className="flex items-center gap-2">
+                      <Refresh01Icon size={14} className={refreshing ? 'animate-spin' : ''} />
+                      <Label>Refresh</Label>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    id="share"
+                    isDisabled={shareLoading || shareableScans.length === 0}
+                    textValue="Share all scans"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Share01Icon size={14} />
+                      <Label>Share all scans</Label>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    id="copy"
+                    isDisabled={sharedScans.length === 0}
+                    textValue="Copy share link"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CopyLinkIcon size={14} />
+                      <Label>{shareCopied ? 'Copied' : 'Copy share link'}</Label>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    id="disable-shares"
+                    isDisabled={shareLoading || sharedScans.length === 0}
+                    textValue="Disable shares"
+                    variant="danger"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Share01Icon size={14} />
+                      <Label>Disable shares</Label>
+                    </div>
+                  </Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
+            <Button
+              type="button"
+              variant="primary"
+              onPress={handleRescanChart}
+              isDisabled={rescanningChart || !latestRun}
+              isPending={rescanningChart}
+            >
+              Re-scan chart
+            </Button>
+          </div>
+        }
+      />
 
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2.5">
-              <PackageIcon size={20} className="text-violet-500 shrink-0" />
-              <div className="min-w-0">
-                <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate" title={latestRun?.chart_name || chartUrl}>
-                  {latestRun?.chart_name || displayUrl || 'Helm run'}
-                </h1>
-                <p className="text-xs text-zinc-500 mt-1 font-mono truncate" title={chartUrl}>{displayUrl}</p>
-              </div>
-              <span
-                className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium"
-                style={{
-                  background: isOCI ? 'rgba(124,58,237,0.1)' : 'rgba(59,130,246,0.1)',
-                  color: isOCI ? '#a78bfa' : '#60a5fa',
-                  border: `1px solid ${isOCI ? 'rgba(124,58,237,0.2)' : 'rgba(59,130,246,0.2)'}`,
-                }}
+      <Card>
+        <Card.Content className="gap-3">
+          <div className="flex items-start gap-2.5">
+            <PackageIcon size={20} className="shrink-0" />
+            <div className="min-w-0">
+              <p
+                className="truncate text-sm font-semibold"
+                title={latestRun?.chart_name || chartUrl}
               >
-                {isOCI ? 'OCI' : 'HTTP'}
+                {latestRun?.chart_name || displayUrl || 'Helm run'}
+              </p>
+              <p className="mt-1 truncate font-mono text-xs text-muted" title={chartUrl}>
+                {displayUrl}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-muted flex-wrap">
+            {latestRun?.chart_version && (
+              <Chip size="sm" variant="secondary">
+                v{latestRun.chart_version}
+              </Chip>
+            )}
+            {latestRun?.platform && (
+              <Chip size="sm" variant="secondary">
+                {latestRun.platform}
+              </Chip>
+            )}
+            {latestRun?.created_at && (
+              <span title={fullDate(latestRun.created_at)}>
+                Started {timeAgo(latestRun.created_at)}
               </span>
-            </div>
-
-            <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500 flex-wrap">
-              {latestRun?.chart_version && <span>v{latestRun.chart_version}</span>}
-              {latestRun?.platform && <span>{latestRun.platform}</span>}
-              {latestRun?.created_at && <span title={fullDate(latestRun.created_at)}>Started {timeAgo(latestRun.created_at)}</span>}
-              {latestRun && <span className="font-mono">Run {latestRun.id}</span>}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-            {canGenerateReport ? (
-              <Link
-                href={`/reports/print?helmRun=${encodeURIComponent(runId)}`}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl transition-colors text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-                style={{ border: '1px solid var(--border-subtle)' }}
-              >
-                Generate report
-              </Link>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl text-zinc-400 disabled:opacity-60"
-                style={{ border: '1px solid var(--border-subtle)' }}
-                title="Wait for active scans to finish before generating a report"
-              >
-                Generate report
-              </button>
             )}
-
-            <button
-              onClick={() => loadRun(true)}
-              disabled={refreshing}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl transition-colors text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 disabled:opacity-40"
-              style={{ border: '1px solid var(--border-subtle)' }}
-              title="Refresh"
-            >
-              <Refresh01Icon size={14} className={refreshing ? 'animate-spin' : ''} />
-            </button>
-
-            <button
-              type="button"
-              onClick={handleShareAll}
-              disabled={shareLoading || shareableScans.length === 0}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl font-medium disabled:opacity-50"
-              style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', color: '#34d399' }}
-            >
-              <Share01Icon size={14} />
-              Share all
-            </button>
-
-            {sharedScans.length > 0 && (
-              <>
-                <button
-                  type="button"
-                  onClick={handleCopyGroupLink}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl transition-colors"
-                  style={{ border: '1px solid rgba(124,58,237,0.2)', color: '#a78bfa' }}
-                >
-                  {shareCopied ? 'Copied' : 'Copy share link'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDisableShares}
-                  disabled={shareLoading}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl transition-colors disabled:opacity-50"
-                  style={{ border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}
-                >
-                  Disable shares
-                </button>
-              </>
-            )}
-
-            <button
-              type="button"
-              onClick={handleRescanChart}
-              disabled={rescanningChart || !latestRun}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl transition-all disabled:opacity-60"
-              style={{
-                background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                color: '#fff',
-                boxShadow: '0 2px 8px rgba(124,58,237,0.3)',
-              }}
-            >
-              {rescanningChart ? 'Re-scanning…' : 'Re-scan chart'}
-            </button>
+            {latestRun && <span className="font-mono">Run {latestRun.id}</span>}
           </div>
-        </div>
-      </div>
+        </Card.Content>
+      </Card>
 
       {!loading && latestScans.length > 0 && (
-        <div className="flex gap-3 flex-wrap [&>*]:flex-1 [&>*]:min-w-[90px]">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
           <StatBox label="Images" value={totalImages} />
-          <StatBox label="Completed" value={completed} color="text-emerald-400" />
-          {pending > 0 && <StatBox label="Running" value={pending} color="text-blue-400" />}
-          {failed > 0 && <StatBox label="Failed" value={failed} color="text-red-400" />}
-          {totalCritical > 0 && <StatBox label="Critical" value={totalCritical} color="text-red-400 font-bold" />}
-          {totalHigh > 0 && <StatBox label="High" value={totalHigh} color="text-orange-400" />}
-          {totalMedium > 0 && <StatBox label="Medium" value={totalMedium} color="text-yellow-400" />}
-          {totalLow > 0 && <StatBox label="Low" value={totalLow} color="text-blue-400" />}
-          {totalCritical === 0 && totalHigh === 0 && completed > 0 && <StatBox label="Vulnerabilities" value="Clean ✓" color="text-emerald-400" />}
+          <StatBox label="Completed" value={completed} color="success" />
+          {pending > 0 && <StatBox label="Running" value={pending} color="accent" />}
+          {failed > 0 && <StatBox label="Failed" value={failed} color="danger" />}
+          {totalCritical > 0 && <StatBox label="Critical" value={totalCritical} color="danger" />}
+          {totalHigh > 0 && <StatBox label="High" value={totalHigh} color="warning" />}
+          {totalMedium > 0 && <StatBox label="Medium" value={totalMedium} color="warning" />}
+          {totalLow > 0 && <StatBox label="Low" value={totalLow} color="accent" />}
+          {totalCritical === 0 && totalHigh === 0 && completed > 0 && (
+            <StatBox label="Vulnerabilities" value="Clean" color="success" />
+          )}
         </div>
       )}
 
       {loading && (
-        <div className="glass-panel rounded-2xl px-6 py-10 flex items-center justify-center gap-3 text-zinc-400 text-sm">
-          <span className="w-4 h-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
-          Loading Helm run…
-        </div>
+        <Card>
+          <Card.Content className="px-6 py-10">
+            <div className="flex items-center justify-center gap-3 text-sm text-muted">
+              <Spinner size="sm" />
+              Loading Helm run...
+            </div>
+          </Card.Content>
+        </Card>
       )}
 
       {!loading && items.length === 0 && (
-        <div className="glass-panel rounded-2xl px-6 py-10 text-center text-zinc-400 text-sm">
-          No scans found for this Helm run.
-        </div>
+        <Card>
+          <Card.Content className="px-6 py-10 text-center text-sm text-muted">
+            No scans found for this Helm run.
+          </Card.Content>
+        </Card>
       )}
 
       {!loading && items.length > 0 && (
-        <div className="glass-panel rounded-2xl overflow-hidden">
-          <div
-            className="grid px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide"
-            style={{
-              gridTemplateColumns: 'minmax(0,1fr) 120px minmax(0,1fr) 90px 70px 70px 70px 70px 120px 120px',
-              background: 'var(--row-hover)',
-              borderBottom: '1px solid var(--border-subtle)',
-            }}
-          >
-            <span>Image</span>
-            <span>Tag</span>
-            <span>Source</span>
-            <span className="text-center">Attempts</span>
-            <span className="text-center">C</span>
-            <span className="text-center">H</span>
-            <span className="text-center">M</span>
-            <span className="text-center">L</span>
-            <span className="text-right">Status</span>
-            <span className="text-right">Action</span>
-          </div>
-
-          {items.map((item, index) => {
-            const scan = item.latest_scan;
-            const retrying = retryingScanId === scan.id;
-            return (
-              <div
-                key={item.key}
-                className="grid items-center px-4 py-3 gap-2"
-                style={{
-                  gridTemplateColumns: 'minmax(0,1fr) 120px minmax(0,1fr) 90px 70px 70px 70px 70px 120px 120px',
-                  borderBottom: index < items.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                  background: 'transparent',
-                }}
-              >
-                <Link href={`/scans/${scan.id}`} className="text-sm font-mono text-zinc-800 dark:text-zinc-200 truncate hover:text-violet-500 transition-colors" title={scan.image_name}>
-                  {scan.image_name}
-                </Link>
-                <span className="text-xs font-mono text-zinc-500 truncate" title={scan.image_tag}>{scan.image_tag || 'latest'}</span>
-                <span className="text-xs text-zinc-400 truncate" title={scan.helm_source_path ?? ''}>
-                  {scan.helm_source_path ? scan.helm_source_path.split(' › ')[0] : '—'}
-                </span>
-                <span className="text-center text-xs font-mono text-zinc-500">{item.attempt_count}</span>
-                <span className="text-center"><SevCount count={scan.critical_count ?? 0} cls={SEV.critical} /></span>
-                <span className="text-center"><SevCount count={scan.high_count ?? 0} cls={SEV.high} /></span>
-                <span className="text-center"><SevCount count={scan.medium_count ?? 0} cls={SEV.medium} /></span>
-                <span className="text-center"><SevCount count={scan.low_count ?? 0} cls={SEV.low} /></span>
-                <span className="flex justify-end"><StatusBadge status={scan.status} /></span>
-                <span className="flex justify-end">
-                  {scan.status === 'failed' ? (
-                    <button
-                      type="button"
-                      onClick={() => handleRetryScan(scan.id)}
-                      disabled={retrying}
-                      className="text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                      style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(167,139,250,0.25)', color: '#c4b5fd' }}
-                    >
-                      {retrying ? 'Retrying…' : 'Retry failed'}
-                    </button>
-                  ) : (
-                    <Link href={`/scans/${scan.id}`} className="text-xs text-violet-500 hover:text-violet-400 font-medium">
-                      View →
-                    </Link>
-                  )}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        <Table>
+          <Table.ScrollContainer>
+            <Table.Content aria-label="Helm run image scans" className="min-w-[1120px]">
+              <Table.Header>
+                <Table.Column isRowHeader>Image</Table.Column>
+                <Table.Column>Tag</Table.Column>
+                <Table.Column>Source</Table.Column>
+                <Table.Column className="text-center">Attempts</Table.Column>
+                <Table.Column className="text-center">C</Table.Column>
+                <Table.Column className="text-center">H</Table.Column>
+                <Table.Column className="text-center">M</Table.Column>
+                <Table.Column className="text-center">L</Table.Column>
+                <Table.Column className="text-right">Status</Table.Column>
+                <Table.Column className="text-right">Action</Table.Column>
+              </Table.Header>
+              <Table.Body>
+                {items.map((item) => {
+                  const scan = item.latest_scan;
+                  const retrying = retryingScanId === scan.id;
+                  return (
+                    <Table.Row key={item.key} id={item.key} className="hover:bg-[var(--row-hover)]">
+                      <Table.Cell>
+                        <Link
+                          href={`/scans/${scan.id}`}
+                          className="block truncate font-mono text-sm"
+                          title={scan.image_name}
+                        >
+                          {scan.image_name}
+                        </Link>
+                      </Table.Cell>
+                      <Table.Cell className="truncate font-mono text-xs text-muted">
+                        {scan.image_tag || 'latest'}
+                      </Table.Cell>
+                      <Table.Cell className="truncate text-xs text-muted">
+                        <span title={scan.helm_source_path ?? ''}>
+                          {scan.helm_source_path ? scan.helm_source_path.split(' › ')[0] : '-'}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell className="text-center font-mono text-xs text-muted">
+                        {item.attempt_count}
+                      </Table.Cell>
+                      <Table.Cell className="text-center">
+                        <SeverityCount count={scan.critical_count ?? 0} color="danger" />
+                      </Table.Cell>
+                      <Table.Cell className="text-center">
+                        <SeverityCount count={scan.high_count ?? 0} color="warning" />
+                      </Table.Cell>
+                      <Table.Cell className="text-center">
+                        <SeverityCount count={scan.medium_count ?? 0} color="warning" />
+                      </Table.Cell>
+                      <Table.Cell className="text-center">
+                        <SeverityCount count={scan.low_count ?? 0} color="accent" />
+                      </Table.Cell>
+                      <Table.Cell className="text-right">
+                        <StatusBadge status={scan.status} />
+                      </Table.Cell>
+                      <Table.Cell className="text-right">
+                        {scan.status === 'failed' ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onPress={() => handleRetryScan(scan.id)}
+                            isDisabled={retrying}
+                            isPending={retrying}
+                          >
+                            Retry failed
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onPress={() => router.push(`/scans/${scan.id}`)}
+                          >
+                            View
+                          </Button>
+                        )}
+                      </Table.Cell>
+                    </Table.Row>
+                  );
+                })}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table>
       )}
 
       {!loading && Object.keys(bySource).length > 1 && (
-        <div className="glass-panel rounded-2xl px-5 py-4 space-y-3">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Images by template file</h2>
-          <div className="flex flex-col gap-1.5">
+        <Card>
+          <Card.Header>
+            <Card.Title>Images by template file</Card.Title>
+          </Card.Header>
+          <Card.Content className="gap-2">
             {Object.entries(bySource)
               .sort((a, b) => b[1].length - a[1].length)
               .map(([source, sourceItems]) => {
-                const critical = sourceItems.reduce((sum, item) => sum + (item.latest_scan.critical_count ?? 0), 0);
-                const high = sourceItems.reduce((sum, item) => sum + (item.latest_scan.high_count ?? 0), 0);
+                const critical = sourceItems.reduce(
+                  (sum, item) => sum + (item.latest_scan.critical_count ?? 0),
+                  0
+                );
+                const high = sourceItems.reduce(
+                  (sum, item) => sum + (item.latest_scan.high_count ?? 0),
+                  0
+                );
                 return (
                   <div key={source} className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-zinc-500 w-72 truncate" title={source}>{source}</span>
-                    <span className="text-xs text-zinc-400">{sourceItems.length} image{sourceItems.length === 1 ? '' : 's'}</span>
+                    <span className="text-xs font-mono text-muted w-72 truncate" title={source}>
+                      {source}
+                    </span>
+                    <span className="text-xs text-muted">
+                      {sourceItems.length} image{sourceItems.length === 1 ? '' : 's'}
+                    </span>
                     {(critical > 0 || high > 0) && (
-                      <span className="text-xs font-mono">
-                        {critical > 0 && <span className="text-red-400">{critical}C </span>}
-                        {high > 0 && <span className="text-orange-400">{high}H</span>}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        {critical > 0 && (
+                          <Chip color="danger" size="sm" variant="soft">
+                            {critical}C
+                          </Chip>
+                        )}
+                        {high > 0 && (
+                          <Chip color="warning" size="sm" variant="soft">
+                            {high}H
+                          </Chip>
+                        )}
+                      </div>
                     )}
                   </div>
                 );
               })}
-          </div>
-        </div>
+          </Card.Content>
+        </Card>
       )}
     </div>
   );

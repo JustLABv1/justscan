@@ -9,10 +9,10 @@ export function Skeleton({ className = '', style }: { className?: string; style?
 export function StatCardSkeleton() {
   return (
     <div className="relative flex flex-col rounded-xl px-4 pt-3 pb-2 gap-3"
-      style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
+      style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)', boxShadow: 'var(--surface-shadow)' }}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5">
-          <Skeleton className="w-9 h-9 rounded-xl" />
+          <Skeleton className="size-9 rounded-xl" />
           <div className="space-y-1.5">
             <Skeleton className="h-6 w-12 rounded" />
             <Skeleton className="h-3 w-20 rounded" />
@@ -44,10 +44,10 @@ export function RecentScanRowSkeleton() {
 export function ChartSkeleton() {
   return (
     <div className="rounded-2xl p-5"
-      style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
+      style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)', boxShadow: 'var(--surface-shadow)' }}>
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
-          <Skeleton className="w-9 h-9 rounded-xl" />
+          <Skeleton className="size-9 rounded-xl" />
           <div className="space-y-1.5">
             <Skeleton className="h-4 w-36 rounded" />
             <Skeleton className="h-3 w-52 rounded" />
@@ -68,10 +68,10 @@ export function ChartSkeleton() {
 export function ImageRowSkeleton() {
   return (
     <tr>
-      <td colSpan={8} className="px-4 py-4">
+      <td colSpan={8} className="p-4">
         <div className="flex items-center gap-3">
-          <Skeleton className="h-4 w-4 rounded" />
-          <Skeleton className="h-4 w-4 rounded" />
+          <Skeleton className="size-4 rounded" />
+          <Skeleton className="size-4 rounded" />
           <div className="flex items-center gap-2.5 flex-1">
             <Skeleton className="h-4 w-48 rounded" />
             <Skeleton className="h-5 w-14 rounded-md" />
@@ -112,14 +112,14 @@ export function ScanDetailSkeleton() {
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="rounded-xl p-4"
-            style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+            style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
             <Skeleton className="h-3 w-14 rounded mb-2" />
             <Skeleton className="h-7 w-10 rounded" />
           </div>
         ))}
       </div>
       <div className="rounded-xl p-5"
-        style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+        style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
         <div className="space-y-2.5">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className={`h-12 w-full rounded-xl ${i > 0 ? 'opacity-70' : ''}`} style={{ opacity: 1 - i * 0.12 }} />

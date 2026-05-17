@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -12,6 +13,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"justscan-backend/pkg/models"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -75,6 +78,9 @@ func TestParseXrayVulnerabilitiesReadsCombinedSummaryCVSS(t *testing.T) {
 	vulns := ParseXrayVulnerabilities(summary, scanID)
 	if len(vulns) != 1 {
 		t.Fatalf("expected 1 vulnerability, got %d", len(vulns))
+	}
+	if vulns[0].XrayIssueID != "XRAY-123" {
+		t.Fatalf("expected xray issue id XRAY-123, got %q", vulns[0].XrayIssueID)
 	}
 	if vulns[0].CVSSScore != 7.5 {
 		t.Fatalf("expected CVSS score 7.5, got %v", vulns[0].CVSSScore)
@@ -195,10 +201,27 @@ func TestParseXrayViolationVulnerabilitiesBuildsFallbackFindings(t *testing.T) {
 	response := &xrayViolationsResponse{
 		Violations: []xrayViolationRecord{
 			{
-				IssueID:     "CVE-2026-0001",
-				Summary:     "Blocked issue",
-				Description: "Xray reported this issue while a blocking policy rejected the image.",
-				Severity:    "High",
+				ID:                     "2052541046701252608",
+				IssueID:                "CVE-2026-0001",
+				Watch:                  "bbsr-watch",
+				Summary:                "Blocked issue",
+				Description:            "Xray reported this issue while a blocking policy rejected the image.",
+				Severity:               "High",
+				Source:                 "GitPython",
+				SourceVersion:          "3.1.46",
+				SourceID:               "pypi://GitPython",
+				ImpactArtifacts:        []string{"default/docker-remote-cache/openwebui/open-webui/sha256__abc/manifest.json"},
+				ComponentPhysicalPaths: []string{"sha256__layer/usr/local/lib/python3.11/site-packages/gitpython-3.1.46.dist-info/GitPython:3.1.46"},
+				Policies: []xrayViolationPolicy{{
+					PolicyName: "bbsr-cve-policy",
+					Rule:       "bbsr-cve-policy-rule",
+					IsBlocking: true,
+				}},
+				IsBlocking: true,
+				Raw: models.JSONObject{
+					"issue_id":     "CVE-2026-0001",
+					"watcher_name": "bbsr-watch",
+				},
 			},
 			{
 				IssueID:     "CVE-2026-0001",
@@ -230,6 +253,36 @@ func TestParseXrayViolationVulnerabilitiesBuildsFallbackFindings(t *testing.T) {
 	}
 	if vulns[0].DataSource != xrayDataSource {
 		t.Fatalf("unexpected data source %q", vulns[0].DataSource)
+	}
+	if vulns[0].XrayIssueID != "CVE-2026-0001" {
+		t.Fatalf("unexpected xray issue id %q", vulns[0].XrayIssueID)
+	}
+	if vulns[0].XrayViolationID != "2052541046701252608" {
+		t.Fatalf("unexpected xray violation id %q", vulns[0].XrayViolationID)
+	}
+	if vulns[0].XrayWatchName != "bbsr-watch" {
+		t.Fatalf("unexpected xray watch name %q", vulns[0].XrayWatchName)
+	}
+	if len(vulns[0].XrayWatchNames) != 1 || vulns[0].XrayWatchNames[0] != "bbsr-watch" {
+		t.Fatalf("unexpected xray watch names %+v", vulns[0].XrayWatchNames)
+	}
+	if len(vulns[0].XrayWatchPolicyMatches) != 1 {
+		t.Fatalf("expected 1 xray watch-policy match, got %d", len(vulns[0].XrayWatchPolicyMatches))
+	}
+	if !vulns[0].XrayIsBlocking {
+		t.Fatal("expected xray_is_blocking to be true")
+	}
+	if vulns[0].XraySource != "GitPython" || vulns[0].XraySourceVersion != "3.1.46" || vulns[0].XraySourceID != "pypi://GitPython" {
+		t.Fatalf("unexpected source fields: %q %q %q", vulns[0].XraySource, vulns[0].XraySourceVersion, vulns[0].XraySourceID)
+	}
+	if len(vulns[0].XrayMatchedPolicies) != 1 {
+		t.Fatalf("expected 1 matched policy, got %d", len(vulns[0].XrayMatchedPolicies))
+	}
+	if len(vulns[0].XrayViolationPaths) != 1 {
+		t.Fatalf("expected 1 violation path, got %d", len(vulns[0].XrayViolationPaths))
+	}
+	if len(vulns[0].XrayComponentPhysicalPaths) != 1 {
+		t.Fatalf("expected 1 component physical path, got %d", len(vulns[0].XrayComponentPhysicalPaths))
 	}
 }
 
@@ -316,6 +369,317 @@ func TestIsRetriableXrayScanArtifactErrorTreatsGatewayTimeoutAsRetriable(t *test
 	if got := isRetriableXrayScanArtifactError(&xrayHTTPError{StatusCode: http.StatusGatewayTimeout}); !got {
 		t.Fatal("expected gateway timeout to be treated as retriable for scanArtifact")
 	}
+}
+
+func TestParseXrayIgnoredViolationRulesFromExport(t *testing.T) {
+	payload, err := buildTestExportZip(map[string]any{
+		"violations": []any{
+			map[string]any{
+				"issue_id":       "CVE-2026-9999",
+				"is_ignored":     true,
+				"ignore_rule_id": "rule-xyz",
+				"policy_name":    "Runtime Risk",
+				"watch_name":     "prod-watch",
+				"justification":  "Accepted by platform team",
+				"expires_at":     "2026-12-01T00:00:00Z",
+			},
+			map[string]any{
+				"issue_id":   "CVE-2026-0000",
+				"is_ignored": false,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to build test export zip: %v", err)
+	}
+
+	rules, err := parseXrayIgnoredViolationRulesFromExport(payload)
+	if err != nil {
+		t.Fatalf("parseXrayIgnoredViolationRulesFromExport returned error: %v", err)
+	}
+	if len(rules) != 1 {
+		t.Fatalf("expected 1 ignored violation rule, got %d", len(rules))
+	}
+
+	rule := rules[0]
+	if rule.VulnID != "CVE-2026-9999" {
+		t.Fatalf("unexpected vuln id %q", rule.VulnID)
+	}
+	if rule.Rule.RuleID != "rule-xyz" {
+		t.Fatalf("unexpected rule id %q", rule.Rule.RuleID)
+	}
+	if rule.Rule.PolicyName != "Runtime Risk" {
+		t.Fatalf("unexpected policy name %q", rule.Rule.PolicyName)
+	}
+	if rule.Rule.WatchName != "prod-watch" {
+		t.Fatalf("unexpected watch name %q", rule.Rule.WatchName)
+	}
+	if rule.Rule.Justification != "Accepted by platform team" {
+		t.Fatalf("unexpected justification %q", rule.Rule.Justification)
+	}
+	if rule.Rule.ExpiresAt == nil {
+		t.Fatal("expected expires_at to be parsed")
+	}
+}
+
+func TestParseXrayIgnoredViolationRulesFromExportStatusFallback(t *testing.T) {
+	payload, err := buildTestExportZip(map[string]any{
+		"data": []any{
+			map[string]any{
+				"issue_id":   "XRAY-4242",
+				"status":     "ignored",
+				"policy":     "Policy A",
+				"watch":      "Watch A",
+				"comment":    "Temporary allow",
+				"expired_at": "2027-01-01T00:00:00Z",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to build test export zip: %v", err)
+	}
+
+	rules, err := parseXrayIgnoredViolationRulesFromExport(payload)
+	if err != nil {
+		t.Fatalf("parseXrayIgnoredViolationRulesFromExport returned error: %v", err)
+	}
+	if len(rules) != 1 {
+		t.Fatalf("expected 1 ignored violation rule, got %d", len(rules))
+	}
+
+	rule := rules[0]
+	if rule.VulnID != "XRAY-4242" {
+		t.Fatalf("unexpected vuln id %q", rule.VulnID)
+	}
+	if rule.Rule.PolicyName != "Policy A" {
+		t.Fatalf("unexpected policy name %q", rule.Rule.PolicyName)
+	}
+	if rule.Rule.WatchName != "Watch A" {
+		t.Fatalf("unexpected watch name %q", rule.Rule.WatchName)
+	}
+	if rule.Rule.RuleID == "" {
+		t.Fatal("expected fallback rule id to be generated")
+	}
+}
+
+func TestParseXrayIgnoredViolationRulesFromExportPlainJSON(t *testing.T) {
+	payload, err := json.Marshal(map[string]any{
+		"violations": []any{
+			map[string]any{
+				"issue_id":      "CVE-2027-1111",
+				"ignored":       true,
+				"policy_name":   "Policy JSON",
+				"watch_name":    "Watch JSON",
+				"justification": "Ignored in plain JSON export",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal json payload: %v", err)
+	}
+
+	rules, err := parseXrayIgnoredViolationRulesFromExport(payload)
+	if err != nil {
+		t.Fatalf("parseXrayIgnoredViolationRulesFromExport returned error: %v", err)
+	}
+	if len(rules) != 1 {
+		t.Fatalf("expected 1 ignored violation rule, got %d", len(rules))
+	}
+
+	rule := rules[0]
+	if rule.VulnID != "CVE-2027-1111" {
+		t.Fatalf("unexpected vuln id %q", rule.VulnID)
+	}
+	if rule.Rule.PolicyName != "Policy JSON" {
+		t.Fatalf("unexpected policy name %q", rule.Rule.PolicyName)
+	}
+	if rule.Rule.WatchName != "Watch JSON" {
+		t.Fatalf("unexpected watch name %q", rule.Rule.WatchName)
+	}
+}
+
+func TestParseXrayViolationsExportPlainJSON(t *testing.T) {
+	payload, err := json.Marshal(map[string]any{
+		"violations": []any{
+			map[string]any{
+				"user_issue_id":  "2052541046701252608",
+				"issue_id":       "XRAY-971174",
+				"watcher_id":     "99ad3de1b189264e660c88ce",
+				"watcher_name":   "bbsr-watch",
+				"source":         "GitPython",
+				"source_version": "3.1.46",
+				"source_id":      "pypi://GitPython",
+				"summary":        "GitPython command injection",
+				"severity":       "Critical",
+				"paths": []any{
+					"default/docker-remote-cache/openwebui/open-webui/sha256__abc/manifest.json",
+				},
+				"component_physical_paths": []any{
+					"sha256__layer/usr/local/lib/python3.11/site-packages/gitpython-3.1.46.dist-info/GitPython:3.1.46",
+				},
+				"matched_policies": []any{
+					map[string]any{
+						"policy":      "bbsr-cve-policy",
+						"rule":        "bbsr-cve-policy-rule",
+						"is_blocking": true,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal json payload: %v", err)
+	}
+
+	parsed, err := parseXrayViolationsExport(payload)
+	if err != nil {
+		t.Fatalf("parseXrayViolationsExport returned error: %v", err)
+	}
+	if parsed == nil || len(parsed.Violations) != 1 {
+		t.Fatalf("expected 1 violation, got %+v", parsed)
+	}
+
+	v := parsed.Violations[0]
+	if v.ID != "2052541046701252608" {
+		t.Fatalf("unexpected violation id %q", v.ID)
+	}
+	if v.IssueID != "XRAY-971174" {
+		t.Fatalf("unexpected issue id %q", v.IssueID)
+	}
+	if v.Watch != "bbsr-watch" {
+		t.Fatalf("unexpected watch %q", v.Watch)
+	}
+	if v.WatchID != "99ad3de1b189264e660c88ce" {
+		t.Fatalf("unexpected watch id %q", v.WatchID)
+	}
+	if v.Source != "GitPython" || v.SourceVersion != "3.1.46" || v.SourceID != "pypi://GitPython" {
+		t.Fatalf("unexpected source fields: %q %q %q", v.Source, v.SourceVersion, v.SourceID)
+	}
+	if len(v.Policies) != 1 || v.Policies[0].PolicyName != "bbsr-cve-policy" || !v.Policies[0].IsBlocking {
+		t.Fatalf("unexpected policies %+v", v.Policies)
+	}
+	if !v.IsBlocking {
+		t.Fatal("expected violation to be blocking")
+	}
+	if len(v.ImpactArtifacts) != 1 {
+		t.Fatalf("unexpected impact artifacts %+v", v.ImpactArtifacts)
+	}
+	if len(v.ComponentPhysicalPaths) != 1 {
+		t.Fatalf("unexpected component physical paths %+v", v.ComponentPhysicalPaths)
+	}
+}
+
+func TestParseXrayViolationsExportZipJSON(t *testing.T) {
+	payload, err := buildTestExportZip(map[string]any{
+		"violations": []any{
+			map[string]any{
+				"issue_id":     "XRAY-980135",
+				"watcher_name": "bmz-watch",
+				"severity":     "High",
+				"matched_policies": []any{
+					map[string]any{"policy": "bmz-cve-policy", "rule": "bmz-cve-policy-rule", "is_blocking": true},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to build zip payload: %v", err)
+	}
+
+	parsed, err := parseXrayViolationsExport(payload)
+	if err != nil {
+		t.Fatalf("parseXrayViolationsExport returned error: %v", err)
+	}
+	if parsed == nil || len(parsed.Violations) != 1 {
+		t.Fatalf("expected 1 violation, got %+v", parsed)
+	}
+	if parsed.Violations[0].IssueID != "XRAY-980135" {
+		t.Fatalf("unexpected issue id %q", parsed.Violations[0].IssueID)
+	}
+}
+
+func TestXrayViolationCandidateVulnIDsIncludesCVEsFromRaw(t *testing.T) {
+	violation := xrayViolationRecord{
+		ID:      "2052541046701252608",
+		IssueID: "XRAY-971174",
+		Raw: models.JSONObject{
+			"cves": []any{
+				map[string]any{"cve": "CVE-2025-66034"},
+				map[string]any{"cve": "CVE-2025-7458"},
+			},
+		},
+	}
+
+	ids := xrayViolationCandidateVulnIDs(violation)
+	joined := strings.Join(ids, ",")
+	if !strings.Contains(joined, "XRAY-971174") {
+		t.Fatalf("expected XRAY issue id in candidate ids, got %v", ids)
+	}
+	if !strings.Contains(joined, "CVE-2025-66034") || !strings.Contains(joined, "CVE-2025-7458") {
+		t.Fatalf("expected CVE ids in candidate ids, got %v", ids)
+	}
+}
+
+func TestXrayExportComponentNamePrefersDigest(t *testing.T) {
+	got := xrayExportComponentName("openwebui/open-webui", "main", "sha256:6403a9b0e6ec71956466300dbcde0dca373f9aa0f597aff3d4c24fbb3b10bec3")
+	want := "openwebui/open-webui:sha256__6403a9b0e6ec71956466300dbcde0dca373f9aa0f597aff3d4c24fbb3b10bec3"
+	if got != want {
+		t.Fatalf("xrayExportComponentName() = %q, want %q", got, want)
+	}
+}
+
+func TestXrayExportComponentNameFallsBackToTag(t *testing.T) {
+	got := xrayExportComponentName("openwebui/open-webui", "main", "")
+	want := "openwebui/open-webui:main"
+	if got != want {
+		t.Fatalf("xrayExportComponentName() = %q, want %q", got, want)
+	}
+}
+
+func TestPreferredXrayArtifactCandidatePrefersDigestCacheManifest(t *testing.T) {
+	candidates := []xrayArtifactPathCandidate{
+		{Repository: "docker-remote", Path: "openwebui/open-webui/0.8-slim/list.manifest.json"},
+		{Repository: "docker-remote-cache", Path: "openwebui/open-webui/sha256__6403a9/manifest.json"},
+		{Repository: "docker-remote", Path: "openwebui/open-webui/sha256__6403a9/manifest.json"},
+	}
+
+	got := preferredXrayArtifactCandidate(candidates)
+	if got.Repository != "docker-remote-cache" {
+		t.Fatalf("preferredXrayArtifactCandidate() repository = %q, want docker-remote-cache", got.Repository)
+	}
+	if got.Path != "openwebui/open-webui/sha256__6403a9/manifest.json" {
+		t.Fatalf("preferredXrayArtifactCandidate() path = %q", got.Path)
+	}
+}
+
+func TestXrayExportComponentNameFromArtifactStripsRegistryPrefixInput(t *testing.T) {
+	got := xrayExportComponentName("openwebui/open-webui", "0.8-slim", "sha256:6403a9")
+	want := "openwebui/open-webui:sha256__6403a9"
+	if got != want {
+		t.Fatalf("xrayExportComponentName() = %q, want %q", got, want)
+	}
+}
+
+func buildTestExportZip(payload map[string]any) ([]byte, error) {
+	buffer := bytes.NewBuffer(nil)
+	writer := zip.NewWriter(buffer)
+
+	file, err := writer.Create("report.json")
+	if err != nil {
+		return nil, err
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := file.Write(body); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	return buffer.Bytes(), nil
 }
 
 func TestDescribeNonFatalXrayIgnoreRuleSyncErrorExplainsPermissionIssue(t *testing.T) {

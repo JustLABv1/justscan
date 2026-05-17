@@ -1,13 +1,36 @@
 'use client';
 
 import { WorkspaceOnboarding } from '@/components/workspace-onboarding';
-import { clearToken, clearUser, getUser, getWorkScope, listMyOrgInvites, listOrgs, Org, setWorkScope, WorkScope } from '@/lib/api';
-import { Button, Drawer, Dropdown, Header, Label, Separator, useOverlayState } from '@heroui/react';
+import {
+  clearToken,
+  clearUser,
+  getUser,
+  getWorkScope,
+  listMyOrgInvites,
+  listOrgs,
+  Org,
+  setWorkScope,
+  WorkScope,
+} from '@/lib/api';
+import {
+  Avatar,
+  Button,
+  Card,
+  Chip,
+  Drawer,
+  Dropdown,
+  Header,
+  Kbd,
+  Label,
+  Popover,
+  Separator,
+  Typography,
+  Tooltip,
+  useOverlayState,
+} from '@heroui/react';
 import {
   AiContentGenerator01Icon,
   ArrowDown01Icon,
-  ArrowLeft01Icon,
-  ArrowRight01Icon,
   Building04Icon,
   DashboardSquare01Icon,
   EyeIcon,
@@ -17,25 +40,30 @@ import {
   Menu01Icon,
   Moon02Icon,
   PackageIcon,
-  PlusSignIcon,
   Search01Icon,
   ServerStack01Icon,
   Settings01Icon,
   Shield01Icon,
   ShieldKeyIcon,
+  SidebarLeft01Icon,
+  SidebarRight01Icon,
   Sun01Icon,
   Tag01Icon,
 } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { type ComponentType, type CSSProperties, useEffect, useMemo, useState } from 'react';
 
 import { AdminSidebarTree } from '@/components/admin-sidebar-tree';
 import { Logo } from '@/components/logo';
 import { SearchModal } from '@/components/search';
 import { ToastProvider } from '@/components/toast';
-import { hasSeenWorkspaceOnboarding, markWorkspaceOnboardingSeen } from '@/lib/workspace-onboarding';
+import { BreadcrumbItem, PageHeaderConfig, PageHeaderContext } from '@/components/ui/page-header';
+import {
+  hasSeenWorkspaceOnboarding,
+  markWorkspaceOnboardingSeen,
+} from '@/lib/workspace-onboarding';
 
 const navGroups = [
   {
@@ -80,9 +108,122 @@ function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + '/');
 }
 
+function titleFromPath(pathname: string) {
+  const segment = pathname.split('/').filter(Boolean).pop();
+  if (!segment) return 'Dashboard';
+
+  return segment.replace(/[-_]/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function resolveFallbackHeader(
+  pathname: string,
+  items: Array<{ href: string; label: string }>
+): PageHeaderConfig {
+  const current = items.find((item) => isActiveRoute(pathname, item.href));
+  const breadcrumbs: BreadcrumbItem[] = current ? [{ label: current.label }] : [];
+
+  return {
+    title: current?.label ?? titleFromPath(pathname),
+    breadcrumbs,
+  };
+}
+
+type SidebarIcon = ComponentType<{
+  size?: number;
+  className?: string;
+  style?: CSSProperties;
+}>;
+
+const activeNavStyle = {
+  color: 'var(--accent-soft-foreground)',
+  background:
+    'linear-gradient(135deg, color-mix(in oklab, var(--accent) 22%, transparent) 0%, color-mix(in oklab, var(--accent) 12%, transparent) 100%)',
+  boxShadow:
+    'inset 0 0 0 1px color-mix(in oklab, var(--accent) 34%, transparent), 0 0 0 1px color-mix(in oklab, var(--accent) 12%, transparent)',
+} as const;
+
+function InviteCountChip({ count, className = '' }: { count: number; className?: string }) {
+  if (count <= 0) return null;
+
+  return (
+    <Chip
+      className={`relative z-10 min-w-6 justify-center px-2 text-[11px] font-semibold ${className}`}
+      color="warning"
+      size="sm"
+      variant="soft"
+    >
+      {count}
+    </Chip>
+  );
+}
+
+function SidebarNavLink({
+  href,
+  itemLabel,
+  Icon,
+  mode,
+  active,
+  inviteCount,
+  onNavigate,
+}: {
+  href: string;
+  itemLabel: string;
+  Icon: SidebarIcon;
+  mode: 'desktop' | 'collapsed' | 'mobile';
+  active: boolean;
+  inviteCount: number;
+  onNavigate?: () => void;
+}) {
+  const iconOnly = mode === 'collapsed';
+  const isMobile = mode === 'mobile';
+
+  return (
+    <Link
+      href={href}
+      aria-current={active ? 'page' : undefined}
+      aria-label={iconOnly ? itemLabel : undefined}
+      className={
+        iconOnly
+          ? `group relative flex h-10 w-full items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`
+          : `group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${isMobile ? 'p-3' : 'overflow-hidden px-3 py-2.5 whitespace-nowrap'} ${active ? '' : 'text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100'}`
+      }
+      onClick={onNavigate}
+      style={active ? activeNavStyle : isMobile ? { background: 'var(--row-hover)' } : undefined}
+    >
+      {!active && !isMobile ? (
+        <span
+          className="absolute inset-0 rounded-xl opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+          style={{ background: 'var(--row-hover)' }}
+        />
+      ) : null}
+      {active && !iconOnly && !isMobile ? (
+        <span
+          className="absolute left-0 inset-y-2 w-1 rounded-r-full"
+          style={{
+            background:
+              'linear-gradient(180deg, color-mix(in oklab, var(--accent) 52%, white), var(--accent))',
+          }}
+        />
+      ) : null}
+      <Icon
+        size={18}
+        className="relative z-10 shrink-0"
+        style={{ color: active ? 'var(--accent-soft-foreground)' : 'var(--text-faint)' }}
+      />
+      {!iconOnly ? (
+        <span className={`relative z-10 flex-1 ${isMobile ? '' : 'truncate'}`}>{itemLabel}</span>
+      ) : null}
+      {href === '/orgs' && !iconOnly ? (
+        <InviteCountChip count={inviteCount} className="ml-auto" />
+      ) : null}
+    </Link>
+  );
+}
+
 export function AppShell({ children, initialUser }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const isAssistantRoute = pathname.startsWith('/assistant');
   const { resolvedTheme, setTheme } = useTheme();
   const [user, setUser] = useState(initialUser);
   const [collapsed, setCollapsed] = useState(false);
@@ -92,12 +233,12 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const [orgsReady, setOrgsReady] = useState(false);
   const [pendingInviteCount, setPendingInviteCount] = useState(0);
   const [workScope, setWorkScopeState] = useState<WorkScope>(() => getWorkScope());
-  const [onboardingStatus, setOnboardingStatus] = useState<'checking' | 'show' | 'done'>('checking');
+  const [onboardingStatus, setOnboardingStatus] = useState<'checking' | 'show' | 'done'>(
+    'checking'
+  );
   const mobileNav = useOverlayState();
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
-  const [hoveredNavPopover, setHoveredNavPopover] = useState<string | null>(null);
-  const [hoveredNavPopoverAnchor, setHoveredNavPopoverAnchor] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
-  const navPopoverCloseTimer = useRef<number | null>(null);
+  const [pageHeader, setPageHeader] = useState<PageHeaderConfig | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -107,17 +248,6 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   useEffect(() => {
     mobileNav.close();
   }, [mobileNav, pathname]);
-
-  useEffect(() => {
-    setHoveredNavPopover(null);
-    setHoveredNavPopoverAnchor(null);
-  }, [pathname]);
-
-  useEffect(() => () => {
-    if (navPopoverCloseTimer.current !== null) {
-      window.clearTimeout(navPopoverCloseTimer.current);
-    }
-  }, []);
 
   useEffect(() => {
     if (localStorage.getItem('sidebar_collapsed') === 'true') {
@@ -133,7 +263,12 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
   useEffect(() => {
     if (!mounted) return;
-    const currentUser = (getUser() ?? user ?? initialUser) as { id?: string; email?: string; username?: string } | null;
+    const currentUser = (getUser() ?? user ?? initialUser) as {
+      id?: string;
+      email?: string;
+      username?: string;
+    } | null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnboardingStatus(hasSeenWorkspaceOnboarding(currentUser) ? 'done' : 'show');
   }, [initialUser, mounted, user]);
 
@@ -155,7 +290,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     }
 
     window.addEventListener('justscan-work-scope-changed', handleScopeChanged as EventListener);
-    return () => window.removeEventListener('justscan-work-scope-changed', handleScopeChanged as EventListener);
+    return () =>
+      window.removeEventListener(
+        'justscan-work-scope-changed',
+        handleScopeChanged as EventListener
+      );
   }, []);
 
   useEffect(() => {
@@ -164,16 +303,20 @@ export function AppShell({ children, initialUser }: AppShellProps) {
     }
 
     window.addEventListener('justscan-org-membership-changed', handleOrgMembershipChanged);
-    return () => window.removeEventListener('justscan-org-membership-changed', handleOrgMembershipChanged);
+    return () =>
+      window.removeEventListener('justscan-org-membership-changed', handleOrgMembershipChanged);
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrgsReady(false);
     Promise.allSettled([listOrgs(), listMyOrgInvites()])
       .then(([orgsResult, invitesResult]) => {
         const nextOrgs = orgsResult.status === 'fulfilled' ? orgsResult.value : [];
         setOrgs(nextOrgs);
-        setPendingInviteCount(invitesResult.status === 'fulfilled' ? invitesResult.value.length : 0);
+        setPendingInviteCount(
+          invitesResult.status === 'fulfilled' ? invitesResult.value.length : 0
+        );
         const current = getWorkScope();
         if (current.kind !== 'org') {
           return;
@@ -237,7 +380,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   }
 
   function finishOnboarding(nextScope: WorkScope) {
-    const currentUser = (getUser() ?? user ?? initialUser) as { id?: string; email?: string; username?: string } | null;
+    const currentUser = (getUser() ?? user ?? initialUser) as {
+      id?: string;
+      email?: string;
+      username?: string;
+    } | null;
     markWorkspaceOnboardingSeen(currentUser);
     setWorkScopeState(nextScope);
     setWorkScope(nextScope);
@@ -246,7 +393,11 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   }
 
   function skipOnboarding() {
-    const currentUser = (getUser() ?? user ?? initialUser) as { id?: string; email?: string; username?: string } | null;
+    const currentUser = (getUser() ?? user ?? initialUser) as {
+      id?: string;
+      email?: string;
+      username?: string;
+    } | null;
     markWorkspaceOnboardingSeen(currentUser);
     const nextScope = resolveFallbackScope();
     setWorkScopeState(nextScope);
@@ -257,66 +408,48 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
   const initials = (user?.username ?? user?.email ?? 'U')[0]?.toUpperCase() ?? 'U';
   const isDark = resolvedTheme === 'dark';
-  const themeToggleTitle = !mounted ? 'Toggle theme' : isDark ? 'Switch to light mode' : 'Switch to dark mode';
-  const scopeLabel = workScope.kind === 'org' ? workScope.orgName ?? 'Organization' : 'Personal workspace';
+  const themeToggleTitle = !mounted
+    ? 'Toggle theme'
+    : isDark
+      ? 'Switch to light mode'
+      : 'Switch to dark mode';
+  const scopeLabel =
+    workScope.kind === 'org' ? (workScope.orgName ?? 'Organization') : 'Personal workspace';
   const workspaceTitle = `Workspace: ${scopeLabel}`;
-  const isAdminRoute = Boolean(user?.role === 'admin' && isActiveRoute(pathname, '/admin'));
+  const workspaceInitial = scopeLabel.trim().charAt(0).toUpperCase() || 'W';
+  type WorkspaceAvatarColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
+  const workspaceColors: WorkspaceAvatarColor[] = ['accent', 'success', 'warning', 'danger'];
+  const hashWorkspaceName = (name: string) =>
+    Array.from(name).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const workspaceColorFor = (kind: 'personal' | 'org', name: string): WorkspaceAvatarColor =>
+    kind === 'personal'
+      ? 'default'
+      : workspaceColors[hashWorkspaceName(name) % workspaceColors.length];
+  const activeWorkspaceColor = workspaceColorFor(
+    workScope.kind,
+    workScope.kind === 'org' ? (workScope.orgName ?? workScope.orgId) : 'personal'
+  );
   const desktopCollapsed = collapsed;
-  const workspaceMarkerStyle = workScope.kind === 'org'
-    ? { background: 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)', boxShadow: '0 0 0 1px rgba(255,255,255,0.65)' }
-    : { background: 'rgba(113,113,122,0.72)', boxShadow: '0 0 0 1px rgba(255,255,255,0.5)' };
-  const navigationGroups = isAdminRoute
-    ? [
-        ...navGroups,
-        ...(user?.role === 'admin'
-          ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
-          : []),
-      ]
-    : [
-        ...navGroups,
-        ...(user?.role === 'admin'
-          ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
-          : []),
-      ];
-  const hoveredNavHref = hoveredNavPopover?.startsWith('desktop:') ? hoveredNavPopover.slice('desktop:'.length) : null;
-  const hoveredLeafNavItem = hoveredNavHref
-    ? navigationGroups.flatMap((group) => group.items).find((item) => item.href === hoveredNavHref && item.href !== '/admin')
-    : null;
-
-  function cancelNavPopoverClose() {
-    if (navPopoverCloseTimer.current !== null) {
-      window.clearTimeout(navPopoverCloseTimer.current);
-      navPopoverCloseTimer.current = null;
-    }
-  }
-
-  function openAnchoredNavPopover(key: string, rect: DOMRect) {
-    cancelNavPopoverClose();
-    const top = Math.max(12, rect.top - 8);
-    const maxHeight = Math.max(240, window.innerHeight - top - 16);
-    setHoveredNavPopover(key);
-    setHoveredNavPopoverAnchor({
-      top,
-      left: rect.right,
-      maxHeight,
-    });
-  }
-
-  function scheduleNavPopoverClose() {
-    cancelNavPopoverClose();
-    navPopoverCloseTimer.current = window.setTimeout(() => {
-      setHoveredNavPopover(null);
-      setHoveredNavPopoverAnchor(null);
-    }, 220);
-  }
+  const navigationGroups = [
+    ...navGroups,
+    ...(user?.role === 'admin'
+      ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
+      : []),
+  ];
+  const navItems = navigationGroups.flatMap((group) =>
+    group.items.map(({ href, label }) => ({ href, label }))
+  );
+  const topbarHeader = pageHeader ?? resolveFallbackHeader(pathname, navItems);
+  const contentRailClass = 'px-4 md:px-6';
+  const pageHeaderContextValue = useMemo(() => ({ setHeader: setPageHeader }), []);
 
   if (onboardingStatus === 'checking') {
     return (
       <ToastProvider>
         <div className="app-bg flex min-h-dvh items-center justify-center px-6 py-10">
-          <div className="glass-panel flex w-full max-w-md flex-col items-center rounded-[28px] px-8 py-10 text-center">
+          <div className="surface-card flex w-full max-w-md flex-col items-center rounded-[28px] px-8 py-10 text-center">
             <div
-              className="flex h-12 w-12 items-center justify-center rounded-2xl"
+              className="flex size-12 items-center justify-center rounded-2xl"
               style={{
                 background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
                 boxShadow: '0 0 20px rgba(124,58,237,0.28), inset 0 1px 0 rgba(255,255,255,0.18)',
@@ -324,8 +457,12 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             >
               <Logo size={20} className="text-white" />
             </div>
-            <p className="mt-5 text-base font-semibold text-zinc-900 dark:text-white">Preparing your workspace view</p>
-            <p className="mt-2 text-sm text-zinc-500">Checking your workspace setup before entering JustScan.</p>
+            <p className="mt-5 text-base font-semibold text-zinc-900 dark:text-white">
+              Preparing your workspace view
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Checking your workspace setup before entering JustScan.
+            </p>
           </div>
         </div>
       </ToastProvider>
@@ -349,643 +486,712 @@ export function AppShell({ children, initialUser }: AppShellProps) {
 
   return (
     <ToastProvider>
-      {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
-      <div className="flex h-dvh app-bg overflow-hidden">
-        <aside
-          className={`relative hidden md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out sidebar-glass ${
-            desktopCollapsed ? 'w-[68px]' : 'w-72'
-          }`}
-        >
-          <div
-            className="absolute -top-10 -left-10 w-40 h-40 rounded-full pointer-events-none"
-            style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%)' }}
-          />
-          <div className="absolute inset-x-0 top-0 h-px pointer-events-none bg-gradient-to-r from-transparent via-violet-400/20 to-transparent" />
-          <div className="absolute inset-y-0 right-0 w-px pointer-events-none bg-gradient-to-b from-violet-500/10 via-transparent to-transparent" />
-
-          <div
-            className="flex items-center px-[18px] py-5 shrink-0"
-            style={{ borderBottom: '1px solid var(--border-subtle)' }}
-          >
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-              style={{
-                background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
-              }}
-            >
-              <Logo size={16} className="text-white" />
-            </div>
-            <span
-              className="ml-3 font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300"
-              style={{ maxWidth: desktopCollapsed ? 0 : 120, opacity: desktopCollapsed ? 0 : 1, color: 'var(--text-primary)' }}
-            >
-              JustScan
-            </span>
-          </div>
-
-          <div className="px-2 pt-3 pb-2 space-y-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-            <button
-              onClick={() => setSearchOpen(true)}
-              title="Search (⌘K)"
-              aria-label="Open search"
-              className={`w-full flex items-center rounded-xl px-3 py-2.5 text-sm transition-all duration-150 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 ${desktopCollapsed ? 'justify-center' : 'gap-2.5'}`}
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
-              onMouseEnter={(event) => (event.currentTarget.style.borderColor = 'rgba(167,139,250,0.3)')}
-              onMouseLeave={(event) => (event.currentTarget.style.borderColor = 'var(--glass-border)')}
-            >
-              <Search01Icon size={15} className="shrink-0" />
-              <span
-                className="flex-1 text-left overflow-hidden transition-all duration-300 text-xs"
-                style={{ maxWidth: desktopCollapsed ? 0 : 120, opacity: desktopCollapsed ? 0 : 1 }}
-              >
-                Search…
-              </span>
-              {!desktopCollapsed && (
-                <kbd className="text-[9px] font-mono px-1 py-0.5 rounded text-zinc-500"
-                  style={{ background: 'var(--row-divider)', border: '1px solid var(--glass-border)' }}>
-                  ⌘K
-                </kbd>
-              )}
-            </button>
-
-            <Link
-              href="/scans?new=1"
-              title={desktopCollapsed ? 'New Scan' : undefined}
-              className={`w-full flex items-center rounded-xl transition-all duration-150 btn-primary-sm py-2.5 ${desktopCollapsed ? 'justify-center px-2' : 'gap-2 px-3'}`}
-            >
-              <PlusSignIcon size={14} className="shrink-0" />
-              <span
-                className="overflow-hidden transition-all duration-300"
-                style={{ maxWidth: desktopCollapsed ? 0 : 120, opacity: desktopCollapsed ? 0 : 1 }}
-              >
-                New Scan
-              </span>
-            </Link>
-
-            {!desktopCollapsed && pendingInviteCount > 0 && (
-              <Link
-                href="/orgs"
-                className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-all duration-150 text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
-                style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)' }}
-              >
-                <div>
-                  <p className="font-medium text-amber-600 dark:text-amber-400">Pending invites</p>
-                  <p className="text-xs text-zinc-500">Review organization access requests</p>
-                </div>
-                <span className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-300"
-                  style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
-                  {pendingInviteCount}
-                </span>
-              </Link>
-            )}
-          </div>
-
-          <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2">
-            {navigationGroups.map(({ label, items }) => (
-              <div key={label} className="mb-1">
-                <div
-                  className="nav-section-label transition-all duration-300 overflow-hidden"
-                  style={{ maxHeight: desktopCollapsed ? 0 : 28, opacity: desktopCollapsed ? 0 : 1, paddingTop: desktopCollapsed ? 0 : undefined, paddingBottom: desktopCollapsed ? 0 : undefined }}
-                >
-                  {label}
-                </div>
-                <div className="space-y-0.5">
-                  {items.map(({ href, label: itemLabel, Icon }) => {
-                    const showAdminTree = href === '/admin';
-                    const active = isActiveRoute(pathname, href);
-                    const popoverKey = `desktop:${href}`;
-
-                    if (showAdminTree && !desktopCollapsed) {
-                      return <AdminSidebarTree key="admin-tree-desktop" showLabel={false} />;
-                    }
-
-                    if (desktopCollapsed && showAdminTree) {
-                      return (
-                        <Link
-                          key={href}
-                          href={href}
-                          aria-label={itemLabel}
-                          onMouseEnter={(event) => openAnchoredNavPopover(popoverKey, event.currentTarget.getBoundingClientRect())}
-                          onMouseLeave={scheduleNavPopoverClose}
-                          className={`relative flex w-full items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                          style={active ? {
-                            background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                            boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
-                          } : undefined}
-                        >
-                          {!active && (
-                            <span
-                              className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                              style={{ background: 'var(--row-hover)' }}
-                            />
-                          )}
-                          {active ? (
-                            <span
-                              className="absolute left-0 inset-y-2 w-0.5 rounded-full"
-                              style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
-                            />
-                          ) : null}
-                          <Icon size={18} className="shrink-0 relative z-10" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
-                        </Link>
-                      );
-                    }
-
-                    if (desktopCollapsed) {
-                      return (
-                        <Link
-                          key={href}
-                          href={href}
-                          aria-label={itemLabel}
-                          onMouseEnter={(event) => openAnchoredNavPopover(popoverKey, event.currentTarget.getBoundingClientRect())}
-                          onMouseLeave={scheduleNavPopoverClose}
-                          className={`relative flex w-full items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                          style={active ? {
-                            background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                            boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
-                          } : undefined}
-                        >
-                          {!active && (
-                            <span
-                              className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                              style={{ background: 'var(--row-hover)' }}
-                            />
-                          )}
-                          {active ? (
-                            <span
-                              className="absolute left-0 inset-y-2 w-0.5 rounded-full"
-                              style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
-                            />
-                          ) : null}
-                          <Icon size={18} className="shrink-0 relative z-10" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
-                        </Link>
-                      );
-                    }
-
-                    return (
-                      <Link
-                        key={href}
-                        href={href}
-                        className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 overflow-hidden whitespace-nowrap group ${active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                        style={active ? {
-                          background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
-                        } : undefined}
-                      >
-                        {!active && (
-                          <span
-                            className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                            style={{ background: 'var(--row-hover)' }}
-                          />
-                        )}
-                        {active && (
-                          <span
-                            className="absolute left-0 inset-y-2 w-0.5 rounded-full"
-                            style={{ background: 'linear-gradient(180deg, #a78bfa, #7c3aed)' }}
-                          />
-                        )}
-                        <Icon size={18} className="shrink-0 relative z-10" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
-                        <span
-                          className="flex-1 overflow-hidden transition-all duration-300 relative z-10"
-                          style={{ maxWidth: desktopCollapsed ? 0 : 160, opacity: desktopCollapsed ? 0 : 1 }}
-                        >
-                          {itemLabel}
-                        </span>
-                        {href === '/orgs' && pendingInviteCount > 0 && !desktopCollapsed && (
-                          <span className="relative z-10 ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
-                            style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
-                            {pendingInviteCount}
-                          </span>
-                        )}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </nav>
-
-          {desktopCollapsed && hoveredNavPopover === 'desktop:/admin' && hoveredNavPopoverAnchor ? (
-            <div
-              className="fixed z-[70] hidden pl-2 md:block"
-              style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
-              onMouseEnter={cancelNavPopoverClose}
-              onMouseLeave={scheduleNavPopoverClose}
-            >
-              <div
-                className="glass-modal w-[320px] overflow-hidden rounded-[24px] p-3"
-                style={{ borderColor: 'var(--modal-border)', maxHeight: hoveredNavPopoverAnchor.maxHeight }}
-              >
-                <div className="space-y-2 overflow-y-auto pr-1" style={{ maxHeight: hoveredNavPopoverAnchor.maxHeight - 32 }}>
-                  <p className="px-1 text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>
-                    Admin
-                  </p>
-                  <AdminSidebarTree condensed showLabel={false} showRoot={false} onNavigate={() => {
-                    setHoveredNavPopover(null);
-                    setHoveredNavPopoverAnchor(null);
-                  }} />
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {desktopCollapsed && hoveredLeafNavItem && hoveredNavPopoverAnchor ? (
-            <div
-              className="pointer-events-none fixed z-[70] hidden pl-2 md:block"
-              style={{ top: hoveredNavPopoverAnchor.top, left: hoveredNavPopoverAnchor.left }}
-            >
-              <div className="glass-modal w-[220px] rounded-[20px] px-3 py-3" style={{ borderColor: 'var(--modal-border)' }}>
-                <div className="flex items-center gap-3 text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                  <hoveredLeafNavItem.Icon size={18} className="shrink-0" style={{ color: isActiveRoute(pathname, hoveredLeafNavItem.href) ? '#a78bfa' : 'var(--text-faint)' }} />
-                  <span className="flex-1">{hoveredLeafNavItem.label}</span>
-                  {hoveredLeafNavItem.href === '/orgs' && pendingInviteCount > 0 ? (
-                    <span className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
-                      style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
-                      {pendingInviteCount}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="shrink-0 px-2 pb-3 pt-2 space-y-1.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-            <Dropdown>
-              <Dropdown.Trigger
-                className={`w-full flex items-center rounded-xl transition-all duration-150 outline-none ${desktopCollapsed ? 'justify-center py-2' : 'gap-2.5 px-2 py-2.5'}`}
-                style={{ background: 'transparent' }}
-                aria-label={workspaceTitle}
-                onMouseEnter={(event: any) => (event.currentTarget.style.background = 'var(--row-hover)')}
-                onMouseLeave={(event: any) => (event.currentTarget.style.background = 'transparent')}
-              >
-                <div className="relative shrink-0" title={desktopCollapsed ? workspaceTitle : undefined}>
-                  <div
-                    className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
-                    style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.12)' }}
-                  >
-                    <GridTableIcon size={16} />
-                  </div>
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full" style={workspaceMarkerStyle} />
-                </div>
-                {!desktopCollapsed && (
-                  <>
-                    <div className="flex min-w-0 flex-1 flex-col justify-center pr-1 text-left">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
-                      <p className="mt-0.5 truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{scopeLabel}</p>
-                    </div>
-                    <ArrowDown01Icon size={14} className="shrink-0 text-zinc-500" />
-                  </>
-                )}
-              </Dropdown.Trigger>
-
-              <Dropdown.Popover className="min-w-[220px]" placement={desktopCollapsed ? 'right bottom' : 'top start'}>
-                <Dropdown.Menu
-                  onAction={(key) => handleScopeChange(key as string)}
-                  selectionMode="single"
-                  selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
-                >
-                  <Dropdown.Item id="personal" textValue="Personal workspace">
-                    <Label>Personal workspace</Label>
-                  </Dropdown.Item>
-                  {orgs.length > 0 && (
-                    <Dropdown.Section>
-                      <Header>Organizations</Header>
-                      {orgs.map((org) => (
-                        <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
-                          <Label>{org.name}</Label>
-                        </Dropdown.Item>
-                      ))}
-                    </Dropdown.Section>
-                  )}
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
-
-            <Dropdown>
-              <Dropdown.Trigger className={`w-full flex items-center ${desktopCollapsed ? 'justify-center' : 'gap-2.5 px-2'} py-2 rounded-xl transition-all duration-150 outline-none`}
-                style={{ background: 'transparent' }}
-                aria-label={desktopCollapsed ? (user?.username ?? user?.email ?? 'User menu') : 'Open user menu'}
-                onMouseEnter={(event: any) => (event.currentTarget.style.background = 'var(--row-hover)')}
-                onMouseLeave={(event: any) => (event.currentTarget.style.background = 'transparent')}
-              >
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
-                  title={desktopCollapsed ? (user?.username ?? user?.email ?? 'User menu') : undefined}
-                  style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
-                >
-                  {initials}
-                </div>
-                {!desktopCollapsed && (
-                   <div className="flex-1 flex flex-col justify-center min-w-0 pl-1.5 pr-1">
-                     <div className="flex items-center justify-between w-full">
-                       <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200 truncate">{user?.username ?? user?.email ?? 'User'}</p>
-                     </div>
-                     <p className="text-[11px] text-zinc-500 truncate text-left">{user?.role ?? 'user'}</p>
-                   </div>
-                )}
-              </Dropdown.Trigger>
-
-              <Dropdown.Popover className="min-w-[200px]" placement="right bottom">
-                <Dropdown.Menu onAction={(key) => {
-                   if (key === 'settings') router.push('/settings');
-                   if (key === 'api-docs') window.open('/swagger/index.html', '_blank');
-                   if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
-                   if (key === 'signout') handleLogout();
-                }}>
-                  <Dropdown.Item id="settings" textValue="Settings">
-                    <div className="flex items-center gap-2">
-                       <Settings01Icon size={14} className="text-zinc-500" />
-                       <Label>Settings</Label>
-                    </div>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="theme" textValue="Theme">
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-2">
-                        {mounted ? (isDark ? <Sun01Icon size={14} className="text-zinc-500" /> : <Moon02Icon size={14} className="text-zinc-500" />) : <span aria-hidden className="block h-[14px] w-[14px]" />}
-                        <Label>Theme</Label>
-                      </div>
-                    </div>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="api-docs" textValue="API Docs">
-                    <div className="flex items-center gap-2">
-                      <FileExportIcon size={14} className="text-zinc-500" />
-                      <Label>API Docs</Label>
-                    </div>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="signout" textValue="Sign Out" className="text-danger flex items-center gap-2 mt-1 border-t border-zinc-200 dark:border-zinc-800 pt-1">
-                    <div className="flex items-center gap-2">
-                      <Logout02Icon size={14} />
-                      <Label className="text-danger">Sign Out</Label>
-                    </div>
-                  </Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
-
-            <button
-              onClick={toggleCollapsed}
-              className="w-full flex items-center justify-center h-8 rounded-xl transition-all duration-150 text-zinc-400 hover:text-zinc-700 dark:text-zinc-600 dark:hover:text-zinc-300"
-              onMouseEnter={(event) => {
-                event.currentTarget.style.background = 'var(--row-hover)';
-              }}
-              onMouseLeave={(event) => {
-                event.currentTarget.style.background = 'transparent';
-              }}
-              title={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {desktopCollapsed ? <ArrowRight01Icon size={14} /> : <ArrowLeft01Icon size={14} />}
-            </button>
-          </div>
-        </aside>
-
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div
-            className="sticky top-0 z-20 flex items-center gap-2 px-4 py-3 md:hidden"
+      <PageHeaderContext.Provider value={pageHeaderContextValue}>
+        {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
+        <div className="flex h-dvh app-bg overflow-hidden">
+          <Card
+            className={`relative hidden rounded-none rounded-br-3xl bg-surface md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
+              desktopCollapsed ? 'w-[68px]' : 'w-72'
+            }`}
             style={{
-              background: isDark ? 'rgba(9,9,11,0.82)' : 'rgba(244,244,245,0.88)',
-              backdropFilter: 'blur(18px)',
-              WebkitBackdropFilter: 'blur(18px)',
-              borderBottom: '1px solid var(--border-subtle)',
+              border: 'none',
+              boxShadow: 'none',
             }}
           >
-            <Drawer state={mobileNav}>
-              <Button aria-label="Open navigation menu" className="rounded-xl" isIconOnly variant="secondary">
-                <Menu01Icon size={18} />
-              </Button>
-              <Drawer.Backdrop className="md:hidden" variant="blur">
-                <Drawer.Content className="md:hidden" placement="left">
-                  <Drawer.Dialog className="flex h-full w-[min(88vw,320px)] flex-col sidebar-glass">
-                    <Drawer.Header
-                      className="flex items-center justify-between px-4 py-4"
-                      style={{ borderBottom: '1px solid var(--border-subtle)' }}
+            <div className="absolute -top-10 -left-10 size-40 rounded-full pointer-events-none" />
+            <div className="absolute inset-x-0 top-0 h-px pointer-events-none" />
+
+            <div className="shrink-0 px-2 pb-1 pt-2">
+              <Dropdown>
+                <Dropdown.Trigger
+                  className={`group w-full flex items-center rounded-xl transition-all duration-150 outline-none ${desktopCollapsed ? 'justify-center py-1.5' : 'gap-2 px-2 py-1.5'}`}
+                  style={{
+                    background: desktopCollapsed
+                      ? undefined
+                      : 'linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, transparent) 0%, color-mix(in oklab, var(--accent) 5%, transparent) 100%)',
+                    border: desktopCollapsed
+                      ? 'none'
+                      : '1px solid color-mix(in oklab, var(--accent) 24%, transparent)',
+                    boxShadow: desktopCollapsed ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.05)',
+                  }}
+                  aria-label={workspaceTitle}
+                >
+                  <div
+                    className="relative shrink-0"
+                    title={desktopCollapsed ? workspaceTitle : undefined}
+                  >
+                    <Avatar
+                      className="size-7 rounded-lg"
+                      color={activeWorkspaceColor}
+                      variant="soft"
                     >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                          style={{
-                            background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                            boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
-                          }}
-                        >
-                          <Logo size={18} className="text-white" />
-                        </div>
-                        <div>
-                          <Drawer.Heading className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                            JustScan
-                          </Drawer.Heading>
-                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                            Scan, watch, and manage
-                          </p>
-                        </div>
+                      <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
+                    </Avatar>
+                  </div>
+                  {!desktopCollapsed ? (
+                    <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                      <p className="min-w-0 flex-1 truncate text-sm font-medium tracking-tight text-zinc-700 dark:text-zinc-100">
+                        {scopeLabel}
+                      </p>
+                      <ArrowDown01Icon
+                        size={14}
+                        className="shrink-0 text-zinc-500 transition-transform duration-150 group-data-[pressed=true]:translate-y-[1px]"
+                      />
+                    </div>
+                  ) : null}
+                </Dropdown.Trigger>
+
+                <Dropdown.Popover
+                  className="min-w-[220px]"
+                  placement={desktopCollapsed ? 'right top' : 'bottom start'}
+                >
+                  <Dropdown.Menu
+                    onAction={(key) => handleScopeChange(key as string)}
+                    selectionMode="single"
+                    selectedKeys={
+                      new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])
+                    }
+                  >
+                    <Dropdown.Item id="personal" textValue="Personal workspace">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="size-6 rounded-lg" color="default" variant="soft">
+                          <Avatar.Fallback>P</Avatar.Fallback>
+                        </Avatar>
+                        <Label>Personal workspace</Label>
                       </div>
-                      <Drawer.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
-                    </Drawer.Header>
-                    <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
-                      <div className="space-y-4">
-                        <Dropdown>
-                          <Dropdown.Trigger className="w-full flex items-center justify-between rounded-xl px-3 py-3 text-sm transition-all duration-150 outline-none text-left"
-                            style={{ background: 'var(--row-hover)', border: '1px solid var(--glass-border)' }}
-                          >
-                            <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                              <div className="relative shrink-0">
-                                <div
-                                  className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-300"
-                                  style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.12)' }}
+                    </Dropdown.Item>
+                    {orgs.length > 0 && (
+                      <Dropdown.Section>
+                        <Header>Organizations</Header>
+                        {orgs.map((org) => (
+                          <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
+                            <div className="flex items-center gap-2">
+                              <Avatar
+                                className="size-6 rounded-lg"
+                                color={workspaceColorFor('org', org.name)}
+                                variant="soft"
+                              >
+                                <Avatar.Fallback>
+                                  {org.name.trim().charAt(0).toUpperCase() || 'O'}
+                                </Avatar.Fallback>
+                              </Avatar>
+                              <Label>{org.name}</Label>
+                            </div>
+                          </Dropdown.Item>
+                        ))}
+                      </Dropdown.Section>
+                    )}
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
+            </div>
+
+            <nav
+              className={`flex-1 overflow-y-auto overflow-x-hidden pb-2 pt-1.5${desktopCollapsed ? '' : ' px-2'}`}
+            >
+              {navigationGroups.map(({ label, items }) => (
+                <div
+                  key={label}
+                  className="mb-1 border-b border-white/5 pb-2 last:border-b-0 last:pb-0"
+                >
+                  <div
+                    className="nav-section-label px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-[0.1em] leading-none transition-all duration-300 overflow-hidden"
+                    style={{
+                      maxHeight: desktopCollapsed ? 0 : 22,
+                      opacity: desktopCollapsed ? 0 : 1,
+                      color: 'var(--text-faint)',
+                      paddingTop: desktopCollapsed ? 0 : undefined,
+                      paddingBottom: desktopCollapsed ? 0 : undefined,
+                    }}
+                  >
+                    {label}
+                  </div>
+                  <div className="space-y-0.5">
+                    {items.map(({ href, label: itemLabel, Icon }) => {
+                      const showAdminTree = href === '/admin';
+                      const active = isActiveRoute(pathname, href);
+
+                      if (showAdminTree && !desktopCollapsed) {
+                        return <AdminSidebarTree key="admin-tree-desktop" showLabel={false} />;
+                      }
+
+                      if (desktopCollapsed && showAdminTree) {
+                        return (
+                          <div key={href}>
+                            <Popover>
+                              <Popover.Trigger aria-label={itemLabel} className="block w-full">
+                                <Button
+                                  aria-current={active ? 'page' : undefined}
+                                  aria-label={itemLabel}
+                                  className={`group relative h-10 w-full rounded-xl ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                                  isIconOnly
+                                  style={active ? activeNavStyle : undefined}
+                                  variant="ghost"
                                 >
-                                  <GridTableIcon size={16} />
+                                  {!active && (
+                                    <span
+                                      className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                                      style={{ background: 'var(--row-hover)' }}
+                                    />
+                                  )}
+                                  <Icon
+                                    size={18}
+                                    className="shrink-0 relative z-10"
+                                    style={{
+                                      color: active
+                                        ? 'var(--accent-soft-foreground)'
+                                        : 'var(--text-faint)',
+                                    }}
+                                  />
+                                </Button>
+                              </Popover.Trigger>
+                              <Popover.Content
+                                placement="right top"
+                                className="bg-surface-secondary"
+                              >
+                                <Popover.Dialog>
+                                  <div className="w-[260px] p-2">
+                                    <p
+                                      className="px-2 pb-1.5 text-[11px] uppercase tracking-[0.18em]"
+                                      style={{ color: 'var(--text-faint)' }}
+                                    >
+                                      Admin
+                                    </p>
+                                    <AdminSidebarTree
+                                      condensed
+                                      showLabel={false}
+                                      showRoot={false}
+                                    />
+                                  </div>
+                                </Popover.Dialog>
+                              </Popover.Content>
+                            </Popover>
+                          </div>
+                        );
+                      }
+
+                      if (desktopCollapsed) {
+                        return (
+                          <div key={href}>
+                            <Tooltip delay={0}>
+                              <Tooltip.Trigger aria-label={itemLabel} className="block w-full">
+                                <SidebarNavLink
+                                  href={href}
+                                  itemLabel={itemLabel}
+                                  Icon={Icon}
+                                  mode="collapsed"
+                                  active={active}
+                                  inviteCount={pendingInviteCount}
+                                />
+                              </Tooltip.Trigger>
+                              <Tooltip.Content placement="right">{itemLabel}</Tooltip.Content>
+                            </Tooltip>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <SidebarNavLink
+                          key={href}
+                          href={href}
+                          itemLabel={itemLabel}
+                          Icon={Icon}
+                          mode="desktop"
+                          active={active}
+                          inviteCount={pendingInviteCount}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
+
+            <div
+              className={`flex min-h-12 items-center gap-2.5 py-2 shrink-0 ${desktopCollapsed ? 'justify-center px-0' : 'px-3'}`}
+              style={{ borderTop: '1px solid var(--border-subtle)' }}
+            >
+              <div
+                className="size-8 rounded-xl flex items-center justify-center shrink-0"
+                style={{
+                  background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)',
+                  boxShadow:
+                    '0 0 12px color-mix(in oklab, var(--accent) 50%, transparent), inset 0 1px 0 rgba(255,255,255,0.15)',
+                }}
+              >
+                <Logo size={16} className="text-white" />
+              </div>
+              <span
+                className={`font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300 ${desktopCollapsed ? 'ml-0' : 'ml-3'}`}
+                style={{
+                  maxWidth: desktopCollapsed ? 0 : 120,
+                  opacity: desktopCollapsed ? 0 : 1,
+                  color: 'var(--text-primary)',
+                }}
+              >
+                JustScan
+              </span>
+            </div>
+          </Card>
+
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div
+              className={`bg-surface rounded-br-3xl flex min-h-11 items-center gap-2.5 py-1.5 ${contentRailClass}`}
+            >
+              <Button
+                isIconOnly
+                onPress={toggleCollapsed}
+                variant="ghost"
+                aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {desktopCollapsed ? (
+                  <SidebarRight01Icon size={24} />
+                ) : (
+                  <SidebarLeft01Icon size={24} />
+                )}
+              </Button>
+
+              <Drawer state={mobileNav}>
+                <Button
+                  aria-label="Open navigation menu"
+                  className="rounded-lg md:hidden"
+                  isIconOnly
+                  variant="secondary"
+                >
+                  <Menu01Icon size={16} />
+                </Button>
+                <Drawer.Backdrop className="md:hidden" variant="blur">
+                  <Drawer.Content className="md:hidden" placement="left">
+                    <Drawer.Dialog className="flex h-full w-[min(88vw,320px)] flex-col surface-sidebar">
+                      <Drawer.Header
+                        className="flex items-center justify-between p-4"
+                        style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="size-9 rounded-xl flex items-center justify-center shrink-0"
+                            style={{
+                              background:
+                                'linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)',
+                              boxShadow:
+                                '0 0 12px color-mix(in oklab, var(--accent) 50%, transparent), inset 0 1px 0 rgba(255,255,255,0.15)',
+                            }}
+                          >
+                            <Logo size={18} className="text-white" />
+                          </div>
+                          <div>
+                            <Drawer.Heading
+                              className="text-sm font-semibold"
+                              style={{ color: 'var(--text-primary)' }}
+                            >
+                              JustScan
+                            </Drawer.Heading>
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                              Scan, watch, and manage
+                            </p>
+                          </div>
+                        </div>
+                        <Drawer.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                      </Drawer.Header>
+                      <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
+                        <div className="space-y-4">
+                          <Dropdown>
+                            <Dropdown.Trigger
+                              className="w-full flex items-center justify-between rounded-xl p-3 text-sm transition-all duration-150 outline-none text-left"
+                              style={{
+                                background: 'var(--row-hover)',
+                                border: '1px solid var(--surface-border)',
+                              }}
+                            >
+                              <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                                <div className="relative shrink-0">
+                                  <Avatar
+                                    className="size-8 rounded-xl"
+                                    color={activeWorkspaceColor}
+                                    variant="soft"
+                                  >
+                                    <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
+                                  </Avatar>
                                 </div>
-                                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full" style={workspaceMarkerStyle} />
+                                <div className="flex flex-col min-w-0 flex-1">
+                                  <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                                    Workspace
+                                  </p>
+                                  <span className="mt-0.5 truncate text-[12px] font-medium text-zinc-700 dark:text-zinc-200">
+                                    {scopeLabel}
+                                  </span>
+                                </div>
                               </div>
-                              <div className="flex flex-col min-w-0 flex-1">
-                                <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace</p>
-                                <span className="mt-0.5 truncate text-[12px] font-medium text-zinc-700 dark:text-zinc-200">{scopeLabel}</span>
+                              <ArrowDown01Icon size={16} className="text-zinc-500 shrink-0 ml-2" />
+                            </Dropdown.Trigger>
+                            <Dropdown.Popover className="w-[min(80vw,300px)]">
+                              <Dropdown.Menu
+                                onAction={(key) => handleScopeChange(key as string)}
+                                selectionMode="single"
+                                selectedKeys={
+                                  new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])
+                                }
+                              >
+                                <Dropdown.Item id="personal" textValue="Personal workspace">
+                                  <div className="flex items-center gap-2">
+                                    <Avatar
+                                      className="size-6 rounded-lg"
+                                      color="default"
+                                      variant="soft"
+                                    >
+                                      <Avatar.Fallback>P</Avatar.Fallback>
+                                    </Avatar>
+                                    <Label>Personal workspace</Label>
+                                  </div>
+                                </Dropdown.Item>
+                                {orgs.length > 0 && (
+                                  <Dropdown.Section>
+                                    <Header>Organizations</Header>
+                                    {orgs.map((org) => (
+                                      <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
+                                        <div className="flex items-center gap-2">
+                                          <Avatar
+                                            className="size-6 rounded-lg"
+                                            color={workspaceColorFor('org', org.name)}
+                                            variant="soft"
+                                          >
+                                            <Avatar.Fallback>
+                                              {org.name.trim().charAt(0).toUpperCase() || 'O'}
+                                            </Avatar.Fallback>
+                                          </Avatar>
+                                          <Label>{org.name}</Label>
+                                        </div>
+                                      </Dropdown.Item>
+                                    ))}
+                                  </Dropdown.Section>
+                                )}
+                              </Dropdown.Menu>
+                            </Dropdown.Popover>
+                          </Dropdown>
+
+                          {pendingInviteCount > 0 && (
+                            <Link
+                              href="/orgs"
+                              className="flex items-center justify-between rounded-xl p-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
+                              onClick={() => mobileNav.close()}
+                              style={{
+                                background: 'color-mix(in oklab, var(--warning) 10%, transparent)',
+                                border:
+                                  '1px solid color-mix(in oklab, var(--warning) 24%, transparent)',
+                              }}
+                            >
+                              <div>
+                                <p>Pending invites</p>
+                                <p className="text-xs font-normal text-zinc-500">
+                                  Review organization access requests
+                                </p>
+                              </div>
+                              <InviteCountChip count={pendingInviteCount} />
+                            </Link>
+                          )}
+
+                          {navigationGroups.map(({ label, items }) => (
+                            <div key={label} className="space-y-1.5">
+                              <p
+                                className="px-2 text-[11px] uppercase tracking-[0.18em]"
+                                style={{ color: 'var(--text-faint)' }}
+                              >
+                                {label}
+                              </p>
+                              <div className="space-y-1">
+                                {items.map(({ href, label: itemLabel, Icon }) => {
+                                  const showAdminTree = href === '/admin';
+
+                                  if (showAdminTree) {
+                                    return (
+                                      <AdminSidebarTree
+                                        key="admin-tree-mobile"
+                                        condensed
+                                        onNavigate={() => mobileNav.close()}
+                                        showLabel={false}
+                                      />
+                                    );
+                                  }
+
+                                  return (
+                                    <SidebarNavLink
+                                      key={href}
+                                      href={href}
+                                      itemLabel={itemLabel}
+                                      Icon={Icon}
+                                      mode="mobile"
+                                      active={isActiveRoute(pathname, href)}
+                                      inviteCount={pendingInviteCount}
+                                      onNavigate={() => mobileNav.close()}
+                                    />
+                                  );
+                                })}
                               </div>
                             </div>
-                            <ArrowDown01Icon size={16} className="text-zinc-500 shrink-0 ml-2" />
+                          ))}
+                        </div>
+                      </Drawer.Body>
+                      <Drawer.Footer
+                        className="flex flex-col gap-2 p-3"
+                        style={{ borderTop: '1px solid var(--border-subtle)' }}
+                      >
+                        <Dropdown>
+                          <Dropdown.Trigger
+                            className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 outline-none text-left"
+                            style={{ background: 'var(--row-hover)' }}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div
+                                className="size-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
+                                style={{
+                                  background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
+                                  color: 'var(--accent-soft-foreground)',
+                                  border:
+                                    '1px solid color-mix(in oklab, var(--accent) 18%, transparent)',
+                                }}
+                              >
+                                {initials}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                                  {user?.username ?? user?.email ?? 'User'}
+                                </p>
+                                <p className="truncate text-[11px] text-zinc-500">
+                                  {user?.role ?? 'user'}
+                                </p>
+                              </div>
+                            </div>
+                            <Settings01Icon size={16} className="text-zinc-400 shrink-0" />
                           </Dropdown.Trigger>
-                          <Dropdown.Popover className="w-[min(80vw,300px)]">
+                          <Dropdown.Popover className="w-[min(80vw,300px)]" placement="top end">
                             <Dropdown.Menu
-                              onAction={(key) => handleScopeChange(key as string)}
-                              selectionMode="single"
-                              selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
+                              onAction={(key) => {
+                                if (key === 'settings') {
+                                  router.push('/profile');
+                                  mobileNav.close();
+                                }
+                                if (key === 'api-docs') {
+                                  window.open('/swagger/index.html', '_blank');
+                                  mobileNav.close();
+                                }
+                                if (key === 'theme') {
+                                  setTheme(isDark ? 'light' : 'dark');
+                                }
+                                if (key === 'signout') {
+                                  handleLogout();
+                                  mobileNav.close();
+                                }
+                              }}
                             >
-                              <Dropdown.Item id="personal" textValue="Personal workspace">
-                                <Label>Personal workspace</Label>
+                              <Dropdown.Item key="settings" id="settings" textValue="Settings">
+                                <div className="flex items-center gap-2">
+                                  <Settings01Icon size={14} className="text-zinc-500" />
+                                  <Label>Profile</Label>
+                                </div>
                               </Dropdown.Item>
-                              {orgs.length > 0 && (
-                                <Dropdown.Section>
-                                  <Header>Organizations</Header>
-                                  {orgs.map((org) => (
-                                    <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
-                                      <Label>{org.name}</Label>
-                                    </Dropdown.Item>
-                                  ))}
-                                </Dropdown.Section>
-                              )}
+                              <Dropdown.Item key="theme" id="theme" textValue="Theme">
+                                <div className="flex items-center justify-between w-full">
+                                  <div className="flex items-center gap-2">
+                                    {mounted ? (
+                                      isDark ? (
+                                        <Sun01Icon size={14} className="text-zinc-500" />
+                                      ) : (
+                                        <Moon02Icon size={14} className="text-zinc-500" />
+                                      )
+                                    ) : (
+                                      <span aria-hidden className="block size-[14px]" />
+                                    )}
+                                    <Label>Theme</Label>
+                                  </div>
+                                </div>
+                              </Dropdown.Item>
+                              <Dropdown.Item key="api-docs" id="api-docs" textValue="API Docs">
+                                <div className="flex items-center gap-2">
+                                  <FileExportIcon size={14} className="text-zinc-500" />
+                                  <Label>API Docs</Label>
+                                </div>
+                              </Dropdown.Item>
+                              <Dropdown.Section>
+                                <Separator className="my-1" />
+                                <Dropdown.Item
+                                  key="signout"
+                                  id="signout"
+                                  textValue="Sign Out"
+                                  className="text-danger"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Logout02Icon size={14} />
+                                    <Label className="text-danger">Sign Out</Label>
+                                  </div>
+                                </Dropdown.Item>
+                              </Dropdown.Section>
                             </Dropdown.Menu>
                           </Dropdown.Popover>
                         </Dropdown>
+                      </Drawer.Footer>
+                    </Drawer.Dialog>
+                  </Drawer.Content>
+                </Drawer.Backdrop>
+              </Drawer>
+              <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                <Button
+                  aria-label="Open search"
+                  className="rounded-full text-zinc-700 dark:text-zinc-200 md:hidden"
+                  isIconOnly
+                  onPress={() => setSearchOpen(true)}
+                  variant="secondary"
+                >
+                  <Search01Icon size={14} className="text-current" />
+                </Button>
 
-                        {pendingInviteCount > 0 && (
-                          <Link
-                            href="/orgs"
-                            className="flex items-center justify-between rounded-xl px-3 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
-                            onClick={() => mobileNav.close()}
-                            style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)' }}
-                          >
-                            <div>
-                              <p>Pending invites</p>
-                              <p className="text-xs font-normal text-zinc-500">Review organization access requests</p>
-                            </div>
-                            <span className="inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
-                              style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
-                              {pendingInviteCount}
-                            </span>
-                          </Link>
-                        )}
+                <Button
+                  onPress={() => setSearchOpen(true)}
+                  variant="tertiary"
+                  className="hidden md:flex md:w-[250px] lg:w-[280px] justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <Search01Icon size={14} />
+                    <Label className="inline-flex">Search...</Label>
+                  </div>
+                  <Kbd>
+                    <Kbd.Abbr keyValue="command" />
+                    <Kbd.Content>K</Kbd.Content>
+                  </Kbd>
+                </Button>
 
-                        {navigationGroups.map(({ label, items }) => (
-                          <div key={label} className="space-y-1.5">
-                            <p className="px-2 text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-faint)' }}>
-                              {label}
-                            </p>
-                            <div className="space-y-1">
-                              {items.map(({ href, label: itemLabel, Icon }) => {
-                                const showAdminTree = href === '/admin';
-                                const active = isActiveRoute(pathname, href);
+                <Dropdown>
+                  <Dropdown.Trigger>
+                    <Avatar variant="soft" color="accent" className="size-9">
+                      <Avatar.Fallback>{initials}</Avatar.Fallback>
+                    </Avatar>
+                  </Dropdown.Trigger>
 
-                                if (showAdminTree) {
-                                  return <AdminSidebarTree key="admin-tree-mobile" condensed onNavigate={() => mobileNav.close()} showLabel={false} />;
-                                }
-
-                                return (
-                                  <Link
-                                    key={href}
-                                    href={href}
-                                    className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all ${
-                                      active ? 'text-violet-600 dark:text-violet-100' : 'text-zinc-700 dark:text-zinc-300'
-                                    }`}
-                                    onClick={() => mobileNav.close()}
-                                    style={active
-                                      ? {
-                                          background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                                          boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.18)',
-                                        }
-                                      : { background: 'var(--row-hover)' }}
-                                  >
-                                    <Icon size={18} className="shrink-0" style={{ color: active ? '#a78bfa' : 'var(--text-faint)' }} />
-                                    <span className="flex-1">{itemLabel}</span>
-                                    {href === '/orgs' && pendingInviteCount > 0 && (
-                                      <span className="ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
-                                        style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
-                                        {pendingInviteCount}
-                                      </span>
-                                    )}
-                                  </Link>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </Drawer.Body>
-                    <Drawer.Footer
-                      className="flex flex-col gap-2 px-3 py-3"
-                      style={{ borderTop: '1px solid var(--border-subtle)' }}
+                  <Dropdown.Popover className="min-w-[200px]" placement="bottom end">
+                    <Dropdown.Menu
+                      onAction={(key) => {
+                        if (key === 'settings') router.push('/profile');
+                        if (key === 'api-docs') window.open('/swagger/index.html', '_blank');
+                        if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
+                        if (key === 'signout') handleLogout();
+                      }}
                     >
-                      <Dropdown>
-                        <Dropdown.Trigger className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 outline-none text-left" style={{ background: 'var(--row-hover)' }}>
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <div
-                              className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
-                              style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.18)' }}
-                            >
-                              {initials}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{user?.username ?? user?.email ?? 'User'}</p>
-                              <p className="truncate text-[11px] text-zinc-500">{user?.role ?? 'user'}</p>
-                            </div>
-                          </div>
-                          <Settings01Icon size={16} className="text-zinc-400 shrink-0" />
-                        </Dropdown.Trigger>
-                        <Dropdown.Popover className="w-[min(80vw,300px)]" placement="top end">
-                          <Dropdown.Menu onAction={(key) => {
-                             if (key === 'settings') { router.push('/settings'); mobileNav.close(); }
-                             if (key === 'api-docs') { window.open('/swagger/index.html', '_blank'); mobileNav.close(); }
-                             if (key === 'theme') { setTheme(isDark ? 'light' : 'dark'); }
-                             if (key === 'signout') { handleLogout(); mobileNav.close(); }
-                          }}>
-                            <Dropdown.Item key="settings" id="settings" textValue="Settings">
-                              <div className="flex items-center gap-2">
-                                 <Settings01Icon size={14} className="text-zinc-500" />
-                                 <Label>Settings</Label>
-                              </div>
-                            </Dropdown.Item>
-                            <Dropdown.Item key="theme" id="theme" textValue="Theme">
-                              <div className="flex items-center justify-between w-full">
-                                <div className="flex items-center gap-2">
-                                  {mounted ? (isDark ? <Sun01Icon size={14} className="text-zinc-500" /> : <Moon02Icon size={14} className="text-zinc-500" />) : <span aria-hidden className="block h-[14px] w-[14px]" />}
-                                  <Label>Theme</Label>
-                                </div>
-                              </div>
-                            </Dropdown.Item>
-                            <Dropdown.Item key="api-docs" id="api-docs" textValue="API Docs">
-                              <div className="flex items-center gap-2">
-                                <FileExportIcon size={14} className="text-zinc-500" />
-                                <Label>API Docs</Label>
-                              </div>
-                            </Dropdown.Item>
-                            <Dropdown.Section>
-                              <Separator className="my-1" />
-                              <Dropdown.Item key="signout" id="signout" textValue="Sign Out" className="text-danger">
-                                <div className="flex items-center gap-2">
-                                  <Logout02Icon size={14} />
-                                  <Label className="text-danger">Sign Out</Label>
-                                </div>
-                              </Dropdown.Item>
-                            </Dropdown.Section>
-                          </Dropdown.Menu>
-                        </Dropdown.Popover>
-                      </Dropdown>
-                    </Drawer.Footer>
-                  </Drawer.Dialog>
-                </Drawer.Content>
-              </Drawer.Backdrop>
-            </Drawer>
-
-            <Link className="flex items-center gap-2 min-w-0" href="/dashboard">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{
-                  background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                  boxShadow: '0 0 12px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
-                }}
-              >
-                <Logo size={18} className="text-white" />
+                      <Dropdown.Item key="settings" id="settings" textValue="Settings">
+                        <div className="flex items-center gap-2">
+                          <Settings01Icon size={14} className="text-zinc-500" />
+                          <Label>Profile</Label>
+                        </div>
+                      </Dropdown.Item>
+                      <Dropdown.Item key="theme" id="theme" textValue="Theme">
+                        <div className="flex items-center gap-2">
+                          {mounted ? (
+                            isDark ? (
+                              <Sun01Icon size={14} className="text-zinc-500" />
+                            ) : (
+                              <Moon02Icon size={14} className="text-zinc-500" />
+                            )
+                          ) : (
+                            <span aria-hidden className="block size-[14px]" />
+                          )}
+                          <Label>{themeToggleTitle}</Label>
+                        </div>
+                      </Dropdown.Item>
+                      <Dropdown.Item key="api-docs" id="api-docs" textValue="API Docs">
+                        <div className="flex items-center gap-2">
+                          <FileExportIcon size={14} className="text-zinc-500" />
+                          <Label>API Docs</Label>
+                        </div>
+                      </Dropdown.Item>
+                      <Dropdown.Item
+                        key="signout"
+                        id="signout"
+                        textValue="Sign Out"
+                        className="text-danger flex items-center gap-2 mt-1 border-t border-zinc-200 dark:border-zinc-800 pt-1"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Logout02Icon size={14} />
+                          <Label className="text-danger">Sign Out</Label>
+                        </div>
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
               </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>JustScan</p>
-                <p className="truncate text-[11px]" style={{ color: 'var(--text-faint)' }}>Security workflow hub</p>
-              </div>
-            </Link>
-
-            <div className="ml-auto flex items-center gap-2">
-              <Button className="rounded-xl" onPress={() => setSearchOpen(true)} variant="secondary">
-                <Search01Icon size={15} />
-                Search
-              </Button>
-              <Link className="btn-primary-sm h-10 px-3" href="/scans?new=1">
-                <PlusSignIcon size={14} className="shrink-0" />
-                <span>New</span>
-              </Link>
             </div>
-          </div>
 
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
+            <main
+              className={`min-h-0 flex-1 overflow-x-hidden ${
+                isAssistantRoute ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
+              }`}
+            >
+              {!isAssistantRoute ? (
+                <div className={`border-b border-white/5 py-1.5 md:py-2 ${contentRailClass}`}>
+                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <h1 className="flex flex-wrap items-center gap-1.5 text-lg font-semibold tracking-tight md:text-xl">
+                        {topbarHeader.title}
+                        {topbarHeader.titleCom}
+                      </h1>
+                      {topbarHeader.description ? (
+                        <Typography.Paragraph className="mt-0.5" color="muted" size="xs">
+                          {topbarHeader.description}
+                        </Typography.Paragraph>
+                      ) : null}
+                      {topbarHeader.breadcrumbs && topbarHeader.breadcrumbs.length > 1 ? (
+                        <nav
+                          aria-label="Breadcrumb"
+                          className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-medium"
+                        >
+                          {topbarHeader.breadcrumbs.map((item, index) => {
+                            const isCurrent = index === topbarHeader.breadcrumbs!.length - 1;
+
+                            return (
+                              <span
+                                key={`${item.label}-${index}`}
+                                className="inline-flex items-center gap-1.5"
+                              >
+                                {item.href && !isCurrent ? (
+                                  <Link
+                                    href={item.href}
+                                    className="transition-colors hover:text-zinc-900 dark:hover:text-white"
+                                    style={{ color: 'var(--text-faint)' }}
+                                  >
+                                    {item.label}
+                                  </Link>
+                                ) : (
+                                  <span
+                                    aria-current={isCurrent ? 'page' : undefined}
+                                    style={{
+                                      color: isCurrent ? 'var(--text-muted)' : 'var(--text-faint)',
+                                    }}
+                                  >
+                                    {item.label}
+                                  </span>
+                                )}
+                                {!isCurrent ? (
+                                  <span style={{ color: 'var(--text-faint)' }}>/</span>
+                                ) : null}
+                              </span>
+                            );
+                          })}
+                        </nav>
+                      ) : null}
+                    </div>
+
+                    {topbarHeader.actions ? (
+                      <div className="flex shrink-0 items-center gap-1.5 sm:justify-end">
+                        {topbarHeader.actions}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+              <div className={isAssistantRoute ? 'min-h-0 flex-1 overflow-hidden' : ''}>
+                {children}
+              </div>
+            </main>
+          </div>
         </div>
-      </div>
+      </PageHeaderContext.Provider>
     </ToastProvider>
   );
 }

@@ -4,6 +4,7 @@ import { WorkspaceOnboarding } from '@/components/workspace-onboarding';
 import {
   clearToken,
   clearUser,
+  getAISettings,
   getUser,
   getWorkScope,
   listMyOrgInvites,
@@ -253,6 +254,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const mobileNav = useOverlayState();
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
   const [pageHeader, setPageHeader] = useState<PageHeaderConfig | null>(null);
+  const [aiEnabled, setAIEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
     const scanMatch = pathname.match(/^\/scans\/([^/]+)/);
@@ -339,6 +341,28 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     window.addEventListener('justscan-org-membership-changed', handleOrgMembershipChanged);
     return () =>
       window.removeEventListener('justscan-org-membership-changed', handleOrgMembershipChanged);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getAISettings()
+      .then((settings) => {
+        if (cancelled) {
+          return;
+        }
+        setAIEnabled(settings.enabled);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setAIEnabled(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -464,8 +488,12 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     workScope.kind === 'org' ? (workScope.orgName ?? workScope.orgId) : 'personal'
   );
   const desktopCollapsed = collapsed;
+  const filteredNavGroups = navGroups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => item.href !== '/assistant' || aiEnabled !== false),
+  }));
   const navigationGroups = [
-    ...navGroups,
+    ...filteredNavGroups,
     ...(user?.role === 'admin'
       ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
       : []),

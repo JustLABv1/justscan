@@ -221,7 +221,7 @@ func GetComplianceTrend(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var rows []DayResult
-		db.NewRaw(`
+		err = db.NewRaw(`
             SELECT to_char(evaluated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') as day,
                    status,
                    count(*) as count
@@ -230,7 +230,23 @@ func GetComplianceTrend(db *bun.DB) gin.HandlerFunc {
               AND evaluated_at >= NOW() - INTERVAL '30 days'
             GROUP BY day, status
             ORDER BY day ASC
-        `, orgID).Scan(c.Request.Context(), &rows) //nolint:errcheck
+        `, orgID).Scan(c.Request.Context(), &rows)
+		if err != nil {
+			log.WithError(err).Warn("org compliance trend: failed to query compliance_history; falling back to compliance_results")
+			if err := db.NewRaw(`
+				SELECT to_char(evaluated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') as day,
+				       status,
+				       count(*) as count
+				FROM compliance_results
+				WHERE org_id = ?
+				  AND evaluated_at >= NOW() - INTERVAL '30 days'
+				GROUP BY day, status
+				ORDER BY day ASC
+			`, orgID).Scan(c.Request.Context(), &rows); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load compliance trend"})
+				return
+			}
+		}
 
 		// Build map: day → {pass, fail}
 		type Point struct {

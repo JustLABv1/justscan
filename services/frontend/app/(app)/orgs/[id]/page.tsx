@@ -515,11 +515,11 @@ export default function OrgDetailPage() {
                   active
                     ? {
                         background:
-                          'linear-gradient(135deg, color-mix(in srgb, var(--accent) 15%, transparent) 0%, color-mix(in srgb, var(--accent) 8%, black) 100%)',
+                          'linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--surface)) 0%, color-mix(in srgb, var(--accent) 6%, var(--surface-secondary)) 100%)',
                         boxShadow:
-                          'inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent), 0 2px 8px color-mix(in srgb, var(--accent) 8%, transparent)',
+                          'inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent), 0 2px 8px color-mix(in srgb, var(--accent) 8%, transparent)',
                       }
-                    : { background: 'transparent' }
+                    : { background: 'var(--surface)' }
                 }
               >
                 <p
@@ -535,7 +535,9 @@ export default function OrgDetailPage() {
       </Card>
 
       <div id={`${activeTab}-panel`} role="tabpanel" aria-labelledby={`${activeTab}-tab`}>
-        {activeTab === 'overview' && <OrgOverviewTab riskScore={riskScore} trend={trend} />}
+        {activeTab === 'overview' && (
+          <OrgOverviewTab riskScore={riskScore} trend={trend} orgScans={orgScans} />
+        )}
         {activeTab === 'automation' && (
           <OrgAutomationTab
             org={org}

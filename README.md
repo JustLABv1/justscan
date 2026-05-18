@@ -259,6 +259,90 @@ All config values can be overridden via environment variables using the `BACKEND
 
 The frontend uses a single environment variable:
 
+---
+
+## GitLab CI: Scan Before Push (Uploaded Archive)
+
+You can scan an image in GitLab CI before pushing it to any registry by:
+
+1. Building the image in CI
+2. Exporting it as an archive (`docker save`)
+3. Uploading it to JustScan via `POST /api/v1/scans/upload`
+4. Polling scan status until completion
+
+### Required CI variables
+
+Set these in your GitLab project/group CI/CD variables:
+
+- `JUSTSCAN_API_URL` (example: `https://scan.example.com`)
+- `JUSTSCAN_API_TOKEN` (JustScan personal or org token)
+
+### Example `.gitlab-ci.yml` job
+
+```yaml
+stages:
+  - security
+
+justscan_prepush_scan:
+  stage: security
+  image: docker:27
+  services:
+    - name: docker:27-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    IMAGE_REF: "$CI_PROJECT_PATH_SLUG:$CI_COMMIT_SHORT_SHA"
+    ARCHIVE_PATH: "/tmp/image.tar"
+  script:
+    - apk add --no-cache curl jq
+    - docker build -t "$IMAGE_REF" .
+    - docker save "$IMAGE_REF" -o "$ARCHIVE_PATH"
+    - |
+      CREATE_RESPONSE="$(curl -sS -X POST "$JUSTSCAN_API_URL/api/v1/scans/upload" \
+        -H "Authorization: Bearer $JUSTSCAN_API_TOKEN" \
+        -F "archive=@$ARCHIVE_PATH" \
+        -F "image_name=$CI_PROJECT_PATH" \
+        -F "image_tag=$CI_COMMIT_SHORT_SHA" \
+        -F "platform=linux/amd64")"
+    - echo "$CREATE_RESPONSE" | jq .
+    - SCAN_ID="$(echo "$CREATE_RESPONSE" | jq -r '.id')"
+    - test -n "$SCAN_ID" && test "$SCAN_ID" != "null"
+    - |
+      for i in $(seq 1 120); do
+        STATUS_RESPONSE="$(curl -sS "$JUSTSCAN_API_URL/api/v1/scans/$SCAN_ID" \
+          -H "Authorization: Bearer $JUSTSCAN_API_TOKEN")"
+        STATUS="$(echo "$STATUS_RESPONSE" | jq -r '.status')"
+        echo "Scan $SCAN_ID status: $STATUS"
+
+        if [ "$STATUS" = "completed" ]; then
+          CRITICAL="$(echo "$STATUS_RESPONSE" | jq -r '.critical_count // 0')"
+          HIGH="$(echo "$STATUS_RESPONSE" | jq -r '.high_count // 0')"
+          echo "Completed. critical=$CRITICAL high=$HIGH"
+          # Optional policy gate:
+          # test "$CRITICAL" -eq 0
+          exit 0
+        fi
+
+        if [ "$STATUS" = "failed" ] || [ "$STATUS" = "cancelled" ]; then
+          echo "JustScan scan failed:"
+          echo "$STATUS_RESPONSE" | jq .
+          exit 1
+        fi
+
+        sleep 5
+      done
+      echo "Timed out waiting for JustScan scan result"
+      exit 1
+```
+
+### Notes
+
+- Upload endpoint is authenticated-only (`/api/v1/scans/upload`).
+- Archive size limit is `5 GB` by default for uploaded archive scans.
+- Uploaded archives are deleted by JustScan after scan processing.
+- For org-scoped scans, include `-F "org_id=<org-uuid>"` in the upload request.
+
 | Variable | Description | Default |
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | Backend base URL | `http://localhost:8080` |

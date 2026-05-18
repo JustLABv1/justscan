@@ -27,13 +27,13 @@ const SEARCHABLE_PAGES = [
   { href: '/orgs', label: 'Organizations', keywords: ['teams', 'workspace'] },
 ] as const;
 
-type SeverityColor = 'default' | 'primary' | 'warning' | 'danger';
+type SeverityColor = 'default' | 'accent' | 'warning' | 'danger';
 
 const SEV_CHIP_COLOR: Record<string, SeverityColor> = {
   CRITICAL: 'danger',
   HIGH: 'warning',
   MEDIUM: 'warning',
-  LOW: 'primary',
+  LOW: 'accent',
   UNKNOWN: 'default',
 };
 
@@ -330,7 +330,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                             <span className="flex-1 truncate font-mono text-sm text-foreground">
                               {img.image_name}
                             </span>
-                            <Chip size="sm" variant="soft" color="primary" className="font-mono">
+                            <Chip size="sm" variant="soft" color="accent" className="font-mono">
                               {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
                             </Chip>
                           </div>

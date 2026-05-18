@@ -144,7 +144,7 @@ function DetailPanel({ entry, onClose }: { entry: VulnKBEntry; onClose: () => vo
                     href={r.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-xs text-violet-500 dark:text-violet-400 hover:underline break-all"
+                    className="text-xs text-accent dark:text-accent hover:underline break-all"
                   >
                     {r.url}
                   </a>
@@ -406,9 +406,9 @@ export default function VulnKBPage() {
                   key={i}
                   className="text-xs px-2 py-0.5 rounded-full font-medium"
                   style={{
-                    background: 'rgba(124,58,237,0.12)',
-                    color: '#a78bfa',
-                    border: '1px solid rgba(167,139,250,0.25)',
+                    background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                    color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                    border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
                   }}
                 >
                   {f}
@@ -449,7 +449,7 @@ export default function VulnKBPage() {
                       <Table.Cell colSpan={6}>
                         <div className="py-16 text-center">
                           <div className="flex justify-center">
-                            <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                            <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                           </div>
                         </div>
                       </Table.Cell>
@@ -478,7 +478,7 @@ export default function VulnKBPage() {
                         onClick={() => handleRowClick(e)}
                       >
                         <Table.Cell>
-                          <span className="font-mono text-xs text-violet-500 dark:text-violet-400">
+                          <span className="font-mono text-xs text-accent dark:text-accent">
                             {e.vuln_id}
                           </span>
                         </Table.Cell>

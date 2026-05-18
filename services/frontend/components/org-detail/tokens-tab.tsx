@@ -257,9 +257,9 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                           expiresIn === opt.value
                             ? {
                                 background:
-                                  'linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(109,40,217,0.12) 100%)',
-                                border: '1px solid rgba(167,139,250,0.4)',
-                                color: '#a78bfa',
+                                  'linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, transparent) 0%, color-mix(in srgb, var(--accent) 12%, black) 100%)',
+                                border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
+                                color: 'color-mix(in srgb, var(--accent) 78%, white)',
                               }
                             : {
                                 background: 'var(--row-hover)',
@@ -415,18 +415,18 @@ export function OrgTokensTab({ orgId, canManage }: OrgTokensTabProps) {
       <div className="surface-card rounded-2xl overflow-hidden">
         {loading ? (
           <div className="flex justify-center py-8">
-            <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+            <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
           </div>
         ) : tokens.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-6 text-center gap-3">
             <div
               className="size-12 rounded-2xl flex items-center justify-center"
               style={{
-                background: 'rgba(124,58,237,0.08)',
-                border: '1px solid rgba(124,58,237,0.15)',
+                background: 'color-mix(in srgb, var(--accent) 8%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
               }}
             >
-              <Key01Icon size={22} color="#a78bfa" />
+              <Key01Icon size={22} color="color-mix(in srgb, var(--accent) 78%, white)" />
             </div>
             <div>
               <p className="font-semibold text-zinc-900 dark:text-white">No org tokens yet</p>

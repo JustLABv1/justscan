@@ -711,7 +711,7 @@ export function InsightsTab() {
                           {log.scan_id ? (
                             <Link
                               href={`/scans/${log.scan_id}`}
-                              className="font-mono text-violet-400 hover:underline"
+                              className="font-mono text-accent hover:underline"
                             >
                               {log.scan_id.slice(0, 8)}…
                             </Link>

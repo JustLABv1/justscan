@@ -1,5 +1,5 @@
 export const nativeFieldClassName =
-  'w-full rounded-xl bg-surface-secondary px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-violet-500/40';
+  'w-full rounded-xl bg-surface-secondary px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40';
 
 export const heroFieldClassName = 'surface-input w-full min-h-11 rounded-xl px-3 text-sm';
 

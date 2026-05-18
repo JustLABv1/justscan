@@ -74,7 +74,7 @@ export function OrgAutomationTab({
         <div
           className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
           style={{
-            background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.15),transparent)',
+            background: 'linear-gradient(90deg,transparent,color-mix(in srgb, var(--accent) 15%, transparent),transparent)',
           }}
         />
         <div>
@@ -83,8 +83,8 @@ export function OrgAutomationTab({
           </h2>
           <p className="text-xs text-zinc-500 mt-0.5">
             Scans matching these patterns are automatically assigned to this org. Use glob syntax:{' '}
-            <code className="text-violet-500 dark:text-violet-400">nginx:*</code>,{' '}
-            <code className="text-violet-500 dark:text-violet-400">docker.io/myapp:*</code>
+            <code className="text-accent dark:text-accent">nginx:*</code>,{' '}
+            <code className="text-accent dark:text-accent">docker.io/myapp:*</code>
           </p>
         </div>
 

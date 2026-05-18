@@ -60,9 +60,9 @@ const AUTH_TYPE_STYLE: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(59,130,246,0.2)',
   },
   token: {
-    color: '#a78bfa',
-    background: 'rgba(124,58,237,0.1)',
-    border: '1px solid rgba(124,58,237,0.2)',
+    color: 'color-mix(in srgb, var(--accent) 78%, white)',
+    background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+    border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
   },
   aws_ecr: {
     color: '#fb923c',
@@ -800,7 +800,7 @@ export default function RegistriesPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

@@ -39,8 +39,8 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string;
     },
     queued_in_xray: {
       color: '#c084fc',
-      bg: 'rgba(192,132,252,0.12)',
-      border: 'rgba(192,132,252,0.22)',
+      bg: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+      border: 'color-mix(in srgb, var(--accent) 22%, transparent)',
       label: 'queued in xray',
     },
     blocked_by_xray_policy: {
@@ -235,7 +235,7 @@ const OWNERSHIP_CONFIG: Record<
   { color: string; bg: string; border: string }
 > = {
   user: { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.22)' },
-  org: { color: '#a78bfa', bg: 'rgba(124,58,237,0.12)', border: 'rgba(124,58,237,0.22)' },
+  org: { color: 'color-mix(in srgb, var(--accent) 78%, white)', bg: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: 'color-mix(in srgb, var(--accent) 22%, transparent)' },
   system: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.22)' },
 };
 

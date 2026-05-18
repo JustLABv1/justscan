@@ -34,7 +34,7 @@ function HelmChartRedirectContent() {
     return (
       <div className="p-6 text-center text-zinc-400 text-sm space-y-3">
         <p>{requestError}</p>
-        <Link href="/helm" className="text-violet-500 hover:underline">
+        <Link href="/helm" className="text-accent hover:underline">
           Back to Helm runs
         </Link>
       </div>
@@ -45,7 +45,7 @@ function HelmChartRedirectContent() {
     return (
       <div className="p-6 text-center text-zinc-400 text-sm space-y-3">
         <p>{error}</p>
-        <Link href="/helm" className="text-violet-500 hover:underline">
+        <Link href="/helm" className="text-accent hover:underline">
           Back to Helm runs
         </Link>
       </div>

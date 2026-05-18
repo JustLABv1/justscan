@@ -17,7 +17,7 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
     <Card className="surface-card rounded-2xl py-16 flex flex-col items-center gap-4 text-center px-6">
       <div
         className="size-14 rounded-2xl flex items-center justify-center"
-        style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.12)' }}
+        style={{ background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)' }}
       >
         <span className="text-zinc-400">{icon}</span>
       </div>

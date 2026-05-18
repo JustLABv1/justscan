@@ -146,7 +146,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
             border: '1px solid var(--surface-border)',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(167,139,250,0.08)',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent)',
           }}
         >
           {/* Input row */}
@@ -156,7 +156,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
           >
             {loading ? (
               <div
-                className="size-4 rounded-full border-2 border-zinc-500 border-t-violet-400 animate-spin shrink-0"
+                className="size-4 rounded-full border-2 border-zinc-500 border-t-accent-400 animate-spin shrink-0"
                 aria-label="Searching"
               />
             ) : (
@@ -232,11 +232,11 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                           <div
                             className="size-7 rounded-lg flex items-center justify-center shrink-0"
                             style={{
-                              background: 'rgba(124,58,237,0.15)',
-                              border: '1px solid rgba(167,139,250,0.15)',
+                              background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                              border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
                             }}
                           >
-                            <Shield01Icon size={14} color="#a78bfa" />
+                            <Shield01Icon size={14} color="color-mix(in srgb, var(--accent) 78%, white)" />
                           </div>
                           <span
                             className="flex-1 font-mono text-sm truncate"

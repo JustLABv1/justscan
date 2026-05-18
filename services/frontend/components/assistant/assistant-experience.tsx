@@ -1099,7 +1099,7 @@ function renderLinkNode(href: string, label: string, key: string) {
   if (/^\/[a-z0-9?=/_-]+$/i.test(href)) {
     return (
       <Link
-        className="text-violet-500 hover:text-violet-400 dark:text-violet-300 dark:hover:text-violet-200"
+        className="text-accent hover:text-accent dark:text-accent dark:hover:text-accent"
         href={href}
         key={key}
       >
@@ -1110,7 +1110,7 @@ function renderLinkNode(href: string, label: string, key: string) {
   if (/^https?:\/\//i.test(href)) {
     return (
       <a
-        className="text-violet-500 hover:text-violet-400 dark:text-violet-300 dark:hover:text-violet-200"
+        className="text-accent hover:text-accent dark:text-accent dark:hover:text-accent"
         href={href}
         key={key}
         rel="noreferrer"

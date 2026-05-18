@@ -67,9 +67,9 @@ const fieldLabelCls = fieldLabelClassName;
 const visibilityOptions: Array<StatusPage['visibility']> = ['private', 'authenticated', 'public'];
 const updateLevelOptions = ['info', 'maintenance', 'incident'] as const;
 const exactSelectionBadgeStyle = {
-  background: 'rgba(124,58,237,0.12)',
-  border: '1px solid rgba(124,58,237,0.22)',
-  color: '#c4b5fd',
+  background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+  border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
+  color: 'color-mix(in srgb, var(--accent) 62%, white)',
 };
 
 type ParsedImagePattern = {
@@ -529,7 +529,7 @@ export default function StatusPagesPage() {
         </div>
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
         </div>
       ) : filteredPages.length === 0 ? (
         <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3 text-center">
@@ -811,14 +811,14 @@ export default function StatusPagesPage() {
                                   key={option.id}
                                   className="flex items-start gap-3 p-3 cursor-pointer transition-colors"
                                   style={
-                                    isSelected ? { background: 'rgba(124,58,237,0.09)' } : undefined
+                                    isSelected ? { background: 'color-mix(in srgb, var(--accent) 9%, transparent)' } : undefined
                                   }
                                 >
                                   <span
                                     className="relative mt-1 flex size-4 shrink-0 items-center justify-center rounded border transition-colors"
                                     style={
                                       isSelected
-                                        ? { borderColor: '#7c3aed', background: '#7c3aed' }
+                                        ? { borderColor: 'var(--accent)', background: 'var(--accent)' }
                                         : { borderColor: 'rgba(113,113,122,0.4)' }
                                     }
                                   >
@@ -1205,7 +1205,7 @@ export default function StatusPagesPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

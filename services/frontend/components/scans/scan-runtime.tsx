@@ -245,30 +245,30 @@ function accentForStep(step: ProgressStepKey) {
     case 'preparing_image':
     case 'queued_in_xray':
       return {
-        accent: '#a78bfa',
-        accentSoft: 'rgba(167,139,250,0.12)',
-        accentBorder: 'rgba(167,139,250,0.24)',
-        beam: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.1), rgba(167,139,250,0.92), rgba(167,139,250,0.1), transparent)',
+        accent: 'color-mix(in srgb, var(--accent) 78%, white)',
+        accentSoft: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+        accentBorder: 'color-mix(in srgb, var(--accent) 24%, transparent)',
+        beam: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 92%, transparent), color-mix(in srgb, var(--accent) 10%, transparent), transparent)',
       };
     case 'processing_results':
     case 'waiting_for_xray':
       return {
         accent: '#c084fc',
-        accentSoft: 'rgba(192,132,252,0.12)',
-        accentBorder: 'rgba(192,132,252,0.24)',
-        beam: 'linear-gradient(90deg, transparent, rgba(192,132,252,0.1), rgba(192,132,252,0.92), rgba(192,132,252,0.1), transparent)',
+        accentSoft: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+        accentBorder: 'color-mix(in srgb, var(--accent) 24%, transparent)',
+        beam: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 92%, transparent), color-mix(in srgb, var(--accent) 10%, transparent), transparent)',
       };
     case 'finalizing_report':
     case 'indexing_artifact':
       return {
-        accent: '#7c3aed',
-        accentSoft: 'rgba(124,58,237,0.12)',
-        accentBorder: 'rgba(124,58,237,0.24)',
-        beam: 'linear-gradient(90deg, transparent, rgba(124,58,237,0.1), rgba(124,58,237,0.92), rgba(124,58,237,0.1), transparent)',
+        accent: 'var(--accent)',
+        accentSoft: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+        accentBorder: 'color-mix(in srgb, var(--accent) 24%, transparent)',
+        beam: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 92%, transparent), color-mix(in srgb, var(--accent) 10%, transparent), transparent)',
       };
     default:
       return {
-        accent: '#8b5cf6',
+        accent: 'color-mix(in srgb, var(--accent) 88%, white)',
         accentSoft: 'rgba(139,92,246,0.12)',
         accentBorder: 'rgba(139,92,246,0.24)',
         beam: 'linear-gradient(90deg, transparent, rgba(139,92,246,0.1), rgba(139,92,246,0.92), rgba(139,92,246,0.1), transparent)',
@@ -443,11 +443,11 @@ function terminalRowTone(step: string, blockedByPolicy: boolean) {
     };
   }
   return {
-    bubble: '#8b5cf6',
+    bubble: 'color-mix(in srgb, var(--accent) 88%, white)',
     glow: 'none',
-    border: 'rgba(124,58,237,0.18)',
-    badgeColor: '#8b5cf6',
-    badgeBackground: 'rgba(124,58,237,0.08)',
+    border: 'color-mix(in srgb, var(--accent) 18%, transparent)',
+    badgeColor: 'color-mix(in srgb, var(--accent) 88%, white)',
+    badgeBackground: 'color-mix(in srgb, var(--accent) 8%, transparent)',
   };
 }
 
@@ -928,7 +928,7 @@ export function ScanStepTimeline({
       <style>{`
 				@keyframes timelineRise { 0% { opacity: 0; transform: translateY(12px); } 100% { opacity: 1; transform: translateY(0); } }
 				@keyframes timelineGlow { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.9; } }
-				@keyframes timelinePulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(167,139,250,0.0); } 50% { box-shadow: 0 0 0 6px rgba(167,139,250,0.1); } }
+				@keyframes timelinePulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); } 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 10%, transparent); } }
 			`}</style>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1243,7 +1243,7 @@ export function ScanStepTimeline({
             <span
               className="size-2 rounded-full"
               style={{
-                background: selectedIsTerminal ? selectedRowTone.bubble : '#a78bfa',
+                background: selectedIsTerminal ? selectedRowTone.bubble : 'color-mix(in srgb, var(--accent) 78%, white)',
                 animation: 'timelineGlow 1.7s ease-in-out infinite',
               }}
             />

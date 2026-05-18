@@ -276,7 +276,7 @@ export default function PublicScanResultPage() {
           <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>
           <Link
             href="/public/scan/image"
-            className="text-violet-600 dark:text-violet-400 text-sm hover:underline"
+            className="text-accent dark:text-accent text-sm hover:underline"
           >
             ← Try another scan
           </Link>
@@ -382,7 +382,7 @@ export default function PublicScanResultPage() {
                   variant="primary"
                 >
                   {reScanning ? (
-                    <span className="size-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+                    <span className="size-3.5 border-2 border-accent-400/30 border-t-accent-400 rounded-full animate-spin" />
                   ) : (
                     <Refresh01Icon size={15} />
                   )}
@@ -441,7 +441,7 @@ export default function PublicScanResultPage() {
               )}
               <Link
                 href="/public/scan/image"
-                className="inline-block mt-3 text-sm text-violet-600 dark:text-violet-400 hover:underline"
+                className="inline-block mt-3 text-sm text-accent dark:text-accent hover:underline"
               >
                 Try another image →
               </Link>
@@ -698,7 +698,7 @@ export default function PublicScanResultPage() {
                               <div className="py-12 text-center">
                                 <div className="flex justify-center">
                                   <div
-                                    className="size-6 rounded-full border-2 border-t-violet-500 animate-spin"
+                                    className="size-6 rounded-full border-2 border-t-accent-500 animate-spin"
                                     style={{
                                       borderColor: 'var(--border-subtle)',
                                       borderTopColor: 'var(--accent)',
@@ -730,7 +730,7 @@ export default function PublicScanResultPage() {
                                     <button
                                       type="button"
                                       onClick={() => openVulnerabilityDetails(v)}
-                                      className="font-mono text-xs text-violet-600 dark:text-violet-400 hover:underline transition-colors"
+                                      className="font-mono text-xs text-accent dark:text-accent hover:underline transition-colors"
                                     >
                                       {v.vuln_id}
                                     </button>

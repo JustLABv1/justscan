@@ -266,7 +266,7 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
       ))}
 
       <button onClick={() => window.print()}
-        style={{ width: '100%', marginTop: 16, background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+        style={{ width: '100%', marginTop: 16, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
         Save as PDF
       </button>
     </div>
@@ -278,7 +278,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
   const activeVulns = filterVulns(vulns.filter(v => !v.suppression), filters);
   const suppressedVulns = filters.showSuppressed ? vulns.filter(v => v.suppression) : [];
   const ws = worstSeverity(scan);
-  const accentColor = SEV_COLORS[ws]?.bg ?? '#7c3aed';
+  const accentColor = SEV_COLORS[ws]?.bg ?? 'var(--accent)';
   const imageRef = `${scan.image_name}:${scan.image_tag}`;
   const displayStatus = reportStatus(scan);
   const statusColors = statusChipColors(displayStatus);
@@ -435,7 +435,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
       </div>
 
       {/* Vulnerabilities */}
-      <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #7c3aed', paddingBottom: 6, display: 'inline-block' }}>
+      <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--accent)', paddingBottom: 6, display: 'inline-block' }}>
         Vulnerabilities ({activeVulns.length})
       </p>
 
@@ -454,7 +454,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
             {activeVulns.map((v, vi) => (
               <>
                 <tr key={v.id} style={{ background: vi % 2 === 0 ? '#fff' : '#fafafa' }}>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#7c3aed', fontWeight: 600 }}>{v.vuln_id || '-'}</td>
+                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>{v.vuln_id || '-'}</td>
                   <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12 }}>{v.pkg_name}</td>
                   <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#6b7280' }}>{v.installed_version}</td>
                   <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#15803d', fontWeight: v.fixed_version ? 600 : 400 }}>{v.fixed_version || '-'}</td>
@@ -469,7 +469,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
                       {v.title && <strong style={{ color: '#111827' }}>{v.title} - </strong>}
                       {v.description.length > 400 ? v.description.slice(0, 400) + '…' : v.description}
                       {filters.showReferences && v.references?.length > 0 && (
-                        <span style={{ color: '#7c3aed', marginLeft: 8, fontSize: 12 }}>{v.references.slice(0, 2).join(' · ')}</span>
+                        <span style={{ color: 'var(--accent)', marginLeft: 8, fontSize: 12 }}>{v.references.slice(0, 2).join(' · ')}</span>
                       )}
                       {filters.showComments && v.comments && v.comments.length > 0 && (
                         <div style={{ marginTop: '6px' }}>
@@ -496,11 +496,11 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
       {/* Manual Findings */}
       {manualFindings.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #7c3aed', paddingBottom: 6, display: 'inline-block' }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--accent)', paddingBottom: 6, display: 'inline-block' }}>
             Manual Findings ({manualFindings.length})
           </p>
           {manualFindings.map((f) => (
-            <div key={f.id} style={{ border: '1px solid #e5e7eb', borderLeft: '4px solid #7c3aed', borderRadius: 4, padding: '10px 12px', marginBottom: 8, position: 'relative' }}>
+            <div key={f.id} style={{ border: '1px solid #e5e7eb', borderLeft: '4px solid var(--accent)', borderRadius: 4, padding: '10px 12px', marginBottom: 8, position: 'relative' }}>
               <button
                 className="print:hidden"
                 onClick={() => deleteManualFinding(f.id)}
@@ -510,7 +510,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
                 <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 12 }}>{f.vuln_id}</span>
                 <SevBadge s={f.severity} />
-                <span style={{ display: 'inline-block', background: '#ede9fe', color: '#6d28d9', fontSize: '0.75rem', fontWeight: 700, padding: '2px 6px', borderRadius: 3, letterSpacing: '0.05em' }}>MANUAL</span>
+                <span style={{ display: 'inline-block', background: 'color-mix(in srgb, var(--accent) 18%, white)', color: 'color-mix(in srgb, var(--accent) 82%, black)', fontSize: '0.75rem', fontWeight: 700, padding: '2px 6px', borderRadius: 3, letterSpacing: '0.05em' }}>MANUAL</span>
                 {f.cvss_score > 0 && <span style={{ fontSize: 12, color: '#555', fontWeight: 600 }}>CVSS {f.cvss_score.toFixed(1)}</span>}
               </div>
               {f.title && <p style={{ margin: '0 0 3px', fontWeight: 600, fontSize: 12 }}>{f.title}</p>}
@@ -522,7 +522,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
                 </p>
               )}
               {f.justification && (
-                <div style={{ marginTop: 6, background: '#ede9fe', border: '1px solid #c4b5fd', borderLeft: '3px solid #7c3aed', borderRadius: 3, padding: '6px 8px' }}>
+                <div style={{ marginTop: 6, background: 'color-mix(in srgb, var(--accent) 18%, white)', border: '1px solid color-mix(in srgb, var(--accent) 62%, white)', borderLeft: '3px solid var(--accent)', borderRadius: 3, padding: '6px 8px' }}>
                   <p style={{ margin: '0 0 2px', fontSize: 12, fontWeight: 700, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Justification</p>
                   <p style={{ margin: 0, fontSize: 12, color: '#4c1d95', lineHeight: 1.5 }}>{f.justification}</p>
                 </div>
@@ -536,7 +536,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
       <div className="print:hidden" style={{ marginBottom: 20 }}>
         <button
           onClick={() => setShowAddFinding(v => !v)}
-          style={{ background: showAddFinding ? '#f3f4f6' : '#7c3aed', color: showAddFinding ? '#374151' : '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
+          style={{ background: showAddFinding ? '#f3f4f6' : 'var(--accent)', color: showAddFinding ? '#374151' : '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
         >
           {showAddFinding ? '✕ Cancel' : '+ Add Manual CVE'}
         </button>
@@ -585,7 +585,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
               <button
                 onClick={submitManualFinding}
                 disabled={!newFinding.vuln_id}
-                style={{ background: newFinding.vuln_id ? '#7c3aed' : '#e5e7eb', color: newFinding.vuln_id ? '#fff' : '#9ca3af', border: 'none', borderRadius: 6, padding: '7px 20px', fontWeight: 700, fontSize: 12, cursor: newFinding.vuln_id ? 'pointer' : 'not-allowed' }}
+                style={{ background: newFinding.vuln_id ? 'var(--accent)' : '#e5e7eb', color: newFinding.vuln_id ? '#fff' : '#9ca3af', border: 'none', borderRadius: 6, padding: '7px 20px', fontWeight: 700, fontSize: 12, cursor: newFinding.vuln_id ? 'pointer' : 'not-allowed' }}
               >
                 Save Finding
               </button>
@@ -697,7 +697,7 @@ function PrintReport() {
   if (!data.length) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#6b7280', gap: 12 }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      <div style={{ width: 20, height: 20, border: '2px solid #e5e7eb', borderTopColor: '#7c3aed', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 20, height: 20, border: '2px solid #e5e7eb', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       Loading report…
     </div>
   );
@@ -727,7 +727,7 @@ function PrintReport() {
 
         {/* Report header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: 20, marginBottom: 28 }}>
-          <div style={{ borderLeft: '5px solid #7c3aed', paddingLeft: 16 }}>
+          <div style={{ borderLeft: '5px solid var(--accent)', paddingLeft: 16 }}>
             <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>{reportTitle}</h1>
             <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 0' }}>
               Generated {new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -740,11 +740,11 @@ function PrintReport() {
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
             {resolvedHelmChart && (
-              <span style={{ background: '#ede9fe', color: '#7c3aed', fontWeight: 700, fontSize: 13, padding: '4px 12px', borderRadius: 999, border: '1px solid #c4b5fd' }}>
+              <span style={{ background: 'color-mix(in srgb, var(--accent) 18%, white)', color: 'var(--accent)', fontWeight: 700, fontSize: 13, padding: '4px 12px', borderRadius: 999, border: '1px solid color-mix(in srgb, var(--accent) 62%, white)' }}>
                 Helm chart
               </span>
             )}
-            <span style={{ background: '#ede9fe', color: '#7c3aed', fontWeight: 700, fontSize: 13, padding: '4px 12px', borderRadius: 999, border: '1px solid #c4b5fd' }}>
+            <span style={{ background: 'color-mix(in srgb, var(--accent) 18%, white)', color: 'var(--accent)', fontWeight: 700, fontSize: 13, padding: '4px 12px', borderRadius: 999, border: '1px solid color-mix(in srgb, var(--accent) 62%, white)' }}>
               {data.length} image{data.length !== 1 ? 's' : ''}
             </span>
             <span style={{ background: totalActive === 0 ? '#dcfce7' : '#fef2f2', color: totalActive === 0 ? '#15803d' : '#dc2626', fontWeight: 700, fontSize: 13, padding: '4px 12px', borderRadius: 999, border: `1px solid ${totalActive === 0 ? '#86efac' : '#fca5a5'}` }}>
@@ -756,7 +756,7 @@ function PrintReport() {
         {/* Multi-scan summary table */}
         {data.length > 1 && (
           <div style={{ marginBottom: 32 }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #7c3aed', paddingBottom: 6, display: 'inline-block' }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--accent)', paddingBottom: 6, display: 'inline-block' }}>
               Summary
             </p>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
@@ -771,7 +771,7 @@ function PrintReport() {
                 {data.map(({ scan }) => (
                   <tr key={scan.id}>
                     <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
-                      <a href={`#scan-${scan.id}`} style={{ color: '#7c3aed', textDecoration: 'none', wordBreak: 'break-all', overflowWrap: 'anywhere' }}>{scan.image_name}:{scan.image_tag}</a>
+                      <a href={`#scan-${scan.id}`} style={{ color: 'var(--accent)', textDecoration: 'none', wordBreak: 'break-all', overflowWrap: 'anywhere' }}>{scan.image_name}:{scan.image_tag}</a>
                     </td>
                     <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', textAlign: 'center' }}>
                       {(() => {

@@ -27,7 +27,7 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
                 pathname === item.href ||
                 (item.href !== '/profile' && pathname.startsWith(`${item.href}/`));
               const labelClass = active
-                ? 'text-violet-700 dark:text-violet-300'
+                ? 'text-accent dark:text-accent'
                 : 'text-zinc-600 dark:text-zinc-300';
 
               return (

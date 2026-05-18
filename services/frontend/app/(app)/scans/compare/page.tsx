@@ -58,7 +58,7 @@ function VulnTable({ vulns, emptyText }: { vulns: Vulnerability[]; emptyText: st
                       href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-mono text-xs text-violet-500 dark:text-violet-400 hover:underline"
+                      className="font-mono text-xs text-accent dark:text-accent hover:underline"
                     >
                       {v.vuln_id}
                     </a>
@@ -206,7 +206,7 @@ function ComparePageInner() {
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           {scansLoading ? (
             <div className="flex-1 flex items-center justify-center py-4">
-              <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+              <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
             </div>
           ) : (
             <>
@@ -362,7 +362,7 @@ export default function ComparePage() {
     <Suspense
       fallback={
         <div className="flex items-center justify-center h-64">
-          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
         </div>
       }
     >

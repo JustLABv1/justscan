@@ -1540,7 +1540,7 @@ export default function ScanDetailPage() {
         variant="primary"
       >
         {reScanning ? (
-          <span className="size-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+          <span className="size-3.5 border-2 border-accent-400/30 border-t-accent-400 rounded-full animate-spin" />
         ) : (
           <Refresh01Icon size={15} />
         )}
@@ -1560,7 +1560,7 @@ export default function ScanDetailPage() {
               className="btn-icon-subtle size-10"
               isIconOnly
               style={
-                shareOpen ? { color: '#a78bfa', borderColor: 'rgba(167,139,250,0.25)' } : undefined
+                shareOpen ? { color: 'color-mix(in srgb, var(--accent) 78%, white)', borderColor: 'color-mix(in srgb, var(--accent) 25%, transparent)' } : undefined
               }
               variant="secondary"
             >
@@ -1641,9 +1641,9 @@ export default function ScanDetailPage() {
                           background:
                             scan.share_visibility === 'public'
                               ? 'rgba(34,197,94,0.1)'
-                              : 'rgba(124,58,237,0.1)',
-                          color: scan.share_visibility === 'public' ? '#4ade80' : '#a78bfa',
-                          border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'rgba(124,58,237,0.2)'}`,
+                              : 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                          color: scan.share_visibility === 'public' ? '#4ade80' : 'color-mix(in srgb, var(--accent) 78%, white)',
+                          border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'color-mix(in srgb, var(--accent) 20%, transparent)'}`,
                         }}
                       >
                         {scan.share_visibility}
@@ -1926,7 +1926,7 @@ export default function ScanDetailPage() {
                           {sbomLoading ? (
                             <div className="py-12 text-center">
                               <div className="flex justify-center">
-                                <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                                <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                               </div>
                             </div>
                           ) : (
@@ -3450,7 +3450,7 @@ export default function ScanDetailPage() {
                   </div>
                   {scanOrgGrantsLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                     </div>
                   ) : scanOrgGrants.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>
@@ -3631,7 +3631,7 @@ export default function ScanDetailPage() {
                   </div>
                   {suppressionAccessLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                     </div>
                   ) : suppressionAccessShares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

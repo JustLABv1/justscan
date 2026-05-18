@@ -179,10 +179,10 @@ const TONE_STYLES: Record<
     softBg: 'rgba(248,113,113,0.07)',
   },
   accent: {
-    color: '#a78bfa',
-    bg: 'rgba(167,139,250,0.14)',
-    border: 'rgba(167,139,250,0.28)',
-    softBg: 'rgba(167,139,250,0.07)',
+    color: 'color-mix(in srgb, var(--accent) 78%, white)',
+    bg: 'color-mix(in srgb, var(--accent) 14%, transparent)',
+    border: 'color-mix(in srgb, var(--accent) 28%, transparent)',
+    softBg: 'color-mix(in srgb, var(--accent) 7%, transparent)',
   },
   neutral: {
     color: 'var(--text-muted)',
@@ -440,7 +440,7 @@ function BriefingMetric({
     <button
       type="button"
       onClick={onPress}
-      className="group h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
+      className="group h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
       aria-haspopup="dialog"
     >
       {content}
@@ -670,7 +670,7 @@ function AttentionQueueCard({
                 key={item.key}
                 type="button"
                 onClick={item.onPress}
-                className="group flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
+                className="group flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
                 style={{ background: tone.softBg, borderColor: tone.border }}
                 aria-haspopup="dialog"
               >
@@ -849,7 +849,7 @@ function WatchlistModalRow({ item }: { item: WatchlistItem }) {
         >
           {posture.label}
         </span>
-        <Link href={`/watchlist`} className="text-[11px] font-medium" style={{ color: '#a78bfa' }}>
+        <Link href={`/watchlist`} className="text-[11px] font-medium" style={{ color: 'color-mix(in srgb, var(--accent) 78%, white)' }}>
           Open
         </Link>
       </div>
@@ -1094,9 +1094,9 @@ function DashboardDrilldownModal({
                               key: 'all' as const,
                               label: 'All',
                               count: needsAttentionTotal,
-                              activeBg: 'rgba(124,58,237,0.12)',
-                              activeBorder: 'rgba(124,58,237,0.3)',
-                              activeColor: '#a78bfa',
+                              activeBg: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                              activeBorder: 'color-mix(in srgb, var(--accent) 30%, transparent)',
+                              activeColor: 'color-mix(in srgb, var(--accent) 78%, white)',
                             },
                             {
                               key: 'failed' as const,
@@ -1326,7 +1326,7 @@ function VulnTrendChart({
       <div
         className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
         style={{
-          background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.2), transparent)',
+          background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 20%, transparent), transparent)',
         }}
       />
 
@@ -1359,9 +1359,9 @@ function VulnTrendChart({
               style={
                 period === d
                   ? {
-                      background: 'rgba(124,58,237,0.25)',
-                      color: '#a78bfa',
-                      border: '1px solid rgba(167,139,250,0.3)',
+                      background: 'color-mix(in srgb, var(--accent) 25%, transparent)',
+                      color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                      border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
                     }
                   : {
                       background: 'var(--row-hover)',
@@ -1788,7 +1788,7 @@ export default function DashboardPage() {
             title="Scan volume"
             description="Total scans per day, last 30 days"
             action={
-              <Link href="/scans" className="text-xs font-medium" style={{ color: '#a78bfa' }}>
+              <Link href="/scans" className="text-xs font-medium" style={{ color: 'color-mix(in srgb, var(--accent) 78%, white)' }}>
                 View all →
               </Link>
             }
@@ -1803,7 +1803,7 @@ export default function DashboardPage() {
             <div className="mt-4 flex-1">
               <MiniSparkline
                 data={scanVolumeTrend}
-                color="#a78bfa"
+                color="color-mix(in srgb, var(--accent) 78%, white)"
                 valueLabel="scans"
               />
             </div>

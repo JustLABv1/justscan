@@ -10,3 +10,6 @@ approval_mode = "approve"
 
 [mcp_servers.heroui-react.tools.list_components]
 approval_mode = "approve"
+
+[mcp_servers.heroui-react.tools.get_docs]
+approval_mode = "approve"

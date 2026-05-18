@@ -8,7 +8,7 @@ import { useWorkScope } from '@/hooks/use-work-scope';
 import { ImageSummary, listScans, Scan } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Checkbox, Pagination, Table, type Selection } from '@heroui/react';
+import { Button, Pagination, Table } from '@heroui/react';
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
@@ -48,6 +48,7 @@ interface ImageScansTableProps extends SharedChildProps {
 }
 
 interface ImageScansStackedChildrenProps extends SharedChildProps {
+  isImageSelected?: boolean;
   imageName: string;
   onVisibleScanIdsChange?: (imageName: string, scanIds: string[]) => void;
 }
@@ -77,29 +78,32 @@ function ScanSelectionCheckbox({
   isSelected,
   onChange,
 }: ScanSelectionCheckboxProps) {
+  const active = isSelected || isIndeterminate;
+
   return (
-    <Checkbox
+    <button
       aria-label={ariaLabel}
-      isIndeterminate={isIndeterminate}
-      isSelected={isSelected}
-      slot="selection"
-      variant="secondary"
-      onChange={onChange}
+      aria-checked={isIndeterminate ? 'mixed' : isSelected}
+      className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--row-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+      role="checkbox"
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onChange(!isSelected);
+      }}
     >
-      <Checkbox.Control>
-        <Checkbox.Indicator>
-          {({ isIndeterminate: indicatorIndeterminate, isSelected: indicatorSelected }) => (
-            <span className="flex h-full w-full items-center justify-center text-[10px] font-bold leading-none text-white">
-              {indicatorIndeterminate || isIndeterminate
-                ? '−'
-                : indicatorSelected || isSelected
-                  ? '✓'
-                  : ''}
-            </span>
-          )}
-        </Checkbox.Indicator>
-      </Checkbox.Control>
-    </Checkbox>
+      <span
+        aria-hidden
+        className="inline-flex h-4 w-4 items-center justify-center rounded-md border text-[10px] font-bold leading-none"
+        style={{
+          backgroundColor: active ? 'var(--accent)' : 'transparent',
+          borderColor: active ? 'var(--accent)' : 'rgb(113 113 122)',
+          color: '#fff',
+        }}
+      >
+        {isIndeterminate ? '−' : isSelected ? '✓' : ''}
+      </span>
+    </button>
   );
 }
 
@@ -188,6 +192,7 @@ function useImageScanChildren(imageName: string, refreshToken: number) {
 
 function ImageScansTreeChildrenRows({
   imageName,
+  isImageSelected = false,
   childRefreshKey,
   onCancel,
   onDelete,
@@ -310,7 +315,7 @@ function ImageScansTreeChildrenRows({
             <Table.Cell onClick={(event) => event.stopPropagation()}>
               <ScanSelectionCheckbox
                 ariaLabel={`Select scan ${scan.image_tag}`}
-                isSelected={selectedScans.has(scan.id)}
+                isSelected={isImageSelected || selectedScans.has(scan.id)}
                 onChange={(selected) => onSelectScan(scan.id, selected)}
               />
             </Table.Cell>
@@ -419,12 +424,19 @@ export function ImageScansTable({
 }: ImageScansTableProps) {
   const tableRows = useMemo(() => images, [images]);
   const [selectedImageNames, setSelectedImageNames] = useState<Set<string>>(new Set());
+  const [localSelectedScans, setLocalSelectedScans] = useState<Set<string>>(new Set());
   const [visibleScanIdsByImage, setVisibleScanIdsByImage] = useState<Record<string, string[]>>({});
 
-  const visibleChildScanIds = useMemo(
-    () => Array.from(new Set(Object.values(visibleScanIdsByImage).flat())),
-    [visibleScanIdsByImage]
-  );
+  useEffect(() => {
+    return deferEffect(() => {
+      setLocalSelectedScans(new Set(selectedScans));
+      if (selectedScans.size === 0) {
+        setSelectedImageNames(new Set());
+      }
+    });
+  }, [selectedScans]);
+
+  const displaySelectedScans = localSelectedScans;
 
   const getSelectableScanIds = useCallback(
     (image: ImageSummary) => {
@@ -442,92 +454,47 @@ export function ImageScansTable({
 
   const isAllSelected =
     allSelectableScanIds.length > 0 &&
-    allSelectableScanIds.every((scanId) => selectedScans.has(scanId));
+    allSelectableScanIds.every((scanId) => displaySelectedScans.has(scanId));
 
   const isPartiallySelected =
-    !isAllSelected && allSelectableScanIds.some((scanId) => selectedScans.has(scanId));
+    !isAllSelected && allSelectableScanIds.some((scanId) => displaySelectedScans.has(scanId));
 
   const effectiveSelectedImageNames = useMemo(
-    () => (selectedScans.size === 0 ? new Set<string>() : selectedImageNames),
-    [selectedImageNames, selectedScans.size]
+    () => (displaySelectedScans.size === 0 ? new Set<string>() : selectedImageNames),
+    [displaySelectedScans.size, selectedImageNames]
   );
 
-  const selectedTableKeys = useMemo(() => {
-    const next = new Set<string>();
-
-    for (const scanId of visibleChildScanIds) {
-      if (selectedScans.has(scanId)) {
-        next.add(scanId);
-      }
-    }
-
-    for (const image of tableRows) {
-      const targetIds = getSelectableScanIds(image);
-      const isParentSelected =
-        effectiveSelectedImageNames.has(image.image_name) ||
-        (targetIds.length > 0 && targetIds.every((scanId) => selectedScans.has(scanId)));
-
-      if (isParentSelected) {
-        next.add(image.image_name);
-      }
-    }
-
-    return next;
-  }, [
-    effectiveSelectedImageNames,
-    getSelectableScanIds,
-    selectedScans,
-    tableRows,
-    visibleChildScanIds,
-  ]);
-
-  const handleSelectionChange = useCallback(
-    (keys: Selection) => {
-      const selectedKeys =
-        keys === 'all'
-          ? new Set([...tableRows.map((image) => image.image_name), ...visibleChildScanIds])
-          : new Set(Array.from(keys, (key) => String(key)));
-
-      const nextSelectedScans = new Set<string>();
-
-      for (const scanId of selectedScans) {
-        if (!allSelectableScanIds.includes(scanId) && !visibleChildScanIds.includes(scanId)) {
-          nextSelectedScans.add(scanId);
+  const setScanSelection = useCallback(
+    (scanId: string, selected: boolean) => {
+      setLocalSelectedScans((previous) => {
+        const next = new Set(previous.size > 0 ? previous : selectedScans);
+        if (selected) {
+          next.add(scanId);
+        } else {
+          next.delete(scanId);
         }
-      }
+        return next;
+      });
+      onSelectScan(scanId, selected);
+    },
+    [onSelectScan, selectedScans]
+  );
 
-      for (const image of tableRows) {
-        const targetIds = getSelectableScanIds(image);
-
-        if (selectedKeys.has(image.image_name)) {
-          targetIds.forEach((scanId) => nextSelectedScans.add(scanId));
-          continue;
-        }
-
-        for (const scanId of targetIds) {
-          if (selectedKeys.has(scanId)) {
-            nextSelectedScans.add(scanId);
+  const setScanIdsSelection = useCallback(
+    (scanIds: string[], selected: boolean) => {
+      setLocalSelectedScans((previous) => {
+        const next = new Set(previous.size > 0 ? previous : selectedScans);
+        for (const scanId of scanIds) {
+          if (selected) {
+            next.add(scanId);
+          } else {
+            next.delete(scanId);
           }
         }
-      }
-
-      setSelectedImageNames(
-        new Set(
-          tableRows
-            .filter((image) => selectedKeys.has(image.image_name))
-            .map((image) => image.image_name)
-        )
-      );
-      onSelectedScansChange(nextSelectedScans);
+        return next;
+      });
     },
-    [
-      allSelectableScanIds,
-      getSelectableScanIds,
-      onSelectedScansChange,
-      selectedScans,
-      tableRows,
-      visibleChildScanIds,
-    ]
+    [selectedScans]
   );
 
   return (
@@ -537,13 +504,10 @@ export function ImageScansTable({
           aria-label="Scans by image"
           className="min-w-[980px]"
           expandedKeys={expanded}
-          selectedKeys={selectedTableKeys}
-          selectionMode="multiple"
           treeColumn="expander"
           onExpandedChange={(keys) => {
             onExpandedChange(new Set(Array.from(keys, (key) => String(key))));
           }}
-          onSelectionChange={handleSelectionChange}
         >
           <Table.Header>
             <Table.Column className="w-8 pr-0">
@@ -555,11 +519,12 @@ export function ImageScansTable({
                   setSelectedImageNames(
                     selected ? new Set(tableRows.map((image) => image.image_name)) : new Set()
                   );
+                  setScanIdsSelection(allSelectableScanIds, selected);
                   onSelectedScansChange(
                     selected
-                      ? new Set([...selectedScans, ...allSelectableScanIds])
+                      ? new Set([...displaySelectedScans, ...allSelectableScanIds])
                       : new Set(
-                          Array.from(selectedScans).filter(
+                          Array.from(displaySelectedScans).filter(
                             (scanId) => !allSelectableScanIds.includes(scanId)
                           )
                         )
@@ -624,9 +589,10 @@ export function ImageScansTable({
                   const isParentSelected =
                     effectiveSelectedImageNames.has(img.image_name) ||
                     (targetIds.length > 0 &&
-                      targetIds.every((scanId) => selectedScans.has(scanId)));
+                      targetIds.every((scanId) => displaySelectedScans.has(scanId)));
                   const isParentIndeterminate =
-                    !isParentSelected && targetIds.some((scanId) => selectedScans.has(scanId));
+                    !isParentSelected &&
+                    targetIds.some((scanId) => displaySelectedScans.has(scanId));
 
                   return (
                     <Table.Row id={img.image_name} textValue={img.image_name}>
@@ -645,6 +611,7 @@ export function ImageScansTable({
                               }
                               return next;
                             });
+                            setScanIdsSelection(targetIds, selected);
 
                             if (onSelectImageScans) {
                               void onSelectImageScans(
@@ -656,7 +623,7 @@ export function ImageScansTable({
                               return;
                             }
 
-                            onSelectScan(img.latest_scan_id, selected);
+                            setScanSelection(img.latest_scan_id, selected);
                           }}
                         />
                       </Table.Cell>
@@ -790,6 +757,7 @@ export function ImageScansTable({
                       <ImageScansTreeChildrenRows
                         childRefreshKey={childRefreshKey}
                         imageName={img.image_name}
+                        isImageSelected={isParentSelected}
                         onCancel={onCancel}
                         onDelete={onDelete}
                         onSelectScan={(scanId, selected) => {
@@ -800,19 +768,21 @@ export function ImageScansTable({
                               return next;
                             });
                           }
-                          onSelectScan(scanId, selected);
+                          setScanSelection(scanId, selected);
                         }}
                         onVisibleScanIdsChange={(name, ids) => {
                           setVisibleScanIdsByImage((previous) => ({ ...previous, [name]: ids }));
                           if (
                             effectiveSelectedImageNames.has(name) &&
-                            ids.some((scanId) => !selectedScans.has(scanId))
+                            ids.some((scanId) => !displaySelectedScans.has(scanId))
                           ) {
-                            onSelectedScansChange(new Set([...selectedScans, ...ids]));
+                            const next = new Set([...displaySelectedScans, ...ids]);
+                            setLocalSelectedScans(next);
+                            onSelectedScansChange(next);
                           }
                         }}
                         orgNamesById={orgNamesById}
-                        selectedScans={selectedScans}
+                        selectedScans={displaySelectedScans}
                       />
                     </Table.Row>
                   );

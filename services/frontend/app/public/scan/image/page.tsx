@@ -1,6 +1,13 @@
 'use client';
 import { Logo } from '@/components/logo';
-import { createPublicScan, getPublicScan, getPublicSettings, getToken, PublicSettings, Scan } from '@/lib/api';
+import {
+  createPublicScan,
+  getPublicScan,
+  getPublicSettings,
+  getToken,
+  PublicSettings,
+  Scan,
+} from '@/lib/api';
 import {
   addToPublicHistory,
   clearPublicHistory,
@@ -9,6 +16,9 @@ import {
   timeAgo,
   updatePublicHistoryEntry,
 } from '@/lib/publicScanHistory';
+import { PublicNavbar } from '@/components/public/public-navbar';
+import { Button, Chip, Input, ToggleButton, ToggleButtonGroup, type Key } from '@heroui/react';
+import { IrisScanIcon, PackageIcon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -18,7 +28,7 @@ function CopyButton({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
-      onClick={e => {
+      onClick={(e) => {
         e.stopPropagation();
         navigator.clipboard.writeText(url).then(() => {
           setCopied(true);
@@ -27,15 +37,38 @@ function CopyButton({ url }: { url: string }) {
       }}
       title="Copy link"
       className="shrink-0 flex items-center justify-center size-6 rounded-md transition-all opacity-0 group-hover:opacity-100 hover:!opacity-100"
-      style={{ color: copied ? '#34d399' : 'var(--text-muted)', background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
+      style={{
+        color: copied ? '#34d399' : 'var(--text-muted)',
+        background: 'var(--surface-bg)',
+        border: '1px solid var(--surface-border)',
+      }}
     >
       {copied ? (
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="20 6 9 17 4 12"/>
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="20 6 9 17 4 12" />
         </svg>
       ) : (
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
         </svg>
       )}
     </button>
@@ -52,10 +85,14 @@ const PLATFORMS = [
 
 function statusStyle(status: string): { color: string; dot: string } {
   switch (status) {
-    case 'completed': return { color: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' };
-    case 'failed':    return { color: 'text-red-500 dark:text-red-400',         dot: 'bg-red-500' };
-    case 'running':   return { color: 'text-blue-500 dark:text-blue-400',        dot: 'bg-blue-400' };
-    default:          return { color: 'text-zinc-500',                           dot: 'bg-zinc-400' };
+    case 'completed':
+      return { color: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' };
+    case 'failed':
+      return { color: 'text-red-500 dark:text-red-400', dot: 'bg-red-500' };
+    case 'running':
+      return { color: 'text-blue-500 dark:text-blue-400', dot: 'bg-blue-400' };
+    default:
+      return { color: 'text-zinc-500', dot: 'bg-zinc-400' };
   }
 }
 
@@ -63,27 +100,39 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
   const router = useRouter();
   const st = statusStyle(record.status);
   const isActive = record.status === 'running' || record.status === 'pending';
-  const scanUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/public/scan/${record.id}`
-    : `/public/scan/${record.id}`;
+  const scanUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/public/scan/${record.id}`
+      : `/public/scan/${record.id}`;
   return (
     <div
       role="link"
       tabIndex={0}
       onClick={() => router.push(`/public/scan/${record.id}`)}
-      onKeyDown={e => { if (e.key === 'Enter') router.push(`/public/scan/${record.id}`); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') router.push(`/public/scan/${record.id}`);
+      }}
       className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors group cursor-pointer"
       style={{ background: 'var(--row-hover)' }}
-      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-bg)')}
-      onMouseLeave={e => (e.currentTarget.style.background = 'var(--row-hover)')}
+      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-bg)')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--row-hover)')}
     >
       <div className="flex-1 min-w-0">
-        <p className="font-mono text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+        <p
+          className="font-mono text-sm font-medium truncate"
+          style={{ color: 'var(--text-primary)' }}
+        >
           {record.image_name}:{record.image_tag}
         </p>
         {record.platform && (
-          <span className="text-xs px-1.5 py-0.5 rounded font-mono mt-0.5 inline-block"
-            style={{ background: 'rgba(124,58,237,0.1)', color: '#7c3aed', border: '1px solid rgba(124,58,237,0.15)' }}>
+          <span
+            className="text-xs px-1.5 py-0.5 rounded font-mono mt-0.5 inline-block"
+            style={{
+              background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+              color: 'var(--accent)',
+              border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
+            }}
+          >
             {record.platform}
           </span>
         )}
@@ -96,23 +145,45 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
 
       {record.status === 'completed' && (
         <div className="hidden sm:flex items-center gap-2 shrink-0 text-xs font-mono">
-          {record.critical_count > 0 && <span className="text-red-500 dark:text-red-400">{record.critical_count}C</span>}
-          {record.high_count > 0     && <span className="text-orange-500 dark:text-orange-400">{record.high_count}H</span>}
-          {record.medium_count > 0   && <span className="text-yellow-600 dark:text-yellow-400">{record.medium_count}M</span>}
-          {record.low_count > 0      && <span className="text-blue-500 dark:text-blue-400">{record.low_count}L</span>}
-          {record.critical_count === 0 && record.high_count === 0 && record.medium_count === 0 && record.low_count === 0 && (
-            <span className="text-emerald-600 dark:text-emerald-400">Clean</span>
+          {record.critical_count > 0 && (
+            <span className="text-red-500 dark:text-red-400">{record.critical_count}C</span>
           )}
+          {record.high_count > 0 && (
+            <span className="text-orange-500 dark:text-orange-400">{record.high_count}H</span>
+          )}
+          {record.medium_count > 0 && (
+            <span className="text-yellow-600 dark:text-yellow-400">{record.medium_count}M</span>
+          )}
+          {record.low_count > 0 && (
+            <span className="text-blue-500 dark:text-blue-400">{record.low_count}L</span>
+          )}
+          {record.critical_count === 0 &&
+            record.high_count === 0 &&
+            record.medium_count === 0 &&
+            record.low_count === 0 && (
+              <span className="text-emerald-600 dark:text-emerald-400">Clean</span>
+            )}
         </div>
       )}
 
-      <span className="text-xs shrink-0" style={{ color: 'var(--text-faint)' }}>{timeAgo(record.created_at)}</span>
+      <span className="text-xs shrink-0" style={{ color: 'var(--text-faint)' }}>
+        {timeAgo(record.created_at)}
+      </span>
       <CopyButton url={scanUrl} />
 
-      <svg className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" width="14" height="14"
-        viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-        style={{ color: 'var(--text-muted)' }}>
-        <polyline points="9 18 15 12 9 6"/>
+      <svg
+        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ color: 'var(--text-muted)' }}
+      >
+        <polyline points="9 18 15 12 9 6" />
       </svg>
     </div>
   );
@@ -137,7 +208,11 @@ export default function PublicImageScanPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     setIsLoggedIn(!!getToken());
-    getPublicSettings().then(setSettings).catch(() => setSettings({ enabled: true, rate_limit_per_hour: 5, local_scan_available: true }));
+    getPublicSettings()
+      .then(setSettings)
+      .catch(() =>
+        setSettings({ enabled: true, rate_limit_per_hour: 5, local_scan_available: true })
+      );
     setHistory(getPublicHistory());
     inputRef.current?.focus();
   }, []);
@@ -145,13 +220,13 @@ export default function PublicImageScanPage() {
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
 
-    const active = history.filter(s => s.status === 'pending' || s.status === 'running');
+    const active = history.filter((s) => s.status === 'pending' || s.status === 'running');
     if (active.length === 0) return;
 
     pollRef.current = setInterval(async () => {
       let anyChange = false;
       await Promise.all(
-        active.map(async record => {
+        active.map(async (record) => {
           try {
             const fresh = await getPublicScan(record.id);
             if (fresh.status !== record.status) {
@@ -165,13 +240,17 @@ export default function PublicImageScanPage() {
               });
               anyChange = true;
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         })
       );
       if (anyChange) setHistory(getPublicHistory());
     }, 3000);
 
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, [history]);
 
   async function handleScan(e: React.FormEvent<HTMLFormElement>) {
@@ -203,11 +282,18 @@ export default function PublicImageScanPage() {
     setHistory([]);
   }
 
-  const isDisabled = settings !== null && (!settings.enabled || settings.local_scan_available === false);
-  const disabledMessage = settings?.disabled_reason || 'The administrator has disabled this feature. Please check back later.';
+  const isDisabled =
+    settings !== null && (!settings.enabled || settings.local_scan_available === false);
+  const disabledMessage =
+    settings?.disabled_reason ||
+    'The administrator has disabled this feature. Please check back later.';
+  const selectedPlatformKey = platform || '';
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--app-bg)', color: 'var(--text-primary)' }}>
+    <div
+      className="min-h-screen flex flex-col"
+      style={{ background: 'var(--app-bg)', color: 'var(--text-primary)' }}
+    >
       {/* Animated background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <style>{`
@@ -222,93 +308,73 @@ export default function PublicImageScanPage() {
             100% { transform: translateY(100vh); opacity: 0; }
           }
         `}</style>
-        <div className="absolute -top-32 left-1/2 -translate-x-1/2 size-[600px] rounded-full"
-          style={{ background: isDark ? 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 65%)' : 'radial-gradient(circle, rgba(124,58,237,0.09) 0%, transparent 65%)' }} />
-        <div className="absolute bottom-0 right-1/4 size-[400px] rounded-full"
-          style={{ background: isDark ? 'radial-gradient(circle, rgba(109,40,217,0.1) 0%, transparent 65%)' : 'radial-gradient(circle, rgba(109,40,217,0.05) 0%, transparent 65%)' }} />
-        <div className="absolute inset-0"
-          style={{
-            backgroundImage: isDark
-              ? 'radial-gradient(circle, rgba(167,139,250,0.12) 1px, transparent 1px)'
-              : 'radial-gradient(circle, rgba(124,58,237,0.07) 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
-            animation: 'gridDrift 14s linear infinite',
-          }} />
-        <div className="absolute inset-x-0 h-px"
+        <div
+          className="absolute -top-32 left-1/2 -translate-x-1/2 size-[600px] rounded-full"
           style={{
             background: isDark
-              ? 'linear-gradient(90deg, transparent, rgba(124,58,237,0.35), rgba(167,139,250,0.45), rgba(124,58,237,0.35), transparent)'
-              : 'linear-gradient(90deg, transparent, rgba(124,58,237,0.18), rgba(124,58,237,0.25), rgba(124,58,237,0.18), transparent)',
+              ? 'radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent) 0%, transparent 65%)'
+              : 'radial-gradient(circle, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 65%)',
+          }}
+        />
+        <div
+          className="absolute bottom-0 right-1/4 size-[400px] rounded-full"
+          style={{
+            background: isDark
+              ? 'radial-gradient(circle, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 65%)'
+              : 'radial-gradient(circle, color-mix(in srgb, var(--accent) 5%, transparent) 0%, transparent 65%)',
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: isDark
+              ? 'radial-gradient(circle, color-mix(in srgb, var(--accent) 12%, transparent) 1px, transparent 1px)'
+              : 'radial-gradient(circle, color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px)',
+            backgroundSize: '40px 40px',
+            animation: 'gridDrift 14s linear infinite',
+          }}
+        />
+        <div
+          className="absolute inset-x-0 h-px"
+          style={{
+            background: isDark
+              ? 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 35%, transparent), color-mix(in srgb, var(--accent) 45%, transparent), color-mix(in srgb, var(--accent) 35%, transparent), transparent)'
+              : 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--accent) 25%, transparent), color-mix(in srgb, var(--accent) 18%, transparent), transparent)',
             animation: 'sweepBeam 9s ease-in-out infinite',
             animationDelay: '1.5s',
             top: 0,
-          }} />
+          }}
+        />
       </div>
 
-      {/* Nav */}
-      <header className="relative z-10 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="size-8 rounded-xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 0 12px rgba(124,58,237,0.5)' }}>
-            <Logo size={16} className="text-white" />
-          </div>
-          <span className="font-semibold text-[15px] tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</span>
-        </Link>
-
-        <div className="flex items-center gap-2">
-          <Link href="/public/scan/helm"
-            className="hidden sm:flex text-sm px-3 py-1.5 rounded-xl font-medium transition-colors items-center gap-1.5"
-            style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="14" y2="14"/>
-              <path d="M12 2a10 10 0 0 1 0 20M2 12h4M18 12h4"/>
-            </svg>
-            Scan Helm
-          </Link>
-          {mounted && (
-            <button
-              onClick={() => setTheme(isDark ? 'light' : 'dark')}
-              className="size-9 flex items-center justify-center rounded-xl transition-colors"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
-              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {isDark ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-                </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
-              )}
-            </button>
-          )}
-          <Link href={isLoggedIn ? '/scans' : '/login'} className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
-            style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
-            {isLoggedIn ? 'Dashboard →' : 'Sign in'}
-          </Link>
-        </div>
-      </header>
+      <PublicNavbar
+        isDark={isDark}
+        isLoggedIn={isLoggedIn}
+        onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
+        alternateAction={{ href: '/public/scan/helm', label: 'Scan Helm', icon: <PackageIcon size={16} /> }}
+      />
 
       <main className="relative z-10 flex-1 flex flex-col items-center px-4 py-12">
         <div className="w-full max-w-2xl space-y-8 my-auto">
-
           {/* Hero */}
           <div className="text-center space-y-4">
             <div className="flex justify-center">
-              <div className="size-16 rounded-2xl flex items-center justify-center"
-                style={{
-                  background: isDark ? 'linear-gradient(135deg, rgba(124,58,237,0.25) 0%, rgba(109,40,217,0.12) 100%)' : 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(109,40,217,0.06) 100%)',
-                  border: '1px solid rgba(167,139,250,0.25)',
-                  boxShadow: '0 0 32px rgba(124,58,237,0.15)',
-                }}>
-                <Logo size={28} className="text-[#a78bfa]" />
-              </div>
+              <Logo size={48} className="text-white" />
             </div>
             <div>
-              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+              <h1
+                className="text-3xl sm:text-4xl font-bold tracking-tight"
+                style={{ color: 'var(--text-primary)' }}
+              >
                 Scan any Docker image{' '}
-                <span style={{ background: 'linear-gradient(135deg, #a78bfa, #7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                <span
+                  style={{
+                    background:
+                      'linear-gradient(135deg, color-mix(in srgb, var(--accent) 55%, white), var(--accent))',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
                   instantly
                 </span>
               </h1>
@@ -320,60 +386,76 @@ export default function PublicImageScanPage() {
 
           {/* Form */}
           {isDisabled ? (
-            <div className="rounded-2xl px-6 py-5 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-              <p className="text-red-500 dark:text-red-400 font-medium">Public scanning is temporarily disabled</p>
-              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{disabledMessage}</p>
+            <div
+              className="rounded-2xl px-6 py-5 text-center"
+              style={{
+                background: 'rgba(239,68,68,0.08)',
+                border: '1px solid rgba(239,68,68,0.2)',
+              }}
+            >
+              <p className="text-red-500 dark:text-red-400 font-medium">
+                Public scanning is temporarily disabled
+              </p>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                {disabledMessage}
+              </p>
             </div>
           ) : (
             <form onSubmit={handleScan} className="space-y-2">
-              <div className="flex items-center gap-2 p-2 rounded-2xl"
-                style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)', boxShadow: 'var(--surface-shadow)' }}>
-                <div className="pl-2 shrink-0" style={{ color: 'var(--text-faint)' }}>
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/><line x1="15" y1="9" x2="15" y2="21"/>
-                  </svg>
-                </div>
-                <input
+              <div
+                className="flex items-center gap-2 p-2 rounded-2xl"
+                style={{
+                  background: 'var(--surface-bg)',
+                  border: '1px solid var(--surface-border)',
+                  boxShadow: 'var(--surface-shadow)',
+                }}
+              >
+                <IrisScanIcon size={28} />
+                <Input
                   ref={inputRef}
                   type="text"
                   value={input}
-                  onChange={e => setInput(e.target.value)}
+                  onChange={(e) => setInput(e.target.value)}
                   placeholder="nginx:latest  or  ubuntu:22.04"
                   disabled={loading}
-                  className="flex-1 bg-transparent text-base outline-none font-mono py-2.5"
-                  style={{ color: 'var(--text-primary)', caretColor: '#7c3aed' }}
+                  aria-label="Docker image"
+                  variant="secondary"
+                  className="flex-1 text-base font-mono"
                 />
-                <button
-                  type="submit"
-                  disabled={loading || !input.trim()}
-                  className="shrink-0 px-5 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90"
-                  style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', boxShadow: '0 0 20px rgba(124,58,237,0.4), inset 0 1px 0 rgba(255,255,255,0.15)' }}
-                >
+                <Button type="submit" isDisabled={loading || !input.trim()} size="lg">
                   {loading ? (
                     <span className="flex items-center gap-2">
                       <span className="size-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                       Starting…
                     </span>
-                  ) : 'Scan'}
-                </button>
+                  ) : (
+                    'Scan'
+                  )}
+                </Button>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs" style={{ color: 'var(--text-faint)' }}>Platform:</span>
-                {PLATFORMS.map(p => (
-                  <button
-                    key={p.value}
-                    type="button"
-                    onClick={() => setPlatform(p.value)}
-                    className="text-xs px-2.5 py-1 rounded-lg font-mono transition-all"
-                    style={platform === p.value
-                      ? { background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(167,139,250,0.4)', color: '#7c3aed' }
-                      : { background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }
-                    }
-                  >
-                    {p.label}
-                  </button>
-                ))}
+                <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
+                  Platform:
+                </span>
+                <ToggleButtonGroup
+                  selectionMode="single"
+                  selectedKeys={[selectedPlatformKey]}
+                  disallowEmptySelection
+                  onSelectionChange={(keys) => {
+                    const key = Array.from(keys)[0] as Key | undefined;
+                    setPlatform(key ? String(key) : '');
+                  }}
+                  size="sm"
+                  className="font-mono"
+                >
+                  {PLATFORMS.map((p, i) => (
+                    <ToggleButton key={p.value} id={p.value} className="text-xs">
+                      {i > 0 ? <ToggleButtonGroup.Separator /> : null}
+                      {p.label}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
               </div>
 
               {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
@@ -383,15 +465,24 @@ export default function PublicImageScanPage() {
           {/* Quick picks */}
           {!isDisabled && (
             <div className="flex flex-wrap gap-2">
-              {['nginx:latest', 'ubuntu:22.04', 'python:3.11-slim', 'node:20-alpine'].map(img => (
-                <button
+              {['nginx:latest', 'ubuntu:22.04', 'python:3.11-slim', 'node:20-alpine'].map((img) => (
+                <Chip
                   key={img}
                   onClick={() => setInput(img)}
-                  className="text-xs px-3 py-1.5 rounded-full font-mono transition-colors"
-                  style={{ background: 'var(--row-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setInput(img);
+                    }
+                  }}
+                  variant="soft"
+                  color="default"
+                  className="text-xs px-3 py-1.5 rounded-full font-mono transition-colors cursor-pointer"
                 >
                   {img}
-                </button>
+                </Chip>
               ))}
             </div>
           )}
@@ -400,20 +491,27 @@ export default function PublicImageScanPage() {
           {history.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Your recent scans</h2>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                  Your recent scans
+                </h2>
                 <button
                   onClick={handleClearHistory}
                   className="text-xs transition-colors"
                   style={{ color: 'var(--text-faint)' }}
-                  onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-faint)')}
                 >
                   Clear history
                 </button>
               </div>
-              <div className="rounded-2xl overflow-hidden space-y-px p-2"
-                style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
-                {history.map(record => (
+              <div
+                className="rounded-2xl overflow-hidden space-y-px p-2"
+                style={{
+                  background: 'var(--surface-bg)',
+                  border: '1px solid var(--surface-border)',
+                }}
+              >
+                {history.map((record) => (
                   <HistoryRow key={record.id} record={record} />
                 ))}
               </div>
@@ -425,7 +523,10 @@ export default function PublicImageScanPage() {
         </div>
       </main>
 
-      <footer className="relative z-10 text-center py-6 text-xs" style={{ color: 'var(--text-faint)', borderTop: '1px solid var(--border-subtle)' }}>
+      <footer
+        className="relative z-10 text-center py-6 text-xs"
+        style={{ color: 'var(--text-faint)', borderTop: '1px solid var(--border-subtle)' }}
+      >
         JustScan · Self-hosted image vulnerability scanner
       </footer>
     </div>

@@ -1,5 +1,28 @@
 'use client';
 
+import {
+  Bar as EvilBar,
+  EvilBarChart,
+  Grid as EvilBarGrid,
+  Tooltip as EvilBarTooltip,
+  XAxis as EvilBarXAxis,
+  YAxis as EvilBarYAxis,
+} from '@/components/evilcharts/charts/bar-chart';
+import {
+  EvilLineChart,
+  Grid as EvilLineGrid,
+  Line as EvilLine,
+  Tooltip as EvilLineTooltip,
+  XAxis as EvilLineXAxis,
+  YAxis as EvilLineYAxis,
+} from '@/components/evilcharts/charts/line-chart';
+import {
+  CHART_TONES,
+  SEVERITY_SERIES,
+  formatChartDate,
+  singleSeriesConfig,
+  typedChartConfigFromSeries,
+} from '@/components/ui/chart-adapter';
 import { ChartSkeleton } from '@/components/ui/skeleton';
 import { getAdminDashboard } from '@/lib/api/admin';
 import type { AdminDashboard, AdminDashboardVulnerabilityTrendPoint } from '@/lib/api/types/admin';
@@ -8,25 +31,6 @@ import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Button, Card, Chip, Link, Skeleton } from '@heroui/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-
-const SEVERITY_SERIES = [
-  { key: 'critical', label: 'Critical', color: '#f87171' },
-  { key: 'high', label: 'High', color: '#fb923c' },
-  { key: 'medium', label: 'Medium', color: '#fbbf24' },
-  { key: 'low', label: 'Low', color: '#60a5fa' },
-  { key: 'unknown', label: 'Unknown', color: '#a1a1aa' },
-] as const;
 
 function formatCompact(value: number) {
   return new Intl.NumberFormat('en', {
@@ -37,49 +41,6 @@ function formatCompact(value: number) {
 
 function formatLatency(value: number) {
   return `${Math.round(value)}ms`;
-}
-
-type AdminChartTooltipProps = {
-  active?: boolean;
-  label?: string | number;
-  payload?: Array<{ name?: string; value?: number | string; color?: string }>;
-  formatLabel?: (value: string) => string;
-};
-
-function AdminChartTooltip({ active, label, payload, formatLabel }: AdminChartTooltipProps) {
-  if (!active || !payload || payload.length === 0) return null;
-
-  return (
-    <div
-      className="rounded-lg border px-3 py-2 shadow-lg"
-      style={{
-        background: 'rgba(24, 24, 27, 0.96)',
-        borderColor: 'rgba(113, 113, 122, 0.45)',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.45)',
-        backdropFilter: 'blur(4px)',
-      }}
-    >
-      <p className="mb-1 text-xs text-foreground/70">
-        {typeof label === 'string' ? (formatLabel ? formatLabel(label) : label) : ''}
-      </p>
-      <div className="space-y-1">
-        {payload.map((entry, index) => (
-          <div key={entry.name} className="flex items-center justify-between gap-3 text-xs">
-            <span className="inline-flex items-center gap-1.5 text-foreground/80">
-              <span
-                className="inline-block size-2 rounded-full"
-                style={{ background: entry.color ?? '#a1a1aa' }}
-              />
-              {entry.name ?? `Series ${index + 1}`}
-            </span>
-            <span className="font-semibold text-foreground">
-              {Number(entry.value ?? 0).toLocaleString()}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 function ScanVolumeChart({ data }: { data: { date: string; value: number }[] }) {
@@ -93,54 +54,18 @@ function ScanVolumeChart({ data }: { data: { date: string; value: number }[] }) 
 
   return (
     <div className="h-[272px] w-full overflow-hidden rounded-lg">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-          <CartesianGrid stroke="rgba(161,161,170,0.15)" strokeDasharray="3 3" />
-          <XAxis
-            dataKey="date"
-            tickFormatter={(value: string) =>
-              new Date(value).toLocaleDateString('en', { month: 'short', day: 'numeric' })
-            }
-            minTickGap={30}
-            tick={{ fill: 'rgb(113 113 122)', fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            tick={{ fill: 'rgb(113 113 122)', fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Tooltip
-            content={(props: any) => (
-              <AdminChartTooltip
-                active={props.active}
-                label={props.label}
-                payload={props.payload}
-                formatLabel={(value: string) =>
-                  new Date(value).toLocaleDateString('en', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })
-                }
-              />
-            )}
-            wrapperStyle={{ outline: 'none', zIndex: 30 }}
-            contentStyle={{ background: 'transparent', border: 'none', padding: 0 }}
-            cursor={{ stroke: 'rgba(124,58,237,0.45)', strokeWidth: 1, strokeDasharray: '3 3' }}
-          />
-          <Line
-            type="monotone"
-            dataKey="value"
-            name="Scans"
-            stroke="#7c3aed"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 5, stroke: '#ffffff', strokeWidth: 2 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+      <EvilLineChart
+        data={data}
+        config={singleSeriesConfig('value', 'Scans', CHART_TONES.accent.dark)}
+        className="h-full !aspect-auto"
+        chartProps={{ margin: { top: 8, right: 8, left: -18, bottom: 0 } }}
+      >
+        <EvilLineGrid stroke="rgba(161,161,170,0.15)" />
+        <EvilLineXAxis dataKey="date" tickFormatter={(value: string) => formatChartDate(value)} minTickGap={30} />
+        <EvilLineYAxis />
+        <EvilLineTooltip variant="frosted-glass" roundness="lg" />
+        <EvilLine dataKey="value" curveType="monotone" />
+      </EvilLineChart>
     </div>
   );
 }
@@ -162,45 +87,21 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
   return (
     <div className="space-y-4">
       <div className="h-[272px] w-full overflow-hidden rounded-lg">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={series} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-            <CartesianGrid stroke="rgba(161,161,170,0.15)" vertical={false} />
-            <XAxis
-              dataKey="label"
-              tick={{ fill: 'rgb(113 113 122)', fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              tick={{ fill: 'rgb(113 113 122)', fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip
-              content={(props: any) => (
-                <AdminChartTooltip
-                  active={props.active}
-                  label={props.label}
-                  payload={props.payload}
-                />
-              )}
-              wrapperStyle={{ outline: 'none', zIndex: 30 }}
-              contentStyle={{ background: 'transparent', border: 'none', padding: 0 }}
-              cursor={{ fill: 'rgba(161,161,170,0.08)' }}
-            />
-            {SEVERITY_SERIES.map((severity) => (
-              <Bar
-                key={severity.key}
-                dataKey={severity.key}
-                name={severity.label}
-                stackId="severity"
-                fill={severity.color}
-                radius={severity.key === 'critical' ? [6, 6, 0, 0] : [0, 0, 0, 0]}
-                maxBarSize={96}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
+        <EvilBarChart
+          data={series}
+          config={typedChartConfigFromSeries(SEVERITY_SERIES)}
+          className="h-full !aspect-auto"
+          stackType="stacked"
+          chartProps={{ margin: { top: 8, right: 8, left: -18, bottom: 0 } }}
+        >
+          <EvilBarGrid stroke="rgba(161,161,170,0.15)" vertical={false} />
+          <EvilBarXAxis dataKey="label" />
+          <EvilBarYAxis />
+          <EvilBarTooltip variant="frosted-glass" roundness="lg" />
+          {SEVERITY_SERIES.map((severity) => (
+            <EvilBar key={severity.key} dataKey={severity.key} variant="default" />
+          ))}
+        </EvilBarChart>
       </div>
 
       <div className="flex flex-wrap gap-2">

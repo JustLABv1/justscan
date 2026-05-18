@@ -50,6 +50,8 @@ import {
   Modal,
   Pagination,
   Popover,
+  Radio,
+  RadioGroup,
   SearchField,
   Select,
   TextArea,
@@ -253,20 +255,22 @@ function ScanWizardStep({
       className="rounded-2xl px-3 py-2.5 transition-all"
       style={{
         background: active
-          ? 'linear-gradient(145deg, rgba(124,58,237,0.14) 0%, rgba(124,58,237,0.08) 100%)'
+          ? 'linear-gradient(145deg, color-mix(in oklab, var(--accent) 20%, transparent) 0%, color-mix(in oklab, var(--accent) 10%, transparent) 100%)'
           : 'var(--surface-secondary)',
-        border: active ? '1px solid rgba(167,139,250,0.3)' : '1px solid var(--surface-border)',
+        border: active
+          ? '1px solid color-mix(in oklab, var(--accent) 30%, transparent)'
+          : '1px solid var(--surface-border)',
       }}
     >
       <div className="flex items-center gap-3">
         <span
           className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
           style={{
-            background: complete || active ? 'rgba(124,58,237,0.18)' : 'rgba(148,163,184,0.12)',
-            color: complete || active ? '#8b5cf6' : '#94a3b8',
+            background: complete || active ? 'var(--accent-soft)' : 'rgba(148,163,184,0.12)',
+            color: complete || active ? 'var(--accent-soft-foreground)' : '#94a3b8',
             border:
               complete || active
-                ? '1px solid rgba(167,139,250,0.28)'
+                ? '1px solid color-mix(in oklab, var(--accent) 24%, transparent)'
                 : '1px solid rgba(148,163,184,0.18)',
           }}
         >
@@ -285,51 +289,60 @@ function ScanSourceCard({
   description,
   disabled = false,
   eyebrow,
-  onClick,
-  selected,
+  source,
   title,
 }: {
   description: string;
   disabled?: boolean;
   eyebrow: string;
-  onClick: () => void;
-  selected: boolean;
+  source: ScanSourceKind;
   title: string;
 }) {
   return (
-    <button
-      aria-pressed={selected}
-      className="rounded-[22px] p-4 text-left transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-60"
-      disabled={disabled}
-      onClick={onClick}
-      type="button"
-      style={{
-        background: selected
-          ? 'linear-gradient(145deg, rgba(124,58,237,0.16) 0%, rgba(124,58,237,0.08) 100%)'
-          : 'var(--row-hover)',
-        border: selected ? '1px solid rgba(167,139,250,0.32)' : '1px solid var(--surface-tertiary)',
-      }}
+    <Radio
+      className="group w-full cursor-pointer rounded-[22px] border border-surface-tertiary bg-row-hover p-4 text-left transition-all duration-150 data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/10 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-60"
+      isDisabled={disabled}
+      value={source}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-violet-500">{eyebrow}</p>
-          <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">{title}</p>
-          <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{description}</p>
-        </div>
-        <span
-          className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
-          style={{
-            background: selected ? 'rgba(124,58,237,0.18)' : 'rgba(148,163,184,0.12)',
-            color: selected ? '#8b5cf6' : '#94a3b8',
-            border: selected
-              ? '1px solid rgba(167,139,250,0.28)'
-              : '1px solid rgba(148,163,184,0.18)',
-          }}
-        >
-          {selected ? '✓' : ''}
-        </span>
-      </div>
-    </button>
+      <Radio.Content className="min-w-0 flex-1">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-accent">{eyebrow}</p>
+        <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">{title}</p>
+        <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{description}</p>
+      </Radio.Content>
+      <Radio.Control
+        className="ml-auto mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-slate-300/50 bg-slate-400/10 group-data-[selected=true]:border-accent/40 group-data-[selected=true]:bg-accent/20"
+        aria-hidden
+      >
+        <Radio.Indicator className="text-[11px] font-semibold text-accent">
+          {({ isSelected }) => (isSelected ? '✓' : null)}
+        </Radio.Indicator>
+      </Radio.Control>
+    </Radio>
+  );
+}
+
+function ScanWizardField({
+  children,
+  description,
+  label,
+  optional = false,
+}: {
+  children: React.ReactNode;
+  description?: React.ReactNode;
+  label: string;
+  optional?: boolean;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+        {label}{' '}
+        {optional ? (
+          <span className="font-normal text-zinc-400 dark:text-zinc-600">(optional)</span>
+        ) : null}
+      </Label>
+      {children}
+      {description ? <p className="text-xs text-zinc-500">{description}</p> : null}
+    </div>
   );
 }
 
@@ -1486,11 +1499,11 @@ export default function ScansPage() {
         <Modal.Backdrop isDismissable>
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog className="w-[min(94vw,72rem)] max-w-none rounded-2xl overflow-hidden">
-              <Modal.Header className="px-6 py-4">
+              <Modal.Header>
                 <Modal.Heading className="font-semibold">New Scan</Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5">
+              <Modal.Body>
                 <form id="create-scan-form" onSubmit={handleCreate} className="space-y-4">
                   {createError ? (
                     <FormAlert description={createError} title="Scan creation failed" />
@@ -1519,7 +1532,12 @@ export default function ScansPage() {
                         </p>
                       </div>
 
-                      <div className="grid gap-3">
+                      <RadioGroup
+                        className="grid gap-3"
+                        name="scan-source"
+                        onChange={(value) => selectScanSource(value as ScanSourceKind)}
+                        value={scanSource}
+                      >
                         <ScanSourceCard
                           description={
                             capabilities.enable_trivy
@@ -1528,8 +1546,7 @@ export default function ScansPage() {
                           }
                           disabled={!capabilities.enable_trivy}
                           eyebrow="Public"
-                          onClick={() => selectScanSource('public')}
-                          selected={scanSource === 'public'}
+                          source="public"
                           title="Public / Docker Hub"
                         />
                         <ScanSourceCard
@@ -1542,8 +1559,7 @@ export default function ScansPage() {
                           }
                           disabled={!capabilities.enable_trivy || privateRegistries.length === 0}
                           eyebrow="Private"
-                          onClick={() => selectScanSource('private_registry')}
-                          selected={scanSource === 'private_registry'}
+                          source="private_registry"
                           title="Private registry"
                         />
                         <ScanSourceCard
@@ -1554,11 +1570,10 @@ export default function ScansPage() {
                           }
                           disabled={xrayRegistries.length === 0}
                           eyebrow="Xray"
-                          onClick={() => selectScanSource('artifactory_xray')}
-                          selected={scanSource === 'artifactory_xray'}
+                          source="artifactory_xray"
                           title="Artifactory Xray"
                         />
-                      </div>
+                      </RadioGroup>
                     </div>
                   ) : null}
 
@@ -1573,48 +1588,35 @@ export default function ScansPage() {
                         </p>
                       </div>
 
-                      <div
-                        className="rounded-[24px] p-4"
-                        style={{ background: 'var(--surface-secondary)' }}
-                      >
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-violet-500">
-                          Selected source
-                        </p>
-                        <p className="mt-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                      <Card className="bg-surface-secondary">
+                        <Label className="text-sm font-medium">Selected source</Label>
+                        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
                           {scanSource === 'artifactory_xray'
                             ? 'Artifactory Xray'
                             : scanSource === 'private_registry'
                               ? 'Private registry'
                               : 'Public / Docker Hub'}
                         </p>
-                      </div>
+                      </Card>
 
                       {scanSource === 'public' ? (
-                        <div
-                          className="rounded-[24px] p-5"
-                          style={{ background: 'var(--surface-secondary)' }}
-                        >
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-violet-500">
-                            Public image
-                          </p>
-                          <p className="mt-2 text-base font-semibold text-zinc-900 dark:text-white">
+                        <Card className="bg-surface-secondary">
+                          <Label className="text-sm font-medium">Public image</Label>
+                          <p className="text-base font-semibold text-zinc-900 dark:text-white">
                             No registry or repo selection needed
                           </p>
-                          <p className="mt-2 text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+                          <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-300">
                             JustScan will use the image reference from the next step exactly as
                             entered.
                           </p>
-                        </div>
+                        </Card>
                       ) : null}
 
                       {scanSource === 'private_registry' ? (
-                        <div
-                          className="space-y-1.5 rounded-[24px] p-5"
-                          style={{ background: 'var(--surface-secondary)' }}
+                        <ScanWizardField
+                          description="Choose the configured registry that hosts this image so JustScan can authenticate and pull it correctly."
+                          label="Private registry"
                         >
-                          <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                            Private registry
-                          </label>
                           <Select
                             value={registryId || '__none__'}
                             onChange={(value) =>
@@ -1635,26 +1637,22 @@ export default function ScansPage() {
                               </ListBox>
                             </Select.Popover>
                           </Select>
-                          <p className="text-xs text-zinc-500">
-                            Choose the configured registry that hosts this image so JustScan can
-                            authenticate and pull it correctly.
-                          </p>
-                        </div>
+                        </ScanWizardField>
                       ) : null}
 
                       {scanSource === 'artifactory_xray' ? (
                         <div className="space-y-4">
-                          <Card className="space-y-1.5 rounded-[24px] p-5 bg-surface-secondary">
-                            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                              Artifactory registry
-                            </Label>
+                          <ScanWizardField
+                            description="Choose the Xray-backed registry that should resolve and analyze this image."
+                            label="Artifactory registry"
+                          >
                             <Select
                               value={registryId || '__none__'}
                               onChange={(value) =>
                                 setRegistryId(String(value === '__none__' ? '' : (value ?? '')))
                               }
                             >
-                              <Select.Trigger className="bg-surface-tertiary">
+                              <Select.Trigger className="bg-surface-secondary">
                                 <Select.Value />
                                 <Select.Indicator />
                               </Select.Trigger>
@@ -1668,19 +1666,19 @@ export default function ScansPage() {
                                 </ListBox>
                               </Select.Popover>
                             </Select>
-                            <p className="text-xs text-zinc-500">
-                              Choose the Xray-backed registry that should resolve and analyze this
-                              image.
-                            </p>
-                          </Card>
+                          </ScanWizardField>
 
-                          <Card className="space-y-1.5 rounded-[24px] p-5 bg-surface-secondary">
-                            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                              Artifactory Repo{' '}
-                              <span className="text-zinc-400 dark:text-zinc-600 font-normal">
-                                (optional override)
-                              </span>
-                            </Label>
+                          <ScanWizardField
+                            label="Artifactory Repo"
+                            optional
+                            description={
+                              <>
+                                Pick a repo like <span className="font-mono">docker-remote</span> so
+                                you can scan <span className="font-mono">n8nio/n8n</span> instead of
+                                typing <span className="font-mono">docker-remote/n8nio/n8n</span>.
+                              </>
+                            }
+                          >
                             <Autocomplete
                               value={xrayRepositoryAutocompleteValue}
                               onChange={(key: Key | null) => {
@@ -1693,7 +1691,7 @@ export default function ScansPage() {
                                 setXrayRepository(value === '__none__' ? '' : value);
                               }}
                             >
-                              <Autocomplete.Trigger className="bg-surface-tertiary">
+                              <Autocomplete.Trigger className="bg-surface-secondary">
                                 <Autocomplete.Value />
                                 <Autocomplete.ClearButton />
                                 <Autocomplete.Indicator />
@@ -1734,11 +1732,6 @@ export default function ScansPage() {
                                 </Autocomplete.Filter>
                               </Autocomplete.Popover>
                             </Autocomplete>
-                            <p className="text-xs text-zinc-500">
-                              Pick a repo like <span className="font-mono">docker-remote</span> so
-                              you can scan <span className="font-mono">n8nio/n8n</span> instead of
-                              typing <span className="font-mono">docker-remote/n8nio/n8n</span>.
-                            </p>
                             {selectedRegistry &&
                             artifactoryRepositoriesLoading === selectedRegistry.id ? (
                               <p className="text-xs text-zinc-500">
@@ -1761,7 +1754,7 @@ export default function ScansPage() {
                                 value={xrayRepository}
                               />
                             ) : null}
-                          </Card>
+                          </ScanWizardField>
                         </div>
                       ) : null}
                     </div>
@@ -1779,9 +1772,7 @@ export default function ScansPage() {
                       </div>
 
                       <Card className="bg-surface-secondary">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-violet-500">
-                          Selected source
-                        </p>
+                        <Label className="text-sm font-medium">Selected source</Label>
                         <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
                           {scanSource === 'artifactory_xray'
                             ? 'Artifactory Xray'
@@ -1796,6 +1787,7 @@ export default function ScansPage() {
                         label="Image Name"
                         onChange={(e) => setImageName(e.target.value)}
                         placeholder="nginx or n8nio/n8n"
+                        required
                         value={imageName}
                       />
                       <FormField
@@ -1807,7 +1799,7 @@ export default function ScansPage() {
                         value={imageTag}
                       />
 
-                      <Card className="bg-surface-secondary">
+                      <div className="space-y-4 rounded-2xl border border-surface-border bg-surface-secondary p-4">
                         <div
                           aria-expanded={advancedOptionsOpen}
                           className="flex w-full items-start justify-between gap-4 text-left"
@@ -1835,19 +1827,14 @@ export default function ScansPage() {
                         </div>
 
                         {advancedOptionsOpen ? (
-                          <div className="mt-4 space-y-4">
-                            <div className="space-y-1.5">
-                              <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                                Additional Images{' '}
-                                <span className="text-zinc-400 dark:text-zinc-600 font-normal">
-                                  (optional)
-                                </span>
-                              </Label>
+                          <div className="space-y-4">
+                            <ScanWizardField
+                              description="Paste one or many full image references, separated by commas or new lines. Anything still in this box is included when you continue."
+                              label="Additional Images"
+                              optional
+                            >
                               <TextArea
-                                className={joinClassNames(
-                                  inputCls,
-                                  'min-h-24 bg-surface-tertiary resize-y'
-                                )}
+                                className={joinClassNames(inputCls, 'min-h-24 bg-surface resize-y')}
                                 placeholder={
                                   'Paste one or more full image references here\nExample: ghcr.io/example/api:1.2.3, registry.example.com/team/worker:latest'
                                 }
@@ -1855,11 +1842,6 @@ export default function ScansPage() {
                                 onChange={(e) => setAdditionalImageDraft(e.target.value)}
                               />
                               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <p className="text-xs text-zinc-500">
-                                  Paste one or many full image references, separated by commas or
-                                  new lines. Anything still in this box is included when you
-                                  continue.
-                                </p>
                                 <Button
                                   variant="secondary"
                                   size="sm"
@@ -1920,22 +1902,16 @@ export default function ScansPage() {
                                   </div>
                                 </div>
                               ) : null}
-                            </div>
+                            </ScanWizardField>
 
-                            <div className="space-y-1.5">
-                              <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                                Platform{' '}
-                                <span className="text-zinc-400 dark:text-zinc-600 font-normal">
-                                  (optional)
-                                </span>
-                              </Label>
+                            <ScanWizardField label="Platform" optional>
                               <Select
                                 value={platform || '__auto__'}
                                 onChange={(value) =>
                                   setPlatform(String(value === '__auto__' ? '' : (value ?? '')))
                                 }
                               >
-                                <Select.Trigger className="bg-surface-tertiary">
+                                <Select.Trigger>
                                   <Select.Value />
                                   <Select.Indicator />
                                 </Select.Trigger>
@@ -1953,15 +1929,15 @@ export default function ScansPage() {
                                   </ListBox>
                                 </Select.Popover>
                               </Select>
-                            </div>
+                            </ScanWizardField>
                           </div>
                         ) : (
-                          <p className="mt-4 text-xs text-zinc-500">
+                          <p className="text-xs text-zinc-500">
                             Collapsed by default. Open this only if you want to queue more images or
                             force a platform.
                           </p>
                         )}
-                      </Card>
+                      </div>
                     </div>
                   ) : null}
 

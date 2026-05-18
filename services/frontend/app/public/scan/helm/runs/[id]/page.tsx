@@ -1,6 +1,6 @@
 'use client';
 
-import { Logo } from '@/components/logo';
+import { PublicNavbar } from '@/components/public/public-navbar';
 import {
     createPublicHelmScans,
     extractPublicHelmImages,
@@ -13,6 +13,7 @@ import {
 import { deferEffect } from '@/lib/defer-effect';
 import { PublicHelmRunHistoryEntry, updateHelmPublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
+import { Button } from '@heroui/react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -31,66 +32,6 @@ const STATUS_STYLE: Record<string, { color: string; bg: string; border: string; 
     },
     cancelled: { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.20)' },
   };
-
-function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setMounted(true), []);
-
-  if (!mounted) return <div className="size-9" />;
-
-  const isDark = resolvedTheme === 'dark';
-  return (
-    <button
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="size-9 flex items-center justify-center rounded-xl transition-colors"
-      style={{
-        background: 'var(--row-hover)',
-        border: '1px solid var(--border-subtle)',
-        color: 'var(--text-muted)',
-      }}
-      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-    >
-      {isDark ? (
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="5" />
-          <line x1="12" y1="1" x2="12" y2="3" />
-          <line x1="12" y1="21" x2="12" y2="23" />
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-          <line x1="1" y1="12" x2="3" y2="12" />
-          <line x1="21" y1="12" x2="23" y2="12" />
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-        </svg>
-      ) : (
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-      )}
-    </button>
-  );
-}
 
 function StatusBadge({ status }: { status: string }) {
   const state = STATUS_STYLE[status] ?? STATUS_STYLE.pending;
@@ -165,6 +106,8 @@ function guessChartNameFromUrl(url: string) {
 export default function PublicHelmRunDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const runId = Array.isArray(params?.id) ? params.id[0] : params?.id;
 
   const [detail, setDetail] = useState<HelmScanRunDetail | null>(null);
@@ -303,67 +246,33 @@ export default function PublicHelmRunDetailPage() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--app-bg)' }}>
-      <header
-        className="sticky top-0 z-20 flex items-center justify-between px-6 py-4"
-        style={{ background: 'var(--app-bg)', borderBottom: '1px solid var(--border-subtle)' }}
-      >
-        <Link href="/public/scan/helm" className="flex items-center gap-2.5">
-          <div
-            className="size-8 rounded-xl flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-              boxShadow: '0 0 12px rgba(124,58,237,0.4)',
-            }}
-          >
-            <Logo size={16} className="text-white" />
-          </div>
-          <span
-            className="font-semibold text-[15px] tracking-tight"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            JustScan
-          </span>
-        </Link>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => loadRun(true)}
-            disabled={refreshing}
-            className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50"
-            style={{
-              background: 'var(--row-hover)',
-              border: '1px solid var(--border-subtle)',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
-          <button
-            onClick={handleRescanChart}
-            disabled={rescanningChart || !latestRun}
-            className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50"
-            style={{
-              background: 'rgba(124,58,237,0.12)',
-              border: '1px solid rgba(167,139,250,0.25)',
-              color: '#c4b5fd',
-            }}
-          >
-            {rescanningChart ? 'Re-scanning…' : 'Re-scan chart'}
-          </button>
-          <ThemeToggle />
-          <Link
-            href={isLoggedIn ? '/scans' : '/login'}
-            className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
-            style={{
-              background: 'var(--row-hover)',
-              border: '1px solid var(--border-subtle)',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            {isLoggedIn ? 'Dashboard →' : 'Sign in'}
-          </Link>
-        </div>
-      </header>
+      <div className="sticky top-0 z-20">
+        <PublicNavbar
+          isDark={isDark}
+          isLoggedIn={isLoggedIn}
+          onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
+          homeHref="/public/scan/helm"
+          leadingActions={
+            <>
+              <Button onPress={() => loadRun(true)} isDisabled={refreshing} variant="secondary">
+                {refreshing ? 'Refreshing…' : 'Refresh'}
+              </Button>
+              <Button
+                onPress={handleRescanChart}
+                isDisabled={rescanningChart || !latestRun}
+                variant="secondary"
+                style={{
+                  background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+                  color: 'color-mix(in srgb, var(--accent) 55%, white)',
+                }}
+              >
+                {rescanningChart ? 'Re-scanning…' : 'Re-scan chart'}
+              </Button>
+            </>
+          }
+        />
+      </div>
 
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-5">
         {actionError && (
@@ -436,9 +345,9 @@ export default function PublicHelmRunDetailPage() {
             <span
               className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium"
               style={{
-                background: isOCI ? 'rgba(124,58,237,0.1)' : 'rgba(59,130,246,0.1)',
-                color: isOCI ? '#a78bfa' : '#60a5fa',
-                border: `1px solid ${isOCI ? 'rgba(124,58,237,0.2)' : 'rgba(59,130,246,0.2)'}`,
+                background: isOCI ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'rgba(59,130,246,0.1)',
+                color: isOCI ? 'color-mix(in srgb, var(--accent) 55%, white)' : '#60a5fa',
+                border: `1px solid ${isOCI ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'rgba(59,130,246,0.2)'}`,
               }}
             >
               {isOCI ? 'OCI' : 'HTTP'}
@@ -560,8 +469,8 @@ export default function PublicHelmRunDetailPage() {
                         disabled={retrying}
                         className="text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                         style={{
-                          background: 'rgba(124,58,237,0.12)',
-                          border: '1px solid rgba(167,139,250,0.25)',
+                          background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                          border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
                           color: '#c4b5fd',
                         }}
                       >
@@ -571,7 +480,7 @@ export default function PublicHelmRunDetailPage() {
                       <Link
                         href={`/public/scan/${scan.id}`}
                         className="text-xs font-medium"
-                        style={{ color: '#a78bfa' }}
+                        style={{ color: 'color-mix(in srgb, var(--accent) 55%, white)' }}
                       >
                         View →
                       </Link>

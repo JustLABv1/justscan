@@ -1,32 +1,34 @@
 'use client';
 import { Logo } from '@/components/logo';
+import { PublicNavbar } from '@/components/public/public-navbar';
 import {
-    createPublicHelmScans,
-    extractPublicHelmImages,
-    getPublicHelmScanRun,
-    getPublicSettings,
-    getToken,
-    HelmExtractResponse,
-    PublicSettings,
-    Scan,
+  createPublicHelmScans,
+  extractPublicHelmImages,
+  getPublicHelmScanRun,
+  getPublicSettings,
+  getToken,
+  HelmExtractResponse,
+  PublicSettings,
+  Scan,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import {
-    createEditableHelmImages,
-    EditableHelmImage,
-    getHelmImageSourceLabel,
-    parseHelmImageRef,
+  createEditableHelmImages,
+  EditableHelmImage,
+  getHelmImageSourceLabel,
+  parseHelmImageRef,
 } from '@/lib/helm-image-overrides';
 import {
-    addToHelmPublicHistory,
-    addToPublicHistory,
-    getHelmPublicHistory,
-    PublicHelmRunHistoryEntry,
-    timeAgo,
-    updateHelmPublicHistoryEntry,
+  addToHelmPublicHistory,
+  addToPublicHistory,
+  getHelmPublicHistory,
+  PublicHelmRunHistoryEntry,
+  timeAgo,
+  updateHelmPublicHistoryEntry,
 } from '@/lib/publicScanHistory';
+import { Button, Chip, Input, Label, Table } from '@heroui/react';
+import { ArrowRight01Icon, IrisScanIcon, LinkSquare02Icon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -249,26 +251,10 @@ export default function PublicHelmScanPage() {
     }
   }
 
-  function toggleImage(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   function updateEditedRef(id: string, value: string) {
     setImages((prev) =>
       prev.map((image) => (image.id === id ? { ...image, edited_ref: value } : image))
     );
-  }
-
-  function selectAll() {
-    setSelected(new Set(images.map((image) => image.id)));
-  }
-  function deselectAll() {
-    setSelected(new Set());
   }
 
   function openRun(run: PublicHelmRunHistoryEntry) {
@@ -298,24 +284,24 @@ export default function PublicHelmScanPage() {
           className="absolute -top-32 left-1/2 -translate-x-1/2 size-[600px] rounded-full"
           style={{
             background: isDark
-              ? 'radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 65%)'
-              : 'radial-gradient(circle, rgba(124,58,237,0.08) 0%, transparent 65%)',
+              ? 'radial-gradient(circle, color-mix(in srgb, var(--accent) 15%, transparent) 0%, transparent 65%)'
+              : 'radial-gradient(circle, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 65%)',
           }}
         />
         <div
           className="absolute bottom-0 left-1/4 size-[400px] rounded-full"
           style={{
             background: isDark
-              ? 'radial-gradient(circle, rgba(109,40,217,0.1) 0%, transparent 65%)'
-              : 'radial-gradient(circle, rgba(109,40,217,0.05) 0%, transparent 65%)',
+              ? 'radial-gradient(circle, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 65%)'
+              : 'radial-gradient(circle, color-mix(in srgb, var(--accent) 5%, transparent) 0%, transparent 65%)',
           }}
         />
         <div
           className="absolute inset-0"
           style={{
             backgroundImage: isDark
-              ? 'radial-gradient(circle, rgba(167,139,250,0.1) 1px, transparent 1px)'
-              : 'radial-gradient(circle, rgba(124,58,237,0.06) 1px, transparent 1px)',
+              ? 'radial-gradient(circle, color-mix(in srgb, var(--accent) 10%, transparent) 1px, transparent 1px)'
+              : 'radial-gradient(circle, color-mix(in srgb, var(--accent) 6%, transparent) 1px, transparent 1px)',
             backgroundSize: '40px 40px',
             animation: 'helmGridDrift 16s linear infinite',
           }}
@@ -324,8 +310,8 @@ export default function PublicHelmScanPage() {
           className="absolute inset-x-0 h-px"
           style={{
             background: isDark
-              ? 'linear-gradient(90deg, transparent, rgba(124,58,237,0.3), rgba(167,139,250,0.4), rgba(124,58,237,0.3), transparent)'
-              : 'linear-gradient(90deg, transparent, rgba(124,58,237,0.15), rgba(124,58,237,0.22), rgba(124,58,237,0.15), transparent)',
+              ? 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 30%, transparent), color-mix(in srgb, var(--accent) 40%, transparent), color-mix(in srgb, var(--accent) 30%, transparent), transparent)'
+              : 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 15%, transparent), color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 15%, transparent), transparent)',
             animation: 'helmSweepBeam 11s ease-in-out infinite',
             animationDelay: '2s',
             top: 0,
@@ -333,153 +319,30 @@ export default function PublicHelmScanPage() {
         />
       </div>
 
-      {/* Nav */}
-      <header
-        className="relative z-10 flex items-center justify-between px-6 py-4"
-        style={{ borderBottom: '1px solid var(--border-subtle)' }}
-      >
-        <Link href="/" className="flex items-center gap-2.5">
-          <div
-            className="size-8 rounded-xl flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-              boxShadow: '0 0 12px rgba(124,58,237,0.5)',
-            }}
-          >
-            <Logo size={16} className="text-white" />
-          </div>
-          <span
-            className="font-semibold text-[15px] tracking-tight"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            JustScan
-          </span>
-        </Link>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/public/scan/image"
-            className="hidden sm:flex text-sm px-3 py-1.5 rounded-xl font-medium transition-colors items-center gap-1.5"
-            style={{
-              background: 'var(--row-hover)',
-              border: '1px solid var(--border-subtle)',
-              color: 'var(--text-muted)',
-            }}
-          >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <line x1="3" y1="9" x2="21" y2="9" />
-              <line x1="3" y1="15" x2="21" y2="15" />
-              <line x1="9" y1="9" x2="9" y2="21" />
-              <line x1="15" y1="9" x2="15" y2="21" />
-            </svg>
-            Scan Image
-          </Link>
-          {mounted && (
-            <button
-              onClick={() => setTheme(isDark ? 'light' : 'dark')}
-              className="size-9 flex items-center justify-center rounded-xl transition-colors"
-              style={{
-                background: 'var(--row-hover)',
-                border: '1px solid var(--border-subtle)',
-                color: 'var(--text-muted)',
-              }}
-            >
-              {isDark ? (
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="5" />
-                  <line x1="12" y1="1" x2="12" y2="3" />
-                  <line x1="12" y1="21" x2="12" y2="23" />
-                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                  <line x1="1" y1="12" x2="3" y2="12" />
-                  <line x1="21" y1="12" x2="23" y2="12" />
-                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                </svg>
-              ) : (
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                </svg>
-              )}
-            </button>
-          )}
-          <Link
-            href={isLoggedIn ? '/scans' : '/login'}
-            className="text-sm px-3 py-1.5 rounded-xl font-medium transition-colors"
-            style={{
-              background: 'var(--row-hover)',
-              border: '1px solid var(--border-subtle)',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            {isLoggedIn ? 'Dashboard →' : 'Sign in'}
-          </Link>
-        </div>
-      </header>
+      <PublicNavbar
+        isDark={isDark}
+        isLoggedIn={isLoggedIn}
+        onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
+        alternateAction={{
+          href: '/public/scan/image',
+          label: 'Scan Image',
+          icon: <IrisScanIcon size={16} />,
+          hideOnMobile: true,
+        }}
+      />
 
       <main className="relative z-10 flex-1 flex flex-col items-center px-4 py-12">
-        <div className="w-full max-w-2xl space-y-8 my-auto">
+        <div
+          className={`w-full space-y-8 my-auto ${
+            step === 'review' || step === 'scanning' ? 'max-w-5xl' : 'max-w-2xl'
+          }`}
+        >
           {/* Hero */}
           <div className="text-center space-y-3">
             <div className="flex justify-center">
-              <div
-                className="size-14 rounded-2xl flex items-center justify-center text-[#a78bfa]"
-                style={{
-                  background: isDark
-                    ? 'linear-gradient(135deg, rgba(124,58,237,0.25) 0%, rgba(109,40,217,0.12) 100%)'
-                    : 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(109,40,217,0.06) 100%)',
-                  border: '1px solid rgba(167,139,250,0.25)',
-                  boxShadow: '0 0 28px rgba(124,58,237,0.15)',
-                }}
-              >
-                {/* Helm wheel icon */}
-                <svg
-                  width="28"
-                  height="28"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
-                </svg>
-              </div>
+              <Logo size={48} className="text-white" />
             </div>
             <div>
-              <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
-                Override any extracted image reference before scanning. Selected rows will use the
-                edited values.
-              </p>
               <h1
                 className="text-3xl sm:text-4xl font-bold tracking-tight"
                 style={{ color: 'var(--text-primary)' }}
@@ -487,7 +350,8 @@ export default function PublicHelmScanPage() {
                 Scan Helm chart{' '}
                 <span
                   style={{
-                    background: 'linear-gradient(135deg, #a78bfa, #7c3aed)',
+                    background:
+                      'linear-gradient(135deg, color-mix(in srgb, var(--accent) 55%, white), var(--accent))',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                   }}
@@ -524,42 +388,19 @@ export default function PublicHelmScanPage() {
             <form onSubmit={handleExtract} className="space-y-3">
               {/* Chart URL */}
               <div>
-                <label
-                  className="block text-xs font-medium mb-1.5"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  Chart URL
-                </label>
-                <div
-                  className="flex items-center gap-2 p-2 rounded-2xl"
-                  style={{
-                    background: 'var(--surface-bg)',
-                    border: '1px solid var(--surface-border)',
-                    boxShadow: 'var(--surface-shadow)',
-                  }}
-                >
+                <Label>Chart URL</Label>
+                <div className="flex items-center gap-2 p-2">
                   <div className="pl-2 shrink-0" style={{ color: 'var(--text-faint)' }}>
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                    </svg>
+                    <LinkSquare02Icon size={16} />
                   </div>
-                  <input
+                  <Input
                     value={chartUrl}
                     onChange={(e) => setChartUrl(e.target.value)}
                     placeholder="oci://ghcr.io/org/chart:1.0  or  https://charts.example.com"
                     disabled={step === 'extracting'}
-                    className="flex-1 bg-transparent text-sm outline-none font-mono py-2.5"
-                    style={{ color: 'var(--text-primary)', caretColor: '#7c3aed' }}
+                    aria-label="Chart URL"
+                    variant="secondary"
+                    className="flex-1 text-sm font-mono"
                   />
                 </div>
               </div>
@@ -574,19 +415,14 @@ export default function PublicHelmScanPage() {
                     >
                       Chart name <span className="text-red-400">*</span>
                     </label>
-                    <input
-                      type="text"
+                    <Input
                       value={chartName}
                       onChange={(e) => setChartName(e.target.value)}
                       placeholder="e.g. nginx"
                       disabled={step === 'extracting'}
-                      className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
-                      style={{
-                        background: 'var(--surface-bg)',
-                        border: '1px solid var(--surface-border)',
-                        color: 'var(--text-primary)',
-                        caretColor: '#7c3aed',
-                      }}
+                      aria-label="Chart name"
+                      variant="secondary"
+                      className="w-full text-sm"
                     />
                   </div>
                   <div>
@@ -596,19 +432,14 @@ export default function PublicHelmScanPage() {
                     >
                       Version <span style={{ color: 'var(--text-faint)' }}>(optional)</span>
                     </label>
-                    <input
-                      type="text"
+                    <Input
                       value={chartVersion}
                       onChange={(e) => setChartVersion(e.target.value)}
                       placeholder="e.g. 1.2.3"
                       disabled={step === 'extracting'}
-                      className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
-                      style={{
-                        background: 'var(--surface-bg)',
-                        border: '1px solid var(--surface-border)',
-                        color: 'var(--text-primary)',
-                        caretColor: '#7c3aed',
-                      }}
+                      aria-label="Chart version"
+                      variant="secondary"
+                      className="w-full text-sm"
                     />
                   </div>
                 </div>
@@ -624,18 +455,18 @@ export default function PublicHelmScanPage() {
                       (optional - overrides tag in URL)
                     </span>
                   </label>
-                  <input
-                    type="text"
+                  <Input
                     value={chartVersion}
                     onChange={(e) => setChartVersion(e.target.value)}
                     placeholder="e.g. 1.2.3"
                     disabled={step === 'extracting'}
-                    className="w-full px-3 py-2.5 rounded-xl text-sm outline-none font-mono"
+                    aria-label="OCI chart version"
+                    variant="secondary"
+                    className="w-full px-3 py-2.5 rounded-xl text-sm outline-none font-mono border border-[var(--surface-border)] shadow-none"
                     style={{
                       background: 'var(--surface-bg)',
-                      border: '1px solid var(--surface-border)',
                       color: 'var(--text-primary)',
-                      caretColor: '#7c3aed',
+                      caretColor: 'var(--accent)',
                     }}
                   />
                 </div>
@@ -645,15 +476,17 @@ export default function PublicHelmScanPage() {
                 <p className="text-sm text-red-500 dark:text-red-400">{extractError}</p>
               )}
 
-              <button
+              <Button
                 type="submit"
-                disabled={
+                isDisabled={
                   step === 'extracting' || !chartUrl.trim() || (!isOCI && !chartName.trim())
                 }
                 className="w-full py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90"
                 style={{
-                  background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-                  boxShadow: '0 0 24px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.15)',
+                  background:
+                    'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 80%, black))',
+                  boxShadow:
+                    '0 0 24px color-mix(in srgb, var(--accent) 35%, transparent), inset 0 1px 0 rgba(255,255,255,0.15)',
                 }}
               >
                 {step === 'extracting' ? (
@@ -664,7 +497,7 @@ export default function PublicHelmScanPage() {
                 ) : (
                   'Extract images →'
                 )}
-              </button>
+              </Button>
 
               <p className="text-xs text-center" style={{ color: 'var(--text-faint)' }}>
                 {settings?.rate_limit_per_hour ?? 5} free scans per hour · Public charts only
@@ -713,9 +546,11 @@ export default function PublicHelmScanPage() {
                             className="text-xs px-1.5 py-0.5 rounded font-medium shrink-0"
                             style={{
                               background: isGroupOCI
-                                ? 'rgba(124,58,237,0.1)'
+                                ? 'color-mix(in srgb, var(--accent) 10%, transparent)'
                                 : 'rgba(59,130,246,0.1)',
-                              color: isGroupOCI ? '#a78bfa' : '#60a5fa',
+                              color: isGroupOCI
+                                ? 'color-mix(in srgb, var(--accent) 55%, white)'
+                                : '#60a5fa',
                             }}
                           >
                             {isGroupOCI ? 'OCI' : 'HTTP'}
@@ -749,20 +584,11 @@ export default function PublicHelmScanPage() {
                             <span className="text-emerald-600">Clean</span>
                           )}
                       </div>
-                      <svg
+                      <ArrowRight01Icon
+                        size={14}
                         className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
                         style={{ color: 'var(--text-muted)' }}
-                      >
-                        <polyline points="9 18 15 12 9 6" />
-                      </svg>
+                      />
                     </button>
                   );
                 })}
@@ -782,9 +608,9 @@ export default function PublicHelmScanPage() {
                       <span
                         className="ml-2 text-xs px-2 py-0.5 rounded-full font-mono"
                         style={{
-                          background: 'rgba(124,58,237,0.1)',
-                          color: '#7c3aed',
-                          border: '1px solid rgba(124,58,237,0.2)',
+                          background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                          color: 'var(--accent)',
+                          border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                         }}
                       >
                         v{chartInfo.version}
@@ -798,21 +624,17 @@ export default function PublicHelmScanPage() {
                     {chartUrl}
                   </p>
                 </div>
-                <button
+                <Button
                   onClick={() => {
                     setStep('form');
                     setImages([]);
                     setSelected(new Set());
                   }}
-                  className="text-xs px-3 py-1.5 rounded-xl transition-colors"
-                  style={{
-                    background: 'var(--row-hover)',
-                    border: '1px solid var(--border-subtle)',
-                    color: 'var(--text-muted)',
-                  }}
+                  variant="secondary"
+                  size="sm"
                 >
                   ← Change chart
-                </button>
+                </Button>
               </div>
 
               <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
@@ -821,101 +643,75 @@ export default function PublicHelmScanPage() {
               </p>
 
               {/* Image list */}
-              <div
-                className="rounded-2xl overflow-hidden"
-                style={{
-                  background: 'var(--surface-bg)',
-                  border: '1px solid var(--surface-border)',
-                }}
-              >
-                <div
-                  className="flex items-center justify-between px-4 py-2.5 border-b"
-                  style={{ borderColor: 'var(--row-divider)' }}
-                >
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                    {images.length} image{images.length !== 1 ? 's' : ''} found · {selected.size}{' '}
-                    selected
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={selectAll}
-                      className="text-xs transition-colors"
-                      style={{ color: '#7c3aed' }}
-                    >
-                      All
-                    </button>
-                    <span style={{ color: 'var(--border-subtle)' }}>·</span>
-                    <button
-                      onClick={deselectAll}
-                      className="text-xs transition-colors"
-                      style={{ color: 'var(--text-faint)' }}
-                    >
-                      None
-                    </button>
-                  </div>
-                </div>
-                <div className="divide-y" style={{ borderColor: 'var(--row-divider)' }}>
-                  {images.map((img) => {
-                    const parsed = parseHelmImageRef(img.edited_ref);
-                    const checked = selected.has(img.id);
-
-                    return (
-                      <div
-                        key={img.id}
-                        className="flex items-start gap-3 px-4 py-3 transition-colors"
-                        style={{ background: checked ? 'rgba(124,58,237,0.04)' : 'transparent' }}
-                        onMouseEnter={(e) => {
-                          if (!checked) e.currentTarget.style.background = 'var(--row-hover)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = checked
-                            ? 'rgba(124,58,237,0.04)'
-                            : 'transparent';
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleImage(img.id)}
-                          className="mt-0.5 accent-violet-600"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <input
-                            type="text"
-                            value={img.edited_ref}
-                            onChange={(event) => updateEditedRef(img.id, event.target.value)}
-                            className="w-full bg-transparent text-sm font-mono font-medium outline-none"
-                            style={{ color: 'var(--text-primary)', caretColor: '#7c3aed' }}
-                            placeholder="registry.example.com/org/image:tag"
-                          />
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <p
-                              className="text-xs font-mono truncate"
-                              style={{ color: 'var(--text-faint)' }}
-                            >
-                              {parsed.name || 'Enter an image reference'}
-                            </p>
-                            <span
-                              className="text-[11px] font-mono px-1.5 py-0.5 rounded"
-                              style={{ background: 'rgba(124,58,237,0.08)', color: '#7c3aed' }}
-                            >
-                              {parsed.tag || '-'}
-                            </span>
-                          </div>
-                          {img.source_path && (
-                            <p
-                              className="text-xs mt-1 font-mono truncate"
-                              style={{ color: 'var(--text-faint)' }}
-                            >
-                              {getHelmImageSourceLabel(img)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <Table className="rounded-2xl overflow-hidden">
+                <Table.ScrollContainer>
+                  <Table.Content
+                    aria-label="Extracted Helm images"
+                    className="min-w-[980px]"
+                    selectionMode="multiple"
+                    selectedKeys={selected}
+                    onSelectionChange={(keys) => {
+                      if (keys === 'all') {
+                        setSelected(new Set(images.map((img) => img.id)));
+                        return;
+                      }
+                      setSelected(new Set(Array.from(keys, (key) => String(key))));
+                    }}
+                  >
+                    <Table.Header>
+                      <Table.Column className="w-[62%] min-w-[440px]">Image Reference</Table.Column>
+                      <Table.Column className="w-[38%] min-w-[320px]">Parsed / Source</Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {images.map((img) => {
+                        const parsed = parseHelmImageRef(img.edited_ref);
+                        return (
+                          <Table.Row key={img.id} id={img.id}>
+                            <Table.Cell>
+                              <Input
+                                value={img.edited_ref}
+                                onChange={(event) => updateEditedRef(img.id, event.target.value)}
+                                aria-label="Image reference"
+                                variant="secondary"
+                                className="w-full bg-transparent text-sm font-mono font-medium border-0 shadow-none"
+                                placeholder="registry.example.com/org/image:tag"
+                              />
+                            </Table.Cell>
+                            <Table.Cell>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p
+                                    className="text-xs font-mono truncate"
+                                    style={{ color: 'var(--text-faint)' }}
+                                  >
+                                    {parsed.name || 'Enter an image reference'}
+                                  </p>
+                                  <Chip
+                                    size="sm"
+                                    variant="soft"
+                                    color="accent"
+                                    className="font-mono"
+                                  >
+                                    {parsed.tag || '-'}
+                                  </Chip>
+                                </div>
+                                {img.source_path ? (
+                                  <p
+                                    className="text-xs mt-1 font-mono truncate"
+                                    style={{ color: 'var(--text-faint)' }}
+                                  >
+                                    {getHelmImageSourceLabel(img)}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </Table.Cell>
+                          </Table.Row>
+                        );
+                      })}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
 
               {/* Platform & scan button */}
               <div className="space-y-2">
@@ -932,9 +728,10 @@ export default function PublicHelmScanPage() {
                       style={
                         platform === p.value
                           ? {
-                              background: 'rgba(124,58,237,0.15)',
-                              border: '1px solid rgba(167,139,250,0.4)',
-                              color: '#7c3aed',
+                              background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                              border:
+                                '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
+                              color: 'var(--accent)',
                             }
                           : {
                               background: 'var(--row-hover)',
@@ -950,13 +747,14 @@ export default function PublicHelmScanPage() {
 
                 {scanError && <p className="text-sm text-red-500 dark:text-red-400">{scanError}</p>}
 
-                <button
-                  onClick={handleScan}
-                  disabled={selected.size === 0 || step === 'scanning' || hasInvalidSelection}
+                <Button
+                  onPress={handleScan}
+                  isDisabled={selected.size === 0 || step === 'scanning' || hasInvalidSelection}
                   className="w-full py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90"
                   style={{
-                    background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-                    boxShadow: '0 0 24px rgba(124,58,237,0.35)',
+                    background:
+                      'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 80%, black))',
+                    boxShadow: '0 0 24px color-mix(in srgb, var(--accent) 35%, transparent)',
                   }}
                 >
                   {step === 'scanning' ? (
@@ -967,7 +765,7 @@ export default function PublicHelmScanPage() {
                   ) : (
                     `Scan ${selected.size} image${selected.size !== 1 ? 's' : ''} →`
                   )}
-                </button>
+                </Button>
               </div>
             </div>
           )}

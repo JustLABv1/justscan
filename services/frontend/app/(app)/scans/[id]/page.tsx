@@ -1,5 +1,5 @@
 'use client';
-import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
+import { useAIContextBridge } from '@/components/assistant/ai-context-bridge';
 import { useToast } from '@/components/toast';
 import {
   OwnershipBadge,
@@ -79,6 +79,8 @@ import {
   Label,
   ListBox,
   Modal,
+  Pagination,
+  SearchField,
   Select,
   Table,
   useOverlayState,
@@ -89,7 +91,6 @@ import {
   ArrowLeft01Icon,
   Cancel01Icon,
   Comment01Icon,
-  CpuIcon,
   Delete01Icon,
   Delete02Icon,
   FileExportIcon,
@@ -111,7 +112,7 @@ import {
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
 
-type ScanTab = 'vulns' | 'sbom' | 'details' | 'timeline';
+type ScanTab = 'vulns' | 'sbom' | 'details' | 'timeline' | 'compliance';
 
 const DEFAULT_VULNERABILITY_VIEW_SETTINGS: VulnerabilityViewSettings = {
   sort_by: 'severity',
@@ -427,6 +428,10 @@ function imageConfigEntries(value: unknown): Array<[string, string]> {
   );
 }
 
+function normalizeVulnId(value?: string | null) {
+  return (value ?? '').trim().toUpperCase();
+}
+
 function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
   if (!firstSeenAt) {
     return (
@@ -441,15 +446,44 @@ function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
   return <span className="text-xs text-zinc-500">{timeAgo(firstSeenAt)}</span>;
 }
 
-const LIMIT = 25;
+const LIMIT = 10;
 
 function isScanTab(value: string | null): value is ScanTab {
-  return value === 'vulns' || value === 'sbom' || value === 'details' || value === 'timeline';
+  return (
+    value === 'vulns' ||
+    value === 'sbom' ||
+    value === 'details' ||
+    value === 'timeline' ||
+    value === 'compliance'
+  );
+}
+
+function buildPaginationItems(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const items: Array<number | 'ellipsis'> = [1];
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  if (start > 2) {
+    items.push('ellipsis');
+  }
+  for (let page = start; page <= end; page += 1) {
+    items.push(page);
+  }
+  if (end < totalPages - 1) {
+    items.push('ellipsis');
+  }
+  items.push(totalPages);
+  return items;
 }
 
 export default function ScanDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { setRouteContext, setOverlayContext } = useAIContextBridge();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const toast = useToast();
@@ -469,6 +503,8 @@ export default function ScanDetailPage() {
   const [severityFilter, setSeverityFilter] = useState<VulnerabilityViewSettings['severity']>('');
   const [pkgFilter, setPkgFilter] = useState('');
   const [pkgInput, setPkgInput] = useState('');
+  const [cveFilter, setCveFilter] = useState('');
+  const [cveInput, setCveInput] = useState('');
   const [minCvss, setMinCvss] = useState(0);
   const [hasFix, setHasFix] = useState(false);
   const [xrayPolicyFirst, setXrayPolicyFirst] = useState(false);
@@ -484,6 +520,7 @@ export default function ScanDetailPage() {
   const [error, setError] = useState('');
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [tagLoading, setTagLoading] = useState('');
+  const [selectedTagToAdd, setSelectedTagToAdd] = useState('');
   const [expandedVuln, setExpandedVuln] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [commentSaving, setCommentSaving] = useState(false);
@@ -491,7 +528,10 @@ export default function ScanDetailPage() {
   const [compliance, setCompliance] = useState<ComplianceResult[]>([]);
   const [allOrgs, setAllOrgs] = useState<Org[]>([]);
   const [complianceLoading, setComplianceLoading] = useState(false);
-  const [expandedOrg, setExpandedOrg] = useState<string | null>(null);
+  const [selectedOrgToAssign, setSelectedOrgToAssign] = useState('');
+  const [complianceVulnById, setComplianceVulnById] = useState<Record<string, Vulnerability[]>>({});
+  const [complianceVulnLoading, setComplianceVulnLoading] = useState(false);
+  const [complianceVulnLoaded, setComplianceVulnLoaded] = useState(false);
   const [reScanning, setReScanning] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [comparingPrev, setComparingPrev] = useState(false);
@@ -530,6 +570,7 @@ export default function ScanDetailPage() {
   );
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanStatus = scan?.status;
   const blockedPolicyDetails = getBlockedPolicyDetails(
     scan?.external_status,
@@ -557,6 +598,31 @@ export default function ScanDetailPage() {
     : viewPreference?.source === 'org'
       ? 'Organization default'
       : 'System default';
+
+  useEffect(() => {
+    setRouteContext({
+      scopeType: 'scan',
+      scopeRef: id,
+      title: scan ? `${scan.image_name}:${scan.image_tag}` : 'Scan scope',
+      description: 'Current scan details',
+    });
+  }, [id, scan, setRouteContext]);
+
+  useEffect(() => {
+    if (!vulnerabilityDetailsModal.isOpen || !selectedVulnerability) {
+      setOverlayContext(null);
+      return;
+    }
+
+    setOverlayContext({
+      scopeType: 'vulnerability',
+      scopeRef: `${id}:${selectedVulnerability.id}`,
+      title: selectedVulnerability.vuln_id || 'Vulnerability scope',
+      description: 'Focused vulnerability details',
+    });
+  }, [id, selectedVulnerability, setOverlayContext, vulnerabilityDetailsModal.isOpen]);
+
+  useEffect(() => () => setOverlayContext(null), [setOverlayContext]);
 
   const loadScan = useCallback(async () => {
     if (loadScanInFlightRef.current) {
@@ -609,6 +675,9 @@ export default function ScanDetailPage() {
       setSortBy('severity');
       setSortDir('asc');
       setPage(1);
+      setComplianceVulnById({});
+      setComplianceVulnLoaded(false);
+      setComplianceVulnLoading(false);
     });
   }, [id]);
 
@@ -654,6 +723,17 @@ export default function ScanDetailPage() {
       if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
     };
   }, [pkgInput]);
+
+  useEffect(() => {
+    if (cveDebounceRef.current) clearTimeout(cveDebounceRef.current);
+    cveDebounceRef.current = setTimeout(() => {
+      setCveFilter(cveInput.trim().toUpperCase());
+      setPage(1);
+    }, 400);
+    return () => {
+      if (cveDebounceRef.current) clearTimeout(cveDebounceRef.current);
+    };
+  }, [cveInput]);
 
   useEffect(() => {
     return deferEffect(() => {
@@ -812,7 +892,10 @@ export default function ScanDetailPage() {
       sortDir,
     ] as const;
 
-    const loadPromise = xrayPolicyFirst
+    const normalizedCveFilter = cveFilter.trim().toUpperCase();
+    const shouldLoadAllPages = xrayPolicyFirst || normalizedCveFilter.length > 0;
+
+    const loadPromise = shouldLoadAllPages
       ? (async () => {
           const pageSize = 100;
           let nextPage = 1;
@@ -831,10 +914,15 @@ export default function ScanDetailPage() {
             nextPage += 1;
           }
 
-          const prioritized = prioritizeXrayPolicyVulnerabilities(all);
+          const prioritized = xrayPolicyFirst ? prioritizeXrayPolicyVulnerabilities(all) : all;
+          const filteredByCve = normalizedCveFilter
+            ? prioritized.filter((vulnerability) =>
+                normalizeVulnId(vulnerability.vuln_id).includes(normalizedCveFilter)
+              )
+            : prioritized;
           const start = (page - 1) * LIMIT;
           const end = start + LIMIT;
-          return { data: prioritized.slice(start, end), total: prioritized.length || total };
+          return { data: filteredByCve.slice(start, end), total: filteredByCve.length || total };
         })()
       : listVulnerabilities(id, page, LIMIT, ...baseArgs);
 
@@ -859,10 +947,70 @@ export default function ScanDetailPage() {
     minCvss,
     hasFix,
     xrayPolicyFirst,
+    cveFilter,
     sortBy,
     sortDir,
     viewSettingsReady,
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const cancelDeferred = deferEffect(() => {
+      if (activeTab !== 'compliance') return;
+      if (!scan || scan.status === 'pending' || scan.status === 'running') return;
+      if (complianceVulnLoaded || complianceVulnLoading) return;
+
+      setComplianceVulnLoading(true);
+      (async () => {
+        try {
+          const pageSize = 200;
+          let currentPage = 1;
+          let total = 0;
+          const allRows: Vulnerability[] = [];
+
+          for (;;) {
+            const response = await listVulnerabilities(id, currentPage, pageSize);
+            const rows = response.data ?? [];
+            total = response.total ?? total;
+            allRows.push(...rows);
+
+            if (rows.length === 0 || allRows.length >= total) {
+              break;
+            }
+            currentPage += 1;
+          }
+
+          if (cancelled) return;
+
+          const byId: Record<string, Vulnerability[]> = {};
+          for (const vulnerability of allRows) {
+            const key = normalizeVulnId(vulnerability.vuln_id);
+            if (!key) continue;
+            if (!byId[key]) {
+              byId[key] = [];
+            }
+            byId[key].push(vulnerability);
+          }
+
+          setComplianceVulnById(byId);
+          setComplianceVulnLoaded(true);
+        } catch {
+          if (!cancelled) {
+            setComplianceVulnLoaded(true);
+          }
+        } finally {
+          if (!cancelled) {
+            setComplianceVulnLoading(false);
+          }
+        }
+      })();
+    });
+
+    return () => {
+      cancelled = true;
+      cancelDeferred();
+    };
+  }, [activeTab, complianceVulnLoaded, complianceVulnLoading, id, scan]);
 
   async function saveVulnerabilityViewPreference() {
     if (!viewSettingsReady) return;
@@ -1307,320 +1455,315 @@ export default function ScanDetailPage() {
     },
     { count: scan.low_count, label: 'Low', color: 'text-blue-400', border: '' },
   ];
+  const complianceByOrg = Object.values(
+    compliance.reduce(
+      (acc, result) => {
+        const key = result.org_id;
+        if (!acc[key]) {
+          acc[key] = {
+            org_id: result.org_id,
+            org_name: result.org_name ?? result.org_id,
+            results: [],
+          };
+        }
+        acc[key].results.push(result);
+        return acc;
+      },
+      {} as Record<string, { org_id: string; org_name: string; results: ComplianceResult[] }>
+    )
+  );
+  const currentVulnById: Record<string, Vulnerability[]> = {};
+  for (const vulnerability of vulns) {
+    const key = normalizeVulnId(vulnerability.vuln_id);
+    if (!key) continue;
+    if (!currentVulnById[key]) {
+      currentVulnById[key] = [];
+    }
+    currentVulnById[key].push(vulnerability);
+  }
+  const complianceViolationRows = compliance
+    .filter((result) => result.status === 'fail')
+    .flatMap((result) =>
+      (result.violations ?? []).map((violation, index) => {
+        const rawVulnId = violation.vuln_id ?? violation.rule?.cve_id ?? '';
+        const vulnId = normalizeVulnId(rawVulnId);
+        const matches = vulnId
+          ? [...(complianceVulnById[vulnId] ?? []), ...(currentVulnById[vulnId] ?? [])]
+          : [];
+        const primaryMatch = matches[0];
+        return {
+          id: `${result.id}-${index}`,
+          orgId: result.org_id,
+          orgName: result.org_name ?? result.org_id,
+          policyName: result.policy_name ?? 'Policy',
+          evaluatedAt: result.evaluated_at,
+          message: violation.message,
+          vulnId,
+          ruleType: violation.rule?.type ?? '',
+          severity: primaryMatch?.severity ?? violation.rule?.severity ?? '',
+          packageName: primaryMatch?.pkg_name ?? '',
+          installedVersion: primaryMatch?.installed_version ?? '',
+          fixedVersion: primaryMatch?.fixed_version ?? '',
+          hasFix: Boolean(primaryMatch?.fixed_version),
+          matchCount: matches.length,
+          primaryMatch,
+        };
+      })
+    );
+  const vulnPaginationItems = buildPaginationItems(page, totalPages);
 
-  return (
-    <div className="p-6 space-y-5">
-      <PageHeader
-        title="Scan details"
-        description="Inspect vulnerability results, runtime signals, and sharing controls for this scan."
-        breadcrumbs={[{ label: 'Scans', href: '/scans' }, { label: 'Scan details' }]}
-      />
-
-      {/* Header */}
-      <ScanDetailHeader
-        badges={
-          <OwnershipBadge
-            ownerType={scan.owner_type}
-            ownerOrgId={scan.owner_org_id}
-            orgNamesById={orgNamesById}
-          />
-        }
-        navigation={
-          <Button className="btn-secondary" onPress={() => router.back()} variant="secondary">
-            <ArrowLeft01Icon size={15} />
-            Back to scans
-          </Button>
-        }
-        title={`${scan.image_name}:${scan.image_tag}`}
-        subtitle={scan.image_digest ? <span>{scan.image_digest}</span> : undefined}
-        meta={
-          <>
-            {scan.architecture && (
-              <p className="flex items-center gap-1.5 text-xs text-zinc-500 mt-1">
-                <CpuIcon size={12} />
-                {scan.architecture} · {scan.os_family} {scan.os_name}
-              </p>
-            )}
-            {scan.helm_chart && (
-              <p
-                className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500"
-                title={scan.helm_source_path}
-              >
-                <span className="font-medium text-violet-400">Helm</span>
-                <span className="max-w-full  break-words" style={{ overflowWrap: 'anywhere' }}>
-                  {scan.helm_chart}
-                </span>
-                {scan.helm_source_path && (
-                  <span className="text-zinc-400 break-words" style={{ overflowWrap: 'anywhere' }}>
-                    · {scan.helm_source_path}
-                  </span>
-                )}
-              </p>
-            )}
-            <p className="mt-1 text-xs text-zinc-500">
-              Workspace:{' '}
-              {scan.owner_type === 'org' && scan.owner_org_id
-                ? (orgNamesById[scan.owner_org_id] ?? 'Org workspace')
-                : 'Personal'}
-            </p>
-          </>
-        }
-        actions={
-          <div className="relative flex flex-wrap items-center gap-2">
-            {(scan.status === 'pending' || scan.status === 'running') && (
-              <Button
-                className="btn-warning"
-                isDisabled={cancelling}
-                onPress={handleCancel}
-                variant="secondary"
-              >
-                {cancelling ? (
-                  <span className="size-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
-                ) : (
-                  <Cancel01Icon size={15} />
-                )}
-                Cancel
-              </Button>
-            )}
+  const headerActions = (
+    <div className="relative flex flex-wrap items-center justify-end gap-2">
+      <Button className="btn-secondary" onPress={() => router.back()} variant="secondary">
+        <ArrowLeft01Icon size={15} />
+        Back to scans
+      </Button>
+      {(scan.status === 'pending' || scan.status === 'running') && (
+        <Button
+          className="btn-warning"
+          isDisabled={cancelling}
+          onPress={handleCancel}
+          variant="secondary"
+        >
+          {cancelling ? (
+            <span className="size-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
+          ) : (
+            <Cancel01Icon size={15} />
+          )}
+          Cancel
+        </Button>
+      )}
+      <Button
+        className="btn-primary"
+        isDisabled={reScanning || scan.status === 'running' || scan.status === 'pending'}
+        onPress={handleReScan}
+        variant="primary"
+      >
+        {reScanning ? (
+          <span className="size-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+        ) : (
+          <Refresh01Icon size={15} />
+        )}
+        Re-scan
+      </Button>
+      {canManageScanAccess() && (
+        <Button className="btn-secondary" onPress={openScanAccessModal} variant="secondary">
+          <Shield01Icon size={15} />
+          Manage Access
+        </Button>
+      )}
+      <div className="relative">
+        <Dropdown>
+          <Dropdown.Trigger>
             <Button
-              className="btn-primary"
-              isDisabled={reScanning || scan.status === 'running' || scan.status === 'pending'}
-              onPress={handleReScan}
-              variant="primary"
-            >
-              {reScanning ? (
-                <span className="size-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
-              ) : (
-                <Refresh01Icon size={15} />
-              )}
-              Re-scan
-            </Button>
-            <Button
-              className="btn-secondary"
-              onPress={() =>
-                router.push(`/assistant?scopeType=scan&scopeRef=${encodeURIComponent(scan.id)}`)
+              aria-label="Open scan actions"
+              className="btn-icon-subtle size-10"
+              isIconOnly
+              style={
+                shareOpen ? { color: '#a78bfa', borderColor: 'rgba(167,139,250,0.25)' } : undefined
               }
               variant="secondary"
             >
-              Ask AI
+              <MoreVerticalIcon size={16} />
             </Button>
-            {canManageScanAccess() && (
-              <Button className="btn-secondary" onPress={openScanAccessModal} variant="secondary">
-                <Shield01Icon size={15} />
-                Manage Access
-              </Button>
-            )}
-            <div className="relative">
-              <Dropdown>
-                <Dropdown.Trigger>
-                  <Button
-                    aria-label="Open scan actions"
-                    className="btn-icon-subtle size-10"
-                    isIconOnly
-                    style={
-                      shareOpen
-                        ? { color: '#a78bfa', borderColor: 'rgba(167,139,250,0.25)' }
-                        : undefined
-                    }
-                    variant="secondary"
-                  >
-                    <MoreVerticalIcon size={16} />
-                  </Button>
-                </Dropdown.Trigger>
-                <Dropdown.Popover className="min-w-[220px]">
-                  <Dropdown.Menu
-                    onAction={(key) => {
-                      if (key === 'export') {
-                        window.open(
-                          `/reports/print?scans=${scan.id}`,
-                          '_blank',
-                          'noopener,noreferrer'
-                        );
-                      }
-                      if (key === 'compare') {
-                        void handleComparePrev();
-                      }
-                      if (key === 'share') {
-                        if (scan.share_visibility)
-                          setShareVisibility(scan.share_visibility as 'public' | 'authenticated');
-                        setShareOpen(true);
-                      }
-                    }}
-                  >
-                    <Dropdown.Item id="export" textValue="Export scan report">
-                      <div className="flex items-center gap-2">
-                        <FileExportIcon size={15} />
-                        <Label>Export</Label>
-                      </div>
-                    </Dropdown.Item>
-                    <Dropdown.Item
-                      id="compare"
-                      textValue="Compare with previous scan"
-                      isDisabled={comparingPrev}
-                    >
-                      <div className="flex items-center gap-2">
-                        <GitCompareIcon size={15} />
-                        <Label>{comparingPrev ? 'Compare…' : 'Compare'}</Label>
-                      </div>
-                    </Dropdown.Item>
-                    <Dropdown.Item id="share" textValue="Manage scan sharing">
-                      <div className="flex items-center gap-2">
-                        <Share01Icon size={15} />
-                        <Label>{scan.share_token ? 'Manage share' : 'Share'}</Label>
-                      </div>
-                    </Dropdown.Item>
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
-              </Dropdown>
-              {shareOpen && (
+          </Dropdown.Trigger>
+          <Dropdown.Popover className="min-w-[220px]">
+            <Dropdown.Menu
+              onAction={(key) => {
+                if (key === 'export') {
+                  window.open(`/reports/print?scans=${scan.id}`, '_blank', 'noopener,noreferrer');
+                }
+                if (key === 'compare') {
+                  void handleComparePrev();
+                }
+                if (key === 'share') {
+                  if (scan.share_visibility)
+                    setShareVisibility(scan.share_visibility as 'public' | 'authenticated');
+                  setShareOpen(true);
+                }
+              }}
+            >
+              <Dropdown.Item id="export" textValue="Export scan report">
+                <div className="flex items-center gap-2">
+                  <FileExportIcon size={15} />
+                  <Label>Export</Label>
+                </div>
+              </Dropdown.Item>
+              <Dropdown.Item
+                id="compare"
+                textValue="Compare with previous scan"
+                isDisabled={comparingPrev}
+              >
+                <div className="flex items-center gap-2">
+                  <GitCompareIcon size={15} />
+                  <Label>{comparingPrev ? 'Compare…' : 'Compare'}</Label>
+                </div>
+              </Dropdown.Item>
+              <Dropdown.Item id="share" textValue="Manage scan sharing">
+                <div className="flex items-center gap-2">
+                  <Share01Icon size={15} />
+                  <Label>{scan.share_token ? 'Manage share' : 'Share'}</Label>
+                </div>
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
+        {shareOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />
+            <div
+              className="absolute right-0 top-12 z-50 w-80 space-y-3 rounded-xl p-4"
+              style={{
+                background: 'var(--modal-bg)',
+                border: '1px solid var(--modal-border)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-zinc-800 dark:text-white">Share scan</p>
+                <Button
+                  className="btn-icon-subtle text-lg leading-none"
+                  onPress={() => setShareOpen(false)}
+                  type="button"
+                  variant="secondary"
+                >
+                  ✕
+                </Button>
+              </div>
+              {scan.share_token ? (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />
-                  <div
-                    className="absolute right-0 top-12 w-80 rounded-xl z-50 p-4 space-y-3"
-                    style={{
-                      background: 'var(--modal-bg)',
-                      border: '1px solid var(--modal-border)',
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-zinc-800 dark:text-white">
-                        Share scan
-                      </p>
+                  <div>
+                    <p className="mb-1.5 text-xs text-zinc-500">
+                      Share link
+                      <span
+                        className="ml-1.5 rounded px-1.5 py-0.5 text-xs font-medium"
+                        style={{
+                          background:
+                            scan.share_visibility === 'public'
+                              ? 'rgba(34,197,94,0.1)'
+                              : 'rgba(124,58,237,0.1)',
+                          color: scan.share_visibility === 'public' ? '#4ade80' : '#a78bfa',
+                          border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'rgba(124,58,237,0.2)'}`,
+                        }}
+                      >
+                        {scan.share_visibility}
+                      </span>
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 truncate rounded-lg bg-zinc-100 px-2 py-1.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                        {typeof window !== 'undefined'
+                          ? `${window.location.origin}/shared/${scan.share_token}`
+                          : ''}
+                      </code>
                       <Button
-                        className="btn-icon-subtle text-lg leading-none"
-                        onPress={() => setShareOpen(false)}
+                        onPress={() => {
+                          navigator.clipboard.writeText(
+                            `${window.location.origin}/shared/${scan.share_token}`
+                          );
+                          setShareCopied(true);
+                          setTimeout(() => setShareCopied(false), 1500);
+                        }}
+                        className="btn-secondary shrink-0"
                         type="button"
                         variant="secondary"
                       >
-                        ✕
+                        {shareCopied ? '✓ Copied' : 'Copy'}
                       </Button>
                     </div>
-                    {scan.share_token ? (
-                      <>
-                        <div>
-                          <p className="text-xs text-zinc-500 mb-1.5">
-                            Share link
-                            <span
-                              className="ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium"
-                              style={{
-                                background:
-                                  scan.share_visibility === 'public'
-                                    ? 'rgba(34,197,94,0.1)'
-                                    : 'rgba(124,58,237,0.1)',
-                                color: scan.share_visibility === 'public' ? '#4ade80' : '#a78bfa',
-                                border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'rgba(124,58,237,0.2)'}`,
-                              }}
-                            >
-                              {scan.share_visibility}
-                            </span>
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 text-xs text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 rounded-lg px-2 py-1.5 truncate">
-                              {typeof window !== 'undefined'
-                                ? `${window.location.origin}/shared/${scan.share_token}`
-                                : ''}
-                            </code>
-                            <Button
-                              onPress={() => {
-                                navigator.clipboard.writeText(
-                                  `${window.location.origin}/shared/${scan.share_token}`
-                                );
-                                setShareCopied(true);
-                                setTimeout(() => setShareCopied(false), 1500);
-                              }}
-                              className="btn-secondary shrink-0"
-                              type="button"
-                              variant="secondary"
-                            >
-                              {shareCopied ? '✓ Copied' : 'Copy'}
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="space-y-1.5">
-                          <p className="text-xs text-zinc-500">Change visibility</p>
-                          <SegmentedControl
-                            ariaLabel="Share visibility"
-                            className="w-full"
-                            itemClassName="flex-1"
-                            options={[
-                              { id: 'public', label: 'Public' },
-                              { id: 'authenticated', label: 'Signed in' },
-                            ]}
-                            value={shareVisibility}
-                            onChange={setShareVisibility}
-                            size="sm"
-                          />
-                          {shareVisibility !== scan.share_visibility && (
-                            <Button
-                              className="btn-primary w-full"
-                              isDisabled={shareLoading}
-                              onPress={handleEnableShare}
-                              type="button"
-                              variant="primary"
-                            >
-                              {shareLoading ? 'Updating…' : 'Update visibility'}
-                            </Button>
-                          )}
-                        </div>
-                        <Button
-                          className="btn-danger w-full"
-                          isDisabled={shareLoading}
-                          onPress={handleDisableShare}
-                          type="button"
-                          variant="danger"
-                        >
-                          {shareLoading ? 'Processing…' : 'Disable sharing'}
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="space-y-1.5">
-                          <p className="text-xs text-zinc-500">Visibility</p>
-                          <SegmentedControl
-                            ariaLabel="Share visibility"
-                            className="w-full"
-                            itemClassName="flex-1"
-                            options={[
-                              { id: 'public', label: 'Public' },
-                              { id: 'authenticated', label: 'Signed in' },
-                            ]}
-                            value={shareVisibility}
-                            onChange={setShareVisibility}
-                            size="sm"
-                          />
-                          <p className="text-xs text-zinc-400 leading-relaxed">
-                            {shareVisibility === 'public'
-                              ? 'Anyone with the link can view this scan.'
-                              : 'Only signed-in users can view this scan.'}
-                          </p>
-                        </div>
-                        <Button
-                          className="btn-primary w-full"
-                          isDisabled={shareLoading}
-                          onPress={handleEnableShare}
-                          type="button"
-                          variant="primary"
-                        >
-                          {shareLoading ? 'Creating link…' : 'Create share link'}
-                        </Button>
-                      </>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-zinc-500">Change visibility</p>
+                    <SegmentedControl
+                      ariaLabel="Share visibility"
+                      className="w-full"
+                      itemClassName="flex-1"
+                      options={[
+                        { id: 'public', label: 'Public' },
+                        { id: 'authenticated', label: 'Signed in' },
+                      ]}
+                      value={shareVisibility}
+                      onChange={setShareVisibility}
+                      size="sm"
+                    />
+                    {shareVisibility !== scan.share_visibility && (
+                      <Button
+                        className="btn-primary w-full"
+                        isDisabled={shareLoading}
+                        onPress={handleEnableShare}
+                        type="button"
+                        variant="primary"
+                      >
+                        {shareLoading ? 'Updating…' : 'Update visibility'}
+                      </Button>
                     )}
                   </div>
+                  <Button
+                    className="btn-danger w-full"
+                    isDisabled={shareLoading}
+                    onPress={handleDisableShare}
+                    type="button"
+                    variant="danger"
+                  >
+                    {shareLoading ? 'Processing…' : 'Disable sharing'}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-zinc-500">Visibility</p>
+                    <SegmentedControl
+                      ariaLabel="Share visibility"
+                      className="w-full"
+                      itemClassName="flex-1"
+                      options={[
+                        { id: 'public', label: 'Public' },
+                        { id: 'authenticated', label: 'Signed in' },
+                      ]}
+                      value={shareVisibility}
+                      onChange={setShareVisibility}
+                      size="sm"
+                    />
+                    <p className="text-xs leading-relaxed text-zinc-400">
+                      {shareVisibility === 'public'
+                        ? 'Anyone with the link can view this scan.'
+                        : 'Only signed-in users can view this scan.'}
+                    </p>
+                  </div>
+                  <Button
+                    className="btn-primary w-full"
+                    isDisabled={shareLoading}
+                    onPress={handleEnableShare}
+                    type="button"
+                    variant="primary"
+                  >
+                    {shareLoading ? 'Creating link…' : 'Create share link'}
+                  </Button>
                 </>
               )}
             </div>
-          </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5 p-6">
+      <PageHeader
+        title={`${scan.image_name}:${scan.image_tag}`}
+        description={
+          scan.image_digest ||
+          'Inspect vulnerability results, runtime signals, and sharing controls for this scan.'
         }
+        actions={headerActions}
       />
 
       {/* Status + severity cards */}
       {scan.status !== 'pending' && scan.status !== 'running' && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <StatCard
             label="Status"
             value={<StatusBadge status={scan.status} externalStatus={scan.external_status} />}
-            className="col-span-2 md:col-span-1"
             valueClassName="text-sm font-semibold"
           />
           {sevCards.map(({ label, count, color, border }) => (
@@ -1705,6 +1848,10 @@ export default function ScanDetailPage() {
                   label: scan.step_logs?.length
                     ? `Timeline (${scan.step_logs.length})`
                     : 'Timeline',
+                },
+                {
+                  id: 'compliance',
+                  label: `Compliance (${complianceViolationRows.length})`,
                 },
                 { id: 'details', label: 'Details' },
               ] as { id: ScanTab; label: string }[]
@@ -1827,16 +1974,52 @@ export default function ScanDetailPage() {
         </div>
       )}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'vulns' && (
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-              Vulnerabilities
-              {vulnTotal > 0 && (
-                <span className="text-sm font-normal text-zinc-500 ml-2">{vulnTotal} found</span>
-              )}
-            </h2>
-            <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
-              <div className="w-full overflow-x-auto pb-1 lg:w-auto lg:max-w-full lg:shrink-0 lg:pb-0">
+        <Card className="overflow-hidden">
+          <Card.Header className="space-y-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                  Vulnerabilities
+                  {vulnTotal > 0 && (
+                    <span className="text-sm font-normal text-zinc-500 ml-2">
+                      {vulnTotal} found
+                    </span>
+                  )}
+                </h2>
+                <p className="text-[11px] text-zinc-500 mt-1">
+                  {viewSettingsReady
+                    ? `${vulnerabilityViewSourceLabel}: ${vulnerabilityViewSummary(currentVulnerabilityViewSettings)}`
+                    : 'Loading default view...'}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button
+                  className="btn-secondary"
+                  isDisabled={
+                    !viewSettingsReady || viewPreferenceSaving || !vulnerabilityViewHasChanges
+                  }
+                  onPress={() => void saveVulnerabilityViewPreference()}
+                  variant="secondary"
+                >
+                  {viewPreferenceSaving && vulnerabilityViewHasChanges
+                    ? 'Saving...'
+                    : 'Save as my default'}
+                </Button>
+                <Button
+                  className="btn-secondary"
+                  isDisabled={
+                    !viewSettingsReady || viewPreferenceSaving || !viewPreference?.has_user_override
+                  }
+                  onPress={() => void resetVulnerabilityViewPreference()}
+                  variant="secondary"
+                >
+                  Reset default
+                </Button>
+              </div>
+            </div>
+
+            <Card variant="secondary" className="flex flex-col gap-3 p-3">
+              <div className="w-full overflow-x-auto pb-1">
                 <SegmentedControl
                   ariaLabel="Severity filters"
                   className="min-w-max"
@@ -1923,24 +2106,80 @@ export default function ScanDetailPage() {
                       border?: string;
                     };
                     return {
-                      background: withPalette.color ?? 'rgba(124,58,237,0.15)',
-                      color: withPalette.activeColor ?? '#a78bfa',
-                      borderColor: withPalette.border ?? 'rgba(167,139,250,0.3)',
+                      background: withPalette.color ?? 'var(--color-accent-soft)',
+                      color: withPalette.activeColor ?? 'var(--color-accent)',
+                      borderColor: withPalette.border ?? 'var(--color-accent-soft-hover)',
                     };
                   }}
                 />
               </div>
-              <div className="flex w-full flex-col gap-2 md:flex-row md:items-center lg:w-auto lg:min-w-0 lg:flex-1 lg:justify-end">
-                <FormField
-                  hideLabel
-                  label="Filter by package"
-                  type="text"
-                  value={pkgInput}
-                  onChange={(e) => setPkgInput(e.target.value)}
-                  placeholder="Package..."
-                  className="min-w-[220px] flex-1 md:min-w-[280px] lg:max-w-[360px]"
-                  containerClassName="min-w-[220px] flex-1 md:min-w-[280px] lg:max-w-[360px]"
-                />
+              <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_160px_150px_120px_auto_auto]">
+                <SearchField name="scan-vuln-search" className="w-full">
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input
+                      placeholder="Search package..."
+                      value={pkgInput}
+                      onChange={(event) => setPkgInput(event.target.value)}
+                    />
+                    <SearchField.ClearButton />
+                  </SearchField.Group>
+                </SearchField>
+                <SearchField name="scan-vuln-cve-search" className="w-full">
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input
+                      placeholder="Search CVE (e.g. CVE-2026-31789)..."
+                      value={cveInput}
+                      onChange={(event) => setCveInput(event.target.value)}
+                    />
+                    <SearchField.ClearButton />
+                  </SearchField.Group>
+                </SearchField>
+                <Select
+                  aria-label="Sort vulnerabilities by"
+                  value={sortBy}
+                  className="w-full"
+                  onChange={(value) => {
+                    setSortBy(value as VulnerabilityViewSettings['sort_by']);
+                    setPage(1);
+                  }}
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="vuln_id">CVE ID</ListBox.Item>
+                      <ListBox.Item id="pkg_name">Package</ListBox.Item>
+                      <ListBox.Item id="severity">Severity</ListBox.Item>
+                      <ListBox.Item id="cvss_score">CVSS</ListBox.Item>
+                      <ListBox.Item id="installed_version">Installed</ListBox.Item>
+                      <ListBox.Item id="fixed_version">Fixed In</ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                <Select
+                  aria-label="Sort direction"
+                  value={sortDir}
+                  className="w-full"
+                  onChange={(value) => {
+                    setSortDir(value as VulnerabilityViewSettings['sort_dir']);
+                    setPage(1);
+                  }}
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="asc">Ascending</ListBox.Item>
+                      <ListBox.Item id="desc">Descending</ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
                 <FormField
                   hideLabel
                   label="Minimum CVSS"
@@ -1955,15 +2194,15 @@ export default function ScanDetailPage() {
                     setMinCvss(!isNaN(val) ? val : 0);
                     setPage(1);
                   }}
-                  className="w-full min-w-[7rem] shrink-0 md:w-28"
-                  containerClassName="w-full min-w-[7rem] shrink-0 md:w-28"
+                  className="w-full bg-surface"
+                  containerClassName="w-full"
                 />
                 <Button
                   onPress={() => {
                     setHasFix(!hasFix);
                     setPage(1);
                   }}
-                  className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full shrink-0 md:w-auto`}
+                  className={`w-full`}
                   variant={hasFix ? 'primary' : 'secondary'}
                 >
                   Has Fix
@@ -1973,536 +2212,707 @@ export default function ScanDetailPage() {
                     setXrayPolicyFirst(!xrayPolicyFirst);
                     setPage(1);
                   }}
-                  className={`${xrayPolicyFirst ? 'btn-primary' : 'btn-secondary'} w-full shrink-0 md:w-auto`}
+                  className={`${xrayPolicyFirst ? 'btn-primary' : 'btn-secondary'} w-full`}
                   variant={xrayPolicyFirst ? 'primary' : 'secondary'}
                 >
                   Xray Policy First
                 </Button>
               </div>
-            </div>
-
-            <Card className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                  {vulnerabilityViewSourceLabel}
-                </p>
-                <p className="text-[11px] text-zinc-500">
-                  {viewSettingsReady
-                    ? vulnerabilityViewSummary(currentVulnerabilityViewSettings)
-                    : 'Loading default view...'}
-                </p>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button
-                  className="btn-secondary"
-                  isDisabled={
-                    !viewSettingsReady || viewPreferenceSaving || !vulnerabilityViewHasChanges
-                  }
-                  onPress={() => void saveVulnerabilityViewPreference()}
-                  variant="secondary"
-                >
-                  {viewPreferenceSaving && vulnerabilityViewHasChanges
-                    ? 'Saving...'
-                    : 'Save as my default'}
-                </Button>
-                <Button
-                  className="btn-secondary"
-                  isDisabled={
-                    !viewSettingsReady || viewPreferenceSaving || !viewPreference?.has_user_override
-                  }
-                  onPress={() => void resetVulnerabilityViewPreference()}
-                  variant="secondary"
-                >
-                  Reset default
-                </Button>
-              </div>
             </Card>
-          </div>
+          </Card.Header>
 
-          <Card className="overflow-hidden">
-            <Table variant="secondary">
-              <Table.ScrollContainer>
-                <Table.Content aria-label="Scan vulnerabilities" className="min-w-[1120px]">
-                  <Table.Header>
-                    {(
-                      [
-                        { label: 'CVE ID', key: 'vuln_id', align: 'left' },
-                        { label: 'Package', key: 'pkg_name', align: 'left' },
-                        { label: 'Installed', key: 'installed_version', align: 'left' },
-                        { label: 'Fixed In', key: 'fixed_version', align: 'left' },
-                        { label: 'Severity', key: 'severity', align: 'left' },
-                        { label: 'CVSS', key: 'cvss_score', align: 'right' },
-                      ] as {
-                        label: string;
-                        key: VulnerabilityViewSettings['sort_by'];
-                        align: 'left' | 'right';
-                      }[]
-                    ).map(({ label, key, align }) => {
-                      const active = sortBy === key;
-                      return (
-                        <Table.Column
-                          key={key}
-                          isRowHeader={key === 'vuln_id'}
-                          onClick={() => {
-                            if (active) {
-                              setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-                            } else {
-                              setSortBy(key);
-                              setSortDir('asc');
-                            }
-                            setPage(1);
-                          }}
-                          className={`cursor-pointer select-none transition-colors ${
-                            align === 'right' ? 'text-right' : 'text-left'
-                          }`}
-                          style={{ color: active ? '#a78bfa' : undefined }}
-                        >
-                          <span className="inline-flex items-center gap-1">
-                            {label}
-                            <span
-                              className={`transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`}
-                            >
-                              {active && sortDir === 'desc' ? '↓' : '↑'}
-                            </span>
+          <Table variant="secondary">
+            <Table.ScrollContainer>
+              <Table.Content aria-label="Scan vulnerabilities" className="min-w-[1120px]">
+                <Table.Header>
+                  {(
+                    [
+                      { label: 'CVE ID', key: 'vuln_id', align: 'left' },
+                      { label: 'Package', key: 'pkg_name', align: 'left' },
+                      { label: 'Installed', key: 'installed_version', align: 'left' },
+                      { label: 'Fixed In', key: 'fixed_version', align: 'left' },
+                      { label: 'Severity', key: 'severity', align: 'left' },
+                      { label: 'CVSS', key: 'cvss_score', align: 'right' },
+                    ] as {
+                      label: string;
+                      key: VulnerabilityViewSettings['sort_by'];
+                      align: 'left' | 'right';
+                    }[]
+                  ).map(({ label, key, align }) => {
+                    const active = sortBy === key;
+                    return (
+                      <Table.Column
+                        key={key}
+                        isRowHeader={key === 'vuln_id'}
+                        onClick={() => {
+                          if (active) {
+                            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+                          } else {
+                            setSortBy(key);
+                            setSortDir('asc');
+                          }
+                          setPage(1);
+                        }}
+                        className={`cursor-pointer select-none transition-colors ${
+                          align === 'right' ? 'text-right' : 'text-left'
+                        }`}
+                        style={{ color: active ? 'var(--color-accent)' : undefined }}
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          {label}
+                          <span
+                            className={`transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`}
+                          >
+                            {active && sortDir === 'desc' ? '↓' : '↑'}
                           </span>
-                        </Table.Column>
-                      );
-                    })}
-                    <Table.Column className="text-left">First Seen</Table.Column>
-                    <Table.Column className="text-left">Xray Policy</Table.Column>
-                    <Table.Column className="text-right">Notes</Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {vulnLoading || vulns.length === 0 ? (
-                      <Table.Row key="vuln-state" id="vuln-state">
-                        <Table.Cell colSpan={9}>
-                          {vulnLoading ? (
-                            <div className="py-12 text-center">
-                              <div className="flex justify-center">
-                                <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
-                              </div>
+                        </span>
+                      </Table.Column>
+                    );
+                  })}
+                  <Table.Column className="text-left">First Seen</Table.Column>
+                  <Table.Column className="text-left">Xray Policy</Table.Column>
+                  <Table.Column className="text-right">Notes</Table.Column>
+                </Table.Header>
+                <Table.Body>
+                  {vulnLoading || vulns.length === 0 ? (
+                    <Table.Row key="vuln-state" id="vuln-state">
+                      <Table.Cell colSpan={9}>
+                        {vulnLoading ? (
+                          <div className="py-12 text-center">
+                            <div className="flex justify-center">
+                              <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent animate-spin" />
                             </div>
-                          ) : (
-                            <div className="py-12 text-center text-zinc-500 text-sm">
-                              {scan.external_status === 'blocked_by_xray_policy'
-                                ? 'No imported vulnerabilities are available because Xray blocked this artifact before the normal scan summary was produced. See the Policy Violations tab for the matched issues, watches, and policies.'
-                                : 'No vulnerabilities found.'}
-                            </div>
-                          )}
-                        </Table.Cell>
-                      </Table.Row>
-                    ) : (
-                      vulns.map((v) => (
-                        <Fragment key={v.id}>
-                          <Table.Row id={v.id} className="hover:bg-[var(--row-hover)]">
-                            <Table.Cell>
-                              {v.vuln_id ? (
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <button
-                                    type="button"
-                                    onClick={() => openVulnerabilityDetails(v)}
-                                    className=" text-xs text-violet-500 dark:text-violet-400 hover:text-violet-400 dark:hover:text-violet-300 hover:underline transition-colors"
-                                  >
-                                    {v.vuln_id}
-                                  </button>
-                                  <SourceBadge source={v.data_source} />
-                                  {v.suppression && (
-                                    <span
-                                      className="text-xs font-medium px-1.5 py-0.5 rounded-md capitalize shrink-0"
-                                      style={{
-                                        background: 'rgba(251,146,60,0.12)',
-                                        color: '#fb923c',
-                                        border: '1px solid rgba(251,146,60,0.25)',
-                                      }}
-                                      title={v.suppression.justification || 'Suppressed'}
-                                    >
-                                      {v.suppression.status.replace(/_/g, ' ')}
-                                    </span>
-                                  )}
-                                  {v.suppression && (
-                                    <SuppressionSourceBadge source={v.suppression.source} />
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-zinc-400 dark:text-zinc-600">-</span>
-                              )}
-                            </Table.Cell>
-                            <Table.Cell className=" text-xs text-zinc-700 dark:text-zinc-300">
-                              {v.pkg_name}
-                            </Table.Cell>
-                            <Table.Cell className=" text-xs text-zinc-500">
-                              {v.installed_version}
-                            </Table.Cell>
-                            <Table.Cell className=" text-xs text-emerald-500">
-                              {v.fixed_version || (
-                                <span className="text-zinc-400 dark:text-zinc-700">-</span>
-                              )}
-                            </Table.Cell>
-                            <Table.Cell>
-                              <SeverityBadge severity={v.severity} />
-                            </Table.Cell>
-                            <Table.Cell className="text-right  text-xs text-zinc-500">
-                              {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
-                            </Table.Cell>
-                            <Table.Cell>
-                              <FirstSeenBadge firstSeenAt={v.first_seen_at} />
-                            </Table.Cell>
-                            <Table.Cell>
-                              {(() => {
-                                const policyMatches = parseXrayWatchPolicyMatches(v);
-                                const watchCount = xrayWatchNames(v).length;
-                                const hasDetails =
-                                  policyMatches.length > 0 ||
-                                  watchCount > 0 ||
-                                  !!v.xray_is_blocking;
-                                if (!hasDetails) {
-                                  return <span className="text-xs text-zinc-400">-</span>;
-                                }
-
-                                return (
-                                  <Button
-                                    onPress={() => openXrayPolicyDetails(v)}
-                                    className="inline-flex items-center gap-1.5"
-                                    variant="danger-soft"
-                                  >
-                                    Details
-                                    <Chip
-                                      className="font-semibold"
-                                      color="danger"
-                                      size="sm"
-                                      variant="soft"
-                                    >
-                                      {policyMatches.length || watchCount}
-                                    </Chip>
-                                  </Button>
-                                );
-                              })()}
-                            </Table.Cell>
-                            <Table.Cell className="text-right">
-                              <Button
-                                onPress={() => {
-                                  setExpandedVuln(expandedVuln === v.id ? null : v.id);
-                                  setCommentText('');
-                                }}
-                                className="inline-flex items-center gap-1 text-zinc-400 dark:text-zinc-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
-                                variant="secondary"
-                              >
-                                <Comment01Icon size={15} />
-                                {v.comments && v.comments.length > 0 && (
+                          </div>
+                        ) : (
+                          <div className="py-12 text-center text-zinc-500 text-sm">
+                            {scan.external_status === 'blocked_by_xray_policy'
+                              ? 'No imported vulnerabilities are available because Xray blocked this artifact before the normal scan summary was produced. See the Policy Violations tab for the matched issues, watches, and policies.'
+                              : 'No vulnerabilities found.'}
+                          </div>
+                        )}
+                      </Table.Cell>
+                    </Table.Row>
+                  ) : (
+                    vulns.map((v) => (
+                      <Fragment key={v.id}>
+                        <Table.Row id={v.id} className="hover:bg-[var(--row-hover)]">
+                          <Table.Cell>
+                            {v.vuln_id ? (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => openVulnerabilityDetails(v)}
+                                  className=" text-xs text-accent hover:text-accent/80 hover:underline transition-colors"
+                                >
+                                  {v.vuln_id}
+                                </button>
+                                <SourceBadge source={v.data_source} />
+                                {v.suppression && (
                                   <span
-                                    className="text-xs rounded-full px-1.5 py-0.5 font-medium"
-                                    style={{ background: 'rgba(124,58,237,0.2)', color: '#a78bfa' }}
+                                    className="text-xs font-medium px-1.5 py-0.5 rounded-md capitalize shrink-0"
+                                    style={{
+                                      background: 'rgba(251,146,60,0.12)',
+                                      color: '#fb923c',
+                                      border: '1px solid rgba(251,146,60,0.25)',
+                                    }}
+                                    title={v.suppression.justification || 'Suppressed'}
                                   >
-                                    {v.comments.length}
+                                    {v.suppression.status.replace(/_/g, ' ')}
                                   </span>
                                 )}
-                              </Button>
-                            </Table.Cell>
-                          </Table.Row>
-                          {expandedVuln === v.id && (
-                            <Table.Row id={`${v.id}-expanded`}>
-                              <Table.Cell
-                                colSpan={9}
-                                className="p-4"
-                                style={{
-                                  borderTop: '1px solid var(--border-subtle)',
-                                  background: 'var(--row-hover)',
-                                }}
-                              >
-                                <div className="space-y-4 max-w-3xl">
-                                  {/* Suppression section */}
-                                  {scan.image_digest && (
-                                    <div className="space-y-2.5">
-                                      <div className="flex items-center gap-2">
-                                        <ShieldKeyIcon size={13} className="text-zinc-400" />
-                                        <span
-                                          className="text-xs font-semibold uppercase tracking-wider"
-                                          style={{ color: 'var(--text-muted)' }}
-                                        >
-                                          Suppression
-                                        </span>
-                                        {v.suppression && (
-                                          <span
-                                            className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
-                                            style={{
-                                              background: 'rgba(239,68,68,0.1)',
-                                              color: '#f87171',
-                                              border: '1px solid rgba(239,68,68,0.2)',
-                                            }}
-                                          >
-                                            {v.suppression.status.replace(/_/g, ' ')}
-                                          </span>
-                                        )}
-                                      </div>
-                                      {v.suppression && (
-                                        <div
-                                          className="rounded-lg px-3 py-2 space-y-1"
-                                          style={{
-                                            background: 'rgba(239,68,68,0.05)',
-                                            border: '1px solid rgba(239,68,68,0.15)',
-                                          }}
-                                        >
-                                          <p className="text-xs text-zinc-400">
-                                            {v.suppression.justification || '-'}
-                                          </p>
-                                          <div className="flex items-center gap-2 pt-1 flex-wrap">
-                                            <SuppressionSourceBadge source={v.suppression.source} />
-                                            <OwnershipBadge
-                                              ownerType={v.suppression.owner_type}
-                                              ownerOrgId={v.suppression.owner_org_id}
-                                              orgNamesById={orgNamesById}
-                                            />
-                                            {v.suppression.read_only && (
-                                              <span className="text-[11px] text-zinc-400">
-                                                Managed by Xray
-                                              </span>
-                                            )}
-                                            {canManageSuppressionAccess(v.suppression) && (
-                                              <Button
-                                                onPress={() =>
-                                                  openSuppressionAccess(
-                                                    v.suppression as Suppression
-                                                  )
-                                                }
-                                                className="inline-flex items-center gap-1 text-[11px] text-violet-400 hover:text-violet-300 transition-colors"
-                                                type="button"
-                                                variant="secondary"
-                                              >
-                                                <Shield01Icon size={12} />
-                                                Manage access
-                                              </Button>
-                                            )}
-                                          </div>
-                                          {v.suppression.expires_at && (
-                                            <p className="text-xs text-zinc-500">
-                                              Expires:{' '}
-                                              {new Date(
-                                                v.suppression.expires_at
-                                              ).toLocaleDateString()}
-                                            </p>
-                                          )}
-                                          {(v.suppression.xray_policy_name ||
-                                            v.suppression.xray_watch_name) && (
-                                            <p className="text-xs text-zinc-500">
-                                              {[
-                                                v.suppression.xray_policy_name,
-                                                v.suppression.xray_watch_name,
-                                              ]
-                                                .filter(Boolean)
-                                                .join(' · ')}
-                                            </p>
-                                          )}
-                                          {v.suppression.username && (
-                                            <p className="text-xs text-zinc-500">
-                                              By: {v.suppression.username}
-                                            </p>
-                                          )}
-                                        </div>
-                                      )}
-                                      {!(
-                                        v.suppression?.read_only || v.suppression?.source === 'xray'
-                                      ) ? (
-                                        <div className="flex gap-2 items-center flex-wrap">
-                                          <Select
-                                            value={suppressStatus}
-                                            onChange={(value) =>
-                                              setSuppressStatus(value as Suppression['status'])
-                                            }
-                                          >
-                                            <Select.Trigger>
-                                              <Select.Value />
-                                              <Select.Indicator />
-                                            </Select.Trigger>
-                                            <Select.Popover>
-                                              <ListBox>
-                                                <ListBox.Item id="accepted">
-                                                  Accepted Risk
-                                                </ListBox.Item>
-                                                <ListBox.Item id="wont_fix">
-                                                  Won&apos;t Fix
-                                                </ListBox.Item>
-                                                <ListBox.Item id="false_positive">
-                                                  False Positive
-                                                </ListBox.Item>
-                                              </ListBox>
-                                            </Select.Popover>
-                                          </Select>
-                                          <FormField
-                                            hideLabel
-                                            label="Suppression justification"
-                                            type="text"
-                                            value={suppressJustification}
-                                            onChange={(e) =>
-                                              setSuppressJustification(e.target.value)
-                                            }
-                                            placeholder="Justification..."
-                                            className="flex-1 min-w-0"
-                                            containerClassName="flex-1 min-w-0"
-                                          />
-                                          <DatePicker
-                                            aria-label="Expiry date (optional)"
-                                            value={suppressExpiry}
-                                            onChange={setSuppressExpiry}
-                                            className="w-40"
-                                          >
-                                            <DateField.Group
-                                              className={`${inputCls} flex items-center gap-1`}
-                                            >
-                                              <DateField.Input>
-                                                {(seg) => <DateField.Segment segment={seg} />}
-                                              </DateField.Input>
-                                              <DateField.Suffix>
-                                                <DatePicker.Trigger>
-                                                  <DatePicker.TriggerIndicator />
-                                                </DatePicker.Trigger>
-                                              </DateField.Suffix>
-                                            </DateField.Group>
-                                            <DatePicker.Popover>
-                                              <Calendar aria-label="Expiry date">
-                                                <Calendar.Header>
-                                                  <Calendar.YearPickerTrigger>
-                                                    <Calendar.YearPickerTriggerHeading />
-                                                    <Calendar.YearPickerTriggerIndicator />
-                                                  </Calendar.YearPickerTrigger>
-                                                  <Calendar.NavButton slot="previous" />
-                                                  <Calendar.NavButton slot="next" />
-                                                </Calendar.Header>
-                                                <Calendar.Grid>
-                                                  <Calendar.GridHeader>
-                                                    {(day) => (
-                                                      <Calendar.HeaderCell>
-                                                        {day}
-                                                      </Calendar.HeaderCell>
-                                                    )}
-                                                  </Calendar.GridHeader>
-                                                  <Calendar.GridBody>
-                                                    {(date) => <Calendar.Cell date={date} />}
-                                                  </Calendar.GridBody>
-                                                </Calendar.Grid>
-                                                <Calendar.YearPickerGrid>
-                                                  <Calendar.YearPickerGridBody>
-                                                    {({ year }) => (
-                                                      <Calendar.YearPickerCell year={year} />
-                                                    )}
-                                                  </Calendar.YearPickerGridBody>
-                                                </Calendar.YearPickerGrid>
-                                              </Calendar>
-                                            </DatePicker.Popover>
-                                          </DatePicker>
-                                          <Button
-                                            onPress={() => handleSuppress(v)}
-                                            isDisabled={
-                                              suppressSaving || !suppressJustification.trim()
-                                            }
-                                            className="btn-warning inline-flex shrink-0 items-center gap-1.5"
-                                            type="button"
-                                            variant="danger-soft"
-                                          >
-                                            {suppressSaving && (
-                                              <span className="size-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
-                                            )}
-                                            {v.suppression ? 'Update' : 'Suppress'}
-                                          </Button>
-                                          {v.suppression && (
-                                            <Button
-                                              onPress={() => handleLiftSuppression(v)}
-                                              isDisabled={suppressSaving}
-                                              className="btn-secondary shrink-0"
-                                              type="button"
-                                              variant="secondary"
-                                            >
-                                              Lift
-                                            </Button>
-                                          )}
-                                        </div>
-                                      ) : (
-                                        <p className="text-xs text-zinc-500">
-                                          This suppression comes from Xray and cannot be edited
-                                          here.
-                                        </p>
-                                      )}
-                                      {suppressError && (
-                                        <p className="text-xs mt-1" style={{ color: '#f87171' }}>
-                                          {suppressError}
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
+                                {v.suppression && (
+                                  <SuppressionSourceBadge source={v.suppression.source} />
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-zinc-400 dark:text-zinc-600">-</span>
+                            )}
+                          </Table.Cell>
+                          <Table.Cell className=" text-xs text-zinc-700 dark:text-zinc-300">
+                            {v.pkg_name}
+                          </Table.Cell>
+                          <Table.Cell className=" text-xs text-zinc-500">
+                            {v.installed_version}
+                          </Table.Cell>
+                          <Table.Cell className=" text-xs text-emerald-500">
+                            {v.fixed_version || (
+                              <span className="text-zinc-400 dark:text-zinc-700">-</span>
+                            )}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <SeverityBadge severity={v.severity} />
+                          </Table.Cell>
+                          <Table.Cell className="text-right  text-xs text-zinc-500">
+                            {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <FirstSeenBadge firstSeenAt={v.first_seen_at} />
+                          </Table.Cell>
+                          <Table.Cell>
+                            {(() => {
+                              const policyMatches = parseXrayWatchPolicyMatches(v);
+                              const watchCount = xrayWatchNames(v).length;
+                              const hasDetails =
+                                policyMatches.length > 0 || watchCount > 0 || !!v.xray_is_blocking;
+                              if (!hasDetails) {
+                                return <span className="text-xs text-zinc-400">-</span>;
+                              }
 
-                                  <div style={{ borderTop: '1px solid var(--border-subtle)' }} />
-
-                                  {/* Notes / Comments */}
-                                  <div className="space-y-3">
+                              return (
+                                <Button
+                                  onPress={() => openXrayPolicyDetails(v)}
+                                  className="inline-flex items-center gap-1.5"
+                                  variant="danger-soft"
+                                >
+                                  Details
+                                  <Chip
+                                    className="font-semibold"
+                                    color="danger"
+                                    size="sm"
+                                    variant="soft"
+                                  >
+                                    {policyMatches.length || watchCount}
+                                  </Chip>
+                                </Button>
+                              );
+                            })()}
+                          </Table.Cell>
+                          <Table.Cell className="text-right">
+                            <Button
+                              onPress={() => {
+                                setExpandedVuln(expandedVuln === v.id ? null : v.id);
+                                setCommentText('');
+                              }}
+                              className="inline-flex items-center gap-1 text-zinc-400 dark:text-zinc-500 hover:text-accent transition-colors"
+                              variant="secondary"
+                            >
+                              <Comment01Icon size={15} />
+                              {v.comments && v.comments.length > 0 && (
+                                <span
+                                  className="text-xs rounded-full px-1.5 py-0.5 font-medium"
+                                  style={{
+                                    background: 'var(--color-accent-soft)',
+                                    color: 'var(--color-accent)',
+                                  }}
+                                >
+                                  {v.comments.length}
+                                </span>
+                              )}
+                            </Button>
+                          </Table.Cell>
+                        </Table.Row>
+                        {expandedVuln === v.id && (
+                          <Table.Row id={`${v.id}-expanded`}>
+                            <Table.Cell
+                              colSpan={9}
+                              className="p-4"
+                              style={{
+                                borderTop: '1px solid var(--border-subtle)',
+                                background: 'var(--row-hover)',
+                              }}
+                            >
+                              <div className="space-y-4 max-w-3xl">
+                                {/* Suppression section */}
+                                {scan.image_digest && (
+                                  <div className="space-y-2.5">
                                     <div className="flex items-center gap-2">
-                                      <Comment01Icon size={13} className="text-zinc-400" />
+                                      <ShieldKeyIcon size={13} className="text-zinc-400" />
                                       <span
                                         className="text-xs font-semibold uppercase tracking-wider"
                                         style={{ color: 'var(--text-muted)' }}
                                       >
-                                        Notes
+                                        Suppression
                                       </span>
+                                      {v.suppression && (
+                                        <span
+                                          className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
+                                          style={{
+                                            background: 'rgba(239,68,68,0.1)',
+                                            color: '#f87171',
+                                            border: '1px solid rgba(239,68,68,0.2)',
+                                          }}
+                                        >
+                                          {v.suppression.status.replace(/_/g, ' ')}
+                                        </span>
+                                      )}
                                     </div>
-                                    {v.comments && v.comments.length > 0 ? (
-                                      <div className="space-y-2">
-                                        {v.comments.map((c) => (
-                                          <div
-                                            key={c.id}
-                                            className="flex items-start justify-between gap-3 group"
+                                    {v.suppression && (
+                                      <div
+                                        className="rounded-lg px-3 py-2 space-y-1"
+                                        style={{
+                                          background: 'rgba(239,68,68,0.05)',
+                                          border: '1px solid rgba(239,68,68,0.15)',
+                                        }}
+                                      >
+                                        <p className="text-xs text-zinc-400">
+                                          {v.suppression.justification || '-'}
+                                        </p>
+                                        <div className="flex items-center gap-2 pt-1 flex-wrap">
+                                          <SuppressionSourceBadge source={v.suppression.source} />
+                                          <OwnershipBadge
+                                            ownerType={v.suppression.owner_type}
+                                            ownerOrgId={v.suppression.owner_org_id}
+                                            orgNamesById={orgNamesById}
+                                          />
+                                          {v.suppression.read_only && (
+                                            <span className="text-[11px] text-zinc-400">
+                                              Managed by Xray
+                                            </span>
+                                          )}
+                                          {canManageSuppressionAccess(v.suppression) && (
+                                            <Button
+                                              onPress={() =>
+                                                openSuppressionAccess(v.suppression as Suppression)
+                                              }
+                                              className="inline-flex items-center gap-1 text-[11px] text-accent hover:text-accent/80 transition-colors"
+                                              type="button"
+                                              variant="secondary"
+                                            >
+                                              <Shield01Icon size={12} />
+                                              Manage access
+                                            </Button>
+                                          )}
+                                        </div>
+                                        {v.suppression.expires_at && (
+                                          <p className="text-xs text-zinc-500">
+                                            Expires:{' '}
+                                            {new Date(
+                                              v.suppression.expires_at
+                                            ).toLocaleDateString()}
+                                          </p>
+                                        )}
+                                        {(v.suppression.xray_policy_name ||
+                                          v.suppression.xray_watch_name) && (
+                                          <p className="text-xs text-zinc-500">
+                                            {[
+                                              v.suppression.xray_policy_name,
+                                              v.suppression.xray_watch_name,
+                                            ]
+                                              .filter(Boolean)
+                                              .join(' · ')}
+                                          </p>
+                                        )}
+                                        {v.suppression.username && (
+                                          <p className="text-xs text-zinc-500">
+                                            By: {v.suppression.username}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
+                                    {!(
+                                      v.suppression?.read_only || v.suppression?.source === 'xray'
+                                    ) ? (
+                                      <div className="flex gap-2 items-center flex-wrap">
+                                        <Select
+                                          value={suppressStatus}
+                                          onChange={(value) =>
+                                            setSuppressStatus(value as Suppression['status'])
+                                          }
+                                        >
+                                          <Select.Trigger>
+                                            <Select.Value />
+                                            <Select.Indicator />
+                                          </Select.Trigger>
+                                          <Select.Popover>
+                                            <ListBox>
+                                              <ListBox.Item id="accepted">
+                                                Accepted Risk
+                                              </ListBox.Item>
+                                              <ListBox.Item id="wont_fix">
+                                                Won&apos;t Fix
+                                              </ListBox.Item>
+                                              <ListBox.Item id="false_positive">
+                                                False Positive
+                                              </ListBox.Item>
+                                            </ListBox>
+                                          </Select.Popover>
+                                        </Select>
+                                        <FormField
+                                          hideLabel
+                                          label="Suppression justification"
+                                          type="text"
+                                          value={suppressJustification}
+                                          onChange={(e) => setSuppressJustification(e.target.value)}
+                                          placeholder="Justification..."
+                                          className="flex-1 min-w-0"
+                                          containerClassName="flex-1 min-w-0"
+                                        />
+                                        <DatePicker
+                                          aria-label="Expiry date (optional)"
+                                          value={suppressExpiry}
+                                          onChange={setSuppressExpiry}
+                                          className="w-40"
+                                        >
+                                          <DateField.Group
+                                            className={`${inputCls} flex items-center gap-1`}
                                           >
-                                            <div className="flex-1 min-w-0">
-                                              <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                                                {c.username || 'You'}
-                                              </span>
-                                              <span
-                                                className="text-xs text-zinc-500 ml-2"
-                                                title={fullDate(c.created_at)}
-                                              >
-                                                {timeAgo(c.created_at)}
-                                              </span>
-                                              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
-                                                {c.content}
-                                              </p>
-                                            </div>
-                                            {currentUser?.id === c.user_id && (
-                                              <Button
-                                                onPress={() => handleDeleteComment(c.id)}
-                                                className="text-zinc-400 dark:text-zinc-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                                                isIconOnly
-                                                variant="secondary"
-                                              >
-                                                <Delete02Icon size={14} />
-                                              </Button>
-                                            )}
-                                          </div>
-                                        ))}
+                                            <DateField.Input>
+                                              {(seg) => <DateField.Segment segment={seg} />}
+                                            </DateField.Input>
+                                            <DateField.Suffix>
+                                              <DatePicker.Trigger>
+                                                <DatePicker.TriggerIndicator />
+                                              </DatePicker.Trigger>
+                                            </DateField.Suffix>
+                                          </DateField.Group>
+                                          <DatePicker.Popover>
+                                            <Calendar aria-label="Expiry date">
+                                              <Calendar.Header>
+                                                <Calendar.YearPickerTrigger>
+                                                  <Calendar.YearPickerTriggerHeading />
+                                                  <Calendar.YearPickerTriggerIndicator />
+                                                </Calendar.YearPickerTrigger>
+                                                <Calendar.NavButton slot="previous" />
+                                                <Calendar.NavButton slot="next" />
+                                              </Calendar.Header>
+                                              <Calendar.Grid>
+                                                <Calendar.GridHeader>
+                                                  {(day) => (
+                                                    <Calendar.HeaderCell>{day}</Calendar.HeaderCell>
+                                                  )}
+                                                </Calendar.GridHeader>
+                                                <Calendar.GridBody>
+                                                  {(date) => <Calendar.Cell date={date} />}
+                                                </Calendar.GridBody>
+                                              </Calendar.Grid>
+                                              <Calendar.YearPickerGrid>
+                                                <Calendar.YearPickerGridBody>
+                                                  {({ year }) => (
+                                                    <Calendar.YearPickerCell year={year} />
+                                                  )}
+                                                </Calendar.YearPickerGridBody>
+                                              </Calendar.YearPickerGrid>
+                                            </Calendar>
+                                          </DatePicker.Popover>
+                                        </DatePicker>
+                                        <Button
+                                          onPress={() => handleSuppress(v)}
+                                          isDisabled={
+                                            suppressSaving || !suppressJustification.trim()
+                                          }
+                                          className="btn-warning inline-flex shrink-0 items-center gap-1.5"
+                                          type="button"
+                                          variant="danger-soft"
+                                        >
+                                          {suppressSaving && (
+                                            <span className="size-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                                          )}
+                                          {v.suppression ? 'Update' : 'Suppress'}
+                                        </Button>
+                                        {v.suppression && (
+                                          <Button
+                                            onPress={() => handleLiftSuppression(v)}
+                                            isDisabled={suppressSaving}
+                                            className="btn-secondary shrink-0"
+                                            type="button"
+                                            variant="secondary"
+                                          >
+                                            Lift
+                                          </Button>
+                                        )}
                                       </div>
                                     ) : (
-                                      <p className="text-xs text-zinc-500">No notes yet.</p>
+                                      <p className="text-xs text-zinc-500">
+                                        This suppression comes from Xray and cannot be edited here.
+                                      </p>
                                     )}
-                                    <div className="flex gap-2 items-end pt-1">
-                                      <textarea
-                                        value={commentText}
-                                        onChange={(e) => setCommentText(e.target.value)}
-                                        placeholder="Add a note…"
-                                        rows={2}
-                                        className={`${inputCls} flex-1 resize-none`}
-                                      />
-                                      <Button
-                                        onPress={() => handleAddComment(v.id)}
-                                        isDisabled={commentSaving || !commentText.trim()}
-                                        className="btn-primary shrink-0"
-                                        type="button"
-                                        variant="primary"
-                                      >
-                                        Add Note
-                                      </Button>
+                                    {suppressError && (
+                                      <p className="text-xs mt-1" style={{ color: '#f87171' }}>
+                                        {suppressError}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                <div style={{ borderTop: '1px solid var(--border-subtle)' }} />
+
+                                {/* Notes / Comments */}
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2">
+                                    <Comment01Icon size={13} className="text-zinc-400" />
+                                    <span
+                                      className="text-xs font-semibold uppercase tracking-wider"
+                                      style={{ color: 'var(--text-muted)' }}
+                                    >
+                                      Notes
+                                    </span>
+                                  </div>
+                                  {v.comments && v.comments.length > 0 ? (
+                                    <div className="space-y-2">
+                                      {v.comments.map((c) => (
+                                        <div
+                                          key={c.id}
+                                          className="flex items-start justify-between gap-3 group"
+                                        >
+                                          <div className="flex-1 min-w-0">
+                                            <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                                              {c.username || 'You'}
+                                            </span>
+                                            <span
+                                              className="text-xs text-zinc-500 ml-2"
+                                              title={fullDate(c.created_at)}
+                                            >
+                                              {timeAgo(c.created_at)}
+                                            </span>
+                                            <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+                                              {c.content}
+                                            </p>
+                                          </div>
+                                          {currentUser?.id === c.user_id && (
+                                            <Button
+                                              onPress={() => handleDeleteComment(c.id)}
+                                              className="text-zinc-400 dark:text-zinc-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                                              isIconOnly
+                                              variant="secondary"
+                                            >
+                                              <Delete02Icon size={14} />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      ))}
                                     </div>
+                                  ) : (
+                                    <p className="text-xs text-zinc-500">No notes yet.</p>
+                                  )}
+                                  <div className="flex gap-2 items-end pt-1">
+                                    <textarea
+                                      value={commentText}
+                                      onChange={(e) => setCommentText(e.target.value)}
+                                      placeholder="Add a note…"
+                                      rows={2}
+                                      className={`${inputCls} flex-1 resize-none`}
+                                    />
+                                    <Button
+                                      onPress={() => handleAddComment(v.id)}
+                                      isDisabled={commentSaving || !commentText.trim()}
+                                      className="btn-primary shrink-0"
+                                      type="button"
+                                      variant="primary"
+                                    >
+                                      Add Note
+                                    </Button>
                                   </div>
                                 </div>
-                              </Table.Cell>
-                            </Table.Row>
-                          )}
-                        </Fragment>
+                              </div>
+                            </Table.Cell>
+                          </Table.Row>
+                        )}
+                      </Fragment>
+                    ))
+                  )}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+          <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3">
+            <span className="text-xs text-zinc-500 whitespace-nowrap">
+              Showing {vulnTotal === 0 ? 0 : (page - 1) * LIMIT + 1}-
+              {Math.min(page * LIMIT, vulnTotal)} of {vulnTotal}
+            </span>
+            <Pagination size="sm" className="justify-self-center">
+              <Pagination.Content>
+                <Pagination.Item>
+                  <Pagination.Previous
+                    isDisabled={page === 1}
+                    onPress={() => setPage((previous) => Math.max(1, previous - 1))}
+                  >
+                    <Pagination.PreviousIcon />
+                    <span>Previous</span>
+                  </Pagination.Previous>
+                </Pagination.Item>
+                {vulnPaginationItems.map((item, index) =>
+                  item === 'ellipsis' ? (
+                    <Pagination.Item key={`vuln-ellipsis-${index}`}>
+                      <Pagination.Ellipsis />
+                    </Pagination.Item>
+                  ) : (
+                    <Pagination.Item key={`vuln-page-${item}`}>
+                      <Pagination.Link isActive={item === page} onPress={() => setPage(item)}>
+                        {item}
+                      </Pagination.Link>
+                    </Pagination.Item>
+                  )
+                )}
+                <Pagination.Item>
+                  <Pagination.Next
+                    isDisabled={page === totalPages}
+                    onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
+                  >
+                    <span>Next</span>
+                    <Pagination.NextIcon />
+                  </Pagination.Next>
+                </Pagination.Item>
+              </Pagination.Content>
+            </Pagination>
+            <div />
+          </Table.Footer>
+        </Card>
+      )}
+
+      {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'compliance' && (
+        <div className="space-y-4">
+          <Card>
+            <Card.Content className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  Non-compliant findings
+                </p>
+                <Button
+                  onPress={handleReEvaluate}
+                  isDisabled={complianceLoading}
+                  className="text-xs text-zinc-500 hover:text-accent transition-colors disabled:opacity-40"
+                  variant="secondary"
+                >
+                  {complianceLoading ? '…' : 'Re-evaluate'}
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Select
+                  value={selectedOrgToAssign || '__none__'}
+                  onChange={(value) =>
+                    setSelectedOrgToAssign(String(value === '__none__' ? '' : (value ?? '')))
+                  }
+                  className="flex-1"
+                >
+                  <Select.Trigger className="bg-surface-secondary">
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="__none__">Assign organization</ListBox.Item>
+                      {allOrgs
+                        .filter((org) => !compliance.some((c) => c.org_id === org.id))
+                        .map((org) => (
+                          <ListBox.Item key={org.id} id={org.id}>
+                            {org.name}
+                          </ListBox.Item>
+                        ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                <Button
+                  className="btn-primary"
+                  variant="primary"
+                  isDisabled={!selectedOrgToAssign}
+                  onPress={() => {
+                    const orgId = selectedOrgToAssign;
+                    setSelectedOrgToAssign('');
+                    void handleAssignOrg(orgId);
+                  }}
+                >
+                  Add
+                </Button>
+              </div>
+              {complianceByOrg.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {complianceByOrg.map(({ org_id, org_name }) => (
+                    <Button
+                      key={org_id}
+                      className="text-xs"
+                      variant="secondary"
+                      onPress={() => void handleRemoveOrg(org_id)}
+                    >
+                      {org_name} ×
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </Card.Content>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <Table variant="secondary">
+              <Table.ScrollContainer>
+                <Table.Content aria-label="Compliance violations" className="min-w-[980px]">
+                  <Table.Header>
+                    <Table.Column isRowHeader>Org</Table.Column>
+                    <Table.Column>Policy</Table.Column>
+                    <Table.Column>CVE</Table.Column>
+                    <Table.Column>Package</Table.Column>
+                    <Table.Column>Installed</Table.Column>
+                    <Table.Column>Fixed In</Table.Column>
+                    <Table.Column>Has Fix</Table.Column>
+                    <Table.Column>Rule</Table.Column>
+                    <Table.Column>Severity</Table.Column>
+                    <Table.Column>Violation</Table.Column>
+                    <Table.Column>Evaluated</Table.Column>
+                    <Table.Column>Open</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {complianceViolationRows.length === 0 ? (
+                      <Table.Row id="compliance-empty">
+                        <Table.Cell colSpan={12}>
+                          <div className="py-10 text-center text-sm text-zinc-500">
+                            No non-compliant violations.
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    ) : (
+                      complianceViolationRows.map((row) => (
+                        <Table.Row key={row.id} id={row.id}>
+                          <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">
+                            {row.orgName}
+                          </Table.Cell>
+                          <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">
+                            {row.policyName}
+                          </Table.Cell>
+                          <Table.Cell className="text-xs">
+                            {row.vulnId ? (
+                              <button
+                                type="button"
+                                className="text-accent hover:text-accent/80 hover:underline"
+                                onClick={() => {
+                                  if (row.primaryMatch) {
+                                    openVulnerabilityDetails(row.primaryMatch);
+                                  }
+                                }}
+                              >
+                                {row.matchCount > 1
+                                  ? `${row.vulnId} (+${row.matchCount - 1})`
+                                  : row.vulnId}
+                              </button>
+                            ) : (
+                              <span className="text-zinc-400">-</span>
+                            )}
+                          </Table.Cell>
+                          <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">
+                            {row.packageName || '-'}
+                          </Table.Cell>
+                          <Table.Cell className="text-xs text-zinc-500">
+                            {row.installedVersion || '-'}
+                          </Table.Cell>
+                          <Table.Cell className="text-xs text-zinc-500">
+                            {row.fixedVersion || '-'}
+                          </Table.Cell>
+                          <Table.Cell className="text-xs text-zinc-500">
+                            {row.hasFix ? 'Yes' : 'No'}
+                          </Table.Cell>
+                          <Table.Cell className="text-xs text-zinc-500">
+                            {row.ruleType || '-'}
+                          </Table.Cell>
+                          <Table.Cell className="text-xs text-zinc-500">
+                            {row.severity || '-'}
+                          </Table.Cell>
+                          <Table.Cell className="text-xs text-zinc-500">{row.message}</Table.Cell>
+                          <Table.Cell className="text-xs text-zinc-500">
+                            {timeAgo(row.evaluatedAt)}
+                          </Table.Cell>
+                          <Table.Cell>
+                            {row.primaryMatch ? (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="text-xs"
+                                onPress={() => openVulnerabilityDetails(row.primaryMatch!)}
+                              >
+                                Open details
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-zinc-400">-</span>
+                            )}
+                          </Table.Cell>
+                        </Table.Row>
                       ))
                     )}
                   </Table.Body>
@@ -2510,70 +2920,103 @@ export default function ScanDetailPage() {
               </Table.ScrollContainer>
             </Table>
           </Card>
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-zinc-500">{vulnTotal} total</span>
-              <div className="flex items-center gap-2">
-                <Button
-                  isDisabled={page <= 1}
-                  onPress={() => setPage((p) => p - 1)}
-                  className="btn-secondary"
-                  type="button"
-                  variant="secondary"
-                >
-                  ← Prev
-                </Button>
-                <span className="text-sm text-zinc-500 px-2">
-                  {page} / {totalPages}
-                </span>
-                <Button
-                  isDisabled={page >= totalPages}
-                  onPress={() => setPage((p) => p + 1)}
-                  className="btn-secondary"
-                  type="button"
-                  variant="secondary"
-                >
-                  Next →
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
       {/* Details tab */}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'details' && (
         <div className="space-y-4">
+          <div className="space-y-3">
+            <p
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Scan context
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Card className="p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                  Ownership
+                </p>
+                <div className="mt-2">
+                  <OwnershipBadge
+                    ownerType={scan.owner_type}
+                    ownerOrgId={scan.owner_org_id}
+                    orgNamesById={orgNamesById}
+                  />
+                </div>
+              </Card>
+              <Card className="p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                  Platform
+                </p>
+                <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">
+                  {scan.architecture
+                    ? `${scan.architecture} · ${scan.os_family} ${scan.os_name}`
+                    : '-'}
+                </p>
+              </Card>
+              <Card className="p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                  Workspace
+                </p>
+                <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">
+                  {scan.owner_type === 'org' && scan.owner_org_id
+                    ? (orgNamesById[scan.owner_org_id] ?? 'Org workspace')
+                    : 'Personal'}
+                </p>
+              </Card>
+              <Card className="p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                  Source
+                </p>
+                {scan.helm_chart ? (
+                  <p
+                    className="mt-1 break-words text-sm text-zinc-900 dark:text-zinc-100"
+                    style={{ overflowWrap: 'anywhere' }}
+                    title={scan.helm_source_path}
+                  >
+                    Helm {scan.helm_chart}
+                    {scan.helm_source_path ? ` · ${scan.helm_source_path}` : ''}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">Direct image scan</p>
+                )}
+              </Card>
+            </div>
+          </div>
+
           {/* Scanner info */}
           {(scan.trivy_version ||
             scan.grype_version ||
             scan.trivy_vuln_db_updated_at ||
             scan.trivy_java_db_updated_at) && (
-            <div>
+            <div className="space-y-3">
               <p
                 className="text-xs font-semibold uppercase tracking-wider mb-2"
                 style={{ color: 'var(--text-muted)' }}
               >
                 Scanner
               </p>
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                <div className="p-4">
-                  <p className="text-xs text-zinc-500 mb-1">Scanner</p>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-white">
-                    Trivy {scan.trivy_version || 'unknown'}
-                  </p>
-                  {scan.grype_version && (
-                    <p className="text-sm font-medium text-zinc-900 dark:text-white mt-1">
-                      Grype {scan.grype_version}
+              <div className="grid gap-3 lg:grid-cols-3">
+                <Card className="p-4">
+                  <Card.Content className="p-0">
+                    <p className="mb-1 text-xs text-zinc-500">Scanner</p>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white">
+                      Trivy {scan.trivy_version || 'unknown'}
                     </p>
-                  )}
-                  <p className="text-xs text-zinc-500 mt-1">
-                    {scan.completed_at
-                      ? `DB snapshot captured ${timeAgo(scan.completed_at)}`
-                      : 'DB snapshot captured when this scan completed'}
-                  </p>
-                </div>
+                    {scan.grype_version && (
+                      <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
+                        Grype {scan.grype_version}
+                      </p>
+                    )}
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {scan.completed_at
+                        ? `DB snapshot captured ${timeAgo(scan.completed_at)}`
+                        : 'DB snapshot captured when this scan completed'}
+                    </p>
+                  </Card.Content>
+                </Card>
                 <ScannerDatabaseCard
                   label="Vulnerability DB"
                   updatedAt={scan.trivy_vuln_db_updated_at}
@@ -2873,190 +3316,85 @@ export default function ScanDetailPage() {
             </div>
           )}
 
-          {/* Tags */}
           {allTags.length > 0 && (
-            <div className="p-4">
-              <p
-                className="text-xs font-semibold uppercase tracking-wider mb-3"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                Tags
-              </p>
-              <div className="flex items-center gap-2 flex-wrap">
-                {allTags.map((tag) => {
-                  const active = (scan.tags ?? []).some((t) => t.id === tag.id);
-                  return (
-                    <Button
-                      key={tag.id}
-                      onPress={() => toggleTag(tag)}
-                      isDisabled={tagLoading === tag.id}
-                      className={`text-xs px-2.5 py-1 font-medium border transition-all disabled:opacity-50 ${
-                        !active
-                          ? 'text-zinc-500 border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600'
-                          : ''
-                      }`}
-                      variant="secondary"
-                      style={
-                        active
-                          ? {
-                              background: tag.color + '22',
-                              color: tag.color,
-                              borderColor: tag.color + '50',
-                            }
-                          : undefined
-                      }
-                    >
-                      {tag.name}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Compliance */}
-          {(allOrgs.length > 0 || compliance.length > 0) && (
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-3">
+            <Card>
+              <Card.Content className="space-y-3 p-4">
                 <p
                   className="text-xs font-semibold uppercase tracking-wider"
                   style={{ color: 'var(--text-muted)' }}
                 >
-                  Compliance
+                  Tags
                 </p>
-                {compliance.length > 0 && (
-                  <Button
-                    onPress={handleReEvaluate}
-                    isDisabled={complianceLoading}
-                    className="text-xs text-zinc-500 hover:text-violet-400 transition-colors disabled:opacity-40"
-                    variant="secondary"
+                <div className="flex gap-2">
+                  <Select
+                    value={selectedTagToAdd || '__none__'}
+                    onChange={(value) =>
+                      setSelectedTagToAdd(String(value === '__none__' ? '' : (value ?? '')))
+                    }
+                    className="flex-1"
                   >
-                    {complianceLoading ? '…' : 'Re-evaluate'}
+                    <Select.Trigger className={selectTriggerCls}>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="__none__">Select a tag</ListBox.Item>
+                        {allTags
+                          .filter((tag) => !(scan.tags ?? []).some((t) => t.id === tag.id))
+                          .map((tag) => (
+                            <ListBox.Item key={tag.id} id={tag.id}>
+                              {tag.name}
+                            </ListBox.Item>
+                          ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                  <Button
+                    className="btn-primary"
+                    variant="primary"
+                    isDisabled={!selectedTagToAdd}
+                    onPress={() => {
+                      const tag = allTags.find((candidate) => candidate.id === selectedTagToAdd);
+                      if (!tag) return;
+                      setSelectedTagToAdd('');
+                      void toggleTag(tag);
+                    }}
+                  >
+                    Add
                   </Button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {compliance.length === 0 ? (
-                  <>
-                    <span className="text-xs text-zinc-500">No org assigned -</span>
-                    {allOrgs.map((org) => (
-                      <Button
-                        key={org.id}
-                        onPress={() => handleAssignOrg(org.id)}
-                        className="text-xs px-2.5 py-1 font-medium border transition-colors"
-                        variant="secondary"
-                      >
-                        + {org.name}
-                      </Button>
-                    ))}
-                  </>
-                ) : (
-                  <>
-                    {Object.entries(
-                      compliance.reduce(
-                        (acc, r) => {
-                          const key = r.org_name ?? r.org_id;
-                          if (!acc[key])
-                            acc[key] = {
-                              org_id: r.org_id,
-                              org_name: r.org_name ?? r.org_id,
-                              results: [],
-                            };
-                          acc[key].results.push(r);
-                          return acc;
-                        },
-                        {} as Record<
-                          string,
-                          { org_id: string; org_name: string; results: ComplianceResult[] }
-                        >
-                      )
-                    ).map(([, { org_id, org_name, results }]) => {
-                      const allPass = results.every((r) => r.status === 'pass');
-                      return (
-                        <div key={org_id} className="flex items-center gap-1">
-                          <Button
-                            onClick={() => setExpandedOrg(expandedOrg === org_id ? null : org_id)}
-                            className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium border transition-all"
-                            variant="secondary"
-                            style={
-                              allPass
-                                ? {
-                                    background: 'rgba(16,185,129,0.1)',
-                                    color: '#34d399',
-                                    borderColor: 'rgba(16,185,129,0.25)',
-                                  }
-                                : {
-                                    background: 'rgba(239,68,68,0.1)',
-                                    color: '#f87171',
-                                    borderColor: 'rgba(239,68,68,0.25)',
-                                  }
-                            }
-                          >
-                            {allPass ? '✓' : '✗'} {org_name}
-                          </Button>
-                          <Button
-                            onPress={() => handleRemoveOrg(org_id)}
-                            className="text-zinc-500 hover:text-red-400 transition-colors text-sm px-1"
-                            variant="secondary"
-                          >
-                            ×
-                          </Button>
-                        </div>
-                      );
-                    })}
-                    {allOrgs
-                      .filter((o) => !compliance.some((c) => c.org_id === o.id))
-                      .map((org) => (
-                        <Button
-                          key={org.id}
-                          onPress={() => handleAssignOrg(org.id)}
-                          className="text-xs px-2.5 py-1 rounded-full font-medium border transition-colors"
-                          variant="secondary"
-                          style={{
-                            background: 'var(--row-hover)',
-                            border: '1px solid var(--surface-border)',
-                            color: 'var(--text-muted)',
-                          }}
-                        >
-                          + {org.name}
-                        </Button>
-                      ))}
-                  </>
-                )}
-              </div>
-              {expandedOrg && (
-                <div className="mt-2 pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-1.5">
-                  {compliance
-                    .filter((r) => r.org_id === expandedOrg)
-                    .map((r) => (
-                      <div key={r.id} className="space-y-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`text-xs ${r.status === 'pass' ? 'text-emerald-500' : 'text-red-400'}`}
-                          >
-                            {r.status === 'pass' ? '✓' : '✗'}
-                          </span>
-                          <span className="text-xs text-zinc-500">{r.policy_name}</span>
-                        </div>
-                        {r.violations && r.violations.length > 0 && (
-                          <ul className="ml-4 space-y-0.5">
-                            {r.violations.slice(0, 3).map((v, i) => (
-                              <li key={i} className="text-xs text-zinc-500">
-                                {v.message}
-                              </li>
-                            ))}
-                            {r.violations.length > 3 && (
-                              <li className="text-xs text-zinc-500">
-                                +{r.violations.length - 3} more
-                              </li>
-                            )}
-                          </ul>
-                        )}
-                      </div>
-                    ))}
                 </div>
-              )}
-            </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(scan.tags ?? []).length === 0 ? (
+                    <span className="text-xs text-zinc-500">No tags assigned.</span>
+                  ) : (
+                    (scan.tags ?? []).map((tag) => (
+                      <Button
+                        key={tag.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium"
+                        variant="secondary"
+                        isDisabled={tagLoading === tag.id}
+                        onPress={() => void toggleTag(tag)}
+                        style={{
+                          background: tag.color + '22',
+                          color: tag.color,
+                          borderColor: tag.color + '50',
+                        }}
+                      >
+                        <span>{tag.name}</span>
+                        <span
+                          className="inline-flex size-4 items-center justify-center rounded-full text-[11px]"
+                          style={{ background: tag.color + '33' }}
+                          aria-hidden
+                        >
+                          ×
+                        </span>
+                      </Button>
+                    ))
+                  )}
+                </div>
+              </Card.Content>
+            </Card>
           )}
         </div>
       )}

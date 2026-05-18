@@ -15,17 +15,7 @@ export function AuthCard({ title, subtitle, children, footer }: AuthCardProps) {
   return (
     <div className="space-y-6">
       <div className="text-center space-y-3">
-        <div
-          className="inline-flex items-center justify-center size-14 rounded-2xl"
-          style={{
-            background:
-              'linear-gradient(135deg,color-mix(in oklab,var(--accent) 88%,white),color-mix(in oklab,var(--accent) 78%,black))',
-            boxShadow:
-              '0 0 32px color-mix(in oklab,var(--accent) 45%,transparent), inset 0 1px 0 rgba(255,255,255,0.2)',
-          }}
-        >
-          <Logo size={26} className="text-white" />
-        </div>
+        <Logo size={60} className="mx-auto" />
         <div>
           <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
             {title}

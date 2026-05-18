@@ -56,6 +56,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { type ComponentType, type CSSProperties, useEffect, useMemo, useState } from 'react';
 
 import { AdminSidebarTree } from '@/components/admin-sidebar-tree';
+import {
+  AIContextBridgeProvider,
+  useAIContextBridge,
+} from '@/components/assistant/ai-context-bridge';
+import { FloatingAIChat } from '@/components/assistant/floating-ai-chat';
 import { Logo } from '@/components/logo';
 import { SearchModal } from '@/components/search';
 import { ToastProvider } from '@/components/toast';
@@ -221,8 +226,17 @@ function SidebarNavLink({
 }
 
 export function AppShell({ children, initialUser }: AppShellProps) {
+  return (
+    <AIContextBridgeProvider>
+      <AppShellInner initialUser={initialUser}>{children}</AppShellInner>
+    </AIContextBridgeProvider>
+  );
+}
+
+function AppShellInner({ children, initialUser }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { setRouteContext } = useAIContextBridge();
   const isAssistantRoute = pathname.startsWith('/assistant');
   const { resolvedTheme, setTheme } = useTheme();
   const [user, setUser] = useState(initialUser);
@@ -239,6 +253,26 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   const mobileNav = useOverlayState();
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
   const [pageHeader, setPageHeader] = useState<PageHeaderConfig | null>(null);
+
+  useEffect(() => {
+    const scanMatch = pathname.match(/^\/scans\/([^/]+)/);
+    if (scanMatch?.[1]) {
+      setRouteContext({
+        scopeType: 'scan',
+        scopeRef: decodeURIComponent(scanMatch[1]),
+        title: 'Scan scope',
+        description: 'Current scan details',
+      });
+      return;
+    }
+
+    setRouteContext({
+      scopeType: 'global',
+      scopeRef: '',
+      title: 'Global workspace context',
+      description: 'General JustScan routes and workflows.',
+    });
+  }, [pathname, setRouteContext]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -451,11 +485,13 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             <div
               className="flex size-12 items-center justify-center rounded-2xl"
               style={{
-                background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                boxShadow: '0 0 20px rgba(124,58,237,0.28), inset 0 1px 0 rgba(255,255,255,0.18)',
+                background:
+                  'linear-gradient(135deg, color-mix(in oklab, var(--accent) 20%, transparent) 0%, color-mix(in oklab, var(--accent) 12%, transparent) 100%)',
+                boxShadow:
+                  '0 0 20px color-mix(in oklab, var(--accent) 28%, transparent), inset 0 0 0 1px color-mix(in oklab, var(--accent) 20%, transparent)',
               }}
             >
-              <Logo size={20} className="text-white" />
+              <Logo size={20} />
             </div>
             <p className="mt-5 text-base font-semibold text-zinc-900 dark:text-white">
               Preparing your workspace view
@@ -711,16 +747,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
               className={`flex min-h-12 items-center gap-2.5 py-2 shrink-0 ${desktopCollapsed ? 'justify-center px-0' : 'px-3'}`}
               style={{ borderTop: '1px solid var(--border-subtle)' }}
             >
-              <div
-                className="size-8 rounded-xl flex items-center justify-center shrink-0"
-                style={{
-                  background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)',
-                  boxShadow:
-                    '0 0 12px color-mix(in oklab, var(--accent) 50%, transparent), inset 0 1px 0 rgba(255,255,255,0.15)',
-                }}
-              >
-                <Logo size={16} className="text-white" />
-              </div>
+              <Logo size={40} className="shrink-0" />
               <span
                 className={`font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300 ${desktopCollapsed ? 'ml-0' : 'ml-3'}`}
                 style={{
@@ -768,17 +795,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
                         style={{ borderBottom: '1px solid var(--border-subtle)' }}
                       >
                         <div className="flex items-center gap-3">
-                          <div
-                            className="size-9 rounded-xl flex items-center justify-center shrink-0"
-                            style={{
-                              background:
-                                'linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)',
-                              boxShadow:
-                                '0 0 12px color-mix(in oklab, var(--accent) 50%, transparent), inset 0 1px 0 rgba(255,255,255,0.15)',
-                            }}
-                          >
-                            <Logo size={18} className="text-white" />
-                          </div>
+                          <Logo size={36} className="shrink-0" />
                           <div>
                             <Drawer.Heading
                               className="text-sm font-semibold"
@@ -1191,6 +1208,7 @@ export function AppShell({ children, initialUser }: AppShellProps) {
             </main>
           </div>
         </div>
+        {!isAssistantRoute ? <FloatingAIChat /> : null}
       </PageHeaderContext.Provider>
     </ToastProvider>
   );

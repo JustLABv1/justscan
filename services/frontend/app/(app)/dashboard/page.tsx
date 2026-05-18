@@ -1,6 +1,19 @@
 'use client';
 import SplitText from '@/components/SplitText';
 import {
+  Area as EvilArea,
+  EvilAreaChart,
+  Grid as EvilAreaGrid,
+  Tooltip as EvilAreaTooltip,
+  XAxis as EvilAreaXAxis,
+  YAxis as EvilAreaYAxis,
+} from '@/components/evilcharts/charts/area-chart';
+import {
+  formatChartDate as formatChartDateShared,
+  singleSeriesConfig,
+  typedChartConfigFromSeries,
+} from '@/components/ui/chart-adapter';
+import {
   buildRecentActivityHref,
   getRecentActivityBounds,
   RECENT_ACTIVITY_RANGE_OPTIONS,
@@ -29,20 +42,11 @@ import {
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
+import { getWatchlistPolicyAttentionItems, getWatchlistPosture } from '@/lib/watchlist-posture';
 import { Button, Card, Modal, useOverlayState } from '@heroui/react';
 import { Add01Icon, ArrowRight01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 
 // ── severity config ──────────────────────────────────────────────────
 const SEV = [
@@ -97,10 +101,10 @@ function buildScansHref(filters?: {
 }
 
 function formatChartDate(date: string, options?: Intl.DateTimeFormatOptions): string {
-  return new Date(`${date}T12:00:00Z`).toLocaleDateString(
-    'en',
-    options ?? { month: 'short', day: 'numeric' }
-  );
+  if (options?.year) {
+    return formatChartDateShared(date, true);
+  }
+  return formatChartDateShared(date);
 }
 
 function toTimestamp(value?: string | null): number | null {
@@ -450,6 +454,7 @@ function ExecutivePostureCard({
   criticalHighCount,
   totalVulns,
   needsAttentionTotal,
+  watchlistPolicyAttentionCount,
   coverage7d,
   successRate,
   onOpenAttention,
@@ -461,6 +466,7 @@ function ExecutivePostureCard({
   criticalHighCount: number;
   totalVulns: number;
   needsAttentionTotal: number;
+  watchlistPolicyAttentionCount: number;
   coverage7d: number;
   successRate: number;
   onOpenAttention: () => void;
@@ -501,7 +507,7 @@ function ExecutivePostureCard({
         )}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <BriefingMetric
           label="Critical + high"
           value={formatCompactNumber(criticalHighCount)}
@@ -515,6 +521,13 @@ function ExecutivePostureCard({
           detail="failed or policy-blocked scans"
           tone={needsAttentionTotal > 0 ? 'danger' : 'success'}
           onPress={onOpenAttention}
+        />
+        <BriefingMetric
+          label="Watched policy"
+          value={watchlistPolicyAttentionCount.toLocaleString()}
+          detail="images non-compliant"
+          tone={watchlistPolicyAttentionCount > 0 ? 'danger' : 'success'}
+          onPress={onOpenWatchlist}
         />
         <BriefingMetric
           label="Freshness"
@@ -563,23 +576,36 @@ function DashboardSectionHeader({
 function AttentionQueueCard({
   genericFailedCount,
   blockedPolicyCount,
+  watchlistPolicyAttentionCount,
   activeQueueCount,
   staleItems,
   onOpenAttention,
+  onOpenWatchlist,
 }: {
   genericFailedCount: number;
   blockedPolicyCount: number;
+  watchlistPolicyAttentionCount: number;
   activeQueueCount: number;
   staleItems: WatchlistItem[];
   onOpenAttention: () => void;
+  onOpenWatchlist: () => void;
 }) {
   const items = [
+    {
+      key: 'watchlist-policy',
+      label: 'Watched policy issues',
+      value: watchlistPolicyAttentionCount,
+      detail: 'Watched images blocked or failing org policy',
+      tone: 'danger' as const,
+      onPress: onOpenWatchlist,
+    },
     {
       key: 'blocked',
       label: 'Policy blocks',
       value: blockedPolicyCount,
       detail: 'Xray policy decisions awaiting review',
       tone: 'danger' as const,
+      onPress: onOpenAttention,
     },
     {
       key: 'failed',
@@ -587,6 +613,7 @@ function AttentionQueueCard({
       value: genericFailedCount,
       detail: 'Scans that did not complete cleanly',
       tone: 'danger' as const,
+      onPress: onOpenAttention,
     },
     {
       key: 'stale',
@@ -594,6 +621,7 @@ function AttentionQueueCard({
       value: staleItems.length,
       detail: 'Scheduled images not scanned in 7 days',
       tone: 'warning' as const,
+      onPress: onOpenWatchlist,
     },
     {
       key: 'running',
@@ -601,6 +629,7 @@ function AttentionQueueCard({
       value: activeQueueCount,
       detail: 'Queued or running scan work',
       tone: 'accent' as const,
+      onPress: onOpenAttention,
     },
   ].filter((item) => item.value > 0);
 
@@ -640,7 +669,7 @@ function AttentionQueueCard({
               <button
                 key={item.key}
                 type="button"
-                onClick={onOpenAttention}
+                onClick={item.onPress}
                 className="group flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
                 style={{ background: tone.softBg, borderColor: tone.border }}
                 aria-haspopup="dialog"
@@ -673,6 +702,7 @@ function AttentionQueueCard({
 
 function ReadinessPanel({
   coverage,
+  watchlistPolicyAttentionCount,
   activeQueueCount,
   startedTodayCount,
   scannerHealth,
@@ -682,6 +712,7 @@ function ReadinessPanel({
   watchlistError,
 }: {
   coverage: WatchlistCoverage;
+  watchlistPolicyAttentionCount: number;
   activeQueueCount: number;
   startedTodayCount: number;
   scannerHealth: ScannerHealth | null;
@@ -704,7 +735,7 @@ function ReadinessPanel({
         title="Readiness confidence"
         description="Signals that determine how much trust to place in current coverage"
       />
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Card variant="secondary">
           <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
             Watchlist freshness
@@ -721,6 +752,20 @@ function ReadinessPanel({
               : watchlistError
                 ? watchlistError
                 : `${coverage.scanned7dCount} of ${coverage.enabledCount || 0} active schedules scanned in 7d`}
+          </p>
+        </Card>
+        <Card variant="secondary">
+          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            Watchlist posture
+          </p>
+          <p
+            className="mt-2 text-2xl font-semibold tabular-nums"
+            style={{ color: watchlistPolicyAttentionCount > 0 ? '#f87171' : '#34d399' }}
+          >
+            {watchlistPolicyAttentionCount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            watched images failing policy checks
           </p>
         </Card>
         <Card variant="secondary">
@@ -776,6 +821,9 @@ function ReadinessPanel({
 }
 
 function WatchlistModalRow({ item }: { item: WatchlistItem }) {
+  const posture = getWatchlistPosture(item);
+  const tone = TONE_STYLES[posture.tone];
+
   return (
     <div
       className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
@@ -788,25 +836,23 @@ function WatchlistModalRow({ item }: { item: WatchlistItem }) {
         <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
           {item.enabled ? `Scheduled ${item.schedule}` : 'Paused'} · {item.timezone}
         </p>
+        {item.last_scan_id ? (
+          <p className="mt-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Last scan {timeAgo(item.last_scanned_at ?? item.last_scan?.completed_at)}
+          </p>
+        ) : null}
       </div>
-      <span
-        className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-        style={
-          item.enabled
-            ? {
-                background: 'rgba(52,211,153,0.12)',
-                border: '1px solid rgba(52,211,153,0.22)',
-                color: '#34d399',
-              }
-            : {
-                background: 'rgba(161,161,170,0.12)',
-                border: '1px solid rgba(161,161,170,0.22)',
-                color: 'var(--text-muted)',
-              }
-        }
-      >
-        {item.enabled ? 'Active' : 'Paused'}
-      </span>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span
+          className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+          style={{ background: tone.bg, border: `1px solid ${tone.border}`, color: tone.color }}
+        >
+          {posture.label}
+        </span>
+        <Link href={`/watchlist`} className="text-[11px] font-medium" style={{ color: '#a78bfa' }}>
+          Open
+        </Link>
+      </div>
     </div>
   );
 }
@@ -977,6 +1023,23 @@ function DashboardDrilldownModal({
     : isWatchlist
       ? 'Open watchlist'
       : 'Open full list';
+  const displayedWatchlistItems = isWatchlist
+    ? watchlistItems.toSorted((left, right) => {
+        const rank = (item: WatchlistItem) => {
+          const kind = getWatchlistPosture(item).kind;
+          if (kind === 'blocked') return 0;
+          if (kind === 'policy_failed') return 1;
+          if (kind === 'scan_failed') return 2;
+          if (kind === 'never_scanned') return 3;
+          return 4;
+        };
+        const rankDiff = rank(left) - rank(right);
+        if (rankDiff !== 0) return rankDiff;
+        const leftTime = Date.parse(left.last_scanned_at ?? left.created_at);
+        const rightTime = Date.parse(right.last_scanned_at ?? right.created_at);
+        return rightTime - leftTime;
+      })
+    : [];
 
   return (
     <Modal state={state}>
@@ -1014,7 +1077,7 @@ function DashboardDrilldownModal({
                     </p>
                   ) : (
                     <div className="space-y-2">
-                      {watchlistItems.map((item) => (
+                      {displayedWatchlistItems.map((item) => (
                         <WatchlistModalRow key={item.id} item={item} />
                       ))}
                     </div>
@@ -1152,107 +1215,42 @@ function DashboardDrilldownModal({
 function MiniSparkline({
   data,
   color,
-  id,
   compact = false,
   valueLabel = 'events',
   showArea = true,
 }: {
   data: { date: string; value: number }[];
   color: string;
-  id: string;
   compact?: boolean;
   valueLabel?: string;
   showArea?: boolean;
 }) {
   if (data.length < 2) return null;
 
-  const gradientId = `sg-${id}`;
-
   return (
     <div className={compact ? 'h-8 w-18 shrink-0' : 'h-full min-h-[208px] w-full'}>
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart
-          data={data}
-          margin={
-            compact
-              ? { top: 1, right: 0, left: 0, bottom: 1 }
-              : { top: 12, right: 8, left: 0, bottom: 0 }
-          }
-        >
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity={compact ? 0.18 : 0.24} />
-              <stop offset="100%" stopColor={color} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-
-          {!compact && (
-            <CartesianGrid vertical={false} stroke="rgba(161,161,170,0.16)" strokeDasharray="4 4" />
-          )}
-
-          {!compact && (
-            <XAxis
-              dataKey="date"
-              axisLine={false}
-              tickLine={false}
-              minTickGap={28}
-              tick={{ fontSize: 10, fill: 'rgba(113,113,122,0.78)' }}
-              tickFormatter={(value: string) => formatChartDate(value)}
-            />
-          )}
-
-          {!compact && (
-            <Tooltip
-              cursor={{ stroke: color, strokeOpacity: 0.18, strokeDasharray: '3 3' }}
-              content={({ active, payload }) => {
-                const point = payload?.[0]?.payload as { date: string; value: number } | undefined;
-                if (!active || !point) return null;
-
-                return (
-                  <div
-                    className="rounded-xl px-3 py-2"
-                    style={{
-                      background: 'rgba(10,10,15,0.94)',
-                      border: `1px solid ${color}44`,
-                      boxShadow: '0 12px 28px rgba(0,0,0,0.28)',
-                    }}
-                  >
-                    <p
-                      className="text-[10px] uppercase tracking-[0.18em]"
-                      style={{ color: 'rgba(255,255,255,0.46)' }}
-                    >
-                      {formatChartDate(point.date)}
-                    </p>
-                    <p className="mt-1 text-xs font-semibold tabular-nums" style={{ color }}>
-                      {point.value.toLocaleString()} {valueLabel}
-                    </p>
-                  </div>
-                );
-              }}
-            />
-          )}
-
-          {showArea && (
-            <Area
-              type="monotone"
-              dataKey="value"
-              stroke="none"
-              fill={`url(#${gradientId})`}
-              isAnimationActive={false}
-            />
-          )}
-
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke={color}
-            strokeWidth={compact ? 2 : 2.25}
-            dot={false}
-            isAnimationActive={false}
-            activeDot={compact ? false : { r: 4, fill: color, stroke: '#fff', strokeWidth: 1.5 }}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+      <EvilAreaChart
+        data={data}
+        config={singleSeriesConfig('value', valueLabel, color)}
+        className="h-full !aspect-auto"
+        chartProps={{
+          margin: compact ? { top: 1, right: 0, left: 0, bottom: 1 } : { top: 12, right: 8, left: 0, bottom: 0 },
+        }}
+      >
+        {!compact && (
+          <EvilAreaGrid vertical={false} stroke="rgba(161,161,170,0.16)" />
+        )}
+        {!compact && (
+          <EvilAreaXAxis dataKey="date" minTickGap={28} tickFormatter={(value: string) => formatChartDate(value)} />
+        )}
+        {!compact && <EvilAreaTooltip variant="frosted-glass" roundness="xl" />}
+        <EvilArea
+          dataKey="value"
+          curveType="monotone"
+          variant={showArea ? 'gradient' : 'solid'}
+          strokeVariant="solid"
+        />
+      </EvilAreaChart>
     </div>
   );
 }
@@ -1397,135 +1395,33 @@ function VulnTrendChart({
           </div>
         ) : (
           <div className="h-[240px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                <defs>
-                  {series.map(({ key, color, opacity }) => (
-                    <linearGradient key={key} id={`risk-grad-${key}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={color} stopOpacity={Math.min(opacity, 0.34)} />
-                      <stop offset="100%" stopColor={color} stopOpacity="0" />
-                    </linearGradient>
-                  ))}
-                </defs>
-                <CartesianGrid
-                  vertical={false}
-                  stroke="rgba(161,161,170,0.16)"
-                  strokeDasharray="4 4"
+            <EvilAreaChart
+              data={chartData}
+              config={typedChartConfigFromSeries(
+                series.map((item) => ({ key: item.key, label: item.label, color: item.color })) as Array<{
+                  key: (typeof STACK)[number]['key'];
+                  label: string;
+                  color: string;
+                }>
+              )}
+              className="h-full !aspect-auto"
+              stackType="stacked"
+              chartProps={{ margin: { top: 8, right: 8, left: -12, bottom: 16 } }}
+            >
+              <EvilAreaGrid vertical={false} stroke="rgba(161,161,170,0.16)" />
+              <EvilAreaXAxis dataKey="date" minTickGap={28} tickFormatter={(value: string) => formatChartDate(value)} />
+              <EvilAreaYAxis ticks={ticks} width={36} tickFormatter={(value: number) => fmtTick(value)} />
+              <EvilAreaTooltip variant="frosted-glass" roundness="xl" />
+              {series.map(({ key }) => (
+                <EvilArea
+                  key={key}
+                  dataKey={key}
+                  curveType="monotone"
+                  variant="gradient"
+                  strokeVariant="solid"
                 />
-                <XAxis
-                  dataKey="date"
-                  axisLine={false}
-                  tickLine={false}
-                  minTickGap={28}
-                  tick={{ fontSize: 10, fill: 'rgba(113,113,122,0.78)' }}
-                  tickFormatter={(value: string) => formatChartDate(value)}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  axisLine={false}
-                  tickLine={false}
-                  ticks={ticks}
-                  width={36}
-                  tick={{ fontSize: 10, fill: 'rgba(113,113,122,0.78)' }}
-                  tickFormatter={(value: number) => fmtTick(value)}
-                />
-                <Tooltip
-                  cursor={{ stroke: '#a78bfa', strokeOpacity: 0.22, strokeDasharray: '3 3' }}
-                  content={({ active, payload, label }) => {
-                    if (!active || !payload?.length || typeof label !== 'string') return null;
-
-                    const total = payload.reduce((sum, entry) => sum + Number(entry.value ?? 0), 0);
-
-                    return (
-                      <div
-                        className="rounded-xl px-3 py-2.5"
-                        style={{
-                          background: 'rgba(10,10,15,0.94)',
-                          border: '1px solid rgba(167,139,250,0.24)',
-                          boxShadow: '0 14px 30px rgba(0,0,0,0.3)',
-                        }}
-                      >
-                        <p
-                          className="text-[10px] uppercase tracking-[0.18em]"
-                          style={{ color: 'rgba(255,255,255,0.46)' }}
-                        >
-                          {formatChartDate(label)}
-                        </p>
-                        {total === 0 ? (
-                          <p className="mt-1 text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>
-                            No finalized scans
-                          </p>
-                        ) : (
-                          <>
-                            <div className="mt-2 space-y-1.5">
-                              {[...series]
-                                .reverse()
-                                .map(({ key, label: seriesLabel, color: seriesColor }) => {
-                                  const entry = payload.find((item) => item.dataKey === key);
-                                  const value = Number(entry?.value ?? 0);
-                                  if (value === 0) return null;
-
-                                  return (
-                                    <div
-                                      key={key}
-                                      className="flex items-center justify-between gap-3 text-[11px]"
-                                    >
-                                      <span
-                                        className="flex items-center gap-1.5"
-                                        style={{ color: seriesColor }}
-                                      >
-                                        <span
-                                          className="size-2 rounded-full"
-                                          style={{ background: seriesColor }}
-                                        />
-                                        {seriesLabel}
-                                      </span>
-                                      <span
-                                        className="tabular-nums"
-                                        style={{ color: 'rgba(255,255,255,0.88)' }}
-                                      >
-                                        {value}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                            <div
-                              className="mt-2 flex items-center justify-between border-t pt-2 text-[11px]"
-                              style={{ borderColor: 'rgba(255,255,255,0.08)' }}
-                            >
-                              <span style={{ color: 'rgba(255,255,255,0.52)' }}>Total avg</span>
-                              <span
-                                className="font-semibold tabular-nums"
-                                style={{ color: '#fff' }}
-                              >
-                                {total}
-                              </span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  }}
-                />
-
-                {series.map(({ key, color, opacity }) => (
-                  <Area
-                    key={key}
-                    type="monotone"
-                    dataKey={key}
-                    stackId="avg-findings"
-                    stroke={color}
-                    strokeWidth={1.8}
-                    fill={`url(#risk-grad-${key})`}
-                    fillOpacity={1}
-                    dot={false}
-                    isAnimationActive={false}
-                    activeDot={{ r: 4, fill: color, stroke: '#fff', strokeWidth: 1.5 }}
-                  />
-                ))}
-              </AreaChart>
-            </ResponsiveContainer>
+              ))}
+            </EvilAreaChart>
           </div>
         )}
       </div>
@@ -1734,6 +1630,8 @@ export default function DashboardPage() {
   const successRate =
     stats.total_scans > 0 ? Math.round((completedCount / stats.total_scans) * 100) : 0;
   const watchlistCoverage = getWatchlistCoverage(watchlistOverviewItems, stats.watchlist_count);
+  const watchlistPolicyAttentionItems = getWatchlistPolicyAttentionItems(watchlistOverviewItems);
+  const watchlistPolicyAttentionCount = watchlistPolicyAttentionItems.length;
   const criticalHighTrend = getCriticalHighTrend(vulnTrends);
   const riskSummary = getRiskSummary({
     criticalHighCount,
@@ -1847,6 +1745,7 @@ export default function DashboardPage() {
         criticalHighCount={criticalHighCount}
         totalVulns={totalVulns}
         needsAttentionTotal={needsAttentionTotal}
+        watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
         coverage7d={watchlistCoverage.coverage7d}
         successRate={successRate}
         onOpenAttention={() => openDrilldown('attention')}
@@ -1863,15 +1762,18 @@ export default function DashboardPage() {
         <AttentionQueueCard
           genericFailedCount={genericFailedCount}
           blockedPolicyCount={blockedPolicyCount}
+          watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
           activeQueueCount={activeQueueCount}
           staleItems={watchlistCoverage.staleItems}
           onOpenAttention={() => openDrilldown('attention')}
+          onOpenWatchlist={() => openDrilldown('watchlist')}
         />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.45fr)]">
         <ReadinessPanel
           coverage={watchlistCoverage}
+          watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
           activeQueueCount={activeQueueCount}
           startedTodayCount={startedTodayCount}
           scannerHealth={scannerHealth}
@@ -1902,7 +1804,6 @@ export default function DashboardPage() {
               <MiniSparkline
                 data={scanVolumeTrend}
                 color="#a78bfa"
-                id="scan-volume"
                 valueLabel="scans"
               />
             </div>

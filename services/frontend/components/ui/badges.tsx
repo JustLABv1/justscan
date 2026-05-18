@@ -179,9 +179,9 @@ export function SourceBadge({ source }: { source?: string }) {
           border: '1px solid rgba(245,158,11,0.22)',
         }
       : {
-          background: 'rgba(124,58,237,0.12)',
-          color: '#a78bfa',
-          border: '1px solid rgba(124,58,237,0.22)',
+          background: 'var(--color-accent-soft)',
+          color: 'var(--color-accent)',
+          border: '1px solid var(--color-accent-soft-hover)',
         };
   return (
     <span

@@ -1,5 +1,5 @@
 'use client';
-import { Logo } from '@/components/logo';
+import { PublicNavbar } from '@/components/public/public-navbar';
 import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
@@ -90,9 +90,9 @@ function SourceBadge({ source }: { source?: string }) {
                 border: '1px solid rgba(245,158,11,0.22)',
               }
             : {
-                background: 'rgba(124,58,237,0.12)',
-                color: '#a78bfa',
-                border: '1px solid rgba(124,58,237,0.22)',
+                background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                color: 'color-mix(in srgb, var(--accent) 55%, white)',
+                border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
               }
       }
       title={
@@ -140,63 +140,6 @@ function ScannerDatabaseCard({
   );
 }
 
-function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return <div className="size-9" />;
-  const isDark = resolvedTheme === 'dark';
-  return (
-    <button
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="size-9 flex items-center justify-center rounded-xl transition-colors"
-      style={{
-        background: 'var(--row-hover)',
-        border: '1px solid var(--border-subtle)',
-        color: 'var(--text-muted)',
-      }}
-      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-    >
-      {isDark ? (
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="5" />
-          <line x1="12" y1="1" x2="12" y2="3" />
-          <line x1="12" y1="21" x2="12" y2="23" />
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-          <line x1="1" y1="12" x2="3" y2="12" />
-          <line x1="21" y1="12" x2="23" y2="12" />
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-        </svg>
-      ) : (
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-      )}
-    </button>
-  );
-}
-
 const LIMIT = 25;
 
 type ResultTab = 'overview' | 'timeline';
@@ -204,6 +147,8 @@ type ResultTab = 'overview' | 'timeline';
 export default function PublicScanResultPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [scan, setScan] = useState<Scan | null>(null);
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -352,42 +297,14 @@ export default function PublicScanResultPage() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--app-bg)' }}>
-      {/* Nav */}
-      <header
-        className="sticky top-0 z-20 flex items-center justify-between px-6 py-4"
-        style={{ background: 'var(--app-bg)', borderBottom: '1px solid var(--border-subtle)' }}
-      >
-        <Link href="/public/scan/image" className="flex items-center gap-2.5">
-          <div
-            className="size-8 rounded-xl flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-              boxShadow: '0 0 12px rgba(124,58,237,0.4)',
-            }}
-          >
-            <Logo size={16} className="text-white" />
-          </div>
-          <span
-            className="font-semibold text-[15px] tracking-tight"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            JustScan
-          </span>
-        </Link>
-
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          {isLoggedIn ? (
-            <Link href="/scans" className="btn-secondary">
-              Dashboard →
-            </Link>
-          ) : (
-            <Link href="/login" className="btn-secondary">
-              Sign in
-            </Link>
-          )}
-        </div>
-      </header>
+      <div className="sticky top-0 z-20">
+        <PublicNavbar
+          isDark={isDark}
+          isLoggedIn={isLoggedIn}
+          onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
+          homeHref="/public/scan/image"
+        />
+      </div>
 
       <main className="max-w-[1500px] mx-auto px-4 py-8 space-y-6">
         {actionError && (
@@ -765,7 +682,7 @@ export default function PublicScanResultPage() {
                                   setPage(1);
                                 }}
                                 className="inline-flex items-center gap-1 cursor-pointer select-none"
-                                style={{ color: active ? '#7c3aed' : 'var(--text-faint)' }}
+                                style={{ color: active ? 'var(--accent)' : 'var(--text-faint)' }}
                               >
                                 <span>{label}</span>
                                 {active && <span>{sortDir === 'desc' ? '↓' : '↑'}</span>}
@@ -784,7 +701,7 @@ export default function PublicScanResultPage() {
                                     className="size-6 rounded-full border-2 border-t-violet-500 animate-spin"
                                     style={{
                                       borderColor: 'var(--border-subtle)',
-                                      borderTopColor: '#7c3aed',
+                                      borderTopColor: 'var(--accent)',
                                     }}
                                   />
                                 </div>
@@ -892,8 +809,8 @@ export default function PublicScanResultPage() {
             <div
               className="rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
               style={{
-                background: 'rgba(124,58,237,0.06)',
-                border: '1px solid rgba(167,139,250,0.15)',
+                background: 'color-mix(in srgb, var(--accent) 6%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
               }}
             >
               <div>

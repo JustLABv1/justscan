@@ -58,15 +58,7 @@ export default function OIDCCallbackPage() {
     return (
       <div className="space-y-6">
         <div className="text-center space-y-3">
-          <div
-            className="inline-flex items-center justify-center size-14 rounded-2xl"
-            style={{
-              background: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
-              boxShadow: '0 0 32px rgba(124,58,237,0.5),inset 0 1px 0 rgba(255,255,255,0.2)',
-            }}
-          >
-            <Logo size={26} className="text-white" />
-          </div>
+          <Logo size={60} className="mx-auto" />
           <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</h1>
         </div>
 
@@ -94,15 +86,7 @@ export default function OIDCCallbackPage() {
 
   return (
     <div className="flex flex-col items-center justify-center gap-4">
-      <div
-        className="inline-flex items-center justify-center size-14 rounded-2xl"
-        style={{
-          background: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
-          boxShadow: '0 0 32px rgba(124,58,237,0.5)',
-        }}
-      >
-        <Logo size={26} className="text-white" />
-      </div>
+      <Logo size={60} />
       <div className="size-6 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
       <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Completing sign-in…</p>
     </div>

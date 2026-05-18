@@ -61,6 +61,16 @@ interface ScanSelectionCheckboxProps {
 
 const CHILD_LIMIT = 10;
 
+function toggleExpanded(current: Set<string>, imageName: string) {
+  const next = new Set(current);
+  if (next.has(imageName)) {
+    next.delete(imageName);
+  } else {
+    next.add(imageName);
+  }
+  return next;
+}
+
 function ScanSelectionCheckbox({
   ariaLabel,
   isIndeterminate = false,
@@ -73,23 +83,22 @@ function ScanSelectionCheckbox({
       isIndeterminate={isIndeterminate}
       isSelected={isSelected}
       slot="selection"
+      variant="secondary"
       onChange={onChange}
     >
-      {({ isIndeterminate: controlIndeterminate, isSelected: controlSelected }) => (
-        <Checkbox.Control
-          className="border border-zinc-500"
-          style={
-            controlSelected || controlIndeterminate
-              ? {
-                  backgroundColor: 'var(--accent)',
-                  borderColor: 'var(--accent)',
-                }
-              : undefined
-          }
-        >
-          <Checkbox.Indicator className="text-white" />
-        </Checkbox.Control>
-      )}
+      <Checkbox.Control>
+        <Checkbox.Indicator>
+          {({ isIndeterminate: indicatorIndeterminate, isSelected: indicatorSelected }) => (
+            <span className="flex h-full w-full items-center justify-center text-[10px] font-bold leading-none text-white">
+              {indicatorIndeterminate || isIndeterminate
+                ? '−'
+                : indicatorSelected || isSelected
+                  ? '✓'
+                  : ''}
+            </span>
+          )}
+        </Checkbox.Indicator>
+      </Checkbox.Control>
     </Checkbox>
   );
 }
@@ -299,15 +308,11 @@ function ImageScansTreeChildrenRows({
         return (
           <Table.Row id={row.id} textValue={`:${scan.image_tag}`} className="cursor-pointer">
             <Table.Cell onClick={(event) => event.stopPropagation()}>
-              <Checkbox
-                aria-label={`Select scan ${scan.image_tag}`}
-                slot="selection"
-                variant="secondary"
-              >
-                <Checkbox.Control>
-                  <Checkbox.Indicator />
-                </Checkbox.Control>
-              </Checkbox>
+              <ScanSelectionCheckbox
+                ariaLabel={`Select scan ${scan.image_tag}`}
+                isSelected={selectedScans.has(scan.id)}
+                onChange={(selected) => onSelectScan(scan.id, selected)}
+              />
             </Table.Cell>
             <Table.Cell onClick={openScan} />
             <Table.Cell onClick={openScan}>
@@ -327,23 +332,11 @@ function ImageScansTreeChildrenRows({
             </Table.Cell>
             <Table.Cell onClick={openScan}>
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-1">
-                  {(scan.tags ?? []).map((tag) => (
-                    <span
-                      key={tag.id}
-                      className="whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-medium"
-                      style={{
-                        background: `${tag.color}22`,
-                        color: tag.color,
-                        border: `1px solid ${tag.color}44`,
-                      }}
-                    >
-                      {tag.name}
-                    </span>
-                  ))}
-                  {(scan.tags ?? []).length === 0 ? (
-                    <span className="text-xs text-zinc-500">No tags</span>
-                  ) : null}
+                <div
+                  className="inline-block max-w-[96px] truncate font-mono text-xs text-zinc-500"
+                  title="Open scan"
+                >
+                  {scan.id.slice(0, 8)}…
                 </div>
                 <div className="mt-1 text-xs text-zinc-500" title={fullDate(scan.created_at)}>
                   {timeAgo(scan.created_at)}
@@ -425,6 +418,7 @@ export function ImageScansTable({
   childRefreshKey,
 }: ImageScansTableProps) {
   const tableRows = useMemo(() => images, [images]);
+  const [selectedImageNames, setSelectedImageNames] = useState<Set<string>>(new Set());
   const [visibleScanIdsByImage, setVisibleScanIdsByImage] = useState<Record<string, string[]>>({});
 
   const visibleChildScanIds = useMemo(
@@ -436,47 +430,9 @@ export function ImageScansTable({
     (image: ImageSummary) => {
       const visibleScanIds = visibleScanIdsByImage[image.image_name] ?? [];
 
-      return visibleScanIds.length > 0 ? visibleScanIds : [image.latest_scan_id];
+      return Array.from(new Set([image.latest_scan_id, ...visibleScanIds]));
     },
     [visibleScanIdsByImage]
-  );
-
-  const selectedTableKeys = useMemo(() => {
-    const next = new Set<string>();
-
-    for (const scanId of visibleChildScanIds) {
-      if (selectedScans.has(scanId)) {
-        next.add(scanId);
-      }
-    }
-
-    return next;
-  }, [selectedScans, visibleChildScanIds]);
-
-  const handleSelectionChange = useCallback(
-    (keys: Selection) => {
-      const nextKeySet =
-        keys === 'all'
-          ? new Set(visibleChildScanIds)
-          : new Set(Array.from(keys, (key) => String(key)));
-
-      const nextSelectedScans = new Set<string>();
-
-      for (const scanId of selectedScans) {
-        if (!visibleChildScanIds.includes(scanId)) {
-          nextSelectedScans.add(scanId);
-        }
-      }
-
-      for (const scanId of visibleChildScanIds) {
-        if (nextKeySet.has(scanId)) {
-          nextSelectedScans.add(scanId);
-        }
-      }
-
-      onSelectedScansChange(nextSelectedScans);
-    },
-    [onSelectedScansChange, selectedScans, visibleChildScanIds]
   );
 
   const allSelectableScanIds = useMemo(
@@ -490,6 +446,89 @@ export function ImageScansTable({
 
   const isPartiallySelected =
     !isAllSelected && allSelectableScanIds.some((scanId) => selectedScans.has(scanId));
+
+  const effectiveSelectedImageNames = useMemo(
+    () => (selectedScans.size === 0 ? new Set<string>() : selectedImageNames),
+    [selectedImageNames, selectedScans.size]
+  );
+
+  const selectedTableKeys = useMemo(() => {
+    const next = new Set<string>();
+
+    for (const scanId of visibleChildScanIds) {
+      if (selectedScans.has(scanId)) {
+        next.add(scanId);
+      }
+    }
+
+    for (const image of tableRows) {
+      const targetIds = getSelectableScanIds(image);
+      const isParentSelected =
+        effectiveSelectedImageNames.has(image.image_name) ||
+        (targetIds.length > 0 && targetIds.every((scanId) => selectedScans.has(scanId)));
+
+      if (isParentSelected) {
+        next.add(image.image_name);
+      }
+    }
+
+    return next;
+  }, [
+    effectiveSelectedImageNames,
+    getSelectableScanIds,
+    selectedScans,
+    tableRows,
+    visibleChildScanIds,
+  ]);
+
+  const handleSelectionChange = useCallback(
+    (keys: Selection) => {
+      const selectedKeys =
+        keys === 'all'
+          ? new Set([...tableRows.map((image) => image.image_name), ...visibleChildScanIds])
+          : new Set(Array.from(keys, (key) => String(key)));
+
+      const nextSelectedScans = new Set<string>();
+
+      for (const scanId of selectedScans) {
+        if (!allSelectableScanIds.includes(scanId) && !visibleChildScanIds.includes(scanId)) {
+          nextSelectedScans.add(scanId);
+        }
+      }
+
+      for (const image of tableRows) {
+        const targetIds = getSelectableScanIds(image);
+
+        if (selectedKeys.has(image.image_name)) {
+          targetIds.forEach((scanId) => nextSelectedScans.add(scanId));
+          continue;
+        }
+
+        for (const scanId of targetIds) {
+          if (selectedKeys.has(scanId)) {
+            nextSelectedScans.add(scanId);
+          }
+        }
+      }
+
+      setSelectedImageNames(
+        new Set(
+          tableRows
+            .filter((image) => selectedKeys.has(image.image_name))
+            .map((image) => image.image_name)
+        )
+      );
+      onSelectedScansChange(nextSelectedScans);
+    },
+    [
+      allSelectableScanIds,
+      getSelectableScanIds,
+      onSelectedScansChange,
+      selectedScans,
+      tableRows,
+      visibleChildScanIds,
+    ]
+  );
 
   return (
     <Table>
@@ -513,6 +552,9 @@ export function ImageScansTable({
                 isIndeterminate={isPartiallySelected}
                 isSelected={isAllSelected}
                 onChange={(selected) => {
+                  setSelectedImageNames(
+                    selected ? new Set(tableRows.map((image) => image.image_name)) : new Set()
+                  );
                   onSelectedScansChange(
                     selected
                       ? new Set([...selectedScans, ...allSelectableScanIds])
@@ -580,7 +622,9 @@ export function ImageScansTable({
                 {(img) => {
                   const targetIds = getSelectableScanIds(img);
                   const isParentSelected =
-                    targetIds.length > 0 && targetIds.every((scanId) => selectedScans.has(scanId));
+                    effectiveSelectedImageNames.has(img.image_name) ||
+                    (targetIds.length > 0 &&
+                      targetIds.every((scanId) => selectedScans.has(scanId)));
                   const isParentIndeterminate =
                     !isParentSelected && targetIds.some((scanId) => selectedScans.has(scanId));
 
@@ -592,6 +636,16 @@ export function ImageScansTable({
                           isIndeterminate={isParentIndeterminate}
                           isSelected={isParentSelected}
                           onChange={(selected) => {
+                            setSelectedImageNames((previous) => {
+                              const next = new Set(previous);
+                              if (selected) {
+                                next.add(img.image_name);
+                              } else {
+                                next.delete(img.image_name);
+                              }
+                              return next;
+                            });
+
                             if (onSelectImageScans) {
                               void onSelectImageScans(
                                 img.image_name,
@@ -606,7 +660,12 @@ export function ImageScansTable({
                           }}
                         />
                       </Table.Cell>
-                      <Table.Cell>
+                      <Table.Cell
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                        }}
+                      >
                         {({ hasChildItems, isDisabled, isExpanded, isTreeColumn }) =>
                           hasChildItems && isTreeColumn ? (
                             <Button
@@ -631,7 +690,12 @@ export function ImageScansTable({
                         }
                       </Table.Cell>
 
-                      <Table.Cell>
+                      <Table.Cell
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                        }}
+                      >
                         <ImageReferenceLabel imageName={img.image_name} />
                         <div className="mt-1.5 flex items-center gap-2">
                           <span className="font-mono text-xs text-zinc-400">:{img.latest_tag}</span>
@@ -648,7 +712,12 @@ export function ImageScansTable({
                         </div>
                       </Table.Cell>
 
-                      <Table.Cell>
+                      <Table.Cell
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                        }}
+                      >
                         <div className="flex items-center gap-3">
                           <div
                             className="shrink-0 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
@@ -668,7 +737,7 @@ export function ImageScansTable({
                         </div>
                       </Table.Cell>
 
-                      <Table.Cell>
+                      <Table.Cell onClick={(event) => event.stopPropagation()}>
                         <Link
                           href={`/scans/${img.latest_scan_id}`}
                           className="inline-block max-w-[96px] truncate font-mono text-xs text-zinc-500 transition-colors hover:text-violet-400"
@@ -678,28 +747,69 @@ export function ImageScansTable({
                         </Link>
                       </Table.Cell>
 
-                      <Table.Cell className="text-center">
+                      <Table.Cell
+                        className="text-center"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                        }}
+                      >
                         <SevCount count={img.critical_count} level="critical" />
                       </Table.Cell>
-                      <Table.Cell className="text-center">
+                      <Table.Cell
+                        className="text-center"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                        }}
+                      >
                         <SevCount count={img.high_count} level="high" />
                       </Table.Cell>
-                      <Table.Cell className="text-center">
+                      <Table.Cell
+                        className="text-center"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                        }}
+                      >
                         <SevCount count={img.medium_count} level="medium" />
                       </Table.Cell>
-                      <Table.Cell className="text-center">
+                      <Table.Cell
+                        className="text-center"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                        }}
+                      >
                         <SevCount count={img.low_count} level="low" />
                       </Table.Cell>
-                      <Table.Cell className="text-right text-xs text-zinc-500">—</Table.Cell>
+                      <Table.Cell className="text-right text-xs text-zinc-500" onClick={(event) => event.stopPropagation()}>
+                        —
+                      </Table.Cell>
 
                       <ImageScansTreeChildrenRows
                         childRefreshKey={childRefreshKey}
                         imageName={img.image_name}
                         onCancel={onCancel}
                         onDelete={onDelete}
-                        onSelectScan={onSelectScan}
+                        onSelectScan={(scanId, selected) => {
+                          if (!selected) {
+                            setSelectedImageNames((previous) => {
+                              const next = new Set(previous);
+                              next.delete(img.image_name);
+                              return next;
+                            });
+                          }
+                          onSelectScan(scanId, selected);
+                        }}
                         onVisibleScanIdsChange={(name, ids) => {
                           setVisibleScanIdsByImage((previous) => ({ ...previous, [name]: ids }));
+                          if (
+                            effectiveSelectedImageNames.has(name) &&
+                            ids.some((scanId) => !selectedScans.has(scanId))
+                          ) {
+                            onSelectedScansChange(new Set([...selectedScans, ...ids]));
+                          }
                         }}
                         orgNamesById={orgNamesById}
                         selectedScans={selectedScans}

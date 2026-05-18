@@ -3,7 +3,7 @@
 import { getScanXrayRequestLogs } from '@/lib/api/scans';
 import type { ScanStepLog, XRayRequestLog } from '@/lib/api/types/scans';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Card, Modal, useOverlayState } from '@heroui/react';
+import { Alert, Button, Card, Chip, ProgressBar, Modal, useOverlayState } from '@heroui/react';
 import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 
@@ -614,18 +614,20 @@ export function ScannerDatabaseCard({
   downloadedAt?: string | null;
 }) {
   return (
-    <div className="surface-card rounded-xl p-4">
-      <p className="text-xs text-zinc-500 mb-1">{label}</p>
-      <p
-        className="text-sm font-medium text-zinc-900 dark:text-white"
-        title={updatedAt ? fullDate(updatedAt) : ''}
-      >
-        {updatedAt ? `${timeAgo(updatedAt)} (${fullDate(updatedAt)})` : 'Unknown'}
-      </p>
-      <p className="text-xs text-zinc-500 mt-1" title={downloadedAt ? fullDate(downloadedAt) : ''}>
-        Downloaded {downloadedAt ? timeAgo(downloadedAt) : 'unknown'}
-      </p>
-    </div>
+    <Card className="p-4">
+      <Card.Content className="p-0">
+        <p className="mb-1 text-xs text-zinc-500">{label}</p>
+        <p
+          className="text-sm font-medium text-zinc-900 dark:text-white"
+          title={updatedAt ? fullDate(updatedAt) : ''}
+        >
+          {updatedAt ? `${timeAgo(updatedAt)} (${fullDate(updatedAt)})` : 'Unknown'}
+        </p>
+        <p className="mt-1 text-xs text-zinc-500" title={downloadedAt ? fullDate(downloadedAt) : ''}>
+          Downloaded {downloadedAt ? timeAgo(downloadedAt) : 'unknown'}
+        </p>
+      </Card.Content>
+    </Card>
   );
 }
 
@@ -691,252 +693,108 @@ export function ScanningAnimation({
   );
   const providerName = providerLabel(scanProvider, orderedLogs);
   const compactImage = compactImageLabel(image);
+  const activeStepIndex = Math.max(
+    0,
+    progress.steps.findIndex((step) => step.state === 'active')
+  );
+  const progressPercent =
+    progress.steps.length <= 1
+      ? 100
+      : Math.round((activeStepIndex / (progress.steps.length - 1)) * 100);
 
   return (
-    <div
-      className="rounded-2xl px-5 py-6 md:px-7"
-      style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
-    >
-      <style>{`
-				@keyframes stepPulse { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.6); opacity: 0.2; } }
-				@keyframes horizontalTrail { 0% { transform: translateX(-100%); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; transform: translateX(300%); } 100% { opacity: 0;  } }
-				@keyframes fadeDetails { 0% { opacity: 0; transform: translateY(4px); } 12% { opacity: 1; transform: translateY(0); } 88% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-4px); } }
-				@media (prefers-reduced-motion: reduce) {
-					* { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
-				}
-			`}</style>
-      <div className="flex min-w-0 flex-col gap-6">
+    <Card className="rounded-2xl p-5 md:p-7">
+      <Card.Content className="flex min-w-0 flex-col gap-6 p-0">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0 flex-1 space-y-1.5">
             <div className="flex items-center gap-3">
-              <span className="relative flex size-3">
-                <span
-                  className="absolute inset-0 rounded-full"
-                  style={{
-                    background: progress.accent,
-                    animation: 'stepPulse 1.6s ease-in-out infinite',
-                  }}
-                />
-                <span
-                  className="relative size-3 rounded-full"
-                  style={{ background: progress.accent }}
-                />
-              </span>
-              <h3
-                className="text-xl font-semibold tracking-tight"
-                style={{ color: 'var(--text-primary)' }}
-              >
+              <Chip color="accent" size="sm" variant="soft">
                 {progress.title}
-              </h3>
+              </Chip>
+              <h3 className="text-xl font-semibold tracking-tight text-foreground">{progress.title}</h3>
             </div>
-            <p
-              key={`${progress.activeKey}-${detailTick}`}
-              className="text-sm leading-5"
-              style={{
-                color: 'var(--text-secondary)',
-                animation: 'fadeDetails 2.6s forwards',
-                minHeight: 40,
-              }}
-            >
+            <p key={`${progress.activeKey}-${detailTick}`} className="min-h-10 text-sm leading-5 text-muted-foreground">
               {detailMessage}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
-            <span
-              className="rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide"
-              style={{
-                background: 'var(--card-bg)',
-                border: '1px solid var(--border-subtle)',
-                color: 'var(--text-secondary)',
-              }}
-            >
+            <Chip size="sm" variant="secondary">
               {providerName}
-            </span>
-            <span
-              className="rounded-full px-2.5 py-1 text-[11px] font-mono uppercase tracking-wide"
-              style={{
-                background: progress.accentSoft,
-                border: `1px solid ${progress.accentBorder}`,
-                color: progress.accent,
-              }}
-            >
+            </Chip>
+            <Chip color="accent" size="sm" variant="soft" className="font-mono uppercase tracking-wide">
               {progress.eyebrow}
-            </span>
+            </Chip>
             {(startedAt || elapsed > 0) && (
-              <span
-                className="rounded-full px-2.5 py-1 text-[11px] font-mono"
-                style={{
-                  background: 'var(--card-bg)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-muted)',
-                }}
-              >
+              <Chip size="sm" variant="secondary" className="font-mono">
                 total {formatElapsed(elapsed)}
-              </span>
+              </Chip>
             )}
             {activeStepElapsed !== null && (
-              <span
-                className="rounded-full px-2.5 py-1 text-[11px] font-mono"
-                style={{
-                  background: 'var(--card-bg)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-muted)',
-                }}
-              >
+              <Chip size="sm" variant="secondary" className="font-mono">
                 step {formatElapsed(activeStepElapsed)}
-              </span>
+              </Chip>
             )}
           </div>
         </div>
 
-        <div className="overflow-x-hidden pt-2 pb-6 md:pb-2">
-          <ol className="flex items-center w-full">
-            {progress.steps.map((step, index) => {
-              const isActive = step.state === 'active';
-              const isComplete = step.state === 'complete';
-              const isLast = index === progress.steps.length - 1;
-              const nodeColor = isActive || isComplete ? progress.accent : 'rgba(148,163,184,0.44)';
-
-              return (
-                <li key={step.key} className={`flex items-center ${isLast ? '' : 'flex-1'}`}>
-                  <div className="relative flex flex-col items-center">
-                    <div
-                      className="z-10 flex items-center justify-center size-7 rounded-full shadow-sm"
-                      style={{
-                        color: isActive || isComplete ? '#ffffff' : '#71717a',
-                        background: isActive || isComplete ? nodeColor : 'var(--card-bg)',
-                        border: `1px solid ${isActive || isComplete ? nodeColor : 'var(--surface-border)'}`,
-                        boxShadow: isActive ? `0 0 14px ${progress.accentSoft}` : undefined,
-                        transform: isActive ? 'scale(1.1)' : 'scale(1)',
-                        transition:
-                          'transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, color 0.3s ease',
-                      }}
-                    >
-                      {isComplete ? (
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                      ) : (
-                        <span className="text-[11px] font-bold">{index + 1}</span>
-                      )}
-                    </div>
-                    <span
-                      className="absolute left-1/2 top-9 hidden w-16 -translate-x-1/2 text-center text-[10px] font-semibold uppercase tracking-wide opacity-100 lg:block"
-                      style={{
-                        color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-                        lineHeight: 1.1,
-                      }}
-                    >
-                      {step.title}
-                    </span>
-                  </div>
-
-                  {!isLast && (
-                    <div
-                      className="flex-1 mx-2 h-1 rounded-full overflow-hidden"
-                      style={{
-                        background: isComplete ? progress.accentSoft : 'var(--surface-border)',
-                      }}
-                    >
-                      {isActive && (
-                        <div
-                          className="h-full w-[40%] rounded-full"
-                          style={{
-                            background: progress.accent,
-                            animation: 'horizontalTrail 1.8s linear infinite',
-                          }}
-                        />
-                      )}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
+        <div className="space-y-3 pt-2 pb-3">
+          <ProgressBar aria-label="Scan step progress" color="accent" size="sm" value={progressPercent}>
+            <ProgressBar.Track>
+              <ProgressBar.Fill />
+            </ProgressBar.Track>
+          </ProgressBar>
+          <div className="flex flex-wrap gap-2">
+            {progress.steps.map((step) => (
+              <Chip
+                key={step.key}
+                size="sm"
+                variant={step.state === 'pending' ? 'secondary' : 'soft'}
+                color={step.state === 'complete' ? 'success' : step.state === 'active' ? 'accent' : 'default'}
+              >
+                {step.title}
+              </Chip>
+            ))}
+          </div>
         </div>
 
         <div className="mt-2 grid gap-4 lg:grid-cols-[1fr_2fr]">
-          <div
-            className="min-w-0 rounded-xl px-4 py-3 pb-4"
-            style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}
-          >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 mb-1.5">
+          <Card variant="secondary" className="min-w-0 px-4 py-3 pb-4">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Context
             </p>
-            <p
-              className="text-sm font-mono break-words"
-              style={{
-                color: compactImage ? 'var(--text-primary)' : 'var(--text-muted)',
-                overflowWrap: 'anywhere',
-              }}
-              title={image}
-            >
+            <p className="break-words text-sm font-mono text-foreground" style={{ overflowWrap: 'anywhere' }} title={image}>
               {image || compactImage || '—'}
             </p>
-            <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
-              {progress.note}
-            </p>
-          </div>
-          <div
-            className="min-w-0 rounded-xl px-4 py-3 pb-4"
-            style={{ background: 'var(--card-bg)', border: '1px solid var(--border-subtle)' }}
-          >
+            <p className="mt-1.5 text-[11px] text-muted-foreground">{progress.note}</p>
+          </Card>
+          <Card variant="secondary" className="min-w-0 px-4 py-3 pb-4">
             <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Live signal
               </p>
-              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              <span className="text-[10px] text-muted-foreground">
                 {stepOutputCount(activeStepLog)
                   ? `${stepOutputCount(activeStepLog)} update${stepOutputCount(activeStepLog) === 1 ? '' : 's'}`
                   : 'Awaiting'}
               </span>
             </div>
-            <p
-              className="text-[13px] font-mono break-words leading-5"
-              style={{
-                color: latestOutput ? 'var(--text-primary)' : 'var(--text-muted)',
-                overflowWrap: 'anywhere',
-              }}
-              title={latestOutput ?? ''}
-            >
+            <p className="break-words text-[13px] font-mono leading-5 text-foreground" style={{ overflowWrap: 'anywhere' }} title={latestOutput ?? ''}>
               {latestOutput ?? 'No output recorded yet.'}
             </p>
-          </div>
+          </Card>
           {runtimeWarning && (
-            <div
-              className="lg:col-span-2 rounded-xl px-4 py-3"
-              style={{
-                background: 'rgba(245,158,11,0.06)',
-                border: '1px solid rgba(245,158,11,0.2)',
-              }}
-            >
-              <p
-                className="text-[10px] font-semibold uppercase tracking-[0.18em]"
-                style={{ color: '#f59e0b' }}
-              >
-                Attention
-              </p>
-              <p className="mt-1 text-[13px] font-medium text-zinc-900 dark:text-white">
-                {runtimeWarning.title}
-              </p>
-              <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
-                {runtimeWarning.detail}
-              </p>
-            </div>
+            <Alert className="lg:col-span-2" status="warning">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>{runtimeWarning.title}</Alert.Title>
+                <Alert.Description>{runtimeWarning.detail}</Alert.Description>
+              </Alert.Content>
+            </Alert>
           )}
         </div>
-      </div>
-    </div>
+      </Card.Content>
+    </Card>
   );
 }
 

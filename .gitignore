@@ -73,3 +73,4 @@ csv-files/
 docs/superpowers/
 # heroui-agents-md
 .heroui-docs/
+.pnpm-store

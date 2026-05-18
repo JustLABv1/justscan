@@ -1,5 +1,13 @@
 import { OrgPolicy, OrgRiskScore, Scan, TrendPoint } from '@/lib/api';
 import { Card } from '@heroui/react';
+import {
+  Bar as EvilBar,
+  EvilBarChart,
+  Tooltip as EvilBarTooltip,
+  XAxis as EvilBarXAxis,
+  YAxis as EvilBarYAxis,
+} from '@/components/evilcharts/charts/bar-chart';
+import { typedChartConfigFromSeries } from '@/components/ui/chart-adapter';
 
 export type OrgScanItem = Scan & { compliance: { policy_id: string; policy_name: string; status: string }[] };
 
@@ -44,28 +52,27 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
   if (points.length === 0) {
     return <p className="text-xs text-zinc-500 py-4 text-center">No compliance history yet.</p>;
   }
-
-  const maxVal = Math.max(...points.map((point) => point.pass + point.fail), 1);
-  const height = 64;
+  const data = points.map((point) => ({
+    ...point,
+    label: new Date(`${point.date}T12:00:00Z`).toLocaleDateString('en', {
+      month: 'short',
+      day: 'numeric',
+    }),
+  }));
+  const config = typedChartConfigFromSeries([
+    { key: 'pass', label: 'Pass', color: '#17C964' },
+    { key: 'fail', label: 'Fail', color: '#F31260' },
+  ] as const);
 
   return (
-    <div className="flex items-end gap-0.5 h-16 w-full overflow-hidden">
-      {points.map((point) => {
-        const passHeight = Math.round((point.pass / maxVal) * height);
-        const failHeight = Math.round((point.fail / maxVal) * height);
-        return (
-          <div
-            key={point.date}
-            className="flex flex-col items-center gap-0 flex-1 min-w-0 group relative"
-            title={`${point.date}: ${point.pass} pass, ${point.fail} fail`}
-          >
-            <div className="w-full flex flex-col justify-end" style={{ height }}>
-              {failHeight > 0 && <div className="w-full bg-red-500/70 rounded-t-sm" style={{ height: failHeight }} />}
-              {passHeight > 0 && <div className="w-full bg-emerald-500/70" style={{ height: passHeight }} />}
-            </div>
-          </div>
-        );
-      })}
+    <div className="h-16 w-full overflow-hidden">
+      <EvilBarChart data={data} config={config} stackType="stacked" className="h-full !aspect-auto">
+        <EvilBarXAxis dataKey="label" hide />
+        <EvilBarYAxis hide />
+        <EvilBarTooltip variant="frosted-glass" roundness="lg" />
+        <EvilBar dataKey="fail" />
+        <EvilBar dataKey="pass" />
+      </EvilBarChart>
     </div>
   );
 }

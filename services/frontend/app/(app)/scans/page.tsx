@@ -577,26 +577,68 @@ export default function ScansPage() {
     scanSource === 'local_archive'
       ? 'Upload a docker/podman image archive (.tar, .tar.gz, .tgz). Display name and tag are optional.'
       : scanSource === 'artifactory_xray'
-      ? 'Keep this step focused on the image reference. We will ask about registry routing and Artifactory repo in the next step.'
-      : scanSource === 'private_registry'
-        ? 'Enter the image reference first. The private registry routing comes in the next step.'
-        : 'Enter the image reference first. Public scans do not need any registry routing after this.';
+        ? 'Keep this step focused on the image reference. We will ask about registry routing and Artifactory repo in the next step.'
+        : scanSource === 'private_registry'
+          ? 'Enter the image reference first. The private registry routing comes in the next step.'
+          : 'Enter the image reference first. Public scans do not need any registry routing after this.';
   const routingStepTitle =
     scanSource === 'local_archive'
       ? 'No routing setup is needed'
       : scanSource === 'artifactory_xray'
-      ? 'Where inside Artifactory should this image resolve?'
-      : scanSource === 'private_registry'
-        ? 'Which private registry hosts this image?'
-        : 'No routing setup is needed';
+        ? 'Where inside Artifactory should this image resolve?'
+        : scanSource === 'private_registry'
+          ? 'Which private registry hosts this image?'
+          : 'No routing setup is needed';
   const routingStepDescription =
     scanSource === 'local_archive'
       ? 'Uploaded archive scans run locally with Trivy and do not use a registry route.'
       : scanSource === 'artifactory_xray'
-      ? 'Choose the Xray-backed registry first, then optionally override the Artifactory repo key for mirrors or remotes.'
-      : scanSource === 'private_registry'
-        ? 'Choose the configured private registry that should authenticate and pull this image.'
-        : 'This image will be scanned directly from its public source.';
+        ? 'Choose the Xray-backed registry first, then optionally override the Artifactory repo key for mirrors or remotes.'
+        : scanSource === 'private_registry'
+          ? 'Choose the configured private registry that should authenticate and pull this image.'
+          : 'This image will be scanned directly from its public source.';
+  const scanSourceOptions = [
+    {
+      description: capabilities.enable_trivy
+        ? 'Scan public images like nginx or n8nio/n8n directly without choosing a registry first.'
+        : 'Unavailable because local Trivy scanning is disabled in this deployment.',
+      disabled: !capabilities.enable_trivy,
+      eyebrow: 'Public',
+      source: 'public' as const,
+      title: 'Public / Docker Hub',
+    },
+    {
+      description: capabilities.enable_trivy
+        ? privateRegistries.length > 0
+          ? 'Use one of your configured private registries and keep the image field focused on what you want to scan.'
+          : 'Unavailable until you configure at least one private registry.'
+        : 'Unavailable because local Trivy scanning is disabled in this deployment.',
+      disabled: !capabilities.enable_trivy || privateRegistries.length === 0,
+      eyebrow: 'Private',
+      source: 'private_registry' as const,
+      title: 'Private registry',
+    },
+    {
+      description:
+        xrayRegistries.length > 0
+          ? 'Route scans through Artifactory Xray and add the Artifactory repo only when this path needs it.'
+          : 'Unavailable until you configure at least one Artifactory Xray registry.',
+      disabled: xrayRegistries.length === 0,
+      eyebrow: 'Xray',
+      source: 'artifactory_xray' as const,
+      title: 'Artifactory Xray',
+    },
+    {
+      description: capabilities.enable_trivy
+        ? 'Upload a docker save/podman save archive and scan it before pushing to any registry.'
+        : 'Unavailable because local Trivy scanning is disabled in this deployment.',
+      disabled: !capabilities.enable_trivy,
+      eyebrow: 'Local',
+      source: 'local_archive' as const,
+      title: 'Local archive upload',
+    },
+  ];
+  const availableScanSourceOptions = scanSourceOptions.filter((option) => !option.disabled);
 
   function resetCreateForm() {
     setScanSource(null);
@@ -966,6 +1008,7 @@ export default function ScansPage() {
       modal.close();
       resetCreateForm();
       toast.success(`${createdScans.length} image${createdScans.length === 1 ? '' : 's'} queued`);
+      const firstCreatedScanId = createdScans[0]?.id;
       setExpanded((prev) => {
         const next = new Set(prev);
         createdScans.forEach((scan) => next.add(scan.image_name));
@@ -975,6 +1018,9 @@ export default function ScansPage() {
       await (hasRecentWindow
         ? loadActivity(1, appliedImageFilter, resolvedActivityRange)
         : loadImages(1, appliedImageFilter, statusFilter));
+      if (firstCreatedScanId) {
+        router.push(`/scans/${firstCreatedScanId}`);
+      }
     } catch (err: unknown) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create scan');
     } finally {
@@ -1577,58 +1623,29 @@ export default function ScansPage() {
                       </div>
 
                       <RadioGroup
-                        className="grid gap-3"
+                        className="grid gap-3 sm:grid-cols-2"
                         name="scan-source"
                         onChange={(value) => selectScanSource(value as ScanSourceKind)}
                         value={scanSource}
                       >
-                        <ScanSourceCard
-                          description={
-                            capabilities.enable_trivy
-                              ? 'Scan public images like nginx or n8nio/n8n directly without choosing a registry first.'
-                              : 'Unavailable because local Trivy scanning is disabled in this deployment.'
-                          }
-                          disabled={!capabilities.enable_trivy}
-                          eyebrow="Public"
-                          source="public"
-                          title="Public / Docker Hub"
-                        />
-                        <ScanSourceCard
-                          description={
-                            capabilities.enable_trivy
-                              ? privateRegistries.length > 0
-                                ? 'Use one of your configured private registries and keep the image field focused on what you want to scan.'
-                                : 'Unavailable until you configure at least one private registry.'
-                              : 'Unavailable because local Trivy scanning is disabled in this deployment.'
-                          }
-                          disabled={!capabilities.enable_trivy || privateRegistries.length === 0}
-                          eyebrow="Private"
-                          source="private_registry"
-                          title="Private registry"
-                        />
-                        <ScanSourceCard
-                          description={
-                            xrayRegistries.length > 0
-                              ? 'Route scans through Artifactory Xray and add the Artifactory repo only when this path needs it.'
-                              : 'Unavailable until you configure at least one Artifactory Xray registry.'
-                          }
-                          disabled={xrayRegistries.length === 0}
-                          eyebrow="Xray"
-                          source="artifactory_xray"
-                          title="Artifactory Xray"
-                        />
-                        <ScanSourceCard
-                          description={
-                            capabilities.enable_trivy
-                              ? 'Upload a docker save/podman save archive and scan it before pushing to any registry.'
-                              : 'Unavailable because local Trivy scanning is disabled in this deployment.'
-                          }
-                          disabled={!capabilities.enable_trivy}
-                          eyebrow="Local"
-                          source="local_archive"
-                          title="Local archive upload"
-                        />
+                        {availableScanSourceOptions.map((option) => (
+                          <ScanSourceCard
+                            key={option.source}
+                            description={option.description}
+                            eyebrow={option.eyebrow}
+                            source={option.source}
+                            title={option.title}
+                          />
+                        ))}
                       </RadioGroup>
+                      {availableScanSourceOptions.length === 0 ? (
+                        <Card className="bg-surface-secondary">
+                          <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+                            No scan sources are available yet. Configure an Artifactory Xray
+                            registry or enable local Trivy scanning to continue.
+                          </p>
+                        </Card>
+                      ) : null}
                     </div>
                   ) : null}
 
@@ -1642,19 +1659,6 @@ export default function ScansPage() {
                           {routingStepDescription}
                         </p>
                       </div>
-
-                      <Card className="bg-surface-secondary">
-                        <Label className="text-sm font-medium">Selected source</Label>
-                        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                          {scanSource === 'artifactory_xray'
-                            ? 'Artifactory Xray'
-                            : scanSource === 'private_registry'
-                              ? 'Private registry'
-                              : scanSource === 'local_archive'
-                                ? 'Local archive upload'
-                                : 'Public / Docker Hub'}
-                        </p>
-                      </Card>
 
                       {scanSource === 'local_archive' ? (
                         <Card className="bg-surface-secondary">
@@ -1841,19 +1845,6 @@ export default function ScansPage() {
                         </p>
                       </div>
 
-                      <Card className="bg-surface-secondary">
-                        <Label className="text-sm font-medium">Selected source</Label>
-                        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                          {scanSource === 'artifactory_xray'
-                            ? 'Artifactory Xray'
-                            : scanSource === 'private_registry'
-                              ? 'Private registry'
-                              : scanSource === 'local_archive'
-                                ? 'Local archive upload'
-                                : 'Public / Docker Hub'}
-                        </p>
-                      </Card>
-
                       {scanSource === 'local_archive' ? (
                         <ScanWizardField
                           label="Image archive"
@@ -1923,81 +1914,84 @@ export default function ScansPage() {
                         {advancedOptionsOpen ? (
                           <div className="space-y-4">
                             {scanSource !== 'local_archive' ? (
-                            <ScanWizardField
-                              description="Paste one or many full image references, separated by commas or new lines. Anything still in this box is included when you continue."
-                              label="Additional Images"
-                              optional
-                            >
-                              <TextArea
-                                className={joinClassNames(inputCls, 'min-h-24 bg-surface resize-y')}
-                                placeholder={
-                                  'Paste one or more full image references here\nExample: ghcr.io/example/api:1.2.3, registry.example.com/team/worker:latest'
-                                }
-                                value={additionalImageDraft}
-                                onChange={(e) => setAdditionalImageDraft(e.target.value)}
-                              />
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  className="shrink-0"
-                                  onClick={addAdditionalImagesFromDraft}
-                                >
-                                  Add{' '}
-                                  {pendingAdditionalImages.length > 1
-                                    ? `${pendingAdditionalImages.length} refs`
-                                    : 'to list'}
-                                </Button>
-                              </div>
-                              {additionalImageEntries.length > 0 ? (
-                                <div
-                                  className="rounded-2xl p-3"
-                                  style={{
-                                    background: 'rgba(255,255,255,0.03)',
-                                    border: '1px solid var(--surface-border)',
-                                  }}
-                                >
-                                  <div className="flex items-center justify-between gap-3">
-                                    <p className="text-xs font-medium text-zinc-500">
-                                      Queued additional images
-                                    </p>
-                                    <span
-                                      className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-500"
-                                      style={{
-                                        background: 'rgba(255,255,255,0.05)',
-                                        border: '1px solid var(--surface-border)',
-                                      }}
-                                    >
-                                      {additionalImageEntries.length}
-                                    </span>
-                                  </div>
-                                  <div className="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
-                                    {additionalImageEntries.map((image) => (
-                                      <div
-                                        key={image}
-                                        className="flex items-start justify-between gap-3 rounded-xl px-3 py-2"
+                              <ScanWizardField
+                                description="Paste one or many full image references, separated by commas or new lines. Anything still in this box is included when you continue."
+                                label="Additional Images"
+                                optional
+                              >
+                                <TextArea
+                                  className={joinClassNames(
+                                    inputCls,
+                                    'min-h-24 bg-surface resize-y'
+                                  )}
+                                  placeholder={
+                                    'Paste one or more full image references here\nExample: ghcr.io/example/api:1.2.3, registry.example.com/team/worker:latest'
+                                  }
+                                  value={additionalImageDraft}
+                                  onChange={(e) => setAdditionalImageDraft(e.target.value)}
+                                />
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="shrink-0"
+                                    onClick={addAdditionalImagesFromDraft}
+                                  >
+                                    Add{' '}
+                                    {pendingAdditionalImages.length > 1
+                                      ? `${pendingAdditionalImages.length} refs`
+                                      : 'to list'}
+                                  </Button>
+                                </div>
+                                {additionalImageEntries.length > 0 ? (
+                                  <div
+                                    className="rounded-2xl p-3"
+                                    style={{
+                                      background: 'rgba(255,255,255,0.03)',
+                                      border: '1px solid var(--surface-border)',
+                                    }}
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <p className="text-xs font-medium text-zinc-500">
+                                        Queued additional images
+                                      </p>
+                                      <span
+                                        className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-500"
                                         style={{
-                                          background: 'rgba(255,255,255,0.03)',
+                                          background: 'rgba(255,255,255,0.05)',
                                           border: '1px solid var(--surface-border)',
                                         }}
                                       >
-                                        <span className="min-w-0 break-all font-mono text-xs text-zinc-600 dark:text-zinc-300">
-                                          {image}
-                                        </span>
-                                        <button
-                                          aria-label={`Remove ${image}`}
-                                          className="btn-icon-subtle size-8 shrink-0 rounded-lg"
-                                          onClick={() => removeAdditionalImageEntry(image)}
-                                          type="button"
+                                        {additionalImageEntries.length}
+                                      </span>
+                                    </div>
+                                    <div className="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
+                                      {additionalImageEntries.map((image) => (
+                                        <div
+                                          key={image}
+                                          className="flex items-start justify-between gap-3 rounded-xl px-3 py-2"
+                                          style={{
+                                            background: 'rgba(255,255,255,0.03)',
+                                            border: '1px solid var(--surface-border)',
+                                          }}
                                         >
-                                          <Cancel01Icon aria-hidden size={14} />
-                                        </button>
-                                      </div>
-                                    ))}
+                                          <span className="min-w-0 break-all font-mono text-xs text-zinc-600 dark:text-zinc-300">
+                                            {image}
+                                          </span>
+                                          <button
+                                            aria-label={`Remove ${image}`}
+                                            className="btn-icon-subtle size-8 shrink-0 rounded-lg"
+                                            onClick={() => removeAdditionalImageEntry(image)}
+                                            type="button"
+                                          >
+                                            <Cancel01Icon aria-hidden size={14} />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
-                              ) : null}
-                            </ScanWizardField>
+                                ) : null}
+                              </ScanWizardField>
                             ) : null}
 
                             <ScanWizardField label="Platform" optional>
@@ -2044,110 +2038,85 @@ export default function ScansPage() {
                           Review &amp; start
                         </h2>
                         <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-300">
-                          Confirm the scan target and routing details before JustScan queues the
-                          work.
+                          Everything is ready. Start the scan and we will open its detail page right
+                          away.
                         </p>
                       </div>
 
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-3 sm:grid-cols-3">
                         <Card className="bg-surface-secondary">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
                             Source
                           </p>
-                          <p className="text-base font-semibold text-zinc-900 dark:text-white">
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-white">
                             {scanSource === 'artifactory_xray'
                               ? 'Artifactory Xray'
                               : scanSource === 'private_registry'
                                 ? 'Private registry'
                                 : scanSource === 'local_archive'
-                                  ? 'Local archive upload'
+                                  ? 'Local archive'
                                   : 'Public / Docker Hub'}
-                          </p>
-                          <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                            {scanSource === 'artifactory_xray'
-                              ? 'JustScan will route this scan through your selected Xray-backed Artifactory registry.'
-                              : scanSource === 'private_registry'
-                                ? 'JustScan will authenticate against the selected private registry before scanning.'
-                                : scanSource === 'local_archive'
-                                  ? 'JustScan will scan the uploaded archive directly with Trivy before any push.'
-                                  : 'JustScan will scan the public image directly.'}
                           </p>
                         </Card>
 
                         <Card className="bg-surface-secondary">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                            Images
+                            Target
                           </p>
-                          <p className="text-base font-semibold text-zinc-900 dark:text-white">
+                          <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
                             {scanSource === 'local_archive'
-                              ? '1 uploaded archive'
-                              : `${requestedImages.length} target${requestedImages.length === 1 ? '' : 's'}`}
+                              ? uploadedArchiveFile?.name || 'Archive upload'
+                              : primaryImage || `${requestedImages.length} image targets`}
                           </p>
-                          <p className="break-all text-sm text-zinc-600 dark:text-zinc-300">
-                            {scanSource === 'local_archive'
-                              ? uploadedArchiveFile?.name || 'No archive selected'
-                              : primaryImage || 'No primary image provided'}
-                          </p>
-                          {scanSource !== 'local_archive' && requestedImages.length > 1 ? (
-                            <p className="text-xs text-zinc-500">
-                              Includes {requestedImages.length - 1} additional image
-                              {requestedImages.length - 1 === 1 ? '' : 's'}.
-                            </p>
-                          ) : null}
                         </Card>
 
-                        {scanSource !== 'public' && scanSource !== 'local_archive' ? (
-                          <Card className="bg-surface-secondary">
-                            <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                              Registry routing
-                            </p>
-                            <p className="text-base font-semibold text-zinc-900 dark:text-white">
-                              {selectedRegistry?.name ?? '—'}
-                            </p>
-                            <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                              {selectedRegistry?.url ?? 'No registry selected.'}
-                            </p>
-                          </Card>
-                        ) : null}
-
-                        {selectedRegistryIsXray ? (
-                          <Card className="bg-surface-secondary">
-                            <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                              Artifactory repo
-                            </p>
-                            <p className="text-base font-semibold text-zinc-900 dark:text-white">
-                              {xrayRepository.trim() || 'Use image path as-is'}
-                            </p>
-                            <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                              Override the repo when the image lives behind a remote or mirror key
-                              like docker-remote.
-                            </p>
-                          </Card>
-                        ) : null}
+                        <Card className="bg-surface-secondary">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                            Routing
+                          </p>
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                            {scanSource === 'public' || scanSource === 'local_archive'
+                              ? 'Direct'
+                              : selectedRegistry?.name || 'Registry selected'}
+                          </p>
+                        </Card>
                       </div>
 
-                      <Card className="bg-surface-secondary">
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <div>
-                            <p className="text-[11px] uppercase tracking-[0.18em]">Platform</p>
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                              {platform || 'Auto-detect'}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] uppercase tracking-[0.18em]">
-                              {scanSource === 'local_archive' ? 'Archive mode' : 'Additional images'}
-                            </p>
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                              {scanSource === 'local_archive'
-                                ? 'Single archive input'
-                                : requestedImages.length > 1
-                                  ? `${requestedImages.length - 1} queued`
-                                  : 'None added'}
-                            </p>
+                      <div className="relative flex min-h-56 items-center justify-center px-6 py-10">
+                        <div className="flex flex-col items-center justify-center gap-5 text-center">
+                          <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                            Start now and jump directly into live scan progress.
+                          </p>
+                          <div className="relative">
+                            <Button
+                              key="wizard-submit-inline"
+                              type="submit"
+                              form="create-scan-form"
+                              isDisabled={creating || xrayOnlyWithoutRegistries}
+                              variant="primary"
+                              className="group relative inline-flex min-w-52 items-center justify-center gap-2 overflow-hidden px-7 py-3 text-base font-semibold shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0"
+                            >
+                              {!creating ? (
+                                <span
+                                  aria-hidden
+                                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                                />
+                              ) : null}
+                              {creating ? (
+                                <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              ) : (
+                                <ArrowRight01Icon
+                                  aria-hidden
+                                  className="size-4 transition-transform duration-200 group-hover:translate-x-0.5"
+                                />
+                              )}
+                              <span className="relative">
+                                {creating ? 'Starting scan…' : 'Start Scan'}
+                              </span>
+                            </Button>
                           </div>
                         </div>
-                      </Card>
+                      </div>
                     </div>
                   ) : null}
                 </form>
@@ -2173,7 +2142,7 @@ export default function ScansPage() {
                       <Button key="wizard-continue" onClick={handleWizardNext}>
                         Continue
                       </Button>
-                    ) : (
+                    ) : scanStepIndex !== 3 ? (
                       <Button
                         key="wizard-submit"
                         type="submit"
@@ -2187,7 +2156,7 @@ export default function ScansPage() {
                         )}
                         Start Scan
                       </Button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </Modal.Footer>

@@ -153,7 +153,18 @@ function LastScanState({
   const timestamp =
     item.last_scanned_at ?? item.last_scan?.completed_at ?? item.last_scan?.created_at;
   return (
-    <div className="space-y-1.5">
+    <Link
+      href={`/scans/${item.last_scan_id}`}
+      className="inline-flex max-w-fit flex-col gap-1.5 px-2 py-1 transition-colors hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 dark:hover:bg-zinc-800/60"
+      title={fullDate(timestamp, {
+        hourCycle,
+        timeZone: item.timezone,
+      })}
+      aria-label={`Open scan details from ${timeAgo(timestamp, {
+        hourCycle,
+        timeZone: item.timezone,
+      })}`}
+    >
       {item.last_scan ? (
         <StatusBadge
           status={item.last_scan.status}
@@ -164,22 +175,13 @@ function LastScanState({
           Unknown
         </Chip>
       )}
-      <div className="text-xs text-zinc-500">
-        <Link
-          href={`/scans/${item.last_scan_id}`}
-          className="hover:text-accent dark:hover:text-accent transition-colors"
-          title={fullDate(timestamp, {
-            hourCycle,
-            timeZone: item.timezone,
-          })}
-        >
-          {timeAgo(timestamp, {
-            hourCycle,
-            timeZone: item.timezone,
-          })}
-        </Link>
-      </div>
-    </div>
+      <span className="text-xs text-zinc-500">
+        {timeAgo(timestamp, {
+          hourCycle,
+          timeZone: item.timezone,
+        })}
+      </span>
+    </Link>
   );
 }
 
@@ -813,7 +815,10 @@ export default function WatchlistPage() {
                     className="bg-surface-secondary"
                     description="e.g. 0 2 * * * = daily at 2:00 in the selected timezone"
                   />
-                  <p className="text-xs font-medium" style={{ color: 'color-mix(in srgb, var(--accent) 88%, transparent)' }}>
+                  <p
+                    className="text-xs font-medium"
+                    style={{ color: 'color-mix(in srgb, var(--accent) 88%, transparent)' }}
+                  >
                     Preview: {schedulePreview}
                   </p>
                   <div className="space-y-2">

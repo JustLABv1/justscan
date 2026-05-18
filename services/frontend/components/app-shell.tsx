@@ -25,8 +25,8 @@ import {
   Label,
   Popover,
   Separator,
-  Typography,
   Tooltip,
+  Typography,
   useOverlayState,
 } from '@heroui/react';
 import {
@@ -510,17 +510,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
       <ToastProvider>
         <div className="app-bg flex min-h-dvh items-center justify-center px-6 py-10">
           <div className="surface-card flex w-full max-w-md flex-col items-center rounded-[28px] px-8 py-10 text-center">
-            <div
-              className="flex size-12 items-center justify-center rounded-2xl"
-              style={{
-                background:
-                  'linear-gradient(135deg, color-mix(in oklab, var(--accent) 20%, transparent) 0%, color-mix(in oklab, var(--accent) 12%, transparent) 100%)',
-                boxShadow:
-                  '0 0 20px color-mix(in oklab, var(--accent) 28%, transparent), inset 0 0 0 1px color-mix(in oklab, var(--accent) 20%, transparent)',
-              }}
-            >
-              <Logo size={20} />
-            </div>
+            <Logo size={64} />
             <p className="mt-5 text-base font-semibold text-zinc-900 dark:text-white">
               Preparing your workspace view
             </p>

@@ -330,7 +330,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                             <span className="flex-1 truncate font-mono text-sm text-foreground">
                               {img.image_name}
                             </span>
-                            <Chip size="sm" variant="flat" color="primary" className="font-mono">
+                            <Chip size="sm" variant="soft" color="primary" className="font-mono">
                               {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
                             </Chip>
                           </div>
@@ -405,7 +405,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                               <p className="truncate font-mono text-sm text-foreground">{v.vuln_id}</p>
                               <p className="truncate text-[11px] text-default-500">{v.pkg_name}</p>
                             </div>
-                            <Chip size="sm" variant="flat" color={sevColor} className="font-mono">
+                            <Chip size="sm" variant="soft" color={sevColor} className="font-mono">
                               {v.severity.charAt(0).toUpperCase() + v.severity.slice(1).toLowerCase()}
                             </Chip>
                           </div>

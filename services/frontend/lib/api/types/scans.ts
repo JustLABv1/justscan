@@ -98,6 +98,7 @@ export interface Scan {
   image_tag: string;
   image_digest: string;
   scan_provider: ScanProvider;
+  scan_source?: 'registry' | 'uploaded_archive';
   external_scan_id?: string;
   external_status?: string;
   current_step: string;

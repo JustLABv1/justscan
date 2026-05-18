@@ -22,10 +22,11 @@ import (
 
 // ScanJob represents a queued scan job
 type ScanJob struct {
-	ScanID   uuid.UUID
-	DB       *bun.DB
-	EnvVars  []string // optional registry credentials
-	Platform string   // optional platform override (e.g. linux/arm64)
+	ScanID      uuid.UUID
+	DB          *bun.DB
+	EnvVars     []string // optional registry credentials
+	Platform    string   // optional platform override (e.g. linux/arm64)
+	ArchivePath string   // optional local OCI/Docker archive path for uploaded archive scans
 }
 
 var jobQueue chan ScanJob
@@ -123,12 +124,12 @@ func InitWorker(db *bun.DB) {
 }
 
 // EnqueueScan queues a scan job. The scan row must already exist in the DB with status=pending.
-func EnqueueScan(scanID uuid.UUID, db *bun.DB, envVars []string, platform string) error {
+func EnqueueScan(scanID uuid.UUID, db *bun.DB, envVars []string, platform, archivePath string) error {
 	if err := setScanStepByID(context.Background(), db, scanID, models.ScanStepQueued); err != nil {
 		return err
 	}
 	recordScanStepOutput(context.Background(), db, scanID, "Scan accepted and queued for execution.")
-	jobQueue <- ScanJob{ScanID: scanID, DB: db, EnvVars: envVars, Platform: platform}
+	jobQueue <- ScanJob{ScanID: scanID, DB: db, EnvVars: envVars, Platform: platform, ArchivePath: archivePath}
 	return nil
 }
 
@@ -155,6 +156,12 @@ func processScan(job ScanJob, cacheDir string) {
 	if scan.Status == models.ScanStatusCancelled {
 		log.Infof("Worker: scan %s was cancelled before processing, skipping", scanID)
 		return
+	}
+	if scan.ScanSource == models.ScanSourceUploadedArchive {
+		if job.ArchivePath == "" {
+			job.ArchivePath = scan.ImageLocation
+		}
+		defer cleanupScanArchive(scan.ID, job.ArchivePath)
 	}
 
 	// Create a cancellable context so this scan can be interrupted via CancelScan().
@@ -236,7 +243,14 @@ func processScan(job ScanJob, cacheDir string) {
 
 	// Run vulnerability scan
 	stopHeartbeat = startScanProgressHeartbeat(ctx, db, scanID)
-	trivyOut, trivyVersion, err := RunScanWithRegistryRetry(ctx, db, scan, job.EnvVars, job.Platform, cacheDir)
+	var trivyOut *TrivyOutput
+	var trivyVersion string
+	if scan.ScanSource == models.ScanSourceUploadedArchive {
+		recordScanStepOutput(ctx, db, scanID, "Scanning uploaded OCI archive input with Trivy.")
+		trivyOut, trivyVersion, err = RunScanFromArchive(ctx, job.ArchivePath, job.Platform, cacheDir)
+	} else {
+		trivyOut, trivyVersion, err = RunScanWithRegistryRetry(ctx, db, scan, job.EnvVars, job.Platform, cacheDir)
+	}
 	stopHeartbeat()
 	if err != nil {
 		if ctx.Err() != nil {
@@ -261,7 +275,14 @@ func processScan(job ScanJob, cacheDir string) {
 	kbEntries := ExtractKBEntries(trivyOut)
 	if GrypeEnabled() {
 		stopHeartbeat = startScanProgressHeartbeat(ctx, db, scanID)
-		grypeOut, version, grypeErr := RunGrypeScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
+		var grypeOut *GrypeOutput
+		var version string
+		var grypeErr error
+		if scan.ScanSource == models.ScanSourceUploadedArchive {
+			grypeOut, version, grypeErr = RunGrypeScanFromArchive(ctx, job.ArchivePath, job.Platform, cacheDir)
+		} else {
+			grypeOut, version, grypeErr = RunGrypeScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
+		}
 		stopHeartbeat()
 		if grypeErr != nil {
 			if ctx.Err() == nil {
@@ -315,7 +336,13 @@ func processScan(job ScanJob, cacheDir string) {
 
 	// Run SBOM scan (best-effort, don't fail the whole scan if it errors)
 	stopHeartbeat = startScanProgressHeartbeat(ctx, db, scanID)
-	sbomOut, sbomErr := RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
+	var sbomOut *TrivySBOMOutput
+	var sbomErr error
+	if scan.ScanSource == models.ScanSourceUploadedArchive {
+		sbomOut, sbomErr = RunSBOMScanFromArchive(ctx, job.ArchivePath, job.Platform, cacheDir)
+	} else {
+		sbomOut, sbomErr = RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
+	}
 	stopHeartbeat()
 	if sbomErr != nil {
 		if ctx.Err() == nil {
@@ -486,6 +513,18 @@ func preserveXrayExternalStatusOnFailure(status string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func cleanupScanArchive(scanID uuid.UUID, archivePath string) {
+	trimmed := strings.TrimSpace(archivePath)
+	if trimmed == "" {
+		return
+	}
+	if err := os.Remove(trimmed); err != nil && !os.IsNotExist(err) {
+		log.Warnf("Worker: failed to remove uploaded archive for scan %s at %s: %v", scanID, trimmed, err)
+	} else {
+		log.Infof("Worker: removed uploaded archive for scan %s at %s", scanID, trimmed)
 	}
 }
 

@@ -116,6 +116,45 @@ func RunGrypeScan(ctx context.Context, imageName, imageTag string, envVars []str
 	return &output, strings.TrimSpace(output.Descriptor.Version), nil
 }
 
+func RunGrypeScanFromArchive(ctx context.Context, archivePath, platform, workerCacheDir string) (*GrypeOutput, string, error) {
+	grypePath := config.Config.Scanner.GrypePath
+	if grypePath == "" {
+		grypePath = "grype"
+	}
+
+	cacheDir := workerGrypeCacheDir(workerCacheDir)
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		return nil, "", fmt.Errorf("failed to create grype cache dir: %w", err)
+	}
+
+	scanCtx, cancel := context.WithTimeout(ctx, scanCommandTimeout())
+	defer cancel()
+
+	args := []string{"-o", "json"}
+	if platform != "" {
+		args = append(args, "--platform", platform)
+	}
+	args = append(args, "oci-archive:"+archivePath)
+
+	cmd := exec.CommandContext(scanCtx, grypePath, args...)
+	cmd.Env = append(os.Environ(), "GRYPE_DB_CACHE_DIR="+cacheDir)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, "", fmt.Errorf("grype failed for uploaded archive: %w — stderr: %s", err, stderr.String())
+	}
+
+	var output GrypeOutput
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		return nil, "", fmt.Errorf("failed to parse grype output: %w", err)
+	}
+
+	return &output, strings.TrimSpace(output.Descriptor.Version), nil
+}
+
 func ParseGrypeVulnerabilities(output *GrypeOutput, scanID uuid.UUID) []models.Vulnerability {
 	if output == nil {
 		return nil

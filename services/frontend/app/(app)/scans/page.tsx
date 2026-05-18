@@ -25,6 +25,7 @@ import {
   ArtifactoryRepository,
   cancelScan,
   createScans,
+  createUploadedArchiveScan,
   deleteScan,
   getDefaultScannerCapabilities,
   getWorkScope,
@@ -167,7 +168,7 @@ function MobileSevStat({ label, count, tone }: { label: string; count: number; t
   );
 }
 
-type ScanSourceKind = 'public' | 'private_registry' | 'artifactory_xray';
+type ScanSourceKind = 'public' | 'private_registry' | 'artifactory_xray' | 'local_archive';
 type ScansTimeRange = '' | RecentActivityRange;
 
 const DEFAULT_ACTIVITY_RANGE: RecentActivityRange = '24h';
@@ -399,6 +400,7 @@ export default function ScansPage() {
   const [scanStepIndex, setScanStepIndex] = useState(0);
   const [advancedOptionsOpen, setAdvancedOptionsOpen] = useState(false);
   const [platform, setPlatform] = useState('');
+  const [uploadedArchiveFile, setUploadedArchiveFile] = useState<File | null>(null);
   const [registryId, setRegistryId] = useState('');
   const [xrayRepository, setXrayRepository] = useState('');
   const [useManualXrayRepository, setUseManualXrayRepository] = useState(false);
@@ -564,25 +566,33 @@ export default function ScansPage() {
       ? '__manual__'
       : xrayRepository || '__none__';
   const detailsStepTitle =
-    scanSource === 'artifactory_xray'
-      ? 'What image should Xray analyze?'
-      : scanSource === 'private_registry'
-        ? 'What image should JustScan pull?'
-        : 'What image should JustScan scan?';
+    scanSource === 'local_archive'
+      ? 'Upload an image archive'
+      : scanSource === 'artifactory_xray'
+        ? 'What image should Xray analyze?'
+        : scanSource === 'private_registry'
+          ? 'What image should JustScan pull?'
+          : 'What image should JustScan scan?';
   const detailsStepDescription =
-    scanSource === 'artifactory_xray'
+    scanSource === 'local_archive'
+      ? 'Upload a docker/podman image archive (.tar, .tar.gz, .tgz). Display name and tag are optional.'
+      : scanSource === 'artifactory_xray'
       ? 'Keep this step focused on the image reference. We will ask about registry routing and Artifactory repo in the next step.'
       : scanSource === 'private_registry'
         ? 'Enter the image reference first. The private registry routing comes in the next step.'
         : 'Enter the image reference first. Public scans do not need any registry routing after this.';
   const routingStepTitle =
-    scanSource === 'artifactory_xray'
+    scanSource === 'local_archive'
+      ? 'No routing setup is needed'
+      : scanSource === 'artifactory_xray'
       ? 'Where inside Artifactory should this image resolve?'
       : scanSource === 'private_registry'
         ? 'Which private registry hosts this image?'
         : 'No routing setup is needed';
   const routingStepDescription =
-    scanSource === 'artifactory_xray'
+    scanSource === 'local_archive'
+      ? 'Uploaded archive scans run locally with Trivy and do not use a registry route.'
+      : scanSource === 'artifactory_xray'
       ? 'Choose the Xray-backed registry first, then optionally override the Artifactory repo key for mirrors or remotes.'
       : scanSource === 'private_registry'
         ? 'Choose the configured private registry that should authenticate and pull this image.'
@@ -599,6 +609,7 @@ export default function ScansPage() {
     setAdditionalImageEntries([]);
     setAdvancedOptionsOpen(false);
     setPlatform('');
+    setUploadedArchiveFile(null);
     setRegistryId('');
     setXrayRepository('');
     setUseManualXrayRepository(false);
@@ -626,6 +637,13 @@ export default function ScansPage() {
       setXrayRepository('');
       setUseManualXrayRepository(false);
     } else {
+      if (source === 'local_archive') {
+        setRegistryId('');
+        setXrayRepository('');
+        setUseManualXrayRepository(false);
+        setScanStepIndex(1);
+        return;
+      }
       const nextRegistry =
         xrayRegistries.find((registry) => registry.id === registryId) ??
         xrayRegistries.find((registry) => registry.is_default) ??
@@ -655,10 +673,16 @@ export default function ScansPage() {
       if (scanSource === 'artifactory_xray' && xrayRegistries.length === 0) {
         return 'Add an Artifactory Xray registry first, or choose a different source.';
       }
+      if (scanSource === 'local_archive' && !capabilities.enable_trivy) {
+        return 'Local archive scans are unavailable because Trivy scanning is disabled.';
+      }
       return '';
     }
 
     if (stepIndex >= 1) {
+      if (scanSource === 'local_archive') {
+        return '';
+      }
       if (scanSource === 'private_registry' && !registryId) {
         return 'Choose the private registry that hosts this image.';
       }
@@ -667,7 +691,11 @@ export default function ScansPage() {
       }
     }
 
-    if (stepIndex >= 2 && requestedImages.length === 0) {
+    if (stepIndex >= 2 && scanSource === 'local_archive' && !uploadedArchiveFile) {
+      return 'Upload an OCI/Docker archive file to continue.';
+    }
+
+    if (stepIndex >= 2 && scanSource !== 'local_archive' && requestedImages.length === 0) {
       return 'Provide at least one image to scan.';
     }
 
@@ -909,15 +937,31 @@ export default function ScansPage() {
       }
 
       const currentScope = getWorkScope();
-      const result = await createScans(
-        requestedImages,
-        scanSource === 'public' ? undefined : registryId || undefined,
-        undefined,
-        platform || undefined,
-        currentScope.kind === 'org' ? currentScope.orgId : undefined,
-        selectedRegistryIsXray ? xrayRepository.trim() || undefined : undefined
-      );
-      const createdScans = Array.isArray(result.scans) ? result.scans : [];
+      let createdScans: Scan[] = [];
+      if (scanSource === 'local_archive') {
+        if (!uploadedArchiveFile) {
+          setCreateError('Upload an OCI/Docker archive file to continue.');
+          return;
+        }
+        const created = await createUploadedArchiveScan({
+          archive: uploadedArchiveFile,
+          imageName: imageName.trim() || undefined,
+          imageTag: imageTag.trim() || undefined,
+          platform: platform || undefined,
+          orgId: currentScope.kind === 'org' ? currentScope.orgId : undefined,
+        });
+        createdScans = [created];
+      } else {
+        const result = await createScans(
+          requestedImages,
+          scanSource === 'public' ? undefined : registryId || undefined,
+          undefined,
+          platform || undefined,
+          currentScope.kind === 'org' ? currentScope.orgId : undefined,
+          selectedRegistryIsXray ? xrayRepository.trim() || undefined : undefined
+        );
+        createdScans = Array.isArray(result.scans) ? result.scans : [];
+      }
 
       modal.close();
       resetCreateForm();
@@ -1573,6 +1617,17 @@ export default function ScansPage() {
                           source="artifactory_xray"
                           title="Artifactory Xray"
                         />
+                        <ScanSourceCard
+                          description={
+                            capabilities.enable_trivy
+                              ? 'Upload a docker save/podman save archive and scan it before pushing to any registry.'
+                              : 'Unavailable because local Trivy scanning is disabled in this deployment.'
+                          }
+                          disabled={!capabilities.enable_trivy}
+                          eyebrow="Local"
+                          source="local_archive"
+                          title="Local archive upload"
+                        />
                       </RadioGroup>
                     </div>
                   ) : null}
@@ -1595,9 +1650,24 @@ export default function ScansPage() {
                             ? 'Artifactory Xray'
                             : scanSource === 'private_registry'
                               ? 'Private registry'
-                              : 'Public / Docker Hub'}
+                              : scanSource === 'local_archive'
+                                ? 'Local archive upload'
+                                : 'Public / Docker Hub'}
                         </p>
                       </Card>
+
+                      {scanSource === 'local_archive' ? (
+                        <Card className="bg-surface-secondary">
+                          <Label className="text-sm font-medium">Archive scan routing</Label>
+                          <p className="text-base font-semibold text-zinc-900 dark:text-white">
+                            Local Trivy input mode
+                          </p>
+                          <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+                            JustScan scans the uploaded archive directly and does not route through
+                            registry credentials.
+                          </p>
+                        </Card>
+                      ) : null}
 
                       {scanSource === 'public' ? (
                         <Card className="bg-surface-secondary">
@@ -1778,16 +1848,40 @@ export default function ScansPage() {
                             ? 'Artifactory Xray'
                             : scanSource === 'private_registry'
                               ? 'Private registry'
-                              : 'Public / Docker Hub'}
+                              : scanSource === 'local_archive'
+                                ? 'Local archive upload'
+                                : 'Public / Docker Hub'}
                         </p>
                       </Card>
 
+                      {scanSource === 'local_archive' ? (
+                        <ScanWizardField
+                          label="Image archive"
+                          description="Accepted formats: .tar, .tar.gz, .tgz. Maximum size: 5 GB."
+                        >
+                          <Input
+                            className={inputCls}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0] ?? null;
+                              setUploadedArchiveFile(file);
+                            }}
+                            type="file"
+                            accept=".tar,.tar.gz,.tgz,application/x-tar,application/gzip"
+                          />
+                          {uploadedArchiveFile ? (
+                            <p className="text-xs text-zinc-500">
+                              Selected: {uploadedArchiveFile.name}
+                            </p>
+                          ) : null}
+                        </ScanWizardField>
+                      ) : null}
+
                       <FormField
                         className="bg-surface-secondary"
-                        label="Image Name"
+                        label={scanSource === 'local_archive' ? 'Display Name' : 'Image Name'}
                         onChange={(e) => setImageName(e.target.value)}
                         placeholder="nginx or n8nio/n8n"
-                        required
+                        required={scanSource !== 'local_archive'}
                         value={imageName}
                       />
                       <FormField
@@ -1795,7 +1889,7 @@ export default function ScansPage() {
                         label="Tag"
                         onChange={(e) => setImageTag(e.target.value)}
                         placeholder="latest"
-                        required
+                        required={scanSource !== 'local_archive'}
                         value={imageTag}
                       />
 
@@ -1828,6 +1922,7 @@ export default function ScansPage() {
 
                         {advancedOptionsOpen ? (
                           <div className="space-y-4">
+                            {scanSource !== 'local_archive' ? (
                             <ScanWizardField
                               description="Paste one or many full image references, separated by commas or new lines. Anything still in this box is included when you continue."
                               label="Additional Images"
@@ -1903,6 +1998,7 @@ export default function ScansPage() {
                                 </div>
                               ) : null}
                             </ScanWizardField>
+                            ) : null}
 
                             <ScanWizardField label="Platform" optional>
                               <Select
@@ -1963,14 +2059,18 @@ export default function ScansPage() {
                               ? 'Artifactory Xray'
                               : scanSource === 'private_registry'
                                 ? 'Private registry'
-                                : 'Public / Docker Hub'}
+                                : scanSource === 'local_archive'
+                                  ? 'Local archive upload'
+                                  : 'Public / Docker Hub'}
                           </p>
                           <p className="text-sm text-zinc-600 dark:text-zinc-300">
                             {scanSource === 'artifactory_xray'
                               ? 'JustScan will route this scan through your selected Xray-backed Artifactory registry.'
                               : scanSource === 'private_registry'
                                 ? 'JustScan will authenticate against the selected private registry before scanning.'
-                                : 'JustScan will scan the public image directly.'}
+                                : scanSource === 'local_archive'
+                                  ? 'JustScan will scan the uploaded archive directly with Trivy before any push.'
+                                  : 'JustScan will scan the public image directly.'}
                           </p>
                         </Card>
 
@@ -1979,12 +2079,16 @@ export default function ScansPage() {
                             Images
                           </p>
                           <p className="text-base font-semibold text-zinc-900 dark:text-white">
-                            {requestedImages.length} target{requestedImages.length === 1 ? '' : 's'}
+                            {scanSource === 'local_archive'
+                              ? '1 uploaded archive'
+                              : `${requestedImages.length} target${requestedImages.length === 1 ? '' : 's'}`}
                           </p>
                           <p className="break-all text-sm text-zinc-600 dark:text-zinc-300">
-                            {primaryImage || 'No primary image provided'}
+                            {scanSource === 'local_archive'
+                              ? uploadedArchiveFile?.name || 'No archive selected'
+                              : primaryImage || 'No primary image provided'}
                           </p>
-                          {requestedImages.length > 1 ? (
+                          {scanSource !== 'local_archive' && requestedImages.length > 1 ? (
                             <p className="text-xs text-zinc-500">
                               Includes {requestedImages.length - 1} additional image
                               {requestedImages.length - 1 === 1 ? '' : 's'}.
@@ -1992,7 +2096,7 @@ export default function ScansPage() {
                           ) : null}
                         </Card>
 
-                        {scanSource !== 'public' ? (
+                        {scanSource !== 'public' && scanSource !== 'local_archive' ? (
                           <Card className="bg-surface-secondary">
                             <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
                               Registry routing
@@ -2032,12 +2136,14 @@ export default function ScansPage() {
                           </div>
                           <div>
                             <p className="text-[11px] uppercase tracking-[0.18em]">
-                              Additional images
+                              {scanSource === 'local_archive' ? 'Archive mode' : 'Additional images'}
                             </p>
                             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                              {requestedImages.length > 1
-                                ? `${requestedImages.length - 1} queued`
-                                : 'None added'}
+                              {scanSource === 'local_archive'
+                                ? 'Single archive input'
+                                : requestedImages.length > 1
+                                  ? `${requestedImages.length - 1} queued`
+                                  : 'None added'}
                             </p>
                           </div>
                         </div>

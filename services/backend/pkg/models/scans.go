@@ -16,6 +16,7 @@ type Scan struct {
 	ImageDigest             string                `bun:"image_digest,type:text,default:''" json:"image_digest"`
 	ImageConfig             JSONObject            `bun:"image_config,type:jsonb,notnull,default:'{}'" json:"image_config,omitempty"`
 	ScanProvider            string                `bun:"scan_provider,type:text,notnull,default:'trivy'" json:"scan_provider"`
+	ScanSource              string                `bun:"scan_source,type:text,notnull,default:'registry'" json:"scan_source"`
 	ExternalScanID          string                `bun:"external_scan_id,type:text,default:''" json:"external_scan_id,omitempty"`
 	ExternalStatus          string                `bun:"external_status,type:text,default:''" json:"external_status,omitempty"`
 	CurrentStep             string                `bun:"current_step,type:text,default:'queued'" json:"current_step"`
@@ -91,6 +92,11 @@ const (
 const (
 	ScanProviderTrivy           = "trivy"
 	ScanProviderArtifactoryXray = "artifactory_xray"
+)
+
+const (
+	ScanSourceRegistry        = "registry"
+	ScanSourceUploadedArchive = "uploaded_archive"
 )
 
 const (

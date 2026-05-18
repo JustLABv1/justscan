@@ -30,7 +30,11 @@ func DispatchScan(_ context.Context, db *bun.DB, scan *models.Scan, envVars []st
 	switch provider {
 	case models.ScanProviderTrivy:
 		scan.CurrentStep = models.ScanStepQueued
-		return EnqueueScan(scan.ID, db, envVars, platform)
+		archivePath := ""
+		if scan.ScanSource == models.ScanSourceUploadedArchive {
+			archivePath = scan.ImageLocation
+		}
+		return EnqueueScan(scan.ID, db, envVars, platform, archivePath)
 	case models.ScanProviderArtifactoryXray:
 		scan.ExternalStatus = "queued"
 		scan.CurrentStep = models.ScanStepQueued
@@ -45,7 +49,7 @@ func DispatchScan(_ context.Context, db *bun.DB, scan *models.Scan, envVars []st
 				return fmt.Errorf("failed to persist external status for scan %s: %w", scan.ID, err)
 			}
 		}
-		return EnqueueScan(scan.ID, db, envVars, platform)
+		return EnqueueScan(scan.ID, db, envVars, platform, "")
 	default:
 		return fmt.Errorf("unsupported scan provider %q", provider)
 	}

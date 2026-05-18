@@ -1,14 +1,37 @@
 import { OrgRiskScore, TrendPoint } from '@/lib/api';
 import { Card } from '@heroui/react';
 
-import { RiskOverviewCard, TrendChart } from './shared';
+import { OrgScanItem, RiskOverviewCard, TrendChart } from './shared';
 
 interface OrgOverviewTabProps {
   riskScore: OrgRiskScore | null;
   trend: TrendPoint[];
+  orgScans: OrgScanItem[];
 }
 
-export function OrgOverviewTab({ riskScore, trend }: OrgOverviewTabProps) {
+export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabProps) {
+  const failingItems = orgScans
+    .slice()
+    .sort((a, b) => {
+      const aTime = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+      const bTime = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+      return bTime - aTime;
+    })
+    .flatMap((scan) =>
+      (scan.compliance ?? [])
+        .filter((result) => result.status === 'fail')
+        .map((result) => ({
+          key: `${scan.id}-${result.policy_id}`,
+          scanId: scan.id,
+          imageRef: `${scan.image_name}:${scan.image_tag}`,
+          policyName: result.policy_name,
+        }))
+    );
+
+  const uniqueFailingItems = Array.from(
+    new Map(failingItems.map((item) => [item.key, item])).values()
+  ).slice(0, 6);
+
   return (
     <div className="space-y-6">
       <RiskOverviewCard riskScore={riskScore} />
@@ -29,6 +52,36 @@ export function OrgOverviewTab({ riskScore, trend }: OrgOverviewTabProps) {
           </div>
         </div>
         <TrendChart points={trend} />
+
+        <div className="pt-1">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            What Failed Recently
+          </h3>
+          {uniqueFailingItems.length === 0 ? (
+            <p className="mt-2 text-xs text-zinc-500">No recent failed policy evaluations.</p>
+          ) : (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {uniqueFailingItems.map((item) => (
+                <a
+                  key={item.key}
+                  href={`/scans/${item.scanId}`}
+                  className="group rounded-lg px-3 py-2 transition-colors hover:border-accent/40"
+                  style={{
+                    background: 'var(--surface-secondary)',
+                    border: '1px solid var(--surface-border)',
+                  }}
+                >
+                  <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200 group-hover:text-accent">
+                    {item.policyName || 'Unnamed policy'}
+                  </p>
+                  <p className="mt-0.5 truncate font-mono text-[11px] text-zinc-600 dark:text-zinc-500">
+                    {item.imageRef}
+                  </p>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
       </Card>
     </div>
   );

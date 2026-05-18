@@ -97,7 +97,7 @@ export function RiskOverviewCard({ riskScore }: { riskScore: OrgRiskScore | null
     <Card className="surface-card relative rounded-2xl p-5">
       <div
         className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-        style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.2),transparent)' }}
+        style={{ background: 'linear-gradient(90deg,transparent,color-mix(in srgb, var(--accent) 20%, transparent),transparent)' }}
       />
       <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Risk Overview</h2>
       <div className="flex items-center gap-6 flex-wrap">

@@ -122,7 +122,7 @@ export function OrgTeamTab({
         <div>
           {membersLoading ? (
             <div className="flex justify-center py-8">
-              <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+              <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
             </div>
           ) : members.length === 0 ? (
             <div className="px-6 py-8 text-sm text-zinc-500 text-center">No members found.</div>
@@ -211,7 +211,7 @@ export function OrgTeamTab({
                                   <option value="admin">admin</option>
                                 </select>
                               ) : (
-                                <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-violet-500/10 text-violet-400 border-violet-500/20">
+                                <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-accent-500/10 text-accent border-accent-500/20">
                                   {member.role}
                                 </span>
                               )}

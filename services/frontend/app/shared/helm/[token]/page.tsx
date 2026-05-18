@@ -166,7 +166,7 @@ function HelmGroupContent() {
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
       <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-        <span className="size-4 rounded-full border-2 border-violet-400/30 border-t-violet-400 animate-spin" />
+        <span className="size-4 rounded-full border-2 border-accent-400/30 border-t-accent-400 animate-spin" />
         Loading helm chart scan…
       </div>
     </div>
@@ -176,7 +176,7 @@ function HelmGroupContent() {
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
       <div className="text-center space-y-3">
         <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>
-        <Link href="/" className="text-violet-600 dark:text-violet-400 text-sm hover:underline">← Back to home</Link>
+        <Link href="/" className="text-accent dark:text-accent text-sm hover:underline">← Back to home</Link>
       </div>
     </div>
   );
@@ -189,7 +189,7 @@ function HelmGroupContent() {
         style={{ background: 'var(--nav-bg)', borderBottom: '1px solid var(--border-subtle)', backdropFilter: 'blur(12px)' }}
       >
         <Link href="/" className="flex items-center gap-2.5 select-none">
-          <Logo size={22} className="text-[#a78bfa]" />
+          <Logo size={22} className="text-[color-mix(in srgb, var(--accent) 78%, white)]" />
           <span className="font-semibold text-sm tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</span>
         </Link>
         <div className="flex items-center gap-2">
@@ -221,7 +221,7 @@ function HelmGroupContent() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2.5 flex-wrap">
                 {/* Helm package icon */}
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="color-mix(in srgb, var(--accent) 78%, white)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                   <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
                 </svg>
                 <h1 className="text-xl font-semibold truncate" style={{ color: 'var(--text-primary)' }} title={chartUrl}>
@@ -231,9 +231,9 @@ function HelmGroupContent() {
                   <span
                     className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium"
                     style={{
-                      background: isOCI ? 'rgba(124,58,237,0.1)' : 'rgba(59,130,246,0.1)',
-                      color: isOCI ? '#a78bfa' : '#60a5fa',
-                      border: `1px solid ${isOCI ? 'rgba(124,58,237,0.2)' : 'rgba(59,130,246,0.2)'}`,
+                      background: isOCI ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'rgba(59,130,246,0.1)',
+                      color: isOCI ? 'color-mix(in srgb, var(--accent) 78%, white)' : '#60a5fa',
+                      border: `1px solid ${isOCI ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'rgba(59,130,246,0.2)'}`,
                     }}
                   >
                     {isOCI ? 'OCI' : 'HTTP'}
@@ -252,7 +252,7 @@ function HelmGroupContent() {
             <button
               onClick={handleCopyLink}
               className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl font-medium transition-all shrink-0"
-              style={{ background: copied ? 'rgba(34,197,94,0.12)' : 'rgba(124,58,237,0.1)', border: `1px solid ${copied ? 'rgba(34,197,94,0.25)' : 'rgba(124,58,237,0.2)'}`, color: copied ? '#4ade80' : '#a78bfa' }}
+              style={{ background: copied ? 'rgba(34,197,94,0.12)' : 'color-mix(in srgb, var(--accent) 10%, transparent)', border: `1px solid ${copied ? 'rgba(34,197,94,0.25)' : 'color-mix(in srgb, var(--accent) 20%, transparent)'}`, color: copied ? '#4ade80' : 'color-mix(in srgb, var(--accent) 78%, white)' }}
             >
               {copied ? (
                 <>
@@ -341,7 +341,7 @@ function HelmGroupContent() {
                 key={scan.id}
                 // @ts-expect-error — href only passed to Link
                 href={isLinkable ? href : undefined}
-                className={`flex flex-col sm:grid items-center px-4 py-3 gap-2 transition-colors ${isLinkable ? 'hover:bg-violet-500/5 cursor-pointer group' : ''}`}
+                className={`flex flex-col sm:grid items-center px-4 py-3 gap-2 transition-colors ${isLinkable ? 'hover:bg-accent-500/5 cursor-pointer group' : ''}`}
                 style={{
                   gridTemplateColumns: '1fr 120px 1fr 60px 60px 60px 60px 110px',
                   borderBottom: i < scans.length - 1 ? '1px solid var(--border-subtle)' : 'none',
@@ -352,7 +352,7 @@ function HelmGroupContent() {
                 <span className="sm:hidden text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Image</span>
 
                 <span
-                  className={`text-sm font-mono truncate transition-colors ${isLinkable ? 'group-hover:text-violet-500' : ''}`}
+                  className={`text-sm font-mono truncate transition-colors ${isLinkable ? 'group-hover:text-accent' : ''}`}
                   style={{ color: 'var(--text-primary)' }}
                   title={scan.image_name}
                 >
@@ -396,7 +396,7 @@ export default function SharedHelmGroupPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
-        <span className="size-5 rounded-full border-2 border-violet-400/30 border-t-violet-400 animate-spin" />
+        <span className="size-5 rounded-full border-2 border-accent-400/30 border-t-accent-400 animate-spin" />
       </div>
     }>
       <HelmGroupContent />

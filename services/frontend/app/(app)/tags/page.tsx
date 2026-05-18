@@ -60,7 +60,7 @@ const COLORS = [
   '#10b981',
   '#3b82f6',
   '#ef4444',
-  '#8b5cf6',
+  'color-mix(in srgb, var(--accent) 88%, white)',
   '#14b8a6',
 ];
 const selectTriggerCls = heroSelectTriggerClassName;
@@ -652,7 +652,7 @@ export default function TagsPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

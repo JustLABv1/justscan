@@ -157,9 +157,9 @@ function ScannerHealthPanel() {
                   {
                     label: 'Oldest Java DB Snapshot',
                     value: formatDbAge(health.oldest_java_db_age_hours),
-                    color: '#a78bfa',
-                    bg: 'rgba(124,58,237,0.1)',
-                    border: 'rgba(124,58,237,0.18)',
+                    color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                    bg: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                    border: 'color-mix(in srgb, var(--accent) 18%, transparent)',
                   },
                 ].map((item) => (
                   <div
@@ -688,7 +688,7 @@ export function SettingsTab() {
             <Link
               href="/scan"
               target="_blank"
-              className="text-violet-500 hover:underline"
+              className="text-accent hover:underline"
               rel="noreferrer"
             >
               /scan
@@ -697,7 +697,7 @@ export function SettingsTab() {
           </p>
         </div>
         {publicScanEnabled === null ? (
-          <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+          <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
         ) : (
           <div
             className="flex items-center justify-between gap-4 p-4 rounded-xl"
@@ -707,9 +707,9 @@ export function SettingsTab() {
               <div
                 className="size-10 rounded-xl flex items-center justify-center shrink-0"
                 style={{
-                  background: publicScanEnabled ? 'rgba(124,58,237,0.15)' : 'rgba(113,113,122,0.1)',
+                  background: publicScanEnabled ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'rgba(113,113,122,0.1)',
                   border: publicScanEnabled
-                    ? '1px solid rgba(167,139,250,0.3)'
+                    ? '1px solid color-mix(in srgb, var(--accent) 30%, transparent)'
                     : '1px solid rgba(113,113,122,0.2)',
                 }}
               >
@@ -718,7 +718,7 @@ export function SettingsTab() {
                   height="18"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke={publicScanEnabled ? '#a78bfa' : '#71717a'}
+                  stroke={publicScanEnabled ? 'color-mix(in srgb, var(--accent) 78%, white)' : '#71717a'}
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -760,9 +760,9 @@ export function SettingsTab() {
                       color: '#f87171',
                     }
                   : {
-                      background: 'rgba(124,58,237,0.15)',
-                      border: '1px solid rgba(167,139,250,0.3)',
-                      color: '#a78bfa',
+                      background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+                      color: 'color-mix(in srgb, var(--accent) 78%, white)',
                     }
               }
               type="button"
@@ -979,7 +979,7 @@ export function OverviewTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
       </div>
     );
   }
@@ -1011,7 +1011,7 @@ export function OverviewTab() {
                     Compact view of the current system posture.
                   </p>
                 </div>
-                <Link href="/admin/scans" className="text-sm text-violet-500 hover:underline">
+                <Link href="/admin/scans" className="text-sm text-accent hover:underline">
                   Open scans
                 </Link>
               </div>
@@ -1020,7 +1020,7 @@ export function OverviewTab() {
                   {
                     label: 'Public scanning',
                     value: summary.publicScanEnabled ? 'Enabled' : 'Disabled',
-                    tone: summary.publicScanEnabled ? '#a78bfa' : '#f87171',
+                    tone: summary.publicScanEnabled ? 'color-mix(in srgb, var(--accent) 78%, white)' : '#f87171',
                     href: '/admin/settings',
                   },
                   {
@@ -1057,7 +1057,7 @@ export function OverviewTab() {
                   <Link
                     key={item.label}
                     href={item.href}
-                    className="rounded-xl px-4 py-3 transition-colors hover:bg-violet-500/5"
+                    className="rounded-xl px-4 py-3 transition-colors hover:bg-accent-500/5"
                     style={{
                       background: 'var(--row-hover)',
                       border: '1px solid var(--surface-border)',
@@ -1111,7 +1111,7 @@ export function OverviewTab() {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5"
+                    className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-accent-500/5"
                     style={{
                       background: 'var(--row-hover)',
                       border: '1px solid var(--surface-border)',
@@ -1121,7 +1121,7 @@ export function OverviewTab() {
                       <p className="text-zinc-700 dark:text-zinc-200">{link.label}</p>
                       <p className="text-xs text-zinc-500 mt-0.5">{link.meta}</p>
                     </div>
-                    <span className="text-violet-500">Open</span>
+                    <span className="text-accent">Open</span>
                   </Link>
                 ))}
               </div>
@@ -1139,7 +1139,7 @@ export function OverviewTab() {
                     Latest high-level admin and system activity.
                   </p>
                 </div>
-                <Link href="/admin/audit" className="text-sm text-violet-500 hover:underline">
+                <Link href="/admin/audit" className="text-sm text-accent hover:underline">
                   View all
                 </Link>
               </div>
@@ -1201,14 +1201,14 @@ export function OverviewTab() {
                     <Link
                       key={link.href}
                       href={link.href}
-                      className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5"
+                      className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-accent-500/5"
                       style={{
                         background: 'var(--row-hover)',
                         border: '1px solid var(--surface-border)',
                       }}
                     >
                       <span className="text-zinc-700 dark:text-zinc-200">{link.label}</span>
-                      <span className="text-violet-500">Open</span>
+                      <span className="text-accent">Open</span>
                     </Link>
                   ))}
                 </div>
@@ -1379,7 +1379,7 @@ export function UsersTab() {
   if (loading)
     return (
       <div className="flex justify-center py-16">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
       </div>
     );
 
@@ -1482,9 +1482,9 @@ export function UsersTab() {
                       style={
                         user.role === 'admin'
                           ? {
-                              color: '#a78bfa',
-                              background: 'rgba(124,58,237,0.1)',
-                              border: '1px solid rgba(124,58,237,0.2)',
+                              color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                              background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                              border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                             }
                           : {
                               color: '#a1a1aa',
@@ -1833,7 +1833,7 @@ export function TokensTab() {
   if (loading)
     return (
       <div className="flex justify-center py-16">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
       </div>
     );
 
@@ -2120,7 +2120,7 @@ export function AutoTagsTab() {
   if (loading)
     return (
       <div className="flex justify-center py-16">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
       </div>
     );
 
@@ -2530,7 +2530,7 @@ export function AuditLogTab() {
             <p>{total} total events</p>
             {loading ? (
               <span className="inline-flex items-center gap-2 text-xs text-zinc-400">
-                <span className="size-3.5 rounded-full border-2 border-zinc-300/60 border-t-violet-500 animate-spin" />
+                <span className="size-3.5 rounded-full border-2 border-zinc-300/60 border-t-accent-500 animate-spin" />
                 Refreshing…
               </span>
             ) : null}
@@ -2575,7 +2575,7 @@ export function AuditLogTab() {
 
       {loading && logs.length === 0 ? (
         <div className="surface-panel rounded-2xl py-16 flex justify-center">
-          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
         </div>
       ) : logs.length === 0 ? (
         <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
@@ -2637,9 +2637,9 @@ export function AuditLogTab() {
                         <span
                           className="text-xs font-mono font-medium px-2 py-0.5 rounded-md"
                           style={{
-                            background: 'rgba(124,58,237,0.1)',
-                            color: '#a78bfa',
-                            border: '1px solid rgba(124,58,237,0.2)',
+                            background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                            color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                            border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                           }}
                         >
                           {log.operation}
@@ -2661,7 +2661,7 @@ export function AuditLogTab() {
                         {canExpand ? (
                           <button
                             aria-expanded={isExpanded}
-                            className="mt-2 text-xs font-medium text-violet-500 transition-colors hover:text-violet-400"
+                            className="mt-2 text-xs font-medium text-accent transition-colors hover:text-accent"
                             onClick={() => toggleDetails(log.id)}
                             type="button"
                           >

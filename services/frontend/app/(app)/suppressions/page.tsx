@@ -40,9 +40,9 @@ const STATUS_STYLE: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(59,130,246,0.22)',
   },
   wont_fix: {
-    color: '#a78bfa',
-    background: 'rgba(124,58,237,0.1)',
-    border: '1px solid rgba(124,58,237,0.22)',
+    color: 'color-mix(in srgb, var(--accent) 78%, white)',
+    background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+    border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
   },
   false_positive: {
     color: '#34d399',
@@ -303,7 +303,7 @@ export default function SuppressionsPage() {
                   <Table.Cell colSpan={9}>
                     <div className="py-16 text-center">
                       <div className="flex justify-center">
-                        <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                        <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                       </div>
                     </div>
                   </Table.Cell>
@@ -334,7 +334,7 @@ export default function SuppressionsPage() {
                         href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="font-mono text-xs text-violet-500 dark:text-violet-400 hover:underline"
+                        className="font-mono text-xs text-accent dark:text-accent hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {s.vuln_id}
@@ -402,7 +402,7 @@ export default function SuppressionsPage() {
                           {canManageAccess(s) && (
                             <Button
                               onPress={() => openShareModal(s)}
-                              className="text-zinc-400 dark:text-zinc-600 hover:text-violet-500 dark:hover:text-violet-400 transition-colors p-1"
+                              className="text-zinc-400 dark:text-zinc-600 hover:text-accent dark:hover:text-accent transition-colors p-1"
                               aria-label="Manage access"
                               type="button"
                               isIconOnly
@@ -533,7 +533,7 @@ export default function SuppressionsPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

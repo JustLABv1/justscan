@@ -330,7 +330,7 @@ export default function PrintReportPage() {
         <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
         <button
           onClick={() => setShowAddFinding(f => !f)}
-          style={{ width: '100%', background: showAddFinding ? '#f3f4f6' : '#7c3aed', color: showAddFinding ? '#374151' : '#fff', border: 'none', borderRadius: '6px', padding: '6px 0', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}
+          style={{ width: '100%', background: showAddFinding ? '#f3f4f6' : 'var(--accent)', color: showAddFinding ? '#374151' : '#fff', border: 'none', borderRadius: '6px', padding: '6px 0', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}
         >
           {showAddFinding ? '✕ Cancel' : '+ Add Manual CVE'}
         </button>
@@ -379,7 +379,7 @@ export default function PrintReportPage() {
             <button
               onClick={submitManualFinding}
               disabled={!newFinding.vuln_id}
-              style={{ background: newFinding.vuln_id ? '#7c3aed' : '#e5e7eb', color: newFinding.vuln_id ? '#fff' : '#9ca3af', border: 'none', borderRadius: '6px', padding: '6px 0', fontWeight: 700, fontSize: '12px', cursor: newFinding.vuln_id ? 'pointer' : 'not-allowed', marginTop: '2px' }}
+              style={{ background: newFinding.vuln_id ? 'var(--accent)' : '#e5e7eb', color: newFinding.vuln_id ? '#fff' : '#9ca3af', border: 'none', borderRadius: '6px', padding: '6px 0', fontWeight: 700, fontSize: '12px', cursor: newFinding.vuln_id ? 'pointer' : 'not-allowed', marginTop: '2px' }}
             >
               Save Finding
             </button>
@@ -551,7 +551,7 @@ export default function PrintReportPage() {
               Manual Findings ({manualFindings.length})
             </h2>
             {manualFindings.map((f) => (
-              <div key={f.id} className="no-break" style={{ border: '1px solid #e5e7eb', borderLeft: '4px solid #7c3aed', borderRadius: '4px', padding: '12px 14px', marginBottom: '10px', position: 'relative' }}>
+              <div key={f.id} className="no-break" style={{ border: '1px solid #e5e7eb', borderLeft: '4px solid var(--accent)', borderRadius: '4px', padding: '12px 14px', marginBottom: '10px', position: 'relative' }}>
                 <button
                   className="print:hidden"
                   onClick={() => deleteManualFinding(f.id)}
@@ -561,7 +561,7 @@ export default function PrintReportPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                   <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '13px' }}>{f.vuln_id}</span>
                   <SeverityBadge severity={f.severity} />
-                  <span style={{ display: 'inline-block', background: '#ede9fe', color: '#6d28d9', fontSize: '0.75rem', fontWeight: 700, padding: '2px 6px', borderRadius: '3px', letterSpacing: '0.05em' }}>MANUAL</span>
+                  <span style={{ display: 'inline-block', background: 'color-mix(in srgb, var(--accent) 18%, white)', color: 'color-mix(in srgb, var(--accent) 82%, black)', fontSize: '0.75rem', fontWeight: 700, padding: '2px 6px', borderRadius: '3px', letterSpacing: '0.05em' }}>MANUAL</span>
                   {opts.showCvss && f.cvss_score > 0 && (
                     <span style={{ fontSize: '12px', color: '#555', fontWeight: 600 }}>CVSS {f.cvss_score.toFixed(1)}</span>
                   )}
@@ -575,7 +575,7 @@ export default function PrintReportPage() {
                   </p>
                 )}
                 {f.justification && (
-                  <div style={{ marginTop: '8px', background: '#ede9fe', border: '1px solid #c4b5fd', borderLeft: '4px solid #7c3aed', borderRadius: '4px', padding: '8px 10px' }}>
+                  <div style={{ marginTop: '8px', background: 'color-mix(in srgb, var(--accent) 18%, white)', border: '1px solid color-mix(in srgb, var(--accent) 62%, white)', borderLeft: '4px solid var(--accent)', borderRadius: '4px', padding: '8px 10px' }}>
                     <p style={{ margin: '0 0 3px', fontSize: '12px', fontWeight: 700, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Justification</p>
                     <p style={{ margin: 0, fontSize: '12px', color: '#4c1d95', lineHeight: 1.6 }}>{f.justification}</p>
                   </div>

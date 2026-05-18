@@ -89,9 +89,9 @@ function SourceBadge({ source }: { source?: string }) {
                 border: '1px solid rgba(245,158,11,0.22)',
               }
             : {
-                background: 'rgba(124,58,237,0.12)',
-                color: '#a78bfa',
-                border: '1px solid rgba(124,58,237,0.22)',
+                background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
               }
       }
       title={
@@ -309,7 +309,7 @@ export default function SharedScanPage() {
       >
         <div className="text-center space-y-3">
           <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>
-          <Link href="/" className="text-violet-600 dark:text-violet-400 text-sm hover:underline">
+          <Link href="/" className="text-accent dark:text-accent text-sm hover:underline">
             ← Back to home
           </Link>
         </div>
@@ -338,8 +338,8 @@ export default function SharedScanPage() {
           <div
             className="size-8 rounded-xl flex items-center justify-center"
             style={{
-              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-              boxShadow: '0 0 12px rgba(124,58,237,0.4)',
+              background: 'linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 82%, black) 100%)',
+              boxShadow: '0 0 12px color-mix(in srgb, var(--accent) 40%, transparent)',
             }}
           >
             <Logo size={16} className="text-white" />
@@ -386,9 +386,9 @@ export default function SharedScanPage() {
               <span
                 className="text-xs px-2 py-0.5 rounded-full font-medium"
                 style={{
-                  background: 'rgba(124,58,237,0.1)',
-                  color: '#a78bfa',
-                  border: '1px solid rgba(124,58,237,0.2)',
+                  background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                  color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                  border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                 }}
               >
                 Shared scan
@@ -446,7 +446,7 @@ export default function SharedScanPage() {
                   variant="primary"
                 >
                   {reScanning ? (
-                    <span className="size-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+                    <span className="size-3.5 border-2 border-accent-400/30 border-t-accent-400 rounded-full animate-spin" />
                   ) : (
                     <Refresh01Icon size={15} />
                   )}
@@ -709,7 +709,7 @@ export default function SharedScanPage() {
                                   setPage(1);
                                 }}
                                 className="inline-flex items-center gap-1 cursor-pointer select-none"
-                                style={{ color: active ? '#7c3aed' : 'var(--text-faint)' }}
+                                style={{ color: active ? 'var(--accent)' : 'var(--text-faint)' }}
                               >
                                 <span>{label}</span>
                                 {active && <span>{sortDir === 'desc' ? '↓' : '↑'}</span>}
@@ -725,10 +725,10 @@ export default function SharedScanPage() {
                               <div className="py-12 text-center">
                                 <div className="flex justify-center">
                                   <div
-                                    className="size-6 rounded-full border-2 border-t-violet-500 animate-spin"
+                                    className="size-6 rounded-full border-2 border-t-accent-500 animate-spin"
                                     style={{
                                       borderColor: 'var(--border-subtle)',
-                                      borderTopColor: '#7c3aed',
+                                      borderTopColor: 'var(--accent)',
                                     }}
                                   />
                                 </div>
@@ -757,7 +757,7 @@ export default function SharedScanPage() {
                                     <button
                                       type="button"
                                       onClick={() => openVulnerabilityDetails(v)}
-                                      className="font-mono text-xs text-violet-600 dark:text-violet-400 hover:underline transition-colors"
+                                      className="font-mono text-xs text-accent dark:text-accent hover:underline transition-colors"
                                     >
                                       {v.vuln_id}
                                     </button>

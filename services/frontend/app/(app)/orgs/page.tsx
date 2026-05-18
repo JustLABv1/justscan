@@ -273,9 +273,9 @@ export default function OrgsPage() {
                         <span
                           className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
                           style={{
-                            background: 'rgba(124,58,237,0.12)',
-                            border: '1px solid rgba(167,139,250,0.22)',
-                            color: '#a78bfa',
+                            background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                            border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
+                            color: 'color-mix(in srgb, var(--accent) 78%, white)',
                           }}
                         >
                           {invite.role}
@@ -333,15 +333,15 @@ export default function OrgsPage() {
 
       {loading ? (
         <div className="flex justify-center items-center h-48">
-          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
         </div>
       ) : orgs.length === 0 ? (
         <Card className="py-20 flex flex-col items-center gap-3">
           <div
             className="size-14 rounded-2xl flex items-center justify-center"
             style={{
-              background: 'rgba(124,58,237,0.12)',
-              border: '1px solid rgba(124,58,237,0.2)',
+              background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
             }}
           >
             <Avatar color="accent" size="lg" variant="soft">

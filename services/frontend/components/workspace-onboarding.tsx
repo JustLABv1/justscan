@@ -49,7 +49,7 @@ const steps = [
 
 function ProductIntroAnimation() {
   const items = [
-    { label: 'Scan', delay: 0, color: '#a78bfa' },
+    { label: 'Scan', delay: 0, color: 'color-mix(in srgb, var(--accent) 78%, white)' },
     { label: 'Registry', delay: 1.2, color: '#38bdf8' },
     { label: 'Watchlist', delay: 2.4, color: '#f59e0b' },
   ];
@@ -59,7 +59,7 @@ function ProductIntroAnimation() {
       <style>{`
         .workspace-onboarding-intro-animation {
           background:
-            radial-gradient(circle at 16% 16%, rgba(124,58,237,0.14) 0%, transparent 24%),
+            radial-gradient(circle at 16% 16%, color-mix(in srgb, var(--accent) 14%, transparent) 0%, transparent 24%),
             radial-gradient(circle at 84% 78%, rgba(56,189,248,0.14) 0%, transparent 24%),
             linear-gradient(145deg, rgba(255,255,255,0.68) 0%, rgba(255,255,255,0.24) 56%, rgba(186,230,253,0.12) 100%);
           border: 1px solid var(--surface-border);
@@ -68,7 +68,7 @@ function ProductIntroAnimation() {
 
         .dark .workspace-onboarding-intro-animation {
           background:
-            radial-gradient(circle at 14% 14%, rgba(124,58,237,0.24) 0%, transparent 24%),
+            radial-gradient(circle at 14% 14%, color-mix(in srgb, var(--accent) 24%, transparent) 0%, transparent 24%),
             radial-gradient(circle at 84% 78%, rgba(56,189,248,0.2) 0%, transparent 26%),
             linear-gradient(145deg, rgba(30,27,45,0.94) 0%, rgba(17,17,21,0.92) 58%, rgba(8,12,18,0.98) 100%);
           border: 1px solid rgba(255,255,255,0.08);
@@ -76,11 +76,11 @@ function ProductIntroAnimation() {
         }
 
         .workspace-onboarding-intro-track {
-          background: linear-gradient(90deg, transparent, rgba(124,58,237,0.2), rgba(124,58,237,0.28), transparent);
+          background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 20%, transparent), color-mix(in srgb, var(--accent) 28%, transparent), transparent);
         }
 
         .dark .workspace-onboarding-intro-track {
-          background: linear-gradient(90deg, transparent, rgba(167,139,250,0.28), rgba(56,189,248,0.28), transparent);
+          background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 28%, transparent), rgba(56,189,248,0.28), transparent);
         }
 
         .workspace-onboarding-intro-pill {
@@ -98,13 +98,13 @@ function ProductIntroAnimation() {
         }
 
         .workspace-onboarding-intro-panel {
-          background: rgba(124,58,237,0.06);
-          border: 1px solid rgba(167,139,250,0.24);
+          background: color-mix(in srgb, var(--accent) 6%, transparent);
+          border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
         }
 
         .dark .workspace-onboarding-intro-panel {
           background: rgba(91,33,182,0.16);
-          border: 1px solid rgba(167,139,250,0.22);
+          border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
         }
 
         .workspace-onboarding-intro-dashboard {
@@ -143,8 +143,8 @@ function ProductIntroAnimation() {
         }
 
         @keyframes onboarding-panel-pulse {
-          0%, 100% { box-shadow: 0 0 0 1px rgba(167,139,250,0.18), 0 14px 28px rgba(124,58,237,0.08); }
-          50% { box-shadow: 0 0 0 1px rgba(167,139,250,0.3), 0 22px 36px rgba(124,58,237,0.14); }
+          0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent), 0 14px 28px color-mix(in srgb, var(--accent) 8%, transparent); }
+          50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 22px 36px color-mix(in srgb, var(--accent) 14%, transparent); }
         }
 
         @keyframes onboarding-bar-glow {
@@ -155,13 +155,13 @@ function ProductIntroAnimation() {
 
       <div
         className="pointer-events-none absolute left-[-8%] top-[-16%] size-64 rounded-full"
-        style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 72%)' }}
+        style={{ background: 'radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent) 0%, transparent 72%)' }}
       />
       <div
         className="pointer-events-none absolute bottom-[-14%] right-[-7%] size-72 rounded-full"
         style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.16) 0%, transparent 72%)' }}
       />
-      <div className="pointer-events-none absolute inset-x-16 bottom-6 h-16 rounded-full bg-violet-500/10 blur-3xl dark:bg-violet-500/15" />
+      <div className="pointer-events-none absolute inset-x-16 bottom-6 h-16 rounded-full bg-accent-500/10 blur-3xl dark:bg-accent-500/15" />
 
       <div className="workspace-onboarding-intro-track absolute left-10 right-10 top-1/2 h-px -translate-y-1/2 md:left-16 md:right-16 xl:left-20 xl:right-20" />
 
@@ -189,17 +189,17 @@ function ProductIntroAnimation() {
       >
         <div
           className="absolute inset-x-3 top-4 h-px rounded-full"
-          style={{ background: 'rgba(167,139,250,0.36)' }}
+          style={{ background: 'color-mix(in srgb, var(--accent) 36%, transparent)' }}
         />
         <div
           className="absolute inset-x-3 bottom-4 h-px rounded-full"
-          style={{ background: 'rgba(167,139,250,0.36)' }}
+          style={{ background: 'color-mix(in srgb, var(--accent) 36%, transparent)' }}
         />
         <div
           className="absolute inset-x-0 top-1/2 h-0.5"
           style={{
-            background: 'linear-gradient(90deg, transparent, rgba(124,58,237,0.86), transparent)',
-            boxShadow: '0 0 14px rgba(124,58,237,0.5)',
+            background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 86%, transparent), transparent)',
+            boxShadow: '0 0 14px color-mix(in srgb, var(--accent) 50%, transparent)',
             animation: 'onboarding-scan-beam 2.2s ease-in-out infinite',
           }}
         />
@@ -207,7 +207,7 @@ function ProductIntroAnimation() {
 
       <div className="workspace-onboarding-intro-dashboard absolute right-4 top-5 z-20 w-[228px] rounded-[28px] p-4 md:right-8 md:top-6 md:w-[256px] xl:right-12 xl:top-8 xl:w-[286px]">
         <div className="flex items-center gap-2">
-          <DashboardSquare01Icon size={16} className="text-violet-500" />
+          <DashboardSquare01Icon size={16} className="text-accent" />
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-300">
             Live dashboard
           </p>
@@ -222,7 +222,7 @@ function ProductIntroAnimation() {
                   width: `${width}%`,
                   background:
                     index === 0
-                      ? 'linear-gradient(90deg, rgba(124,58,237,0.82), rgba(167,139,250,0.95))'
+                      ? 'linear-gradient(90deg, color-mix(in srgb, var(--accent) 82%, transparent), color-mix(in srgb, var(--accent) 95%, transparent))'
                       : index === 1
                         ? 'linear-gradient(90deg, rgba(56,189,248,0.82), rgba(125,211,252,0.92))'
                         : 'linear-gradient(90deg, rgba(245,158,11,0.82), rgba(251,191,36,0.92))',
@@ -287,10 +287,10 @@ export function WorkspaceOnboarding({
         className="rounded-2xl p-4 text-left transition-all duration-150"
         style={{
           background: selected
-            ? 'linear-gradient(145deg, rgba(124,58,237,0.18) 0%, rgba(124,58,237,0.08) 100%)'
+            ? 'linear-gradient(145deg, color-mix(in srgb, var(--accent) 18%, transparent) 0%, color-mix(in srgb, var(--accent) 8%, transparent) 100%)'
             : 'var(--row-hover)',
-          border: selected ? '1px solid rgba(167,139,250,0.38)' : '1px solid var(--surface-border)',
-          boxShadow: selected ? '0 12px 30px rgba(124,58,237,0.12)' : 'none',
+          border: selected ? '1px solid color-mix(in srgb, var(--accent) 38%, transparent)' : '1px solid var(--surface-border)',
+          boxShadow: selected ? '0 12px 30px color-mix(in srgb, var(--accent) 12%, transparent)' : 'none',
         }}
       >
         <div className="flex items-start justify-between gap-3">
@@ -301,10 +301,10 @@ export function WorkspaceOnboarding({
           <span
             className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
             style={{
-              background: selected ? 'rgba(124,58,237,0.2)' : 'rgba(148,163,184,0.12)',
-              color: selected ? '#a78bfa' : '#94a3b8',
+              background: selected ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'rgba(148,163,184,0.12)',
+              color: selected ? 'color-mix(in srgb, var(--accent) 78%, white)' : '#94a3b8',
               border: selected
-                ? '1px solid rgba(167,139,250,0.32)'
+                ? '1px solid color-mix(in srgb, var(--accent) 32%, transparent)'
                 : '1px solid rgba(148,163,184,0.18)',
             }}
           >
@@ -319,7 +319,7 @@ export function WorkspaceOnboarding({
     <div className="app-bg relative min-h-dvh overflow-hidden p-3 md:px-5 md:py-5">
       <div
         className="pointer-events-none absolute left-[-10%] top-[-8%] size-[32rem] rounded-full"
-        style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.16) 0%, transparent 72%)' }}
+        style={{ background: 'radial-gradient(circle, color-mix(in srgb, var(--accent) 16%, transparent) 0%, transparent 72%)' }}
       />
       <div
         className="pointer-events-none absolute bottom-[-18%] right-[-8%] size-[34rem] rounded-full"
@@ -335,8 +335,8 @@ export function WorkspaceOnboarding({
             <div
               className="flex size-11 items-center justify-center rounded-2xl"
               style={{
-                background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                boxShadow: '0 0 20px rgba(124,58,237,0.28), inset 0 1px 0 rgba(255,255,255,0.18)',
+                background: 'linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 82%, black) 100%)',
+                boxShadow: '0 0 20px color-mix(in srgb, var(--accent) 28%, transparent), inset 0 1px 0 rgba(255,255,255,0.18)',
               }}
             >
               <Logo size={20} className="text-white" />
@@ -369,7 +369,7 @@ export function WorkspaceOnboarding({
               {stepIndex === 0 ? (
                 <div className="space-y-8">
                   <div className="space-y-6">
-                    <p className="text-xs uppercase tracking-[0.2em] text-violet-500">
+                    <p className="text-xs uppercase tracking-[0.2em] text-accent">
                       {currentStep.eyebrow}
                     </p>
                     {displayName && (
@@ -405,7 +405,7 @@ export function WorkspaceOnboarding({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-violet-500">
+                  <p className="text-xs uppercase tracking-[0.2em] text-accent">
                     {currentStep.eyebrow}
                   </p>
                   <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-zinc-950 dark:text-white md:text-5xl md:leading-[1.02] xl:text-[3.7rem]">
@@ -452,8 +452,8 @@ export function WorkspaceOnboarding({
                     className="rounded-[28px] p-6 lg:col-span-2 xl:col-span-1"
                     style={{
                       background:
-                        'linear-gradient(145deg, rgba(124,58,237,0.12) 0%, rgba(14,165,233,0.08) 100%)',
-                      border: '1px solid rgba(124,58,237,0.18)',
+                        'linear-gradient(145deg, color-mix(in srgb, var(--accent) 12%, transparent) 0%, rgba(14,165,233,0.08) 100%)',
+                      border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)',
                     }}
                   >
                     <p className="text-lg font-semibold text-zinc-900 dark:text-white">
@@ -476,7 +476,7 @@ export function WorkspaceOnboarding({
                       border: '1px solid var(--surface-border)',
                     }}
                   >
-                    <DashboardSquare01Icon size={22} className="text-violet-500" />
+                    <DashboardSquare01Icon size={22} className="text-accent" />
                     <p className="mt-4 text-lg font-semibold text-zinc-900 dark:text-white">
                       Dashboards follow scope
                     </p>
@@ -638,7 +638,7 @@ export function WorkspaceOnboarding({
                   width: index === stepIndex ? 30 : 10,
                   background:
                     index <= stepIndex
-                      ? 'linear-gradient(90deg, #a78bfa, #7c3aed)'
+                      ? 'linear-gradient(90deg, color-mix(in srgb, var(--accent) 78%, white), var(--accent))'
                       : 'rgba(161,161,170,0.25)',
                 }}
               />

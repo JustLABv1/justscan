@@ -166,7 +166,7 @@ function StatusReportContent() {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: "var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif)", color: '#6b7280', gap: 12 }}>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <div style={{ width: 20, height: 20, border: '2px solid #e5e7eb', borderTopColor: '#7c3aed', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <div style={{ width: 20, height: 20, border: '2px solid #e5e7eb', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
         Loading report…
       </div>
     );
@@ -198,8 +198,8 @@ function StatusReportContent() {
           fontSize: 13,
           fontWeight: 700,
           color: '#fff',
-          background: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
-          boxShadow: '0 0 18px rgba(124,58,237,0.28)',
+          background: 'linear-gradient(135deg,var(--accent),color-mix(in srgb, var(--accent) 82%, black))',
+          boxShadow: '0 0 18px color-mix(in srgb, var(--accent) 28%, transparent)',
           cursor: 'pointer',
         }}
       >
@@ -208,7 +208,7 @@ function StatusReportContent() {
 
       <div style={{ width: '100%', maxWidth: '186mm', margin: '0 auto', padding: '28px 0 40px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: 20, marginBottom: 28 }}>
-          <div style={{ borderLeft: '5px solid #7c3aed', paddingLeft: 16 }}>
+          <div style={{ borderLeft: '5px solid var(--accent)', paddingLeft: 16 }}>
             <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>JustScan Status Report</h1>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6b7280' }}>{pageName}</p>
             <p style={{ margin: '8px 0 0', fontFamily: 'monospace', fontSize: 12, color: '#6b7280', wordBreak: 'break-all' }}>
@@ -217,7 +217,7 @@ function StatusReportContent() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-            <span style={{ background: '#ede9fe', color: '#6d28d9', fontWeight: 700, fontSize: 12, padding: '4px 12px', borderRadius: 999, border: '1px solid #c4b5fd' }}>
+            <span style={{ background: 'color-mix(in srgb, var(--accent) 18%, white)', color: 'color-mix(in srgb, var(--accent) 82%, black)', fontWeight: 700, fontSize: 12, padding: '4px 12px', borderRadius: 999, border: '1px solid color-mix(in srgb, var(--accent) 62%, white)' }}>
               {vulns.length.toLocaleString()} findings
             </span>
             <span style={{ fontSize: 12, color: '#6b7280' }}>Generated {formatDate(new Date().toISOString())}</span>
@@ -225,7 +225,7 @@ function StatusReportContent() {
         </div>
 
         <div style={{ marginBottom: 24 }}>
-          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #7c3aed', paddingBottom: 6, display: 'inline-block' }}>
+          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--accent)', paddingBottom: 6, display: 'inline-block' }}>
             Scan Snapshot
           </p>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, border: '1px solid #e5e7eb' }}>
@@ -252,13 +252,13 @@ function StatusReportContent() {
         </div>
 
         <div style={{ marginBottom: 24 }}>
-          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #7c3aed', paddingBottom: 6, display: 'inline-block' }}>
+          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--accent)', paddingBottom: 6, display: 'inline-block' }}>
             Applied Filters
           </p>
           {filterSummary.length > 0 ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {filterSummary.map(part => (
-                <span key={part} style={{ background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>{part}</span>
+                <span key={part} style={{ background: '#f5f3ff', color: 'color-mix(in srgb, var(--accent) 82%, black)', border: '1px solid #ddd6fe', borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>{part}</span>
               ))}
             </div>
           ) : (
@@ -267,7 +267,7 @@ function StatusReportContent() {
         </div>
 
         <div style={{ marginBottom: 28 }}>
-          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #7c3aed', paddingBottom: 6, display: 'inline-block' }}>
+          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--accent)', paddingBottom: 6, display: 'inline-block' }}>
             Severity Summary
           </p>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
@@ -293,7 +293,7 @@ function StatusReportContent() {
         </div>
 
         <div>
-          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #7c3aed', paddingBottom: 6, display: 'inline-block' }}>
+          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--accent)', paddingBottom: 6, display: 'inline-block' }}>
             Vulnerabilities
           </p>
           {vulns.length === 0 ? (
@@ -312,7 +312,7 @@ function StatusReportContent() {
                   <tr key={vuln.id} style={{ background: index % 2 === 0 ? '#fff' : '#fafafa' }}>
                     <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', verticalAlign: 'top' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <span style={{ color: '#7c3aed', fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>{vuln.vuln_id || '—'}</span>
+                        <span style={{ color: 'var(--accent)', fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>{vuln.vuln_id || '—'}</span>
                         {vuln.title && <span style={{ color: '#6b7280', fontSize: 12, lineHeight: 1.45 }}>{vuln.title}</span>}
                       </div>
                     </td>

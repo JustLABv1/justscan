@@ -167,7 +167,7 @@ function LastScanState({
       <div className="text-xs text-zinc-500">
         <Link
           href={`/scans/${item.last_scan_id}`}
-          className="hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
+          className="hover:text-accent dark:hover:text-accent transition-colors"
           title={fullDate(timestamp, {
             hourCycle,
             timeZone: item.timezone,
@@ -651,7 +651,7 @@ export default function WatchlistPage() {
                         <Table.Cell>
                           <div
                             className="flex items-center gap-1.5 text-xs"
-                            style={{ color: 'rgba(167,139,250,0.8)' }}
+                            style={{ color: 'color-mix(in srgb, var(--accent) 80%, transparent)' }}
                             title={item.schedule}
                           >
                             <Clock01Icon
@@ -716,7 +716,7 @@ export default function WatchlistPage() {
                                   label: triggering === item.id ? 'Scanning…' : 'Scan now',
                                   icon:
                                     triggering === item.id ? (
-                                      <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-400 rounded-full animate-spin" />
+                                      <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-400 rounded-full animate-spin" />
                                     ) : (
                                       <PlayIcon size={15} />
                                     ),
@@ -813,7 +813,7 @@ export default function WatchlistPage() {
                     className="bg-surface-secondary"
                     description="e.g. 0 2 * * * = daily at 2:00 in the selected timezone"
                   />
-                  <p className="text-xs font-medium" style={{ color: 'rgba(167,139,250,0.88)' }}>
+                  <p className="text-xs font-medium" style={{ color: 'color-mix(in srgb, var(--accent) 88%, transparent)' }}>
                     Preview: {schedulePreview}
                   </p>
                   <div className="space-y-2">
@@ -954,7 +954,7 @@ export default function WatchlistPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

@@ -64,7 +64,7 @@ export default function OIDCCallbackPage() {
 
         <div className="surface-panel rounded-2xl p-6 space-y-4 relative">
           <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-            style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.3),transparent)' }} />
+            style={{ background: 'linear-gradient(90deg,transparent,color-mix(in srgb, var(--accent) 30%, transparent),transparent)' }} />
           <div className="rounded-xl px-3.5 py-2.5 text-sm"
             style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.22)', color: '#f87171' }}>
             {error}
@@ -73,8 +73,8 @@ export default function OIDCCallbackPage() {
             href="/login"
             className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold text-white flex items-center justify-center transition-all hover:opacity-90"
             style={{
-              background: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
-              boxShadow: '0 0 24px rgba(124,58,237,0.45)',
+              background: 'linear-gradient(135deg,var(--accent),color-mix(in srgb, var(--accent) 82%, black))',
+              boxShadow: '0 0 24px color-mix(in srgb, var(--accent) 45%, transparent)',
             }}
           >
             Back to Login
@@ -87,7 +87,7 @@ export default function OIDCCallbackPage() {
   return (
     <div className="flex flex-col items-center justify-center gap-4">
       <Logo size={60} />
-      <div className="size-6 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
+      <div className="size-6 border-2 border-accent-500/30 border-t-accent-500 rounded-full animate-spin" />
       <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Completing sign-in…</p>
     </div>
   );

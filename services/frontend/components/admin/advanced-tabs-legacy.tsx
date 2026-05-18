@@ -124,9 +124,9 @@ const USER_AUTH_STYLE: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(59,130,246,0.2)',
   },
   oidc: {
-    color: '#a78bfa',
-    background: 'rgba(124,58,237,0.1)',
-    border: '1px solid rgba(124,58,237,0.2)',
+    color: 'color-mix(in srgb, var(--accent) 78%, white)',
+    background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+    border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
   },
 };
 
@@ -307,9 +307,9 @@ function ScannerHealthPanel() {
                   {
                     label: 'Oldest Java DB Snapshot',
                     value: formatDbAge(health.oldest_java_db_age_hours),
-                    color: '#a78bfa',
-                    bg: 'rgba(124,58,237,0.1)',
-                    border: 'rgba(124,58,237,0.18)',
+                    color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                    bg: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                    border: 'color-mix(in srgb, var(--accent) 18%, transparent)',
                   },
                 ].map((item) => (
                   <div
@@ -616,7 +616,7 @@ function SettingsTab() {
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Public Scanning</h2>
           <p className="text-sm text-zinc-500 mt-0.5">
             Allow unauthenticated users to scan Docker images at{' '}
-            <a href="/scan" target="_blank" className="text-violet-500 hover:underline">
+            <a href="/scan" target="_blank" className="text-accent hover:underline">
               /scan
             </a>
             . Rate limited per IP and managed below.
@@ -624,7 +624,7 @@ function SettingsTab() {
         </div>
 
         {publicScanEnabled === null ? (
-          <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+          <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
         ) : (
           <div
             className="flex items-center justify-between gap-4 p-4 rounded-xl"
@@ -634,9 +634,9 @@ function SettingsTab() {
               <div
                 className="size-10 rounded-xl flex items-center justify-center shrink-0"
                 style={{
-                  background: publicScanEnabled ? 'rgba(124,58,237,0.15)' : 'rgba(113,113,122,0.1)',
+                  background: publicScanEnabled ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'rgba(113,113,122,0.1)',
                   border: publicScanEnabled
-                    ? '1px solid rgba(167,139,250,0.3)'
+                    ? '1px solid color-mix(in srgb, var(--accent) 30%, transparent)'
                     : '1px solid rgba(113,113,122,0.2)',
                 }}
               >
@@ -645,7 +645,7 @@ function SettingsTab() {
                   height="18"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke={publicScanEnabled ? '#a78bfa' : '#71717a'}
+                  stroke={publicScanEnabled ? 'color-mix(in srgb, var(--accent) 78%, white)' : '#71717a'}
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -688,9 +688,9 @@ function SettingsTab() {
                       color: '#f87171',
                     }
                   : {
-                      background: 'rgba(124,58,237,0.15)',
-                      border: '1px solid rgba(167,139,250,0.3)',
-                      color: '#a78bfa',
+                      background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+                      color: 'color-mix(in srgb, var(--accent) 78%, white)',
                     }
               }
             >
@@ -1113,7 +1113,7 @@ function OverviewTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
       </div>
     );
   }
@@ -1146,7 +1146,7 @@ function OverviewTab() {
                     Compact view of the current system posture.
                   </p>
                 </div>
-                <Link href="/admin/scans" className="text-sm text-violet-500 hover:underline">
+                <Link href="/admin/scans" className="text-sm text-accent hover:underline">
                   Open scans
                 </Link>
               </div>
@@ -1156,7 +1156,7 @@ function OverviewTab() {
                   {
                     label: 'Public scanning',
                     value: summary.publicScanEnabled ? 'Enabled' : 'Disabled',
-                    tone: summary.publicScanEnabled ? '#a78bfa' : '#f87171',
+                    tone: summary.publicScanEnabled ? 'color-mix(in srgb, var(--accent) 78%, white)' : '#f87171',
                     href: '/admin/settings',
                   },
                   {
@@ -1193,7 +1193,7 @@ function OverviewTab() {
                   <Link
                     key={item.label}
                     href={item.href}
-                    className="rounded-xl px-4 py-3 transition-colors hover:bg-violet-500/5"
+                    className="rounded-xl px-4 py-3 transition-colors hover:bg-accent-500/5"
                     style={{
                       background: 'var(--row-hover)',
                       border: '1px solid var(--surface-border)',
@@ -1248,7 +1248,7 @@ function OverviewTab() {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5"
+                    className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-accent-500/5"
                     style={{
                       background: 'var(--row-hover)',
                       border: '1px solid var(--surface-border)',
@@ -1258,7 +1258,7 @@ function OverviewTab() {
                       <p className="text-zinc-700 dark:text-zinc-200">{link.label}</p>
                       <p className="text-xs text-zinc-500 mt-0.5">{link.meta}</p>
                     </div>
-                    <span className="text-violet-500">Open</span>
+                    <span className="text-accent">Open</span>
                   </Link>
                 ))}
               </div>
@@ -1276,7 +1276,7 @@ function OverviewTab() {
                     Latest high-level admin and system activity.
                   </p>
                 </div>
-                <Link href="/admin/audit" className="text-sm text-violet-500 hover:underline">
+                <Link href="/admin/audit" className="text-sm text-accent hover:underline">
                   View all
                 </Link>
               </div>
@@ -1339,14 +1339,14 @@ function OverviewTab() {
                     <Link
                       key={link.href}
                       href={link.href}
-                      className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-violet-500/5"
+                      className="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors hover:bg-accent-500/5"
                       style={{
                         background: 'var(--row-hover)',
                         border: '1px solid var(--surface-border)',
                       }}
                     >
                       <span className="text-zinc-700 dark:text-zinc-200">{link.label}</span>
-                      <span className="text-violet-500">Open</span>
+                      <span className="text-accent">Open</span>
                     </Link>
                   ))}
                 </div>
@@ -1514,7 +1514,7 @@ function UsersTab() {
   if (loading)
     return (
       <div className="flex justify-center py-16">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
       </div>
     );
 
@@ -1614,9 +1614,9 @@ function UsersTab() {
                       style={
                         u.role === 'admin'
                           ? {
-                              color: '#a78bfa',
-                              background: 'rgba(124,58,237,0.1)',
-                              border: '1px solid rgba(124,58,237,0.2)',
+                              color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                              background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                              border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                             }
                           : {
                               color: '#a1a1aa',
@@ -1965,7 +1965,7 @@ function TokensTab() {
   if (loading)
     return (
       <div className="flex justify-center py-16">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
       </div>
     );
 
@@ -2248,7 +2248,7 @@ function AutoTagsTab() {
   if (loading)
     return (
       <div className="flex justify-center py-16">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
       </div>
     );
 
@@ -2591,7 +2591,7 @@ function AuditLogTab() {
   if (loading)
     return (
       <div className="flex justify-center py-16">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
       </div>
     );
 
@@ -2733,9 +2733,9 @@ function AuditLogTab() {
                     <span
                       className="text-xs font-mono font-medium px-2 py-0.5 rounded-md"
                       style={{
-                        background: 'rgba(124,58,237,0.1)',
-                        color: '#a78bfa',
-                        border: '1px solid rgba(124,58,237,0.2)',
+                        background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                        color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                        border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                       }}
                     >
                       {l.operation}
@@ -3011,7 +3011,7 @@ export function NotificationsTab() {
   if (loading)
     return (
       <div className="flex justify-center py-16">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
       </div>
     );
 
@@ -3241,7 +3241,7 @@ export function NotificationsTab() {
 
                           {historyLoading ? (
                             <div className="flex justify-center py-4">
-                              <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                              <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                             </div>
                           ) : (deliveryHistory[ch.id] ?? []).length === 0 ? (
                             <p className="text-sm text-zinc-500">No deliveries recorded yet.</p>
@@ -3487,7 +3487,7 @@ export function NotificationsTab() {
                           type="checkbox"
                           checked={formSMTPTLS}
                           onChange={(e) => setFormSMTPTLS(e.target.checked)}
-                          className="size-4 rounded accent-violet-500"
+                          className="size-4 rounded accent-accent"
                         />
                         <span className="text-sm text-zinc-600 dark:text-zinc-300">
                           Use TLS (port 465)
@@ -3537,7 +3537,7 @@ export function NotificationsTab() {
                             type="checkbox"
                             checked={formEvents.includes(ev.value)}
                             onChange={() => toggleEvent(ev.value)}
-                            className="size-4 rounded accent-violet-500"
+                            className="size-4 rounded accent-accent"
                           />
                           <span className="text-sm text-zinc-600 dark:text-zinc-300">
                             {ev.label}
@@ -3569,7 +3569,7 @@ export function NotificationsTab() {
                               type="checkbox"
                               checked={formOrgIds.includes(org.id)}
                               onChange={() => toggleOrg(org.id)}
-                              className="size-4 rounded accent-violet-500"
+                              className="size-4 rounded accent-accent"
                             />
                             <span className="text-sm text-zinc-600 dark:text-zinc-300">
                               {org.name}
@@ -3637,7 +3637,7 @@ export function NotificationsTab() {
                       type="checkbox"
                       checked={formEnabled}
                       onChange={(e) => setFormEnabled(e.target.checked)}
-                      className="size-4 rounded accent-violet-500"
+                      className="size-4 rounded accent-accent"
                     />
                     <span className="text-sm text-zinc-600 dark:text-zinc-300">Enabled</span>
                   </label>
@@ -4038,7 +4038,7 @@ export function ScansTab() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
         </div>
       ) : groups.length === 0 ? (
         <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
@@ -4112,11 +4112,11 @@ export function ScansTab() {
                           className="flex items-center justify-center size-5 rounded-md transition-all duration-150"
                           style={{
                             color: 'var(--text-muted)',
-                            background: isOpen ? 'rgba(124,58,237,0.12)' : undefined,
+                            background: isOpen ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined,
                           }}
                         >
                           {isOpen ? (
-                            <ArrowDown01Icon size={13} className="text-violet-400" />
+                            <ArrowDown01Icon size={13} className="text-accent" />
                           ) : (
                             <ArrowRight01Icon size={13} />
                           )}
@@ -4130,9 +4130,9 @@ export function ScansTab() {
                           <span
                             className="text-xs px-1.5 py-0.5 rounded-md font-medium"
                             style={{
-                              background: 'rgba(124,58,237,0.1)',
-                              color: '#a78bfa',
-                              border: '1px solid rgba(167,139,250,0.2)',
+                              background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                              color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                              border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                             }}
                           >
                             {group.scans.length} scan{group.scans.length !== 1 ? 's' : ''}
@@ -4262,7 +4262,7 @@ export function ScansTab() {
                                           si > 0 ? '1px solid var(--row-divider)' : undefined,
                                       }}
                                       onMouseEnter={(e) =>
-                                        (e.currentTarget.style.background = 'rgba(124,58,237,0.06)')
+                                        (e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 6%, transparent)')
                                       }
                                       onMouseLeave={(e) =>
                                         (e.currentTarget.style.background = 'transparent')
@@ -4277,10 +4277,10 @@ export function ScansTab() {
                                           <span
                                             className="w-1 h-4 rounded-full shrink-0 opacity-0 group-hover/link:opacity-100 transition-opacity"
                                             style={{
-                                              background: 'linear-gradient(180deg,#a78bfa,#7c3aed)',
+                                              background: 'linear-gradient(180deg,color-mix(in srgb, var(--accent) 78%, white),var(--accent))',
                                             }}
                                           />
-                                          <span className="font-mono text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:text-violet-400 transition-colors">
+                                          <span className="font-mono text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:text-accent transition-colors">
                                             :{s.image_tag}
                                           </span>
                                         </Link>
@@ -4851,9 +4851,9 @@ export function InsightsTab() {
                 {
                   label: 'Avg Duration',
                   value: `${stats.avg_duration_ms.toFixed(0)} ms`,
-                  color: '#a78bfa',
-                  bg: 'rgba(124,58,237,0.1)',
-                  border: 'rgba(124,58,237,0.18)',
+                  color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                  bg: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                  border: 'color-mix(in srgb, var(--accent) 18%, transparent)',
                 },
                 {
                   label: 'p95 Duration',
@@ -4887,9 +4887,9 @@ export function InsightsTab() {
                     <span
                       className="font-mono text-xs px-1.5 py-0.5 rounded-md"
                       style={{
-                        background: 'rgba(124,58,237,0.1)',
-                        color: '#a78bfa',
-                        border: '1px solid rgba(124,58,237,0.2)',
+                        background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                        color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                        border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                       }}
                     >
                       {ep.method}
@@ -5014,7 +5014,7 @@ export function InsightsTab() {
           {/* Table */}
           {apiLoading ? (
             <div className="flex justify-center py-12">
-              <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+              <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
             </div>
           ) : apiLogs.length === 0 ? (
             <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
@@ -5072,9 +5072,9 @@ export function InsightsTab() {
                         <span
                           className="text-xs font-mono font-medium px-1.5 py-0.5 rounded-md"
                           style={{
-                            background: 'rgba(124,58,237,0.1)',
-                            color: '#a78bfa',
-                            border: '1px solid rgba(124,58,237,0.2)',
+                            background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                            color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                            border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                           }}
                         >
                           {log.method}
@@ -5130,9 +5130,9 @@ export function InsightsTab() {
                   {
                     label: 'Avg Duration',
                     value: `${xrayStats.avg_duration_ms.toFixed(0)} ms`,
-                    color: '#a78bfa',
-                    bg: 'rgba(124,58,237,0.1)',
-                    border: 'rgba(124,58,237,0.18)',
+                    color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                    bg: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                    border: 'color-mix(in srgb, var(--accent) 18%, transparent)',
                   },
                   {
                     label: 'p95 Duration',
@@ -5166,9 +5166,9 @@ export function InsightsTab() {
                         <span
                           className="font-mono text-xs px-1.5 py-0.5 rounded-md"
                           style={{
-                            background: 'rgba(124,58,237,0.1)',
-                            color: '#a78bfa',
-                            border: '1px solid rgba(124,58,237,0.2)',
+                            background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                            color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                            border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                           }}
                         >
                           {ep.method}
@@ -5289,7 +5289,7 @@ export function InsightsTab() {
           {/* Table */}
           {xrayLoading ? (
             <div className="flex justify-center py-12">
-              <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+              <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
             </div>
           ) : xrayLogs.length === 0 ? (
             <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
@@ -5351,7 +5351,7 @@ export function InsightsTab() {
                           {log.scan_id ? (
                             <Link
                               href={`/scans/${log.scan_id}`}
-                              className="text-violet-400 hover:underline font-mono"
+                              className="text-accent hover:underline font-mono"
                             >
                               {log.scan_id.slice(0, 8)}…
                             </Link>
@@ -5363,9 +5363,9 @@ export function InsightsTab() {
                           <span
                             className="text-xs font-mono font-medium px-1.5 py-0.5 rounded-md"
                             style={{
-                              background: 'rgba(124,58,237,0.1)',
-                              color: '#a78bfa',
-                              border: '1px solid rgba(124,58,237,0.2)',
+                              background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                              color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                              border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                             }}
                           >
                             {log.method}
@@ -5403,7 +5403,7 @@ export function InsightsTab() {
                               {canExpand ? (
                                 <button
                                   aria-expanded={isExpanded}
-                                  className="mt-2 text-xs font-medium text-violet-500 transition-colors hover:text-violet-400"
+                                  className="mt-2 text-xs font-medium text-accent transition-colors hover:text-accent"
                                   onClick={() => toggleXrayError(log.id)}
                                   type="button"
                                 >
@@ -5971,7 +5971,7 @@ export function IdentityProvidersTab() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
         </div>
       ) : providers.length === 0 ? (
         <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
@@ -7650,7 +7650,7 @@ export function GlobalRegistriesTab() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
         </div>
       ) : registries.length === 0 ? (
         <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3">
@@ -7705,9 +7705,9 @@ export function GlobalRegistriesTab() {
                       <span
                         className="text-xs font-medium px-2 py-0.5 rounded-full"
                         style={{
-                          color: '#a78bfa',
-                          background: 'rgba(124,58,237,0.1)',
-                          border: '1px solid rgba(124,58,237,0.2)',
+                          color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                          background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                          border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                         }}
                       >
                         Default

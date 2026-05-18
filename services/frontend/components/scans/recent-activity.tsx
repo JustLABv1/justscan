@@ -122,9 +122,9 @@ export function RecentActivityRangePicker({
           style={
             value == null
               ? {
-                  background: 'rgba(124,58,237,0.2)',
-                  color: '#a78bfa',
-                  border: '1px solid rgba(167,139,250,0.28)',
+                  background: 'color-mix(in srgb, var(--accent) 20%, transparent)',
+                  color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                  border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)',
                 }
               : {
                   background: 'var(--row-hover)',
@@ -152,9 +152,9 @@ export function RecentActivityRangePicker({
             style={
               isActive
                 ? {
-                    background: 'rgba(124,58,237,0.2)',
-                    color: '#a78bfa',
-                    border: '1px solid rgba(167,139,250,0.28)',
+                    background: 'color-mix(in srgb, var(--accent) 20%, transparent)',
+                    color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                    border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)',
                   }
                 : {
                     background: 'var(--row-hover)',

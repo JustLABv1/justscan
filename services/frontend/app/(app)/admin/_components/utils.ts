@@ -11,7 +11,7 @@ const USER_AUTH_LABEL: Record<string, string> = {
 
 export const USER_AUTH_STYLE: Record<string, CSSProperties> = {
   local: { color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' },
-  oidc: { color: '#a78bfa', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' },
+  oidc: { color: 'color-mix(in srgb, var(--accent) 78%, white)', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)' },
 };
 
 export function userAuthLabel(authType?: string) {

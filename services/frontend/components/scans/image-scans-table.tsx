@@ -681,7 +681,7 @@ export function ImageScansTable({
                               variant="ghost"
                             >
                               {isExpanded ? (
-                                <ArrowDown01Icon size={13} className="text-violet-400" />
+                                <ArrowDown01Icon size={13} className="text-accent" />
                               ) : (
                                 <ArrowRight01Icon size={13} />
                               )}
@@ -722,9 +722,9 @@ export function ImageScansTable({
                           <div
                             className="shrink-0 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
                             style={{
-                              background: 'rgba(124,58,237,0.1)',
-                              color: '#a78bfa',
-                              borderColor: 'rgba(167,139,250,0.2)',
+                              background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                              color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                              borderColor: 'color-mix(in srgb, var(--accent) 20%, transparent)',
                             }}
                           >
                             {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
@@ -740,7 +740,7 @@ export function ImageScansTable({
                       <Table.Cell onClick={(event) => event.stopPropagation()}>
                         <Link
                           href={`/scans/${img.latest_scan_id}`}
-                          className="inline-block max-w-[96px] truncate font-mono text-xs text-zinc-500 transition-colors hover:text-violet-400"
+                          className="inline-block max-w-[96px] truncate font-mono text-xs text-zinc-500 transition-colors hover:text-accent"
                           title="Open latest scan"
                         >
                           {img.latest_scan_id.slice(0, 8)}…

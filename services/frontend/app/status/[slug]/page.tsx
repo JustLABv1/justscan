@@ -77,7 +77,7 @@ const STATUS_COLOR: Record<string, string> = {
   stale: '#eab308',
   failed: '#ef4444',
   blocked_by_xray_policy: '#f59e0b',
-  pending: '#a78bfa',
+  pending: 'color-mix(in srgb, var(--accent) 78%, white)',
   running: '#60a5fa',
   cancelled: '#52525b',
   waiting_for_xray: '#f59e0b',
@@ -851,7 +851,7 @@ function ScanTimeline({
 
       {isLoading ? (
         <div className="flex h-10 items-center justify-center">
-          <div className="size-4 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500" />
+          <div className="size-4 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500" />
         </div>
       ) : (
         <div
@@ -882,7 +882,7 @@ function ScanTimeline({
                   onClick={() => onSelect(scan.scan_id)}
                   onMouseEnter={() => setHoveredId(scan.scan_id)}
                   onMouseLeave={() => setHoveredId(null)}
-                  className="relative flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60"
+                  className="relative flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
                 >
                   <span
                     className="relative flex size-4 shrink-0 items-center justify-center rounded-full transition-all duration-200"
@@ -1550,8 +1550,8 @@ function StatusItemVulnerabilityModal({
                                     }
                                     setPage(1);
                                   }}
-                                  className="inline-flex items-center gap-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60"
-                                  style={{ color: active ? '#7c3aed' : 'var(--text-faint)' }}
+                                  className="inline-flex items-center gap-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                                  style={{ color: active ? 'var(--accent)' : 'var(--text-faint)' }}
                                   aria-label={`Sort vulnerabilities by ${label}`}
                                 >
                                   <span>{label}</span>
@@ -1567,7 +1567,7 @@ function StatusItemVulnerabilityModal({
                               <Table.Cell colSpan={6}>
                                 <div className="py-12 text-center">
                                   <div className="flex justify-center">
-                                    <div className="size-6 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500" />
+                                    <div className="size-6 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500" />
                                   </div>
                                 </div>
                               </Table.Cell>
@@ -1601,7 +1601,7 @@ function StatusItemVulnerabilityModal({
                                         <button
                                           type="button"
                                           onClick={() => openVulnerabilityDetails(vuln)}
-                                          className="font-mono text-xs text-violet-600 transition-colors hover:underline dark:text-violet-400"
+                                          className="font-mono text-xs text-accent transition-colors hover:underline dark:text-accent"
                                         >
                                           {vuln.vuln_id}
                                         </button>
@@ -1753,7 +1753,7 @@ function StatusBoardRow({
   return (
     <button
       type="button"
-      className="w-full p-6 text-left transition-colors hover:bg-black/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60 sm:px-8"
+      className="w-full p-6 text-left transition-colors hover:bg-black/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60 sm:px-8"
       aria-label={`Open details for ${item.image_name}:${item.image_tag}`}
       onClick={() => onOpen(item)}
     >
@@ -1927,11 +1927,11 @@ export default function PublicStatusPage() {
         <div className="flex flex-col items-center gap-4">
           <div
             className="size-10 rounded-2xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}
+            style={{ background: 'linear-gradient(135deg,var(--accent),color-mix(in srgb, var(--accent) 82%, black))' }}
           >
             <Logo size={18} className="text-white" />
           </div>
-          <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-violet-500 animate-spin" />
+          <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
         </div>
       </div>
     );
@@ -1949,7 +1949,7 @@ export default function PublicStatusPage() {
         >
           <div
             className="size-11 rounded-2xl mx-auto flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}
+            style={{ background: 'linear-gradient(135deg,var(--accent),color-mix(in srgb, var(--accent) 82%, black))' }}
           >
             <Logo size={18} className="text-white" />
           </div>
@@ -1963,7 +1963,7 @@ export default function PublicStatusPage() {
             <Link
               href={`/login?returnUrl=/status/${slug}`}
               className="inline-flex px-4 py-2 rounded-xl text-sm font-semibold text-white"
-              style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}
+              style={{ background: 'linear-gradient(135deg,var(--accent),color-mix(in srgb, var(--accent) 82%, black))' }}
             >
               {getToken() ? 'Sign in again to continue' : 'Sign in to continue'}
             </Link>

@@ -471,7 +471,7 @@ export default function PublicHelmRunDetailPage() {
                         style={{
                           background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
                           border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
-                          color: '#c4b5fd',
+                          color: 'color-mix(in srgb, var(--accent) 62%, white)',
                         }}
                       >
                         {retrying ? 'Retrying…' : 'Retry failed'}

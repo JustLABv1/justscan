@@ -40,12 +40,12 @@ export function PageTabs({ items, currentPath }: PageTabsProps) {
                 className="rounded-xl px-4 py-3 text-left transition-all duration-150"
                 style={active
                   ? {
-                      background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
-                      boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.2), 0 2px 8px rgba(124,58,237,0.08)',
+                      background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 15%, transparent) 0%, color-mix(in srgb, var(--accent) 8%, black) 100%)',
+                      boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent), 0 2px 8px color-mix(in srgb, var(--accent) 8%, transparent)',
                     }
                   : { background: 'transparent' }}
               >
-                <p className={`text-sm font-semibold ${active ? 'text-violet-600 dark:text-violet-200' : 'text-zinc-700 dark:text-zinc-200'}`}>
+                <p className={`text-sm font-semibold ${active ? 'text-accent dark:text-accent' : 'text-zinc-700 dark:text-zinc-200'}`}>
                   {item.label}
                 </p>
                 {item.description ? <p className="mt-1 text-xs text-zinc-500">{item.description}</p> : null}

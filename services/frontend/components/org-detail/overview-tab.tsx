@@ -16,7 +16,7 @@ export function OrgOverviewTab({ riskScore, trend }: OrgOverviewTabProps) {
       <Card className="surface-card relative rounded-2xl p-5 space-y-3">
         <div
           className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-          style={{ background: 'linear-gradient(90deg,transparent,rgba(167,139,250,0.2),transparent)' }}
+          style={{ background: 'linear-gradient(90deg,transparent,color-mix(in srgb, var(--accent) 20%, transparent),transparent)' }}
         />
         <div className="flex items-center justify-between">
           <div>

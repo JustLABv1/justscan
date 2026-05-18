@@ -435,7 +435,7 @@ export default function OrgDetailPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
       </div>
     );
   }
@@ -515,15 +515,15 @@ export default function OrgDetailPage() {
                   active
                     ? {
                         background:
-                          'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%)',
+                          'linear-gradient(135deg, color-mix(in srgb, var(--accent) 15%, transparent) 0%, color-mix(in srgb, var(--accent) 8%, black) 100%)',
                         boxShadow:
-                          'inset 0 0 0 1px rgba(167,139,250,0.2), 0 2px 8px rgba(124,58,237,0.08)',
+                          'inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent), 0 2px 8px color-mix(in srgb, var(--accent) 8%, transparent)',
                       }
                     : { background: 'transparent' }
                 }
               >
                 <p
-                  className={`text-sm font-semibold ${active ? 'text-violet-600 dark:text-violet-200' : 'text-zinc-700 dark:text-zinc-200'}`}
+                  className={`text-sm font-semibold ${active ? 'text-accent dark:text-accent' : 'text-zinc-700 dark:text-zinc-200'}`}
                 >
                   {tab.label}
                 </p>
@@ -681,7 +681,7 @@ export default function OrgDetailPage() {
                               onChange={(e) =>
                                 setRuleField(idx, 'value', parseFloat(e.target.value))
                               }
-                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-violet-500/40"
+                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
                             />
                           </div>
                         )}
@@ -717,7 +717,7 @@ export default function OrgDetailPage() {
                                 onChange={(e) =>
                                   setRuleField(idx, 'value', parseInt(e.target.value))
                                 }
-                                className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-violet-500/40"
+                                className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
                               />
                             </div>
                           </div>
@@ -732,7 +732,7 @@ export default function OrgDetailPage() {
                               min={0}
                               value={rule.value ?? 0}
                               onChange={(e) => setRuleField(idx, 'value', parseInt(e.target.value))}
-                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-violet-500/40"
+                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
                             />
                           </div>
                         )}
@@ -769,7 +769,7 @@ export default function OrgDetailPage() {
                               value={rule.cve_id ?? ''}
                               onChange={(e) => setRuleField(idx, 'cve_id', e.target.value)}
                               placeholder="CVE-2024-12345"
-                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-violet-500/40"
+                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
                             />
                           </div>
                         )}
@@ -817,7 +817,7 @@ export default function OrgDetailPage() {
               <Modal.Body className="px-6 py-5 max-h-[60vh] overflow-y-auto">
                 {assignLoading ? (
                   <div className="flex justify-center py-8">
-                    <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-500 animate-spin" />
+                    <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                   </div>
                 ) : allScans.length === 0 ? (
                   <p className="text-sm text-zinc-500 text-center py-6">
@@ -836,7 +836,7 @@ export default function OrgDetailPage() {
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                       >
                         <div>
-                          <p className="font-mono text-sm text-zinc-700 dark:text-zinc-300 group-hover:text-violet-500 dark:group-hover:text-violet-400 transition-colors">
+                          <p className="font-mono text-sm text-zinc-700 dark:text-zinc-300 group-hover:text-accent dark:group-hover:text-accent transition-colors">
                             {scan.image_name}:{scan.image_tag}
                           </p>
                           <p className="text-xs text-zinc-500 mt-0.5">{timeAgo(scan.created_at)}</p>

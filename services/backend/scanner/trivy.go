@@ -191,6 +191,39 @@ func RunScan(ctx context.Context, imageName, imageTag string, envVars []string, 
 	return &output, extractVersion(stderr.String()), nil
 }
 
+func RunScanFromArchive(ctx context.Context, archivePath, platform, cacheDir string) (*TrivyOutput, string, error) {
+	trivyPath := config.Config.Scanner.TrivyPath
+	if trivyPath == "" {
+		trivyPath = "trivy"
+	}
+	scanCtx, cancel := context.WithTimeout(ctx, scanCommandTimeout())
+	defer cancel()
+
+	args := []string{"image", "--format", "json", "--exit-code", "0", "--no-progress"}
+	if cacheDir != "" {
+		args = append(args, "--cache-dir", cacheDir)
+	}
+	if platform != "" {
+		args = append(args, "--platform", platform)
+	}
+	args = append(args, "--input", archivePath)
+	cmd := exec.CommandContext(scanCtx, trivyPath, args...)
+	cmd.Env = os.Environ()
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, "", fmt.Errorf("trivy failed for uploaded archive: %w — stderr: %s", err, stderr.String())
+	}
+	var output TrivyOutput
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		return nil, "", fmt.Errorf("failed to parse trivy output: %w", err)
+	}
+	return &output, extractVersion(stderr.String()), nil
+}
+
 func RunScanWithRegistryRetry(ctx context.Context, db *bun.DB, scan *models.Scan, envVars []string, platform, cacheDir string) (*TrivyOutput, string, error) {
 	output, version, err := RunScan(ctx, scan.ImageName, scan.ImageTag, envVars, platform, cacheDir)
 	if err == nil || ctx.Err() != nil || !isRetriableTrivyRegistryError(err) {
@@ -332,6 +365,39 @@ func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []stri
 
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("trivy sbom failed: %w — stderr: %s", err, stderr.String())
+	}
+	var sbom TrivySBOMOutput
+	if err := json.Unmarshal(stdout.Bytes(), &sbom); err != nil {
+		return nil, fmt.Errorf("failed to parse trivy sbom output: %w", err)
+	}
+	return &sbom, nil
+}
+
+func RunSBOMScanFromArchive(ctx context.Context, archivePath, platform, cacheDir string) (*TrivySBOMOutput, error) {
+	trivyPath := config.Config.Scanner.TrivyPath
+	if trivyPath == "" {
+		trivyPath = "trivy"
+	}
+	scanCtx, cancel := context.WithTimeout(ctx, scanCommandTimeout())
+	defer cancel()
+
+	args := []string{"image", "--format", "cyclonedx", "--exit-code", "0", "--no-progress"}
+	if cacheDir != "" {
+		args = append(args, "--cache-dir", cacheDir)
+	}
+	if platform != "" {
+		args = append(args, "--platform", platform)
+	}
+	args = append(args, "--input", archivePath)
+	cmd := exec.CommandContext(scanCtx, trivyPath, args...)
+	cmd.Env = os.Environ()
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("trivy sbom failed for uploaded archive: %w — stderr: %s", err, stderr.String())
 	}
 	var sbom TrivySBOMOutput
 	if err := json.Unmarshal(stdout.Bytes(), &sbom); err != nil {

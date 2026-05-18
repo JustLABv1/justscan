@@ -1,4 +1,4 @@
-import { req } from './core';
+import { req, reqForm } from './core';
 import { appendScope } from './scope';
 import type {
     ResourceShare,
@@ -92,6 +92,24 @@ export const createScans = (
     org_id: orgId,
     xray_repository: xrayRepository,
   });
+
+export const createUploadedArchiveScan = (input: {
+  archive: File;
+  imageName?: string;
+  imageTag?: string;
+  platform?: string;
+  orgId?: string;
+  tagIds?: string[];
+}) => {
+  const formData = new FormData();
+  formData.append('archive', input.archive);
+  if (input.imageName) formData.append('image_name', input.imageName);
+  if (input.imageTag) formData.append('image_tag', input.imageTag);
+  if (input.platform) formData.append('platform', input.platform);
+  if (input.orgId) formData.append('org_id', input.orgId);
+  if (input.tagIds && input.tagIds.length > 0) formData.append('tag_ids', input.tagIds.join(','));
+  return reqForm<Scan>('POST', '/api/v1/scans/upload', formData);
+};
 
 export const deleteScan = (id: string) => req<{ result: string }>('DELETE', `/api/v1/scans/${id}`);
 

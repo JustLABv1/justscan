@@ -10,11 +10,40 @@ function authHeaders(): HeadersInit {
   };
 }
 
+function authHeadersWithoutContentType(): HeadersInit {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${API}${path}`, {
     method,
     headers: authHeaders(),
     body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (response.status === 401) {
+    clearToken();
+    clearUser();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    throw new Error('Session expired. Please log in again.');
+  }
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error ?? response.statusText);
+  }
+
+  return response.json();
+}
+
+export async function reqForm<T>(method: string, path: string, body: FormData): Promise<T> {
+  const response = await fetch(`${API}${path}`, {
+    method,
+    headers: authHeadersWithoutContentType(),
+    body,
   });
 
   if (response.status === 401) {

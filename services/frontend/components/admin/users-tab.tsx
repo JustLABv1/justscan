@@ -274,6 +274,7 @@ export function UsersTab() {
                 <Table.Column>Auth</Table.Column>
                 <Table.Column>Role</Table.Column>
                 <Table.Column>Status</Table.Column>
+                <Table.Column>Last Login</Table.Column>
                 <Table.Column>Created</Table.Column>
                 <Table.Column className="text-right">Actions</Table.Column>
               </Table.Header>
@@ -302,6 +303,18 @@ export function UsersTab() {
                       <Chip size="sm" color={user.disabled ? 'danger' : 'success'} variant="soft">
                         {user.disabled ? 'Disabled' : 'Active'}
                       </Chip>
+                    </Table.Cell>
+                    <Table.Cell className="text-xs text-zinc-500">
+                      {user.last_login_at ? (
+                        <div className="space-y-0.5">
+                          <p title={fullDate(user.last_login_at)}>{timeAgo(user.last_login_at)}</p>
+                          <p className="text-[11px] text-zinc-400">
+                            via {userAuthLabel(user.last_login_method || user.auth_type).toLowerCase()}
+                          </p>
+                        </div>
+                      ) : (
+                        <span className="text-zinc-400">Never</span>
+                      )}
                     </Table.Cell>
                     <Table.Cell className="text-xs text-zinc-500">
                       <span title={fullDate(user.created_at)}>{timeAgo(user.created_at)}</span>

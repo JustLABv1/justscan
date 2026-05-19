@@ -49,6 +49,12 @@ export interface Org {
   name: string;
   description: string;
   image_patterns?: string[];
+  is_active: boolean;
+  allow_image_scans: boolean;
+  allow_helm_scans: boolean;
+  allow_rescans: boolean;
+  allow_member_invites: boolean;
+  allow_org_tokens: boolean;
   created_by_id: string;
   created_at: string;
   updated_at: string;

@@ -71,8 +71,11 @@ func CreateOrgToken(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		_, _, userID, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
+		org, _, userID, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
 		if !ok {
+			return
+		}
+		if !authz.EnsureOrgActionAllowed(c, org, "org_token") {
 			return
 		}
 

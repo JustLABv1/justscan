@@ -33,6 +33,8 @@ import {
   ImageSummary,
   listArtifactoryRepositories,
   listOrgMembers,
+  listOrgs,
+  Org,
   listRegistriesWithCapabilities,
   listScanImages,
   listScans,
@@ -390,6 +392,7 @@ export default function ScansPage() {
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
   const [scanUsersById, setScanUsersById] = useState<Record<string, { displayName: string }>>({});
+  const [scopedOrgPolicy, setScopedOrgPolicy] = useState<Org | null>(null);
   const [capabilities, setCapabilities] = useState<ScannerCapabilities>(
     getDefaultScannerCapabilities()
   );
@@ -568,6 +571,30 @@ export default function ScansPage() {
     };
   }, [scopeKey, workScope]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadScopedOrgPolicy = async () => {
+      if (workScope.kind !== 'org') {
+        await Promise.resolve();
+        if (!cancelled) setScopedOrgPolicy(null);
+        return;
+      }
+      listOrgs()
+        .then((orgs) => {
+          if (cancelled) return;
+          setScopedOrgPolicy(orgs.find((org) => org.id === workScope.orgId) ?? null);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setScopedOrgPolicy(null);
+        });
+    };
+    void loadScopedOrgPolicy();
+    return () => {
+      cancelled = true;
+    };
+  }, [scopeKey, workScope]);
+
   const selectableRegistries = registries.filter(
     (registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy
   );
@@ -579,6 +606,18 @@ export default function ScansPage() {
   );
 
   const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
+  const orgFeatureBlockMessage =
+    workScope.kind !== 'org' || !scopedOrgPolicy
+      ? ''
+      : !scopedOrgPolicy.is_active
+        ? 'Organization is suspended. Scan creation is disabled.'
+        : scanSource === 'artifactory_xray'
+          ? scopedOrgPolicy.allow_helm_scans
+            ? ''
+            : 'Helm/Xray scans are disabled for this organization.'
+          : scopedOrgPolicy.allow_image_scans
+            ? ''
+            : 'Image scans are disabled for this organization.';
   const pendingAdditionalImages = parseImageReferences(additionalImageDraft);
   const primaryImage = imageName.trim()
     ? `${imageName.trim()}${imageTag.trim() ? `:${imageTag.trim()}` : ''}`
@@ -1009,6 +1048,10 @@ export default function ScansPage() {
         setCreateError(
           'No Artifactory Xray registry is configured yet. Add one before starting scans.'
         );
+        return;
+      }
+      if (orgFeatureBlockMessage) {
+        setCreateError(orgFeatureBlockMessage);
         return;
       }
 
@@ -1638,6 +1681,13 @@ export default function ScansPage() {
                   {createError ? (
                     <FormAlert description={createError} title="Scan creation failed" />
                   ) : null}
+                  {!createError && orgFeatureBlockMessage ? (
+                    <FormAlert
+                      title="Scan creation disabled"
+                      description={orgFeatureBlockMessage}
+                      status="warning"
+                    />
+                  ) : null}
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                     {SCAN_WIZARD_STEPS.map((step, index) => (
                       <ScanWizardStep
@@ -2132,7 +2182,7 @@ export default function ScansPage() {
                               key="wizard-submit-inline"
                               type="submit"
                               form="create-scan-form"
-                              isDisabled={creating || xrayOnlyWithoutRegistries}
+                              isDisabled={creating || xrayOnlyWithoutRegistries || Boolean(orgFeatureBlockMessage)}
                               variant="primary"
                               className="group relative inline-flex min-w-52 items-center justify-center gap-2 overflow-hidden px-7 py-3 text-base font-semibold shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0"
                             >
@@ -2187,7 +2237,7 @@ export default function ScansPage() {
                         key="wizard-submit"
                         type="submit"
                         form="create-scan-form"
-                        isDisabled={creating || xrayOnlyWithoutRegistries}
+                        isDisabled={creating || xrayOnlyWithoutRegistries || Boolean(orgFeatureBlockMessage)}
                         variant="primary"
                         className="inline-flex items-center gap-2"
                       >

@@ -121,6 +121,22 @@ func Auth(db *bun.DB) gin.HandlerFunc {
 				httperror.Unauthorized(context, "Org token has no associated organization", errors.New("org token missing org_id"))
 				return
 			}
+			org := &models.Org{}
+			if err := db.NewSelect().Model(org).
+				Column("id", "is_active", "allow_org_tokens").
+				Where("id = ?", *token.OrgID).
+				Scan(context); err != nil {
+				httperror.Unauthorized(context, "Organization for token was not found", err)
+				return
+			}
+			if !org.IsActive {
+				httperror.Unauthorized(context, "Organization is suspended", errors.New("organization is suspended"))
+				return
+			}
+			if !org.AllowOrgTokens {
+				httperror.Unauthorized(context, "Organization tokens are disabled for this organization", errors.New("organization tokens disabled"))
+				return
+			}
 
 			context.Set(AuthContextOrgTokenIDKey, token.ID)
 			context.Set(AuthContextOrgTokenOrgID, *token.OrgID)

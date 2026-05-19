@@ -118,6 +118,12 @@ func RequireOrgRole(c *gin.Context, db *bun.DB, orgID uuid.UUID, minRole string)
 		c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
 		return nil, nil, uuid.Nil, false, false
 	}
+
+	if !org.IsActive && !IsReadOnlyRequest(c.Request.Method) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "organization is suspended"})
+		return nil, nil, uuid.Nil, false, false
+	}
+
 	if isAdmin {
 		return org, nil, userID, true, true
 	}

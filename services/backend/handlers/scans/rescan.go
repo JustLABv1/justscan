@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"justscan-backend/functions/audit"
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -28,6 +29,16 @@ func ReScan(db *bun.DB) gin.HandlerFunc {
 		orig, userID, _, ok := LoadAuthorizedScanForWrite(c, db, scanID)
 		if !ok {
 			return
+		}
+		if orig.OwnerOrgID != nil {
+			org := &models.Org{}
+			if err := db.NewSelect().Model(org).Where("id = ?", *orig.OwnerOrgID).Scan(c.Request.Context()); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
+				return
+			}
+			if !authz.EnsureOrgActionAllowed(c, org, "rescan") {
+				return
+			}
 		}
 
 		registry, envVars, err := scanner.ResolveRegistryForScan(c.Request.Context(), db, orig.ImageName, orig.RegistryID)

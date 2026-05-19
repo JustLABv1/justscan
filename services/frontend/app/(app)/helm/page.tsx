@@ -17,6 +17,8 @@ import {
   HelmExtractResponse,
   HelmScanRunSummary,
   listHelmScanRuns,
+  listOrgs,
+  Org,
   listRegistriesWithCapabilities,
   listTags,
   RegistryWithHealth,
@@ -114,6 +116,7 @@ export default function HelmPage() {
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [scanning, setScanning] = useState(false);
   const [makePublic, setMakePublic] = useState(false);
+  const [scopedOrgPolicy, setScopedOrgPolicy] = useState<Org | null>(null);
 
   const [helmRuns, setHelmRuns] = useState<HelmScanRunSummary[]>([]);
   const [isAdmin] = useState(() => getTokenType() === 'admin');
@@ -161,6 +164,39 @@ export default function HelmPage() {
     });
   }, [loadHistory, loadTags, scopeKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadScopedOrgPolicy = async () => {
+      if (workScope.kind !== 'org') {
+        await Promise.resolve();
+        if (!cancelled) setScopedOrgPolicy(null);
+        return;
+      }
+      listOrgs()
+        .then((orgs) => {
+          if (cancelled) return;
+          setScopedOrgPolicy(orgs.find((org) => org.id === workScope.orgId) ?? null);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setScopedOrgPolicy(null);
+        });
+    };
+    void loadScopedOrgPolicy();
+    return () => {
+      cancelled = true;
+    };
+  }, [scopeKey, workScope]);
+
+  const orgFeatureBlockMessage =
+    workScope.kind !== 'org' || !scopedOrgPolicy
+      ? ''
+      : !scopedOrgPolicy.is_active
+        ? 'Organization is suspended. Helm scan creation is disabled.'
+        : scopedOrgPolicy.allow_helm_scans
+          ? ''
+          : 'Helm scans are disabled for this organization.';
+
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault();
     setExtractError('');
@@ -200,6 +236,10 @@ export default function HelmPage() {
     }
     if (xrayOnlyWithoutRegistries) {
       toast.error('No Artifactory Xray registry is configured yet.');
+      return;
+    }
+    if (orgFeatureBlockMessage) {
+      toast.error(orgFeatureBlockMessage);
       return;
     }
 
@@ -680,6 +720,15 @@ export default function HelmPage() {
             Override any extracted image reference before queueing. The selected rows will use the
             edited values.
           </p>
+          {orgFeatureBlockMessage ? (
+            <Alert status="warning">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>Scan creation disabled</Alert.Title>
+                <Alert.Description>{orgFeatureBlockMessage}</Alert.Description>
+              </Alert.Content>
+            </Alert>
+          ) : null}
 
           <div className="flex items-center justify-between gap-4 pt-1">
             <Button type="button" variant="secondary" onPress={() => setStep('input')}>
@@ -691,7 +740,7 @@ export default function HelmPage() {
               variant="primary"
               onPress={handleScan}
               isDisabled={
-                scanning || selected.size === 0 || hasInvalidSelection || xrayOnlyWithoutRegistries
+                scanning || selected.size === 0 || hasInvalidSelection || xrayOnlyWithoutRegistries || Boolean(orgFeatureBlockMessage)
               }
               isPending={scanning}
             >

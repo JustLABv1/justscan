@@ -304,9 +304,10 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
 interface OrgTokensTabProps {
   orgId: string;
   canManage: boolean;
+  featureDisabledReason?: string;
 }
 
-export function OrgTokensTab({ orgId, canManage }: OrgTokensTabProps) {
+export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTokensTabProps) {
   const [tokens, setTokens] = useState<APIToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [rawToken, setRawToken] = useState('');
@@ -405,12 +406,13 @@ export function OrgTokensTab({ orgId, canManage }: OrgTokensTabProps) {
           </p>
         </div>
         {canManage && (
-          <Button onClick={() => createModal.open()}>
+          <Button onClick={() => createModal.open()} isDisabled={Boolean(featureDisabledReason)}>
             <PlusSignIcon size={14} />
             New Token
           </Button>
         )}
       </div>
+      {featureDisabledReason && <p className="text-xs text-warning">{featureDisabledReason}</p>}
 
       <div className="surface-card rounded-2xl overflow-hidden">
         {loading ? (
@@ -436,7 +438,7 @@ export function OrgTokensTab({ orgId, canManage }: OrgTokensTabProps) {
               </p>
             </div>
             {canManage && (
-              <Button onClick={() => createModal.open()}>
+              <Button onClick={() => createModal.open()} isDisabled={Boolean(featureDisabledReason)}>
                 <PlusSignIcon size={14} />
                 Create first token
               </Button>
@@ -531,7 +533,7 @@ export function OrgTokensTab({ orgId, canManage }: OrgTokensTabProps) {
         )}
       </div>
 
-      {canManage && (
+      {canManage && !featureDisabledReason && (
         <CreateOrgTokenDialog state={createModal} orgId={orgId} onCreated={handleCreated} />
       )}
       <TokenRevealDialog state={revealModal} rawToken={rawToken} />

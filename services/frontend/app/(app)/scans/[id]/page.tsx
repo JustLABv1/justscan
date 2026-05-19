@@ -1427,6 +1427,18 @@ export default function ScanDetailPage() {
   const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
   const isPlatformAdmin = getTokenType() === 'admin' || currentUser?.role === 'admin';
   const orgNamesById = Object.fromEntries(allOrgs.map((org) => [org.id, org.name]));
+  const ownerOrgPolicy =
+    scan?.owner_type === 'org' && scan.owner_org_id
+      ? allOrgs.find((org) => org.id === scan.owner_org_id)
+      : null;
+  const rescanDisabledReason =
+    !ownerOrgPolicy
+      ? ''
+      : !ownerOrgPolicy.is_active
+        ? 'Organization is suspended. Re-scan is disabled.'
+        : ownerOrgPolicy.allow_rescans
+          ? ''
+          : 'Re-scans are disabled for this organization.';
   const manageableOrgIds = new Set(
     allOrgs
       .filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin')
@@ -1599,7 +1611,12 @@ export default function ScanDetailPage() {
       )}
       <Button
         className="btn-primary"
-        isDisabled={reScanning || scan.status === 'running' || scan.status === 'pending'}
+        isDisabled={
+          reScanning ||
+          scan.status === 'running' ||
+          scan.status === 'pending' ||
+          Boolean(rescanDisabledReason)
+        }
         onPress={handleReScan}
         variant="primary"
       >
@@ -1704,6 +1721,15 @@ export default function ScanDetailPage() {
         }
         actions={headerActions}
       />
+      {rescanDisabledReason ? (
+        <Alert status="warning">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Re-scan disabled</Alert.Title>
+            <Alert.Description>{rescanDisabledReason}</Alert.Description>
+          </Alert.Content>
+        </Alert>
+      ) : null}
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="sm" placement="center">

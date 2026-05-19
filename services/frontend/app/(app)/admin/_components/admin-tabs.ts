@@ -1,6 +1,6 @@
 export type AdminArea = 'home' | 'operations' | 'access' | 'integrations' | 'governance';
 
-export type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans' | 'insights' | 'identity' | 'registries' | 'ai';
+export type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans' | 'insights' | 'identity' | 'registries' | 'ai' | 'organizations';
 
 export interface AdminTabMeta {
   value: AdminTab;
@@ -31,6 +31,7 @@ export const ADMIN_TABS: AdminTabMeta[] = [
   { value: 'autotags', label: 'Auto Tags', href: '/admin/autotags', blurb: 'Rule-driven tag automation.', area: 'operations' },
   { value: 'insights', label: 'Observability', href: '/admin/insights', blurb: 'API and xRay telemetry.', area: 'home' },
   { value: 'users', label: 'Users', href: '/admin/users', blurb: 'System user access and state.', area: 'access' },
+  { value: 'organizations', label: 'Organizations', href: '/admin/orgs', blurb: 'Organization governance and controls.', area: 'access' },
   { value: 'tokens', label: 'Tokens', href: '/admin/tokens', blurb: 'Service credentials and access keys.', area: 'access' },
   { value: 'identity', label: 'Identity Providers', href: '/admin/identity', blurb: 'OIDC login and group mapping.', area: 'access' },
   { value: 'notifications', label: 'Notifications', href: '/admin/notifications', blurb: 'Outbound routing and deliveries.', area: 'integrations' },
@@ -70,7 +71,7 @@ export const ADMIN_AREAS: AdminAreaMeta[] = [
     label: 'Access',
     href: '/admin/users',
     description: 'Human and machine access control.',
-    tabs: [tabMeta('users'), tabMeta('tokens'), tabMeta('identity')],
+    tabs: [tabMeta('users'), tabMeta('organizations'), tabMeta('tokens'), tabMeta('identity')],
   },
   {
     value: 'integrations',

@@ -7,16 +7,16 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type { Scan, Vulnerability } from '@/lib/api';
 import {
-    getPublicScan,
-    getPublicVulnerabilityContextAnalysis,
-    getToken,
-    listPublicVulnerabilities,
-    reScanPublic,
+  getPublicScan,
+  getPublicVulnerabilityContextAnalysis,
+  getToken,
+  listPublicVulnerabilities,
+  reScanPublic,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Card, ListBox, Select, Table, useOverlayState } from '@heroui/react';
+import { Button, Card, ListBox, SearchField, Select, Table, useOverlayState } from '@heroui/react';
 import { ArrowLeft01Icon, CpuIcon, FileExportIcon, Refresh01Icon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -158,6 +158,8 @@ export default function PublicScanResultPage() {
   const [severityFilter, setSeverityFilter] = useState('');
   const [pkgInput, setPkgInput] = useState('');
   const [pkgFilter, setPkgFilter] = useState('');
+  const [cveInput, setCveInput] = useState('');
+  const [cveFilter, setCveFilter] = useState('');
   const [minCvss, setMinCvss] = useState(0);
   const [minCvssInput, setMinCvssInput] = useState('');
   const [hasFix, setHasFix] = useState(false);
@@ -171,6 +173,7 @@ export default function PublicScanResultPage() {
   const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     function fetchScan() {
@@ -214,6 +217,17 @@ export default function PublicScanResultPage() {
   }, [pkgInput]);
 
   useEffect(() => {
+    if (cveDebounceRef.current) clearTimeout(cveDebounceRef.current);
+    cveDebounceRef.current = setTimeout(() => {
+      setCveFilter(cveInput.trim().toUpperCase());
+      setPage(1);
+    }, 400);
+    return () => {
+      if (cveDebounceRef.current) clearTimeout(cveDebounceRef.current);
+    };
+  }, [cveInput]);
+
+  useEffect(() => {
     return deferEffect(() => {
       if (
         !scan ||
@@ -221,25 +235,53 @@ export default function PublicScanResultPage() {
       )
         return;
       setVulnLoading(true);
-      listPublicVulnerabilities(
-        id,
-        page,
-        LIMIT,
-        severityFilter || undefined,
-        pkgFilter || undefined,
-        hasFix || undefined,
-        minCvss || undefined,
-        sortBy,
-        sortDir
-      )
-        .then((res) => {
+      const loadVulnerabilities = async () => {
+        const normalizedCveFilter = cveFilter.trim().toUpperCase();
+        const baseArgs = [
+          severityFilter || undefined,
+          pkgFilter || undefined,
+          hasFix || undefined,
+          minCvss || undefined,
+          sortBy,
+          sortDir,
+        ] as const;
+
+        if (!normalizedCveFilter) {
+          const res = await listPublicVulnerabilities(id, page, LIMIT, ...baseArgs);
           setVulns(res.data ?? []);
           setVulnTotal(res.total);
-        })
+          return;
+        }
+
+        const PAGE_SIZE = 100;
+        const first = await listPublicVulnerabilities(id, 1, PAGE_SIZE, ...baseArgs);
+        const firstData = first.data ?? [];
+        const allRows: Vulnerability[] = [...firstData];
+        const total = Math.max(first.total ?? firstData.length, firstData.length);
+        const maxPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+        for (let currentPage = 2; currentPage <= maxPage; currentPage += 1) {
+          const next = await listPublicVulnerabilities(id, currentPage, PAGE_SIZE, ...baseArgs);
+          const nextData = next.data ?? [];
+          allRows.push(...nextData);
+          if (nextData.length < PAGE_SIZE) {
+            break;
+          }
+        }
+
+        const filtered = allRows.filter((row) =>
+          (row.vuln_id ?? '').toUpperCase().includes(normalizedCveFilter)
+        );
+        const start = (page - 1) * LIMIT;
+        setVulnTotal(filtered.length);
+        setVulns(filtered.slice(start, start + LIMIT));
+      };
+
+      loadVulnerabilities()
         .catch(() => {})
         .finally(() => setVulnLoading(false));
     });
-  }, [id, scan, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir]);
+  }, [id, scan, page, severityFilter, pkgFilter, cveFilter, minCvss, hasFix, sortBy, sortDir]);
 
   async function handleRescan() {
     setReScanning(true);
@@ -321,28 +363,6 @@ export default function PublicScanResultPage() {
         )}
 
         <ScanDetailHeader
-          navigation={
-            <>
-              <Button
-                className="btn-secondary"
-                onPress={() => router.push('/public/scan/image')}
-                variant="secondary"
-              >
-                <ArrowLeft01Icon size={15} />
-                New scan
-              </Button>
-              {scan?.helm_scan_run_id && (
-                <Button
-                  className="btn-secondary"
-                  onPress={() => router.push(`/public/scan/helm/runs/${scan.helm_scan_run_id}`)}
-                  variant="secondary"
-                >
-                  <ArrowLeft01Icon size={15} />
-                  Back to Helm run
-                </Button>
-              )}
-            </>
-          }
           title={imageName}
           subtitle={scan?.image_digest ? <span>{scan.image_digest}</span> : undefined}
           meta={
@@ -362,6 +382,24 @@ export default function PublicScanResultPage() {
               role="toolbar"
               aria-label="Public scan actions"
             >
+              <Button
+                className="btn-secondary"
+                onPress={() => router.push('/public/scan/image')}
+                variant="secondary"
+              >
+                <ArrowLeft01Icon size={15} />
+                New scan
+              </Button>
+              {scan?.helm_scan_run_id && (
+                <Button
+                  className="btn-secondary"
+                  onPress={() => router.push(`/public/scan/helm/runs/${scan.helm_scan_run_id}`)}
+                  variant="secondary"
+                >
+                  <ArrowLeft01Icon size={15} />
+                  Back to Helm run
+                </Button>
+              )}
               {(scan?.status === 'completed' || isBlockedByXrayPolicy) && (
                 <Button
                   className="btn-secondary"
@@ -516,51 +554,6 @@ export default function PublicScanResultPage() {
               ))}
             </div>
 
-            {(scan.trivy_version ||
-              scan.grype_version ||
-              scan.trivy_vuln_db_updated_at ||
-              scan.trivy_java_db_updated_at) && (
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                <div
-                  className="rounded-2xl border p-4"
-                  style={{
-                    background: 'var(--surface-bg)',
-                    border: '1px solid var(--surface-border)',
-                  }}
-                >
-                  <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-                    Scanner
-                  </p>
-                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                    Trivy {scan.trivy_version || 'unknown'}
-                  </p>
-                  {scan.grype_version && (
-                    <p
-                      className="text-sm font-medium mt-1"
-                      style={{ color: 'var(--text-primary)' }}
-                    >
-                      Grype {scan.grype_version}
-                    </p>
-                  )}
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>
-                    {scan.completed_at
-                      ? `DB snapshot captured ${timeAgo(scan.completed_at)}`
-                      : 'DB snapshot captured when this scan completed'}
-                  </p>
-                </div>
-                <ScannerDatabaseCard
-                  label="Vulnerability DB"
-                  updatedAt={scan.trivy_vuln_db_updated_at}
-                  downloadedAt={scan.trivy_vuln_db_downloaded_at}
-                />
-                <ScannerDatabaseCard
-                  label="Java DB"
-                  updatedAt={scan.trivy_java_db_updated_at}
-                  downloadedAt={scan.trivy_java_db_downloaded_at}
-                />
-              </div>
-            )}
-
             {/* Vulnerabilities */}
             <div className="space-y-3">
               <div className="space-y-3">
@@ -576,39 +569,95 @@ export default function PublicScanResultPage() {
                   )}
                 </h2>
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                  <Select
-                    value={severityFilter || '__all__'}
-                    onChange={(value) => {
-                      setSeverityFilter(String(value === '__all__' ? '' : (value ?? '')));
-                      setPage(1);
-                    }}
-                  >
-                    <Select.Trigger className={selectTriggerCls}>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        <ListBox.Item id="__all__">All Severities</ListBox.Item>
-                        <ListBox.Item id="CRITICAL">Critical</ListBox.Item>
-                        <ListBox.Item id="HIGH">High</ListBox.Item>
-                        <ListBox.Item id="MEDIUM">Medium</ListBox.Item>
-                        <ListBox.Item id="LOW">Low</ListBox.Item>
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                  <div className="flex w-full flex-col gap-2 md:flex-row md:items-end xl:w-auto xl:justify-end">
-                    <FormField
-                      hideLabel
-                      label="Filter by package"
-                      type="text"
-                      value={pkgInput}
-                      onChange={(e) => setPkgInput(e.target.value)}
-                      placeholder="Package..."
-                      className="min-w-[220px] flex-1 md:min-w-[280px] xl:w-[320px] xl:flex-none"
-                      containerClassName="min-w-[220px] flex-1 md:min-w-[280px] xl:w-[320px] xl:flex-none"
-                    />
-                    <div className="flex shrink-0 flex-col gap-1.5">
+                  <div className="w-full space-y-2">
+                    <Select
+                      value={severityFilter || '__all__'}
+                      onChange={(value) => {
+                        setSeverityFilter(String(value === '__all__' ? '' : (value ?? '')));
+                        setPage(1);
+                      }}
+                    >
+                      <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__all__">All Severities</ListBox.Item>
+                          <ListBox.Item id="CRITICAL">Critical</ListBox.Item>
+                          <ListBox.Item id="HIGH">High</ListBox.Item>
+                          <ListBox.Item id="MEDIUM">Medium</ListBox.Item>
+                          <ListBox.Item id="LOW">Low</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_150px_150px_120px_120px]">
+                      <SearchField name="public-scan-vuln-search" className="w-full">
+                        <SearchField.Group className="h-11">
+                          <SearchField.SearchIcon />
+                          <SearchField.Input
+                            placeholder="Search package..."
+                            value={pkgInput}
+                            onChange={(event) => setPkgInput(event.target.value)}
+                          />
+                          <SearchField.ClearButton />
+                        </SearchField.Group>
+                      </SearchField>
+                      <SearchField name="public-scan-vuln-cve-search" className="w-full">
+                        <SearchField.Group className="h-11">
+                          <SearchField.SearchIcon />
+                          <SearchField.Input
+                            placeholder="Search CVE (e.g. CVE-2026-31789)..."
+                            value={cveInput}
+                            onChange={(event) => setCveInput(event.target.value)}
+                          />
+                          <SearchField.ClearButton />
+                        </SearchField.Group>
+                      </SearchField>
+                      <Select
+                        aria-label="Sort vulnerabilities by"
+                        value={sortBy}
+                        className="w-full"
+                        onChange={(value) => {
+                          setSortBy(String(value ?? 'severity'));
+                          setPage(1);
+                        }}
+                      >
+                        <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="vuln_id">CVE ID</ListBox.Item>
+                            <ListBox.Item id="pkg_name">Package</ListBox.Item>
+                            <ListBox.Item id="severity">Severity</ListBox.Item>
+                            <ListBox.Item id="cvss_score">CVSS</ListBox.Item>
+                            <ListBox.Item id="installed_version">Installed</ListBox.Item>
+                            <ListBox.Item id="fixed_version">Fixed In</ListBox.Item>
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                      <Select
+                        aria-label="Sort direction"
+                        value={sortDir}
+                        className="w-full"
+                        onChange={(value) => {
+                          setSortDir(value === 'desc' ? 'desc' : 'asc');
+                          setPage(1);
+                        }}
+                      >
+                        <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="asc">Ascending</ListBox.Item>
+                            <ListBox.Item id="desc">Descending</ListBox.Item>
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
                       <FormField
                         hideLabel
                         label="Minimum CVSS"
@@ -623,21 +672,21 @@ export default function PublicScanResultPage() {
                           setMinCvss(isNaN(v) ? 0 : v);
                           setPage(1);
                         }}
-                        placeholder="0"
-                        className="w-full min-w-[5.5rem] md:w-24"
-                        containerClassName="w-full min-w-[5.5rem] md:w-24"
+                        placeholder="Min CVSS"
+                        className="w-full h-11"
+                        containerClassName="w-full"
                       />
+                      <Button
+                        onPress={() => {
+                          setHasFix(!hasFix);
+                          setPage(1);
+                        }}
+                        className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full h-11`}
+                        variant={hasFix ? 'primary' : 'secondary'}
+                      >
+                        Has Fix
+                      </Button>
                     </div>
-                    <Button
-                      onPress={() => {
-                        setHasFix(!hasFix);
-                        setPage(1);
-                      }}
-                      className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full shrink-0 md:w-auto`}
-                      variant={hasFix ? 'primary' : 'secondary'}
-                    >
-                      Has Fix
-                    </Button>
                   </div>
                 </div>
               </div>
@@ -693,7 +742,7 @@ export default function PublicScanResultPage() {
                       </Table.Header>
                       <Table.Body>
                         {vulnLoading ? (
-                          <Table.Row id="loading">
+                          <Table.Row key="loading" id="loading">
                             <Table.Cell colSpan={6}>
                               <div className="py-12 text-center">
                                 <div className="flex justify-center">
@@ -709,7 +758,7 @@ export default function PublicScanResultPage() {
                             </Table.Cell>
                           </Table.Row>
                         ) : vulns.length === 0 ? (
-                          <Table.Row id="empty">
+                          <Table.Row key="empty" id="empty">
                             <Table.Cell colSpan={6}>
                               <div
                                 className="py-12 text-center text-sm"

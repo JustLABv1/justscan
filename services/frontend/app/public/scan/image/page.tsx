@@ -1,5 +1,6 @@
 'use client';
 import { Logo } from '@/components/logo';
+import { PublicNavbar } from '@/components/public/public-navbar';
 import {
   createPublicScan,
   getPublicScan,
@@ -16,11 +17,17 @@ import {
   timeAgo,
   updatePublicHistoryEntry,
 } from '@/lib/publicScanHistory';
-import { PublicNavbar } from '@/components/public/public-navbar';
-import { Button, Chip, Input, ToggleButton, ToggleButtonGroup, type Key } from '@heroui/react';
+import {
+  Button,
+  Card,
+  Chip,
+  Input,
+  ToggleButton,
+  ToggleButtonGroup,
+  type Key,
+} from '@heroui/react';
 import { IrisScanIcon, PackageIcon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -82,6 +89,7 @@ const PLATFORMS = [
   { value: 'linux/arm/v7', label: 'linux/arm/v7' },
   { value: 'windows/amd64', label: 'windows/amd64' },
 ];
+const AUTO_PLATFORM_KEY = '__auto_platform__';
 
 function statusStyle(status: string): { color: string; dot: string } {
   switch (status) {
@@ -105,87 +113,59 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
       ? `${window.location.origin}/public/scan/${record.id}`
       : `/public/scan/${record.id}`;
   return (
-    <div
-      role="link"
+    <Card
       tabIndex={0}
       onClick={() => router.push(`/public/scan/${record.id}`)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') router.push(`/public/scan/${record.id}`);
-      }}
-      className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors group cursor-pointer"
-      style={{ background: 'var(--row-hover)' }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-bg)')}
-      onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--row-hover)')}
+      className="hover:bg-surface-secondary"
     >
-      <div className="flex-1 min-w-0">
-        <p
-          className="font-mono text-sm font-medium truncate"
-          style={{ color: 'var(--text-primary)' }}
-        >
+      <div className="flex items-center justify-between">
+        <p className="font-mono text-sm font-medium truncate">
           {record.image_name}:{record.image_tag}
         </p>
         {record.platform && (
-          <span
-            className="text-xs px-1.5 py-0.5 rounded font-mono mt-0.5 inline-block"
-            style={{
-              background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
-              color: 'var(--accent)',
-              border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
-            }}
-          >
+          <Chip variant="soft" color="accent">
             {record.platform}
-          </span>
+          </Chip>
         )}
       </div>
+      <Card.Footer className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-1.5 text-xs font-medium shrink-0 ${st.color}`}>
+            <span
+              className={`size-1.5 rounded-full ${st.dot} ${isActive ? 'animate-pulse' : ''}`}
+            />
+            {record.status}
+          </div>
 
-      <div className={`flex items-center gap-1.5 text-xs font-medium shrink-0 ${st.color}`}>
-        <span className={`size-1.5 rounded-full ${st.dot} ${isActive ? 'animate-pulse' : ''}`} />
-        {record.status}
-      </div>
-
-      {record.status === 'completed' && (
-        <div className="hidden sm:flex items-center gap-2 shrink-0 text-xs font-mono">
-          {record.critical_count > 0 && (
-            <span className="text-red-500 dark:text-red-400">{record.critical_count}C</span>
+          {record.status === 'completed' && (
+            <div className="hidden sm:flex items-center gap-2 shrink-0 text-xs font-mono">
+              {record.critical_count > 0 && (
+                <span className="text-red-500 dark:text-red-400">{record.critical_count}C</span>
+              )}
+              {record.high_count > 0 && (
+                <span className="text-orange-500 dark:text-orange-400">{record.high_count}H</span>
+              )}
+              {record.medium_count > 0 && (
+                <span className="text-yellow-600 dark:text-yellow-400">{record.medium_count}M</span>
+              )}
+              {record.low_count > 0 && (
+                <span className="text-blue-500 dark:text-blue-400">{record.low_count}L</span>
+              )}
+              {record.critical_count === 0 &&
+                record.high_count === 0 &&
+                record.medium_count === 0 &&
+                record.low_count === 0 && (
+                  <span className="text-emerald-600 dark:text-emerald-400">Clean</span>
+                )}
+            </div>
           )}
-          {record.high_count > 0 && (
-            <span className="text-orange-500 dark:text-orange-400">{record.high_count}H</span>
-          )}
-          {record.medium_count > 0 && (
-            <span className="text-yellow-600 dark:text-yellow-400">{record.medium_count}M</span>
-          )}
-          {record.low_count > 0 && (
-            <span className="text-blue-500 dark:text-blue-400">{record.low_count}L</span>
-          )}
-          {record.critical_count === 0 &&
-            record.high_count === 0 &&
-            record.medium_count === 0 &&
-            record.low_count === 0 && (
-              <span className="text-emerald-600 dark:text-emerald-400">Clean</span>
-            )}
         </div>
-      )}
 
-      <span className="text-xs shrink-0" style={{ color: 'var(--text-faint)' }}>
-        {timeAgo(record.created_at)}
-      </span>
-      <CopyButton url={scanUrl} />
-
-      <svg
-        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ color: 'var(--text-muted)' }}
-      >
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
-    </div>
+        <span className="text-xs shrink-0" style={{ color: 'var(--text-faint)' }}>
+          {timeAgo(record.created_at)}
+        </span>
+      </Card.Footer>
+    </Card>
   );
 }
 
@@ -287,7 +267,7 @@ export default function PublicImageScanPage() {
   const disabledMessage =
     settings?.disabled_reason ||
     'The administrator has disabled this feature. Please check back later.';
-  const selectedPlatformKey = platform || '';
+  const selectedPlatformKey = platform || AUTO_PLATFORM_KEY;
 
   return (
     <div
@@ -351,7 +331,11 @@ export default function PublicImageScanPage() {
         isDark={isDark}
         isLoggedIn={isLoggedIn}
         onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
-        alternateAction={{ href: '/public/scan/helm', label: 'Scan Helm', icon: <PackageIcon size={16} /> }}
+        alternateAction={{
+          href: '/public/scan/helm',
+          label: 'Scan Helm',
+          icon: <PackageIcon size={16} />,
+        }}
       />
 
       <main className="relative z-10 flex-1 flex flex-col items-center px-4 py-12">
@@ -444,13 +428,18 @@ export default function PublicImageScanPage() {
                   disallowEmptySelection
                   onSelectionChange={(keys) => {
                     const key = Array.from(keys)[0] as Key | undefined;
-                    setPlatform(key ? String(key) : '');
+                    const next = key ? String(key) : AUTO_PLATFORM_KEY;
+                    setPlatform(next === AUTO_PLATFORM_KEY ? '' : next);
                   }}
                   size="sm"
                   className="font-mono"
                 >
                   {PLATFORMS.map((p, i) => (
-                    <ToggleButton key={p.value} id={p.value} className="text-xs">
+                    <ToggleButton
+                      key={p.value || AUTO_PLATFORM_KEY}
+                      id={p.value || AUTO_PLATFORM_KEY}
+                      className="text-xs"
+                    >
                       {i > 0 ? <ToggleButtonGroup.Separator /> : null}
                       {p.label}
                     </ToggleButton>
@@ -462,31 +451,6 @@ export default function PublicImageScanPage() {
             </form>
           )}
 
-          {/* Quick picks */}
-          {!isDisabled && (
-            <div className="flex flex-wrap gap-2">
-              {['nginx:latest', 'ubuntu:22.04', 'python:3.11-slim', 'node:20-alpine'].map((img) => (
-                <Chip
-                  key={img}
-                  onClick={() => setInput(img)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setInput(img);
-                    }
-                  }}
-                  variant="soft"
-                  color="default"
-                  className="text-xs px-3 py-1.5 rounded-full font-mono transition-colors cursor-pointer"
-                >
-                  {img}
-                </Chip>
-              ))}
-            </div>
-          )}
-
           {/* History */}
           {history.length > 0 && (
             <div className="space-y-2">
@@ -494,15 +458,9 @@ export default function PublicImageScanPage() {
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
                   Your recent scans
                 </h2>
-                <button
-                  onClick={handleClearHistory}
-                  className="text-xs transition-colors"
-                  style={{ color: 'var(--text-faint)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-faint)')}
-                >
+                <Button onClick={handleClearHistory} variant="tertiary">
                   Clear history
-                </button>
+                </Button>
               </div>
               <div
                 className="rounded-2xl overflow-hidden space-y-px p-2"

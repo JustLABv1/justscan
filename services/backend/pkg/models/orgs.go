@@ -40,6 +40,12 @@ type Org struct {
 	Name                      string                     `bun:"name,type:text,notnull,unique" json:"name"`
 	Description               string                     `bun:"description,type:text,default:''" json:"description"`
 	ImagePatterns             StringList                 `bun:"image_patterns,type:jsonb,default:'[]'" json:"image_patterns"`
+	IsActive                  bool                       `bun:"is_active,type:bool,notnull,default:true" json:"is_active"`
+	AllowImageScans           bool                       `bun:"allow_image_scans,type:bool,notnull,default:true" json:"allow_image_scans"`
+	AllowHelmScans            bool                       `bun:"allow_helm_scans,type:bool,notnull,default:true" json:"allow_helm_scans"`
+	AllowRescans              bool                       `bun:"allow_rescans,type:bool,notnull,default:true" json:"allow_rescans"`
+	AllowMemberInvites        bool                       `bun:"allow_member_invites,type:bool,notnull,default:true" json:"allow_member_invites"`
+	AllowOrgTokens            bool                       `bun:"allow_org_tokens,type:bool,notnull,default:true" json:"allow_org_tokens"`
 	CreatedByID               uuid.UUID                  `bun:"created_by_id,type:uuid,notnull" json:"created_by_id"`
 	CreatedAt                 time.Time                  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	UpdatedAt                 time.Time                  `bun:"updated_at,type:timestamptz" json:"updated_at"`

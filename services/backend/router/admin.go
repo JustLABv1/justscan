@@ -27,6 +27,16 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.PUT("/users/:userID/state", func(c *gin.Context) {
 			admins.DisableUser(c, db)
 		})
+		// organizations
+		admin.GET("/orgs", func(c *gin.Context) {
+			admins.ListOrgs(c, db)
+		})
+		admin.GET("/orgs/:id", func(c *gin.Context) {
+			admins.GetOrgGovernance(c, db)
+		})
+		admin.PUT("/orgs/:id/governance", func(c *gin.Context) {
+			admins.UpdateOrgGovernance(c, db)
+		})
 		admin.PUT("/users/:userID/disable", func(c *gin.Context) {
 			admins.DisableUser(c, db)
 		})

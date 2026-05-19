@@ -78,7 +78,11 @@ func CreateScan(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
 				return
 			}
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleViewer); !ok {
+			org, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleViewer)
+			if !ok {
+				return
+			}
+			if !authz.EnsureOrgActionAllowed(c, org, "image_scan") {
 				return
 			}
 			requestedOrgID = &parsedOrgID
@@ -197,7 +201,11 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
 				return
 			}
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleViewer); !ok {
+			org, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleViewer)
+			if !ok {
+				return
+			}
+			if !authz.EnsureOrgActionAllowed(c, org, "image_scan") {
 				return
 			}
 			requestedOrgID = &parsedOrgID
@@ -359,7 +367,11 @@ func CreateUploadedArchiveScan(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
 				return
 			}
-			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleViewer); !ok {
+			org, _, _, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleViewer)
+			if !ok {
+				return
+			}
+			if !authz.EnsureOrgActionAllowed(c, org, "image_scan") {
 				return
 			}
 			requestedOrgID = &parsedOrgID

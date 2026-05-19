@@ -23,6 +23,7 @@ interface OrgTeamTabProps {
   onRemoveMember: (member: OrgMember) => void | Promise<void>;
   onRevokeInvite: (invite: OrgInvite) => void | Promise<void>;
   onTransferOwnership: (member: OrgMember) => void | Promise<void>;
+  featureDisabledReason?: string;
 }
 
 function memberInitials(member: OrgMember) {
@@ -56,6 +57,7 @@ export function OrgTeamTab({
   onRemoveMember,
   onRevokeInvite,
   onTransferOwnership,
+  featureDisabledReason,
 }: OrgTeamTabProps) {
   const [memberSearch, setMemberSearch] = useState('');
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
@@ -112,12 +114,15 @@ export function OrgTeamTab({
             </p>
           </div>
           {canManageMembers && (
-            <Button onClick={onOpenInviteModal}>
+            <Button onClick={onOpenInviteModal} isDisabled={Boolean(featureDisabledReason)}>
               <PlusSignIcon size={14} />
               Invite Member
             </Button>
           )}
         </div>
+        {featureDisabledReason && (
+          <p className="text-xs text-warning mt-1">{featureDisabledReason}</p>
+        )}
 
         <div>
           {membersLoading ? (

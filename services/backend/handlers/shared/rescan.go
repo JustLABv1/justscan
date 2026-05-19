@@ -9,6 +9,7 @@ import (
 
 	"justscan-backend/functions/audit"
 	"justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -24,6 +25,16 @@ func RescanShared(db *bun.DB) gin.HandlerFunc {
 		orig := getScanByShareToken(c, db)
 		if orig == nil {
 			return
+		}
+		if orig.OwnerOrgID != nil {
+			org := &models.Org{}
+			if err := db.NewSelect().Model(org).Where("id = ?", *orig.OwnerOrgID).Scan(c.Request.Context()); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
+				return
+			}
+			if !authz.EnsureOrgActionAllowed(c, org, "rescan") {
+				return
+			}
 		}
 
 		newScan := &models.Scan{

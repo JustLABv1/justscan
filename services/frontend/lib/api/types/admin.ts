@@ -218,3 +218,21 @@ export interface NotificationDelivery {
   created_at: string;
   channel_name?: string;
 }
+
+export interface AdminOrg {
+  id: string;
+  name: string;
+  description: string;
+  created_by_id: string;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+  allow_image_scans: boolean;
+  allow_helm_scans: boolean;
+  allow_rescans: boolean;
+  allow_member_invites: boolean;
+  allow_org_tokens: boolean;
+  member_count: number;
+  pending_invite_count: number;
+  active_token_count: number;
+}

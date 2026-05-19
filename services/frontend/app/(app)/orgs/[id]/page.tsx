@@ -213,6 +213,14 @@ export default function OrgDetailPage() {
   }, [activeTab, searchParams]);
 
   function openInviteModal() {
+    if (!org?.is_active) {
+      toast.error('Organization is suspended. Member invites are disabled.');
+      return;
+    }
+    if (!org?.allow_member_invites) {
+      toast.error('Member invites are disabled for this organization.');
+      return;
+    }
     setInviteEmail('');
     setInviteRole('viewer');
     setInviteError('');
@@ -573,6 +581,13 @@ export default function OrgDetailPage() {
             onRemoveMember={(member) => void handleRemoveMember(member)}
             onRevokeInvite={(invite) => void handleRevokeInvite(invite)}
             onTransferOwnership={(member) => void handleTransferOwnership(member)}
+            featureDisabledReason={
+              !org?.is_active
+                ? 'Organization is suspended. Invites are disabled.'
+                : !org?.allow_member_invites
+                  ? 'Member invites are disabled by organization policy.'
+                  : undefined
+            }
           />
         )}
         {activeTab === 'scans' && (
@@ -586,6 +601,13 @@ export default function OrgDetailPage() {
           <OrgTokensTab
             orgId={id}
             canManage={isSystemAdmin || currentOrgRole === 'owner' || currentOrgRole === 'admin'}
+            featureDisabledReason={
+              !org?.is_active
+                ? 'Organization is suspended. Token creation is disabled.'
+                : !org?.allow_org_tokens
+                  ? 'Organization tokens are disabled by organization policy.'
+                  : undefined
+            }
           />
         )}
       </div>

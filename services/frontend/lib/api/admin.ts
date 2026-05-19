@@ -1,6 +1,6 @@
 import { req } from './core';
 import { getDefaultScannerCapabilities } from './registries';
-import type { APIRequestLog, APIRequestLogFilters, APIUsageStats, AdminDashboard, AdminToken, AdminUser, AdminXRayRequestLog, AuditLog, AuditLogFilters, NotificationChannel, NotificationDelivery, XRayRequestLogFilters, XRayUsageStats } from './types/admin';
+import type { APIRequestLog, APIRequestLogFilters, APIUsageStats, AdminDashboard, AdminOrg, AdminToken, AdminUser, AdminXRayRequestLog, AuditLog, AuditLogFilters, NotificationChannel, NotificationDelivery, XRayRequestLogFilters, XRayUsageStats } from './types/admin';
 import type { AIProviderAdmin, AIProviderTestResult, AISettings, AISupportedProvider } from './types/ai';
 import type { AutoTagRule, OIDCClaimSyncPreview, OIDCGroupMapping, OIDCOrgRoleOverride, OIDCProviderAdmin, Registry, RegistryListResponse, ScannerSettings } from './types/registries';
 import type { AdminScan } from './types/scans';
@@ -127,6 +127,22 @@ export const disableAdminUser = (id: string, disabled: boolean, disabled_reason?
 
 export const createAdminUser = (username: string, email: string, password: string, role: string) =>
   req<{ result: string }>('POST', '/api/v1/admin/users/', { username, email, password, role });
+
+export const listAdminOrgs = (q?: string) => {
+  const params = new URLSearchParams();
+  if (q?.trim()) params.set('q', q.trim());
+  const suffix = params.toString() ? `?${params}` : '';
+  return req<{ data: AdminOrg[] }>('GET', `/api/v1/admin/orgs${suffix}`).then((result) => result.data ?? []);
+};
+
+export const getAdminOrg = (id: string) =>
+  req<AdminOrg>('GET', `/api/v1/admin/orgs/${id}`);
+
+export const updateAdminOrgGovernance = (
+  id: string,
+  data: Partial<Pick<AdminOrg, 'is_active' | 'allow_image_scans' | 'allow_helm_scans' | 'allow_rescans' | 'allow_member_invites' | 'allow_org_tokens'>>
+) =>
+  req<AdminOrg>('PUT', `/api/v1/admin/orgs/${id}/governance`, data);
 
 export const listAdminTokens = () =>
   req<{ tokens: AdminToken[] }>('GET', '/api/v1/admin/tokens').then((result) => result.tokens ?? []);

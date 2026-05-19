@@ -1,5 +1,6 @@
 'use client';
 import { useAIContextBridge } from '@/components/assistant/ai-context-bridge';
+import { EvilRadarChart } from '@/components/evilcharts/charts/radar-chart';
 import { useToast } from '@/components/toast';
 import {
   OwnershipBadge,
@@ -26,6 +27,7 @@ import type {
   Suppression,
   Tag,
   Vulnerability,
+  VulnerabilitySummary,
   VulnerabilityViewPreferenceResponse,
   VulnerabilityViewSettings,
 } from '@/lib/api';
@@ -45,6 +47,7 @@ import {
   getTokenType,
   getUser,
   getVulnerabilityContextAnalysis,
+  getVulnerabilitySummary,
   grantScanOrgAccess,
   listOrgs,
   listScanOrgGrants,
@@ -83,6 +86,7 @@ import {
   SearchField,
   Select,
   Table,
+  Tooltip,
   useOverlayState,
 } from '@heroui/react';
 import type { DateValue } from '@internationalized/date';
@@ -517,6 +521,12 @@ export default function ScanDetailPage() {
   const [viewPreferenceSaving, setViewPreferenceSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [vulnLoading, setVulnLoading] = useState(false);
+  const [vulnSummary, setVulnSummary] = useState<VulnerabilitySummary | null>(null);
+  const [isVulnerabilityRadarCollapsed, setIsVulnerabilityRadarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const userId = getUser()?.id ?? 'anonymous';
+    return window.localStorage.getItem(`justscan:vuln-radar-collapsed:${userId}`) === '1';
+  });
   const [error, setError] = useState('');
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [tagLoading, setTagLoading] = useState('');
@@ -535,7 +545,6 @@ export default function ScanDetailPage() {
   const [reScanning, setReScanning] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [comparingPrev, setComparingPrev] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareVisibility, setShareVisibility] = useState<'public' | 'authenticated'>('public');
   const [shareCopied, setShareCopied] = useState(false);
@@ -562,6 +571,7 @@ export default function ScanDetailPage() {
   const [suppressionAccessSaving, setSuppressionAccessSaving] = useState(false);
   const vulnerabilityDetailsModal = useOverlayState();
   const xrayPolicyDetailsModal = useOverlayState();
+  const shareModal = useOverlayState();
   const scanAccessModal = useOverlayState();
   const suppressionAccessModal = useOverlayState();
   const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
@@ -598,6 +608,8 @@ export default function ScanDetailPage() {
     : viewPreference?.source === 'org'
       ? 'Organization default'
       : 'System default';
+  const currentUser = getUser();
+  const radarPreferenceKey = `justscan:vuln-radar-collapsed:${currentUser?.id ?? 'anonymous'}`;
 
   useEffect(() => {
     setRouteContext({
@@ -952,6 +964,25 @@ export default function ScanDetailPage() {
     sortDir,
     viewSettingsReady,
   ]);
+
+  useEffect(() => {
+    return deferEffect(() => {
+      if (!scan || scan.status === 'pending' || scan.status === 'running' || !viewSettingsReady) {
+        setVulnSummary(null);
+        return;
+      }
+
+      getVulnerabilitySummary(
+        id,
+        severityFilter || undefined,
+        pkgFilter || undefined,
+        hasFix || undefined,
+        minCvss || undefined
+      )
+        .then(setVulnSummary)
+        .catch(() => setVulnSummary(null));
+    });
+  }, [id, scan, severityFilter, pkgFilter, minCvss, hasFix, viewSettingsReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1394,7 +1425,6 @@ export default function ScanDetailPage() {
   if (!scan) return null;
 
   const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
-  const currentUser = getUser();
   const isPlatformAdmin = getTokenType() === 'admin' || currentUser?.role === 'admin';
   const orgNamesById = Object.fromEntries(allOrgs.map((org) => [org.id, org.name]));
   const manageableOrgIds = new Set(
@@ -1512,6 +1542,40 @@ export default function ScanDetailPage() {
     );
   const vulnPaginationItems = buildPaginationItems(page, totalPages);
 
+  const vulnerabilityRadarData = [
+    { subject: 'Critical', value: vulnSummary?.critical ?? 0 },
+    { subject: 'High', value: vulnSummary?.high ?? 0 },
+    { subject: 'Medium', value: vulnSummary?.medium ?? 0 },
+    { subject: 'Low', value: vulnSummary?.low ?? 0 },
+    { subject: 'Fix Available', value: vulnSummary?.with_fix ?? 0 },
+    { subject: 'Xray Policy', value: vulnSummary?.xray_policy ?? 0 },
+  ];
+  const filteredVulnerabilityTotal = vulnTotal;
+  const vulnerabilitiesWithFix = vulnSummary?.with_fix ?? 0;
+  const vulnerabilitiesWithoutFix = Math.max(
+    0,
+    filteredVulnerabilityTotal - vulnerabilitiesWithFix
+  );
+  const xrayPolicyMatches = vulnSummary?.xray_policy ?? 0;
+  const criticalAndHigh = (vulnSummary?.critical ?? 0) + (vulnSummary?.high ?? 0);
+  const fixCoveragePercent =
+    filteredVulnerabilityTotal > 0
+      ? Math.round((vulnerabilitiesWithFix / filteredVulnerabilityTotal) * 100)
+      : 0;
+  const xrayPolicyPercent =
+    filteredVulnerabilityTotal > 0
+      ? Math.round((xrayPolicyMatches / filteredVulnerabilityTotal) * 100)
+      : 0;
+  const severityDistribution = [
+    { label: 'Critical', value: vulnSummary?.critical ?? 0 },
+    { label: 'High', value: vulnSummary?.high ?? 0 },
+    { label: 'Medium', value: vulnSummary?.medium ?? 0 },
+    { label: 'Low', value: vulnSummary?.low ?? 0 },
+  ];
+  const dominantSeverity = severityDistribution.reduce((best, current) =>
+    current.value > best.value ? current : best
+  );
+
   const headerActions = (
     <div className="relative flex flex-wrap items-center justify-end gap-2">
       <Button className="btn-secondary" onPress={() => router.back()} variant="secondary">
@@ -1560,7 +1624,12 @@ export default function ScanDetailPage() {
               className="btn-icon-subtle size-10"
               isIconOnly
               style={
-                shareOpen ? { color: 'color-mix(in srgb, var(--accent) 78%, white)', borderColor: 'color-mix(in srgb, var(--accent) 25%, transparent)' } : undefined
+                shareModal.isOpen
+                  ? {
+                      color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                      borderColor: 'color-mix(in srgb, var(--accent) 25%, transparent)',
+                    }
+                  : undefined
               }
               variant="secondary"
             >
@@ -1579,7 +1648,7 @@ export default function ScanDetailPage() {
                 if (key === 'share') {
                   if (scan.share_visibility)
                     setShareVisibility(scan.share_visibility as 'public' | 'authenticated');
-                  setShareOpen(true);
+                  shareModal.open();
                 }
               }}
             >
@@ -1608,141 +1677,19 @@ export default function ScanDetailPage() {
             </Dropdown.Menu>
           </Dropdown.Popover>
         </Dropdown>
-        {shareOpen && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />
-            <div
-              className="absolute right-0 top-12 z-50 w-80 space-y-3 rounded-xl p-4"
-              style={{
-                background: 'var(--modal-bg)',
-                border: '1px solid var(--modal-border)',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-zinc-800 dark:text-white">Share scan</p>
-                <Button
-                  className="btn-icon-subtle text-lg leading-none"
-                  onPress={() => setShareOpen(false)}
-                  type="button"
-                  variant="secondary"
-                >
-                  ✕
-                </Button>
-              </div>
-              {scan.share_token ? (
-                <>
-                  <div>
-                    <p className="mb-1.5 text-xs text-zinc-500">
-                      Share link
-                      <span
-                        className="ml-1.5 rounded px-1.5 py-0.5 text-xs font-medium"
-                        style={{
-                          background:
-                            scan.share_visibility === 'public'
-                              ? 'rgba(34,197,94,0.1)'
-                              : 'color-mix(in srgb, var(--accent) 10%, transparent)',
-                          color: scan.share_visibility === 'public' ? '#4ade80' : 'color-mix(in srgb, var(--accent) 78%, white)',
-                          border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'color-mix(in srgb, var(--accent) 20%, transparent)'}`,
-                        }}
-                      >
-                        {scan.share_visibility}
-                      </span>
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 truncate rounded-lg bg-zinc-100 px-2 py-1.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                        {typeof window !== 'undefined'
-                          ? `${window.location.origin}/shared/${scan.share_token}`
-                          : ''}
-                      </code>
-                      <Button
-                        onPress={() => {
-                          navigator.clipboard.writeText(
-                            `${window.location.origin}/shared/${scan.share_token}`
-                          );
-                          setShareCopied(true);
-                          setTimeout(() => setShareCopied(false), 1500);
-                        }}
-                        className="btn-secondary shrink-0"
-                        type="button"
-                        variant="secondary"
-                      >
-                        {shareCopied ? '✓ Copied' : 'Copy'}
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-zinc-500">Change visibility</p>
-                    <SegmentedControl
-                      ariaLabel="Share visibility"
-                      className="w-full"
-                      itemClassName="flex-1"
-                      options={[
-                        { id: 'public', label: 'Public' },
-                        { id: 'authenticated', label: 'Signed in' },
-                      ]}
-                      value={shareVisibility}
-                      onChange={setShareVisibility}
-                      size="sm"
-                    />
-                    {shareVisibility !== scan.share_visibility && (
-                      <Button
-                        className="btn-primary w-full"
-                        isDisabled={shareLoading}
-                        onPress={handleEnableShare}
-                        type="button"
-                        variant="primary"
-                      >
-                        {shareLoading ? 'Updating…' : 'Update visibility'}
-                      </Button>
-                    )}
-                  </div>
-                  <Button
-                    className="btn-danger w-full"
-                    isDisabled={shareLoading}
-                    onPress={handleDisableShare}
-                    type="button"
-                    variant="danger"
-                  >
-                    {shareLoading ? 'Processing…' : 'Disable sharing'}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-zinc-500">Visibility</p>
-                    <SegmentedControl
-                      ariaLabel="Share visibility"
-                      className="w-full"
-                      itemClassName="flex-1"
-                      options={[
-                        { id: 'public', label: 'Public' },
-                        { id: 'authenticated', label: 'Signed in' },
-                      ]}
-                      value={shareVisibility}
-                      onChange={setShareVisibility}
-                      size="sm"
-                    />
-                    <p className="text-xs leading-relaxed text-zinc-400">
-                      {shareVisibility === 'public'
-                        ? 'Anyone with the link can view this scan.'
-                        : 'Only signed-in users can view this scan.'}
-                    </p>
-                  </div>
-                  <Button
-                    className="btn-primary w-full"
-                    isDisabled={shareLoading}
-                    onPress={handleEnableShare}
-                    type="button"
-                    variant="primary"
-                  >
-                    {shareLoading ? 'Creating link…' : 'Create share link'}
-                  </Button>
-                </>
-              )}
-            </div>
-          </>
-        )}
+        {scan.share_token ? (
+          <Tooltip delay={0}>
+            <Tooltip.Trigger
+              aria-label={`Shared scan (${scan.share_visibility === 'authenticated' ? 'signed in' : 'public'})`}
+              className="absolute -right-0.5 -top-0.5 z-10 inline-block size-2.5 rounded-full bg-success ring-2 ring-[var(--app-bg)]"
+            />
+            <Tooltip.Content placement="top" showArrow>
+              {scan.share_visibility === 'authenticated'
+                ? 'Shared scan: only signed-in users can open the link'
+                : 'Shared scan: anyone with the link can open it'}
+            </Tooltip.Content>
+          </Tooltip>
+        ) : null}
       </div>
     </div>
   );
@@ -1757,6 +1704,135 @@ export default function ScanDetailPage() {
         }
         actions={headerActions}
       />
+      <Modal state={shareModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="sm" placement="center">
+            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
+              <Modal.Header>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                  Share scan
+                </Modal.Heading>
+                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              </Modal.Header>
+              <Modal.Body className="py-5 space-y-4">
+                {scan.share_token ? (
+                  <>
+                    <div>
+                      <p className="mb-1.5 text-xs text-zinc-500">
+                        Share link
+                        <span
+                          className="ml-1.5 rounded px-1.5 py-0.5 text-xs font-medium"
+                          style={{
+                            background:
+                              scan.share_visibility === 'public'
+                                ? 'rgba(34,197,94,0.1)'
+                                : 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                            color:
+                              scan.share_visibility === 'public'
+                                ? '#4ade80'
+                                : 'color-mix(in srgb, var(--accent) 78%, white)',
+                            border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'color-mix(in srgb, var(--accent) 20%, transparent)'}`,
+                          }}
+                        >
+                          {scan.share_visibility}
+                        </span>
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 truncate rounded-lg bg-zinc-100 px-2 py-1.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                          {typeof window !== 'undefined'
+                            ? `${window.location.origin}/shared/${scan.share_token}`
+                            : ''}
+                        </code>
+                        <Button
+                          onPress={() => {
+                            navigator.clipboard.writeText(
+                              `${window.location.origin}/shared/${scan.share_token}`
+                            );
+                            setShareCopied(true);
+                            setTimeout(() => setShareCopied(false), 1500);
+                          }}
+                          className="btn-secondary shrink-0"
+                          type="button"
+                          variant="secondary"
+                        >
+                          {shareCopied ? '✓ Copied' : 'Copy'}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-zinc-500">Change visibility</p>
+                      <SegmentedControl
+                        ariaLabel="Share visibility"
+                        className="w-full"
+                        itemClassName="flex-1"
+                        options={[
+                          { id: 'public', label: 'Public' },
+                          { id: 'authenticated', label: 'Signed in' },
+                        ]}
+                        value={shareVisibility}
+                        onChange={setShareVisibility}
+                        size="sm"
+                      />
+                      {shareVisibility !== scan.share_visibility && (
+                        <Button
+                          className="btn-primary w-full"
+                          isDisabled={shareLoading}
+                          onPress={handleEnableShare}
+                          type="button"
+                          variant="primary"
+                        >
+                          {shareLoading ? 'Updating…' : 'Update visibility'}
+                        </Button>
+                      )}
+                    </div>
+                    <Button
+                      className="btn-danger w-full"
+                      isDisabled={shareLoading}
+                      onPress={handleDisableShare}
+                      type="button"
+                      variant="danger"
+                    >
+                      {shareLoading ? 'Processing…' : 'Disable sharing'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-zinc-500">Visibility</p>
+                      <SegmentedControl
+                        ariaLabel="Share visibility"
+                        className="w-full"
+                        itemClassName="flex-1"
+                        options={[
+                          { id: 'public', label: 'Public' },
+                          { id: 'authenticated', label: 'Signed in' },
+                        ]}
+                        value={shareVisibility}
+                        onChange={setShareVisibility}
+                        size="sm"
+                      />
+                      <p className="text-xs leading-relaxed text-zinc-400">
+                        {shareVisibility === 'public'
+                          ? 'Anyone with the link can view this scan.'
+                          : 'Only signed-in users can view this scan.'}
+                      </p>
+                    </div>
+                    <Button
+                      className="btn-primary w-full"
+                      isDisabled={shareLoading}
+                      onPress={handleEnableShare}
+                      type="button"
+                      variant="primary"
+                    >
+                      {shareLoading ? 'Creating link…' : 'Create share link'}
+                    </Button>
+                  </>
+                )}
+              </Modal.Body>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
 
       {/* Status + severity cards */}
       {scan.status !== 'pending' && scan.status !== 'running' && (
@@ -2218,6 +2294,78 @@ export default function ScanDetailPage() {
                   Xray Policy First
                 </Button>
               </div>
+            </Card>
+
+            <Card variant="secondary" className="p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                  Vulnerability Radar
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-zinc-500">
+                    Filtered results ({vulnTotal} rows)
+                  </span>
+                  <Button
+                    className="btn-secondary h-7 px-2 text-[11px]"
+                    variant="secondary"
+                    onPress={() => {
+                      const next = !isVulnerabilityRadarCollapsed;
+                      setIsVulnerabilityRadarCollapsed(next);
+                      if (typeof window !== 'undefined') {
+                        window.localStorage.setItem(radarPreferenceKey, next ? '1' : '0');
+                      }
+                    }}
+                  >
+                    {isVulnerabilityRadarCollapsed ? 'Show' : 'Hide'}
+                  </Button>
+                </div>
+              </div>
+              {!isVulnerabilityRadarCollapsed && (
+                <div className="grid gap-3 lg:grid-cols-[minmax(320px,520px)_1fr] lg:items-center">
+                  <EvilRadarChart
+                    data={vulnerabilityRadarData}
+                    className="mx-auto h-[240px] w-full max-w-[520px] min-h-[240px] flex-none"
+                  />
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
+                    <Card className="p-2.5">
+                      <p className="text-[11px] text-zinc-500">Dominant Severity</p>
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        {dominantSeverity.label}
+                      </p>
+                    </Card>
+                    <Card className="p-2.5">
+                      <p className="text-[11px] text-zinc-500">Critical + High</p>
+                      <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">
+                        {criticalAndHigh}
+                      </p>
+                    </Card>
+                    <Card className="p-2.5">
+                      <p className="text-[11px] text-zinc-500">Fix Coverage</p>
+                      <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                        {fixCoveragePercent}%
+                      </p>
+                    </Card>
+                    <Card className="p-2.5">
+                      <p className="text-[11px] text-zinc-500">No Known Fix</p>
+                      <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+                        {vulnerabilitiesWithoutFix}
+                      </p>
+                    </Card>
+                    <Card className="p-2.5">
+                      <p className="text-[11px] text-zinc-500">Xray Policy Matches</p>
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        {xrayPolicyMatches}
+                      </p>
+                    </Card>
+                    <Card className="p-2.5">
+                      <p className="text-[11px] text-zinc-500">Policy Match Rate</p>
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        {xrayPolicyPercent}%
+                      </p>
+                    </Card>
+                  </div>
+                </div>
+              )}
             </Card>
           </Card.Header>
 
@@ -3403,40 +3551,31 @@ export default function ScanDetailPage() {
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
+              <Modal.Header>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
                   Manage Scan Access
                 </Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5 space-y-4">
+              <Modal.Body className="py-5 space-y-4">
                 {scanOrgGrantsError ? (
                   <FormAlert description={scanOrgGrantsError} title="Access update failed" />
                 ) : null}
-                <div
-                  className="rounded-xl px-4 py-3"
-                  style={{
-                    background: 'var(--row-hover)',
-                    border: '1px solid var(--surface-border)',
-                  }}
-                >
-                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                    {scan.image_name}:{scan.image_tag}
-                  </p>
-                  <p className="mt-1  text-xs text-zinc-500" title={scan.image_digest}>
-                    {scan.image_digest}
-                  </p>
-                  <div className="mt-2">
+                <Card variant="secondary">
+                  <div className="flex gap-2">
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                      {scan.image_name}:{scan.image_tag}
+                    </p>
                     <OwnershipBadge
                       ownerType={scan.owner_type}
                       ownerOrgId={scan.owner_org_id}
                       orgNamesById={orgNamesById}
                     />
                   </div>
-                </div>
+                  <p className="text-xs text-zinc-500" title={scan.image_digest}>
+                    {scan.image_digest}
+                  </p>
+                </Card>
 
                 <div className="space-y-2">
                   <div>
@@ -3457,39 +3596,34 @@ export default function ScanDetailPage() {
                   ) : (
                     <div className="space-y-2">
                       {scanOrgGrants.map((share) => (
-                        <div
-                          key={share.org_id}
-                          className="flex items-start justify-between gap-3 rounded-xl px-4 py-3"
-                          style={{
-                            background: 'var(--row-hover)',
-                            border: '1px solid var(--surface-border)',
-                          }}
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                              {share.org_name}
-                            </p>
-                            <p className="text-xs text-zinc-500 mt-0.5">
-                              {share.is_owner ? 'Owner workspace' : 'Shared access'}
-                            </p>
+                        <Card key={share.org_id} className="py-3" variant="secondary">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                                {share.org_name}
+                              </p>
+                              <p className="text-xs text-zinc-500 mt-0.5">
+                                {share.is_owner ? 'Owner workspace' : 'Shared access'}
+                              </p>
+                            </div>
+                            <div>
+                              {share.is_owner ? (
+                                <span className="text-xs font-medium text-zinc-500">Locked</span>
+                              ) : (
+                                <Button
+                                  onPress={() => {
+                                    void handleRevokeScanAccess(share.org_id);
+                                  }}
+                                  isDisabled={scanOrgGrantSaving}
+                                  isIconOnly
+                                  variant="danger-soft"
+                                >
+                                  <Delete01Icon size={15} />
+                                </Button>
+                              )}
+                            </div>
                           </div>
-                          {share.is_owner ? (
-                            <span className="text-xs font-medium text-zinc-500">Locked</span>
-                          ) : (
-                            <Button
-                              type="button"
-                              onPress={() => {
-                                void handleRevokeScanAccess(share.org_id);
-                              }}
-                              isDisabled={scanOrgGrantSaving}
-                              className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
-                              isIconOnly
-                              variant="secondary"
-                            >
-                              <Delete01Icon size={15} />
-                            </Button>
-                          )}
-                        </div>
+                        </Card>
                       ))}
                     </div>
                   )}
@@ -3517,7 +3651,7 @@ export default function ScanDetailPage() {
                         }
                         className="flex-1"
                       >
-                        <Select.Trigger className={selectTriggerCls}>
+                        <Select.Trigger className="bg-surface-secondary">
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
@@ -3547,10 +3681,7 @@ export default function ScanDetailPage() {
                   )}
                 </div>
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
+              <Modal.Footer>
                 <Button
                   onPress={scanAccessModal.close}
                   className="btn-secondary"

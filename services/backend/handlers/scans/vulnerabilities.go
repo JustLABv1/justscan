@@ -21,6 +21,31 @@ type VulnerabilityResponse struct {
 	FirstSeenAt *time.Time `json:"first_seen_at"`
 }
 
+type VulnerabilitySummary struct {
+	Critical   int `json:"critical"`
+	High       int `json:"high"`
+	Medium     int `json:"medium"`
+	Low        int `json:"low"`
+	WithFix    int `json:"with_fix"`
+	XrayPolicy int `json:"xray_policy"`
+}
+
+func applyVulnerabilityFilters(c *gin.Context, q *bun.SelectQuery) *bun.SelectQuery {
+	if sev := c.Query("severity"); sev != "" {
+		q = q.Where("severity = ?", sev)
+	}
+	if pkg := c.Query("pkg"); pkg != "" {
+		q = q.Where("pkg_name ILIKE ?", "%"+pkg+"%")
+	}
+	if c.Query("has_fix") == "true" {
+		q = q.Where("fixed_version != ''")
+	}
+	if minCVSS := c.Query("min_cvss"); minCVSS != "" {
+		q = q.Where("cvss_score >= ?", minCVSS)
+	}
+	return q
+}
+
 func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		scanID, err := uuid.Parse(c.Param("id"))
@@ -58,19 +83,7 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 			Limit(limit).
 			Offset(offset)
 
-		// Filters
-		if sev := c.Query("severity"); sev != "" {
-			q = q.Where("severity = ?", sev)
-		}
-		if pkg := c.Query("pkg"); pkg != "" {
-			q = q.Where("pkg_name ILIKE ?", "%"+pkg+"%")
-		}
-		if c.Query("has_fix") == "true" {
-			q = q.Where("fixed_version != ''")
-		}
-		if minCVSS := c.Query("min_cvss"); minCVSS != "" {
-			q = q.Where("cvss_score >= ?", minCVSS)
-		}
+		q = applyVulnerabilityFilters(c, q)
 
 		total, err := q.Count(c.Request.Context())
 		if err != nil {
@@ -159,5 +172,44 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 			"page":  page,
 			"limit": limit,
 		})
+	}
+}
+
+func GetVulnerabilitySummary(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		scanID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+			return
+		}
+
+		if _, _, _, ok := LoadAuthorizedScan(c, db, scanID); !ok {
+			return
+		}
+
+		baseQuery := db.NewSelect().
+			TableExpr("vulnerabilities").
+			Where("scan_id = ?", scanID)
+		baseQuery = applyVulnerabilityFilters(c, baseQuery)
+
+		var summary VulnerabilitySummary
+		if err := baseQuery.
+			ColumnExpr("COUNT(*) FILTER (WHERE severity = 'CRITICAL') AS critical").
+			ColumnExpr("COUNT(*) FILTER (WHERE severity = 'HIGH') AS high").
+			ColumnExpr("COUNT(*) FILTER (WHERE severity = 'MEDIUM') AS medium").
+			ColumnExpr("COUNT(*) FILTER (WHERE severity = 'LOW') AS low").
+			ColumnExpr("COUNT(*) FILTER (WHERE fixed_version != '') AS with_fix").
+			ColumnExpr(`COUNT(*) FILTER (
+				WHERE xray_is_blocking = true
+					OR COALESCE(xray_watch_name, '') != ''
+					OR COALESCE(jsonb_array_length(xray_watch_names), 0) > 0
+					OR COALESCE(jsonb_array_length(xray_watch_policy_matches), 0) > 0
+			) AS xray_policy`).
+			Scan(c.Request.Context(), &summary); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to summarize vulnerabilities"})
+			return
+		}
+
+		c.JSON(http.StatusOK, summary)
 	}
 }

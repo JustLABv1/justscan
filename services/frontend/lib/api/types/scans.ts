@@ -199,6 +199,15 @@ export interface VulnerabilityContextAnalysis {
   raw?: Record<string, unknown>;
 }
 
+export interface VulnerabilitySummary {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  with_fix: number;
+  xray_policy: number;
+}
+
 export interface ScanTrendPoint {
   date: string;
   critical: number;

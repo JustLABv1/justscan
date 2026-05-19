@@ -1,21 +1,22 @@
 'use client';
-import { Logo } from '@/components/logo';
+import { PublicNavbar } from '@/components/public/public-navbar';
 import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
+import { VulnerabilitiesTable } from '@/components/scans/vulnerabilities-table';
 import { FormField } from '@/components/ui/form-field';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type { Scan, Vulnerability } from '@/lib/api';
 import {
-    ApiError,
-    getSharedScan,
-    getSharedVulnerabilityContextAnalysis,
-    getToken,
-    listScans,
-    listSharedVulnerabilities,
-    rescanShared,
+  ApiError,
+  getSharedScan,
+  getSharedVulnerabilityContextAnalysis,
+  getToken,
+  listScans,
+  listSharedVulnerabilities,
+  rescanShared,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Button, Card, Table, useOverlayState } from '@heroui/react';
+import { Button, Card, ListBox, Select, useOverlayState } from '@heroui/react';
 import { CpuIcon, FileExportIcon, GitCompareIcon, Refresh01Icon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -104,70 +105,121 @@ function SourceBadge({ source }: { source?: string }) {
   );
 }
 
-function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return <div className="size-9" />;
-  const isDark = resolvedTheme === 'dark';
+const LIMIT = 25;
+
+type XrayWatchPolicyMatch = {
+  watchName: string;
+  watchID: string;
+  policy: string;
+  rule: string;
+  isBlocking: boolean;
+  isBuildFailed: boolean;
+  failPullRequest: boolean;
+};
+
+function parseXrayWatchPolicyMatches(vulnerability: Vulnerability): XrayWatchPolicyMatch[] {
+  const raw = vulnerability.xray_watch_policy_matches;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  const results: XrayWatchPolicyMatch[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue;
+    }
+
+    const row = item as Record<string, unknown>;
+    const watchName = typeof row.watch_name === 'string' ? row.watch_name.trim() : '';
+    const watchID = typeof row.watch_id === 'string' ? row.watch_id.trim() : '';
+    const policy = typeof row.policy === 'string' ? row.policy.trim() : '';
+    const rule = typeof row.rule === 'string' ? row.rule.trim() : '';
+    const isBlocking = row.is_blocking === true;
+    const isBuildFailed = row.is_build_failed === true;
+    const failPullRequest = row.fail_pull_request === true;
+
+    results.push({ watchName, watchID, policy, rule, isBlocking, isBuildFailed, failPullRequest });
+  }
+
+  const deduped = new Map<string, XrayWatchPolicyMatch>();
+  for (const match of results) {
+    const key = [
+      match.watchName.toLowerCase(),
+      match.watchID.toLowerCase(),
+      match.policy.toLowerCase(),
+      match.rule.toLowerCase(),
+      match.isBlocking ? '1' : '0',
+      match.isBuildFailed ? '1' : '0',
+      match.failPullRequest ? '1' : '0',
+    ].join('|');
+    if (!deduped.has(key)) {
+      deduped.set(key, match);
+    }
+  }
+
+  return Array.from(deduped.values());
+}
+
+function xrayWatchNames(vulnerability: Vulnerability): string[] {
+  const names = [...(vulnerability.xray_watch_names ?? []), vulnerability.xray_watch_name ?? '']
+    .map((name) => name.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(names));
+}
+
+function vulnerabilityHasXrayPolicy(vulnerability: Vulnerability): boolean {
+  const policyMatches = parseXrayWatchPolicyMatches(vulnerability);
   return (
-    <button
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="size-9 flex items-center justify-center rounded-xl transition-colors"
-      style={{
-        background: 'var(--row-hover)',
-        border: '1px solid var(--border-subtle)',
-        color: 'var(--text-muted)',
-      }}
-      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-    >
-      {isDark ? (
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="5" />
-          <line x1="12" y1="1" x2="12" y2="3" />
-          <line x1="12" y1="21" x2="12" y2="23" />
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-          <line x1="1" y1="12" x2="3" y2="12" />
-          <line x1="21" y1="12" x2="23" y2="12" />
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-        </svg>
-      ) : (
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-      )}
-    </button>
+    policyMatches.length > 0 ||
+    xrayWatchNames(vulnerability).length > 0 ||
+    vulnerability.xray_is_blocking === true
   );
 }
 
-const LIMIT = 25;
+function prioritizeXrayPolicyVulnerabilities(vulnerabilities: Vulnerability[]): Vulnerability[] {
+  return vulnerabilities
+    .map((vulnerability, index) => ({ vulnerability, index }))
+    .sort((left, right) => {
+      const leftPriority = vulnerabilityHasXrayPolicy(left.vulnerability) ? 1 : 0;
+      const rightPriority = vulnerabilityHasXrayPolicy(right.vulnerability) ? 1 : 0;
+      if (leftPriority !== rightPriority) {
+        return rightPriority - leftPriority;
+      }
+      return left.index - right.index;
+    })
+    .map((entry) => entry.vulnerability);
+}
+
+function buildPaginationItems(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const items: Array<number | 'ellipsis'> = [1];
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  if (start > 2) {
+    items.push('ellipsis');
+  }
+  for (let nextPage = start; nextPage <= end; nextPage += 1) {
+    items.push(nextPage);
+  }
+  if (end < totalPages - 1) {
+    items.push('ellipsis');
+  }
+  items.push(totalPages);
+  return items;
+}
 
 type ResultTab = 'overview' | 'timeline';
 
 export default function SharedScanPage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [scan, setScan] = useState<Scan | null>(null);
   const [error, setError] = useState('');
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
@@ -179,6 +231,7 @@ export default function SharedScanPage() {
   const [minCvss, setMinCvss] = useState(0);
   const [minCvssInput, setMinCvssInput] = useState('');
   const [hasFix, setHasFix] = useState(false);
+  const [xrayPolicyFirst, setXrayPolicyFirst] = useState(false);
   const [sortBy, setSortBy] = useState('severity');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [vulnLoading, setVulnLoading] = useState(false);
@@ -236,17 +289,54 @@ export default function SharedScanPage() {
       )
         return;
       setVulnLoading(true);
-      listSharedVulnerabilities(
-        token,
-        page,
-        LIMIT,
-        severityFilter || undefined,
-        pkgFilter || undefined,
-        hasFix || undefined,
-        minCvss || undefined,
-        sortBy,
-        sortDir
-      )
+      const shouldLoadAllPages = xrayPolicyFirst;
+      const severity = severityFilter || undefined;
+      const pkg = pkgFilter || undefined;
+      const fix = hasFix || undefined;
+      const cvss = minCvss || undefined;
+
+      const request = shouldLoadAllPages
+        ? (async () => {
+            const pageSize = 100;
+            let nextPage = 1;
+            const all: Vulnerability[] = [];
+            while (true) {
+              const res = await listSharedVulnerabilities(
+                token,
+                nextPage,
+                pageSize,
+                severity,
+                pkg,
+                fix,
+                cvss,
+                sortBy,
+                sortDir
+              );
+              const rows = res.data ?? [];
+              all.push(...rows);
+              if (all.length >= res.total || rows.length < pageSize) {
+                break;
+              }
+              nextPage += 1;
+            }
+            const prioritized = prioritizeXrayPolicyVulnerabilities(all);
+            const start = (page - 1) * LIMIT;
+            const end = start + LIMIT;
+            return { data: prioritized.slice(start, end), total: prioritized.length };
+          })()
+        : listSharedVulnerabilities(
+            token,
+            page,
+            LIMIT,
+            severity,
+            pkg,
+            fix,
+            cvss,
+            sortBy,
+            sortDir
+          );
+
+      request
         .then((res) => {
           setVulns(res.data ?? []);
           setVulnTotal(res.total);
@@ -258,7 +348,19 @@ export default function SharedScanPage() {
         })
         .finally(() => setVulnLoading(false));
     });
-  }, [token, scan, page, severityFilter, pkgFilter, minCvss, hasFix, sortBy, sortDir, router]);
+  }, [
+    token,
+    scan,
+    page,
+    severityFilter,
+    pkgFilter,
+    minCvss,
+    hasFix,
+    xrayPolicyFirst,
+    sortBy,
+    sortDir,
+    router,
+  ]);
 
   async function handleRescan() {
     setReScanning(true);
@@ -325,46 +427,19 @@ export default function SharedScanPage() {
     scan && (scan.status === 'completed' || isBlockedByXrayPolicy)
   );
   const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
+  const vulnPaginationItems = buildPaginationItems(page, totalPages);
   const imageName = scan ? `${scan.image_name}:${scan.image_tag}` : '…';
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--app-bg)' }}>
-      {/* Nav */}
-      <header
-        className="sticky top-0 z-20 flex items-center justify-between px-6 py-4"
-        style={{ background: 'var(--app-bg)', borderBottom: '1px solid var(--border-subtle)' }}
-      >
-        <Link href="/" className="flex items-center gap-2.5">
-          <div
-            className="size-8 rounded-xl flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 82%, black) 100%)',
-              boxShadow: '0 0 12px color-mix(in srgb, var(--accent) 40%, transparent)',
-            }}
-          >
-            <Logo size={16} className="text-white" />
-          </div>
-          <span
-            className="font-semibold text-[15px] tracking-tight"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            JustScan
-          </span>
-        </Link>
-
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          {isLoggedIn ? (
-            <Link href="/scans" className="btn-secondary">
-              Dashboard →
-            </Link>
-          ) : (
-            <Link href={`/login?returnUrl=/shared/${token}`} className="btn-secondary">
-              Sign in
-            </Link>
-          )}
-        </div>
-      </header>
+      <div className="sticky top-0 z-20">
+        <PublicNavbar
+          isDark={isDark}
+          isLoggedIn={isLoggedIn}
+          onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
+          homeHref="/public/scan/image"
+        />
+      </div>
 
       <main className="max-w-[1500px] mx-auto px-4 py-8 space-y-6">
         {actionError && (
@@ -590,22 +665,23 @@ export default function SharedScanPage() {
             </div>
 
             {/* Vulnerabilities */}
-            <div className="space-y-3">
-              <div className="space-y-3">
-                <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Vulnerabilities
-                  {vulnTotal > 0 && (
-                    <span
-                      className="text-sm font-normal ml-2"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      {vulnTotal} found
-                    </span>
-                  )}
-                </h2>
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                  {/* Severity pills */}
-                  <div className="w-full overflow-x-auto pb-1 xl:w-auto">
+            <Card className="overflow-hidden">
+              <Card.Header className="space-y-4">
+                <div>
+                  <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    Vulnerabilities
+                    {vulnTotal > 0 && (
+                      <span
+                        className="text-sm font-normal ml-2"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
+                        {vulnTotal} found
+                      </span>
+                    )}
+                  </h2>
+                </div>
+                <Card variant="secondary" className="flex flex-col gap-3 p-3">
+                  <div className="w-full overflow-x-auto pb-1">
                     <SegmentedControl
                       ariaLabel="Severity filters"
                       className="min-w-max"
@@ -624,213 +700,173 @@ export default function SharedScanPage() {
                       size="sm"
                     />
                   </div>
-                  <div className="flex w-full flex-col gap-2 md:flex-row md:items-end xl:w-auto xl:justify-end">
+                  <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(220px,1fr)_160px_150px_150px_120px_auto_auto]">
                     <FormField
                       hideLabel
                       label="Filter by package"
                       type="text"
                       value={pkgInput}
                       onChange={(e) => setPkgInput(e.target.value)}
-                      placeholder="Package..."
-                      className="min-w-[220px] flex-1 md:min-w-[280px] xl:w-[320px] xl:flex-none"
-                      containerClassName="min-w-[220px] flex-1 md:min-w-[280px] xl:w-[320px] xl:flex-none"
+                      placeholder="Search package..."
+                      className="w-full bg-surface"
+                      containerClassName="w-full"
                     />
-                    <div className="flex shrink-0 flex-col gap-1.5">
-                      <FormField
-                        hideLabel
-                        label="Minimum CVSS"
-                        type="number"
-                        min={0}
-                        max={10}
-                        step={0.1}
-                        value={minCvssInput}
-                        onChange={(e) => {
-                          setMinCvssInput(e.target.value);
-                          const v = parseFloat(e.target.value);
-                          setMinCvss(isNaN(v) ? 0 : v);
-                          setPage(1);
-                        }}
-                        placeholder="0"
-                        className="w-full min-w-[5.5rem] md:w-24"
-                        containerClassName="w-full min-w-[5.5rem] md:w-24"
-                      />
-                    </div>
+                    <Select
+                      aria-label="Sort vulnerabilities by"
+                      value={sortBy}
+                      className="w-full"
+                      onChange={(value) => {
+                        if (value == null) {
+                          return;
+                        }
+                        setSortBy(String(value));
+                        setPage(1);
+                      }}
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="vuln_id">CVE ID</ListBox.Item>
+                          <ListBox.Item id="pkg_name">Package</ListBox.Item>
+                          <ListBox.Item id="severity">Severity</ListBox.Item>
+                          <ListBox.Item id="cvss_score">CVSS</ListBox.Item>
+                          <ListBox.Item id="installed_version">Installed</ListBox.Item>
+                          <ListBox.Item id="fixed_version">Fixed In</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <Select
+                      aria-label="Sort direction"
+                      value={sortDir}
+                      className="w-full"
+                      onChange={(value) => {
+                        if (value == null) {
+                          return;
+                        }
+                        setSortDir(String(value) as 'asc' | 'desc');
+                        setPage(1);
+                      }}
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="asc">Ascending</ListBox.Item>
+                          <ListBox.Item id="desc">Descending</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <FormField
+                      hideLabel
+                      label="Minimum CVSS"
+                      type="number"
+                      min={0}
+                      max={10}
+                      step={0.1}
+                      value={minCvssInput}
+                      onChange={(e) => {
+                        setMinCvssInput(e.target.value);
+                        const v = parseFloat(e.target.value);
+                        setMinCvss(isNaN(v) ? 0 : v);
+                        setPage(1);
+                      }}
+                      placeholder="Min CVSS"
+                      className="w-full bg-surface"
+                      containerClassName="w-full"
+                    />
                     <Button
                       onPress={() => {
                         setHasFix(!hasFix);
                         setPage(1);
                       }}
-                      className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full shrink-0 md:w-auto`}
+                      className="w-full"
                       variant={hasFix ? 'primary' : 'secondary'}
                     >
                       Has Fix
                     </Button>
+                    <Button
+                      onPress={() => {
+                        setXrayPolicyFirst(!xrayPolicyFirst);
+                        setPage(1);
+                      }}
+                      className="w-full"
+                      variant={xrayPolicyFirst ? 'primary' : 'secondary'}
+                    >
+                      Xray Policy First
+                    </Button>
                   </div>
-                </div>
-              </div>
-
-              {/* Table */}
-              <div
-                className="rounded-2xl overflow-hidden"
-                style={{
-                  background: 'var(--surface-bg)',
-                  border: '1px solid var(--surface-border)',
+                </Card>
+              </Card.Header>
+              <VulnerabilitiesTable
+                ariaLabel="Shared scan vulnerabilities"
+                vulns={vulns}
+                vulnLoading={vulnLoading}
+                vulnTotal={vulnTotal}
+                sortBy={
+                  sortBy as
+                    | 'vuln_id'
+                    | 'pkg_name'
+                    | 'installed_version'
+                    | 'fixed_version'
+                    | 'severity'
+                    | 'cvss_score'
+                }
+                sortDir={sortDir}
+                onSortChange={(key, direction) => {
+                  setSortBy(key);
+                  setSortDir(direction);
+                  setPage(1);
                 }}
-              >
-                <Table>
-                  <Table.ScrollContainer>
-                    <Table.Content
-                      aria-label="Shared scan vulnerabilities"
-                      className="min-w-[920px]"
-                    >
-                      <Table.Header>
-                        {(
-                          [
-                            { label: 'CVE ID', key: 'vuln_id' },
-                            { label: 'Package', key: 'pkg_name' },
-                            { label: 'Installed', key: 'installed_version' },
-                            { label: 'Fixed In', key: 'fixed_version' },
-                            { label: 'Severity', key: 'severity' },
-                            { label: 'CVSS', key: 'cvss_score' },
-                          ] as { label: string; key: string }[]
-                        ).map(({ label, key }) => {
-                          const active = sortBy === key;
-                          return (
-                            <Table.Column key={key} isRowHeader={key === 'vuln_id'}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (active) {
-                                    setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-                                  } else {
-                                    setSortBy(key);
-                                    setSortDir('asc');
-                                  }
-                                  setPage(1);
-                                }}
-                                className="inline-flex items-center gap-1 cursor-pointer select-none"
-                                style={{ color: active ? 'var(--accent)' : 'var(--text-faint)' }}
-                              >
-                                <span>{label}</span>
-                                {active && <span>{sortDir === 'desc' ? '↓' : '↑'}</span>}
-                              </button>
-                            </Table.Column>
-                          );
-                        })}
-                      </Table.Header>
-                      <Table.Body>
-                        {vulnLoading ? (
-                          <Table.Row id="loading">
-                            <Table.Cell colSpan={6}>
-                              <div className="py-12 text-center">
-                                <div className="flex justify-center">
-                                  <div
-                                    className="size-6 rounded-full border-2 border-t-accent-500 animate-spin"
-                                    style={{
-                                      borderColor: 'var(--border-subtle)',
-                                      borderTopColor: 'var(--accent)',
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            </Table.Cell>
-                          </Table.Row>
-                        ) : vulns.length === 0 ? (
-                          <Table.Row id="empty">
-                            <Table.Cell colSpan={6}>
-                              <div
-                                className="py-12 text-center text-sm"
-                                style={{ color: 'var(--text-faint)' }}
-                              >
-                                {vulnTotal === 0
-                                  ? 'No vulnerabilities found.'
-                                  : 'No results match your filters.'}
-                              </div>
-                            </Table.Cell>
-                          </Table.Row>
-                        ) : (
-                          vulns.map((v) => (
-                            <Table.Row key={v.id} id={v.id} className="hover:bg-[var(--row-hover)]">
-                              <Table.Cell>
-                                {v.vuln_id ? (
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <button
-                                      type="button"
-                                      onClick={() => openVulnerabilityDetails(v)}
-                                      className="font-mono text-xs text-accent dark:text-accent hover:underline transition-colors"
-                                    >
-                                      {v.vuln_id}
-                                    </button>
-                                    <SourceBadge source={v.data_source} />
-                                  </div>
-                                ) : (
-                                  <span style={{ color: 'var(--text-faint)' }}>-</span>
-                                )}
-                              </Table.Cell>
-                              <Table.Cell
-                                className="font-mono text-xs"
-                                style={{ color: 'var(--text-secondary)' }}
-                              >
-                                {v.pkg_name}
-                              </Table.Cell>
-                              <Table.Cell
-                                className="font-mono text-xs"
-                                style={{ color: 'var(--text-muted)' }}
-                              >
-                                {v.installed_version}
-                              </Table.Cell>
-                              <Table.Cell className="font-mono text-xs text-emerald-600 dark:text-emerald-500">
-                                {v.fixed_version || (
-                                  <span style={{ color: 'var(--text-faint)' }}>-</span>
-                                )}
-                              </Table.Cell>
-                              <Table.Cell>
-                                <SeverityBadge severity={v.severity} />
-                              </Table.Cell>
-                              <Table.Cell
-                                className="font-mono text-xs"
-                                style={{ color: 'var(--text-muted)' }}
-                              >
-                                {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
-                              </Table.Cell>
-                            </Table.Row>
-                          ))
-                        )}
-                      </Table.Body>
-                    </Table.Content>
-                  </Table.ScrollContainer>
-                </Table>
-              </div>
+                onOpenVulnerability={openVulnerabilityDetails}
+                renderSeverityBadge={(severity) => <SeverityBadge severity={severity} />}
+                renderSourceBadge={(source) => <SourceBadge source={source} />}
+                renderXrayPolicyCell={(vulnerability) => {
+                  const policyMatches = parseXrayWatchPolicyMatches(vulnerability);
+                  const watchCount = xrayWatchNames(vulnerability).length;
+                  const hasDetails =
+                    policyMatches.length > 0 || watchCount > 0 || !!vulnerability.xray_is_blocking;
+                  if (!hasDetails) {
+                    return <span className="text-xs text-zinc-400">-</span>;
+                  }
 
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    {vulnTotal} total
-                  </span>
-                  <div className="flex items-center gap-2">
+                  const total = policyMatches.length || watchCount;
+                  const isBlocking =
+                    vulnerability.xray_is_blocking ||
+                    policyMatches.some(
+                      (match) => match.isBlocking || match.isBuildFailed || match.failPullRequest
+                    );
+
+                  return (
                     <Button
-                      isDisabled={page <= 1}
-                      onPress={() => setPage((p) => p - 1)}
-                      className="btn-secondary"
-                      variant="secondary"
+                      onPress={() => openVulnerabilityDetails(vulnerability)}
+                      className="inline-flex items-center gap-1.5"
+                      variant={isBlocking ? 'danger-soft' : 'secondary'}
                     >
-                      ← Prev
+                      Details
+                      <span
+                        className={`font-semibold text-xs rounded-full px-1.5 py-0.5 ${
+                          isBlocking
+                            ? 'bg-red-500/20 text-red-400'
+                            : 'bg-zinc-500/20 text-zinc-300 dark:text-zinc-200'
+                        }`}
+                      >
+                        {total}
+                      </span>
                     </Button>
-                    <span className="text-sm px-2" style={{ color: 'var(--text-muted)' }}>
-                      {page} / {totalPages}
-                    </span>
-                    <Button
-                      isDisabled={page >= totalPages}
-                      onPress={() => setPage((p) => p + 1)}
-                      className="btn-secondary"
-                      variant="secondary"
-                    >
-                      Next →
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
+                  );
+                }}
+                page={page}
+                totalPages={totalPages}
+                paginationItems={vulnPaginationItems}
+                onPageChange={setPage}
+                pageSize={LIMIT}
+              />
+            </Card>
           </>
         )}
 

@@ -1,7 +1,9 @@
 'use client';
 
+import { useToast } from '@/components/toast';
 import {
   adminUpdateAuthSettings,
+  adminUpdateMaintenanceSettings,
   adminUpdateScannerSettings,
   getAdminSettings,
   setPublicScanEnabled,
@@ -11,24 +13,11 @@ import {
   updateXRayLogRetention,
 } from '@/lib/api/admin';
 import type { ScannerSettings } from '@/lib/api/types/registries';
-import { Button, Card, Input, Link, Switch } from '@heroui/react';
+import { Button, Card, Input, Link, Modal, Switch, TextArea, useOverlayState } from '@heroui/react';
 import { useEffect, useState } from 'react';
 
-function Banner({ type, text }: { type: 'success' | 'error'; text: string }) {
-  return (
-    <Card
-      className={
-        type === 'success'
-          ? 'border border-success/30 bg-success/10'
-          : 'border border-danger/30 bg-danger/10'
-      }
-    >
-      <Card.Content>
-        <p className={type === 'success' ? 'text-sm text-success' : 'text-sm text-danger'}>{text}</p>
-      </Card.Content>
-    </Card>
-  );
-}
+const DEFAULT_MAINTENANCE_MESSAGE =
+  'JustScan is currently undergoing maintenance. Please check back shortly.';
 
 function SettingRow({
   title,
@@ -54,11 +43,10 @@ function SettingRow({
 }
 
 function ScannerSettingsPanel() {
+  const toast = useToast();
   const [settings, setSettings] = useState<ScannerSettings>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState('');
-  const [error, setError] = useState('');
 
   useEffect(() => {
     getAdminSettings()
@@ -73,21 +61,19 @@ function ScannerSettingsPanel() {
         });
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch(() => {
+        setLoading(false);
+        toast.error('Failed to load scanner settings');
+      });
+  }, [toast]);
 
   async function handleSave() {
     setSaving(true);
-    setError('');
-    setSuccess('');
     try {
       await adminUpdateScannerSettings(settings);
-      setSuccess('Scanner settings updated');
-      setTimeout(() => setSuccess(''), 3000);
+      toast.success('Scanner settings updated');
     } catch (saveError: unknown) {
-      setError(
-        saveError instanceof Error ? saveError.message : 'Failed to update scanner settings'
-      );
+      toast.error(saveError instanceof Error ? saveError.message : 'Failed to update scanner settings');
     } finally {
       setSaving(false);
     }
@@ -101,9 +87,6 @@ function ScannerSettingsPanel() {
         <h2 className="text-base font-semibold">Scanner Runtime</h2>
         <p className="text-sm text-zinc-500">Tune scanner engines and job execution behavior.</p>
       </div>
-
-      {error && <Banner type="error" text={error} />}
-      {success && <Banner type="success" text={success} />}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Switch
@@ -181,11 +164,10 @@ function ScannerSettingsPanel() {
 }
 
 function AuthSettingsPanel() {
+  const toast = useToast();
   const [localAuthEnabled, setLocalAuthEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState('');
-  const [error, setError] = useState('');
 
   useEffect(() => {
     getAdminSettings()
@@ -193,19 +175,19 @@ function AuthSettingsPanel() {
         setLocalAuthEnabled(settings['auth.local_enabled'] !== 'false');
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch(() => {
+        setLoading(false);
+        toast.error('Failed to load authentication settings');
+      });
+  }, [toast]);
 
   async function handleSave() {
     setSaving(true);
-    setError('');
-    setSuccess('');
     try {
       await adminUpdateAuthSettings({ local_auth_enabled: localAuthEnabled });
-      setSuccess('Authentication settings updated');
-      setTimeout(() => setSuccess(''), 3000);
+      toast.success('Authentication settings updated');
     } catch (saveError: unknown) {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to update auth settings');
+      toast.error(saveError instanceof Error ? saveError.message : 'Failed to update auth settings');
     } finally {
       setSaving(false);
     }
@@ -219,8 +201,6 @@ function AuthSettingsPanel() {
         <h2 className="text-base font-semibold">Authentication</h2>
         <p className="text-sm text-zinc-500">Control available login methods.</p>
       </div>
-      {error && <Banner type="error" text={error} />}
-      {success && <Banner type="success" text={success} />}
       <Switch isSelected={localAuthEnabled} onChange={setLocalAuthEnabled}>
         <Switch.Control>
           <Switch.Thumb />
@@ -237,6 +217,7 @@ function AuthSettingsPanel() {
 }
 
 export function SettingsTab() {
+  const toast = useToast();
   const [publicScanEnabled, setPublicScanEnabledState] = useState<boolean | null>(null);
   const [rateLimit, setRateLimitState] = useState(5);
   const [rateLimitInput, setRateLimitInput] = useState('5');
@@ -246,15 +227,17 @@ export function SettingsTab() {
   const [apiLogRetentionInput, setApiLogRetentionInput] = useState('30');
   const [xrayLogRetention, setXrayLogRetention] = useState(30);
   const [xrayLogRetentionInput, setXrayLogRetentionInput] = useState('30');
+  const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState(DEFAULT_MAINTENANCE_MESSAGE);
+  const [maintenanceDraft, setMaintenanceDraft] = useState(DEFAULT_MAINTENANCE_MESSAGE);
+  const maintenanceModal = useOverlayState();
 
   const [savingPublic, setSavingPublic] = useState(false);
   const [savingRl, setSavingRl] = useState(false);
   const [savingRegisterRl, setSavingRegisterRl] = useState(false);
   const [savingApiRetention, setSavingApiRetention] = useState(false);
   const [savingXrayRetention, setSavingXrayRetention] = useState(false);
-
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [savingMaintenance, setSavingMaintenance] = useState(false);
 
   useEffect(() => {
     getAdminSettings()
@@ -272,21 +255,67 @@ export function SettingsTab() {
         setApiLogRetentionInput(String(apiRet));
         setXrayLogRetention(xrayRet);
         setXrayLogRetentionInput(String(xrayRet));
+        const nextMaintenanceEnabled = settings['maintenance.enabled'] === 'true';
+        const nextMaintenanceMessage =
+          settings['maintenance.message'] || DEFAULT_MAINTENANCE_MESSAGE;
+        setMaintenanceEnabled(nextMaintenanceEnabled);
+        setMaintenanceMessage(nextMaintenanceMessage);
+        setMaintenanceDraft(nextMaintenanceMessage);
       })
-      .catch(() => setError('Failed to load settings'));
-  }, []);
+      .catch(() => toast.error('Failed to load settings'));
+  }, [toast]);
+
+  async function saveMaintenance(nextEnabled: boolean, nextMessage: string) {
+    const trimmed = nextMessage.trim();
+    if (!trimmed) {
+      toast.error('Maintenance message cannot be empty');
+      return false;
+    }
+    if (trimmed.length > 500) {
+      toast.error('Maintenance message must be 500 characters or fewer');
+      return false;
+    }
+
+    setSavingMaintenance(true);
+    try {
+      const result = await adminUpdateMaintenanceSettings({
+        enabled: nextEnabled,
+        message: trimmed,
+      });
+      setMaintenanceEnabled(result.enabled);
+      setMaintenanceMessage(result.message);
+      setMaintenanceDraft(result.message);
+      toast.success('Maintenance mode settings updated');
+      return true;
+    } catch (saveError: unknown) {
+      toast.error(
+        saveError instanceof Error
+          ? saveError.message
+          : 'Failed to update maintenance mode settings'
+      );
+      return false;
+    } finally {
+      setSavingMaintenance(false);
+    }
+  }
+
+  async function handleToggleMaintenance(enabled: boolean) {
+    await saveMaintenance(enabled, maintenanceMessage);
+  }
+
+  async function handleSaveMaintenanceMessage() {
+    const ok = await saveMaintenance(maintenanceEnabled, maintenanceDraft);
+    if (ok) maintenanceModal.close();
+  }
 
   async function handleTogglePublicScan(enabled: boolean) {
     setSavingPublic(true);
-    setError('');
-    setSuccess('');
     try {
       await setPublicScanEnabled(enabled);
       setPublicScanEnabledState(enabled);
-      setSuccess(`Public scanning ${enabled ? 'enabled' : 'disabled'} successfully`);
-      setTimeout(() => setSuccess(''), 3000);
+      toast.success(`Public scanning ${enabled ? 'enabled' : 'disabled'} successfully`);
     } catch (toggleError: unknown) {
-      setError(toggleError instanceof Error ? toggleError.message : 'Failed to update setting');
+      toast.error(toggleError instanceof Error ? toggleError.message : 'Failed to update setting');
     } finally {
       setSavingPublic(false);
     }
@@ -295,19 +324,16 @@ export function SettingsTab() {
   async function handleSaveRateLimit() {
     const value = parseInt(rateLimitInput, 10);
     if (isNaN(value) || value < 1 || value > 1000) {
-      setError('Rate limit must be between 1 and 1000');
+      toast.error('Rate limit must be between 1 and 1000');
       return;
     }
     setSavingRl(true);
-    setError('');
-    setSuccess('');
     try {
       await updateRateLimit(value);
       setRateLimitState(value);
-      setSuccess('Rate limit updated');
-      setTimeout(() => setSuccess(''), 3000);
+      toast.success('Rate limit updated');
     } catch (saveError: unknown) {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to update rate limit');
+      toast.error(saveError instanceof Error ? saveError.message : 'Failed to update rate limit');
     } finally {
       setSavingRl(false);
     }
@@ -316,19 +342,16 @@ export function SettingsTab() {
   async function handleSaveRegisterRateLimit() {
     const value = parseInt(registerRateLimitInput, 10);
     if (isNaN(value) || value < 1 || value > 1000) {
-      setError('Registration rate limit must be between 1 and 1000');
+      toast.error('Registration rate limit must be between 1 and 1000');
       return;
     }
     setSavingRegisterRl(true);
-    setError('');
-    setSuccess('');
     try {
       await updateRegisterRateLimit(value);
       setRegisterRateLimitState(value);
-      setSuccess('Registration rate limit updated');
-      setTimeout(() => setSuccess(''), 3000);
+      toast.success('Registration rate limit updated');
     } catch (saveError: unknown) {
-      setError(
+      toast.error(
         saveError instanceof Error ? saveError.message : 'Failed to update registration rate limit'
       );
     } finally {
@@ -339,19 +362,16 @@ export function SettingsTab() {
   async function handleSaveApiLogRetention() {
     const value = parseInt(apiLogRetentionInput, 10);
     if (isNaN(value) || value < 0) {
-      setError('Retention must be 0 or more (0 = keep forever)');
+      toast.error('Retention must be 0 or more (0 = keep forever)');
       return;
     }
     setSavingApiRetention(true);
-    setError('');
-    setSuccess('');
     try {
       await updateAPILogRetention(value);
       setApiLogRetention(value);
-      setSuccess('API log retention updated');
-      setTimeout(() => setSuccess(''), 3000);
+      toast.success('API log retention updated');
     } catch (saveError: unknown) {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to update API log retention');
+      toast.error(saveError instanceof Error ? saveError.message : 'Failed to update API log retention');
     } finally {
       setSavingApiRetention(false);
     }
@@ -360,19 +380,16 @@ export function SettingsTab() {
   async function handleSaveXrayLogRetention() {
     const value = parseInt(xrayLogRetentionInput, 10);
     if (isNaN(value) || value < 0) {
-      setError('Retention must be 0 or more (0 = keep forever)');
+      toast.error('Retention must be 0 or more (0 = keep forever)');
       return;
     }
     setSavingXrayRetention(true);
-    setError('');
-    setSuccess('');
     try {
       await updateXRayLogRetention(value);
       setXrayLogRetention(value);
-      setSuccess('xRay log retention updated');
-      setTimeout(() => setSuccess(''), 3000);
+      toast.success('xRay log retention updated');
     } catch (saveError: unknown) {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to update xRay log retention');
+      toast.error(saveError instanceof Error ? saveError.message : 'Failed to update xRay log retention');
     } finally {
       setSavingXrayRetention(false);
     }
@@ -380,9 +397,6 @@ export function SettingsTab() {
 
   return (
     <div className="space-y-4">
-      {error && <Banner type="error" text={error} />}
-      {success && <Banner type="success" text={success} />}
-
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="space-y-4">
           <div>
@@ -424,6 +438,45 @@ export function SettingsTab() {
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="rounded-xl border border-divider/60 bg-content2/30 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Maintenance Mode</p>
+                <p className="text-xs text-zinc-500">
+                  Route non-admin users to the maintenance page.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  isDisabled={savingMaintenance}
+                  onPress={() => {
+                    setMaintenanceDraft(maintenanceMessage);
+                    maintenanceModal.open();
+                  }}
+                >
+                  Edit message
+                </Button>
+                <Switch
+                  isDisabled={savingMaintenance}
+                  isSelected={maintenanceEnabled}
+                  onChange={handleToggleMaintenance}
+                >
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <Switch.Content>{maintenanceEnabled ? 'Enabled' : 'Disabled'}</Switch.Content>
+                </Switch>
+              </div>
+            </div>
+            {maintenanceEnabled ? (
+              <div className="mt-3 rounded-lg border border-warning/30 bg-warning/10 p-2 text-xs text-warning">
+                Maintenance page is active.
+              </div>
+            ) : null}
           </div>
 
           <SettingRow
@@ -541,6 +594,55 @@ export function SettingsTab() {
         <ScannerSettingsPanel />
         <AuthSettingsPanel />
       </div>
+
+      <Modal state={maintenanceModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>Edit Maintenance Message</Modal.Heading>
+                <p className="text-sm text-zinc-500">
+                  This plain-text message is shown on the public maintenance page.
+                </p>
+              </Modal.Header>
+              <Modal.Body>
+                <TextArea
+                  aria-label="Maintenance message"
+                  fullWidth
+                  maxLength={500}
+                  placeholder="Explain what users should know while the app is unavailable."
+                  rows={5}
+                  value={maintenanceDraft}
+                  variant="secondary"
+                  onChange={(event) => setMaintenanceDraft(event.target.value)}
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+                  <span>Plain text only.</span>
+                  <span>{maintenanceDraft.length}/500</span>
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button
+                  variant="tertiary"
+                  onPress={() => {
+                    setMaintenanceDraft(maintenanceMessage);
+                    maintenanceModal.close();
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="secondary"
+                  isDisabled={savingMaintenance || maintenanceDraft.trim() === maintenanceMessage}
+                  onPress={handleSaveMaintenanceMessage}
+                >
+                  {savingMaintenance ? 'Saving...' : 'Save message'}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </div>
   );
 }

@@ -28,9 +28,11 @@ import {
   createUploadedArchiveScan,
   deleteScan,
   getDefaultScannerCapabilities,
+  getUserDetails,
   getWorkScope,
   ImageSummary,
   listArtifactoryRepositories,
+  listOrgMembers,
   listRegistriesWithCapabilities,
   listScanImages,
   listScans,
@@ -387,6 +389,7 @@ export default function ScansPage() {
   // Available tags for bulk tagging
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
+  const [scanUsersById, setScanUsersById] = useState<Record<string, { displayName: string }>>({});
   const [capabilities, setCapabilities] = useState<ScannerCapabilities>(
     getDefaultScannerCapabilities()
   );
@@ -529,6 +532,41 @@ export default function ScansPage() {
       })
       .catch(() => {});
   }, [scopeKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadScanUsers = async () => {
+      const [currentUserResult, orgMembers] = await Promise.all([
+        getUserDetails().catch(() => null),
+        workScope.kind === 'org' ? listOrgMembers(workScope.orgId).catch(() => []) : Promise.resolve([]),
+      ]);
+
+      if (cancelled) return;
+
+      const next: Record<string, { displayName: string }> = {};
+      if (currentUserResult?.user?.id) {
+        next[currentUserResult.user.id] = {
+          displayName: currentUserResult.user.username || currentUserResult.user.email,
+        };
+      }
+
+      orgMembers.forEach((member) => {
+        if (!member.user_id) return;
+        next[member.user_id] = {
+          displayName: member.username || member.email || member.user_id,
+        };
+      });
+
+      setScanUsersById(next);
+    };
+
+    void loadScanUsers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scopeKey, workScope]);
 
   const selectableRegistries = registries.filter(
     (registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy
@@ -772,6 +810,7 @@ export default function ScansPage() {
 
       if (
         artifactoryRepositoriesByRegistry[selectedRegistry.id] ||
+        artifactoryRepositoriesErrorByRegistry[selectedRegistry.id] ||
         artifactoryRepositoriesLoading === selectedRegistry.id
       ) {
         return;
@@ -808,6 +847,7 @@ export default function ScansPage() {
     });
   }, [
     artifactoryRepositoriesByRegistry,
+    artifactoryRepositoriesErrorByRegistry,
     artifactoryRepositoriesLoading,
     selectedRegistry,
     selectedRegistryIsXray,
@@ -1546,7 +1586,7 @@ export default function ScansPage() {
                 });
               }
             }}
-            orgNamesById={orgNamesById}
+            scanUsersById={scanUsersById}
             selectedScans={selectedScans}
           />
         </>

@@ -1,6 +1,6 @@
 'use client';
 
-import { OwnershipBadge, SevCount, StatusBadge } from '@/components/ui/badges';
+import { SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
@@ -8,7 +8,7 @@ import { useWorkScope } from '@/hooks/use-work-scope';
 import { ImageSummary, listScans, Scan } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Pagination, Table } from '@heroui/react';
+import { Avatar, Button, Pagination, Popover, Table } from '@heroui/react';
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
@@ -26,7 +26,7 @@ interface SharedChildProps {
   onCancel: (scanId: string, imageName: string) => Promise<void> | void;
   onDelete: (scanId: string, imageName: string) => Promise<void> | void;
   onSelectScan: (scanId: string, selected: boolean) => void;
-  orgNamesById?: Record<string, string>;
+  scanUsersById?: Record<string, { displayName: string }>;
   selectedScans: Set<string>;
 }
 
@@ -61,6 +61,64 @@ interface ScanSelectionCheckboxProps {
 }
 
 const CHILD_LIMIT = 10;
+
+function scanUserInitials(displayName: string | undefined, ownerUserId: string | undefined) {
+  const source = displayName?.trim() || ownerUserId?.trim() || '';
+  if (!source) return '—';
+  const parts = source.split(/[\s._-]+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase();
+  }
+  return source.slice(0, 2).toUpperCase();
+}
+
+function TriggeredByAvatar({
+  ownerUserId,
+  scanUsersById,
+}: {
+  ownerUserId?: string | null;
+  scanUsersById?: Record<string, { displayName: string }>;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (!ownerUserId) {
+    return <span className="text-xs text-zinc-500">—</span>;
+  }
+
+  const displayName = scanUsersById?.[ownerUserId]?.displayName;
+  const label = displayName || ownerUserId;
+
+  return (
+    <Popover isOpen={isOpen} onOpenChange={setIsOpen}>
+      <Popover.Trigger>
+        <button
+          type="button"
+          aria-label={`Triggered by ${label}`}
+          className="inline-flex rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+          onClick={(event) => event.stopPropagation()}
+          onFocus={() => setIsOpen(true)}
+          onBlur={() => setIsOpen(false)}
+          onMouseEnter={() => setIsOpen(true)}
+          onMouseLeave={() => setIsOpen(false)}
+        >
+          <Avatar size="sm" variant="soft" color="default">
+            <Avatar.Fallback>{scanUserInitials(displayName, ownerUserId)}</Avatar.Fallback>
+          </Avatar>
+        </button>
+      </Popover.Trigger>
+      <Popover.Content
+        placement="top"
+        className="rounded-lg"
+        onMouseEnter={() => setIsOpen(true)}
+        onMouseLeave={() => setIsOpen(false)}
+      >
+        <Popover.Dialog className="px-2 py-1 text-xs text-zinc-700 dark:text-zinc-200">
+          {label}
+        </Popover.Dialog>
+      </Popover.Content>
+    </Popover>
+  );
+}
 
 function toggleExpanded(current: Set<string>, imageName: string) {
   const next = new Set(current);
@@ -197,7 +255,7 @@ function ImageScansTreeChildrenRows({
   onCancel,
   onDelete,
   onSelectScan,
-  orgNamesById,
+  scanUsersById,
   selectedScans,
   onVisibleScanIdsChange,
 }: ImageScansStackedChildrenProps) {
@@ -241,7 +299,7 @@ function ImageScansTreeChildrenRows({
         if (row.kind === 'loading') {
           return (
             <Table.Row id={row.id} textValue={`Loading scans for ${imageName}`}>
-              <Table.Cell colSpan={10}>
+              <Table.Cell colSpan={11}>
                 <div className="px-4 py-3.5">
                   <div className="h-7 animate-pulse rounded-md" />
                 </div>
@@ -253,7 +311,7 @@ function ImageScansTreeChildrenRows({
         if (row.kind === 'empty') {
           return (
             <Table.Row id={row.id} textValue={`No scans for ${imageName}`}>
-              <Table.Cell colSpan={10}>
+              <Table.Cell colSpan={11}>
                 <div className="px-4 py-3 text-xs text-zinc-500">No scans yet.</div>
               </Table.Cell>
             </Table.Row>
@@ -263,7 +321,7 @@ function ImageScansTreeChildrenRows({
         if (row.kind === 'pagination') {
           return (
             <Table.Row id={row.id} textValue={`Scan pages for ${imageName}`}>
-              <Table.Cell colSpan={10}>
+              <Table.Cell colSpan={11}>
                 <div className="justify-self-center px-2 py-2">
                   <Pagination size="sm">
                     <Pagination.Content>
@@ -328,12 +386,10 @@ function ImageScansTreeChildrenRows({
             <Table.Cell onClick={openScan}>
               <div className="flex items-center gap-2">
                 <StatusBadge status={scan.status} externalStatus={scan.external_status} />
-                <OwnershipBadge
-                  ownerType={scan.owner_type}
-                  ownerOrgId={scan.owner_org_id}
-                  orgNamesById={orgNamesById}
-                />
               </div>
+            </Table.Cell>
+            <Table.Cell onClick={openScan}>
+              <TriggeredByAvatar ownerUserId={scan.owner_user_id} scanUsersById={scanUsersById} />
             </Table.Cell>
             <Table.Cell onClick={openScan}>
               <div className="min-w-0">
@@ -418,7 +474,7 @@ export function ImageScansTable({
   onSelectedScansChange,
   onSelectImageScans,
   onSelectScan,
-  orgNamesById,
+  scanUsersById,
   selectedScans,
   childRefreshKey,
 }: ImageScansTableProps) {
@@ -535,6 +591,7 @@ export function ImageScansTable({
             <Table.Column id="expander" className="w-8" />
             <Table.Column isRowHeader>Image</Table.Column>
             <Table.Column>Metadata</Table.Column>
+            <Table.Column>Triggered by</Table.Column>
             <Table.Column>Latest</Table.Column>
             <Table.Column className="text-center" style={{ color: 'rgba(239,68,68,0.7)' }}>
               C
@@ -554,7 +611,7 @@ export function ImageScansTable({
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <Table.Row key={`loading-${i}`} id={`loading-${i}`}>
-                  <Table.Cell colSpan={10}>
+                  <Table.Cell colSpan={11}>
                     <div className="px-4 py-3.5">
                       <div className="h-8 animate-pulse rounded-md" />
                     </div>
@@ -563,7 +620,7 @@ export function ImageScansTable({
               ))
             ) : tableRows.length === 0 ? (
               <Table.Row id="empty">
-                <Table.Cell colSpan={10}>
+                <Table.Cell colSpan={11}>
                   <div className="py-4">
                     <EmptyState
                       icon={<Shield01Icon size={28} />}
@@ -696,12 +753,18 @@ export function ImageScansTable({
                           >
                             {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
                           </div>
-                          <OwnershipBadge
-                            ownerType={img.owner_type}
-                            ownerOrgId={img.owner_org_id}
-                            orgNamesById={orgNamesById}
-                          />
                         </div>
+                      </Table.Cell>
+                      <Table.Cell
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                        }}
+                      >
+                        <TriggeredByAvatar
+                          ownerUserId={img.owner_user_id}
+                          scanUsersById={scanUsersById}
+                        />
                       </Table.Cell>
 
                       <Table.Cell onClick={(event) => event.stopPropagation()}>
@@ -781,7 +844,7 @@ export function ImageScansTable({
                             onSelectedScansChange(next);
                           }
                         }}
-                        orgNamesById={orgNamesById}
+                        scanUsersById={scanUsersById}
                         selectedScans={displaySelectedScans}
                       />
                     </Table.Row>

@@ -33,6 +33,7 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 		s.PUT("/:id/vulnerability-view", scans.SaveVulnerabilityViewPreference(db))
 		s.DELETE("/:id/vulnerability-view", scans.ResetVulnerabilityViewPreference(db))
 		s.GET("/:id/vulnerabilities", scans.ListVulnerabilities(db))
+		s.GET("/:id/vulnerabilities/summary", scans.GetVulnerabilitySummary(db))
 		s.GET("/:id/vulnerabilities/:vulnerabilityId/analysis", scans.GetVulnerabilityContextAnalysis(db))
 		s.GET("/:id/sbom", scans.GetSBOM(db))
 		s.GET("/:id/export", scans.ExportScan(db))

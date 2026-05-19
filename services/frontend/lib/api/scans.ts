@@ -15,6 +15,7 @@ import type {
     ScanTrendPoint,
     SharedScanRescanResponse,
     Vulnerability,
+    VulnerabilitySummary,
     VulnerabilityContextAnalysis,
     XRayRequestLog,
 } from './types/scans';
@@ -134,6 +135,25 @@ export const listVulnerabilities = (
   return req<{ data: Vulnerability[]; total: number }>(
     'GET',
     `/api/v1/scans/${scanId}/vulnerabilities?${params}`
+  );
+};
+
+export const getVulnerabilitySummary = (
+  scanId: string,
+  severity?: string,
+  pkg?: string,
+  hasFix?: boolean,
+  minCvss?: number
+) => {
+  const params = new URLSearchParams();
+  if (severity) params.set('severity', severity);
+  if (pkg) params.set('pkg', pkg);
+  if (hasFix) params.set('has_fix', 'true');
+  if (minCvss) params.set('min_cvss', String(minCvss));
+  const query = params.toString();
+  return req<VulnerabilitySummary>(
+    'GET',
+    `/api/v1/scans/${scanId}/vulnerabilities/summary${query ? `?${query}` : ''}`
   );
 };
 

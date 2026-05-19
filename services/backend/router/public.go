@@ -12,6 +12,7 @@ func PublicScan(router *gin.RouterGroup, db *bun.DB) {
 	p := router.Group("/public")
 	{
 		p.GET("/settings", public.GetPublicSettings(db))
+		p.GET("/maintenance", public.GetMaintenanceSettings(db))
 		p.POST("/scans", middlewares.PublicScanRateLimit(), public.CreatePublicScan(db))
 		p.GET("/scans/:id", public.GetPublicScan(db))
 		p.POST("/scans/:id/rescan", middlewares.PublicScanRateLimit(), public.ReScanPublic(db))

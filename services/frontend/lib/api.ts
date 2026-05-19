@@ -6,6 +6,7 @@ export * from './api/comments';
 export * from './api/core';
 export * from './api/dashboard';
 export * from './api/helm';
+export * from './api/maintenance';
 export * from './api/orgs';
 export * from './api/public';
 export * from './api/registries';
@@ -32,4 +33,3 @@ export * from './api/types/watchlist';
 export * from './api/user';
 export * from './api/vulnkb';
 export * from './api/watchlist';
-

@@ -3,6 +3,7 @@ package admins
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"justscan-backend/middlewares"
@@ -10,6 +11,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
+)
+
+const (
+	maintenanceEnabledKey = "maintenance.enabled"
+	maintenanceMessageKey = "maintenance.message"
 )
 
 func upsertSystemSetting(c *gin.Context, db *bun.DB, key string, value string) error {
@@ -37,6 +43,43 @@ func GetSettings(c *gin.Context, db *bun.DB) {
 		result[s.Key] = s.Value
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+// UpdateMaintenanceSettings updates the user-facing maintenance mode settings.
+func UpdateMaintenanceSettings(c *gin.Context, db *bun.DB) {
+	var req struct {
+		Enabled bool   `json:"enabled"`
+		Message string `json:"message"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	message := strings.TrimSpace(req.Message)
+	if message == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "maintenance message cannot be empty"})
+		return
+	}
+	if len(message) > 500 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "maintenance message must be 500 characters or fewer"})
+		return
+	}
+
+	enabledValue := "false"
+	if req.Enabled {
+		enabledValue = "true"
+	}
+	if err := upsertSystemSetting(c, db, maintenanceEnabledKey, enabledValue); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update maintenance mode"})
+		return
+	}
+	if err := upsertSystemSetting(c, db, maintenanceMessageKey, message); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update maintenance message"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"enabled": req.Enabled, "message": message})
 }
 
 // UpdatePublicScanEnabled enables or disables the public scan feature.

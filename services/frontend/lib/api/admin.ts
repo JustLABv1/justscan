@@ -53,6 +53,9 @@ export const adminUpdateScannerSettings = (data: Partial<ScannerSettings>) =>
 export const adminUpdateAuthSettings = (data: { local_auth_enabled: boolean }) =>
   req<{ local_auth_enabled: boolean }>('PUT', '/api/v1/admin/settings/auth', data);
 
+export const adminUpdateMaintenanceSettings = (data: { enabled: boolean; message: string }) =>
+  req<{ enabled: boolean; message: string }>('PUT', '/api/v1/admin/settings/maintenance', data);
+
 export const adminListGlobalRegistries = () =>
   req<RegistryListResponse>('GET', '/api/v1/admin/registries').then((result) => ({ data: result.data ?? [], capabilities: result.capabilities ?? getDefaultScannerCapabilities() }));
 

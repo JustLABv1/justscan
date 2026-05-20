@@ -74,17 +74,18 @@ export function OrgAutomationTab({
         <div
           className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
           style={{
-            background: 'linear-gradient(90deg,transparent,color-mix(in srgb, var(--accent) 15%, transparent),transparent)',
+            background:
+              'linear-gradient(90deg,transparent,color-mix(in srgb, var(--accent) 15%, transparent),transparent)',
           }}
         />
         <div>
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
-            Auto-assign Patterns
+            Auto-route Unscoped Scans
           </h2>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Scans matching these patterns are automatically assigned to this org. Use glob syntax:{' '}
-            <code className="text-accent dark:text-accent">nginx:*</code>,{' '}
-            <code className="text-accent dark:text-accent">docker.io/myapp:*</code>
+            Scans created outside org scope that match these patterns are automatically assigned to
+            this org. Use glob syntax: <code className="text-accent dark:text-accent">nginx:*</code>
+            , <code className="text-accent dark:text-accent">docker.io/myapp:*</code>
           </p>
         </div>
 
@@ -240,50 +241,52 @@ export function OrgAutomationTab({
           </div>
         </div>
 
-        <Switch
-          isSelected={vulnerabilityViewSettings.has_fix}
-          onChange={(value) => updateVulnerabilityViewSettings({ has_fix: value })}
-          isDisabled={!canManageOrgSettings}
-        >
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <Switch.Content>
-            <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              Only show vulnerabilities with a fix
-            </Label>
-          </Switch.Content>
-        </Switch>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Switch
+            isSelected={vulnerabilityViewSettings.has_fix}
+            onChange={(value) => updateVulnerabilityViewSettings({ has_fix: value })}
+            isDisabled={!canManageOrgSettings}
+          >
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            <Switch.Content>
+              <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                Only show vulnerabilities with a fix
+              </Label>
+            </Switch.Content>
+          </Switch>
 
-        <Switch
-          isSelected={vulnerabilityViewSettings.xray_policy_first}
-          onChange={(value) => updateVulnerabilityViewSettings({ xray_policy_first: value })}
-          isDisabled={!canManageOrgSettings}
-        >
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <Switch.Content>
-            <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              Prioritize vulnerabilities with Xray policy matches
-            </Label>
-          </Switch.Content>
-        </Switch>
+          <Switch
+            isSelected={vulnerabilityViewSettings.xray_policy_first}
+            onChange={(value) => updateVulnerabilityViewSettings({ xray_policy_first: value })}
+            isDisabled={!canManageOrgSettings}
+          >
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            <Switch.Content>
+              <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                Prioritize vulnerabilities with Xray policy matches
+              </Label>
+            </Switch.Content>
+          </Switch>
 
-        <Switch
-          isSelected={vulnerabilityViewSettings.policy_failed_only}
-          onChange={(value) => updateVulnerabilityViewSettings({ policy_failed_only: value })}
-          isDisabled={!canManageOrgSettings}
-        >
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <Switch.Content>
-            <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              Only show vulnerabilities that failed org policy
-            </Label>
-          </Switch.Content>
-        </Switch>
+          <Switch
+            isSelected={vulnerabilityViewSettings.policy_failed_only}
+            onChange={(value) => updateVulnerabilityViewSettings({ policy_failed_only: value })}
+            isDisabled={!canManageOrgSettings}
+          >
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            <Switch.Content>
+              <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                Only show vulnerabilities that failed org policy
+              </Label>
+            </Switch.Content>
+          </Switch>
+        </div>
       </Card>
 
       <Card>

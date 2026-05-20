@@ -2369,8 +2369,8 @@ export default function ScanDetailPage() {
                   }}
                 />
               </div>
-              <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_160px_150px_120px_minmax(360px,auto)]">
-                <SearchField name="scan-vuln-search" className="w-full">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_160px_150px_120px_minmax(360px,auto)]">
+                <SearchField name="scan-vuln-search" className="min-w-0 w-full">
                   <SearchField.Group>
                     <SearchField.SearchIcon />
                     <SearchField.Input
@@ -2381,7 +2381,7 @@ export default function ScanDetailPage() {
                     <SearchField.ClearButton />
                   </SearchField.Group>
                 </SearchField>
-                <SearchField name="scan-vuln-cve-search" className="w-full">
+                <SearchField name="scan-vuln-cve-search" className="min-w-0 w-full">
                   <SearchField.Group>
                     <SearchField.SearchIcon />
                     <SearchField.Input
@@ -2453,13 +2453,13 @@ export default function ScanDetailPage() {
                   className="w-full h-11 bg-surface"
                   containerClassName="w-full"
                 />
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:col-span-2 2xl:col-span-1 2xl:grid-cols-3">
                   <Button
                     onPress={() => {
                       setHasFix(!hasFix);
                       setPage(1);
                     }}
-                    className="w-full"
+                    className="min-w-0 w-full"
                     variant={hasFix ? 'primary' : 'secondary'}
                   >
                     Has Fix
@@ -2469,7 +2469,7 @@ export default function ScanDetailPage() {
                       setXrayPolicyFirst(!xrayPolicyFirst);
                       setPage(1);
                     }}
-                    className={`${xrayPolicyFirst ? 'btn-primary' : 'btn-secondary'} w-full`}
+                    className={`${xrayPolicyFirst ? 'btn-primary' : 'btn-secondary'} min-w-0 w-full`}
                     variant={xrayPolicyFirst ? 'primary' : 'secondary'}
                   >
                     Xray Policy First
@@ -2480,7 +2480,7 @@ export default function ScanDetailPage() {
                       setPage(1);
                     }}
                     isDisabled={workScope.kind !== 'org'}
-                    className={`${policyFailedOnly && workScope.kind === 'org' ? 'btn-primary' : 'btn-secondary'} w-full`}
+                    className={`${policyFailedOnly && workScope.kind === 'org' ? 'btn-primary' : 'btn-secondary'} min-w-0 w-full`}
                     variant={
                       policyFailedOnly && workScope.kind === 'org' ? 'primary' : 'secondary'
                     }

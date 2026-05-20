@@ -10,6 +10,7 @@ import (
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
 
@@ -91,6 +92,21 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 				Where("st.scan_id = ?", scans[i].ID).
 				Scan(c.Request.Context(), &tags) //nolint:errcheck
 			scans[i].Tags = tags
+		}
+
+		if scopedOrgID, scoped := scopedOrgIDFromRequest(c); scoped {
+			scanIDs := make([]uuid.UUID, 0, len(scans))
+			for _, scan := range scans {
+				scanIDs = append(scanIDs, scan.ID)
+			}
+			summaries, summaryErr := buildScanComplianceSummaries(c.Request.Context(), db, scanIDs, scopedOrgID)
+			if summaryErr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan compliance summaries"})
+				return
+			}
+			for i := range scans {
+				scans[i].ComplianceSummary = summaries[scans[i].ID]
+			}
 		}
 
 		c.JSON(http.StatusOK, gin.H{

@@ -33,6 +33,7 @@ export interface VulnerabilityViewSettings {
   min_cvss: number;
   has_fix: boolean;
   xray_policy_first: boolean;
+  policy_failed_only: boolean;
 }
 
 export interface VulnerabilityViewPreferenceResponse {
@@ -122,6 +123,7 @@ export interface ComplianceResult {
   evaluated_at: string;
   policy_name?: string;
   org_name?: string;
+  policy_rules?: PolicyRule[];
 }
 
 export interface APIToken {

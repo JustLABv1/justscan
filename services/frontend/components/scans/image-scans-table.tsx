@@ -8,7 +8,7 @@ import { useWorkScope } from '@/hooks/use-work-scope';
 import { ImageSummary, listScans, Scan } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Avatar, Button, Pagination, Popover, Table } from '@heroui/react';
+import { Avatar, Button, Chip, Pagination, Popover, Table, Tooltip } from '@heroui/react';
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
@@ -61,6 +61,67 @@ interface ScanSelectionCheckboxProps {
 }
 
 const CHILD_LIMIT = 10;
+
+type ComplianceSummary = Scan['compliance_summary'] | ImageSummary['compliance_summary'];
+
+function failedPolicyNames(summary?: ComplianceSummary | null) {
+  return (summary?.failed_policy_names ?? []).map((name) => name.trim()).filter(Boolean);
+}
+
+function failedPolicyDetails(summary?: ComplianceSummary | null) {
+  const details =
+    summary?.failed_policies
+      ?.map((policy) => ({
+        name: policy.name?.trim() ?? '',
+        ruleSummaries: (policy.rule_summaries ?? []).map((rule) => rule.trim()).filter(Boolean),
+      }))
+      .filter((policy) => policy.name) ?? [];
+
+  if (details.length > 0) {
+    return details;
+  }
+
+  return failedPolicyNames(summary).map((name) => ({ name, ruleSummaries: [] as string[] }));
+}
+
+function PolicyFailureIndicator({
+  summary,
+}: {
+  summary?: ComplianceSummary | null;
+}) {
+  const failedPolicies = failedPolicyDetails(summary);
+  if (failedPolicies.length === 0) {
+    return null;
+  }
+
+  return (
+    <Tooltip delay={0}>
+      <Tooltip.Trigger className="inline-flex">
+        <Chip color="danger" size="sm" variant="soft">
+          Policy failed
+        </Chip>
+      </Tooltip.Trigger>
+      <Tooltip.Content placement="top" showArrow>
+        <div className="max-w-xs space-y-2 p-0.5">
+          {failedPolicies.map((policy) => (
+            <div key={policy.name} className="space-y-1">
+              <p className="text-xs font-semibold text-zinc-100">{policy.name}</p>
+              {policy.ruleSummaries.length > 0 ? (
+                <div className="space-y-0.5">
+                  {policy.ruleSummaries.map((rule) => (
+                    <p key={`${policy.name}-${rule}`} className="text-[11px] text-zinc-300">
+                      {rule}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </Tooltip.Content>
+    </Tooltip>
+  );
+}
 
 function scanUserInitials(displayName: string | undefined, ownerUserId: string | undefined) {
   const source = displayName?.trim() || ownerUserId?.trim() || '';
@@ -386,6 +447,7 @@ function ImageScansTreeChildrenRows({
             <Table.Cell onClick={openScan}>
               <div className="flex items-center gap-2">
                 <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+                <PolicyFailureIndicator summary={scan.compliance_summary} />
               </div>
             </Table.Cell>
             <Table.Cell onClick={openScan}>
@@ -727,6 +789,7 @@ export function ImageScansTable({
                             status={img.latest_status}
                             externalStatus={img.latest_external_status}
                           />
+                          <PolicyFailureIndicator summary={img.compliance_summary} />
                           <span
                             className="text-xs text-zinc-500"
                             title={fullDate(img.latest_scan_at)}

@@ -227,6 +227,7 @@ type ComplianceResult struct {
 	Violations  ViolationList `bun:"violations,type:jsonb" json:"violations"`
 	EvaluatedAt time.Time     `bun:"evaluated_at,type:timestamptz,default:now()" json:"evaluated_at"`
 
-	PolicyName string `bun:"-" json:"policy_name,omitempty"`
-	OrgName    string `bun:"-" json:"org_name,omitempty"`
+	PolicyName  string         `bun:"-" json:"policy_name,omitempty"`
+	OrgName     string         `bun:"-" json:"org_name,omitempty"`
+	PolicyRules PolicyRuleList `bun:"-" json:"policy_rules,omitempty"`
 }

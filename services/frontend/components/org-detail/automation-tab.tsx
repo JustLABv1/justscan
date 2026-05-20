@@ -269,6 +269,21 @@ export function OrgAutomationTab({
             </Label>
           </Switch.Content>
         </Switch>
+
+        <Switch
+          isSelected={vulnerabilityViewSettings.policy_failed_only}
+          onChange={(value) => updateVulnerabilityViewSettings({ policy_failed_only: value })}
+          isDisabled={!canManageOrgSettings}
+        >
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Switch.Content>
+            <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              Only show vulnerabilities that failed org policy
+            </Label>
+          </Switch.Content>
+        </Switch>
       </Card>
 
       <Card>

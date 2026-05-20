@@ -623,6 +623,7 @@ func GetScanCompliance(db *bun.DB) gin.HandlerFunc {
 			policy := &models.OrgPolicy{}
 			if err := db.NewSelect().Model(policy).Where("id = ?", results[i].PolicyID).Scan(c.Request.Context()); err == nil {
 				results[i].PolicyName = policy.Name
+				results[i].PolicyRules = policy.Rules
 			}
 		}
 
@@ -667,6 +668,7 @@ func ReEvaluate(db *bun.DB) gin.HandlerFunc {
 			policy := &models.OrgPolicy{}
 			if err := db.NewSelect().Model(policy).Where("id = ?", results[i].PolicyID).Scan(c.Request.Context()); err == nil {
 				results[i].PolicyName = policy.Name
+				results[i].PolicyRules = policy.Rules
 			}
 		}
 

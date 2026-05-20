@@ -49,6 +49,19 @@ export interface BlockedPolicyDetails {
   total_violations?: number;
 }
 
+export interface ScanComplianceSummary {
+  status: 'pass' | 'fail';
+  pass_count: number;
+  fail_count: number;
+  policy_names: string[];
+  failed_policy_names: string[];
+  failed_policies?: Array<{
+    name: string;
+    rule_summaries?: string[];
+  }>;
+  evaluated_at?: string | null;
+}
+
 export interface Tag {
   id: string;
   name: string;
@@ -137,6 +150,7 @@ export interface Scan {
   helm_chart_version?: string;
   helm_source_path?: string;
   blocked_policy_details?: BlockedPolicyDetails | null;
+  compliance_summary?: ScanComplianceSummary | null;
   step_logs?: ScanStepLog[];
 }
 
@@ -233,6 +247,7 @@ export interface ImageSummary {
   high_count: number;
   medium_count: number;
   low_count: number;
+  compliance_summary?: ScanComplianceSummary | null;
 }
 
 export interface SBOMComponent {

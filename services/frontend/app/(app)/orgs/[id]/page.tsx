@@ -70,6 +70,7 @@ const DEFAULT_VULNERABILITY_VIEW_SETTINGS: VulnerabilityViewSettings = {
   min_cvss: 0,
   has_fix: false,
   xray_policy_first: false,
+  policy_failed_only: false,
 };
 
 function emptyRule(): PolicyRule {

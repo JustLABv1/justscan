@@ -28,6 +28,7 @@ import {
   createUploadedArchiveScan,
   deleteScan,
   getDefaultScannerCapabilities,
+  getTokenType,
   getUserDetails,
   getWorkScope,
   ImageSummary,
@@ -424,6 +425,7 @@ export default function ScansPage() {
 
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const isPlatformAdmin = getTokenType() === 'admin';
   const LIMIT = 30;
   const hasRecentWindow = activityRange !== '';
   const resolvedActivityRange = activityRange || DEFAULT_ACTIVITY_RANGE;
@@ -608,7 +610,10 @@ export default function ScansPage() {
 
   const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
   const canMutateCurrentScope =
-    workScope.kind !== 'org' || canMutateOrg(scopedOrgPolicy?.current_user_role);
+    isPlatformAdmin ||
+    workScope.kind !== 'org' ||
+    !scopedOrgPolicy ||
+    canMutateOrg(scopedOrgPolicy.current_user_role);
   const orgFeatureBlockMessage =
     workScope.kind !== 'org' || !scopedOrgPolicy
       ? ''

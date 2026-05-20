@@ -29,12 +29,17 @@ type RestfulConf struct {
 	Database     DatabaseConf   `mapstructure:"database" validate:"required"`
 	JWT          JWTConf        `mapstructure:"jwt" validate:"required"`
 	AllowOrigins []string       `mapstructure:"allow_origins"`
+	Security     SecurityConf   `mapstructure:"security"`
 	AI           AIConf         `mapstructure:"ai"`
 	Scanner      ScannerConf    `mapstructure:"scanner"`
 	Encryption   EncryptionConf `mapstructure:"encryption"`
 	VulnKB       VulnKBConf     `mapstructure:"vuln_kb"`
 	OIDC         OIDCConf       `mapstructure:"oidc"`
 	LocalAuth    LocalAuthConf  `mapstructure:"local_auth"`
+}
+
+type SecurityConf struct {
+	AllowInsecureDefaults bool `mapstructure:"allow_insecure_defaults"`
 }
 
 type AIConf struct {
@@ -149,6 +154,7 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"encryption.key":                       "BACKEND_ENCRYPTION_KEY",
 		"encryption.master_secret":             "BACKEND_ENCRYPTION_MASTER_SECRET",
 		"jwt.secret":                           "BACKEND_JWT_SECRET",
+		"security.allow_insecure_defaults":     "BACKEND_SECURITY_ALLOW_INSECURE_DEFAULTS",
 		"runner.shared_runner_secret":          "BACKEND_RUNNER_SHARED_RUNNER_SECRET",
 		"oidc.enabled":                         "BACKEND_OIDC_ENABLED",
 		"oidc.debug":                           "BACKEND_OIDC_DEBUG",
@@ -207,6 +213,7 @@ func (cm *ConfigurationManager) setDefaults(config *RestfulConf) {
 	if config.LogLevel == "" {
 		config.LogLevel = "info"
 	}
+	config.Security.AllowInsecureDefaults = false
 	if config.Port == 0 {
 		config.Port = 8080
 	}
@@ -265,6 +272,20 @@ func (cm *ConfigurationManager) validate(config *RestfulConf) error {
 	if !config.Scanner.EnableTrivy && config.Scanner.EnableGrype {
 		return fmt.Errorf("invalid scanner configuration: enable_grype requires enable_trivy=true")
 	}
+	if config.Security.AllowInsecureDefaults {
+		return nil
+	}
+
+	jwtSecret := strings.TrimSpace(config.JWT.Secret)
+	if len(jwtSecret) < 32 {
+		return fmt.Errorf("invalid jwt configuration: jwt.secret must be at least 32 characters (or set security.allow_insecure_defaults=true for development only)")
+	}
+
+	encryptionKey := strings.TrimSpace(config.Encryption.Key)
+	if len(encryptionKey) < 32 {
+		return fmt.Errorf("invalid encryption configuration: encryption.key must be at least 32 characters (or set security.allow_insecure_defaults=true for development only)")
+	}
+
 	return nil
 }
 

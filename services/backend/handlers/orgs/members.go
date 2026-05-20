@@ -134,8 +134,11 @@ func RemoveMember(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		_, requesterMember, userID, isAdmin, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
+		org, requesterMember, userID, isAdmin, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
 		if !ok {
+			return
+		}
+		if !authz.EnsureOrgActionAllowed(c, org, "member_invite") {
 			return
 		}
 
@@ -267,8 +270,11 @@ func CreateInvite(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		_, requesterMember, userID, isAdmin, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
+		org, requesterMember, userID, isAdmin, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
 		if !ok {
+			return
+		}
+		if !authz.EnsureOrgActionAllowed(c, org, "member_invite") {
 			return
 		}
 
@@ -361,8 +367,11 @@ func RevokeInvite(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		_, requesterMember, _, isAdmin, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
+		org, requesterMember, _, isAdmin, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
 		if !ok {
+			return
+		}
+		if !authz.EnsureOrgActionAllowed(c, org, "member_invite") {
 			return
 		}
 

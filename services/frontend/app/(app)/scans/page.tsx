@@ -45,6 +45,7 @@ import {
   Tag,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { canMutateOrg } from '@/lib/org-permissions';
 import {
   Autocomplete,
   Button,
@@ -606,6 +607,8 @@ export default function ScansPage() {
   );
 
   const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
+  const canMutateCurrentScope =
+    workScope.kind !== 'org' || canMutateOrg(scopedOrgPolicy?.current_user_role);
   const orgFeatureBlockMessage =
     workScope.kind !== 'org' || !scopedOrgPolicy
       ? ''
@@ -735,6 +738,7 @@ export default function ScansPage() {
   }
 
   function openCreateModal() {
+    if (!canMutateCurrentScope) return;
     resetCreateForm();
     modal.open();
   }
@@ -1040,6 +1044,7 @@ export default function ScansPage() {
   }
 
   async function handleCreate(e: React.FormEvent) {
+    if (!canMutateCurrentScope) return;
     e.preventDefault();
     setCreateError('');
     setCreating(true);
@@ -1112,6 +1117,7 @@ export default function ScansPage() {
   }
 
   async function handleDelete(scanId: string, imageName: string) {
+    if (!canMutateCurrentScope) return;
     const ok = await confirm({
       title: 'Delete scan?',
       message: 'This scan and all its vulnerability data will be permanently removed.',
@@ -1130,6 +1136,7 @@ export default function ScansPage() {
   }
 
   async function handleCancel(scanId: string, imageName: string) {
+    if (!canMutateCurrentScope) return;
     const ok = await confirm({
       title: 'Cancel scan?',
       message: 'The scan will be stopped and marked as cancelled.',
@@ -1148,6 +1155,7 @@ export default function ScansPage() {
   }
 
   async function handleBulkDelete() {
+    if (!canMutateCurrentScope) return;
     if (selectedScans.size === 0) return;
     const ok = await confirm({
       title: `Delete ${selectedScans.size} scan${selectedScans.size !== 1 ? 's' : ''}?`,
@@ -1168,6 +1176,7 @@ export default function ScansPage() {
   }
 
   async function handleBulkAddTag(tagId: string) {
+    if (!canMutateCurrentScope) return;
     if (selectedScans.size === 0) return;
     try {
       const { bulkAddTagToScans } = await import('@/lib/api');
@@ -1324,6 +1333,7 @@ export default function ScansPage() {
             <Button
               onPress={openCreateModal}
               className="flex flex-1 min-w-[130px] items-center justify-center gap-2 sm:flex-none"
+              isDisabled={!canMutateCurrentScope}
             >
               <PlusSignIcon size={15} />
               New Scan
@@ -1487,7 +1497,7 @@ export default function ScansPage() {
       {error ? <FormAlert description={error} title="Scan list failed to load" /> : null}
 
       {/* Bulk action toolbar */}
-      {!hasRecentWindow && selectedScans.size > 0 && (
+      {!hasRecentWindow && canMutateCurrentScope && selectedScans.size > 0 && (
         <Card className="px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             {selectedScans.size} scan{selectedScans.size !== 1 ? 's' : ''} selected
@@ -1614,6 +1624,7 @@ export default function ScansPage() {
             onDelete={(scanId, imageName) => handleDelete(scanId, imageName)}
             onExpandedChange={setExpanded}
             onOpenCreateModal={openCreateModal}
+            allowMutationActions={canMutateCurrentScope}
             onSelectedScansChange={setSelectedScans}
             onSelectImageScans={(imageName, selected, latestScanId, visibleScanIds) =>
               handleParentScanSelection(imageName, selected, latestScanId, visibleScanIds)
@@ -2182,7 +2193,12 @@ export default function ScansPage() {
                               key="wizard-submit-inline"
                               type="submit"
                               form="create-scan-form"
-                              isDisabled={creating || xrayOnlyWithoutRegistries || Boolean(orgFeatureBlockMessage)}
+                              isDisabled={
+                                creating ||
+                                !canMutateCurrentScope ||
+                                xrayOnlyWithoutRegistries ||
+                                Boolean(orgFeatureBlockMessage)
+                              }
                               variant="primary"
                               className="group relative inline-flex min-w-52 items-center justify-center gap-2 overflow-hidden px-7 py-3 text-base font-semibold shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0"
                             >
@@ -2237,7 +2253,12 @@ export default function ScansPage() {
                         key="wizard-submit"
                         type="submit"
                         form="create-scan-form"
-                        isDisabled={creating || xrayOnlyWithoutRegistries || Boolean(orgFeatureBlockMessage)}
+                        isDisabled={
+                          creating ||
+                          !canMutateCurrentScope ||
+                          xrayOnlyWithoutRegistries ||
+                          Boolean(orgFeatureBlockMessage)
+                        }
                         variant="primary"
                         className="inline-flex items-center gap-2"
                       >

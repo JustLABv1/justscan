@@ -44,6 +44,7 @@ import {
   VulnerabilityViewSettings,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { canManageOrg, canMutateOrg, canOwnOrg } from '@/lib/org-permissions';
 import { timeAgo } from '@/lib/time';
 import { Button, Card, Input, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
 import { ArrowLeft01Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
@@ -131,10 +132,10 @@ export default function OrgDetailPage() {
   const [assignLoading, setAssignLoading] = useState(false);
   const assignModal = useOverlayState();
   const currentOrgRole = org?.current_user_role;
-  const canManageMembers =
-    isSystemAdmin || currentOrgRole === 'owner' || currentOrgRole === 'admin';
-  const canEditRoles = isSystemAdmin || currentOrgRole === 'owner';
+  const canManageMembers = isSystemAdmin || canManageOrg(currentOrgRole);
+  const canEditRoles = isSystemAdmin || canOwnOrg(currentOrgRole);
   const canManageOrgSettings = canManageMembers;
+  const canMutateOrgScans = isSystemAdmin || canMutateOrg(currentOrgRole);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -215,6 +216,7 @@ export default function OrgDetailPage() {
   }, [activeTab, searchParams]);
 
   function openInviteModal() {
+    if (!canManageMembers) return;
     if (!org?.is_active) {
       toast.error('Organization is suspended. Member invites are disabled.');
       return;
@@ -230,6 +232,7 @@ export default function OrgDetailPage() {
   }
 
   async function handleCreateInvite(e: React.FormEvent) {
+    if (!canManageMembers) return;
     e.preventDefault();
     setInviteError('');
     setInviteSaving(true);
@@ -249,6 +252,7 @@ export default function OrgDetailPage() {
     member: OrgMember,
     nextRole: Extract<OrgRole, 'admin' | 'editor' | 'viewer'>
   ) {
+    if (!canEditRoles) return;
     if (member.role === nextRole) return;
     try {
       await updateOrgMemberRole(id, member.user_id, nextRole);
@@ -261,6 +265,7 @@ export default function OrgDetailPage() {
   }
 
   async function handleRemoveMember(member: OrgMember) {
+    if (!canManageMembers) return;
     const ok = await confirm({
       title: `Remove ${member.username || member.email || 'member'}?`,
       message: 'This user will lose access to this organization immediately.',
@@ -274,6 +279,7 @@ export default function OrgDetailPage() {
   }
 
   async function handleTransferOwnership(member: OrgMember) {
+    if (!canEditRoles) return;
     const label = member.username || member.email || 'this member';
     const ok = await confirm({
       title: `Transfer ownership to ${label}?`,
@@ -293,6 +299,7 @@ export default function OrgDetailPage() {
   }
 
   async function handleRevokeInvite(invite: OrgInvite) {
+    if (!canManageMembers) return;
     const ok = await confirm({
       title: `Revoke invite for ${invite.email}?`,
       message: 'The invite link will stop working immediately.',
@@ -312,6 +319,7 @@ export default function OrgDetailPage() {
   }
 
   function openCreatePolicy() {
+    if (!canManageOrgSettings) return;
     setEditingPolicy(null);
     setPolicyName('');
     setPolicyRules([emptyRule()]);
@@ -320,6 +328,7 @@ export default function OrgDetailPage() {
   }
 
   function openEditPolicy(policy: OrgPolicy) {
+    if (!canManageOrgSettings) return;
     setEditingPolicy(policy);
     setPolicyName(policy.name);
     setPolicyRules(policy.rules.length > 0 ? policy.rules : [emptyRule()]);
@@ -328,6 +337,7 @@ export default function OrgDetailPage() {
   }
 
   async function handleSavePolicy(e: React.FormEvent) {
+    if (!canManageOrgSettings) return;
     e.preventDefault();
     setPolicyError('');
     setPolicySaving(true);
@@ -349,6 +359,7 @@ export default function OrgDetailPage() {
   }
 
   async function handleDeletePolicy(policyId: string) {
+    if (!canManageOrgSettings) return;
     const ok = await confirm({
       title: 'Delete policy?',
       message: 'Existing compliance results for this policy will be permanently removed.',
@@ -366,14 +377,17 @@ export default function OrgDetailPage() {
   }
 
   function addRule() {
+    if (!canManageOrgSettings) return;
     setPolicyRules((prev) => [...prev, emptyRule()]);
   }
 
   function removeRule(idx: number) {
+    if (!canManageOrgSettings) return;
     setPolicyRules((prev) => prev.filter((_, i) => i !== idx));
   }
 
   async function openAssignModal() {
+    if (!canMutateOrgScans) return;
     setAssignLoading(true);
     assignModal.open();
     try {
@@ -388,6 +402,7 @@ export default function OrgDetailPage() {
   }
 
   async function handleAssign(scanId: string) {
+    if (!canMutateOrgScans) return;
     await assignScanToOrg(id, scanId).catch(() => {});
     toast.success('Scan assigned to organization');
     assignModal.close();
@@ -395,6 +410,7 @@ export default function OrgDetailPage() {
   }
 
   async function handleRemoveScan(scanId: string) {
+    if (!canMutateOrgScans) return;
     const ok = await confirm({
       title: 'Remove scan from organization?',
       message:
@@ -409,6 +425,7 @@ export default function OrgDetailPage() {
   }
 
   async function addPattern() {
+    if (!canManageOrgSettings) return;
     if (!newPattern.trim() || !org) return;
     const patterns = [...(org.image_patterns ?? []), newPattern.trim()];
     const updated = await updateOrg(id, { image_patterns: patterns }).catch(() => null);
@@ -419,6 +436,7 @@ export default function OrgDetailPage() {
   }
 
   async function removePattern(p: string) {
+    if (!canManageOrgSettings) return;
     if (!org) return;
     const patterns = (org.image_patterns ?? []).filter((x) => x !== p);
     const updated = await updateOrg(id, { image_patterns: patterns }).catch(() => null);
@@ -594,6 +612,7 @@ export default function OrgDetailPage() {
         )}
         {activeTab === 'scans' && (
           <OrgScansTab
+            canManageScans={canMutateOrgScans}
             onOpenAssignModal={() => void openAssignModal()}
             onRemoveScan={(scanId) => void handleRemoveScan(scanId)}
             orgScans={orgScans}
@@ -602,7 +621,7 @@ export default function OrgDetailPage() {
         {activeTab === 'tokens' && (
           <OrgTokensTab
             orgId={id}
-            canManage={isSystemAdmin || currentOrgRole === 'owner' || currentOrgRole === 'admin'}
+            canManage={isSystemAdmin || canManageOrg(currentOrgRole)}
             featureDisabledReason={
               !org?.is_active
                 ? 'Organization is suspended. Token creation is disabled.'

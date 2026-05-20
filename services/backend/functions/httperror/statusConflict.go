@@ -7,6 +7,10 @@ import (
 )
 
 func StatusConflict(context *gin.Context, message string, err error) {
-	context.JSON(http.StatusConflict, gin.H{"message": message, "error": err.Error()})
+	errorMessage := "conflict"
+	if err != nil {
+		errorMessage = err.Error()
+	}
+	context.JSON(http.StatusConflict, gin.H{"message": message, "error": errorMessage})
 	context.Abort()
 }

@@ -26,6 +26,7 @@ import {
   updateTag,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
 import {
   Button,
   Card,
@@ -103,9 +104,17 @@ export default function TagsPage() {
   const toast = useToast();
   const isPlatformAdmin = getTokenType() === 'admin';
   const currentUserId = getUser()?.id as string | undefined;
+  const orgRoleById = useMemo(
+    () => new Map(orgs.map((org) => [org.id, org.current_user_role] as const)),
+    [orgs]
+  );
+  const canMutateActiveScope =
+    isPlatformAdmin ||
+    workScope.kind !== 'org' ||
+    canMutateOrg(orgRoleById.get(workScope.orgId));
   const manageableOrgIds = new Set(
     orgs
-      .filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin')
+      .filter((org) => canManageOrg(org.current_user_role))
       .map((org) => org.id)
   );
 
@@ -123,6 +132,7 @@ export default function TagsPage() {
   useEffect(() => deferEffect(load), [load, scopeKey]);
 
   function openCreate() {
+    if (!canMutateActiveScope) return;
     setEditing(null);
     setName('');
     setColor(COLORS[0]);
@@ -130,11 +140,21 @@ export default function TagsPage() {
     modal.open();
   }
   function openEdit(tag: Tag) {
+    if (!canMutateTag(tag)) return;
     setEditing(tag);
     setName(tag.name);
     setColor(tag.color);
     setFormError('');
     modal.open();
+  }
+
+  function canMutateTag(tag: Tag) {
+    if (tag.owner_type === 'system') return isPlatformAdmin;
+    if (isPlatformAdmin) return true;
+    if (tag.owner_type === 'org' && tag.owner_org_id) {
+      return canMutateOrg(orgRoleById.get(tag.owner_org_id));
+    }
+    return !tag.owner_user_id || tag.owner_user_id === currentUserId;
   }
 
   function canManageTag(tag: Tag) {
@@ -159,6 +179,7 @@ export default function TagsPage() {
   }
 
   function openShareModal(tag: Tag) {
+    if (!canManageTag(tag)) return;
     setShareTarget(tag);
     setShares([]);
     setShareOrgId('');
@@ -168,7 +189,7 @@ export default function TagsPage() {
   }
 
   async function handleGrantShare() {
-    if (!shareTarget || !shareOrgId) return;
+    if (!shareTarget || !shareOrgId || !canManageTag(shareTarget)) return;
     setShareSaving(true);
     setShareError('');
     try {
@@ -184,7 +205,7 @@ export default function TagsPage() {
   }
 
   async function handleRevokeShare(orgId: string) {
-    if (!shareTarget) return;
+    if (!shareTarget || !canManageTag(shareTarget)) return;
     setShareSaving(true);
     setShareError('');
     try {
@@ -270,6 +291,7 @@ export default function TagsPage() {
   }, [effectivePage, visibleTags]);
 
   async function handleSubmit(e: React.FormEvent) {
+    if (editing ? !canMutateTag(editing) : !canMutateActiveScope) return;
     e.preventDefault();
     setFormError('');
     setSaving(true);
@@ -292,6 +314,8 @@ export default function TagsPage() {
   }
 
   async function handleDelete(id: string) {
+    const tag = tags.find((candidate) => candidate.id === id);
+    if (tag && !canMutateTag(tag)) return;
     const ok = await confirm({
       title: 'Delete tag?',
       message: 'The tag will be removed from all scans.',
@@ -317,6 +341,7 @@ export default function TagsPage() {
           <Button
             onPress={openCreate}
             className="btn-primary inline-flex items-center gap-2"
+            isDisabled={!canMutateActiveScope}
             variant="primary"
           >
             <PlusSignIcon size={15} /> New Tag
@@ -365,7 +390,7 @@ export default function TagsPage() {
           icon={<Tag01Icon size={28} />}
           title="No tags yet"
           description="Create color-coded tags to group and filter your scans. Tags can be assigned to any scan."
-          action={{ label: '+ New Tag', onClick: openCreate }}
+          action={canMutateActiveScope ? { label: '+ New Tag', onClick: openCreate } : undefined}
         />
       ) : (
         <Card className="space-y-4">
@@ -439,31 +464,39 @@ export default function TagsPage() {
                       </Table.Cell>
                       <Table.Cell>
                         <div className="flex items-center justify-end">
-                          {canManageTag(tag) ? (
+                          {canManageTag(tag) || canMutateTag(tag) ? (
                             <RowActionsMenu
                               label={`Open actions menu for tag ${tag.name}`}
                               items={[
-                                {
-                                  id: 'share',
-                                  label: 'Manage access',
-                                  icon: <Shield01Icon size={15} />,
-                                  onAction: () => openShareModal(tag),
-                                },
-                                {
-                                  id: 'edit',
-                                  label: 'Edit tag',
-                                  icon: <PencilEdit01Icon size={15} />,
-                                  onAction: () => openEdit(tag),
-                                },
-                                {
-                                  id: 'delete',
-                                  label: 'Delete tag',
-                                  icon: <Delete01Icon size={15} />,
-                                  variant: 'danger',
-                                  onAction: () => {
-                                    void handleDelete(tag.id);
-                                  },
-                                },
+                                ...(canManageTag(tag)
+                                  ? [
+                                      {
+                                        id: 'share',
+                                        label: 'Manage access',
+                                        icon: <Shield01Icon size={15} />,
+                                        onAction: () => openShareModal(tag),
+                                      },
+                                    ]
+                                  : []),
+                                ...(canMutateTag(tag)
+                                  ? [
+                                      {
+                                        id: 'edit',
+                                        label: 'Edit tag',
+                                        icon: <PencilEdit01Icon size={15} />,
+                                        onAction: () => openEdit(tag),
+                                      },
+                                      {
+                                        id: 'delete',
+                                        label: 'Delete tag',
+                                        icon: <Delete01Icon size={15} />,
+                                        variant: 'danger' as const,
+                                        onAction: () => {
+                                          void handleDelete(tag.id);
+                                        },
+                                      },
+                                    ]
+                                  : []),
                               ]}
                             />
                           ) : (
@@ -594,7 +627,12 @@ export default function TagsPage() {
                 <Button onPress={modal.close} variant="secondary">
                   Cancel
                 </Button>
-                <Button type="submit" form="tag-form" isDisabled={saving} variant="primary">
+                <Button
+                  type="submit"
+                  form="tag-form"
+                  isDisabled={saving || (editing ? !canMutateTag(editing) : !canMutateActiveScope)}
+                  variant="primary"
+                >
                   {saving && (
                     <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   )}

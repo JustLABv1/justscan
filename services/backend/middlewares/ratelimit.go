@@ -28,6 +28,12 @@ var authRegisterLimiter = &ipRateLimiter{
 	window:  time.Hour,
 }
 
+var authLoginLimiter = &ipRateLimiter{
+	buckets: make(map[string][]time.Time),
+	limit:   20,
+	window:  time.Hour,
+}
+
 // SetPublicScanRateLimit updates the per-IP hourly limit for public scans.
 func SetPublicScanRateLimit(limit int) {
 	publicScanLimiter.mu.Lock()
@@ -39,6 +45,12 @@ func SetAuthRegisterRateLimit(limit int) {
 	authRegisterLimiter.mu.Lock()
 	authRegisterLimiter.limit = limit
 	authRegisterLimiter.mu.Unlock()
+}
+
+func SetAuthLoginRateLimit(limit int) {
+	authLoginLimiter.mu.Lock()
+	authLoginLimiter.limit = limit
+	authLoginLimiter.mu.Unlock()
 }
 
 func (rl *ipRateLimiter) check(ip string) (allowed bool, remaining int) {
@@ -94,5 +106,11 @@ func PublicScanRateLimit() gin.HandlerFunc {
 func AuthRegisterRateLimit() gin.HandlerFunc {
 	return rateLimitMiddleware(authRegisterLimiter, func(limit int) string {
 		return "rate limit exceeded: you can create up to " + strconv.Itoa(limit) + " accounts per hour from this IP"
+	})
+}
+
+func AuthLoginRateLimit() gin.HandlerFunc {
+	return rateLimitMiddleware(authLoginLimiter, func(limit int) string {
+		return "rate limit exceeded: too many login attempts from this IP"
 	})
 }

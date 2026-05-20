@@ -2,6 +2,8 @@ package tokens
 
 import (
 	"net/http"
+	"strings"
+	"time"
 
 	"justscan-backend/functions/auth"
 	"justscan-backend/functions/httperror"
@@ -12,7 +14,29 @@ import (
 )
 
 func RefreshToken(context *gin.Context, db *bun.DB) {
-	token := context.GetHeader("Authorization")
+	token := strings.TrimPrefix(context.GetHeader("Authorization"), "Bearer ")
+	if token == "" {
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var dbToken models.Tokens
+	if err := db.NewSelect().Model(&dbToken).
+		Column("id", "key", "type", "disabled").
+		Where("key = ?", token).
+		Scan(context); err != nil {
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if dbToken.Disabled {
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if dbToken.Type != "user" && dbToken.Type != "personal" {
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	newToken, expiresAt, err := auth.RefreshToken(token)
 	if err != nil {
 		if err.Error() == "token is not close to expiration" {
@@ -35,10 +59,18 @@ func RefreshToken(context *gin.Context, db *bun.DB) {
 		httperror.InternalServerError(context, "Error collecting user informations from db", err)
 		return
 	}
+	if user.Disabled {
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
-	// update the expired time in tokens table
-	_, err = db.NewUpdate().Model(&models.Tokens{}).Set("expires_at = ?, key = ?", expiresAt, newToken).
-		Where("token = ?", token).Exec(context)
+	// Update the existing token row only when it is still active.
+	_, err = db.NewUpdate().Model((*models.Tokens)(nil)).
+		Set("expires_at = ?", time.Unix(expiresAt, 0)).
+		Set("key = ?", newToken).
+		Where("id = ?", dbToken.ID).
+		Where("disabled = false").
+		Exec(context)
 	if err != nil {
 		httperror.InternalServerError(context, "Error updating token expiration time", err)
 		return

@@ -8,7 +8,7 @@ import { useWorkScope } from '@/hooks/use-work-scope';
 import { ImageSummary, listScans, Scan } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Avatar, Button, Chip, Pagination, Popover, Table, Tooltip } from '@heroui/react';
+import { Avatar, Button, Checkbox, Chip, Pagination, Popover, Table, Tooltip } from '@heroui/react';
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
@@ -19,7 +19,15 @@ import {
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 
 interface SharedChildProps {
   childRefreshKey: Record<string, number>;
@@ -31,6 +39,7 @@ interface SharedChildProps {
 }
 
 interface ImageScansTableProps extends SharedChildProps {
+  allowMutationActions?: boolean;
   expanded: Set<string>;
   hasActiveFilters: boolean;
   images: ImageSummary[];
@@ -38,7 +47,7 @@ interface ImageScansTableProps extends SharedChildProps {
   onClearFilters: () => void;
   onExpandedChange: (next: Set<string>) => void;
   onOpenCreateModal: () => void;
-  onSelectedScansChange: (next: Set<string>) => void;
+  onSelectedScansChange: Dispatch<SetStateAction<Set<string>>>;
   onSelectImageScans?: (
     imageName: string,
     selected: boolean,
@@ -48,6 +57,7 @@ interface ImageScansTableProps extends SharedChildProps {
 }
 
 interface ImageScansStackedChildrenProps extends SharedChildProps {
+  allowMutationActions: boolean;
   isImageSelected?: boolean;
   imageName: string;
   onVisibleScanIdsChange?: (imageName: string, scanIds: string[]) => void;
@@ -197,32 +207,48 @@ function ScanSelectionCheckbox({
   isSelected,
   onChange,
 }: ScanSelectionCheckboxProps) {
-  const active = isSelected || isIndeterminate;
-
   return (
-    <button
+    <Checkbox
       aria-label={ariaLabel}
-      aria-checked={isIndeterminate ? 'mixed' : isSelected}
-      className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--row-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-      role="checkbox"
-      type="button"
-      onClick={(event) => {
-        event.stopPropagation();
-        onChange(!isSelected);
-      }}
+      isIndeterminate={isIndeterminate}
+      isSelected={isSelected}
+      slot={null}
+      variant="secondary"
+      onChange={onChange}
     >
-      <span
-        aria-hidden
-        className="inline-flex h-4 w-4 items-center justify-center rounded-md border text-[10px] font-bold leading-none"
-        style={{
-          backgroundColor: active ? 'var(--accent)' : 'transparent',
-          borderColor: active ? 'var(--accent)' : 'rgb(113 113 122)',
-          color: '#fff',
-        }}
-      >
-        {isIndeterminate ? '−' : isSelected ? '✓' : ''}
-      </span>
-    </button>
+      <Checkbox.Control>
+        <Checkbox.Indicator>
+          {isIndeterminate ? (
+            <svg aria-hidden className="size-3 text-accent-foreground" fill="none" viewBox="0 0 24 24">
+              <line
+                x1="21"
+                x2="3"
+                y1="12"
+                y2="12"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeWidth="3"
+              />
+            </svg>
+          ) : isSelected ? (
+            <svg
+              aria-hidden
+              className="size-2.5 text-accent-foreground"
+              fill="none"
+              viewBox="0 0 17 18"
+            >
+              <polyline
+                points="1 9 7 14 15 4"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.5"
+              />
+            </svg>
+          ) : null}
+        </Checkbox.Indicator>
+      </Checkbox.Control>
+    </Checkbox>
   );
 }
 
@@ -310,6 +336,7 @@ function useImageScanChildren(imageName: string, refreshToken: number) {
 }
 
 function ImageScansTreeChildrenRows({
+  allowMutationActions,
   imageName,
   isImageSelected = false,
   childRefreshKey,
@@ -326,6 +353,7 @@ function ImageScansTreeChildrenRows({
     imageName,
     refreshToken
   );
+  const onVisibleScanIdsChangeRef = useRef(onVisibleScanIdsChange);
 
   const childRows: Array<{
     id: string;
@@ -348,14 +376,18 @@ function ImageScansTreeChildrenRows({
   }
 
   useEffect(() => {
-    onVisibleScanIdsChange?.(
+    onVisibleScanIdsChangeRef.current = onVisibleScanIdsChange;
+  }, [onVisibleScanIdsChange]);
+
+  useEffect(() => {
+    onVisibleScanIdsChangeRef.current?.(
       imageName,
       scans.map((scan) => scan.id)
     );
-  }, [imageName, onVisibleScanIdsChange, scans]);
+  }, [imageName, scans]);
 
   return (
-    <Table.Collection items={childRows}>
+    <Table.Collection items={childRows} dependencies={[selectedScans, isImageSelected]}>
       {(row) => {
         if (row.kind === 'loading') {
           return (
@@ -491,7 +523,8 @@ function ImageScansTreeChildrenRows({
                         router.push(`/scans/${scan.id}`);
                       },
                     },
-                    ...(scan.status === 'pending' || scan.status === 'running'
+                    ...(allowMutationActions &&
+                    (scan.status === 'pending' || scan.status === 'running')
                       ? [
                           {
                             id: 'cancel',
@@ -503,15 +536,19 @@ function ImageScansTreeChildrenRows({
                           },
                         ]
                       : []),
-                    {
-                      id: 'delete',
-                      label: 'Delete scan',
-                      icon: <Delete01Icon size={14} aria-hidden />,
-                      variant: 'danger' as const,
-                      onAction: () => {
-                        void onDelete(scan.id, imageName);
-                      },
-                    },
+                    ...(allowMutationActions
+                      ? [
+                          {
+                            id: 'delete',
+                            label: 'Delete scan',
+                            icon: <Delete01Icon size={14} aria-hidden />,
+                            variant: 'danger' as const,
+                            onAction: () => {
+                              void onDelete(scan.id, imageName);
+                            },
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </div>
@@ -524,6 +561,7 @@ function ImageScansTreeChildrenRows({
 }
 
 export function ImageScansTable({
+  allowMutationActions = true,
   expanded,
   hasActiveFilters,
   images,
@@ -542,19 +580,19 @@ export function ImageScansTable({
 }: ImageScansTableProps) {
   const tableRows = useMemo(() => images, [images]);
   const [selectedImageNames, setSelectedImageNames] = useState<Set<string>>(new Set());
-  const [localSelectedScans, setLocalSelectedScans] = useState<Set<string>>(new Set());
   const [visibleScanIdsByImage, setVisibleScanIdsByImage] = useState<Record<string, string[]>>({});
+  const displaySelectedScans = selectedScans;
+  const previousSelectedCountRef = useRef(selectedScans.size);
 
   useEffect(() => {
-    return deferEffect(() => {
-      setLocalSelectedScans(new Set(selectedScans));
-      if (selectedScans.size === 0) {
-        setSelectedImageNames(new Set());
-      }
-    });
-  }, [selectedScans]);
-
-  const displaySelectedScans = localSelectedScans;
+    // Only clear explicit parent selections when the global scan selection transitions to empty.
+    // This avoids clearing a freshly selected parent row during async selection updates.
+    const previousCount = previousSelectedCountRef.current;
+    if (previousCount > 0 && selectedScans.size === 0) {
+      setSelectedImageNames(new Set());
+    }
+    previousSelectedCountRef.current = selectedScans.size;
+  }, [selectedScans.size]);
 
   const getSelectableScanIds = useCallback(
     (image: ImageSummary) => {
@@ -577,15 +615,10 @@ export function ImageScansTable({
   const isPartiallySelected =
     !isAllSelected && allSelectableScanIds.some((scanId) => displaySelectedScans.has(scanId));
 
-  const effectiveSelectedImageNames = useMemo(
-    () => (displaySelectedScans.size === 0 ? new Set<string>() : selectedImageNames),
-    [displaySelectedScans.size, selectedImageNames]
-  );
-
   const setScanSelection = useCallback(
     (scanId: string, selected: boolean) => {
-      setLocalSelectedScans((previous) => {
-        const next = new Set(previous.size > 0 ? previous : selectedScans);
+      onSelectedScansChange((previous) => {
+        const next = new Set(previous);
         if (selected) {
           next.add(scanId);
         } else {
@@ -593,15 +626,14 @@ export function ImageScansTable({
         }
         return next;
       });
-      onSelectScan(scanId, selected);
     },
-    [onSelectScan, selectedScans]
+    [onSelectedScansChange]
   );
 
   const setScanIdsSelection = useCallback(
     (scanIds: string[], selected: boolean) => {
-      setLocalSelectedScans((previous) => {
-        const next = new Set(previous.size > 0 ? previous : selectedScans);
+      onSelectedScansChange((previous) => {
+        const next = new Set(previous);
         for (const scanId of scanIds) {
           if (selected) {
             next.add(scanId);
@@ -612,7 +644,7 @@ export function ImageScansTable({
         return next;
       });
     },
-    [selectedScans]
+    [onSelectedScansChange]
   );
 
   return (
@@ -638,15 +670,6 @@ export function ImageScansTable({
                     selected ? new Set(tableRows.map((image) => image.image_name)) : new Set()
                   );
                   setScanIdsSelection(allSelectableScanIds, selected);
-                  onSelectedScansChange(
-                    selected
-                      ? new Set([...displaySelectedScans, ...allSelectableScanIds])
-                      : new Set(
-                          Array.from(displaySelectedScans).filter(
-                            (scanId) => !allSelectableScanIds.includes(scanId)
-                          )
-                        )
-                  );
                 }}
               />
             </Table.Column>
@@ -695,18 +718,23 @@ export function ImageScansTable({
                       action={
                         hasActiveFilters
                           ? { label: 'Clear Filters', onClick: onClearFilters }
-                          : { label: '+ New Scan', onClick: onOpenCreateModal }
+                          : allowMutationActions
+                            ? { label: '+ New Scan', onClick: onOpenCreateModal }
+                            : undefined
                       }
                     />
                   </div>
                 </Table.Cell>
               </Table.Row>
             ) : (
-              <Table.Collection items={tableRows}>
+              <Table.Collection
+                items={tableRows}
+                dependencies={[displaySelectedScans, selectedImageNames, visibleScanIdsByImage]}
+              >
                 {(img) => {
                   const targetIds = getSelectableScanIds(img);
                   const isParentSelected =
-                    effectiveSelectedImageNames.has(img.image_name) ||
+                    selectedImageNames.has(img.image_name) ||
                     (targetIds.length > 0 &&
                       targetIds.every((scanId) => displaySelectedScans.has(scanId)));
                   const isParentIndeterminate =
@@ -876,11 +904,15 @@ export function ImageScansTable({
                       >
                         <SevCount count={img.low_count} level="low" />
                       </Table.Cell>
-                      <Table.Cell className="text-right text-xs text-zinc-500" onClick={(event) => event.stopPropagation()}>
+                      <Table.Cell
+                        className="text-right text-xs text-zinc-500"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         —
                       </Table.Cell>
 
                       <ImageScansTreeChildrenRows
+                        allowMutationActions={allowMutationActions}
                         childRefreshKey={childRefreshKey}
                         imageName={img.image_name}
                         isImageSelected={isParentSelected}
@@ -897,14 +929,25 @@ export function ImageScansTable({
                           setScanSelection(scanId, selected);
                         }}
                         onVisibleScanIdsChange={(name, ids) => {
-                          setVisibleScanIdsByImage((previous) => ({ ...previous, [name]: ids }));
+                          setVisibleScanIdsByImage((previous) => {
+                            const currentIds = previous[name] ?? [];
+                            const unchanged =
+                              currentIds.length === ids.length &&
+                              currentIds.every((id, index) => id === ids[index]);
+                            if (unchanged) {
+                              return previous;
+                            }
+                            return { ...previous, [name]: ids };
+                          });
                           if (
-                            effectiveSelectedImageNames.has(name) &&
+                            selectedImageNames.has(name) &&
                             ids.some((scanId) => !displaySelectedScans.has(scanId))
                           ) {
-                            const next = new Set([...displaySelectedScans, ...ids]);
-                            setLocalSelectedScans(next);
-                            onSelectedScansChange(next);
+                            onSelectedScansChange((previous) => {
+                              const next = new Set(previous);
+                              ids.forEach((scanId) => next.add(scanId));
+                              return next;
+                            });
                           }
                         }}
                         scanUsersById={scanUsersById}

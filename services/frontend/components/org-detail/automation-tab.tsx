@@ -97,6 +97,7 @@ export function OrgAutomationTab({
                 onClick={() => void onRemovePattern(pattern)}
                 className="text-zinc-400 hover:text-red-400 transition-colors ml-0.5"
                 type="button"
+                disabled={!canManageOrgSettings}
               >
                 ×
               </button>
@@ -115,8 +116,12 @@ export function OrgAutomationTab({
             onKeyDown={(event) => event.key === 'Enter' && void onAddPattern()}
             placeholder="nginx:* or docker.io/myapp:*"
             className={`${inputClassName}`}
+            disabled={!canManageOrgSettings}
           />
-          <Button onClick={() => void onAddPattern()} isDisabled={!newPattern.trim()}>
+          <Button
+            onClick={() => void onAddPattern()}
+            isDisabled={!canManageOrgSettings || !newPattern.trim()}
+          >
             Add
           </Button>
         </div>
@@ -292,7 +297,7 @@ export function OrgAutomationTab({
       <Card>
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Policies</h2>
-          <Button onClick={onCreatePolicy}>
+          <Button onClick={onCreatePolicy} isDisabled={!canManageOrgSettings}>
             <PlusSignIcon size={14} />
             Add Policy
           </Button>
@@ -320,13 +325,19 @@ export function OrgAutomationTab({
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Button onClick={() => onEditPolicy(policy)} variant="secondary" type="button">
+                    <Button
+                      onClick={() => onEditPolicy(policy)}
+                      variant="secondary"
+                      type="button"
+                      isDisabled={!canManageOrgSettings}
+                    >
                       <PencilEdit01Icon size={15} />
                     </Button>
                     <Button
                       onClick={() => void onDeletePolicy(policy.id)}
                       variant="danger-soft"
                       type="button"
+                      isDisabled={!canManageOrgSettings}
                     >
                       <Delete01Icon size={15} />
                     </Button>

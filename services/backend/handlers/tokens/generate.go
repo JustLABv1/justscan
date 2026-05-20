@@ -1,7 +1,6 @@
 package tokens
 
 import (
-	"errors"
 	"net/http"
 	"time"
 
@@ -40,19 +39,19 @@ func GenerateTokenUser(db *bun.DB, context *gin.Context) {
 	var user models.Users
 	err := db.NewSelect().Model(&user).Where("email = ? OR username = ?", request.Email, request.Email).Scan(context)
 	if err != nil {
-		httperror.InternalServerError(context, "Benutzer nicht gefunden", err)
+		httperror.Unauthorized(context, "invalid credentials", err)
 		return
 	}
 
 	// check if user account is disabled
 	if user.Disabled {
-		httperror.Unauthorized(context, "Dein Account ist deaktiviert", errors.New("dein account ist deaktiviert: "+user.DisabledReason))
+		httperror.Unauthorized(context, "invalid credentials", err)
 		return
 	}
 	// check if password is correct
 	credentialError := user.CheckPassword(request.Password)
 	if credentialError != nil {
-		httperror.Unauthorized(context, "Passwort ist falsch", errors.New("passwort ist falsch"))
+		httperror.Unauthorized(context, "invalid credentials", credentialError)
 		return
 	}
 

@@ -1,6 +1,7 @@
 package admins
 
 import (
+	"errors"
 	"net/http"
 
 	"justscan-backend/functions/httperror"
@@ -26,7 +27,7 @@ func CreateUser(context *gin.Context, db *bun.DB) {
 		return
 	}
 	if firstCount > 0 {
-		httperror.StatusConflict(context, "User already exists", nil)
+		httperror.StatusConflict(context, "User already exists", errors.New("user already exists"))
 		return
 	}
 

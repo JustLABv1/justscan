@@ -8,12 +8,18 @@ import { ImageScansTable } from '../scans/image-scans-table';
 import { OrgScanItem } from './shared';
 
 interface OrgScansTabProps {
+  canManageScans: boolean;
   onOpenAssignModal: () => void | Promise<void>;
   onRemoveScan: (scanId: string) => void | Promise<void>;
   orgScans: OrgScanItem[];
 }
 
-export function OrgScansTab({ onOpenAssignModal, onRemoveScan, orgScans }: OrgScansTabProps) {
+export function OrgScansTab({
+  canManageScans,
+  onOpenAssignModal,
+  onRemoveScan,
+  orgScans,
+}: OrgScansTabProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedScans, setSelectedScans] = useState<Set<string>>(new Set());
   const [childRefreshKey, setChildRefreshKey] = useState<Record<string, number>>({});
@@ -82,10 +88,12 @@ export function OrgScansTab({ onOpenAssignModal, onRemoveScan, orgScans }: OrgSc
     <Card>
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold">Assigned Scans</h2>
-        <Button onClick={() => void onOpenAssignModal()}>
-          <PlusSignIcon size={14} />
-          Assign Scan
-        </Button>
+        {canManageScans && (
+          <Button onClick={() => void onOpenAssignModal()}>
+            <PlusSignIcon size={14} />
+            Assign Scan
+          </Button>
+        )}
       </div>
 
       {orgScans.length === 0 ? (
@@ -106,6 +114,7 @@ export function OrgScansTab({ onOpenAssignModal, onRemoveScan, orgScans }: OrgSc
           onOpenCreateModal={onOpenAssignModal}
           onSelectedScansChange={setSelectedScans}
           onSelectScan={() => {}}
+          allowMutationActions={canManageScans}
           selectedScans={selectedScans}
         />
       )}

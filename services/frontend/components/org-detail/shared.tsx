@@ -1,5 +1,3 @@
-import { OrgPolicy, OrgRiskScore, Scan, TrendPoint } from '@/lib/api';
-import { Card } from '@heroui/react';
 import {
   Bar as EvilBar,
   EvilBarChart,
@@ -9,22 +7,46 @@ import {
   YAxis as EvilBarYAxis,
 } from '@/components/evilcharts/charts/bar-chart';
 import { typedChartConfigFromSeries } from '@/components/ui/chart-adapter';
+import { OrgPolicy, OrgRiskScore, Scan, TrendPoint } from '@/lib/api';
+import { Card } from '@heroui/react';
 
-export type OrgScanItem = Scan & { compliance: { policy_id: string; policy_name: string; status: string }[] };
+export type OrgScanItem = Scan & {
+  compliance: { policy_id: string; policy_name: string; status: string }[];
+};
 
 export function RulePill({ rule }: { rule: OrgPolicy['rules'][number] }) {
   const base = 'inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full border';
   switch (rule.type) {
     case 'max_cvss':
-      return <span className={`${base} bg-red-500/10 text-red-400 border-red-500/20`}>CVSS &lt; {rule.value}</span>;
+      return (
+        <span className={`${base} bg-red-500/10 text-red-400 border-red-500/20`}>
+          CVSS &lt; {rule.value}
+        </span>
+      );
     case 'max_count':
-      return <span className={`${base} bg-orange-500/10 text-orange-400 border-orange-500/20`}>{rule.value} {rule.severity}</span>;
+      return (
+        <span className={`${base} bg-orange-500/10 text-orange-400 border-orange-500/20`}>
+          {rule.value} {rule.severity}
+        </span>
+      );
     case 'max_total':
-      return <span className={`${base} bg-yellow-500/10 text-yellow-400 border-yellow-500/20`}>Total ≤ {rule.value}</span>;
+      return (
+        <span className={`${base} bg-yellow-500/10 text-yellow-400 border-yellow-500/20`}>
+          Total ≤ {rule.value}
+        </span>
+      );
     case 'require_fix':
-      return <span className={`${base} bg-blue-500/10 text-blue-400 border-blue-500/20`}>Fix req. {rule.severity}</span>;
+      return (
+        <span className={`${base} bg-blue-500/10 text-blue-400 border-blue-500/20`}>
+          Fix req. {rule.severity}
+        </span>
+      );
     case 'blocked_cve':
-      return <span className={`${base} bg-red-500/10 text-red-400 border-red-500/20`}>Block {rule.cve_id}</span>;
+      return (
+        <span className={`${base} bg-red-500/10 text-red-400 border-red-500/20`}>
+          Block {rule.cve_id}
+        </span>
+      );
     case 'xray_policy_block':
       return (
         <span className={`${base} bg-red-500/10 text-red-400 border-red-500/20`}>
@@ -32,7 +54,11 @@ export function RulePill({ rule }: { rule: OrgPolicy['rules'][number] }) {
         </span>
       );
     default:
-      return <span className={`${base} bg-zinc-500/10 text-zinc-400 border-zinc-500/20`}>{rule.type}</span>;
+      return (
+        <span className={`${base} bg-zinc-500/10 text-zinc-400 border-zinc-500/20`}>
+          {rule.type}
+        </span>
+      );
   }
 }
 
@@ -47,9 +73,15 @@ export function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full"
-      style={{ color: palette.color, background: palette.bg, border: `1px solid ${palette.border}` }}
+      style={{
+        color: palette.color,
+        background: palette.bg,
+        border: `1px solid ${palette.border}`,
+      }}
     >
-      <span className={`size-1.5 rounded-full bg-current ${status === 'running' ? 'animate-pulse' : ''}`} />
+      <span
+        className={`size-1.5 rounded-full bg-current ${status === 'running' ? 'animate-pulse' : ''}`}
+      />
       {status}
     </span>
   );
@@ -115,7 +147,6 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
         className="h-44 w-full overflow-hidden rounded-xl p-2"
         style={{
           background: 'var(--surface-secondary)',
-          border: '1px solid var(--surface-border)',
         }}
       >
         <EvilBarChart
@@ -124,20 +155,20 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
           stackType="stacked"
           className="h-full !aspect-auto"
           barCategoryGap={6}
-          chartProps={{ margin: { top: 8, right: 8, left: 0, bottom: 2 } }}
         >
           <EvilBarGrid stroke="rgba(161,161,170,0.12)" vertical={false} />
           <EvilBarXAxis
             dataKey="shortLabel"
             minTickGap={24}
-            tick={{ fontSize: 11, fill: 'var(--text-faint)' }}
-            tickFormatter={(_, index) => (index % 5 === 0 || index === last30Days.length - 1 ? last30Days[index].shortLabel : '')}
+            tickFormatter={(_, index) =>
+              index % 5 === 0 || index === last30Days.length - 1 ? last30Days[index].shortLabel : ''
+            }
           />
-          <EvilBarYAxis allowDecimals={false} width={28} tick={{ fontSize: 11, fill: 'var(--text-faint)' }} />
+          <EvilBarYAxis allowDecimals={false} width={28} />
           <EvilBarTooltip variant="frosted-glass" roundness="lg" />
-        <EvilBar dataKey="fail" />
-        <EvilBar dataKey="pass" />
-      </EvilBarChart>
+          <EvilBar dataKey="fail" />
+          <EvilBar dataKey="pass" />
+        </EvilBarChart>
       </div>
     </div>
   );
@@ -146,24 +177,29 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
 export function RiskOverviewCard({ riskScore }: { riskScore: OrgRiskScore | null }) {
   if (!riskScore) return null;
 
-  const gradeColor = riskScore.grade === 'A'
-    ? '#34d399'
-    : riskScore.grade === 'B'
-      ? '#60a5fa'
-      : riskScore.grade === 'C'
-        ? '#fbbf24'
-        : riskScore.grade === 'D'
-          ? '#fb923c'
-          : '#f87171';
-  const pct = riskScore.compliance_pass + riskScore.compliance_fail > 0
-    ? Math.round(riskScore.compliance_pass_rate * 100)
-    : null;
+  const gradeColor =
+    riskScore.grade === 'A'
+      ? '#34d399'
+      : riskScore.grade === 'B'
+        ? '#60a5fa'
+        : riskScore.grade === 'C'
+          ? '#fbbf24'
+          : riskScore.grade === 'D'
+            ? '#fb923c'
+            : '#f87171';
+  const pct =
+    riskScore.compliance_pass + riskScore.compliance_fail > 0
+      ? Math.round(riskScore.compliance_pass_rate * 100)
+      : null;
 
   return (
     <Card className="surface-card relative rounded-2xl p-5">
       <div
         className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-        style={{ background: 'linear-gradient(90deg,transparent,color-mix(in srgb, var(--accent) 20%, transparent),transparent)' }}
+        style={{
+          background:
+            'linear-gradient(90deg,transparent,color-mix(in srgb, var(--accent) 20%, transparent),transparent)',
+        }}
       />
       <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Risk Overview</h2>
       <div className="flex items-center gap-6 flex-wrap">
@@ -171,18 +207,24 @@ export function RiskOverviewCard({ riskScore }: { riskScore: OrgRiskScore | null
           className="flex flex-col items-center justify-center size-20 rounded-2xl"
           style={{ background: `${gradeColor}18`, border: `1px solid ${gradeColor}30` }}
         >
-          <span className="text-4xl font-black" style={{ color: gradeColor }}>{riskScore.grade}</span>
+          <span className="text-4xl font-black" style={{ color: gradeColor }}>
+            {riskScore.grade}
+          </span>
           <span className="text-xs text-zinc-500 mt-0.5">grade</span>
         </div>
         <div className="flex gap-4 flex-wrap">
-          {([
-            ['CRITICAL', riskScore.totals.critical, '#f87171'],
-            ['HIGH', riskScore.totals.high, '#fb923c'],
-            ['MEDIUM', riskScore.totals.medium, '#fbbf24'],
-            ['LOW', riskScore.totals.low, '#60a5fa'],
-          ] as [string, number, string][]).map(([label, value, color]) => (
+          {(
+            [
+              ['CRITICAL', riskScore.totals.critical, '#f87171'],
+              ['HIGH', riskScore.totals.high, '#fb923c'],
+              ['MEDIUM', riskScore.totals.medium, '#fbbf24'],
+              ['LOW', riskScore.totals.low, '#60a5fa'],
+            ] as [string, number, string][]
+          ).map(([label, value, color]) => (
             <div key={label} className="flex flex-col items-center">
-              <span className="text-2xl font-bold" style={{ color }}>{value}</span>
+              <span className="text-2xl font-bold" style={{ color }}>
+                {value}
+              </span>
               <span className="text-xs text-zinc-500 mt-0.5">{label}</span>
             </div>
           ))}
@@ -190,11 +232,15 @@ export function RiskOverviewCard({ riskScore }: { riskScore: OrgRiskScore | null
         {pct !== null && (
           <div className="ml-auto flex flex-col items-end">
             <span className="text-xs text-zinc-500 mb-1">Compliance</span>
-            <div className="w-48 h-2 rounded-full overflow-hidden" style={{ background: 'var(--row-hover)' }}>
+            <div
+              className="w-48 h-2 rounded-full overflow-hidden"
+              style={{ background: 'var(--row-hover)' }}
+            >
               <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
             </div>
             <span className="text-xs text-zinc-500 mt-1">
-              {pct}% pass ({riskScore.compliance_pass}/{riskScore.compliance_pass + riskScore.compliance_fail})
+              {pct}% pass ({riskScore.compliance_pass}/
+              {riskScore.compliance_pass + riskScore.compliance_fail})
             </span>
           </div>
         )}

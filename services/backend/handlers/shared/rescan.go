@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"justscan-backend/functions/audit"
@@ -55,16 +54,13 @@ func RescanShared(db *bun.DB) gin.HandlerFunc {
 
 		// Determine caller authentication status
 		raw := c.GetHeader("Authorization")
-		tokenString := strings.TrimPrefix(raw, "Bearer ")
-		isAuthenticated := tokenString != "" && auth.ValidateToken(tokenString) == nil
+		resolvedUserID, _, resolveErr := auth.ResolveUserAccess(raw, db)
+		isAuthenticated := resolveErr == nil
 
 		scanType := "public"
 		if isAuthenticated {
-			userID, err := auth.GetUserIDFromToken(raw)
-			if err == nil {
-				newScan.UserID = &userID
-				scanType = "authenticated"
-			}
+			newScan.UserID = &resolvedUserID
+			scanType = "authenticated"
 		} else {
 			// Public rescans respect the public scan enabled flag
 			if !isPublicScanEnabled(c.Request.Context(), db) {

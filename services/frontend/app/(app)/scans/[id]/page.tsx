@@ -1944,8 +1944,10 @@ export default function ScanDetailPage() {
                           { id: 'authenticated', label: 'Signed in' },
                         ]}
                         value={shareVisibility}
-                        onChange={setShareVisibility}
-                        isDisabled={!canManageScanAccess()}
+                        onChange={(next) => {
+                          if (!canManageScanAccess()) return;
+                          setShareVisibility(next);
+                        }}
                         size="sm"
                       />
                       {shareVisibility !== scan.share_visibility && (
@@ -1983,8 +1985,10 @@ export default function ScanDetailPage() {
                           { id: 'authenticated', label: 'Signed in' },
                         ]}
                         value={shareVisibility}
-                        onChange={setShareVisibility}
-                        isDisabled={!canManageScanAccess()}
+                        onChange={(next) => {
+                          if (!canManageScanAccess()) return;
+                          setShareVisibility(next);
+                        }}
                         size="sm"
                       />
                       <p className="text-xs leading-relaxed text-zinc-400">

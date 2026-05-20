@@ -33,6 +33,7 @@ import {
   updateStatusPage,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
 import { timeAgo } from '@/lib/time';
 import {
   Alert,
@@ -144,9 +145,17 @@ export default function StatusPagesPage() {
   const { confirm, dialog } = useConfirmDialog();
   const isPlatformAdmin = getTokenType() === 'admin';
   const currentUserId = getUser()?.id as string | undefined;
+  const orgRoleById = useMemo(
+    () => new Map(orgs.map((org) => [org.id, org.current_user_role] as const)),
+    [orgs]
+  );
+  const canMutateActiveScope =
+    isPlatformAdmin ||
+    workScope.kind !== 'org' ||
+    canMutateOrg(orgRoleById.get(workScope.orgId));
   const manageableOrgIds = new Set(
     orgs
-      .filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin')
+      .filter((org) => canManageOrg(org.current_user_role))
       .map((org) => org.id)
   );
   const filteredPages = useMemo(() => {
@@ -282,7 +291,7 @@ export default function StatusPagesPage() {
   function canManageStatusPage(page: StatusPage) {
     if (isPlatformAdmin) return true;
     if (page.owner_type === 'org' && page.owner_org_id) {
-      return manageableOrgIds.has(page.owner_org_id);
+      return canManageOrg(orgRoleById.get(page.owner_org_id));
     }
     return !page.owner_user_id || page.owner_user_id === currentUserId;
   }
@@ -300,6 +309,7 @@ export default function StatusPagesPage() {
   }
 
   function openShareModal(page: StatusPage) {
+    if (!canManageStatusPage(page)) return;
     setShareTarget(page);
     setShareOrgId('');
     setShareError('');
@@ -309,7 +319,7 @@ export default function StatusPagesPage() {
   }
 
   async function handleGrantShare() {
-    if (!shareTarget || !shareOrgId) return;
+    if (!shareTarget || !shareOrgId || !canManageStatusPage(shareTarget)) return;
     setShareSaving(true);
     setShareError('');
     try {
@@ -325,7 +335,7 @@ export default function StatusPagesPage() {
   }
 
   async function handleRevokeShare(orgId: string) {
-    if (!shareTarget) return;
+    if (!shareTarget || !canManageStatusPage(shareTarget)) return;
     setShareSaving(true);
     setShareError('');
     try {
@@ -366,6 +376,7 @@ export default function StatusPagesPage() {
   }
 
   function openCreate() {
+    if (!canMutateActiveScope) return;
     resetForm();
     modal.open();
   }
@@ -417,6 +428,7 @@ export default function StatusPagesPage() {
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    if (editing ? !canManageStatusPage(editing) : !canMutateActiveScope) return;
     event.preventDefault();
     setSaving(true);
     setFormError('');
@@ -469,7 +481,7 @@ export default function StatusPagesPage() {
         title="Status Pages"
         description="Publish current image-tag health internally or externally."
         actions={
-          <Button onPress={openCreate} className="btn-primary">
+          <Button onPress={openCreate} className="btn-primary" isDisabled={!canMutateActiveScope}>
             <PlusSignIcon size={15} /> New Status Page
           </Button>
         }
@@ -1146,7 +1158,12 @@ export default function StatusPagesPage() {
                 <Button
                   type="submit"
                   form="status-page-form"
-                  isDisabled={saving || invalidImagePatterns.length > 0 || !scopeIsValid}
+                  isDisabled={
+                    saving ||
+                    invalidImagePatterns.length > 0 ||
+                    !scopeIsValid ||
+                    (editing ? !canManageStatusPage(editing) : !canMutateActiveScope)
+                  }
                   className="btn-primary"
                 >
                   {saving && (

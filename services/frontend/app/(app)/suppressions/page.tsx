@@ -18,6 +18,7 @@ import {
     unshareSuppression,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
   Button,
@@ -97,9 +98,13 @@ export default function SuppressionsPage() {
   const toast = useToast();
   const shareModal = useOverlayState();
   const isPlatformAdmin = getTokenType() === 'admin';
+  const orgRoleById = useMemo(
+    () => new Map(orgs.map((org) => [org.id, org.current_user_role] as const)),
+    [orgs]
+  );
   const manageableOrgIds = new Set(
     orgs
-      .filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin')
+      .filter((org) => canManageOrg(org.current_user_role))
       .map((org) => org.id)
   );
 
@@ -130,7 +135,22 @@ export default function SuppressionsPage() {
       return false;
     if (isPlatformAdmin) return true;
     if (suppression.owner_type === 'org' && suppression.owner_org_id) {
-      return manageableOrgIds.has(suppression.owner_org_id);
+      return canManageOrg(orgRoleById.get(suppression.owner_org_id));
+    }
+    return true;
+  }
+
+  function canMutateSuppression(suppression: Suppression) {
+    if (
+      suppression.read_only ||
+      suppression.source === 'xray' ||
+      suppression.owner_type === 'system'
+    ) {
+      return false;
+    }
+    if (isPlatformAdmin) return true;
+    if (suppression.owner_type === 'org' && suppression.owner_org_id) {
+      return canMutateOrg(orgRoleById.get(suppression.owner_org_id));
     }
     return true;
   }
@@ -148,6 +168,7 @@ export default function SuppressionsPage() {
   }
 
   function openShareModal(suppression: Suppression) {
+    if (!canManageAccess(suppression)) return;
     setShareTarget(suppression);
     setShares([]);
     setShareOrgId('');
@@ -157,7 +178,7 @@ export default function SuppressionsPage() {
   }
 
   async function handleGrantShare() {
-    if (!shareTarget || !shareOrgId) return;
+    if (!shareTarget || !shareOrgId || !canManageAccess(shareTarget)) return;
     setShareSaving(true);
     setShareError('');
     try {
@@ -173,7 +194,7 @@ export default function SuppressionsPage() {
   }
 
   async function handleRevokeShare(orgId: string) {
-    if (!shareTarget) return;
+    if (!shareTarget || !canManageAccess(shareTarget)) return;
     setShareSaving(true);
     setShareError('');
     try {
@@ -188,7 +209,7 @@ export default function SuppressionsPage() {
   }
 
   async function handleDelete(s: Suppression) {
-    if (s.read_only || s.source === 'xray') return;
+    if (!canMutateSuppression(s)) return;
     const ok = await confirm({
       title: `Remove suppression for ${s.vuln_id}?`,
       message: 'The vulnerability will no longer be suppressed for this image.',
@@ -395,11 +416,9 @@ export default function SuppressionsPage() {
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      {s.read_only || s.source === 'xray' ? (
-                        <span className="text-[11px] text-zinc-400">Read only</span>
-                      ) : (
+                      {canManageAccess(s) || canMutateSuppression(s) ? (
                         <div className="flex items-center justify-end gap-1">
-                          {canManageAccess(s) && (
+                          {canManageAccess(s) ? (
                             <Button
                               onPress={() => openShareModal(s)}
                               className="text-zinc-400 dark:text-zinc-600 hover:text-accent dark:hover:text-accent transition-colors p-1"
@@ -410,18 +429,22 @@ export default function SuppressionsPage() {
                             >
                               <Shield01Icon size={15} />
                             </Button>
-                          )}
-                          <Button
-                            onPress={() => handleDelete(s)}
-                            className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1"
-                            aria-label="Remove suppression"
-                            type="button"
-                            isIconOnly
-                            variant="secondary"
-                          >
-                            <Delete01Icon size={15} />
-                          </Button>
+                          ) : null}
+                          {canMutateSuppression(s) ? (
+                            <Button
+                              onPress={() => handleDelete(s)}
+                              className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1"
+                              aria-label="Remove suppression"
+                              type="button"
+                              isIconOnly
+                              variant="secondary"
+                            >
+                              <Delete01Icon size={15} />
+                            </Button>
+                          ) : null}
                         </div>
+                      ) : (
+                        <span className="text-[11px] text-zinc-400">Read only</span>
                       )}
                     </Table.Cell>
                   </Table.Row>

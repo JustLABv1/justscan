@@ -28,6 +28,7 @@ import {
   updateRegistry,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
 import { timeAgo } from '@/lib/time';
 import { Button, Card, ListBox, Modal, SearchField, Select, Table, useOverlayState } from '@heroui/react';
 import {
@@ -165,9 +166,17 @@ export default function RegistriesPage() {
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
   const isPlatformAdmin = getTokenType() === 'admin';
+  const orgRoleById = useMemo(
+    () => new Map(orgs.map((org) => [org.id, org.current_user_role] as const)),
+    [orgs]
+  );
+  const canMutateActiveScope =
+    isPlatformAdmin ||
+    workScope.kind !== 'org' ||
+    canMutateOrg(orgRoleById.get(workScope.orgId));
   const manageableOrgIds = new Set(
     orgs
-      .filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin')
+      .filter((org) => canManageOrg(org.current_user_role))
       .map((org) => org.id)
   );
 
@@ -187,6 +196,7 @@ export default function RegistriesPage() {
   useEffect(() => deferEffect(load), [load, scopeKey]);
 
   function openCreate() {
+    if (!canMutateActiveScope) return;
     setEditing(null);
     setName('');
     setUrl('');
@@ -201,6 +211,7 @@ export default function RegistriesPage() {
     modal.open();
   }
   function openEdit(r: RegistryWithHealth) {
+    if (!canMutateRegistry(r)) return;
     setEditing(r);
     setName(r.name);
     setUrl(r.url);
@@ -214,7 +225,17 @@ export default function RegistriesPage() {
     setFormError('');
     modal.open();
   }
+  function canMutateRegistry(registry: RegistryWithHealth) {
+    if (registry.owner_type === 'system') return isPlatformAdmin;
+    if (isPlatformAdmin) return true;
+    if (registry.owner_type === 'org' && registry.owner_org_id) {
+      return canMutateOrg(orgRoleById.get(registry.owner_org_id));
+    }
+    return true;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
+    if (editing ? !canMutateRegistry(editing) : !canMutateActiveScope) return;
     e.preventDefault();
     setFormError('');
     setSaving(true);
@@ -250,6 +271,8 @@ export default function RegistriesPage() {
     }
   }
   async function handleDelete(id: string) {
+    const registry = registries.find((candidate) => candidate.id === id);
+    if (registry && !canMutateRegistry(registry)) return;
     const ok = await confirm({
       title: 'Delete registry?',
       message: 'The registry configuration will be permanently removed.',
@@ -262,6 +285,8 @@ export default function RegistriesPage() {
     load();
   }
   async function handleTest(id: string) {
+    const registry = registries.find((candidate) => candidate.id === id);
+    if (registry && !canMutateRegistry(registry)) return;
     setTesting(id);
     try {
       await testRegistry(id);
@@ -278,7 +303,7 @@ export default function RegistriesPage() {
   function canManageAccess(registry: RegistryWithHealth) {
     if (isPlatformAdmin) return true;
     if (registry.owner_type === 'org' && registry.owner_org_id) {
-      return manageableOrgIds.has(registry.owner_org_id);
+      return canManageOrg(orgRoleById.get(registry.owner_org_id));
     }
     return true;
   }
@@ -296,6 +321,7 @@ export default function RegistriesPage() {
   }
 
   function openShareModal(registry: RegistryWithHealth) {
+    if (!canManageAccess(registry)) return;
     setShareTarget(registry);
     setShares([]);
     setShareOrgId('');
@@ -305,7 +331,7 @@ export default function RegistriesPage() {
   }
 
   async function handleGrantShare() {
-    if (!shareTarget || !shareOrgId) return;
+    if (!shareTarget || !shareOrgId || !canManageAccess(shareTarget)) return;
     setShareSaving(true);
     setShareError('');
     try {
@@ -321,7 +347,7 @@ export default function RegistriesPage() {
   }
 
   async function handleRevokeShare(orgId: string) {
-    if (!shareTarget) return;
+    if (!shareTarget || !canManageAccess(shareTarget)) return;
     setShareSaving(true);
     setShareError('');
     try {
@@ -365,6 +391,7 @@ export default function RegistriesPage() {
             onPress={openCreate}
             className="btn-primary inline-flex items-center gap-2"
             type="button"
+            isDisabled={!canMutateActiveScope}
             variant="primary"
           >
             <PlusSignIcon size={15} /> Add Registry
@@ -457,7 +484,9 @@ export default function RegistriesPage() {
           action={
             registries.length > 0
               ? { label: 'Clear filters', onClick: () => { setSearchQuery(''); setProviderFilter('all'); } }
-              : { label: '+ Add Registry', onClick: openCreate }
+              : canMutateActiveScope
+                ? { label: '+ Add Registry', onClick: openCreate }
+                : undefined
           }
         />
       ) : (
@@ -525,45 +554,57 @@ export default function RegistriesPage() {
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex items-center justify-end">
-                        <RowActionsMenu
-                          label={`Open actions menu for ${r.name}`}
-                          items={[
-                            {
-                              id: 'test',
-                              label: testing === r.id ? 'Testing…' : 'Test connection',
-                              icon: <TestTube01Icon size={15} />,
-                              disabled: testing === r.id,
-                              onAction: () => {
-                                void handleTest(r.id);
-                              },
-                            },
-                            ...(canManageAccess(r)
-                              ? [
-                                  {
-                                    id: 'share',
-                                    label: 'Manage access',
-                                    icon: <Shield01Icon size={15} />,
-                                    onAction: () => openShareModal(r),
-                                  },
-                                ]
-                              : []),
-                            {
-                              id: 'edit',
-                              label: 'Edit registry',
-                              icon: <PencilEdit01Icon size={15} />,
-                              onAction: () => openEdit(r),
-                            },
-                            {
-                              id: 'delete',
-                              label: 'Delete registry',
-                              icon: <Delete01Icon size={15} />,
-                              variant: 'danger',
-                              onAction: () => {
-                                void handleDelete(r.id);
-                              },
-                            },
-                          ]}
-                        />
+                        {canManageAccess(r) || canMutateRegistry(r) ? (
+                          <RowActionsMenu
+                            label={`Open actions menu for ${r.name}`}
+                            items={[
+                              ...(canMutateRegistry(r)
+                                ? [
+                                    {
+                                      id: 'test',
+                                      label: testing === r.id ? 'Testing…' : 'Test connection',
+                                      icon: <TestTube01Icon size={15} />,
+                                      disabled: testing === r.id,
+                                      onAction: () => {
+                                        void handleTest(r.id);
+                                      },
+                                    },
+                                  ]
+                                : []),
+                              ...(canManageAccess(r)
+                                ? [
+                                    {
+                                      id: 'share',
+                                      label: 'Manage access',
+                                      icon: <Shield01Icon size={15} />,
+                                      onAction: () => openShareModal(r),
+                                    },
+                                  ]
+                                : []),
+                              ...(canMutateRegistry(r)
+                                ? [
+                                    {
+                                      id: 'edit',
+                                      label: 'Edit registry',
+                                      icon: <PencilEdit01Icon size={15} />,
+                                      onAction: () => openEdit(r),
+                                    },
+                                    {
+                                      id: 'delete',
+                                      label: 'Delete registry',
+                                      icon: <Delete01Icon size={15} />,
+                                      variant: 'danger' as const,
+                                      onAction: () => {
+                                        void handleDelete(r.id);
+                                      },
+                                    },
+                                  ]
+                                : []),
+                            ]}
+                          />
+                        ) : (
+                          <span className="text-xs text-zinc-400">Read only</span>
+                        )}
                       </div>
                     </Table.Cell>
                   </Table.Row>
@@ -740,7 +781,14 @@ export default function RegistriesPage() {
                 <Button onPress={modal.close} type="button" variant="secondary">
                   Cancel
                 </Button>
-                <Button type="submit" form="registry-form" isDisabled={saving} variant="primary">
+                <Button
+                  type="submit"
+                  form="registry-form"
+                  isDisabled={
+                    saving || (editing ? !canMutateRegistry(editing) : !canMutateActiveScope)
+                  }
+                  variant="primary"
+                >
                   {saving && (
                     <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   )}

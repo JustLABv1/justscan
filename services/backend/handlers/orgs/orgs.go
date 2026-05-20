@@ -137,7 +137,7 @@ func GetOrg(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		org, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
+		org, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleViewer)
 		if !ok {
 			return
 		}

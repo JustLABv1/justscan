@@ -1,5 +1,11 @@
 export interface PolicyRule {
-  type: 'max_cvss' | 'max_count' | 'max_total' | 'require_fix' | 'blocked_cve';
+  type:
+    | 'max_cvss'
+    | 'max_count'
+    | 'max_total'
+    | 'require_fix'
+    | 'blocked_cve'
+    | 'xray_policy_block';
   value?: number;
   severity?: string;
   cve_id?: string;
@@ -33,6 +39,7 @@ export interface VulnerabilityViewSettings {
   min_cvss: number;
   has_fix: boolean;
   xray_policy_first: boolean;
+  policy_failed_only: boolean;
 }
 
 export interface VulnerabilityViewPreferenceResponse {
@@ -122,6 +129,7 @@ export interface ComplianceResult {
   evaluated_at: string;
   policy_name?: string;
   org_name?: string;
+  policy_rules?: PolicyRule[];
 }
 
 export interface APIToken {

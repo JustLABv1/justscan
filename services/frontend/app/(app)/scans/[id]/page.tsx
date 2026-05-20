@@ -18,9 +18,11 @@ import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import type {
   ComplianceResult,
   Org,
+  PolicyRule,
   ResourceShare,
   SBOMComponent,
   Scan,
@@ -125,6 +127,7 @@ const DEFAULT_VULNERABILITY_VIEW_SETTINGS: VulnerabilityViewSettings = {
   min_cvss: 0,
   has_fix: false,
   xray_policy_first: false,
+  policy_failed_only: false,
 };
 
 const VULNERABILITY_SORT_LABELS: Record<VulnerabilityViewSettings['sort_by'], string> = {
@@ -142,6 +145,7 @@ function vulnerabilityViewSummary(settings: VulnerabilityViewSettings) {
     settings.min_cvss > 0 ? `CVSS >= ${settings.min_cvss}` : '',
     settings.has_fix ? 'Has fix' : '',
     settings.xray_policy_first ? 'Xray policy first' : '',
+    settings.policy_failed_only ? 'Org policy failed only' : '',
   ].filter(Boolean);
   return `${VULNERABILITY_SORT_LABELS[settings.sort_by]} ${settings.sort_dir === 'desc' ? 'descending' : 'ascending'} | ${filters.join(' | ')}`;
 }
@@ -156,7 +160,8 @@ function vulnerabilityViewSettingsEqual(
     a.severity === b.severity &&
     a.min_cvss === b.min_cvss &&
     a.has_fix === b.has_fix &&
-    a.xray_policy_first === b.xray_policy_first
+    a.xray_policy_first === b.xray_policy_first &&
+    a.policy_failed_only === b.policy_failed_only
   );
 }
 
@@ -436,6 +441,33 @@ function normalizeVulnId(value?: string | null) {
   return (value ?? '').trim().toUpperCase();
 }
 
+function summarizePolicyRule(rule?: PolicyRule | null): string {
+  if (!rule) {
+    return '';
+  }
+
+  switch (rule.type) {
+    case 'max_cvss':
+      return `Max CVSS < ${(rule.value ?? 0).toFixed(1)}`;
+    case 'max_count': {
+      const severity = (rule.severity ?? '').trim().toUpperCase() || 'SEVERITY';
+      return `Max ${severity} vulnerabilities: ${Math.trunc(rule.value ?? 0)}`;
+    }
+    case 'max_total':
+      return `Max total vulnerabilities: ${Math.trunc(rule.value ?? 0)}`;
+    case 'require_fix': {
+      const severity = (rule.severity ?? '').trim().toUpperCase() || 'SPECIFIED';
+      return `Fix required for ${severity} vulnerabilities`;
+    }
+    case 'blocked_cve':
+      return `Blocked CVE: ${(rule.cve_id ?? '').trim() || 'specified CVE'}`;
+    case 'xray_policy_block':
+      return 'No Xray policy blocking vulnerabilities';
+    default:
+      return rule.type;
+  }
+}
+
 function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
   if (!firstSeenAt) {
     return (
@@ -490,6 +522,7 @@ export default function ScanDetailPage() {
   const { setRouteContext, setOverlayContext } = useAIContextBridge();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const workScope = useWorkScope();
   const toast = useToast();
   const [scan, setScan] = useState<Scan | null>(null);
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
@@ -512,6 +545,7 @@ export default function ScanDetailPage() {
   const [minCvss, setMinCvss] = useState(0);
   const [hasFix, setHasFix] = useState(false);
   const [xrayPolicyFirst, setXrayPolicyFirst] = useState(false);
+  const [policyFailedOnly, setPolicyFailedOnly] = useState(false);
   const [sortBy, setSortBy] = useState<VulnerabilityViewSettings['sort_by']>('severity');
   const [sortDir, setSortDir] = useState<VulnerabilityViewSettings['sort_dir']>('asc');
   const [viewSettingsReady, setViewSettingsReady] = useState(false);
@@ -582,6 +616,7 @@ export default function ScanDetailPage() {
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanStatus = scan?.status;
+  const activeWorkScopeOrgId = workScope.kind === 'org' ? workScope.orgId : '';
   const blockedPolicyDetails = getBlockedPolicyDetails(
     scan?.external_status,
     scan?.blocked_policy_details,
@@ -594,6 +629,7 @@ export default function ScanDetailPage() {
     min_cvss: minCvss,
     has_fix: hasFix,
     xray_policy_first: xrayPolicyFirst,
+    policy_failed_only: policyFailedOnly,
   };
   const effectiveVulnerabilityViewSettings =
     viewPreference?.settings ?? DEFAULT_VULNERABILITY_VIEW_SETTINGS;
@@ -661,13 +697,19 @@ export default function ScanDetailPage() {
 
   const applyVulnerabilityViewPreference = useCallback(
     (preference: VulnerabilityViewPreferenceResponse) => {
-      setViewPreference(preference);
-      setSeverityFilter(preference.settings.severity);
-      setMinCvss(preference.settings.min_cvss);
-      setHasFix(preference.settings.has_fix);
-      setXrayPolicyFirst(preference.settings.xray_policy_first);
-      setSortBy(preference.settings.sort_by);
-      setSortDir(preference.settings.sort_dir);
+      const normalizedSettings: VulnerabilityViewSettings = {
+        ...DEFAULT_VULNERABILITY_VIEW_SETTINGS,
+        ...preference.settings,
+        policy_failed_only: Boolean(preference.settings.policy_failed_only),
+      };
+      setViewPreference({ ...preference, settings: normalizedSettings });
+      setSeverityFilter(normalizedSettings.severity);
+      setMinCvss(normalizedSettings.min_cvss);
+      setHasFix(normalizedSettings.has_fix);
+      setXrayPolicyFirst(normalizedSettings.xray_policy_first);
+      setPolicyFailedOnly(normalizedSettings.policy_failed_only);
+      setSortBy(normalizedSettings.sort_by);
+      setSortDir(normalizedSettings.sort_dir);
       setPage(1);
     },
     []
@@ -684,6 +726,7 @@ export default function ScanDetailPage() {
       setMinCvss(0);
       setHasFix(false);
       setXrayPolicyFirst(false);
+      setPolicyFailedOnly(false);
       setSortBy('severity');
       setSortDir('asc');
       setPage(1);
@@ -905,7 +948,23 @@ export default function ScanDetailPage() {
     ] as const;
 
     const normalizedCveFilter = cveFilter.trim().toUpperCase();
-    const shouldLoadAllPages = xrayPolicyFirst || normalizedCveFilter.length > 0;
+    const policyFailedFilterActive = policyFailedOnly && workScope.kind === 'org';
+    const policyFailedVulnIdSet = new Set<string>();
+    if (policyFailedFilterActive) {
+      for (const result of compliance) {
+        if (result.org_id !== activeWorkScopeOrgId || result.status !== 'fail') continue;
+        for (const violation of result.violations ?? []) {
+          const rawVulnId = (violation.vuln_id ?? violation.rule?.cve_id ?? '').trim();
+          if (!rawVulnId) continue;
+          const normalizedVulnId = normalizeVulnId(rawVulnId);
+          if (normalizedVulnId) {
+            policyFailedVulnIdSet.add(normalizedVulnId);
+          }
+        }
+      }
+    }
+    const shouldLoadAllPages =
+      xrayPolicyFirst || normalizedCveFilter.length > 0 || policyFailedFilterActive;
 
     const loadPromise = shouldLoadAllPages
       ? (async () => {
@@ -932,9 +991,14 @@ export default function ScanDetailPage() {
                 normalizeVulnId(vulnerability.vuln_id).includes(normalizedCveFilter)
               )
             : prioritized;
+          const filteredByPolicy = policyFailedFilterActive
+            ? filteredByCve.filter((vulnerability) =>
+                policyFailedVulnIdSet.has(normalizeVulnId(vulnerability.vuln_id))
+              )
+            : filteredByCve;
           const start = (page - 1) * LIMIT;
           const end = start + LIMIT;
-          return { data: filteredByCve.slice(start, end), total: filteredByCve.length || total };
+          return { data: filteredByPolicy.slice(start, end), total: filteredByPolicy.length };
         })()
       : listVulnerabilities(id, page, LIMIT, ...baseArgs);
 
@@ -959,9 +1023,13 @@ export default function ScanDetailPage() {
     minCvss,
     hasFix,
     xrayPolicyFirst,
+    policyFailedOnly,
     cveFilter,
     sortBy,
     sortDir,
+    compliance,
+    workScope.kind,
+    activeWorkScopeOrgId,
     viewSettingsReady,
   ]);
 
@@ -1523,6 +1591,54 @@ export default function ScanDetailPage() {
     }
     currentVulnById[key].push(vulnerability);
   }
+  const activeOrgCompliance =
+    workScope.kind === 'org'
+      ? compliance.filter((result) => result.org_id === workScope.orgId)
+      : [];
+  const orgPolicyFailuresByVuln: Record<string, Array<{ name: string; ruleSummaries: string[] }>> =
+    {};
+  const orgPolicyFailureSetsByVuln: Record<string, Record<string, Set<string>>> = {};
+  for (const result of activeOrgCompliance) {
+    if (result.status !== 'fail') {
+      continue;
+    }
+    const policyName = result.policy_name?.trim() || 'Policy';
+    const policyRuleSummaries = (result.policy_rules ?? [])
+      .map((rule) => summarizePolicyRule(rule))
+      .map((summary) => summary.trim())
+      .filter(Boolean);
+    for (const violation of result.violations ?? []) {
+      const rawVulnId = (violation.vuln_id ?? violation.rule?.cve_id ?? '').trim();
+      if (!rawVulnId) {
+        continue;
+      }
+      const vulnId = normalizeVulnId(rawVulnId);
+      if (!vulnId) {
+        continue;
+      }
+      if (!orgPolicyFailureSetsByVuln[vulnId]) {
+        orgPolicyFailureSetsByVuln[vulnId] = {};
+      }
+      if (!orgPolicyFailureSetsByVuln[vulnId][policyName]) {
+        orgPolicyFailureSetsByVuln[vulnId][policyName] = new Set<string>();
+      }
+      for (const summary of policyRuleSummaries) {
+        orgPolicyFailureSetsByVuln[vulnId][policyName].add(summary);
+      }
+      const violationRuleSummary = summarizePolicyRule(violation.rule);
+      if (violationRuleSummary) {
+        orgPolicyFailureSetsByVuln[vulnId][policyName].add(violationRuleSummary);
+      }
+    }
+  }
+  for (const vulnId of Object.keys(orgPolicyFailureSetsByVuln)) {
+    orgPolicyFailuresByVuln[vulnId] = Object.entries(orgPolicyFailureSetsByVuln[vulnId])
+      .map(([name, rules]) => ({
+        name,
+        ruleSummaries: Array.from(rules).sort((left, right) => left.localeCompare(right)),
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
   const complianceViolationRows = compliance
     .filter((result) => result.status === 'fail')
     .flatMap((result) =>
@@ -1944,16 +2060,16 @@ export default function ScanDetailPage() {
                   id: 'vulns',
                   label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities',
                 },
+                {
+                  id: 'compliance',
+                  label: `Compliance (${complianceViolationRows.length})`,
+                },
                 { id: 'sbom', label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
                 {
                   id: 'timeline',
                   label: scan.step_logs?.length
                     ? `Timeline (${scan.step_logs.length})`
                     : 'Timeline',
-                },
-                {
-                  id: 'compliance',
-                  label: `Compliance (${complianceViolationRows.length})`,
                 },
                 { id: 'details', label: 'Details' },
               ] as { id: ScanTab; label: string }[]
@@ -2215,7 +2331,7 @@ export default function ScanDetailPage() {
                   }}
                 />
               </div>
-              <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_160px_150px_120px_auto_auto]">
+              <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_160px_150px_120px_minmax(360px,auto)]">
                 <SearchField name="scan-vuln-search" className="w-full">
                   <SearchField.Group>
                     <SearchField.SearchIcon />
@@ -2247,7 +2363,7 @@ export default function ScanDetailPage() {
                     setPage(1);
                   }}
                 >
-                  <Select.Trigger>
+                  <Select.Trigger className={`${selectTriggerCls} h-11`}>
                     <Select.Value />
                     <Select.Indicator />
                   </Select.Trigger>
@@ -2271,7 +2387,7 @@ export default function ScanDetailPage() {
                     setPage(1);
                   }}
                 >
-                  <Select.Trigger>
+                  <Select.Trigger className={`${selectTriggerCls} h-11`}>
                     <Select.Value />
                     <Select.Indicator />
                   </Select.Trigger>
@@ -2296,29 +2412,44 @@ export default function ScanDetailPage() {
                     setMinCvss(!isNaN(val) ? val : 0);
                     setPage(1);
                   }}
-                  className="w-full bg-surface"
+                  className="w-full h-11 bg-surface"
                   containerClassName="w-full"
                 />
-                <Button
-                  onPress={() => {
-                    setHasFix(!hasFix);
-                    setPage(1);
-                  }}
-                  className={`w-full`}
-                  variant={hasFix ? 'primary' : 'secondary'}
-                >
-                  Has Fix
-                </Button>
-                <Button
-                  onPress={() => {
-                    setXrayPolicyFirst(!xrayPolicyFirst);
-                    setPage(1);
-                  }}
-                  className={`${xrayPolicyFirst ? 'btn-primary' : 'btn-secondary'} w-full`}
-                  variant={xrayPolicyFirst ? 'primary' : 'secondary'}
-                >
-                  Xray Policy First
-                </Button>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <Button
+                    onPress={() => {
+                      setHasFix(!hasFix);
+                      setPage(1);
+                    }}
+                    className="w-full"
+                    variant={hasFix ? 'primary' : 'secondary'}
+                  >
+                    Has Fix
+                  </Button>
+                  <Button
+                    onPress={() => {
+                      setXrayPolicyFirst(!xrayPolicyFirst);
+                      setPage(1);
+                    }}
+                    className={`${xrayPolicyFirst ? 'btn-primary' : 'btn-secondary'} w-full`}
+                    variant={xrayPolicyFirst ? 'primary' : 'secondary'}
+                  >
+                    Xray Policy First
+                  </Button>
+                  <Button
+                    onPress={() => {
+                      setPolicyFailedOnly(!policyFailedOnly);
+                      setPage(1);
+                    }}
+                    isDisabled={workScope.kind !== 'org'}
+                    className={`${policyFailedOnly && workScope.kind === 'org' ? 'btn-primary' : 'btn-secondary'} w-full`}
+                    variant={
+                      policyFailedOnly && workScope.kind === 'org' ? 'primary' : 'secondary'
+                    }
+                  >
+                    Policy Failed
+                  </Button>
+                </div>
               </div>
             </Card>
 
@@ -2444,13 +2575,14 @@ export default function ScanDetailPage() {
                     );
                   })}
                   <Table.Column className="text-left">First Seen</Table.Column>
+                  <Table.Column className="text-left">Org Policy</Table.Column>
                   <Table.Column className="text-left">Xray Policy</Table.Column>
                   <Table.Column className="text-right">Notes</Table.Column>
                 </Table.Header>
                 <Table.Body>
                   {vulnLoading || vulns.length === 0 ? (
                     <Table.Row key="vuln-state" id="vuln-state">
-                      <Table.Cell colSpan={9}>
+                      <Table.Cell colSpan={10}>
                         {vulnLoading ? (
                           <div className="py-12 text-center">
                             <div className="flex justify-center">
@@ -2467,9 +2599,26 @@ export default function ScanDetailPage() {
                       </Table.Cell>
                     </Table.Row>
                   ) : (
-                    vulns.map((v) => (
+                    vulns.map((v) => {
+                      const failedPolicies =
+                        orgPolicyFailuresByVuln[normalizeVulnId(v.vuln_id)] ?? [];
+                      const hasPolicyFailure = failedPolicies.length > 0;
+
+                      return (
                       <Fragment key={v.id}>
-                        <Table.Row id={v.id} className="hover:bg-[var(--row-hover)]">
+                        <Table.Row
+                          id={v.id}
+                          className="hover:bg-[var(--row-hover)]"
+                          style={
+                            hasPolicyFailure
+                              ? {
+                                  background: 'rgba(239,68,68,0.05)',
+                                  borderTop: '1px solid rgba(239,68,68,0.12)',
+                                  borderBottom: '1px solid rgba(239,68,68,0.12)',
+                                }
+                              : undefined
+                          }
+                        >
                           <Table.Cell>
                             {v.vuln_id ? (
                               <div className="flex items-center gap-1.5 flex-wrap">
@@ -2521,6 +2670,42 @@ export default function ScanDetailPage() {
                           </Table.Cell>
                           <Table.Cell>
                             <FirstSeenBadge firstSeenAt={v.first_seen_at} />
+                          </Table.Cell>
+                          <Table.Cell>
+                            {hasPolicyFailure ? (
+                              <Tooltip delay={0}>
+                                <Tooltip.Trigger className="inline-flex">
+                                  <Chip color="danger" size="sm" variant="soft">
+                                    Policy failed
+                                  </Chip>
+                                </Tooltip.Trigger>
+                                <Tooltip.Content placement="top" showArrow>
+                                  <div className="max-w-xs space-y-2 p-0.5">
+                                    {failedPolicies.map((policy) => (
+                                      <div key={policy.name} className="space-y-1">
+                                        <p className="text-xs font-semibold text-zinc-100">
+                                          {policy.name}
+                                        </p>
+                                        {policy.ruleSummaries.length > 0 ? (
+                                          <div className="space-y-0.5">
+                                            {policy.ruleSummaries.map((rule) => (
+                                              <p
+                                                key={`${policy.name}-${rule}`}
+                                                className="text-[11px] text-zinc-300"
+                                              >
+                                                {rule}
+                                              </p>
+                                            ))}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </Tooltip.Content>
+                              </Tooltip>
+                            ) : (
+                              <span className="text-xs text-zinc-400">-</span>
+                            )}
                           </Table.Cell>
                           <Table.Cell>
                             {(() => {
@@ -2578,7 +2763,7 @@ export default function ScanDetailPage() {
                         {expandedVuln === v.id && (
                           <Table.Row id={`${v.id}-expanded`}>
                             <Table.Cell
-                              colSpan={9}
+                              colSpan={10}
                               className="p-4"
                               style={{
                                 borderTop: '1px solid var(--border-subtle)',
@@ -2872,7 +3057,8 @@ export default function ScanDetailPage() {
                           </Table.Row>
                         )}
                       </Fragment>
-                    ))
+                      );
+                    })
                   )}
                 </Table.Body>
               </Table.Content>

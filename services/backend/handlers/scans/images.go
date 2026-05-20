@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"justscan-backend/functions/authz"
+	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,20 +16,21 @@ import (
 
 // ImageSummary holds the aggregated view of all scans for a single image name.
 type ImageSummary struct {
-	ImageName            string     `json:"image_name"`
-	ScanCount            int        `json:"scan_count"`
-	LatestScanID         string     `json:"latest_scan_id"`
-	LatestTag            string     `json:"latest_tag"`
-	LatestStatus         string     `json:"latest_status"`
-	LatestExternalStatus string     `json:"latest_external_status,omitempty"`
-	LatestScanAt         time.Time  `json:"latest_scan_at"`
-	OwnerType            string     `json:"owner_type,omitempty"`
-	OwnerUserID          *uuid.UUID `json:"owner_user_id,omitempty"`
-	OwnerOrgID           *uuid.UUID `json:"owner_org_id,omitempty"`
-	CriticalCount        int        `json:"critical_count"`
-	HighCount            int        `json:"high_count"`
-	MediumCount          int        `json:"medium_count"`
-	LowCount             int        `json:"low_count"`
+	ImageName            string                        `json:"image_name"`
+	ScanCount            int                           `json:"scan_count"`
+	LatestScanID         string                        `json:"latest_scan_id"`
+	LatestTag            string                        `json:"latest_tag"`
+	LatestStatus         string                        `json:"latest_status"`
+	LatestExternalStatus string                        `json:"latest_external_status,omitempty"`
+	LatestScanAt         time.Time                     `json:"latest_scan_at"`
+	OwnerType            string                        `json:"owner_type,omitempty"`
+	OwnerUserID          *uuid.UUID                    `json:"owner_user_id,omitempty"`
+	OwnerOrgID           *uuid.UUID                    `json:"owner_org_id,omitempty"`
+	CriticalCount        int                           `json:"critical_count"`
+	HighCount            int                           `json:"high_count"`
+	MediumCount          int                           `json:"medium_count"`
+	LowCount             int                           `json:"low_count"`
+	ComplianceSummary    *models.ScanComplianceSummary `json:"compliance_summary,omitempty"`
 }
 
 func latestImageStatusWhereClause(raw string) (string, []interface{}) {
@@ -193,6 +195,31 @@ LIMIT ? OFFSET ?`
 		}
 		if images == nil {
 			images = []ImageSummary{}
+		}
+
+		if scopedOrgID, scoped := scopedOrgIDFromRequest(c); scoped {
+			scanIDs := make([]uuid.UUID, 0, len(images))
+			scanIndexByID := make(map[uuid.UUID]int, len(images))
+			for index, image := range images {
+				scanID, parseErr := uuid.Parse(strings.TrimSpace(image.LatestScanID))
+				if parseErr != nil {
+					continue
+				}
+				scanIDs = append(scanIDs, scanID)
+				scanIndexByID[scanID] = index
+			}
+			summaries, summaryErr := buildScanComplianceSummaries(c.Request.Context(), db, scanIDs, scopedOrgID)
+			if summaryErr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load image compliance summaries"})
+				return
+			}
+			for scanID, summary := range summaries {
+				index, ok := scanIndexByID[scanID]
+				if !ok {
+					continue
+				}
+				images[index].ComplianceSummary = summary
+			}
 		}
 
 		c.JSON(http.StatusOK, gin.H{"data": images, "total": total, "page": page, "limit": limit})

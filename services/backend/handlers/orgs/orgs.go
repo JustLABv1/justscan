@@ -326,11 +326,12 @@ func ListPolicies(db *bun.DB) gin.HandlerFunc {
 }
 
 var validRuleTypes = map[string]bool{
-	"max_cvss":    true,
-	"max_count":   true,
-	"max_total":   true,
-	"require_fix": true,
-	"blocked_cve": true,
+	"max_cvss":          true,
+	"max_count":         true,
+	"max_total":         true,
+	"require_fix":       true,
+	"blocked_cve":       true,
+	"xray_policy_block": true,
 }
 
 // CreatePolicy creates a new policy for an org.
@@ -623,6 +624,7 @@ func GetScanCompliance(db *bun.DB) gin.HandlerFunc {
 			policy := &models.OrgPolicy{}
 			if err := db.NewSelect().Model(policy).Where("id = ?", results[i].PolicyID).Scan(c.Request.Context()); err == nil {
 				results[i].PolicyName = policy.Name
+				results[i].PolicyRules = policy.Rules
 			}
 		}
 
@@ -667,6 +669,7 @@ func ReEvaluate(db *bun.DB) gin.HandlerFunc {
 			policy := &models.OrgPolicy{}
 			if err := db.NewSelect().Model(policy).Where("id = ?", results[i].PolicyID).Scan(c.Request.Context()); err == nil {
 				results[i].PolicyName = policy.Name
+				results[i].PolicyRules = policy.Rules
 			}
 		}
 

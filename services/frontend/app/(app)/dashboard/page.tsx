@@ -1,6 +1,10 @@
 'use client';
 import SplitText from '@/components/SplitText';
 import {
+  DashboardDrilldownKey,
+  DashboardDrilldownModal,
+} from '@/components/dashboard/dashboard-drilldown-modal';
+import {
   Area as EvilArea,
   EvilAreaChart,
   Grid as EvilAreaGrid,
@@ -9,17 +13,16 @@ import {
   YAxis as EvilAreaYAxis,
 } from '@/components/evilcharts/charts/area-chart';
 import {
-  formatChartDate as formatChartDateShared,
-  singleSeriesConfig,
-  typedChartConfigFromSeries,
-} from '@/components/ui/chart-adapter';
-import {
   buildRecentActivityHref,
   getRecentActivityBounds,
   RECENT_ACTIVITY_RANGE_OPTIONS,
   RecentActivityRange,
 } from '@/components/scans/recent-activity';
-import { DashboardDrilldownKey, DashboardDrilldownModal } from '@/components/dashboard/dashboard-drilldown-modal';
+import {
+  formatChartDate as formatChartDateShared,
+  singleSeriesConfig,
+  typedChartConfigFromSeries,
+} from '@/components/ui/chart-adapter';
 import { PageHeader } from '@/components/ui/page-header';
 import { ChartSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -407,12 +410,7 @@ function BriefingMetric({
     <Card className={`${className ?? ''}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p
-            className="text-[10px] font-medium uppercase tracking-wide"
-            style={{ color: 'var(--text-faint)' }}
-          >
-            {label}
-          </p>
+          <p className="text-[11px] font-medium uppercase">{label}</p>
           <p
             className="mt-0.5 text-lg font-semibold tabular-nums"
             style={{ color: toneStyle.color }}
@@ -425,9 +423,7 @@ function BriefingMetric({
           style={{ background: toneStyle.color, opacity: 0.9 }}
         />
       </div>
-      <p className="mt-0.5 text-[11px] leading-4" style={{ color: 'var(--text-muted)' }}>
-        {detail}
-      </p>
+      <p className="text-[11px] leading-4 text-muted">{detail}</p>
     </Card>
   );
 
@@ -475,35 +471,6 @@ function ExecutivePostureCard({
 
   return (
     <section className="space-y-3 rounded-2xl px-1 py-1">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p
-              className="text-[11px] font-semibold uppercase tracking-widest"
-              style={{ color: 'var(--text-faint)' }}
-            >
-              Security briefing
-            </p>
-            <PosturePill summary={risk} />
-            <PosturePill summary={readiness} />
-          </div>
-          <p className="mt-2 max-w-4xl text-sm leading-6" style={{ color: 'var(--text-muted)' }}>
-            <span className="font-medium" style={{ color: riskTone.color }}>
-              {risk.title}.
-            </span>{' '}
-            <span className="font-medium" style={{ color: readinessTone.color }}>
-              {readiness.title}.
-            </span>{' '}
-            {risk.description}
-          </p>
-        </div>
-        {needsAttentionTotal > 0 && (
-          <Button onPress={onOpenAttention} variant="secondary">
-            Review
-          </Button>
-        )}
-      </div>
-
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <BriefingMetric
           label="Critical + high"
@@ -840,14 +807,18 @@ function MiniSparkline({
         config={singleSeriesConfig('value', valueLabel, color)}
         className="h-full !aspect-auto"
         chartProps={{
-          margin: compact ? { top: 1, right: 0, left: 0, bottom: 1 } : { top: 12, right: 8, left: 0, bottom: 0 },
+          margin: compact
+            ? { top: 1, right: 0, left: 0, bottom: 1 }
+            : { top: 12, right: 8, left: 0, bottom: 0 },
         }}
       >
+        {!compact && <EvilAreaGrid vertical={false} stroke="rgba(161,161,170,0.16)" />}
         {!compact && (
-          <EvilAreaGrid vertical={false} stroke="rgba(161,161,170,0.16)" />
-        )}
-        {!compact && (
-          <EvilAreaXAxis dataKey="date" minTickGap={28} tickFormatter={(value: string) => formatChartDate(value)} />
+          <EvilAreaXAxis
+            dataKey="date"
+            minTickGap={28}
+            tickFormatter={(value: string) => formatChartDate(value)}
+          />
         )}
         {!compact && <EvilAreaTooltip variant="frosted-glass" roundness="xl" />}
         <EvilArea
@@ -932,7 +903,8 @@ function VulnTrendChart({
       <div
         className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
         style={{
-          background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 20%, transparent), transparent)',
+          background:
+            'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 20%, transparent), transparent)',
         }}
       />
 
@@ -1004,7 +976,11 @@ function VulnTrendChart({
             <EvilAreaChart
               data={chartData}
               config={typedChartConfigFromSeries(
-                series.map((item) => ({ key: item.key, label: item.label, color: item.color })) as Array<{
+                series.map((item) => ({
+                  key: item.key,
+                  label: item.label,
+                  color: item.color,
+                })) as Array<{
                   key: (typeof STACK)[number]['key'];
                   label: string;
                   color: string;
@@ -1012,11 +988,18 @@ function VulnTrendChart({
               )}
               className="h-full !aspect-auto"
               stackType="stacked"
-              chartProps={{ margin: { top: 8, right: 8, left: -12, bottom: 16 } }}
             >
               <EvilAreaGrid vertical={false} stroke="rgba(161,161,170,0.16)" />
-              <EvilAreaXAxis dataKey="date" minTickGap={28} tickFormatter={(value: string) => formatChartDate(value)} />
-              <EvilAreaYAxis ticks={ticks} width={36} tickFormatter={(value: number) => fmtTick(value)} />
+              <EvilAreaXAxis
+                dataKey="date"
+                minTickGap={28}
+                tickFormatter={(value: string) => formatChartDate(value)}
+              />
+              <EvilAreaYAxis
+                ticks={ticks}
+                width={36}
+                tickFormatter={(value: number) => fmtTick(value)}
+              />
               <EvilAreaTooltip variant="frosted-glass" roundness="xl" />
               {series.map(({ key }) => (
                 <EvilArea
@@ -1394,7 +1377,11 @@ export default function DashboardPage() {
             title="Scan volume"
             description="Total scans per day, last 30 days"
             action={
-              <Link href="/scans" className="text-xs font-medium" style={{ color: 'color-mix(in srgb, var(--accent) 78%, white)' }}>
+              <Link
+                href="/scans"
+                className="text-xs font-medium"
+                style={{ color: 'color-mix(in srgb, var(--accent) 78%, white)' }}
+              >
                 View all →
               </Link>
             }

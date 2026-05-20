@@ -12,13 +12,13 @@ import (
 func Auth(router *gin.RouterGroup, db *bun.DB) {
 	auth := router.Group("/auth")
 	{
-		auth.POST("/login", func(c *gin.Context) {
+		auth.POST("/login", middlewares.AuthLoginRateLimit(), func(c *gin.Context) {
 			tokens.GenerateTokenUser(db, c)
 		})
 		auth.POST("/register", middlewares.AuthRegisterRateLimit(), func(c *gin.Context) {
 			auths.RegisterUser(c, db)
 		})
-		auth.POST("/user/taken", func(c *gin.Context) {
+		auth.POST("/user/taken", middlewares.AuthLoginRateLimit(), func(c *gin.Context) {
 			auths.CheckUserTaken(c, db)
 		})
 

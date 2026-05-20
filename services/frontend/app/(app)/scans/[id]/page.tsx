@@ -70,6 +70,7 @@ import {
 } from '@/lib/api';
 import { formatIgnoreRuleStatusLabel, getBlockedPolicyDetails } from '@/lib/blocked-policy';
 import { deferEffect } from '@/lib/defer-effect';
+import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
   Accordion,
@@ -1147,7 +1148,7 @@ export default function ScanDetailPage() {
   }
 
   async function toggleTag(tag: Tag) {
-    if (!scan) return;
+    if (!scan || !canMutateScan()) return;
     const has = (scan.tags ?? []).some((t) => t.id === tag.id);
     setTagLoading(tag.id);
     try {
@@ -1195,17 +1196,20 @@ export default function ScanDetailPage() {
   }
 
   async function handleAssignOrg(orgId: string) {
+    if (!canMutateScan()) return;
     await assignScanToOrg(orgId, id).catch(() => {});
     const results = await getScanCompliance(id).catch(() => [] as ComplianceResult[]);
     setCompliance(results);
   }
 
   async function handleRemoveOrg(orgId: string) {
+    if (!canMutateScan()) return;
     await removeScanFromOrg(orgId, id).catch(() => {});
     setCompliance((c) => c.filter((r) => r.org_id !== orgId));
   }
 
   async function handleReEvaluate() {
+    if (!canMutateScan()) return;
     setComplianceLoading(true);
     const results = await reEvaluateCompliance(id).catch(() => [] as ComplianceResult[]);
     setCompliance(results);
@@ -1213,6 +1217,7 @@ export default function ScanDetailPage() {
   }
 
   async function handleReScan() {
+    if (!canMutateScan()) return;
     setReScanning(true);
     try {
       const newScan = await reScan(id);
@@ -1226,7 +1231,7 @@ export default function ScanDetailPage() {
   }
 
   async function handleCancel() {
-    if (!scan) return;
+    if (!scan || !canMutateScan()) return;
     setCancelling(true);
     try {
       const result = await cancelScan(id);
@@ -1252,7 +1257,7 @@ export default function ScanDetailPage() {
   }
 
   async function handleEnableShare() {
-    if (!scan) return;
+    if (!scan || !canManageScanAccess()) return;
     setShareLoading(true);
     try {
       const result = await createShare(scan.id, shareVisibility);
@@ -1267,7 +1272,7 @@ export default function ScanDetailPage() {
   }
 
   async function handleDisableShare() {
-    if (!scan) return;
+    if (!scan || !canManageScanAccess()) return;
     setShareLoading(true);
     try {
       await deleteShare(scan.id);
@@ -1294,7 +1299,7 @@ export default function ScanDetailPage() {
   }
 
   async function handleSuppress(vuln: Vulnerability) {
-    if (!scan?.image_digest) return;
+    if (!scan?.image_digest || !canMutateScan()) return;
     setSuppressSaving(true);
     setSuppressError('');
     try {
@@ -1314,7 +1319,7 @@ export default function ScanDetailPage() {
   }
 
   async function handleLiftSuppression(vuln: Vulnerability) {
-    if (!scan?.image_digest) return;
+    if (!scan?.image_digest || !canMutateScan()) return;
     if (vuln.suppression?.read_only || vuln.suppression?.source === 'xray') return;
     setSuppressSaving(true);
     setSuppressError('');
@@ -1332,10 +1337,25 @@ export default function ScanDetailPage() {
     }
   }
 
+  function roleForOrg(orgId?: string | null) {
+    if (!orgId) return undefined;
+    return allOrgs.find((org) => org.id === orgId)?.current_user_role;
+  }
+
+  function canMutateScan() {
+    if (!scan) return false;
+    if (isPlatformAdmin) return true;
+    if (scan.owner_type === 'org' && scan.owner_org_id) {
+      return canMutateOrg(roleForOrg(scan.owner_org_id));
+    }
+    return true;
+  }
+
   function canManageScanAccess() {
+    if (!scan) return false;
     if (isPlatformAdmin) return true;
     if (scan?.owner_type === 'org' && scan.owner_org_id) {
-      return manageableOrgIds.has(scan.owner_org_id);
+      return canManageOrg(roleForOrg(scan.owner_org_id));
     }
     return true;
   }
@@ -1356,6 +1376,7 @@ export default function ScanDetailPage() {
   }
 
   function openScanAccessModal() {
+    if (!canManageScanAccess()) return;
     setScanOrgGrantOrgId('');
     setScanOrgGrantsError('');
     scanAccessModal.open();
@@ -1363,7 +1384,7 @@ export default function ScanDetailPage() {
   }
 
   async function handleGrantScanAccess() {
-    if (!scan || !scanOrgGrantOrgId) return;
+    if (!scan || !scanOrgGrantOrgId || !canManageScanAccess()) return;
     setScanOrgGrantSaving(true);
     setScanOrgGrantsError('');
     try {
@@ -1379,7 +1400,7 @@ export default function ScanDetailPage() {
   }
 
   async function handleRevokeScanAccess(orgId: string) {
-    if (!scan) return;
+    if (!scan || !canManageScanAccess()) return;
     setScanOrgGrantSaving(true);
     setScanOrgGrantsError('');
     try {
@@ -1403,7 +1424,7 @@ export default function ScanDetailPage() {
       return false;
     if (isPlatformAdmin) return true;
     if (suppression.owner_type === 'org' && suppression.owner_org_id) {
-      return manageableOrgIds.has(suppression.owner_org_id);
+      return canManageOrg(roleForOrg(suppression.owner_org_id));
     }
     return true;
   }
@@ -1423,6 +1444,7 @@ export default function ScanDetailPage() {
   }
 
   function openSuppressionAccess(suppression: Suppression) {
+    if (!canManageSuppressionAccess(suppression)) return;
     setSuppressionAccessTarget(suppression);
     setSuppressionAccessShares([]);
     setSuppressionAccessOrgId('');
@@ -1432,7 +1454,12 @@ export default function ScanDetailPage() {
   }
 
   async function handleGrantSuppressionAccess() {
-    if (!suppressionAccessTarget || !suppressionAccessOrgId) return;
+    if (
+      !suppressionAccessTarget ||
+      !suppressionAccessOrgId ||
+      !canManageSuppressionAccess(suppressionAccessTarget)
+    )
+      return;
     setSuppressionAccessSaving(true);
     setSuppressionAccessError('');
     try {
@@ -1448,7 +1475,7 @@ export default function ScanDetailPage() {
   }
 
   async function handleRevokeSuppressionAccess(orgId: string) {
-    if (!suppressionAccessTarget) return;
+    if (!suppressionAccessTarget || !canManageSuppressionAccess(suppressionAccessTarget)) return;
     setSuppressionAccessSaving(true);
     setSuppressionAccessError('');
     try {
@@ -1509,9 +1536,10 @@ export default function ScanDetailPage() {
           : 'Re-scans are disabled for this organization.';
   const manageableOrgIds = new Set(
     allOrgs
-      .filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin')
+      .filter((org) => canManageOrg(org.current_user_role))
       .map((org) => org.id)
   );
+  const canMutateCurrentScan = canMutateScan();
   const fullImageConfig = scan.image_config;
   const runtimeImageConfig = imageConfigObject(fullImageConfig?.['config']);
   const imageCreated = imageConfigString(fullImageConfig?.['created']);
@@ -1713,7 +1741,7 @@ export default function ScanDetailPage() {
       {(scan.status === 'pending' || scan.status === 'running') && (
         <Button
           className="btn-warning"
-          isDisabled={cancelling}
+          isDisabled={cancelling || !canMutateCurrentScan}
           onPress={handleCancel}
           variant="secondary"
         >
@@ -1729,6 +1757,7 @@ export default function ScanDetailPage() {
         className="btn-primary"
         isDisabled={
           reScanning ||
+          !canMutateCurrentScan ||
           scan.status === 'running' ||
           scan.status === 'pending' ||
           Boolean(rescanDisabledReason)
@@ -1779,6 +1808,7 @@ export default function ScanDetailPage() {
                   void handleComparePrev();
                 }
                 if (key === 'share') {
+                  if (!canManageScanAccess()) return;
                   if (scan.share_visibility)
                     setShareVisibility(scan.share_visibility as 'public' | 'authenticated');
                   shareModal.open();
@@ -1801,12 +1831,14 @@ export default function ScanDetailPage() {
                   <Label>{comparingPrev ? 'Compare…' : 'Compare'}</Label>
                 </div>
               </Dropdown.Item>
-              <Dropdown.Item id="share" textValue="Manage scan sharing">
-                <div className="flex items-center gap-2">
-                  <Share01Icon size={15} />
-                  <Label>{scan.share_token ? 'Manage share' : 'Share'}</Label>
-                </div>
-              </Dropdown.Item>
+              {canManageScanAccess() ? (
+                <Dropdown.Item id="share" textValue="Manage scan sharing">
+                  <div className="flex items-center gap-2">
+                    <Share01Icon size={15} />
+                    <Label>{scan.share_token ? 'Manage share' : 'Share'}</Label>
+                  </div>
+                </Dropdown.Item>
+              ) : null}
             </Dropdown.Menu>
           </Dropdown.Popover>
         </Dropdown>
@@ -1913,12 +1945,13 @@ export default function ScanDetailPage() {
                         ]}
                         value={shareVisibility}
                         onChange={setShareVisibility}
+                        isDisabled={!canManageScanAccess()}
                         size="sm"
                       />
                       {shareVisibility !== scan.share_visibility && (
                         <Button
                           className="btn-primary w-full"
-                          isDisabled={shareLoading}
+                          isDisabled={shareLoading || !canManageScanAccess()}
                           onPress={handleEnableShare}
                           type="button"
                           variant="primary"
@@ -1929,7 +1962,7 @@ export default function ScanDetailPage() {
                     </div>
                     <Button
                       className="btn-danger w-full"
-                      isDisabled={shareLoading}
+                      isDisabled={shareLoading || !canManageScanAccess()}
                       onPress={handleDisableShare}
                       type="button"
                       variant="danger"
@@ -1951,6 +1984,7 @@ export default function ScanDetailPage() {
                         ]}
                         value={shareVisibility}
                         onChange={setShareVisibility}
+                        isDisabled={!canManageScanAccess()}
                         size="sm"
                       />
                       <p className="text-xs leading-relaxed text-zinc-400">
@@ -1961,7 +1995,7 @@ export default function ScanDetailPage() {
                     </div>
                     <Button
                       className="btn-primary w-full"
-                      isDisabled={shareLoading}
+                      isDisabled={shareLoading || !canManageScanAccess()}
                       onPress={handleEnableShare}
                       type="button"
                       variant="primary"
@@ -2858,15 +2892,15 @@ export default function ScanDetailPage() {
                                         )}
                                       </div>
                                     )}
-                                    {!(
-                                      v.suppression?.read_only || v.suppression?.source === 'xray'
-                                    ) ? (
+                                    {canMutateCurrentScan &&
+                                    !(v.suppression?.read_only || v.suppression?.source === 'xray') ? (
                                       <div className="flex gap-2 items-center flex-wrap">
                                         <Select
                                           value={suppressStatus}
                                           onChange={(value) =>
                                             setSuppressStatus(value as Suppression['status'])
                                           }
+                                          isDisabled={!canMutateCurrentScan}
                                         >
                                           <Select.Trigger>
                                             <Select.Value />
@@ -2895,12 +2929,14 @@ export default function ScanDetailPage() {
                                           placeholder="Justification..."
                                           className="flex-1 min-w-0"
                                           containerClassName="flex-1 min-w-0"
+                                          disabled={!canMutateCurrentScan}
                                         />
                                         <DatePicker
                                           aria-label="Expiry date (optional)"
                                           value={suppressExpiry}
                                           onChange={setSuppressExpiry}
                                           className="w-40"
+                                          isDisabled={!canMutateCurrentScan}
                                         >
                                           <DateField.Group
                                             className={`${inputCls} flex items-center gap-1`}
@@ -2947,7 +2983,9 @@ export default function ScanDetailPage() {
                                         <Button
                                           onPress={() => handleSuppress(v)}
                                           isDisabled={
-                                            suppressSaving || !suppressJustification.trim()
+                                            suppressSaving ||
+                                            !suppressJustification.trim() ||
+                                            !canMutateCurrentScan
                                           }
                                           className="btn-warning inline-flex shrink-0 items-center gap-1.5"
                                           type="button"
@@ -2961,7 +2999,7 @@ export default function ScanDetailPage() {
                                         {v.suppression && (
                                           <Button
                                             onPress={() => handleLiftSuppression(v)}
-                                            isDisabled={suppressSaving}
+                                            isDisabled={suppressSaving || !canMutateCurrentScan}
                                             className="btn-secondary shrink-0"
                                             type="button"
                                             variant="secondary"
@@ -2972,7 +3010,9 @@ export default function ScanDetailPage() {
                                       </div>
                                     ) : (
                                       <p className="text-xs text-zinc-500">
-                                        This suppression comes from Xray and cannot be edited here.
+                                        {canMutateCurrentScan
+                                          ? 'This suppression comes from Xray and cannot be edited here.'
+                                          : 'Your role has read-only suppression access in this organization.'}
                                       </p>
                                     )}
                                     {suppressError && (
@@ -3119,7 +3159,7 @@ export default function ScanDetailPage() {
                 </p>
                 <Button
                   onPress={handleReEvaluate}
-                  isDisabled={complianceLoading}
+                  isDisabled={complianceLoading || !canMutateCurrentScan}
                   className="text-xs text-zinc-500 hover:text-accent transition-colors disabled:opacity-40"
                   variant="secondary"
                 >
@@ -3133,6 +3173,7 @@ export default function ScanDetailPage() {
                     setSelectedOrgToAssign(String(value === '__none__' ? '' : (value ?? '')))
                   }
                   className="flex-1"
+                  isDisabled={!canMutateCurrentScan}
                 >
                   <Select.Trigger className="bg-surface-secondary">
                     <Select.Value />
@@ -3154,7 +3195,7 @@ export default function ScanDetailPage() {
                 <Button
                   className="btn-primary"
                   variant="primary"
-                  isDisabled={!selectedOrgToAssign}
+                  isDisabled={!selectedOrgToAssign || !canMutateCurrentScan}
                   onPress={() => {
                     const orgId = selectedOrgToAssign;
                     setSelectedOrgToAssign('');
@@ -3171,6 +3212,7 @@ export default function ScanDetailPage() {
                       key={org_id}
                       className="text-xs"
                       variant="secondary"
+                      isDisabled={!canMutateCurrentScan}
                       onPress={() => void handleRemoveOrg(org_id)}
                     >
                       {org_name} ×
@@ -3692,6 +3734,7 @@ export default function ScanDetailPage() {
                       setSelectedTagToAdd(String(value === '__none__' ? '' : (value ?? '')))
                     }
                     className="flex-1"
+                    isDisabled={!canMutateCurrentScan}
                   >
                     <Select.Trigger className={selectTriggerCls}>
                       <Select.Value />
@@ -3713,7 +3756,7 @@ export default function ScanDetailPage() {
                   <Button
                     className="btn-primary"
                     variant="primary"
-                    isDisabled={!selectedTagToAdd}
+                    isDisabled={!selectedTagToAdd || !canMutateCurrentScan}
                     onPress={() => {
                       const tag = allTags.find((candidate) => candidate.id === selectedTagToAdd);
                       if (!tag) return;
@@ -3733,7 +3776,7 @@ export default function ScanDetailPage() {
                         key={tag.id}
                         className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium"
                         variant="secondary"
-                        isDisabled={tagLoading === tag.id}
+                        isDisabled={tagLoading === tag.id || !canMutateCurrentScan}
                         onPress={() => void toggleTag(tag)}
                         style={{
                           background: tag.color + '22',

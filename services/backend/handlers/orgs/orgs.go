@@ -137,7 +137,7 @@ func GetOrg(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		org, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID)
+		org, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
 		if !ok {
 			return
 		}
@@ -174,7 +174,7 @@ func UpdateOrg(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		org, _, _, ok := authz.LoadAuthorizedOrg(c, db, orgID)
+		org, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
 		if !ok {
 			return
 		}
@@ -210,7 +210,7 @@ func GetComplianceTrend(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleViewer); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin); !ok {
 			return
 		}
 
@@ -342,7 +342,7 @@ func CreatePolicy(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleViewer); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin); !ok {
 			return
 		}
 

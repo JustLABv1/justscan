@@ -2,7 +2,6 @@ package shared
 
 import (
 	"net/http"
-	"strings"
 
 	"justscan-backend/functions/auth"
 	"justscan-backend/functions/blockedpolicy"
@@ -32,8 +31,11 @@ func getScanByShareToken(c *gin.Context, db *bun.DB) *models.Scan {
 	// Enforce visibility: "authenticated" requires a valid JWT
 	if scan.ShareVisibility != nil && *scan.ShareVisibility == "authenticated" {
 		raw := c.GetHeader("Authorization")
-		tokenString := strings.TrimPrefix(raw, "Bearer ")
-		if tokenString == "" || auth.ValidateToken(tokenString) != nil {
+		if raw == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required to view this scan"})
+			return nil
+		}
+		if _, _, err := auth.ResolveUserAccess(raw, db); err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required to view this scan"})
 			return nil
 		}

@@ -3,13 +3,7 @@ import { useWorkScope } from '@/hooks/use-work-scope';
 import { search, SearchImageResult, SearchScanResult, SearchVulnResult } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { Card, Chip, Kbd, SearchField, Spinner } from '@heroui/react';
-import {
-    ArrowRight01Icon,
-    Cancel01Icon,
-    Shield01Icon,
-    ShieldKeyIcon,
-    TaskDone02Icon,
-} from 'hugeicons-react';
+import { ArrowRight01Icon, Shield01Icon, ShieldKeyIcon, TaskDone02Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -124,18 +118,21 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     [images, pages, scans, vulns]
   );
 
-  const navigate = useCallback((item: ResultItem) => {
-    if (item.kind === 'page') {
-      router.push(item.data.href);
-    } else if (item.kind === 'image') {
-      router.push(`/scans?image=${encodeURIComponent(item.data.image_name)}`);
-    } else if (item.kind === 'scan') {
-      router.push(`/scans/${item.data.id}`);
-    } else {
-      router.push(`/vulnkb?q=${encodeURIComponent(item.data.vuln_id)}`);
-    }
-    onClose();
-  }, [onClose, router]);
+  const navigate = useCallback(
+    (item: ResultItem) => {
+      if (item.kind === 'page') {
+        router.push(item.data.href);
+      } else if (item.kind === 'image') {
+        router.push(`/scans?image=${encodeURIComponent(item.data.image_name)}`);
+      } else if (item.kind === 'scan') {
+        router.push(`/scans/${item.data.id}`);
+      } else {
+        router.push(`/vulnkb?q=${encodeURIComponent(item.data.vuln_id)}`);
+      }
+      onClose();
+    },
+    [onClose, router]
+  );
 
   const activeItem = useMemo(
     () => (activeIdx >= 0 ? allItems[activeIdx] : undefined),
@@ -148,7 +145,11 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   }, [activeIdx, allItems]);
 
   const handleKeyNavigation = useCallback(
-    (e: Pick<KeyboardEvent, 'key' | 'preventDefault'> | Pick<React.KeyboardEvent, 'key' | 'preventDefault'>) => {
+    (
+      e:
+        | Pick<KeyboardEvent, 'key' | 'preventDefault'>
+        | Pick<React.KeyboardEvent, 'key' | 'preventDefault'>
+    ) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
@@ -241,13 +242,6 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                     }}
                   />
                 ) : null}
-                <button
-                  onClick={onClose}
-                  className="text-default-500 transition-colors hover:text-default-700"
-                  aria-label="Close search"
-                >
-                  <Cancel01Icon size={16} />
-                </button>
               </SearchField.Group>
             </SearchField>
           </div>
@@ -294,7 +288,9 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                               <ArrowRight01Icon size={14} />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-foreground">{page.label}</p>
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {page.label}
+                              </p>
                               <p className="truncate text-xs text-default-500">{page.href}</p>
                             </div>
                           </div>
@@ -364,10 +360,11 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="truncate font-mono text-sm text-foreground">
-                              {scan.image_name}:{scan.image_tag}
+                                {scan.image_name}:{scan.image_tag}
                               </p>
                               <p className="truncate text-[11px] text-default-500">
-                                {scan.status} · {scan.critical_count} critical · {scan.high_count} high
+                                {scan.status} · {scan.critical_count} critical · {scan.high_count}{' '}
+                                high
                               </p>
                             </div>
                           </div>
@@ -379,7 +376,11 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
                 {/* Vulns group */}
                 {vulns.length > 0 && (
-                  <div className={pages.length > 0 || images.length > 0 || scans.length > 0 ? 'mt-1' : ''}>
+                  <div
+                    className={
+                      pages.length > 0 || images.length > 0 || scans.length > 0 ? 'mt-1' : ''
+                    }
+                  >
                     <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-default-500">
                       CVEs &amp; Packages
                     </p>
@@ -402,11 +403,14 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                               <ShieldKeyIcon size={14} />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate font-mono text-sm text-foreground">{v.vuln_id}</p>
+                              <p className="truncate font-mono text-sm text-foreground">
+                                {v.vuln_id}
+                              </p>
                               <p className="truncate text-[11px] text-default-500">{v.pkg_name}</p>
                             </div>
                             <Chip size="sm" variant="soft" color={sevColor} className="font-mono">
-                              {v.severity.charAt(0).toUpperCase() + v.severity.slice(1).toLowerCase()}
+                              {v.severity.charAt(0).toUpperCase() +
+                                v.severity.slice(1).toLowerCase()}
                             </Chip>
                           </div>
                         </button>
@@ -419,9 +423,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
             {/* Footer hint */}
             {hasResults && (
-              <div
-                className="flex items-center gap-3 border-t border-divider px-4 py-2 text-[10px] text-default-500"
-              >
+              <div className="flex items-center gap-3 border-t border-divider px-4 py-2 text-[10px] text-default-500">
                 <span>
                   <Kbd className="font-mono">↑↓</Kbd> navigate
                 </span>

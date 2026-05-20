@@ -162,6 +162,22 @@ local_auth:
   enabled: true
 ```
 
+### Security defaults for production
+
+- By default, backend startup now enforces strong secrets:
+  - `jwt.secret` must be at least 32 characters
+  - `encryption.key` must be at least 32 characters
+- For local development only, you can bypass this with:
+
+```yaml
+security:
+  allow_insecure_defaults: true
+```
+
+Or with environment variable:
+
+`BACKEND_SECURITY_ALLOW_INSECURE_DEFAULTS=true`
+
 ## OIDC Configuration
 
 JustScan supports OpenID Connect providers such as Keycloak, Authentik, Okta, Azure AD, and Google Workspace.
@@ -241,6 +257,7 @@ All config values can be overridden via environment variables using the `BACKEND
 | `database.user` | `BACKEND_DATABASE_USER` |
 | `database.password` | `BACKEND_DATABASE_PASSWORD` |
 | `encryption.key` | `BACKEND_ENCRYPTION_KEY` |
+| `security.allow_insecure_defaults` | `BACKEND_SECURITY_ALLOW_INSECURE_DEFAULTS` |
 | `oidc.enabled` | `BACKEND_OIDC_ENABLED` |
 | `oidc.issuer_url` | `BACKEND_OIDC_ISSUER_URL` |
 | `oidc.client_id` | `BACKEND_OIDC_CLIENT_ID` |

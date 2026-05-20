@@ -9,9 +9,9 @@ import {
   YAxis as EvilBarYAxis,
 } from '@/components/evilcharts/charts/bar-chart';
 import {
+  Line as EvilLine,
   EvilLineChart,
   Grid as EvilLineGrid,
-  Line as EvilLine,
   Tooltip as EvilLineTooltip,
   XAxis as EvilLineXAxis,
   YAxis as EvilLineYAxis,
@@ -61,7 +61,11 @@ function ScanVolumeChart({ data }: { data: { date: string; value: number }[] }) 
         chartProps={{ margin: { top: 8, right: 8, left: -18, bottom: 0 } }}
       >
         <EvilLineGrid stroke="rgba(161,161,170,0.15)" />
-        <EvilLineXAxis dataKey="date" tickFormatter={(value: string) => formatChartDate(value)} minTickGap={30} />
+        <EvilLineXAxis
+          dataKey="date"
+          tickFormatter={(value: string) => formatChartDate(value)}
+          minTickGap={30}
+        />
         <EvilLineYAxis />
         <EvilLineTooltip variant="frosted-glass" roundness="lg" />
         <EvilLine dataKey="value" curveType="monotone" />
@@ -92,7 +96,6 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
           config={typedChartConfigFromSeries(SEVERITY_SERIES)}
           className="h-full !aspect-auto"
           stackType="stacked"
-          chartProps={{ margin: { top: 8, right: 8, left: -18, bottom: 0 } }}
         >
           <EvilBarGrid stroke="rgba(161,161,170,0.15)" vertical={false} />
           <EvilBarXAxis dataKey="label" />

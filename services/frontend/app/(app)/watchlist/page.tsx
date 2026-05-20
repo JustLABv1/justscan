@@ -31,6 +31,7 @@ import {
 } from '@/lib/api';
 import { cronToHuman, type HourCyclePreference } from '@/lib/cron';
 import { deferEffect } from '@/lib/defer-effect';
+import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
   getWatchlistPolicyAttentionItems,
@@ -243,9 +244,20 @@ export default function WatchlistPage() {
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
   const isPlatformAdmin = getTokenType() === 'admin';
+  const orgRoleById = useMemo(
+    () =>
+      new Map(
+        orgs.map((org) => [org.id, org.current_user_role] as const)
+      ),
+    [orgs]
+  );
+  const canMutateActiveScope =
+    isPlatformAdmin ||
+    workScope.kind !== 'org' ||
+    canMutateOrg(orgRoleById.get(workScope.orgId));
   const manageableOrgIds = new Set(
     orgs
-      .filter((org) => org.current_user_role === 'owner' || org.current_user_role === 'admin')
+      .filter((org) => canManageOrg(org.current_user_role))
       .map((org) => org.id)
   );
 
@@ -287,6 +299,7 @@ export default function WatchlistPage() {
   const defaultRegistryId = registries.find((registry) => registry.is_default)?.id ?? '';
 
   function openCreate() {
+    if (!canMutateActiveScope) return;
     setEditing(null);
     setImageName('');
     setImageTag('latest');
@@ -298,6 +311,7 @@ export default function WatchlistPage() {
     modal.open();
   }
   function openEdit(item: WatchlistItem) {
+    if (!canMutateItem(item)) return;
     setEditing(item);
     setImageName(item.image_name);
     setImageTag(item.image_tag);
@@ -309,6 +323,7 @@ export default function WatchlistPage() {
     modal.open();
   }
   async function handleSubmit(e: React.FormEvent) {
+    if (!canMutateActiveScope) return;
     e.preventDefault();
     setFormError('');
     setSaving(true);
@@ -343,6 +358,8 @@ export default function WatchlistPage() {
     }
   }
   async function handleDelete(id: string) {
+    const item = items.find((candidate) => candidate.id === id);
+    if (item && !canMutateItem(item)) return;
     const ok = await confirm({
       title: 'Remove from watchlist?',
       message: 'This image will no longer be automatically scanned on a schedule.',
@@ -355,6 +372,8 @@ export default function WatchlistPage() {
     load();
   }
   async function handleTrigger(id: string) {
+    const item = items.find((candidate) => candidate.id === id);
+    if (item && !canMutateItem(item)) return;
     setTriggering(id);
     try {
       await triggerWatchlistScan(id);
@@ -367,10 +386,18 @@ export default function WatchlistPage() {
     }
   }
 
+  function canMutateItem(item: WatchlistItem) {
+    if (isPlatformAdmin) return true;
+    if (item.owner_type === 'org' && item.owner_org_id) {
+      return canMutateOrg(orgRoleById.get(item.owner_org_id));
+    }
+    return true;
+  }
+
   function canManageAccess(item: WatchlistItem) {
     if (isPlatformAdmin) return true;
     if (item.owner_type === 'org' && item.owner_org_id) {
-      return manageableOrgIds.has(item.owner_org_id);
+      return canManageOrg(orgRoleById.get(item.owner_org_id));
     }
     return true;
   }
@@ -388,6 +415,7 @@ export default function WatchlistPage() {
   }
 
   function openShareModal(item: WatchlistItem) {
+    if (!canManageAccess(item)) return;
     setShareTarget(item);
     setShares([]);
     setShareOrgId('');
@@ -397,7 +425,7 @@ export default function WatchlistPage() {
   }
 
   async function handleGrantShare() {
-    if (!shareTarget || !shareOrgId) return;
+    if (!shareTarget || !shareOrgId || !canManageAccess(shareTarget)) return;
     setShareSaving(true);
     setShareError('');
     try {
@@ -413,7 +441,7 @@ export default function WatchlistPage() {
   }
 
   async function handleRevokeShare(orgId: string) {
-    if (!shareTarget) return;
+    if (!shareTarget || !canManageAccess(shareTarget)) return;
     setShareSaving(true);
     setShareError('');
     try {
@@ -494,6 +522,7 @@ export default function WatchlistPage() {
             <Button
               onPress={openCreate}
               className="btn-primary inline-flex items-center gap-2"
+              isDisabled={!canMutateActiveScope}
               variant="primary"
             >
               <PlusSignIcon size={15} /> Add Image
@@ -615,7 +644,9 @@ export default function WatchlistPage() {
                       setStatusFilter('all');
                     },
                   }
-                : { label: '+ Add Image', onClick: openCreate }
+                : canMutateActiveScope
+                  ? { label: '+ Add Image', onClick: openCreate }
+                  : undefined
             }
           />
         ) : (
@@ -636,6 +667,57 @@ export default function WatchlistPage() {
                   {filteredItems.map((item) => {
                     const reg = registries.find((r) => r.id === item.registry_id);
                     const posture = getWatchlistPosture(item);
+                    const canMutate = canMutateItem(item);
+                    const canManageItemAccess = canManageAccess(item);
+                    const actions = [
+                      ...(canMutate
+                        ? [
+                            {
+                              id: 'scan-now',
+                              label: triggering === item.id ? 'Scanning…' : 'Scan now',
+                              icon:
+                                triggering === item.id ? (
+                                  <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-400 rounded-full animate-spin" />
+                                ) : (
+                                  <PlayIcon size={15} />
+                                ),
+                              disabled: triggering === item.id,
+                              onAction: () => {
+                                void handleTrigger(item.id);
+                              },
+                            },
+                            {
+                              id: 'edit',
+                              label: 'Edit watchlist item',
+                              icon: <PencilEdit01Icon size={15} />,
+                              onAction: () => openEdit(item),
+                            },
+                          ]
+                        : []),
+                      ...(canManageItemAccess
+                        ? [
+                            {
+                              id: 'share',
+                              label: 'Manage access',
+                              icon: <BiometricAccessIcon size={15} />,
+                              onAction: () => openShareModal(item),
+                            },
+                          ]
+                        : []),
+                      ...(canMutate
+                        ? [
+                            {
+                              id: 'delete',
+                              label: 'Delete watchlist item',
+                              icon: <Delete01Icon size={15} />,
+                              variant: 'danger' as const,
+                              onAction: () => {
+                                void handleDelete(item.id);
+                              },
+                            },
+                          ]
+                        : []),
+                    ];
                     return (
                       <Table.Row key={item.id} id={item.id} className="hover:bg-[var(--row-hover)]">
                         <Table.Cell>
@@ -710,50 +792,14 @@ export default function WatchlistPage() {
                         </Table.Cell>
                         <Table.Cell>
                           <div className="flex justify-end">
-                            <RowActionsMenu
-                              label={`Open actions menu for ${item.image_name}:${item.image_tag}`}
-                              items={[
-                                {
-                                  id: 'scan-now',
-                                  label: triggering === item.id ? 'Scanning…' : 'Scan now',
-                                  icon:
-                                    triggering === item.id ? (
-                                      <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-400 rounded-full animate-spin" />
-                                    ) : (
-                                      <PlayIcon size={15} />
-                                    ),
-                                  disabled: triggering === item.id,
-                                  onAction: () => {
-                                    void handleTrigger(item.id);
-                                  },
-                                },
-                                {
-                                  id: 'edit',
-                                  label: 'Edit watchlist item',
-                                  icon: <PencilEdit01Icon size={15} />,
-                                  onAction: () => openEdit(item),
-                                },
-                                ...(canManageAccess(item)
-                                  ? [
-                                      {
-                                        id: 'share',
-                                        label: 'Manage access',
-                                        icon: <BiometricAccessIcon size={15} />,
-                                        onAction: () => openShareModal(item),
-                                      },
-                                    ]
-                                  : []),
-                                {
-                                  id: 'delete',
-                                  label: 'Delete watchlist item',
-                                  icon: <Delete01Icon size={15} />,
-                                  variant: 'danger',
-                                  onAction: () => {
-                                    void handleDelete(item.id);
-                                  },
-                                },
-                              ]}
-                            />
+                            {actions.length > 0 ? (
+                              <RowActionsMenu
+                                label={`Open actions menu for ${item.image_name}:${item.image_tag}`}
+                                items={actions}
+                              />
+                            ) : (
+                              <span className="text-xs text-zinc-400">No actions</span>
+                            )}
                           </div>
                         </Table.Cell>
                       </Table.Row>

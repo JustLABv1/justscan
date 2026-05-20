@@ -4,8 +4,6 @@ import (
 	"net/http"
 
 	"justscan-backend/functions/auth"
-	"justscan-backend/functions/httperror"
-	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -13,23 +11,14 @@ import (
 
 func ValidateToken(context *gin.Context, db *bun.DB) {
 	token := context.GetHeader("Authorization")
-	err := auth.ValidateToken(token)
-	if err != nil {
-		httperror.Unauthorized(context, "Token is invalid", err)
+	if token == "" {
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	userID, err := auth.GetUserIDFromToken(token)
+	_, _, err := auth.ResolveUserAccess(token, db)
 	if err != nil {
-		httperror.Unauthorized(context, "Token is invalid", err)
-		return
-	}
-
-	// check for token in db
-	var dbToken models.Tokens
-	err = db.NewSelect().Model(&dbToken).Where("user_id = ?", userID).Scan(context)
-	if err != nil {
-		httperror.Unauthorized(context, "No token found", err)
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 

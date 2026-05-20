@@ -26,14 +26,16 @@ func RegisterUser(context *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// check if user exists
-	firstCount, err := db.NewSelect().Model(&user).Where("email = ?", user.Email).Where("username = ?", user.Username).Count(context)
+	// Check if either email or username already exists.
+	exists, err := db.NewSelect().Model((*models.Users)(nil)).
+		Where("email = ? OR username = ?", user.Email, user.Username).
+		Exists(context)
 	if err != nil {
-		httperror.InternalServerError(context, "Error checking for email and username on db", err)
+		httperror.InternalServerError(context, "Error checking for existing user on db", err)
 		return
 	}
-	if firstCount > 0 {
-		httperror.StatusConflict(context, "User already exists", nil)
+	if exists {
+		httperror.StatusConflict(context, "registration unavailable", errors.New("user already exists"))
 		return
 	}
 

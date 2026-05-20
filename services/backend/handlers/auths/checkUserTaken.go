@@ -3,7 +3,9 @@ package auths
 import (
 	"errors"
 	"net/http"
+	"strings"
 
+	"justscan-backend/functions/auth"
 	"justscan-backend/functions/httperror"
 	"justscan-backend/pkg/models"
 
@@ -29,9 +31,24 @@ func CheckUserTaken(context *gin.Context, db *bun.DB) {
 	checkUsername = true
 
 	if user.ID != uuid.Nil {
+		rawAuth := strings.TrimSpace(context.GetHeader("Authorization"))
+		if rawAuth == "" {
+			context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		resolvedUserID, isAdmin, err := auth.ResolveUserAccess(rawAuth, db)
+		if err != nil {
+			context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		if !isAdmin && resolvedUserID != user.ID {
+			context.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+
 		// get user data from db
 		var userFromDb models.Users
-		err := db.NewSelect().Model(&userFromDb).Where("id = ?", user.ID).Scan(context)
+		err = db.NewSelect().Model(&userFromDb).Where("id = ?", user.ID).Scan(context)
 		if err != nil {
 			httperror.InternalServerError(context, "Error getting user data from db", err)
 			return
@@ -54,7 +71,7 @@ func CheckUserTaken(context *gin.Context, db *bun.DB) {
 			return
 		}
 		if usernameCount > 0 {
-			httperror.StatusConflict(context, "Benutzername bereits vergeben", errors.New("benutzername bereits vergeben"))
+			httperror.StatusConflict(context, "value unavailable", errors.New("username unavailable"))
 			return
 		}
 	}
@@ -67,7 +84,7 @@ func CheckUserTaken(context *gin.Context, db *bun.DB) {
 			return
 		}
 		if emailCount > 0 {
-			httperror.StatusConflict(context, "Email bereits vergeben", errors.New("email bereits vergeben"))
+			httperror.StatusConflict(context, "value unavailable", errors.New("email unavailable"))
 			return
 		}
 	}

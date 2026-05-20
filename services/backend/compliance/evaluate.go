@@ -71,6 +71,21 @@ func EvaluatePolicy(policy *models.OrgPolicy, vulns []models.Vulnerability) (str
 					})
 				}
 			}
+		case "xray_policy_block":
+			for _, v := range vulns {
+				if !v.XrayIsBlocking {
+					continue
+				}
+				details := ""
+				if len(v.XrayWatchNames) > 0 {
+					details = fmt.Sprintf(" (watches: %s)", strings.Join(v.XrayWatchNames, ", "))
+				}
+				violations = append(violations, models.Violation{
+					Rule:    rule,
+					Message: fmt.Sprintf("%s (%s) is blocked by Xray policy%s", v.VulnID, v.PkgName, details),
+					VulnID:  v.VulnID,
+				})
+			}
 		}
 	}
 

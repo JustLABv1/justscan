@@ -326,11 +326,12 @@ func ListPolicies(db *bun.DB) gin.HandlerFunc {
 }
 
 var validRuleTypes = map[string]bool{
-	"max_cvss":    true,
-	"max_count":   true,
-	"max_total":   true,
-	"require_fix": true,
-	"blocked_cve": true,
+	"max_cvss":          true,
+	"max_count":         true,
+	"max_total":         true,
+	"require_fix":       true,
+	"blocked_cve":       true,
+	"xray_policy_block": true,
 }
 
 // CreatePolicy creates a new policy for an org.

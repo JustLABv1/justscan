@@ -461,6 +461,8 @@ function summarizePolicyRule(rule?: PolicyRule | null): string {
     }
     case 'blocked_cve':
       return `Blocked CVE: ${(rule.cve_id ?? '').trim() || 'specified CVE'}`;
+    case 'xray_policy_block':
+      return 'No Xray policy blocking vulnerabilities';
     default:
       return rule.type;
   }

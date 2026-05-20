@@ -234,6 +234,8 @@ func summarizePolicyRule(rule models.PolicyRule) string {
 			cve = "specified CVE"
 		}
 		return fmt.Sprintf("Blocked CVE: %s", cve)
+	case "xray_policy_block":
+		return "No Xray policy blocking vulnerabilities"
 	default:
 		return rule.Type
 	}

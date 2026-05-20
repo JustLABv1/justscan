@@ -59,6 +59,7 @@ const RULE_TYPE_LABELS: Record<string, string> = {
   max_total: 'Max Total',
   require_fix: 'Require Fix',
   blocked_cve: 'Blocked CVE',
+  xray_policy_block: 'Block Xray Policy Matches',
 };
 
 const SEV_OPTIONS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
@@ -796,6 +797,15 @@ export default function OrgDetailPage() {
                               placeholder="CVE-2024-12345"
                               className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
                             />
+                          </div>
+                        )}
+                        {rule.type === 'xray_policy_block' && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-zinc-500">Xray policy blocking</label>
+                            <p className="text-xs text-zinc-500">
+                              Fails when any vulnerability has an active Xray blocking policy
+                              match.
+                            </p>
                           </div>
                         )}
                       </Card>

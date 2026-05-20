@@ -111,7 +111,7 @@ type ComplianceHistory struct {
 }
 
 type PolicyRule struct {
-	Type     string  `json:"type"`               // max_cvss, max_count, max_total, require_fix, blocked_cve
+	Type     string  `json:"type"`               // max_cvss, max_count, max_total, require_fix, blocked_cve, xray_policy_block
 	Value    float64 `json:"value,omitempty"`    // numeric threshold
 	Severity string  `json:"severity,omitempty"` // for max_count, require_fix
 	CVEID    string  `json:"cve_id,omitempty"`   // for blocked_cve

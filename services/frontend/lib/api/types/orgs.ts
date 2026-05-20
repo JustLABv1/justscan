@@ -1,5 +1,11 @@
 export interface PolicyRule {
-  type: 'max_cvss' | 'max_count' | 'max_total' | 'require_fix' | 'blocked_cve';
+  type:
+    | 'max_cvss'
+    | 'max_count'
+    | 'max_total'
+    | 'require_fix'
+    | 'blocked_cve'
+    | 'xray_policy_block';
   value?: number;
   severity?: string;
   cve_id?: string;

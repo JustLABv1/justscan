@@ -25,6 +25,12 @@ export function RulePill({ rule }: { rule: OrgPolicy['rules'][number] }) {
       return <span className={`${base} bg-blue-500/10 text-blue-400 border-blue-500/20`}>Fix req. {rule.severity}</span>;
     case 'blocked_cve':
       return <span className={`${base} bg-red-500/10 text-red-400 border-red-500/20`}>Block {rule.cve_id}</span>;
+    case 'xray_policy_block':
+      return (
+        <span className={`${base} bg-red-500/10 text-red-400 border-red-500/20`}>
+          No Xray Blocking
+        </span>
+      );
     default:
       return <span className={`${base} bg-zinc-500/10 text-zinc-400 border-zinc-500/20`}>{rule.type}</span>;
   }

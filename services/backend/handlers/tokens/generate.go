@@ -39,19 +39,19 @@ func GenerateTokenUser(db *bun.DB, context *gin.Context) {
 	var user models.Users
 	err := db.NewSelect().Model(&user).Where("email = ? OR username = ?", request.Email, request.Email).Scan(context)
 	if err != nil {
-		httperror.Unauthorized(context, "invalid credentials", err)
+		httperror.Unauthorized(context, "user not found", err)
 		return
 	}
 
 	// check if user account is disabled
 	if user.Disabled {
-		httperror.Unauthorized(context, "invalid credentials", err)
+		httperror.Unauthorized(context, "user account is disabled", err)
 		return
 	}
 	// check if password is correct
 	credentialError := user.CheckPassword(request.Password)
 	if credentialError != nil {
-		httperror.Unauthorized(context, "invalid credentials", credentialError)
+		httperror.Unauthorized(context, "password is incorrect", credentialError)
 		return
 	}
 

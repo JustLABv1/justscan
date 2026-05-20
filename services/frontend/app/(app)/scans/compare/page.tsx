@@ -1,12 +1,12 @@
 'use client';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { PageHeader } from '@/components/ui/page-header';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { compareScans, listScans, Scan, ScanComparison, Vulnerability } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { ListBox, Select, Table } from '@heroui/react';
+import { Button, Card, ListBox, Select, Table } from '@heroui/react';
 import { ArrowLeft01Icon } from 'hugeicons-react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 
 const selectTriggerCls = heroSelectTriggerClassName;
@@ -35,7 +35,7 @@ function VulnTable({ vulns, emptyText }: { vulns: Vulnerability[]; emptyText: st
     return <p className="text-sm text-zinc-500 py-6 text-center">{emptyText}</p>;
   }
   return (
-    <Table>
+    <Table variant="secondary">
       <Table.ScrollContainer>
         <Table.Content aria-label="Scan comparison vulnerabilities" className="min-w-[760px]">
           <Table.Header>
@@ -106,6 +106,7 @@ function ScanSelector({
         onChange={(nextValue) =>
           onChange(String(nextValue === '__none__' ? '' : (nextValue ?? '')))
         }
+        variant="secondary"
       >
         <Select.Trigger className={selectTriggerCls}>
           <Select.Value />
@@ -130,6 +131,7 @@ function ScanSelector({
 function ComparePageInner() {
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
+  const router = useRouter();
   const params = useSearchParams();
   const [scanA, setScanA] = useState(params.get('a') ?? '');
   const [scanB, setScanB] = useState(params.get('b') ?? '');
@@ -187,22 +189,19 @@ function ComparePageInner() {
 
   return (
     <div className="p-6 space-y-5">
-      {/* Header */}
-      <div>
-        <Link href="/scans" className="btn-secondary inline-flex items-center gap-1.5 mb-3">
-          <ArrowLeft01Icon size={15} />
-          Back to scans
-        </Link>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">
-          Scan Comparison
-        </h1>
-        <p className="text-sm text-zinc-500 mt-0.5">
-          Compare two scans to see which vulnerabilities were added or resolved
-        </p>
-      </div>
+      <PageHeader
+        title="Scan Comparison"
+        description="Compare two scans to see which vulnerabilities were added or resolved."
+        actions={
+          <Button onPress={() => router.push('/scans')} variant="secondary">
+            <ArrowLeft01Icon size={15} />
+            Back to scans
+          </Button>
+        }
+      />
 
       {/* Selectors */}
-      <div className="surface-panel rounded-2xl p-5">
+      <Card>
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           {scansLoading ? (
             <div className="flex-1 flex items-center justify-center py-4">
@@ -227,19 +226,14 @@ function ComparePageInner() {
               />
             </>
           )}
-          <button
-            onClick={handleCompare}
-            disabled={loading || !scanA || !scanB}
-            className="btn-primary shrink-0 inline-flex items-center gap-2"
-            type="button"
-          >
+          <Button onClick={handleCompare} isDisabled={loading || !scanA || !scanB}>
             {loading && (
               <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             )}
             Compare
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
       {error && (
         <div
@@ -258,39 +252,44 @@ function ComparePageInner() {
         <>
           {/* Summary bar */}
           <div className="grid grid-cols-3 gap-3">
-            <div className="surface-panel rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold tabular-nums" style={{ color: '#f87171' }}>
-                {result.summary.added_count}
-              </p>
-              <p className="text-xs text-zinc-500 mt-0.5">New vulnerabilities</p>
-              {(result.summary.added_critical > 0 || result.summary.added_high > 0) && (
-                <p className="text-xs mt-1" style={{ color: '#f87171' }}>
-                  {result.summary.added_critical > 0 && `${result.summary.added_critical} critical`}
-                  {result.summary.added_critical > 0 && result.summary.added_high > 0 && ', '}
-                  {result.summary.added_high > 0 && `${result.summary.added_high} high`}
+            <Card className="text-center">
+              <Card.Content>
+                <p className="text-2xl font-bold tabular-nums" style={{ color: '#f87171' }}>
+                  {result.summary.added_count}
                 </p>
-              )}
-            </div>
-            <div className="surface-panel rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold tabular-nums" style={{ color: '#34d399' }}>
-                {result.summary.removed_count}
-              </p>
-              <p className="text-xs text-zinc-500 mt-0.5">Resolved vulnerabilities</p>
-            </div>
-            <div className="surface-panel rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold tabular-nums text-zinc-400">
-                {result.summary.unchanged_count}
-              </p>
-              <p className="text-xs text-zinc-500 mt-0.5">Unchanged</p>
-            </div>
+                <p className="text-xs text-zinc-500">New vulnerabilities</p>
+                {(result.summary.added_critical > 0 || result.summary.added_high > 0) && (
+                  <p className="text-xs" style={{ color: '#f87171' }}>
+                    {result.summary.added_critical > 0 &&
+                      `${result.summary.added_critical} critical`}
+                    {result.summary.added_critical > 0 && result.summary.added_high > 0 && ', '}
+                    {result.summary.added_high > 0 && `${result.summary.added_high} high`}
+                  </p>
+                )}
+              </Card.Content>
+            </Card>
+
+            <Card className="text-center">
+              <Card.Content>
+                <p className="text-2xl font-bold tabular-nums" style={{ color: '#34d399' }}>
+                  {result.summary.removed_count}
+                </p>
+                <p className="text-xs text-zinc-500">Resolved vulnerabilities</p>
+              </Card.Content>
+            </Card>
+            <Card className="text-center">
+              <Card.Content>
+                <p className="text-2xl font-bold tabular-nums text-zinc-400">
+                  {result.summary.unchanged_count}
+                </p>
+                <p className="text-xs text-zinc-500">Unchanged</p>
+              </Card.Content>
+            </Card>
           </div>
 
           {/* Added */}
-          <div className="surface-panel rounded-2xl overflow-hidden">
-            <div
-              className="flex items-center gap-3 px-5 py-4"
-              style={{ borderBottom: '1px solid var(--row-divider)' }}
-            >
+          <Card>
+            <div className="flex items-center gap-3">
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
                 New Vulnerabilities
               </h2>
@@ -306,14 +305,11 @@ function ComparePageInner() {
               </span>
             </div>
             <VulnTable vulns={result.added} emptyText="No new vulnerabilities - great!" />
-          </div>
+          </Card>
 
           {/* Removed */}
-          <div className="surface-panel rounded-2xl overflow-hidden">
-            <div
-              className="flex items-center gap-3 px-5 py-4"
-              style={{ borderBottom: '1px solid var(--row-divider)' }}
-            >
+          <Card>
+            <div className="flex items-center gap-3">
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
                 Resolved Vulnerabilities
               </h2>
@@ -329,14 +325,11 @@ function ComparePageInner() {
               </span>
             </div>
             <VulnTable vulns={result.removed} emptyText="No vulnerabilities were resolved." />
-          </div>
+          </Card>
 
           {/* Unchanged */}
-          <div className="surface-panel rounded-2xl overflow-hidden">
-            <div
-              className="flex items-center gap-3 px-5 py-4"
-              style={{ borderBottom: '1px solid var(--row-divider)' }}
-            >
+          <Card>
+            <div className="flex items-center gap-3">
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Unchanged</h2>
               <span
                 className="text-xs font-semibold px-2 py-0.5 rounded-full"
@@ -350,7 +343,7 @@ function ComparePageInner() {
               </span>
             </div>
             <VulnTable vulns={result.unchanged} emptyText="No unchanged vulnerabilities." />
-          </div>
+          </Card>
         </>
       )}
     </div>

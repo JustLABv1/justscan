@@ -2,38 +2,49 @@
 
 import { Logo } from '@/components/logo';
 import {
-    SeverityBadge,
-    SourceBadge,
-    StatusBadge,
-    formatStatusLabel,
-    resolveDisplayStatus,
+  SeverityBadge,
+  SourceBadge,
+  StatusBadge,
+  formatStatusLabel,
+  resolveDisplayStatus,
 } from '@/components/ui/badges';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type {
-    StatusPageItem,
-    StatusPageResponse,
-    StatusPageScanSummary,
-    Vulnerability,
+  StatusPageItem,
+  StatusPageResponse,
+  StatusPageScanSummary,
+  Vulnerability,
 } from '@/lib/api';
 import {
-    ApiError,
-    getStatusPageBySlug,
-    getStatusPageItemVulnerabilityContextAnalysis,
-    getStatusPageTrackedScan,
-    getToken,
-    listStatusPageItemVulnerabilities,
-    listStatusPageScanHistory,
+  ApiError,
+  getStatusPageBySlug,
+  getStatusPageItemVulnerabilityContextAnalysis,
+  getStatusPageTrackedScan,
+  getToken,
+  listStatusPageItemVulnerabilities,
+  listStatusPageScanHistory,
 } from '@/lib/api';
 import type { BlockedPolicyDetailsView } from '@/lib/blocked-policy';
 import {
-    compactBlockedPolicyList,
-    countBlockedPolicyList,
-    formatIgnoreRuleStatusLabel,
-    getBlockedPolicyDetails,
+  compactBlockedPolicyList,
+  countBlockedPolicyList,
+  formatIgnoreRuleStatusLabel,
+  getBlockedPolicyDetails,
 } from '@/lib/blocked-policy';
 import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
-import { Button, ListBox, Modal, Select, Table, useOverlayState } from '@heroui/react';
+import {
+  Button,
+  Card,
+  Chip,
+  ListBox,
+  Modal,
+  SearchField,
+  Select,
+  Spinner,
+  Table,
+  useOverlayState,
+} from '@heroui/react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -42,7 +53,7 @@ const AUTO_REFRESH_MS = 30000;
 const VULN_PAGE_SIZE = 25;
 const STATUS_SELECT_TRIGGER_CLS = 'surface-input min-h-11 rounded-full px-3 text-sm';
 const STATUS_INPUT_CLS = 'surface-input min-h-11 rounded-xl px-3 text-sm outline-none';
-const RECENT_SCAN_SEGMENTS = 12;
+const RECENT_SCAN_SEGMENTS = 14;
 const STATUS_PRIORITY: Record<string, number> = {
   failed: 0,
   blocked_by_xray_policy: 1,
@@ -616,6 +627,56 @@ function getServiceTone(item: StatusPageItem) {
   };
 }
 
+type PolicyDecision = 'allowed' | 'warning' | 'blocked';
+
+function getPolicyDecision(item: StatusPageItem): PolicyDecision {
+  const operationalStatus = getPresentationStatus(item);
+  if (
+    operationalStatus === 'failed' ||
+    operationalStatus === 'blocked_by_xray_policy' ||
+    item.critical_count > 0
+  ) {
+    return 'blocked';
+  }
+  if (
+    operationalStatus !== 'healthy' ||
+    item.high_count > 0 ||
+    item.medium_count > 0 ||
+    item.low_count > 0
+  ) {
+    return 'warning';
+  }
+  return 'allowed';
+}
+
+function getPolicyDecisionMeta(decision: PolicyDecision) {
+  if (decision === 'blocked') {
+    return { label: 'Blocked', color: 'danger' as const, tone: '#f87171' };
+  }
+  if (decision === 'warning') {
+    return { label: 'Warning', color: 'warning' as const, tone: '#facc15' };
+  }
+  return { label: 'Allowed', color: 'success' as const, tone: '#34d399' };
+}
+
+function getRiskScore(item: StatusPageItem) {
+  const weighted =
+    item.critical_count * 20 + item.high_count * 8 + item.medium_count * 3 + item.low_count;
+  const operationalStatus = getPresentationStatus(item);
+  const withOperationalFloor =
+    operationalStatus === 'failed' || operationalStatus === 'blocked_by_xray_policy'
+      ? Math.max(weighted, 70)
+      : weighted;
+  return Math.min(99, withOperationalFloor);
+}
+
+function formatScanner(scanProvider?: string) {
+  if (!scanProvider) return '-';
+  if (scanProvider.toLowerCase() === 'xray') return 'Xray';
+  if (scanProvider.toLowerCase() === 'trivy') return 'Trivy';
+  return scanProvider;
+}
+
 function StatusBoardBadge({ label, color }: { label: string; color: string }) {
   return (
     <span
@@ -626,35 +687,6 @@ function StatusBoardBadge({ label, color }: { label: string; color: string }) {
       {label}
     </span>
   );
-}
-
-function getStatusUpdateTone(level?: string) {
-  switch (level) {
-    case 'incident':
-      return {
-        label: 'Incident',
-        color: '#dc2626',
-        background: 'rgba(220,38,38,0.08)',
-        border: 'rgba(220,38,38,0.22)',
-        strongBackground: 'rgba(220,38,38,0.12)',
-      };
-    case 'maintenance':
-      return {
-        label: 'Maintenance',
-        color: '#b45309',
-        background: 'rgba(180,83,9,0.08)',
-        border: 'rgba(180,83,9,0.22)',
-        strongBackground: 'rgba(180,83,9,0.12)',
-      };
-    default:
-      return {
-        label: 'Update',
-        color: '#2563eb',
-        background: 'rgba(37,99,235,0.08)',
-        border: 'rgba(37,99,235,0.22)',
-        strongBackground: 'rgba(37,99,235,0.12)',
-      };
-  }
 }
 
 function formatScanHistoryOptionLabel(scan: StatusPageScanSummary) {
@@ -716,11 +748,13 @@ function RecentScanStrip({
   item,
   scans,
   onHistoryLoaded,
+  compact,
 }: {
   slug: string;
   item: StatusPageItem;
   scans?: StatusPageScanSummary[];
   onHistoryLoaded?: (scanId: string, scans: StatusPageScanSummary[]) => void;
+  compact?: boolean;
 }) {
   const [localScans, setLocalScans] = useState<StatusPageScanSummary[] | undefined>(scans);
   const [localLoading, setLocalLoading] = useState(false);
@@ -774,14 +808,40 @@ function RecentScanStrip({
       ? 'Single recorded scan'
       : `${recentScans.length} recent scans`;
 
+  if (compact) {
+    return (
+      <div className="flex gap-1.5 overflow-hidden" aria-label="14 day scan history">
+        {Array.from({ length: leadingPlaceholders }, (_, index) => (
+          <span
+            key={`${item.latest_scan_id}:empty:${index}`}
+            className="h-14 w-2.5 shrink-0 rounded-[3px] bg-default-100"
+            aria-hidden="true"
+          />
+        ))}
+        {recentScans.map((scan) => {
+          const status = getEffectiveScanStatus(scan.scan_status, scan.external_status);
+          const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
+          return (
+            <span
+              key={scan.scan_id}
+              className="h-14 w-2.5 shrink-0 rounded-[3px]"
+              style={{ background: color, opacity: scan.is_latest ? 1 : 0.84 }}
+              title={formatScanHistoryOptionLabel(scan)}
+              aria-label={formatScanHistoryOptionLabel(scan)}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex gap-1.5 overflow-hidden" aria-label="Recent scan history">
         {Array.from({ length: leadingPlaceholders }, (_, index) => (
           <span
             key={`${item.latest_scan_id}:empty:${index}`}
-            className="h-10 flex-1 rounded-[3px]"
-            style={{ background: 'var(--row-hover)' }}
+            className="h-10 flex-1 rounded-[3px] bg-default-100"
             aria-hidden="true"
           />
         ))}
@@ -799,11 +859,11 @@ function RecentScanStrip({
           );
         })}
       </div>
-      <div className="flex items-center gap-4 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+      <div className="flex items-center gap-4 text-[12px] text-default-500">
         <span>Older scans</span>
-        <span className="h-px flex-1" style={{ background: 'var(--border-subtle)' }} />
+        <span className="h-px flex-1 bg-divider" />
         <span style={{ color: tone.color }}>{latestLabel}</span>
-        <span className="h-px flex-1" style={{ background: 'var(--border-subtle)' }} />
+        <span className="h-px flex-1 bg-divider" />
         <span>{timeAgo(latestScan.observed_at)}</span>
       </div>
     </div>
@@ -1730,58 +1790,6 @@ function StatusItemVulnerabilityModal({
   );
 }
 
-function StatusBoardRow({
-  slug,
-  item,
-  scans,
-  onOpen,
-  onHistoryLoaded,
-}: {
-  slug: string;
-  item: StatusPageItem;
-  scans?: StatusPageScanSummary[];
-  onOpen: (item: StatusPageItem) => void;
-  onHistoryLoaded?: (scanId: string, scans: StatusPageScanSummary[]) => void;
-}) {
-  const tone = getServiceTone(item);
-  const totalFindings = getFindingTotal(item);
-  const meta =
-    totalFindings > 0
-      ? `${item.image_tag} · ${totalFindings.toLocaleString()} findings`
-      : `${item.image_tag} · Updated ${timeAgo(item.observed_at)}`;
-
-  return (
-    <button
-      type="button"
-      className="w-full p-6 text-left transition-colors hover:bg-black/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60 sm:px-8"
-      aria-label={`Open details for ${item.image_name}:${item.image_tag}`}
-      onClick={() => onOpen(item)}
-    >
-      <div className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-2">
-            <h3
-              className="text-lg font-semibold tracking-[-0.01em]"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              {item.image_name}
-            </h3>
-            <p className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>
-              {meta}
-            </p>
-          </div>
-
-          <div className="flex shrink-0 items-center justify-end gap-2">
-            <StatusBoardBadge label={tone.label} color={tone.color} />
-          </div>
-        </div>
-
-        <RecentScanStrip slug={slug} item={item} scans={scans} onHistoryLoaded={onHistoryLoaded} />
-      </div>
-    </button>
-  );
-}
-
 export default function PublicStatusPage() {
   const { slug } = useParams<{ slug: string }>();
   const [data, setData] = useState<StatusPageResponse | null>(null);
@@ -1791,6 +1799,7 @@ export default function PublicStatusPage() {
   const [needsAuth, setNeedsAuth] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
   const [activeItem, setActiveItem] = useState<StatusPageItem | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [rowScanHistory, setRowScanHistory] = useState<Record<string, StatusPageScanSummary[]>>({});
   const mountedRef = useRef(true);
   const vulnerabilityModal = useOverlayState();
@@ -1912,6 +1921,34 @@ export default function PublicStatusPage() {
     );
   }, [data]);
 
+  const filteredTrackedItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return trackedItems;
+    return trackedItems.filter((item) => {
+      const operationalStatus = getPresentationStatus(item);
+      const decisionLabel = getPolicyDecisionMeta(getPolicyDecision(item)).label.toLowerCase();
+      return (
+        item.image_name.toLowerCase().includes(query) ||
+        item.image_tag.toLowerCase().includes(query) ||
+        `${item.image_name}:${item.image_tag}`.toLowerCase().includes(query) ||
+        formatStatusLabel(operationalStatus).toLowerCase().includes(query) ||
+        formatScanner(item.scan_provider).toLowerCase().includes(query) ||
+        decisionLabel.includes(query)
+      );
+    });
+  }, [searchQuery, trackedItems]);
+
+  const decisionSummary = useMemo(() => {
+    return trackedItems.reduce(
+      (acc, item) => {
+        const decision = getPolicyDecision(item);
+        acc[decision] += 1;
+        return acc;
+      },
+      { allowed: 0, warning: 0, blocked: 0 }
+    );
+  }, [trackedItems]);
+
   const latestObservedAt = useMemo(() => {
     return trackedItems.reduce<string | null>((latest, item) => {
       if (!latest) return item.observed_at;
@@ -1923,47 +1960,29 @@ export default function PublicStatusPage() {
 
   if (loading && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center app-bg">
-        <div className="flex flex-col items-center gap-4">
-          <div
-            className="size-10 rounded-2xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg,var(--accent),color-mix(in srgb, var(--accent) 82%, black))' }}
-          >
-            <Logo size={18} className="text-white" />
-          </div>
-          <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Spinner size="lg" />
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="min-h-screen app-bg flex items-center justify-center px-6">
-        <div
-          className="rounded-2xl p-8 max-w-md text-center space-y-4"
-          style={{
-            background: 'var(--status-card-bg)',
-            border: '1px solid var(--status-card-border)',
-          }}
-        >
-          <div
-            className="size-11 rounded-2xl mx-auto flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg,var(--accent),color-mix(in srgb, var(--accent) 82%, black))' }}
-          >
-            <Logo size={18} className="text-white" />
+      <div className="min-h-screen bg-background flex items-center justify-center px-6">
+        <div className="rounded-2xl border border-divider bg-content1 p-8 max-w-md text-center space-y-4">
+          <div className="size-11 rounded-2xl mx-auto flex items-center justify-center bg-content2">
+            <Logo size={18} className="text-foreground" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+            <h1 className="text-lg font-semibold text-foreground">
               {needsAuth ? 'Authentication Required' : 'Status Page Unavailable'}
             </h1>
-            <p className="text-sm text-zinc-500 mt-1.5">{error}</p>
+            <p className="text-sm text-default-500 mt-1.5">{error}</p>
           </div>
           {needsAuth && (
             <Link
               href={`/login?returnUrl=/status/${slug}`}
-              className="inline-flex px-4 py-2 rounded-xl text-sm font-semibold text-white"
-              style={{ background: 'linear-gradient(135deg,var(--accent),color-mix(in srgb, var(--accent) 82%, black))' }}
+              className="inline-flex px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground"
             >
               {getToken() ? 'Sign in again to continue' : 'Sign in to continue'}
             </Link>
@@ -1973,9 +1992,6 @@ export default function PublicStatusPage() {
     );
   }
 
-  const recentUpdates = data.page.updates?.slice(0, 3) ?? [];
-  const latestUpdate = recentUpdates[0] ?? null;
-  const olderUpdates = recentUpdates.slice(1);
   const operationalIssueCount =
     (summary.operations.failed ?? 0) +
     (summary.operations.blocked_by_xray_policy ?? 0) +
@@ -2009,332 +2025,216 @@ export default function PublicStatusPage() {
               description:
                 'Every tracked service is healthy in the latest snapshot and no known findings are currently present.',
             };
+  const headerDescription = data.page.description?.trim() ?? '';
+  const showHeaderDescription =
+    headerDescription.length > 0 &&
+    headerDescription.toLowerCase() !== data.page.name.trim().toLowerCase();
 
   return (
-    <div className="min-h-screen app-bg">
-      <main className="mx-auto w-full max-w-[1180px] px-4 py-8 sm:px-6 sm:py-10">
-        <div className="mx-auto max-w-[1040px] space-y-6">
-          <section
-            className="rounded-[30px] border p-6 sm:px-8"
-            style={{
-              background: 'color-mix(in srgb, var(--status-card-bg) 96%, white)',
-              borderColor: 'color-mix(in srgb, var(--status-card-border) 82%, rgba(15,23,42,0.04))',
-              boxShadow: '0 28px 70px rgba(15,23,42,0.06)',
-            }}
-          >
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0 space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div
-                    className="flex size-11 shrink-0 items-center justify-center rounded-2xl"
-                    style={{ background: 'linear-gradient(135deg,#0f172a,#334155)' }}
-                  >
-                    <Logo size={18} className="text-white" />
-                  </div>
-                  <div>
-                    <p
-                      className="text-[11px] font-semibold uppercase tracking-[0.18em]"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      Status
-                    </p>
-                    <h1
-                      className="text-2xl font-semibold tracking-[-0.02em] sm:text-[30px]"
-                      style={{ color: 'var(--text-primary)' }}
-                    >
-                      {data.page.name}
-                    </h1>
-                  </div>
-                </div>
-
-                {data.page.description ? (
-                  <p
-                    className="max-w-3xl text-[15px] leading-7"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {data.page.description}
-                  </p>
-                ) : null}
-
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                  <StatusBoardBadge label={pageTone.label} color={pageTone.color} />
-                  <p
-                    className="min-w-0 flex-1 text-[14px] leading-6"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {pageTone.description}
-                  </p>
-                </div>
+    <div className="light min-h-screen bg-background text-foreground" data-theme="light">
+      <main className="w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+        <section className="space-y-6">
+          <div className="flex flex-wrap items-start justify-between gap-6">
+            <div className="space-y-4">
+              <div className="inline-flex items-center gap-2 rounded-full border border-divider bg-content1 px-3 py-1.5">
+                <Logo size={14} className="invert-0 dark:invert-0" />
+                <span className="text-sm font-medium text-default-700">JustScan Status</span>
               </div>
-
-              <div className="flex shrink-0 flex-col items-start gap-3 lg:items-end">
-                <div className="flex flex-wrap gap-2">
-                  <span
-                    className="rounded-full px-3 py-1.5 text-[12px] font-medium"
-                    style={{
-                      background: 'var(--status-pill-bg)',
-                      border: '1px solid var(--status-pill-border)',
-                      color: 'var(--text-secondary)',
-                    }}
-                  >
-                    Snapshot {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
-                  </span>
-                  <span
-                    className="rounded-full px-3 py-1.5 text-[12px] font-medium"
-                    style={{
-                      background: 'var(--status-pill-bg)',
-                      border: '1px solid var(--status-pill-border)',
-                      color: 'var(--text-secondary)',
-                    }}
-                  >
-                    {trackedItems.length} service{trackedItems.length === 1 ? '' : 's'}
-                  </span>
-                  <span
-                    className="rounded-full px-3 py-1.5 text-[12px] font-medium capitalize"
-                    style={{
-                      background: 'var(--status-pill-bg)',
-                      border: '1px solid var(--status-pill-border)',
-                      color: 'var(--text-secondary)',
-                    }}
-                  >
-                    {data.page.visibility}
-                  </span>
-                  <Button
-                    size="sm"
-                    isPending={refreshing}
-                    onPress={() => void load(false)}
-                    className="rounded-full px-4 text-sm font-semibold"
-                  >
-                    {refreshing ? 'Refreshing...' : 'Refresh now'}
-                  </Button>
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-divider bg-content1">
+                  <Logo size={20} className="invert-0 dark:invert-0" />
                 </div>
-                <div
-                  className="text-right text-[13px] leading-6"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  <p>
-                    {healthyCount} healthy, {operationalIssueCount} issues, {exposedCount} exposed
-                  </p>
-                  <p>
-                    {refreshing ? 'Refreshing now' : `Auto refresh in ${secondsRemaining}s`} · Stale
-                    after {data.page.stale_after_hours}h
-                  </p>
-                </div>
+                <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+                  {data.page.name}
+                </h1>
               </div>
+              {showHeaderDescription ? (
+                <p className="max-w-4xl text-base leading-relaxed text-default-600">
+                  {headerDescription}
+                </p>
+              ) : null}
             </div>
-          </section>
-
-          <section
-            className="overflow-hidden rounded-[30px] border"
-            style={{
-              background: 'color-mix(in srgb, var(--status-card-bg) 98%, white)',
-              borderColor: 'color-mix(in srgb, var(--status-card-border) 88%, rgba(15,23,42,0.04))',
-              boxShadow: '0 24px 55px rgba(15,23,42,0.05)',
-            }}
-          >
-            <div className="p-6 sm:px-8">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p
-                    className="text-[11px] font-semibold uppercase tracking-[0.18em]"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    Notifications
-                  </p>
-                  <h2
-                    className="mt-1 text-lg font-semibold"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    Recent status messages
-                  </h2>
-                </div>
-                <span className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>
-                  {recentUpdates.length} shown
-                </span>
-              </div>
-
-              <div className="mt-4 space-y-4">
-                {latestUpdate ? (
-                  (() => {
-                    const tone = getStatusUpdateTone(latestUpdate.level);
-
-                    return (
-                      <div
-                        className="rounded-[28px] border p-5 sm:px-6"
-                        style={{
-                          background: `linear-gradient(135deg, ${tone.background}, color-mix(in srgb, var(--status-card-bg) 92%, white))`,
-                          borderColor: tone.border,
-                          boxShadow: `0 18px 38px color-mix(in srgb, ${tone.color} 12%, transparent)`,
-                        }}
-                      >
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0 space-y-3">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <span
-                                className="inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1 text-[12px] font-semibold"
-                                style={{
-                                  background: tone.strongBackground,
-                                  border: `1px solid ${tone.border}`,
-                                  color: tone.color,
-                                }}
-                              >
-                                <span
-                                  className="size-2.5 rounded-full"
-                                  style={{ background: tone.color }}
-                                />
-                                {tone.label}
-                              </span>
-                              <p
-                                className="text-base font-semibold"
-                                style={{ color: 'var(--text-primary)' }}
-                              >
-                                {latestUpdate.title}
-                              </p>
-                            </div>
-                            <p
-                              className="max-w-3xl text-[15px] leading-7"
-                              style={{ color: 'var(--text-primary)' }}
-                            >
-                              {latestUpdate.body}
-                            </p>
-                          </div>
-                          <span
-                            className="shrink-0 text-[12px]"
-                            style={{ color: 'var(--text-muted)' }}
-                          >
-                            {latestUpdate.created_at
-                              ? timeAgo(latestUpdate.created_at)
-                              : 'Recently updated'}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })()
-                ) : (
-                  <div
-                    className="rounded-2xl border border-dashed px-4 py-5 text-sm"
-                    style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
-                  >
-                    No incident or maintenance updates are published for this page.
-                  </div>
-                )}
-
-                {olderUpdates.length > 0 && (
-                  <div className="space-y-3">
-                    <p
-                      className="text-[11px] font-semibold uppercase tracking-[0.16em]"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      Earlier messages
-                    </p>
-                    <div className="space-y-4">
-                      {olderUpdates.map((update, index) => {
-                        const tone = getStatusUpdateTone(update.level);
-
-                        return (
-                          <div
-                            key={`${update.title}:${update.created_at ?? index}`}
-                            className="flex flex-col gap-2 border-b pb-4 last:border-b-0 last:pb-0"
-                            style={{ borderColor: 'var(--border-subtle)' }}
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div className="flex flex-wrap items-center gap-3">
-                                <StatusBoardBadge label={tone.label} color={tone.color} />
-                                <p
-                                  className="text-sm font-semibold"
-                                  style={{ color: 'var(--text-primary)' }}
-                                >
-                                  {update.title}
-                                </p>
-                              </div>
-                              <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                                {update.created_at
-                                  ? timeAgo(update.created_at)
-                                  : 'Recently updated'}
-                              </span>
-                            </div>
-                            <p
-                              className="text-[14px] leading-6"
-                              style={{ color: 'var(--text-secondary)' }}
-                            >
-                              {update.body}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="border-b p-6 sm:px-8" style={{ borderColor: 'var(--border-subtle)' }}>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p
-                    className="text-[11px] font-semibold uppercase tracking-[0.18em]"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    Hosted Pages
-                  </p>
-                  <h2
-                    className="mt-1 text-xl font-semibold tracking-[-0.02em]"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    Current status across tracked services
-                  </h2>
-                </div>
-                <div className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>
-                  <span>
-                    {operationalIssueCount} issue{operationalIssueCount === 1 ? '' : 's'}
-                  </span>
-                  <span className="mx-2">•</span>
-                  <span>{runningCount} scanning</span>
-                  <span className="mx-2">•</span>
-                  <span>{summary.findings.toLocaleString()} findings</span>
-                </div>
-              </div>
-              <p
-                className="mt-3 max-w-3xl text-[13px] leading-6"
-                style={{ color: 'var(--text-secondary)' }}
+            <div className="flex flex-wrap items-center gap-2">
+              <Chip variant="soft" color="default">
+                Snapshot {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
+              </Chip>
+              <Chip variant="soft" color="default" className="capitalize">
+                {data.page.visibility}
+              </Chip>
+              <Button
+                size="sm"
+                variant="secondary"
+                isPending={refreshing}
+                onPress={() => void load(false)}
+                className="rounded-full px-4"
               >
-                Each block represents one actual recorded scan, ordered from older scans on the left
-                to the latest scan on the right.
-              </p>
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-default-600">
+            <StatusBoardBadge label={pageTone.label} color={pageTone.color} />
+            <span>{healthyCount} healthy</span>
+            <span>{operationalIssueCount} issues</span>
+            <span>{exposedCount} exposed</span>
+            <span>{runningCount} scanning</span>
+            <span>{refreshing ? 'Refreshing now' : `Auto refresh in ${secondsRemaining}s`}</span>
+            <span>Stale after {data.page.stale_after_hours}h</span>
+          </div>
+          <p className="text-sm text-default-600">{pageTone.description}</p>
+
+          <Card className="grid overflow-hidden sm:grid-cols-3 sm:divide-x sm:divide-divider" variant="secondary">
+            <div className="text-center">
+              <p className="text-3xl font-semibold text-success">{decisionSummary.allowed}</p>
+              <p className="mt-1 text-sm text-default-600">Allowed</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-semibold text-warning">{decisionSummary.warning}</p>
+              <p className="mt-1 text-sm text-default-600">Warnings</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-semibold text-danger">{decisionSummary.blocked}</p>
+              <p className="mt-1 text-sm text-default-600">Blocked</p>
+            </div>
+          </Card>
+
+          <Card variant="secondary">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight text-foreground">Scanned images</h2>
+                <p className="mt-1 text-default-600">
+                  Latest policy decision per tracked image with 14-day history.
+                </p>
+              </div>
+              <SearchField
+                aria-label="Search images"
+                value={searchQuery}
+                onChange={setSearchQuery}
+                variant="secondary"
+                className="w-full sm:max-w-sm"
+              >
+                <SearchField.Group className="rounded-full">
+                  <SearchField.SearchIcon />
+                  <SearchField.Input placeholder="Search images..." />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
             </div>
 
-            {trackedItems.length > 0 ? (
-              <div>
-                {trackedItems.map((item, index) => (
-                  <div
-                    key={`${item.image_name}:${item.image_tag}`}
-                    style={{ borderTop: index > 0 ? '1px solid var(--border-subtle)' : undefined }}
-                  >
-                    <StatusBoardRow
-                      slug={slug}
-                      item={item}
-                      scans={rowScanHistory[item.latest_scan_id]}
-                      onOpen={openItemDetails}
-                      onHistoryLoaded={syncRowHistory}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="px-6 py-14 text-center sm:px-8">
-                <p className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  No services are currently tracked
-                </p>
-                <p
-                  className="mt-2 text-[14px] leading-6"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  Add image tags to this status page to populate the public board.
-                </p>
-              </div>
-            )}
-          </section>
-        </div>
+            <Table variant="secondary">
+              <Table.ScrollContainer>
+                <Table.Content aria-label="Image policy status table" className="min-w-[1180px]">
+                  <Table.Header>
+                    <Table.Column isRowHeader>Image</Table.Column>
+                    <Table.Column>Status</Table.Column>
+                    <Table.Column>Risk</Table.Column>
+                    <Table.Column>Findings</Table.Column>
+                    <Table.Column>14 Days</Table.Column>
+                    <Table.Column>Scanner</Table.Column>
+                    <Table.Column>Last Scan</Table.Column>
+                    <Table.Column>Actions</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {filteredTrackedItems.length === 0 ? (
+                      <Table.Row id="empty">
+                        <Table.Cell colSpan={8}>
+                          <div className="py-12 text-center text-sm text-default-600">
+                            {trackedItems.length === 0
+                              ? 'No services are currently tracked.'
+                              : 'No images match your search.'}
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    ) : (
+                      filteredTrackedItems.map((item) => {
+                        const decision = getPolicyDecision(item);
+                        const decisionMeta = getPolicyDecisionMeta(decision);
+                        const riskScore = getRiskScore(item);
+                        return (
+                          <Table.Row
+                            key={`${item.image_name}:${item.image_tag}`}
+                            id={`${item.image_name}:${item.image_tag}`}
+                            className="hover:bg-content2"
+                          >
+                            <Table.Cell>
+                              <div className="flex items-start gap-3">
+                                <span
+                                  className="mt-2 size-2.5 shrink-0 rounded-full"
+                                  style={{ background: decisionMeta.tone }}
+                                />
+                                <div className="min-w-0">
+                                  <button
+                                    type="button"
+                                    className="truncate text-left text-lg font-semibold hover:underline"
+                                    onClick={() => openItemDetails(item)}
+                                  >
+                                    {item.image_name}
+                                  </button>
+                                  <p className="mt-1 truncate font-mono text-xs text-default-500">
+                                    {item.image_name}:{item.image_tag}
+                                  </p>
+                                </div>
+                              </div>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <Chip
+                                color={decisionMeta.color}
+                                variant="soft"
+                                className="rounded-full"
+                              >
+                                {decisionMeta.label}
+                              </Chip>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <span className="text-3xl font-semibold">{riskScore}</span>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <span className="text-sm">
+                                <span className="text-danger">{item.critical_count}</span> critical
+                                <span className="mx-1 text-default-400">·</span>
+                                <span className="text-warning">{item.high_count}</span> high
+                              </span>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <RecentScanStrip
+                                slug={slug}
+                                item={item}
+                                scans={rowScanHistory[item.latest_scan_id]}
+                                onHistoryLoaded={syncRowHistory}
+                                compact
+                              />
+                            </Table.Cell>
+                            <Table.Cell>
+                              <span className="text-sm text-default-600">
+                                {formatScanner(item.scan_provider)}
+                              </span>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <span className="text-sm text-default-500">
+                                {timeAgo(item.observed_at)}
+                              </span>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onPress={() => openItemDetails(item)}
+                                className="rounded-full"
+                              >
+                                Details
+                              </Button>
+                            </Table.Cell>
+                          </Table.Row>
+                        );
+                      })
+                    )}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </Card>
+        </section>
       </main>
 
       {activeItem && vulnerabilityModal.isOpen && (

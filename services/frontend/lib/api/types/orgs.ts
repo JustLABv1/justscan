@@ -16,6 +16,7 @@ export interface OrgPolicy {
   org_id: string;
   name: string;
   rules: PolicyRule[];
+  include_suppressed: boolean;
   created_at: string;
   updated_at: string;
 }

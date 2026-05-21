@@ -1,8 +1,6 @@
 export type OwnerType = 'user' | 'org' | 'system';
 
-export type WorkScope =
-  | { kind: 'personal' }
-  | { kind: 'org'; orgId: string; orgName?: string };
+export type WorkScope = { kind: 'personal' } | { kind: 'org'; orgId: string; orgName?: string };
 
 export interface AuthSnapshot {
   token_present: boolean;
@@ -21,4 +19,5 @@ export interface User {
   auth_type: 'local' | 'oidc';
   last_login_at?: string | null;
   last_login_method: 'local' | 'oidc' | '';
+  workspace_tour_completed_at?: string | null;
 }

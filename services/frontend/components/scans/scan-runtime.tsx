@@ -3,29 +3,14 @@
 import { getScanXrayRequestLogs } from '@/lib/api/scans';
 import type { ScanStepLog, XRayRequestLog } from '@/lib/api/types/scans';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Alert, Button, Card, Chip, ProgressBar, Modal, useOverlayState } from '@heroui/react';
-import { motion } from 'motion/react';
+import { Alert, Button, Card, Chip, Modal, ProgressBar, useOverlayState } from '@heroui/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState } from 'react';
-
-type ProgressStepKey =
-  | 'queued'
-  | 'preparing_image'
-  | 'scanning_image'
-  | 'processing_results'
-  | 'finalizing_report'
-  | 'warming_cache'
-  | 'indexing_artifact'
-  | 'queued_in_xray'
-  | 'waiting_for_xray'
-  | 'importing_results'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
 
 type ProgressStepState = 'pending' | 'active' | 'complete';
 
 type StepDefinition = {
-  key: ProgressStepKey;
+  key: string;
   title: string;
   description: string;
   detailMessages: string[];
@@ -36,16 +21,11 @@ type StepView = StepDefinition & {
 };
 
 type ProgressModel = {
-  activeKey: ProgressStepKey;
-  badgeLabel: string;
+  activeKey: string;
   eyebrow: string;
   title: string;
   detailMessages: string[];
   note: string;
-  accent: string;
-  accentSoft: string;
-  accentBorder: string;
-  beam: string;
   steps: StepView[];
 };
 
@@ -204,7 +184,7 @@ const XRAY_PROGRESS_STEPS: StepDefinition[] = [
   },
 ];
 
-const XRAY_STEP_KEYS = new Set<ProgressStepKey>([
+const XRAY_STEP_KEYS = new Set<string>([
   'warming_cache',
   'indexing_artifact',
   'queued_in_xray',
@@ -239,42 +219,6 @@ const STEP_DEFINITION_MAP = new Map<string, StepDefinition>(
     step,
   ])
 );
-
-function accentForStep(step: ProgressStepKey) {
-  switch (step) {
-    case 'preparing_image':
-    case 'queued_in_xray':
-      return {
-        accent: 'color-mix(in srgb, var(--accent) 78%, white)',
-        accentSoft: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-        accentBorder: 'color-mix(in srgb, var(--accent) 24%, transparent)',
-        beam: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 92%, transparent), color-mix(in srgb, var(--accent) 10%, transparent), transparent)',
-      };
-    case 'processing_results':
-    case 'waiting_for_xray':
-      return {
-        accent: '#c084fc',
-        accentSoft: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-        accentBorder: 'color-mix(in srgb, var(--accent) 24%, transparent)',
-        beam: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 92%, transparent), color-mix(in srgb, var(--accent) 10%, transparent), transparent)',
-      };
-    case 'finalizing_report':
-    case 'indexing_artifact':
-      return {
-        accent: 'var(--accent)',
-        accentSoft: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-        accentBorder: 'color-mix(in srgb, var(--accent) 24%, transparent)',
-        beam: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 92%, transparent), color-mix(in srgb, var(--accent) 10%, transparent), transparent)',
-      };
-    default:
-      return {
-        accent: 'color-mix(in srgb, var(--accent) 88%, white)',
-        accentSoft: 'rgba(139,92,246,0.12)',
-        accentBorder: 'rgba(139,92,246,0.24)',
-        beam: 'linear-gradient(90deg, transparent, rgba(139,92,246,0.1), rgba(139,92,246,0.92), rgba(139,92,246,0.1), transparent)',
-      };
-  }
-}
 
 function formatElapsed(elapsedSeconds: number): string {
   const mins = Math.floor(elapsedSeconds / 60);
@@ -352,7 +296,7 @@ function providerLabel(scanProvider?: string | null, stepLogs?: ScanStepLog[] | 
   if (scanProvider && PROVIDER_LABELS[scanProvider]) {
     return PROVIDER_LABELS[scanProvider];
   }
-  if ((stepLogs ?? []).some((stepLog) => XRAY_STEP_KEYS.has(stepLog.step as ProgressStepKey))) {
+  if ((stepLogs ?? []).some((stepLog) => XRAY_STEP_KEYS.has(stepLog.step))) {
     return PROVIDER_LABELS.artifactory_xray;
   }
   return PROVIDER_LABELS.trivy;
@@ -452,7 +396,7 @@ function terminalRowTone(step: string, blockedByPolicy: boolean) {
 }
 
 function buildRuntimeWarning(
-  activeKey: ProgressStepKey,
+  activeKey: string,
   activeStepElapsedSeconds: number | null,
   latestOutput: string | null,
   scanProvider?: string | null
@@ -545,7 +489,7 @@ function describeStep(step: string): StepDefinition {
   }
 
   return {
-    key: 'queued',
+    key: step,
     title: titleCaseStep(step),
     description: 'This step was recorded by the backend during scan execution.',
     detailMessages: ['This step was recorded by the backend during scan execution.'],
@@ -556,8 +500,8 @@ function resolveCurrentStep(
   status: string,
   currentStep: string | null | undefined,
   scanProvider?: string | null
-): ProgressStepKey {
-  const normalized = (currentStep ?? '').trim() as ProgressStepKey | '';
+): string {
+  const normalized = (currentStep ?? '').trim();
   if (normalized) {
     return normalized;
   }
@@ -576,30 +520,36 @@ function buildProgressModel(
   const activeKey = resolveCurrentStep(status, currentStep, scanProvider);
   const xrayFlow = scanProvider === 'artifactory_xray' || XRAY_STEP_KEYS.has(activeKey);
   const steps = xrayFlow ? XRAY_PROGRESS_STEPS : LOCAL_PROGRESS_STEPS;
-  const activeIndex = Math.max(
-    0,
-    steps.findIndex((step) => step.key === activeKey)
-  );
-  const resolvedStep = steps[activeIndex] ?? steps[0];
-  const accent = accentForStep(resolvedStep.key);
-  const stepViews: StepView[] = steps.map((step, index) => ({
-    ...step,
-    state: index < activeIndex ? 'complete' : index === activeIndex ? 'active' : 'pending',
-  }));
+  const knownActiveIndex = steps.findIndex((step) => step.key === activeKey);
+  const activeIndex = knownActiveIndex === -1 ? steps.length : Math.max(0, knownActiveIndex);
+  const resolvedStep =
+    knownActiveIndex === -1 ? describeStep(activeKey) : (steps[activeIndex] ?? steps[0]);
+  const stepViews: StepView[] = [
+    ...steps.map(
+      (step, index): StepView => ({
+        ...step,
+        state: index < activeIndex ? 'complete' : index === activeIndex ? 'active' : 'pending',
+      })
+    ),
+    ...(knownActiveIndex === -1
+      ? [
+          {
+            ...resolvedStep,
+            key: activeKey,
+            state: 'active' as const,
+          },
+        ]
+      : []),
+  ];
 
   return {
     activeKey: resolvedStep.key,
-    badgeLabel: resolvedStep.title,
-    eyebrow: `Stage ${activeIndex + 1} of ${steps.length}`,
+    eyebrow: `Stage ${Math.min(activeIndex + 1, stepViews.length)} of ${stepViews.length}`,
     title: resolvedStep.title,
     detailMessages: resolvedStep.detailMessages,
     note: xrayFlow
       ? 'This progress is driven by live backend states from the Xray integration.'
       : 'This progress is driven by live backend states from the local scanner worker.',
-    accent: accent.accent,
-    accentSoft: accent.accentSoft,
-    accentBorder: accent.accentBorder,
-    beam: accent.beam,
     steps: stepViews,
   };
 }
@@ -623,11 +573,358 @@ export function ScannerDatabaseCard({
         >
           {updatedAt ? `${timeAgo(updatedAt)} (${fullDate(updatedAt)})` : 'Unknown'}
         </p>
-        <p className="mt-1 text-xs text-zinc-500" title={downloadedAt ? fullDate(downloadedAt) : ''}>
+        <p
+          className="mt-1 text-xs text-zinc-500"
+          title={downloadedAt ? fullDate(downloadedAt) : ''}
+        >
           Downloaded {downloadedAt ? timeAgo(downloadedAt) : 'unknown'}
         </p>
       </Card.Content>
     </Card>
+  );
+}
+
+const SCAN_SCENE_LAYERS = ['Layer 01', 'Layer 02', 'Layer 03', 'Layer 04', 'Layer 05', 'Layer 06'];
+const CVE_CONVEYOR_ITEMS = [
+  { label: 'CVE-2026-1842', color: 'danger' as const },
+  { label: 'CVE-2025-7710', color: 'warning' as const },
+  { label: 'CVE-2026-0914', color: 'accent' as const },
+  { label: 'CVE-2024-6387', color: 'danger' as const },
+];
+
+function visualLayerState(index: number, activeLayerIndex: number): ProgressStepState {
+  if (index < activeLayerIndex) return 'complete';
+  if (index === activeLayerIndex) return 'active';
+  return 'pending';
+}
+
+function CveEmitter({ reduceMotion }: { reduceMotion: boolean }) {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-y-0 left-[calc(100%-1rem)] z-20 hidden w-[min(26rem,72vw)] overflow-visible md:block"
+    >
+      {CVE_CONVEYOR_ITEMS.map((item, index) => (
+        <motion.div
+          key={item.label}
+          className="absolute left-0 top-1/2 -translate-y-1/2"
+          initial={reduceMotion ? false : { x: 0, scale: 0.7, opacity: 0 }}
+          animate={
+            reduceMotion
+              ? { x: 24 + index * 56, y: index % 2 === 0 ? -14 : 14, opacity: 0.72 }
+              : {
+                  x: [0, 30, 360],
+                  y: [0, index % 2 === 0 ? -10 : 10, index % 2 === 0 ? -16 : 16],
+                  scale: [0.65, 1, 0.92],
+                  opacity: [0, 1, 0],
+                }
+          }
+          transition={{
+            duration: 4.6,
+            ease: 'easeOut',
+            repeat: reduceMotion ? 0 : Infinity,
+            delay: reduceMotion ? 0 : index * 1.05,
+            repeatDelay: reduceMotion ? 0 : 0.7,
+          }}
+        >
+          <Chip className="font-mono shadow-surface" color={item.color} size="sm" variant="soft">
+            {item.label}
+          </Chip>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+function ScanLayerScene({
+  progress,
+  progressPercent,
+  providerName,
+  image,
+  reduceMotion,
+}: {
+  progress: ProgressModel;
+  progressPercent: number;
+  providerName: string;
+  image?: string;
+  reduceMotion: boolean;
+}) {
+  const activeLayerIndex = Math.min(
+    SCAN_SCENE_LAYERS.length - 1,
+    Math.round((progressPercent / 100) * (SCAN_SCENE_LAYERS.length - 1))
+  );
+
+  return (
+    <Card className="relative min-h-[380px] overflow-hidden">
+      <Card.Content className="relative min-h-[348px] justify-between gap-5">
+        <span aria-hidden className="absolute inset-x-8 top-3 h-px bg-divider/70" />
+        <span aria-hidden className="absolute inset-y-8 left-3 w-px bg-divider/50" />
+
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-muted">Docker image scan</p>
+            <p
+              className="mt-1 break-words font-mono text-sm text-foreground"
+              style={{ overflowWrap: 'anywhere' }}
+              title={image}
+            >
+              {image || 'Image queued for analysis'}
+            </p>
+          </div>
+          <Chip size="sm" variant="secondary">
+            {providerName}
+          </Chip>
+        </div>
+
+        <div className="relative mx-auto flex w-full max-w-md flex-col gap-3 px-2 py-3 sm:px-5">
+          {SCAN_SCENE_LAYERS.map((label, index) => {
+            const state = visualLayerState(index, activeLayerIndex);
+
+            return (
+              <motion.div
+                key={label}
+                className={`relative z-10 rounded-2xl bg-surface-secondary px-3 py-3 shadow-surface sm:px-4 ${
+                  state === 'active' ? 'overflow-visible' : 'overflow-hidden'
+                } ${state === 'active' ? 'ring-1 ring-accent/30' : ''}`}
+                animate={
+                  reduceMotion || state !== 'active'
+                    ? { opacity: state === 'pending' ? 0.7 : 1, y: 0 }
+                    : { opacity: 1, y: [0, -3, 0] }
+                }
+                transition={{
+                  duration: 2.2,
+                  ease: 'easeInOut',
+                  repeat: reduceMotion || state !== 'active' ? 0 : Infinity,
+                }}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    aria-hidden
+                    className={`flex size-8 shrink-0 items-center justify-center rounded-xl ${
+                      state === 'active' ? 'bg-accent/15' : 'bg-default'
+                    }`}
+                  >
+                    <span
+                      className={`size-2 rounded-full ${
+                        state === 'pending'
+                          ? 'bg-foreground/30'
+                          : state === 'complete'
+                            ? 'bg-success'
+                            : 'bg-accent'
+                      } ${state === 'active' && !reduceMotion ? 'animate-pulse' : ''}`}
+                    />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-mono text-xs text-muted">{label}</span>
+                      <span className="text-xs font-medium text-foreground">
+                        {state === 'complete'
+                          ? 'Inspected'
+                          : state === 'active'
+                            ? 'Scanning'
+                            : 'Queued'}
+                      </span>
+                    </div>
+                    <ProgressBar
+                      aria-label={`${label} visual scan state`}
+                      className="mt-2"
+                      color={state === 'complete' ? 'success' : 'accent'}
+                      isIndeterminate={state === 'active' && !reduceMotion}
+                      size="sm"
+                      value={state === 'complete' ? 100 : state === 'active' ? 66 : 12}
+                    >
+                      <ProgressBar.Track>
+                        <ProgressBar.Fill />
+                      </ProgressBar.Track>
+                    </ProgressBar>
+                  </div>
+                </div>
+                {state === 'active' ? <CveEmitter reduceMotion={reduceMotion} /> : null}
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <p className="max-w-md text-xs leading-5 text-muted">{progress.note}</p>
+      </Card.Content>
+    </Card>
+  );
+}
+
+function ScanStageRail({
+  progress,
+  progressPercent,
+  detailMessage,
+  detailKey,
+  reduceMotion,
+}: {
+  progress: ProgressModel;
+  progressPercent: number;
+  detailMessage: string;
+  detailKey: string;
+  reduceMotion: boolean;
+}) {
+  return (
+    <Card>
+      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium text-muted">Backend stages</p>
+          <Card.Title className="mt-1 text-xl">{progress.title}</Card.Title>
+        </div>
+        <Chip color="accent" size="sm" variant="soft" className="font-mono">
+          {progress.eyebrow}
+        </Chip>
+      </Card.Header>
+
+      <Card.Content>
+        <p key={detailKey} className="min-h-10 text-sm leading-5 text-muted">
+          {detailMessage}
+        </p>
+
+        <ProgressBar
+          aria-label="Scan stage progress"
+          className="mt-3"
+          color="accent"
+          size="sm"
+          value={progressPercent}
+        >
+          <ProgressBar.Track>
+            <ProgressBar.Fill />
+          </ProgressBar.Track>
+        </ProgressBar>
+
+        <ol className="mt-5 space-y-2.5">
+          {progress.steps.map((step, index) => {
+            const nextStep = progress.steps[index + 1];
+
+            return (
+              <li key={`${step.key}-${index}`} className="relative flex gap-3">
+                <div className="relative flex w-6 shrink-0 justify-center">
+                  {nextStep ? (
+                    <span
+                      aria-hidden
+                      className={`absolute top-5 h-[calc(100%+0.625rem)] w-px ${
+                        step.state === 'complete' ? 'bg-accent/35' : 'bg-divider'
+                      }`}
+                    />
+                  ) : null}
+                  <span
+                    aria-hidden
+                    className={`relative z-10 mt-1 flex size-4 items-center justify-center rounded-full ${
+                      step.state === 'active'
+                        ? 'bg-accent'
+                        : step.state === 'complete'
+                          ? 'bg-accent/20'
+                          : 'bg-default'
+                    } ${step.state === 'active' && !reduceMotion ? 'animate-pulse' : ''}`}
+                  >
+                    {step.state === 'complete' ? (
+                      <span className="size-1.5 rounded-full bg-accent" />
+                    ) : null}
+                  </span>
+                </div>
+                <div
+                  className={`min-w-0 flex-1 rounded-2xl bg-surface-secondary px-3 py-2.5 ${
+                    step.state === 'active' ? 'ring-1 ring-accent/25' : ''
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground">{step.title}</p>
+                    {step.state === 'active' ? (
+                      <Chip color="accent" size="sm" variant="soft">
+                        Active
+                      </Chip>
+                    ) : step.state === 'complete' ? (
+                      <Chip color="success" size="sm" variant="soft">
+                        Done
+                      </Chip>
+                    ) : (
+                      <span className="text-xs text-muted">Next</span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted">
+                    {step.state === 'active' ? detailMessage : step.description}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </Card.Content>
+    </Card>
+  );
+}
+
+function ScanSignalStrip({
+  image,
+  compactImage,
+  providerName,
+  elapsed,
+  activeStepElapsed,
+  latestOutput,
+  activeStepLog,
+}: {
+  image?: string;
+  compactImage: string | null;
+  providerName: string;
+  elapsed: number;
+  activeStepElapsed: number | null;
+  latestOutput: string | null;
+  activeStepLog: ScanStepLog | null;
+}) {
+  const outputCount = stepOutputCount(activeStepLog);
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <Card>
+        <Card.Content>
+          <dl className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <dt className="text-xs text-muted">Provider</dt>
+              <dd className="mt-1 text-sm font-medium text-foreground">{providerName}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Total time</dt>
+              <dd className="mt-1 font-mono text-sm text-foreground">{formatElapsed(elapsed)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Active step</dt>
+              <dd className="mt-1 font-mono text-sm text-foreground">
+                {activeStepElapsed !== null ? formatElapsed(activeStepElapsed) : 'Waiting'}
+              </dd>
+            </div>
+          </dl>
+          <div className="mt-4 border-t border-divider pt-3">
+            <p className="text-xs text-muted">Image</p>
+            <p
+              className="mt-1 break-words font-mono text-sm text-foreground"
+              style={{ overflowWrap: 'anywhere' }}
+              title={image}
+            >
+              {image || compactImage || '-'}
+            </p>
+          </div>
+        </Card.Content>
+      </Card>
+
+      <Card>
+        <Card.Content>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted">Live signal</p>
+            <span className="text-xs text-muted">
+              {outputCount ? `${outputCount} update${outputCount === 1 ? '' : 's'}` : 'Awaiting'}
+            </span>
+          </div>
+          <p
+            className="mt-3 min-h-11 break-words font-mono text-sm leading-5 text-foreground"
+            style={{ overflowWrap: 'anywhere' }}
+            title={latestOutput ?? ''}
+          >
+            {latestOutput ?? 'No output recorded yet.'}
+          </p>
+        </Card.Content>
+      </Card>
+    </div>
   );
 }
 
@@ -646,6 +943,7 @@ export function ScanningAnimation({
   currentStep?: string | null;
   stepLogs?: ScanStepLog[] | null;
 }) {
+  const reduceMotion = useReducedMotion() ?? false;
   const startedAtMs = startedAt ? new Date(startedAt).getTime() : null;
   const [fallbackStart, setFallbackStart] = useState<number | null>(startedAtMs);
   const [now, setNow] = useState(() => startedAtMs ?? 0);
@@ -703,26 +1001,27 @@ export function ScanningAnimation({
       : Math.round((activeStepIndex / (progress.steps.length - 1)) * 100);
 
   return (
-    <Card className="rounded-2xl p-5 md:p-7">
-      <Card.Content className="flex min-w-0 flex-col gap-6 p-0">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="flex items-center gap-3">
+    <section className="space-y-4">
+      <Card>
+        <Card.Header className="gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <Chip color="accent" size="sm" variant="soft">
-                {progress.title}
+                Scan running
               </Chip>
-              <h3 className="text-xl font-semibold tracking-tight text-foreground">{progress.title}</h3>
+              <Chip size="sm" variant="secondary">
+                {providerName}
+              </Chip>
             </div>
-            <p key={`${progress.activeKey}-${detailTick}`} className="min-h-10 text-sm leading-5 text-muted-foreground">
-              {detailMessage}
-            </p>
+            <Card.Title className="mt-3 text-2xl">Inspecting image layers</Card.Title>
+            <Card.Description className="mt-2 max-w-2xl leading-6">
+              Packages, dependencies, and provider results are being inspected before the report is
+              ready.
+            </Card.Description>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 md:justify-end">
-            <Chip size="sm" variant="secondary">
-              {providerName}
-            </Chip>
-            <Chip color="accent" size="sm" variant="soft" className="font-mono uppercase tracking-wide">
+          <div className="flex flex-wrap gap-2 md:justify-end">
+            <Chip color="accent" size="sm" variant="soft" className="font-mono">
               {progress.eyebrow}
             </Chip>
             {(startedAt || elapsed > 0) && (
@@ -730,71 +1029,52 @@ export function ScanningAnimation({
                 total {formatElapsed(elapsed)}
               </Chip>
             )}
-            {activeStepElapsed !== null && (
+            {activeStepElapsed !== null ? (
               <Chip size="sm" variant="secondary" className="font-mono">
                 step {formatElapsed(activeStepElapsed)}
               </Chip>
-            )}
+            ) : null}
           </div>
-        </div>
+        </Card.Header>
+      </Card>
 
-        <div className="space-y-3 pt-2 pb-3">
-          <ProgressBar aria-label="Scan step progress" color="accent" size="sm" value={progressPercent}>
-            <ProgressBar.Track>
-              <ProgressBar.Fill />
-            </ProgressBar.Track>
-          </ProgressBar>
-          <div className="flex flex-wrap gap-2">
-            {progress.steps.map((step) => (
-              <Chip
-                key={step.key}
-                size="sm"
-                variant={step.state === 'pending' ? 'secondary' : 'soft'}
-                color={step.state === 'complete' ? 'success' : step.state === 'active' ? 'accent' : 'default'}
-              >
-                {step.title}
-              </Chip>
-            ))}
-          </div>
-        </div>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.98fr)]">
+        <ScanLayerScene
+          image={image}
+          progress={progress}
+          progressPercent={progressPercent}
+          providerName={providerName}
+          reduceMotion={reduceMotion}
+        />
+        <ScanStageRail
+          detailKey={`${progress.activeKey}-${detailTick}`}
+          detailMessage={detailMessage}
+          progress={progress}
+          progressPercent={progressPercent}
+          reduceMotion={reduceMotion}
+        />
+      </div>
 
-        <div className="mt-2 grid gap-4 lg:grid-cols-[1fr_2fr]">
-          <Card variant="secondary" className="min-w-0 px-4 py-3 pb-4">
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Context
-            </p>
-            <p className="break-words text-sm font-mono text-foreground" style={{ overflowWrap: 'anywhere' }} title={image}>
-              {image || compactImage || '—'}
-            </p>
-            <p className="mt-1.5 text-[11px] text-muted-foreground">{progress.note}</p>
-          </Card>
-          <Card variant="secondary" className="min-w-0 px-4 py-3 pb-4">
-            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Live signal
-              </p>
-              <span className="text-[10px] text-muted-foreground">
-                {stepOutputCount(activeStepLog)
-                  ? `${stepOutputCount(activeStepLog)} update${stepOutputCount(activeStepLog) === 1 ? '' : 's'}`
-                  : 'Awaiting'}
-              </span>
-            </div>
-            <p className="break-words text-[13px] font-mono leading-5 text-foreground" style={{ overflowWrap: 'anywhere' }} title={latestOutput ?? ''}>
-              {latestOutput ?? 'No output recorded yet.'}
-            </p>
-          </Card>
-          {runtimeWarning && (
-            <Alert className="lg:col-span-2" status="warning">
-              <Alert.Indicator />
-              <Alert.Content>
-                <Alert.Title>{runtimeWarning.title}</Alert.Title>
-                <Alert.Description>{runtimeWarning.detail}</Alert.Description>
-              </Alert.Content>
-            </Alert>
-          )}
-        </div>
-      </Card.Content>
-    </Card>
+      <ScanSignalStrip
+        activeStepElapsed={activeStepElapsed}
+        activeStepLog={activeStepLog}
+        compactImage={compactImage}
+        elapsed={elapsed}
+        image={image}
+        latestOutput={latestOutput}
+        providerName={providerName}
+      />
+
+      {runtimeWarning ? (
+        <Alert status="warning">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>{runtimeWarning.title}</Alert.Title>
+            <Alert.Description>{runtimeWarning.detail}</Alert.Description>
+          </Alert.Content>
+        </Alert>
+      ) : null}
+    </section>
   );
 }
 
@@ -1243,7 +1523,9 @@ export function ScanStepTimeline({
             <span
               className="size-2 rounded-full"
               style={{
-                background: selectedIsTerminal ? selectedRowTone.bubble : 'color-mix(in srgb, var(--accent) 78%, white)',
+                background: selectedIsTerminal
+                  ? selectedRowTone.bubble
+                  : 'color-mix(in srgb, var(--accent) 78%, white)',
                 animation: 'timelineGlow 1.7s ease-in-out infinite',
               }}
             />

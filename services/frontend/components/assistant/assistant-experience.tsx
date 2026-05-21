@@ -667,6 +667,7 @@ export function AssistantExperience({ forcedScopeType, forcedScopeRef, embedded 
 
   return (
     <div
+      id={embedded ? undefined : 'tour-assistant-root'}
       className={`flex h-full min-h-0 flex-col overflow-hidden pb-2 pt-0 ${embedded ? 'px-2 md:px-3' : 'px-4 md:px-6'}`}
     >
       <div className="flex h-full min-h-0 w-full flex-1 gap-4 overflow-hidden">

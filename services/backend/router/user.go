@@ -38,5 +38,12 @@ func User(router *gin.RouterGroup, db *bun.DB) {
 		user.DELETE("/tokens/:tokenId", func(c *gin.Context) {
 			users.RevokeUserToken(c, db)
 		})
+
+		user.GET("/onboarding/workspace-tour", func(c *gin.Context) {
+			users.GetWorkspaceTourState(c, db)
+		})
+		user.PUT("/onboarding/workspace-tour", func(c *gin.Context) {
+			users.UpdateWorkspaceTourState(c, db)
+		})
 	}
 }

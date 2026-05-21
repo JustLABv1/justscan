@@ -83,26 +83,28 @@ func GenerateTokenUser(db *bun.DB, context *gin.Context) {
 	}
 
 	type UserResponse struct {
-		ID              uuid.UUID  `json:"id"`
-		Email           string     `json:"email"`
-		Username        string     `json:"username"`
-		Disabled        bool       `json:"disabled"`
-		DisabledReason  string     `json:"disabled_reason"`
-		Role            string     `json:"role"`
-		AuthType        string     `json:"auth_type"`
-		LastLoginAt     *time.Time `json:"last_login_at,omitempty"`
-		LastLoginMethod string     `json:"last_login_method"`
+		ID                       uuid.UUID  `json:"id"`
+		Email                    string     `json:"email"`
+		Username                 string     `json:"username"`
+		Disabled                 bool       `json:"disabled"`
+		DisabledReason           string     `json:"disabled_reason"`
+		Role                     string     `json:"role"`
+		AuthType                 string     `json:"auth_type"`
+		LastLoginAt              *time.Time `json:"last_login_at,omitempty"`
+		LastLoginMethod          string     `json:"last_login_method"`
+		WorkspaceTourCompletedAt *time.Time `json:"workspace_tour_completed_at,omitempty"`
 	}
 	userResponse := UserResponse{
-		ID:              user.ID,
-		Email:           user.Email,
-		Username:        user.Username,
-		Disabled:        user.Disabled,
-		DisabledReason:  user.DisabledReason,
-		Role:            user.Role,
-		AuthType:        user.AuthType,
-		LastLoginAt:     user.LastLoginAt,
-		LastLoginMethod: user.LastLoginMethod,
+		ID:                       user.ID,
+		Email:                    user.Email,
+		Username:                 user.Username,
+		Disabled:                 user.Disabled,
+		DisabledReason:           user.DisabledReason,
+		Role:                     user.Role,
+		AuthType:                 user.AuthType,
+		LastLoginAt:              user.LastLoginAt,
+		LastLoginMethod:          user.LastLoginMethod,
+		WorkspaceTourCompletedAt: user.WorkspaceTourCompletedAt,
 	}
 
 	context.JSON(http.StatusOK, gin.H{"token": tokenString, "user": userResponse, "expires_at": ExpiresAt})

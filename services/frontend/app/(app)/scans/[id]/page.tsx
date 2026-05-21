@@ -2990,14 +2990,14 @@ export default function ScanDetailPage() {
                                                       <ListBox.Item id="personal">
                                                         Personal
                                                       </ListBox.Item>
-                                                      {(workScope.kind === 'org' ||
-                                                        suppressScope === 'workspace') && (
-                                                        <ListBox.Item id="workspace">
-                                                          {workScope.orgName
-                                                            ? `Workspace: ${workScope.orgName}`
-                                                            : 'Organization workspace'}
-                                                        </ListBox.Item>
-                                                      )}
+                                                    {(workScope.kind === 'org' ||
+                                                      suppressScope === 'workspace') && (
+                                                      <ListBox.Item id="workspace">
+                                                        {workScope.kind === 'org' && workScope.orgName
+                                                          ? `Workspace: ${workScope.orgName}`
+                                                          : 'Organization workspace'}
+                                                      </ListBox.Item>
+                                                    )}
                                                       {isPlatformAdmin && (
                                                         <ListBox.Item id="global">
                                                           Global (all workspaces)

@@ -256,7 +256,7 @@ export function OwnershipBadge({
   const orgName = ownerOrgId ? orgNamesById?.[ownerOrgId] : undefined;
   const isSharedIntoCurrentOrg = workScope.kind === 'org' && resolvedType === 'user';
   const label = isSharedIntoCurrentOrg
-    ? 'Shared'
+    ? 'User-owned'
     : resolvedType === 'org'
       ? orgName
         ? `Org: ${orgName}`
@@ -266,8 +266,8 @@ export function OwnershipBadge({
         : 'Personal';
   const title = isSharedIntoCurrentOrg
     ? workScope.orgName
-      ? `Shared item. You are viewing it in ${workScope.orgName}, but ownership stays with the original workspace.`
-      : 'Shared item. You are viewing it in the current organization workspace, but ownership stays with the original workspace.'
+      ? `User-owned item. You are viewing it in ${workScope.orgName}, but ownership stays with the original workspace.`
+      : 'User-owned item. You are viewing it in the current organization workspace, but ownership stays with the original workspace.'
     : resolvedType === 'org'
       ? orgName
         ? `Organization-owned item. ${orgName} controls access based on member role.`

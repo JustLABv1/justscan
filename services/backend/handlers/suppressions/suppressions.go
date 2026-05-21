@@ -3,7 +3,9 @@ package suppressions
 import (
 	"context"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"justscan-backend/functions/authz"
@@ -33,13 +35,21 @@ func ListAllSuppressions(db *bun.DB) gin.HandlerFunc {
 		statusFilter := c.Query("status")
 		search := c.Query("q")
 
-		suppressions, total, err := effectivesuppressions.LoadEffectiveSuppressionsPage(c.Request.Context(), db, userID, isAdmin, accessibleOrgIDs, page, limit, statusFilter, search)
+		scope := c.Query("scope")
+		suppressions, total, err := effectivesuppressions.LoadEffectiveSuppressionsPage(c.Request.Context(), db, userID, isAdmin, accessibleOrgIDs, scope, page, limit, statusFilter, search)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load suppressions"})
 			return
 		}
 
+		appliesCounts, err := loadSuppressionAppliesImageCounts(c.Request.Context(), c, db, suppressions, userID, isAdmin, accessibleOrgIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load suppression image counts"})
+			return
+		}
+
 		for i := range suppressions {
+			suppressions[i].AppliesImageCount = appliesCounts[suppressions[i].ImageDigest]
 			if suppressions[i].Source == "xray" {
 				continue
 			}
@@ -63,7 +73,7 @@ func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		userID, _, ok := authz.RequireRequestUser(c, db)
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
 		if !ok {
 			return
 		}
@@ -74,6 +84,7 @@ func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
 			Justification string     `json:"justification"`
 			ExpiresAt     *time.Time `json:"expires_at"`
 			OrgID         string     `json:"org_id"`
+			IsGlobal      bool       `json:"is_global"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -83,7 +94,19 @@ func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
 		ownerType := models.OwnerTypeUser
 		ownerUserID := &userID
 		var ownerOrgID *uuid.UUID
-		if body.OrgID != "" {
+		if body.IsGlobal {
+			if !isAdmin {
+				c.JSON(http.StatusForbidden, gin.H{"error": "admin access required for global suppressions"})
+				return
+			}
+			if strings.TrimSpace(body.OrgID) != "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "global suppressions cannot have org ownership"})
+				return
+			}
+			ownerType = models.OwnerTypeSystem
+			ownerUserID = nil
+			ownerOrgID = nil
+		} else if body.OrgID != "" {
 			parsedOrgID, err := uuid.Parse(body.OrgID)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
@@ -100,9 +123,15 @@ func UpsertSuppression(db *bun.DB) gin.HandlerFunc {
 		existing := &models.Suppression{}
 		query := db.NewSelect().Model(existing).
 			Where("image_digest = ? AND vuln_id = ?", digest, body.VulnID)
-		if ownerOrgID != nil {
+		if ownerType == models.OwnerTypeSystem {
+			query = query.Where("owner_type = ?", models.OwnerTypeSystem)
+			query = query.Where("owner_user_id IS NULL")
+			query = query.Where("owner_org_id IS NULL")
+		} else if ownerOrgID != nil {
+			query = query.Where("owner_type = ?", models.OwnerTypeOrg)
 			query = query.Where("owner_org_id = ?", *ownerOrgID)
 		} else {
+			query = query.Where("owner_type = ?", models.OwnerTypeUser)
 			query = query.Where("owner_org_id IS NULL")
 			query = query.Where("owner_user_id = ? OR (user_id = ? AND owner_user_id IS NULL)", userID, userID)
 		}
@@ -241,6 +270,19 @@ type suppressionShare struct {
 	IsOwner        bool      `bun:"-" json:"is_owner"`
 }
 
+type suppressionAppliesDigestCount struct {
+	ImageDigest string `bun:"image_digest"`
+	Count       int    `bun:"count"`
+}
+
+type suppressionAppliedImage struct {
+	ImageName    string    `bun:"image_name" json:"image_name"`
+	ImageTag     string    `bun:"image_tag" json:"image_tag"`
+	ImageDigest  string    `bun:"image_digest" json:"image_digest"`
+	LatestScanID string    `bun:"latest_scan_id" json:"latest_scan_id"`
+	LatestSeenAt time.Time `bun:"latest_seen_at" json:"latest_seen_at"`
+}
+
 func DeleteSuppressionByID(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		suppression, _, _, ok := loadSuppressionForShareManagement(c, db)
@@ -300,6 +342,61 @@ func ListSuppressionShares(db *bun.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"data": shares})
+	}
+}
+
+func ListSuppressionImages(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		suppressionID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid suppression ID"})
+			return
+		}
+
+		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
+		if !ok {
+			return
+		}
+
+		suppression := &models.Suppression{}
+		q := db.NewSelect().Model(suppression).Where("id = ?", suppressionID)
+		if !isAdmin {
+			q = effectivesuppressions.ApplySuppressionVisibility(q, "", &userID, accessibleOrgIDs)
+		}
+		q = effectivesuppressions.ApplySuppressionWorkspaceScope(q, "", c.Query("scope"), userID)
+		if err := q.Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "suppression not found"})
+			return
+		}
+
+		imageDigest := strings.TrimSpace(suppression.ImageDigest)
+		if imageDigest == "" {
+			c.JSON(http.StatusOK, gin.H{"data": []suppressionAppliedImage{}, "total": 0})
+			return
+		}
+
+		rows := make([]suppressionAppliedImage, 0)
+		query := db.NewSelect().
+			TableExpr("scans AS scan").
+			ColumnExpr("DISTINCT ON (scan.image_name, scan.image_tag, scan.image_digest) scan.image_name").
+			ColumnExpr("scan.image_tag").
+			ColumnExpr("scan.image_digest").
+			ColumnExpr("scan.id::text AS latest_scan_id").
+			ColumnExpr("scan.created_at AS latest_seen_at").
+			Where("scan.image_digest = ?", imageDigest).
+			OrderExpr("scan.image_name, scan.image_tag, scan.image_digest, scan.created_at DESC")
+		query = authz.ApplyOwnershipVisibility(query, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		query = authz.ApplyWorkspaceScopeValue(query, "scan", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, c.Query("scope"))
+		if err := query.Scan(c.Request.Context(), &rows); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load suppression images"})
+			return
+		}
+
+		sort.Slice(rows, func(i, j int) bool {
+			return rows[i].LatestSeenAt.After(rows[j].LatestSeenAt)
+		})
+
+		c.JSON(http.StatusOK, gin.H{"data": rows, "total": len(rows)})
 	}
 }
 
@@ -401,6 +498,9 @@ func canManageSuppression(ctx context.Context, db *bun.DB, suppression *models.S
 	if suppression == nil {
 		return false
 	}
+	if suppression.OwnerType == models.OwnerTypeSystem {
+		return isAdmin
+	}
 	if isAdmin || suppression.UserID == userID {
 		return true
 	}
@@ -460,6 +560,45 @@ func loadSuppressionByDigestAndVuln(c *gin.Context, db *bun.DB, digest, vulnID s
 		return nil, false
 	}
 	return suppression, true
+}
+
+func loadSuppressionAppliesImageCounts(ctx context.Context, c *gin.Context, db *bun.DB, suppressions []models.Suppression, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) (map[string]int, error) {
+	digestSet := make(map[string]struct{})
+	digests := make([]string, 0, len(suppressions))
+	for _, suppression := range suppressions {
+		digest := strings.TrimSpace(suppression.ImageDigest)
+		if digest == "" {
+			continue
+		}
+		if _, exists := digestSet[digest]; exists {
+			continue
+		}
+		digestSet[digest] = struct{}{}
+		digests = append(digests, digest)
+	}
+	if len(digests) == 0 {
+		return map[string]int{}, nil
+	}
+
+	rows := make([]suppressionAppliesDigestCount, 0, len(digests))
+	q := db.NewSelect().
+		TableExpr("scans AS scan").
+		ColumnExpr("scan.image_digest").
+		ColumnExpr("COUNT(DISTINCT CONCAT_WS('|', scan.image_name, scan.image_tag, scan.image_digest)) AS count").
+		Where("scan.image_digest IN (?)", bun.In(digests)).
+		GroupExpr("scan.image_digest")
+	q = authz.ApplyOwnershipVisibility(q, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+	q = authz.ApplyWorkspaceScopeValue(q, "scan", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, c.Query("scope"))
+	if err := q.Scan(ctx, &rows); err != nil {
+		return nil, err
+	}
+
+	counts := make(map[string]int, len(rows))
+	for _, row := range rows {
+		counts[row.ImageDigest] = row.Count
+	}
+
+	return counts, nil
 }
 
 func ensureOrgSuppressionLink(ctx context.Context, db bun.IDB, orgID, suppressionID uuid.UUID) error {

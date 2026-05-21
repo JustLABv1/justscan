@@ -41,6 +41,7 @@ func ApplySuppressionVisibility(query *bun.SelectQuery, alias string, userID *uu
 			addWhere(fmt.Sprintf("%s IN (?)", qualify("owner_org_id")), bun.In(accessibleOrgIDs))
 			addWhere(fmt.Sprintf("EXISTS (SELECT 1 FROM org_suppressions shared WHERE shared.suppression_id = %s AND shared.org_id IN (?))", qualify("id")), bun.In(accessibleOrgIDs))
 		}
+		addWhere(fmt.Sprintf("%s = ?", qualify("owner_type")), models.OwnerTypeSystem)
 		if !hasCondition {
 			q = q.Where("1 = 0")
 		}
@@ -49,17 +50,49 @@ func ApplySuppressionVisibility(query *bun.SelectQuery, alias string, userID *uu
 	})
 }
 
+func ApplySuppressionWorkspaceScope(query *bun.SelectQuery, alias, scope string, userID uuid.UUID) *bun.SelectQuery {
+	if strings.TrimSpace(scope) == "" {
+		return query
+	}
+
+	qualify := func(column string) string {
+		if alias == "" {
+			return column
+		}
+		return alias + "." + column
+	}
+
+	if scope == "personal" {
+		return query.WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
+			q = q.Where(fmt.Sprintf("%s = ?", qualify("owner_type")), models.OwnerTypeSystem)
+			q = q.WhereOr(fmt.Sprintf("%s = ?", qualify("owner_user_id")), userID)
+			q = q.WhereOr(fmt.Sprintf("(%s = ? AND %s IS NULL)", qualify("user_id"), qualify("owner_user_id")), userID)
+			return q
+		})
+	}
+
+	orgID, err := uuid.Parse(strings.TrimSpace(scope))
+	if err != nil {
+		return query
+	}
+
+	return query.WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
+		q = q.Where(fmt.Sprintf("%s = ?", qualify("owner_type")), models.OwnerTypeSystem)
+		q = q.WhereOr(fmt.Sprintf("%s = ?", qualify("owner_org_id")), orgID)
+		q = q.WhereOr(fmt.Sprintf("EXISTS (SELECT 1 FROM org_suppressions shared WHERE shared.suppression_id = %s AND shared.org_id = ?)", qualify("id")), orgID)
+		return q
+	})
+}
+
 func LoadLocalSuppressionsByDigest(ctx context.Context, db *bun.DB, imageDigest string, userID *uuid.UUID, accessibleOrgIDs []uuid.UUID) (map[string]*models.Suppression, error) {
 	if strings.TrimSpace(imageDigest) == "" {
-		return map[string]*models.Suppression{}, nil
-	}
-	if userID == nil && len(accessibleOrgIDs) == 0 {
 		return map[string]*models.Suppression{}, nil
 	}
 
 	var suppressions []models.Suppression
 	query := db.NewSelect().Model(&suppressions).
-		Where("image_digest = ?", imageDigest)
+		Where("image_digest = ?", imageDigest).
+		OrderExpr("CASE WHEN owner_type = ? THEN 0 ELSE 1 END ASC, updated_at DESC", models.OwnerTypeSystem)
 	query = ApplySuppressionVisibility(query, "", userID, accessibleOrgIDs)
 	if err := query.Scan(ctx); err != nil {
 		return nil, err
@@ -172,42 +205,52 @@ func MergeEffectiveSuppression(local *models.Suppression, xray *models.XraySuppr
 	return &merged
 }
 
-func LoadEffectiveSuppressionsPage(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, page, limit int, statusFilter, query string) ([]models.Suppression, int, error) {
-	localRows, err := loadLocalSuppressionsPageRows(ctx, db, userID, isAdmin, accessibleOrgIDs, statusFilter, query)
+func LoadEffectiveSuppressionsPage(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, scope string, page, limit int, statusFilter, query string) ([]models.Suppression, int, error) {
+	localRows, err := loadLocalSuppressionsPageRows(ctx, db, userID, isAdmin, accessibleOrgIDs, scope, statusFilter, query)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	xrayRows, err := loadXraySuppressionsPageRows(ctx, db, userID, isAdmin, accessibleOrgIDs, statusFilter, query)
+	xrayRows, err := loadXraySuppressionsPageRows(ctx, db, userID, isAdmin, accessibleOrgIDs, scope, statusFilter, query)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	merged := make(map[string]*models.Suppression, len(localRows)+len(xrayRows))
+	xrayByDigestVuln := make(map[string]*models.XraySuppression, len(xrayRows))
+	for i := range xrayRows {
+		x := xrayRows[i]
+		xrayByDigestVuln[suppressionKey(x.ImageDigest, x.VulnID)] = &x
+	}
+
+	rows := make([]models.Suppression, 0, len(localRows)+len(xrayRows))
+	usedXrayKeys := make(map[string]bool, len(xrayRows))
 	for i := range localRows {
 		row := localRows[i]
+		key := suppressionKey(row.ImageDigest, row.VulnID)
+		if xrayRow, ok := xrayByDigestVuln[key]; ok {
+			usedXrayKeys[key] = true
+			mixed := MergeEffectiveSuppression(&row, xrayRow)
+			if mixed != nil {
+				rows = append(rows, *mixed)
+			}
+			continue
+		}
 		row.Source = "local"
 		row.Sources = []string{"local"}
 		row.ReadOnly = false
-		merged[suppressionKey(row.ImageDigest, row.VulnID)] = &row
+		rows = append(rows, row)
 	}
 
 	for i := range xrayRows {
 		xrayRow := xrayRows[i]
 		key := suppressionKey(xrayRow.ImageDigest, xrayRow.VulnID)
-		if existing, ok := merged[key]; ok {
-			mixed := MergeEffectiveSuppression(existing, &xrayRow)
-			if mixed != nil {
-				merged[key] = mixed
-			}
+		if usedXrayKeys[key] {
 			continue
 		}
-		merged[key] = xrayAsSuppression(&xrayRow)
-	}
-
-	rows := make([]models.Suppression, 0, len(merged))
-	for _, row := range merged {
-		rows = append(rows, *row)
+		xraySuppression := xrayAsSuppression(&xrayRow)
+		if xraySuppression != nil {
+			rows = append(rows, *xraySuppression)
+		}
 	}
 
 	sort.Slice(rows, func(i, j int) bool {
@@ -230,12 +273,13 @@ func LoadEffectiveSuppressionsPage(ctx context.Context, db *bun.DB, userID uuid.
 	return rows[start:end], total, nil
 }
 
-func loadLocalSuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, statusFilter, query string) ([]models.Suppression, error) {
+func loadLocalSuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, scope, statusFilter, query string) ([]models.Suppression, error) {
 	var suppressions []models.Suppression
 	q := db.NewSelect().Model(&suppressions).OrderExpr("updated_at DESC")
 	if !isAdmin {
 		q = ApplySuppressionVisibility(q, "", &userID, accessibleOrgIDs)
 	}
+	q = ApplySuppressionWorkspaceScope(q, "", scope, userID)
 	if strings.TrimSpace(statusFilter) != "" {
 		q = q.Where("status = ?", statusFilter)
 	}
@@ -256,7 +300,7 @@ func loadLocalSuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.
 	return rows, nil
 }
 
-func loadXraySuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, statusFilter, query string) ([]models.XraySuppression, error) {
+func loadXraySuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, scope, statusFilter, query string) ([]models.XraySuppression, error) {
 	if strings.TrimSpace(statusFilter) != "" && statusFilter != models.SuppressionXrayIgnore {
 		return []models.XraySuppression{}, nil
 	}
@@ -269,6 +313,7 @@ func loadXraySuppressionsPageRows(ctx context.Context, db *bun.DB, userID uuid.U
 	if !isAdmin {
 		q = authz.ApplyOwnershipVisibility(q, "scans", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
 	}
+	q = authz.ApplyWorkspaceScopeValue(q, "scans", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, scope)
 	if trimmedQuery := strings.TrimSpace(query); trimmedQuery != "" {
 		q = q.Where("vuln_id ILIKE ? OR image_digest ILIKE ? OR policy_name ILIKE ? OR watch_name ILIKE ?", "%"+trimmedQuery+"%", "%"+trimmedQuery+"%", "%"+trimmedQuery+"%", "%"+trimmedQuery+"%")
 	}

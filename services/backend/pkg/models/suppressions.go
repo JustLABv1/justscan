@@ -24,13 +24,14 @@ type Suppression struct {
 	UpdatedAt     time.Time  `bun:"updated_at,type:timestamptz" json:"updated_at"`
 
 	// Populated on join
-	Username       string   `bun:"-" json:"username,omitempty"`
-	Source         string   `bun:"-" json:"source,omitempty"`
-	Sources        []string `bun:"-" json:"sources,omitempty"`
-	ReadOnly       bool     `bun:"-" json:"read_only,omitempty"`
-	XrayRuleID     string   `bun:"-" json:"xray_rule_id,omitempty"`
-	XrayPolicyName string   `bun:"-" json:"xray_policy_name,omitempty"`
-	XrayWatchName  string   `bun:"-" json:"xray_watch_name,omitempty"`
+	Username          string   `bun:"-" json:"username,omitempty"`
+	AppliesImageCount int      `bun:"-" json:"applies_image_count,omitempty"`
+	Source            string   `bun:"-" json:"source,omitempty"`
+	Sources           []string `bun:"-" json:"sources,omitempty"`
+	ReadOnly          bool     `bun:"-" json:"read_only,omitempty"`
+	XrayRuleID        string   `bun:"-" json:"xray_rule_id,omitempty"`
+	XrayPolicyName    string   `bun:"-" json:"xray_policy_name,omitempty"`
+	XrayWatchName     string   `bun:"-" json:"xray_watch_name,omitempty"`
 }
 
 // Suppression status constants

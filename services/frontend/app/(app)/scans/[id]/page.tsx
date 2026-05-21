@@ -1,6 +1,7 @@
 'use client';
 import { useAIContextBridge } from '@/components/assistant/ai-context-bridge';
 import { EvilRadarChart } from '@/components/evilcharts/charts/radar-chart';
+import { ManageSuppressionAccessModal } from '@/components/suppressions/manage-suppression-access-modal';
 import { useToast } from '@/components/toast';
 import {
   OwnershipBadge,
@@ -42,6 +43,7 @@ import {
   deleteComment,
   deleteShare,
   deleteSuppression,
+  deleteSuppressionById,
   getScan,
   getScanCompliance,
   getScanSBOM,
@@ -89,6 +91,7 @@ import {
   SearchField,
   Select,
   Table,
+  TextArea,
   Tooltip,
   useOverlayState,
 } from '@heroui/react';
@@ -589,6 +592,9 @@ export default function ScanDetailPage() {
   const vulnerabilityViewInitializedRef = useRef(false);
 
   const [suppressStatus, setSuppressStatus] = useState<Suppression['status']>('accepted');
+  const [suppressScope, setSuppressScope] = useState<'personal' | 'workspace' | 'global'>(
+    workScope.kind === 'org' ? 'workspace' : 'personal'
+  );
   const [suppressJustification, setSuppressJustification] = useState('');
   const [suppressExpiry, setSuppressExpiry] = useState<DateValue | null>(null);
   const [suppressSaving, setSuppressSaving] = useState(false);
@@ -880,12 +886,20 @@ export default function ScanDetailPage() {
       setSuppressError('');
       if (v?.suppression) {
         setSuppressStatus(v.suppression.status);
+        setSuppressScope(
+          v.suppression.owner_type === 'system'
+            ? 'global'
+            : v.suppression.owner_type === 'org'
+              ? 'workspace'
+              : 'personal'
+        );
         setSuppressJustification(v.suppression.justification);
         setSuppressExpiry(
           v.suppression.expires_at ? parseDate(v.suppression.expires_at.slice(0, 10)) : null
         );
       } else {
         setSuppressStatus('accepted');
+        setSuppressScope(workScope.kind === 'org' ? 'workspace' : 'personal');
         setSuppressJustification('');
         setSuppressExpiry(null);
       }
@@ -1308,7 +1322,13 @@ export default function ScanDetailPage() {
         status: suppressStatus,
         justification: suppressJustification,
         expires_at: suppressExpiry ? new Date(suppressExpiry.toString()).toISOString() : null,
-        org_id: scan.owner_type === 'org' ? (scan.owner_org_id ?? undefined) : undefined,
+        org_id:
+          suppressScope === 'global'
+            ? undefined
+            : suppressScope === 'workspace' && workScope.kind === 'org'
+              ? workScope.orgId
+              : undefined,
+        is_global: suppressScope === 'global' ? true : undefined,
       });
       loadVulns();
     } catch (e: unknown) {
@@ -1324,14 +1344,20 @@ export default function ScanDetailPage() {
     setSuppressSaving(true);
     setSuppressError('');
     try {
-      await deleteSuppression(
-        scan.image_digest,
-        vuln.vuln_id,
-        scan.owner_type === 'org' ? (scan.owner_org_id ?? undefined) : undefined
-      );
+      if (vuln.suppression?.id) {
+        await deleteSuppressionById(vuln.suppression.id);
+      } else {
+        await deleteSuppression(
+          scan.image_digest,
+          vuln.vuln_id,
+          vuln.suppression?.owner_type === 'org'
+            ? (vuln.suppression.owner_org_id ?? undefined)
+            : undefined
+        );
+      }
       loadVulns();
     } catch (e: unknown) {
-      setSuppressError(e instanceof Error ? e.message : 'Failed to lift suppression');
+      setSuppressError(e instanceof Error ? e.message : 'Failed to remove suppression');
     } finally {
       setSuppressSaving(false);
     }
@@ -1526,18 +1552,15 @@ export default function ScanDetailPage() {
     scan?.owner_type === 'org' && scan.owner_org_id
       ? allOrgs.find((org) => org.id === scan.owner_org_id)
       : null;
-  const rescanDisabledReason =
-    !ownerOrgPolicy
-      ? ''
-      : !ownerOrgPolicy.is_active
-        ? 'Organization is suspended. Re-scan is disabled.'
-        : ownerOrgPolicy.allow_rescans
-          ? ''
-          : 'Re-scans are disabled for this organization.';
+  const rescanDisabledReason = !ownerOrgPolicy
+    ? ''
+    : !ownerOrgPolicy.is_active
+      ? 'Organization is suspended. Re-scan is disabled.'
+      : ownerOrgPolicy.allow_rescans
+        ? ''
+        : 'Re-scans are disabled for this organization.';
   const manageableOrgIds = new Set(
-    allOrgs
-      .filter((org) => canManageOrg(org.current_user_role))
-      .map((org) => org.id)
+    allOrgs.filter((org) => canManageOrg(org.current_user_role)).map((org) => org.id)
   );
   const canMutateCurrentScan = canMutateScan();
   const fullImageConfig = scan.image_config;
@@ -1623,8 +1646,10 @@ export default function ScanDetailPage() {
     workScope.kind === 'org'
       ? compliance.filter((result) => result.org_id === workScope.orgId)
       : [];
-  const orgPolicyFailuresByVuln: Record<string, Array<{ name: string; ruleSummaries: string[] }>> =
-    {};
+  const orgPolicyFailuresByVuln: Record<
+    string,
+    Array<{ name: string; ruleSummaries: string[] }>
+  > = {};
   const orgPolicyFailureSetsByVuln: Record<string, Record<string, Set<string>>> = {};
   for (const result of activeOrgCompliance) {
     if (result.status !== 'fail') {
@@ -2481,9 +2506,7 @@ export default function ScanDetailPage() {
                     }}
                     isDisabled={workScope.kind !== 'org'}
                     className={`${policyFailedOnly && workScope.kind === 'org' ? 'btn-primary' : 'btn-secondary'} min-w-0 w-full`}
-                    variant={
-                      policyFailedOnly && workScope.kind === 'org' ? 'primary' : 'secondary'
-                    }
+                    variant={policyFailedOnly && workScope.kind === 'org' ? 'primary' : 'secondary'}
                   >
                     Policy Failed
                   </Button>
@@ -2615,7 +2638,7 @@ export default function ScanDetailPage() {
                   <Table.Column className="text-left">First Seen</Table.Column>
                   <Table.Column className="text-left">Org Policy</Table.Column>
                   <Table.Column className="text-left">Xray Policy</Table.Column>
-                  <Table.Column className="text-right">Notes</Table.Column>
+                  <Table.Column className="text-right">Suppr. & Notes</Table.Column>
                 </Table.Header>
                 <Table.Body>
                   {vulnLoading || vulns.length === 0 ? (
@@ -2643,464 +2666,572 @@ export default function ScanDetailPage() {
                       const hasPolicyFailure = failedPolicies.length > 0;
 
                       return (
-                      <Fragment key={v.id}>
-                        <Table.Row
-                          id={v.id}
-                          className="hover:bg-[var(--row-hover)]"
-                          style={
-                            hasPolicyFailure
-                              ? {
-                                  background: 'rgba(239,68,68,0.05)',
-                                  borderTop: '1px solid rgba(239,68,68,0.12)',
-                                  borderBottom: '1px solid rgba(239,68,68,0.12)',
-                                }
-                              : undefined
-                          }
-                        >
-                          <Table.Cell>
-                            {v.vuln_id ? (
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <button
-                                  type="button"
-                                  onClick={() => openVulnerabilityDetails(v)}
-                                  className=" text-xs text-accent hover:text-accent/80 hover:underline transition-colors"
-                                >
-                                  {v.vuln_id}
-                                </button>
-                                <SourceBadge source={v.data_source} />
-                                {v.suppression && (
-                                  <span
-                                    className="text-xs font-medium px-1.5 py-0.5 rounded-md capitalize shrink-0"
-                                    style={{
-                                      background: 'rgba(251,146,60,0.12)',
-                                      color: '#fb923c',
-                                      border: '1px solid rgba(251,146,60,0.25)',
-                                    }}
-                                    title={v.suppression.justification || 'Suppressed'}
+                        <Fragment key={v.id}>
+                          <Table.Row
+                            id={v.id}
+                            className="hover:bg-[var(--row-hover)]"
+                            style={
+                              hasPolicyFailure
+                                ? {
+                                    background: 'rgba(239,68,68,0.05)',
+                                    borderTop: '1px solid rgba(239,68,68,0.12)',
+                                    borderBottom: '1px solid rgba(239,68,68,0.12)',
+                                  }
+                                : undefined
+                            }
+                          >
+                            <Table.Cell>
+                              {v.vuln_id ? (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => openVulnerabilityDetails(v)}
+                                    className=" text-xs text-accent hover:text-accent/80 hover:underline transition-colors"
                                   >
-                                    {v.suppression.status.replace(/_/g, ' ')}
-                                  </span>
-                                )}
-                                {v.suppression && (
-                                  <SuppressionSourceBadge source={v.suppression.source} />
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-zinc-400 dark:text-zinc-600">-</span>
-                            )}
-                          </Table.Cell>
-                          <Table.Cell className=" text-xs text-zinc-700 dark:text-zinc-300">
-                            {v.pkg_name}
-                          </Table.Cell>
-                          <Table.Cell className=" text-xs text-zinc-500">
-                            {v.installed_version}
-                          </Table.Cell>
-                          <Table.Cell className=" text-xs text-emerald-500">
-                            {v.fixed_version || (
-                              <span className="text-zinc-400 dark:text-zinc-700">-</span>
-                            )}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <SeverityBadge severity={v.severity} />
-                          </Table.Cell>
-                          <Table.Cell className="text-right  text-xs text-zinc-500">
-                            {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <FirstSeenBadge firstSeenAt={v.first_seen_at} />
-                          </Table.Cell>
-                          <Table.Cell>
-                            {hasPolicyFailure ? (
-                              <Tooltip delay={0}>
-                                <Tooltip.Trigger className="inline-flex">
-                                  <Chip color="danger" size="sm" variant="soft">
-                                    Policy failed
-                                  </Chip>
-                                </Tooltip.Trigger>
-                                <Tooltip.Content placement="top" showArrow>
-                                  <div className="max-w-xs space-y-2 p-0.5">
-                                    {failedPolicies.map((policy) => (
-                                      <div key={policy.name} className="space-y-1">
-                                        <p className="text-xs font-semibold text-zinc-100">
-                                          {policy.name}
-                                        </p>
-                                        {policy.ruleSummaries.length > 0 ? (
-                                          <div className="space-y-0.5">
-                                            {policy.ruleSummaries.map((rule) => (
-                                              <p
-                                                key={`${policy.name}-${rule}`}
-                                                className="text-[11px] text-zinc-300"
-                                              >
-                                                {rule}
-                                              </p>
-                                            ))}
-                                          </div>
-                                        ) : null}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </Tooltip.Content>
-                              </Tooltip>
-                            ) : (
-                              <span className="text-xs text-zinc-400">-</span>
-                            )}
-                          </Table.Cell>
-                          <Table.Cell>
-                            {(() => {
-                              const policyMatches = parseXrayWatchPolicyMatches(v);
-                              const watchCount = xrayWatchNames(v).length;
-                              const hasDetails =
-                                policyMatches.length > 0 || watchCount > 0 || !!v.xray_is_blocking;
-                              if (!hasDetails) {
-                                return <span className="text-xs text-zinc-400">-</span>;
-                              }
-
-                              return (
-                                <Button
-                                  onPress={() => openXrayPolicyDetails(v)}
-                                  className="inline-flex items-center gap-1.5"
-                                  variant="danger-soft"
-                                >
-                                  Details
-                                  <Chip
-                                    className="font-semibold"
-                                    color="danger"
-                                    size="sm"
-                                    variant="soft"
-                                  >
-                                    {policyMatches.length || watchCount}
-                                  </Chip>
-                                </Button>
-                              );
-                            })()}
-                          </Table.Cell>
-                          <Table.Cell className="text-right">
-                            <Button
-                              onPress={() => {
-                                setExpandedVuln(expandedVuln === v.id ? null : v.id);
-                                setCommentText('');
-                              }}
-                              className="inline-flex items-center gap-1 text-zinc-400 dark:text-zinc-500 hover:text-accent transition-colors"
-                              variant="secondary"
-                            >
-                              <Comment01Icon size={15} />
-                              {v.comments && v.comments.length > 0 && (
-                                <span
-                                  className="text-xs rounded-full px-1.5 py-0.5 font-medium"
-                                  style={{
-                                    background: 'var(--color-accent-soft)',
-                                    color: 'var(--color-accent)',
-                                  }}
-                                >
-                                  {v.comments.length}
-                                </span>
-                              )}
-                            </Button>
-                          </Table.Cell>
-                        </Table.Row>
-                        {expandedVuln === v.id && (
-                          <Table.Row id={`${v.id}-expanded`}>
-                            <Table.Cell
-                              colSpan={10}
-                              className="p-4"
-                              style={{
-                                borderTop: '1px solid var(--border-subtle)',
-                                background: 'var(--row-hover)',
-                              }}
-                            >
-                              <div className="space-y-4 max-w-3xl">
-                                {/* Suppression section */}
-                                {scan.image_digest && (
-                                  <div className="space-y-2.5">
-                                    <div className="flex items-center gap-2">
-                                      <ShieldKeyIcon size={13} className="text-zinc-400" />
-                                      <span
-                                        className="text-xs font-semibold uppercase tracking-wider"
-                                        style={{ color: 'var(--text-muted)' }}
-                                      >
-                                        Suppression
-                                      </span>
-                                      {v.suppression && (
-                                        <span
-                                          className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
-                                          style={{
-                                            background: 'rgba(239,68,68,0.1)',
-                                            color: '#f87171',
-                                            border: '1px solid rgba(239,68,68,0.2)',
-                                          }}
-                                        >
-                                          {v.suppression.status.replace(/_/g, ' ')}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {v.suppression && (
-                                      <div
-                                        className="rounded-lg px-3 py-2 space-y-1"
-                                        style={{
-                                          background: 'rgba(239,68,68,0.05)',
-                                          border: '1px solid rgba(239,68,68,0.15)',
-                                        }}
-                                      >
-                                        <p className="text-xs text-zinc-400">
-                                          {v.suppression.justification || '-'}
-                                        </p>
-                                        <div className="flex items-center gap-2 pt-1 flex-wrap">
-                                          <SuppressionSourceBadge source={v.suppression.source} />
-                                          <OwnershipBadge
-                                            ownerType={v.suppression.owner_type}
-                                            ownerOrgId={v.suppression.owner_org_id}
-                                            orgNamesById={orgNamesById}
-                                          />
-                                          {v.suppression.read_only && (
-                                            <span className="text-[11px] text-zinc-400">
-                                              Managed by Xray
-                                            </span>
-                                          )}
-                                          {canManageSuppressionAccess(v.suppression) && (
-                                            <Button
-                                              onPress={() =>
-                                                openSuppressionAccess(v.suppression as Suppression)
-                                              }
-                                              className="inline-flex items-center gap-1 text-[11px] text-accent hover:text-accent/80 transition-colors"
-                                              type="button"
-                                              variant="secondary"
-                                            >
-                                              <Shield01Icon size={12} />
-                                              Manage access
-                                            </Button>
-                                          )}
-                                        </div>
-                                        {v.suppression.expires_at && (
-                                          <p className="text-xs text-zinc-500">
-                                            Expires:{' '}
-                                            {new Date(
-                                              v.suppression.expires_at
-                                            ).toLocaleDateString()}
-                                          </p>
-                                        )}
-                                        {(v.suppression.xray_policy_name ||
-                                          v.suppression.xray_watch_name) && (
-                                          <p className="text-xs text-zinc-500">
-                                            {[
-                                              v.suppression.xray_policy_name,
-                                              v.suppression.xray_watch_name,
-                                            ]
-                                              .filter(Boolean)
-                                              .join(' · ')}
-                                          </p>
-                                        )}
-                                        {v.suppression.username && (
-                                          <p className="text-xs text-zinc-500">
-                                            By: {v.suppression.username}
-                                          </p>
-                                        )}
-                                      </div>
-                                    )}
-                                    {canMutateCurrentScan &&
-                                    !(v.suppression?.read_only || v.suppression?.source === 'xray') ? (
-                                      <div className="flex gap-2 items-center flex-wrap">
-                                        <Select
-                                          value={suppressStatus}
-                                          onChange={(value) =>
-                                            setSuppressStatus(value as Suppression['status'])
-                                          }
-                                          isDisabled={!canMutateCurrentScan}
-                                        >
-                                          <Select.Trigger>
-                                            <Select.Value />
-                                            <Select.Indicator />
-                                          </Select.Trigger>
-                                          <Select.Popover>
-                                            <ListBox>
-                                              <ListBox.Item id="accepted">
-                                                Accepted Risk
-                                              </ListBox.Item>
-                                              <ListBox.Item id="wont_fix">
-                                                Won&apos;t Fix
-                                              </ListBox.Item>
-                                              <ListBox.Item id="false_positive">
-                                                False Positive
-                                              </ListBox.Item>
-                                            </ListBox>
-                                          </Select.Popover>
-                                        </Select>
-                                        <FormField
-                                          hideLabel
-                                          label="Suppression justification"
-                                          type="text"
-                                          value={suppressJustification}
-                                          onChange={(e) => setSuppressJustification(e.target.value)}
-                                          placeholder="Justification..."
-                                          className="flex-1 min-w-0"
-                                          containerClassName="flex-1 min-w-0"
-                                          disabled={!canMutateCurrentScan}
-                                        />
-                                        <DatePicker
-                                          aria-label="Expiry date (optional)"
-                                          value={suppressExpiry}
-                                          onChange={setSuppressExpiry}
-                                          className="w-40"
-                                          isDisabled={!canMutateCurrentScan}
-                                        >
-                                          <DateField.Group
-                                            className={`${inputCls} flex items-center gap-1`}
-                                          >
-                                            <DateField.Input>
-                                              {(seg) => <DateField.Segment segment={seg} />}
-                                            </DateField.Input>
-                                            <DateField.Suffix>
-                                              <DatePicker.Trigger>
-                                                <DatePicker.TriggerIndicator />
-                                              </DatePicker.Trigger>
-                                            </DateField.Suffix>
-                                          </DateField.Group>
-                                          <DatePicker.Popover>
-                                            <Calendar aria-label="Expiry date">
-                                              <Calendar.Header>
-                                                <Calendar.YearPickerTrigger>
-                                                  <Calendar.YearPickerTriggerHeading />
-                                                  <Calendar.YearPickerTriggerIndicator />
-                                                </Calendar.YearPickerTrigger>
-                                                <Calendar.NavButton slot="previous" />
-                                                <Calendar.NavButton slot="next" />
-                                              </Calendar.Header>
-                                              <Calendar.Grid>
-                                                <Calendar.GridHeader>
-                                                  {(day) => (
-                                                    <Calendar.HeaderCell>{day}</Calendar.HeaderCell>
-                                                  )}
-                                                </Calendar.GridHeader>
-                                                <Calendar.GridBody>
-                                                  {(date) => <Calendar.Cell date={date} />}
-                                                </Calendar.GridBody>
-                                              </Calendar.Grid>
-                                              <Calendar.YearPickerGrid>
-                                                <Calendar.YearPickerGridBody>
-                                                  {({ year }) => (
-                                                    <Calendar.YearPickerCell year={year} />
-                                                  )}
-                                                </Calendar.YearPickerGridBody>
-                                              </Calendar.YearPickerGrid>
-                                            </Calendar>
-                                          </DatePicker.Popover>
-                                        </DatePicker>
-                                        <Button
-                                          onPress={() => handleSuppress(v)}
-                                          isDisabled={
-                                            suppressSaving ||
-                                            !suppressJustification.trim() ||
-                                            !canMutateCurrentScan
-                                          }
-                                          className="btn-warning inline-flex shrink-0 items-center gap-1.5"
-                                          type="button"
-                                          variant="danger-soft"
-                                        >
-                                          {suppressSaving && (
-                                            <span className="size-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
-                                          )}
-                                          {v.suppression ? 'Update' : 'Suppress'}
-                                        </Button>
-                                        {v.suppression && (
-                                          <Button
-                                            onPress={() => handleLiftSuppression(v)}
-                                            isDisabled={suppressSaving || !canMutateCurrentScan}
-                                            className="btn-secondary shrink-0"
-                                            type="button"
-                                            variant="secondary"
-                                          >
-                                            Lift
-                                          </Button>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <p className="text-xs text-zinc-500">
-                                        {canMutateCurrentScan
-                                          ? 'This suppression comes from Xray and cannot be edited here.'
-                                          : 'Your role has read-only suppression access in this organization.'}
-                                      </p>
-                                    )}
-                                    {suppressError && (
-                                      <p className="text-xs mt-1" style={{ color: '#f87171' }}>
-                                        {suppressError}
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-
-                                <div style={{ borderTop: '1px solid var(--border-subtle)' }} />
-
-                                {/* Notes / Comments */}
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2">
-                                    <Comment01Icon size={13} className="text-zinc-400" />
+                                    {v.vuln_id}
+                                  </button>
+                                  <SourceBadge source={v.data_source} />
+                                  {v.suppression && (
                                     <span
-                                      className="text-xs font-semibold uppercase tracking-wider"
-                                      style={{ color: 'var(--text-muted)' }}
+                                      className="text-xs font-medium px-1.5 py-0.5 rounded-md capitalize shrink-0"
+                                      style={{
+                                        background: 'rgba(251,146,60,0.12)',
+                                        color: '#fb923c',
+                                        border: '1px solid rgba(251,146,60,0.25)',
+                                      }}
+                                      title={v.suppression.justification || 'Suppressed'}
                                     >
-                                      Notes
+                                      {v.suppression.status.replace(/_/g, ' ')}
                                     </span>
-                                  </div>
-                                  {v.comments && v.comments.length > 0 ? (
-                                    <div className="space-y-2">
-                                      {v.comments.map((c) => (
-                                        <div
-                                          key={c.id}
-                                          className="flex items-start justify-between gap-3 group"
-                                        >
-                                          <div className="flex-1 min-w-0">
-                                            <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                                              {c.username || 'You'}
-                                            </span>
-                                            <span
-                                              className="text-xs text-zinc-500 ml-2"
-                                              title={fullDate(c.created_at)}
-                                            >
-                                              {timeAgo(c.created_at)}
-                                            </span>
-                                            <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
-                                              {c.content}
-                                            </p>
-                                          </div>
-                                          {currentUser?.id === c.user_id && (
-                                            <Button
-                                              onPress={() => handleDeleteComment(c.id)}
-                                              className="text-zinc-400 dark:text-zinc-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                                              isIconOnly
-                                              variant="secondary"
-                                            >
-                                              <Delete02Icon size={14} />
-                                            </Button>
-                                          )}
+                                  )}
+                                  {v.suppression && (
+                                    <SuppressionSourceBadge source={v.suppression.source} />
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-zinc-400 dark:text-zinc-600">-</span>
+                              )}
+                            </Table.Cell>
+                            <Table.Cell className=" text-xs text-zinc-700 dark:text-zinc-300">
+                              {v.pkg_name}
+                            </Table.Cell>
+                            <Table.Cell className=" text-xs text-zinc-500">
+                              {v.installed_version}
+                            </Table.Cell>
+                            <Table.Cell className=" text-xs text-emerald-500">
+                              {v.fixed_version || (
+                                <span className="text-zinc-400 dark:text-zinc-700">-</span>
+                              )}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <SeverityBadge severity={v.severity} />
+                            </Table.Cell>
+                            <Table.Cell className="text-right  text-xs text-zinc-500">
+                              {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <FirstSeenBadge firstSeenAt={v.first_seen_at} />
+                            </Table.Cell>
+                            <Table.Cell>
+                              {hasPolicyFailure ? (
+                                <Tooltip delay={0}>
+                                  <Tooltip.Trigger className="inline-flex">
+                                    <Chip color="danger" size="sm" variant="soft">
+                                      Policy failed
+                                    </Chip>
+                                  </Tooltip.Trigger>
+                                  <Tooltip.Content placement="top" showArrow>
+                                    <div className="max-w-xs space-y-2 p-0.5">
+                                      {failedPolicies.map((policy) => (
+                                        <div key={policy.name} className="space-y-1">
+                                          <p className="text-xs font-semibold text-zinc-100">
+                                            {policy.name}
+                                          </p>
+                                          {policy.ruleSummaries.length > 0 ? (
+                                            <div className="space-y-0.5">
+                                              {policy.ruleSummaries.map((rule) => (
+                                                <p
+                                                  key={`${policy.name}-${rule}`}
+                                                  className="text-[11px] text-zinc-300"
+                                                >
+                                                  {rule}
+                                                </p>
+                                              ))}
+                                            </div>
+                                          ) : null}
                                         </div>
                                       ))}
                                     </div>
-                                  ) : (
-                                    <p className="text-xs text-zinc-500">No notes yet.</p>
-                                  )}
-                                  <div className="flex gap-2 items-end pt-1">
-                                    <textarea
-                                      value={commentText}
-                                      onChange={(e) => setCommentText(e.target.value)}
-                                      placeholder="Add a note…"
-                                      rows={2}
-                                      className={`${inputCls} flex-1 resize-none`}
-                                    />
-                                    <Button
-                                      onPress={() => handleAddComment(v.id)}
-                                      isDisabled={commentSaving || !commentText.trim()}
-                                      className="btn-primary shrink-0"
-                                      type="button"
-                                      variant="primary"
+                                  </Tooltip.Content>
+                                </Tooltip>
+                              ) : (
+                                <span className="text-xs text-zinc-400">-</span>
+                              )}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {(() => {
+                                const policyMatches = parseXrayWatchPolicyMatches(v);
+                                const watchCount = xrayWatchNames(v).length;
+                                const hasDetails =
+                                  policyMatches.length > 0 ||
+                                  watchCount > 0 ||
+                                  !!v.xray_is_blocking;
+                                if (!hasDetails) {
+                                  return <span className="text-xs text-zinc-400">-</span>;
+                                }
+
+                                return (
+                                  <Button
+                                    onPress={() => openXrayPolicyDetails(v)}
+                                    className="inline-flex items-center gap-1.5"
+                                    variant="danger-soft"
+                                  >
+                                    Details
+                                    <Chip
+                                      className="font-semibold"
+                                      color="danger"
+                                      size="sm"
+                                      variant="soft"
                                     >
-                                      Add Note
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
+                                      {policyMatches.length || watchCount}
+                                    </Chip>
+                                  </Button>
+                                );
+                              })()}
+                            </Table.Cell>
+                            <Table.Cell className="text-right">
+                              <Button
+                                onPress={() => {
+                                  setExpandedVuln(expandedVuln === v.id ? null : v.id);
+                                  setCommentText('');
+                                }}
+                                className="inline-flex items-center gap-1 text-zinc-400 dark:text-zinc-500 hover:text-accent transition-colors"
+                                variant="secondary"
+                              >
+                                <Comment01Icon size={15} />
+                                {v.comments && v.comments.length > 0 && (
+                                  <span
+                                    className="text-xs rounded-full px-1.5 py-0.5 font-medium"
+                                    style={{
+                                      background: 'var(--color-accent-soft)',
+                                      color: 'var(--color-accent)',
+                                    }}
+                                  >
+                                    {v.comments.length}
+                                  </span>
+                                )}
+                              </Button>
                             </Table.Cell>
                           </Table.Row>
-                        )}
-                      </Fragment>
+                          {expandedVuln === v.id && (
+                            <Table.Row id={`${v.id}-expanded`}>
+                              <Table.Cell
+                                colSpan={10}
+                                className="p-4"
+                                style={{
+                                  borderTop: '1px solid var(--border-subtle)',
+                                  background: 'var(--row-hover)',
+                                }}
+                              >
+                                <div className="w-full space-y-4 xl:grid xl:grid-cols-12 xl:gap-4 xl:space-y-0">
+                                  {/* Suppression section */}
+                                  {scan.image_digest && (
+                                    <Card
+                                      className="overflow-hidden xl:col-span-8"
+                                      variant="secondary"
+                                    >
+                                      <Card.Header className="flex-row items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2">
+                                          <ShieldKeyIcon size={13} className="text-zinc-400" />
+                                          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                                            Suppression
+                                          </span>
+                                        </div>
+                                        {v.suppression && (
+                                          <Chip color="danger" size="sm" variant="soft">
+                                            {v.suppression.status.replace(/_/g, ' ')}
+                                          </Chip>
+                                        )}
+                                      </Card.Header>
+                                      <Card.Content className="space-y-3">
+                                        {v.suppression ? (
+                                          <Card variant="default">
+                                            <Card.Content className="space-y-3 p-3">
+                                              <p className="text-sm text-zinc-300">
+                                                {v.suppression.justification ||
+                                                  'No justification provided.'}
+                                              </p>
+                                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                  <SuppressionSourceBadge
+                                                    source={v.suppression.source}
+                                                  />
+                                                  <OwnershipBadge
+                                                    ownerType={v.suppression.owner_type}
+                                                    ownerOrgId={v.suppression.owner_org_id}
+                                                    orgNamesById={orgNamesById}
+                                                  />
+                                                  {v.suppression.read_only && (
+                                                    <Chip size="sm" variant="soft">
+                                                      Managed by Xray
+                                                    </Chip>
+                                                  )}
+                                                </div>
+                                                {canManageSuppressionAccess(v.suppression) && (
+                                                  <Button
+                                                    onPress={() =>
+                                                      openSuppressionAccess(
+                                                        v.suppression as Suppression
+                                                      )
+                                                    }
+                                                    size="sm"
+                                                    className="inline-flex items-center gap-1"
+                                                    type="button"
+                                                    variant="secondary"
+                                                  >
+                                                    <Shield01Icon size={12} />
+                                                    Manage Access
+                                                  </Button>
+                                                )}
+                                              </div>
+                                              <div className="grid gap-1 text-xs text-zinc-500 sm:grid-cols-2">
+                                                {v.suppression.expires_at && (
+                                                  <p>
+                                                    Expires:{' '}
+                                                    {new Date(
+                                                      v.suppression.expires_at
+                                                    ).toLocaleDateString()}
+                                                  </p>
+                                                )}
+                                                {(v.suppression.xray_policy_name ||
+                                                  v.suppression.xray_watch_name) && (
+                                                  <p>
+                                                    {[
+                                                      v.suppression.xray_policy_name,
+                                                      v.suppression.xray_watch_name,
+                                                    ]
+                                                      .filter(Boolean)
+                                                      .join(' · ')}
+                                                  </p>
+                                                )}
+                                                {v.suppression.username && (
+                                                  <p>By: {v.suppression.username}</p>
+                                                )}
+                                              </div>
+                                            </Card.Content>
+                                          </Card>
+                                        ) : (
+                                          <p className="text-sm text-zinc-500">
+                                            No suppression exists for this vulnerability yet.
+                                          </p>
+                                        )}
+
+                                        {canMutateCurrentScan &&
+                                        !(
+                                          v.suppression?.read_only ||
+                                          v.suppression?.source === 'xray'
+                                        ) &&
+                                        !(
+                                          v.suppression?.owner_type === 'system' && !isPlatformAdmin
+                                        ) ? (
+                                          <Card variant="default">
+                                            <Card.Content className="space-y-3 p-3">
+                                              <div className="grid gap-2 sm:grid-cols-2">
+                                                <Select
+                                                  value={suppressStatus}
+                                                  onChange={(value) =>
+                                                    setSuppressStatus(
+                                                      value as Suppression['status']
+                                                    )
+                                                  }
+                                                  isDisabled={!canMutateCurrentScan}
+                                                  variant="secondary"
+                                                >
+                                                  <Select.Trigger>
+                                                    <Select.Value />
+                                                    <Select.Indicator />
+                                                  </Select.Trigger>
+                                                  <Select.Popover>
+                                                    <ListBox>
+                                                      <ListBox.Item id="accepted">
+                                                        Accepted Risk
+                                                      </ListBox.Item>
+                                                      <ListBox.Item id="wont_fix">
+                                                        Won&apos;t Fix
+                                                      </ListBox.Item>
+                                                      <ListBox.Item id="false_positive">
+                                                        False Positive
+                                                      </ListBox.Item>
+                                                    </ListBox>
+                                                  </Select.Popover>
+                                                </Select>
+                                                <Select
+                                                  value={suppressScope}
+                                                  onChange={(value) =>
+                                                    setSuppressScope(
+                                                      (value as
+                                                        | 'personal'
+                                                        | 'workspace'
+                                                        | 'global') ??
+                                                        (workScope.kind === 'org'
+                                                          ? 'workspace'
+                                                          : 'personal')
+                                                    )
+                                                  }
+                                                  variant="secondary"
+                                                  isDisabled={Boolean(v.suppression)}
+                                                >
+                                                  <Select.Trigger>
+                                                    <Select.Value />
+                                                    <Select.Indicator />
+                                                  </Select.Trigger>
+                                                  <Select.Popover>
+                                                    <ListBox>
+                                                      <ListBox.Item id="personal">
+                                                        Personal
+                                                      </ListBox.Item>
+                                                      {(workScope.kind === 'org' ||
+                                                        suppressScope === 'workspace') && (
+                                                        <ListBox.Item id="workspace">
+                                                          {workScope.orgName
+                                                            ? `Workspace: ${workScope.orgName}`
+                                                            : 'Organization workspace'}
+                                                        </ListBox.Item>
+                                                      )}
+                                                      {isPlatformAdmin && (
+                                                        <ListBox.Item id="global">
+                                                          Global (all workspaces)
+                                                        </ListBox.Item>
+                                                      )}
+                                                    </ListBox>
+                                                  </Select.Popover>
+                                                </Select>
+                                              </div>
+                                              <FormField
+                                                hideLabel
+                                                label="Suppression justification"
+                                                type="text"
+                                                value={suppressJustification}
+                                                onChange={(e) =>
+                                                  setSuppressJustification(e.target.value)
+                                                }
+                                                placeholder="Suppression justification"
+                                                className="w-full"
+                                                containerClassName="w-full"
+                                                disabled={!canMutateCurrentScan}
+                                              />
+                                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                                <span className="text-xs text-zinc-500">
+                                                  {suppressScope === 'global'
+                                                    ? 'Visible in all workspaces.'
+                                                    : suppressScope === 'workspace'
+                                                      ? 'Visible in the selected organization workspace.'
+                                                      : 'Visible only in your personal workspace unless shared later.'}
+                                                </span>
+                                                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                                                  <DatePicker
+                                                    aria-label="Expiry date (optional)"
+                                                    value={suppressExpiry}
+                                                    onChange={setSuppressExpiry}
+                                                    className="w-64"
+                                                    isDisabled={!canMutateCurrentScan}
+                                                  >
+                                                    <DateField.Group
+                                                      className={`${inputCls} flex min-h-10 items-center justify-between gap-1`}
+                                                    >
+                                                      <DateField.Input>
+                                                        {(seg) => (
+                                                          <DateField.Segment segment={seg} />
+                                                        )}
+                                                      </DateField.Input>
+                                                      <DateField.Suffix>
+                                                        <DatePicker.Trigger>
+                                                          <DatePicker.TriggerIndicator />
+                                                        </DatePicker.Trigger>
+                                                      </DateField.Suffix>
+                                                    </DateField.Group>
+                                                    <DatePicker.Popover>
+                                                      <Calendar aria-label="Expiry date">
+                                                        <Calendar.Header>
+                                                          <Calendar.YearPickerTrigger>
+                                                            <Calendar.YearPickerTriggerHeading />
+                                                            <Calendar.YearPickerTriggerIndicator />
+                                                          </Calendar.YearPickerTrigger>
+                                                          <Calendar.NavButton slot="previous" />
+                                                          <Calendar.NavButton slot="next" />
+                                                        </Calendar.Header>
+                                                        <Calendar.Grid>
+                                                          <Calendar.GridHeader>
+                                                            {(day) => (
+                                                              <Calendar.HeaderCell>
+                                                                {day}
+                                                              </Calendar.HeaderCell>
+                                                            )}
+                                                          </Calendar.GridHeader>
+                                                          <Calendar.GridBody>
+                                                            {(date) => (
+                                                              <Calendar.Cell date={date} />
+                                                            )}
+                                                          </Calendar.GridBody>
+                                                        </Calendar.Grid>
+                                                        <Calendar.YearPickerGrid>
+                                                          <Calendar.YearPickerGridBody>
+                                                            {({ year }) => (
+                                                              <Calendar.YearPickerCell
+                                                                year={year}
+                                                              />
+                                                            )}
+                                                          </Calendar.YearPickerGridBody>
+                                                        </Calendar.YearPickerGrid>
+                                                      </Calendar>
+                                                    </DatePicker.Popover>
+                                                  </DatePicker>
+                                                  <Button
+                                                    onPress={() => handleSuppress(v)}
+                                                    isDisabled={
+                                                      suppressSaving ||
+                                                      !suppressJustification.trim() ||
+                                                      !canMutateCurrentScan
+                                                    }
+                                                    className="btn-warning inline-flex shrink-0 items-center gap-1.5"
+                                                    type="button"
+                                                    variant="danger-soft"
+                                                  >
+                                                    {suppressSaving && (
+                                                      <span className="size-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                                                    )}
+                                                    {v.suppression ? 'Update' : 'Suppress'}
+                                                  </Button>
+                                                  {v.suppression && (
+                                                    <Button
+                                                      onPress={() => handleLiftSuppression(v)}
+                                                      isDisabled={
+                                                        suppressSaving || !canMutateCurrentScan
+                                                      }
+                                                      className="btn-secondary shrink-0"
+                                                      type="button"
+                                                      variant="secondary"
+                                                    >
+                                                      Remove
+                                                    </Button>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              {suppressError && (
+                                                <p className="text-xs text-red-400">
+                                                  {suppressError}
+                                                </p>
+                                              )}
+                                            </Card.Content>
+                                          </Card>
+                                        ) : (
+                                          <Card variant="default">
+                                            <Card.Content className="p-3">
+                                              <p className="text-xs text-zinc-500">
+                                                {canMutateCurrentScan
+                                                  ? v.suppression?.owner_type === 'system'
+                                                    ? 'This is a global suppression. Only platform admins can edit it here.'
+                                                    : 'This suppression comes from Xray and cannot be edited here.'
+                                                  : 'Your role has read-only suppression access in this organization.'}
+                                              </p>
+                                            </Card.Content>
+                                          </Card>
+                                        )}
+                                      </Card.Content>
+                                    </Card>
+                                  )}
+
+                                  {/* Notes / Comments */}
+                                  <Card
+                                    className={`overflow-hidden xl:h-full ${scan.image_digest ? 'xl:col-span-4' : 'xl:col-span-12'}`}
+                                    variant="secondary"
+                                  >
+                                    <Card.Header className="flex-row items-center justify-between gap-3">
+                                      <div className="flex items-center gap-2">
+                                        <Comment01Icon size={13} className="text-zinc-400" />
+                                        <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                                          Notes
+                                        </span>
+                                      </div>
+                                      <Chip size="sm" variant="soft">
+                                        {v.comments?.length ?? 0} note
+                                        {(v.comments?.length ?? 0) === 1 ? '' : 's'}
+                                      </Chip>
+                                    </Card.Header>
+                                    <Card.Content className="space-y-3">
+                                      {v.comments && v.comments.length > 0 ? (
+                                        <div className="space-y-2">
+                                          {v.comments.map((c) => (
+                                            <Card key={c.id} variant="default">
+                                              <Card.Content className="p-3">
+                                                <div className="flex items-start justify-between gap-3">
+                                                  <div className="min-w-0 flex-1">
+                                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                      <span className="text-xs font-semibold text-zinc-300">
+                                                        {c.username || 'You'}
+                                                      </span>
+                                                      <span
+                                                        className="text-xs text-zinc-500"
+                                                        title={fullDate(c.created_at)}
+                                                      >
+                                                        {timeAgo(c.created_at)}
+                                                      </span>
+                                                    </div>
+                                                    <p className="mt-1 text-sm text-zinc-400">
+                                                      {c.content}
+                                                    </p>
+                                                  </div>
+                                                  {currentUser?.id === c.user_id && (
+                                                    <Button
+                                                      onPress={() => handleDeleteComment(c.id)}
+                                                      className="shrink-0"
+                                                      isIconOnly
+                                                      variant="secondary"
+                                                    >
+                                                      <Delete02Icon size={14} />
+                                                    </Button>
+                                                  )}
+                                                </div>
+                                              </Card.Content>
+                                            </Card>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <Card variant="default">
+                                          <Card.Content className="p-3">
+                                            <p className="text-sm text-zinc-500">
+                                              No notes yet. Add context for teammates here.
+                                            </p>
+                                          </Card.Content>
+                                        </Card>
+                                      )}
+                                      <div className="space-y-2">
+                                        <TextArea
+                                          className="w-full"
+                                          value={commentText}
+                                          onChange={(e) => setCommentText(e.target.value)}
+                                          placeholder="Add a note..."
+                                          rows={3}
+                                        />
+                                        <div className="flex justify-end">
+                                          <Button
+                                            onPress={() => handleAddComment(v.id)}
+                                            isDisabled={commentSaving || !commentText.trim()}
+                                            className="btn-primary shrink-0"
+                                            type="button"
+                                            variant="primary"
+                                          >
+                                            Add Note
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </Card.Content>
+                                  </Card>
+                                </div>
+                              </Table.Cell>
+                            </Table.Row>
+                          )}
+                        </Fragment>
                       );
                     })
                   )}
@@ -3955,188 +4086,28 @@ export default function ScanDetailPage() {
         </Modal.Backdrop>
       </Modal>
 
-      <Modal state={suppressionAccessModal}>
-        <Modal.Backdrop isDismissable>
-          <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
-                  Manage Suppression Access
-                </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
-              </Modal.Header>
-              <Modal.Body className="px-6 py-5 space-y-4">
-                {suppressionAccessError ? (
-                  <div
-                    className="rounded-xl px-3 py-2.5 text-sm"
-                    style={{
-                      background: 'rgba(239,68,68,0.1)',
-                      border: '1px solid rgba(239,68,68,0.2)',
-                      color: '#f87171',
-                    }}
-                  >
-                    {suppressionAccessError}
-                  </div>
-                ) : null}
-                {suppressionAccessTarget ? (
-                  <div
-                    className="rounded-xl px-4 py-3"
-                    style={{
-                      background: 'var(--row-hover)',
-                      border: '1px solid var(--surface-border)',
-                    }}
-                  >
-                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                      {suppressionAccessTarget.vuln_id}
-                    </p>
-                    <p
-                      className="mt-1  text-xs text-zinc-500"
-                      title={suppressionAccessTarget.image_digest}
-                    >
-                      {suppressionAccessTarget.image_digest.length > 48
-                        ? `${suppressionAccessTarget.image_digest.slice(0, 48)}…`
-                        : suppressionAccessTarget.image_digest}
-                    </p>
-                    <div className="mt-2">
-                      <OwnershipBadge
-                        ownerType={suppressionAccessTarget.owner_type}
-                        ownerOrgId={suppressionAccessTarget.owner_org_id}
-                        orgNamesById={orgNamesById}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="space-y-2">
-                  <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-                      Current access
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      Organizations listed here can use this suppression.
-                    </p>
-                  </div>
-                  {suppressionAccessLoading ? (
-                    <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
-                    </div>
-                  ) : suppressionAccessShares.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {suppressionAccessShares.map((share) => (
-                        <div
-                          key={share.org_id}
-                          className="flex items-start justify-between gap-3 rounded-xl px-4 py-3"
-                          style={{
-                            background: 'var(--row-hover)',
-                            border: '1px solid var(--surface-border)',
-                          }}
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                              {share.org_name}
-                            </p>
-                            <p className="text-xs text-zinc-500 mt-0.5">
-                              {share.is_owner ? 'Owner workspace' : 'Shared access'}
-                            </p>
-                          </div>
-                          {share.is_owner ? (
-                            <span className="text-xs font-medium text-zinc-500">Locked</span>
-                          ) : (
-                            <Button
-                              type="button"
-                              onPress={() => {
-                                void handleRevokeSuppressionAccess(share.org_id);
-                              }}
-                              isDisabled={suppressionAccessSaving}
-                              className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
-                              isIconOnly
-                              variant="secondary"
-                            >
-                              <Delete01Icon size={15} />
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-                      Grant access
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      Share this suppression with another organization you manage.
-                    </p>
-                  </div>
-                  {availableSuppressionShareTargets.length === 0 ? (
-                    <p className="text-sm text-zinc-500">
-                      No additional organizations are available for sharing.
-                    </p>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Select
-                        value={suppressionAccessOrgId || '__none__'}
-                        onChange={(value) =>
-                          setSuppressionAccessOrgId(
-                            String(value === '__none__' ? '' : (value ?? ''))
-                          )
-                        }
-                        className="flex-1"
-                      >
-                        <Select.Trigger className={selectTriggerCls}>
-                          <Select.Value />
-                          <Select.Indicator />
-                        </Select.Trigger>
-                        <Select.Popover>
-                          <ListBox>
-                            <ListBox.Item id="__none__">Select an organization</ListBox.Item>
-                            {availableSuppressionShareTargets.map((org) => (
-                              <ListBox.Item key={org.id} id={org.id}>
-                                {org.name}
-                              </ListBox.Item>
-                            ))}
-                          </ListBox>
-                        </Select.Popover>
-                      </Select>
-                      <Button
-                        type="button"
-                        onPress={() => {
-                          void handleGrantSuppressionAccess();
-                        }}
-                        isDisabled={!suppressionAccessOrgId || suppressionAccessSaving}
-                        className="btn-primary disabled:opacity-60"
-                        variant="primary"
-                      >
-                        Grant
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <Button
-                  onPress={suppressionAccessModal.close}
-                  className="btn-secondary"
-                  type="button"
-                  variant="secondary"
-                >
-                  Close
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+      <ManageSuppressionAccessModal
+        state={suppressionAccessModal}
+        target={suppressionAccessTarget}
+        shares={suppressionAccessShares}
+        loading={suppressionAccessLoading}
+        error={suppressionAccessError}
+        saving={suppressionAccessSaving}
+        selectedOrgId={suppressionAccessOrgId}
+        onSelectedOrgIdChange={setSuppressionAccessOrgId}
+        onGrant={() => {
+          void handleGrantSuppressionAccess();
+        }}
+        onRevoke={(orgId) => {
+          void handleRevokeSuppressionAccess(orgId);
+        }}
+        availableOrgTargets={availableSuppressionShareTargets.map((org) => ({
+          id: org.id,
+          name: org.name,
+        }))}
+        orgNamesById={orgNamesById}
+        selectTriggerClassName={selectTriggerCls}
+      />
 
       <VulnerabilityDetailsModal
         vulnerability={selectedVulnerability}

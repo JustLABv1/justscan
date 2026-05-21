@@ -1,21 +1,25 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { ManageSuppressionAccessModal } from '@/components/suppressions/manage-suppression-access-modal';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, SuppressionSourceBadge } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-    deleteSuppressionById,
-    getTokenType,
-    listAllSuppressions,
-    listSuppressionShares,
-    ResourceShare,
-    shareSuppression,
-    Suppression,
-    unshareSuppression,
+  deleteSuppressionById,
+  getTokenType,
+  listAllSuppressions,
+  listSuppressionImages,
+  listSuppressionShares,
+  ResourceShare,
+  shareSuppression,
+  Suppression,
+  SuppressionAppliedImage,
+  unshareSuppression,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
@@ -28,10 +32,12 @@ import {
   Pagination,
   SearchField,
   Select,
+  Separator,
   Table,
   useOverlayState,
 } from '@heroui/react';
 import { Delete01Icon, SecurityLockIcon, Shield01Icon } from 'hugeicons-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const STATUS_STYLE: Record<string, React.CSSProperties> = {
@@ -77,6 +83,7 @@ const LIMIT = 50;
 const selectTriggerCls = heroSelectTriggerClassName;
 
 export default function SuppressionsPage() {
+  const router = useRouter();
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const { orgs, orgNamesById } = useOrgDirectory();
@@ -93,19 +100,23 @@ export default function SuppressionsPage() {
   const [shareError, setShareError] = useState('');
   const [shareOrgId, setShareOrgId] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
+  const [imagesTarget, setImagesTarget] = useState<Suppression | null>(null);
+  const [appliedImages, setAppliedImages] = useState<SuppressionAppliedImage[]>([]);
+  const [imagesTotal, setImagesTotal] = useState(0);
+  const [imagesLoading, setImagesLoading] = useState(false);
+  const [imagesError, setImagesError] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
   const shareModal = useOverlayState();
+  const imagesModal = useOverlayState();
   const isPlatformAdmin = getTokenType() === 'admin';
   const orgRoleById = useMemo(
     () => new Map(orgs.map((org) => [org.id, org.current_user_role] as const)),
     [orgs]
   );
   const manageableOrgIds = new Set(
-    orgs
-      .filter((org) => canManageOrg(org.current_user_role))
-      .map((org) => org.id)
+    orgs.filter((org) => canManageOrg(org.current_user_role)).map((org) => org.id)
   );
 
   const load = useCallback(async (p: number, status: string, q: string) => {
@@ -127,11 +138,7 @@ export default function SuppressionsPage() {
   );
 
   function canManageAccess(suppression: Suppression) {
-    if (
-      suppression.read_only ||
-      suppression.source === 'xray' ||
-      suppression.owner_type === 'system'
-    )
+    if (suppression.read_only || suppression.source === 'xray' || suppression.owner_type === 'system')
       return false;
     if (isPlatformAdmin) return true;
     if (suppression.owner_type === 'org' && suppression.owner_org_id) {
@@ -141,14 +148,11 @@ export default function SuppressionsPage() {
   }
 
   function canMutateSuppression(suppression: Suppression) {
-    if (
-      suppression.read_only ||
-      suppression.source === 'xray' ||
-      suppression.owner_type === 'system'
-    ) {
+    if (suppression.read_only || suppression.source === 'xray') {
       return false;
     }
     if (isPlatformAdmin) return true;
+    if (suppression.owner_type === 'system') return false;
     if (suppression.owner_type === 'org' && suppression.owner_org_id) {
       return canMutateOrg(orgRoleById.get(suppression.owner_org_id));
     }
@@ -208,6 +212,31 @@ export default function SuppressionsPage() {
     }
   }
 
+  async function loadAppliedImages(suppressionId: string) {
+    setImagesLoading(true);
+    setImagesError('');
+    try {
+      const result = await listSuppressionImages(suppressionId);
+      setAppliedImages(result.data ?? []);
+      setImagesTotal(result.total ?? 0);
+    } catch (err: unknown) {
+      setImagesError(err instanceof Error ? err.message : 'Failed to load matching images');
+      setAppliedImages([]);
+      setImagesTotal(0);
+    } finally {
+      setImagesLoading(false);
+    }
+  }
+
+  function openAppliesImagesModal(suppression: Suppression) {
+    setImagesTarget(suppression);
+    setAppliedImages([]);
+    setImagesTotal(0);
+    setImagesError('');
+    imagesModal.open();
+    void loadAppliedImages(suppression.id);
+  }
+
   async function handleDelete(s: Suppression) {
     if (!canMutateSuppression(s)) return;
     const ok = await confirm({
@@ -258,7 +287,11 @@ export default function SuppressionsPage() {
 
       <Card className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <SearchField name="suppressions-search" variant="secondary" className="w-full sm:max-w-sm">
+          <SearchField
+            name="suppressions-search"
+            variant="secondary"
+            className="w-full sm:max-w-sm"
+          >
             <SearchField.Group>
               <SearchField.SearchIcon />
               <SearchField.Input
@@ -307,156 +340,174 @@ export default function SuppressionsPage() {
         <Table variant="secondary">
           <Table.ScrollContainer>
             <Table.Content aria-label="Suppressions" className="min-w-[1100px]">
-            <Table.Header>
-              <Table.Column isRowHeader>CVE ID</Table.Column>
-              <Table.Column>Image Digest</Table.Column>
-              <Table.Column>Status</Table.Column>
-              <Table.Column>Source</Table.Column>
-              <Table.Column>Justification</Table.Column>
-              <Table.Column>By</Table.Column>
-              <Table.Column>Expires</Table.Column>
-              <Table.Column>Created</Table.Column>
-              <Table.Column>Actions</Table.Column>
-            </Table.Header>
-            <Table.Body>
-              {loading ? (
-                <Table.Row key="loading-row" id="loading">
-                  <Table.Cell colSpan={9}>
-                    <div className="py-16 text-center">
-                      <div className="flex justify-center">
-                        <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+              <Table.Header>
+                <Table.Column isRowHeader>CVE ID</Table.Column>
+                <Table.Column>Image Digest</Table.Column>
+                <Table.Column>Applies to Images</Table.Column>
+                <Table.Column>Status</Table.Column>
+                <Table.Column>Source</Table.Column>
+                <Table.Column>Justification</Table.Column>
+                <Table.Column>By</Table.Column>
+                <Table.Column>Expires</Table.Column>
+                <Table.Column>Created</Table.Column>
+                <Table.Column>Actions</Table.Column>
+              </Table.Header>
+              <Table.Body>
+                {loading ? (
+                  <Table.Row key="loading-row" id="loading">
+                    <Table.Cell colSpan={10}>
+                      <div className="py-16 text-center">
+                        <div className="flex justify-center">
+                          <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                        </div>
                       </div>
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ) : suppressions.length === 0 ? (
-                <Table.Row key="empty-row" id="empty">
-                  <Table.Cell colSpan={9}>
-                    <div className="flex flex-col items-center gap-3 py-16 text-center">
-                      <SecurityLockIcon size={32} className="text-zinc-400 dark:text-zinc-600" />
-                      <p className="text-sm text-zinc-500">
-                        {searchQuery || statusFilter
-                          ? 'No suppressions match your filters.'
-                          : 'No suppressions found.'}
-                      </p>
-                      {!searchQuery && !statusFilter && (
-                        <p className="text-xs text-zinc-400">
-                          Suppressions allow you to acknowledge known vulnerabilities in a scan.
+                    </Table.Cell>
+                  </Table.Row>
+                ) : suppressions.length === 0 ? (
+                  <Table.Row key="empty-row" id="empty">
+                    <Table.Cell colSpan={10}>
+                      <div className="flex flex-col items-center gap-3 py-16 text-center">
+                        <SecurityLockIcon size={32} className="text-zinc-400 dark:text-zinc-600" />
+                        <p className="text-sm text-zinc-500">
+                          {searchQuery || statusFilter
+                            ? 'No suppressions match your filters.'
+                            : 'No suppressions found.'}
                         </p>
-                      )}
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ) : (
-                suppressions.map((s) => (
-                  <Table.Row id={s.id} key={s.id} className="hover:bg-[var(--row-hover)]">
-                    <Table.Cell>
-                      <a
-                        href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-mono text-xs text-accent dark:text-accent hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {s.vuln_id}
-                      </a>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span className="font-mono text-xs text-zinc-500" title={s.image_digest}>
-                        {s.image_digest.length > 28
-                          ? s.image_digest.slice(0, 28) + '…'
-                          : s.image_digest}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <StatusBadge status={s.status} />
-                    </Table.Cell>
-                    <Table.Cell>
-                      <SuppressionSourceBadge source={s.source} />
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="text-xs text-zinc-500 max-w-xs">
-                        <span className="line-clamp-2">{s.justification || '—'}</span>
-                        {(s.xray_policy_name || s.xray_watch_name) && (
-                          <p className="mt-1 text-[11px] text-zinc-400">
-                            {[s.xray_policy_name, s.xray_watch_name].filter(Boolean).join(' · ')}
+                        {!searchQuery && !statusFilter && (
+                          <p className="text-xs text-zinc-400">
+                            Suppressions allow you to acknowledge known vulnerabilities in a scan.
                           </p>
                         )}
                       </div>
                     </Table.Cell>
-                    <Table.Cell>
-                      <div className="space-y-1">
-                        <p className="text-xs text-zinc-500">{s.username || '—'}</p>
-                        <OwnershipBadge
-                          ownerType={s.owner_type}
-                          ownerOrgId={s.owner_org_id}
-                          orgNamesById={orgNamesById}
-                        />
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="text-xs">
-                        {s.expires_at ? (
-                          <span
-                            className={
-                              new Date(s.expires_at) < new Date() ? 'text-red-400' : 'text-zinc-500'
-                            }
-                            title={fullDate(s.expires_at)}
-                          >
-                            {new Date(s.expires_at).toLocaleDateString()}
-                          </span>
-                        ) : (
-                          <span className="text-zinc-400">Never</span>
-                        )}
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="text-xs text-zinc-500" title={fullDate(s.created_at)}>
-                        {timeAgo(s.created_at)}
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
-                      {canManageAccess(s) || canMutateSuppression(s) ? (
-                        <div className="flex items-center justify-end gap-1">
-                          {canManageAccess(s) ? (
-                            <Button
-                              onPress={() => openShareModal(s)}
-                              className="text-zinc-400 dark:text-zinc-600 hover:text-accent dark:hover:text-accent transition-colors p-1"
-                              aria-label="Manage access"
-                              type="button"
-                              isIconOnly
-                              variant="secondary"
-                            >
-                              <Shield01Icon size={15} />
-                            </Button>
-                          ) : null}
-                          {canMutateSuppression(s) ? (
-                            <Button
-                              onPress={() => handleDelete(s)}
-                              className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors p-1"
-                              aria-label="Remove suppression"
-                              type="button"
-                              isIconOnly
-                              variant="secondary"
-                            >
-                              <Delete01Icon size={15} />
-                            </Button>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-zinc-400">Read only</span>
-                      )}
-                    </Table.Cell>
                   </Table.Row>
-                ))
-              )}
-            </Table.Body>
+                ) : (
+                  suppressions.map((s) => (
+                    <Table.Row id={s.id} key={s.id} className="hover:bg-[var(--row-hover)]">
+                      <Table.Cell>
+                        <a
+                          href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-mono text-xs text-accent dark:text-accent hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {s.vuln_id}
+                        </a>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span className="font-mono text-xs text-zinc-500" title={s.image_digest}>
+                          {s.image_digest.length > 28
+                            ? s.image_digest.slice(0, 28) + '…'
+                            : s.image_digest}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Button
+                          variant="secondary"
+                          onPress={() => openAppliesImagesModal(s)}
+                          size="sm"
+                        >
+                          {(s.applies_image_count ?? 0).toLocaleString()} image
+                          {(s.applies_image_count ?? 0) === 1 ? '' : 's'}
+                        </Button>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <StatusBadge status={s.status} />
+                      </Table.Cell>
+                      <Table.Cell>
+                        <SuppressionSourceBadge source={s.source} />
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="text-xs text-zinc-500 max-w-xs">
+                          <span className="line-clamp-2">{s.justification || '—'}</span>
+                          {(s.xray_policy_name || s.xray_watch_name) && (
+                            <p className="mt-1 text-[11px] text-zinc-400">
+                              {[s.xray_policy_name, s.xray_watch_name].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="space-y-1">
+                          <p className="text-xs text-zinc-500">{s.username || '—'}</p>
+                          <OwnershipBadge
+                            ownerType={s.owner_type}
+                            ownerOrgId={s.owner_org_id}
+                            orgNamesById={orgNamesById}
+                          />
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="text-xs">
+                          {s.expires_at ? (
+                            <span
+                              className={
+                                new Date(s.expires_at) < new Date()
+                                  ? 'text-red-400'
+                                  : 'text-zinc-500'
+                              }
+                              title={fullDate(s.expires_at)}
+                            >
+                              {new Date(s.expires_at).toLocaleDateString()}
+                            </span>
+                          ) : (
+                            <span className="text-zinc-400">Never</span>
+                          )}
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="text-xs text-zinc-500" title={fullDate(s.created_at)}>
+                          {timeAgo(s.created_at)}
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        {canManageAccess(s) || canMutateSuppression(s) ? (
+                          <div className="flex items-center justify-end">
+                            <RowActionsMenu
+                              label={`Actions for ${s.vuln_id}`}
+                              items={[
+                                ...(canManageAccess(s)
+                                  ? [
+                                      {
+                                        id: 'manage-access',
+                                        label: 'Manage access',
+                                        icon: <Shield01Icon size={14} />,
+                                        onAction: () => openShareModal(s),
+                                      },
+                                    ]
+                                  : []),
+                                ...(canMutateSuppression(s)
+                                  ? [
+                                      {
+                                        id: 'remove',
+                                        label: 'Remove suppression',
+                                        icon: <Delete01Icon size={14} />,
+                                        variant: 'danger' as const,
+                                        onAction: () => {
+                                          void handleDelete(s);
+                                        },
+                                      },
+                                    ]
+                                  : []),
+                              ]}
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-zinc-400">Read only</span>
+                        )}
+                      </Table.Cell>
+                    </Table.Row>
+                  ))
+                )}
+              </Table.Body>
             </Table.Content>
           </Table.ScrollContainer>
           {totalPages > 1 ? (
             <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
               <span className="text-xs text-zinc-500 whitespace-nowrap">
-                Showing {total === 0 ? 0 : (page - 1) * LIMIT + 1}-{Math.min(page * LIMIT, total)} of {total}
+                Showing {total === 0 ? 0 : (page - 1) * LIMIT + 1}-{Math.min(page * LIMIT, total)}{' '}
+                of {total}
               </span>
               <Pagination size="sm" className="justify-self-center">
                 <Pagination.Content>
@@ -499,170 +550,134 @@ export default function SuppressionsPage() {
         </Table>
       </Card>
 
-      <Modal state={shareModal}>
+      <ManageSuppressionAccessModal
+        state={shareModal}
+        target={shareTarget}
+        shares={shares}
+        loading={sharesLoading}
+        error={shareError}
+        saving={shareSaving}
+        selectedOrgId={shareOrgId}
+        onSelectedOrgIdChange={setShareOrgId}
+        onGrant={() => {
+          void handleGrantShare();
+        }}
+        onRevoke={(orgId) => {
+          void handleRevokeShare(orgId);
+        }}
+        availableOrgTargets={availableShareTargets.map((org) => ({ id: org.id, name: org.name }))}
+        orgNamesById={orgNamesById}
+      />
+
+      <Modal state={imagesModal}>
         <Modal.Backdrop isDismissable>
-          <Modal.Container size="md" placement="center">
+          <Modal.Container size="lg" placement="center">
             <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
+              <Modal.Header>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
-                  Manage Suppression Access
+                  Applies to Images
                 </Modal.Heading>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
-              <Modal.Body className="px-6 py-5 space-y-4">
-                {shareError ? (
-                  <FormAlert description={shareError} title="Access update failed" />
+              <Modal.Body className="py-5 space-y-4">
+                {imagesError ? (
+                  <FormAlert description={imagesError} title="Images loading failed" />
                 ) : null}
-                {shareTarget ? (
-                  <div
-                    className="rounded-xl px-4 py-3"
-                    style={{
-                      background: 'var(--row-hover)',
-                      border: '1px solid var(--surface-border)',
-                    }}
-                  >
-                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                      {shareTarget.vuln_id}
-                    </p>
-                    <p
-                      className="mt-1 font-mono text-xs text-zinc-500"
-                      title={shareTarget.image_digest}
-                    >
-                      {shareTarget.image_digest.length > 48
-                        ? `${shareTarget.image_digest.slice(0, 48)}…`
-                        : shareTarget.image_digest}
-                    </p>
-                    <div className="mt-2">
-                      <OwnershipBadge
-                        ownerType={shareTarget.owner_type}
-                        ownerOrgId={shareTarget.owner_org_id}
-                        orgNamesById={orgNamesById}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-                      Current access
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      Organizations listed here can use this suppression.
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+                      Suppression
                     </p>
                   </div>
-                  {sharesLoading ? (
-                    <div className="flex justify-center py-6">
+                  {imagesTarget ? (
+                    <Card variant="secondary" className="py-3">
+                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                        {imagesTarget.vuln_id}
+                      </p>
+                      <p
+                        className="font-mono text-xs text-zinc-500"
+                        title={imagesTarget.image_digest}
+                      >
+                        {imagesTarget.image_digest.length > 64
+                          ? `${imagesTarget.image_digest.slice(0, 64)}…`
+                          : imagesTarget.image_digest}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {imagesTotal.toLocaleString()} matching image
+                        {imagesTotal === 1 ? '' : 's'} in current workspace
+                      </p>
+                    </Card>
+                  ) : null}
+                </div>
+
+                <Separator />
+
+                <div className="flex flex-col gap-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+                      Matching Images
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Images currently visible in this workspace for the suppression digest.
+                    </p>
+                  </div>
+
+                  {imagesLoading ? (
+                    <div className="flex justify-center py-8">
                       <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
                     </div>
-                  ) : shares.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                  ) : appliedImages.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No matching images were found.</p>
                   ) : (
-                    <div className="space-y-2">
-                      {shares.map((share) => (
-                        <div
-                          key={share.org_id}
-                          className="flex items-start justify-between gap-3 rounded-xl px-4 py-3"
-                          style={{
-                            background: 'var(--row-hover)',
-                            border: '1px solid var(--surface-border)',
-                          }}
+                    <div className="max-h-[320px] overflow-y-auto">
+                      {appliedImages.map((image) => (
+                        <Card
+                          key={`${image.image_name}:${image.image_tag}:${image.image_digest}`}
+                          className="py-3"
+                          variant="secondary"
                         >
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                              {share.org_name}
-                            </p>
-                            <p className="text-xs text-zinc-500 mt-0.5">
-                              {share.is_owner ? 'Owner workspace' : 'Shared access'}
-                            </p>
-                          </div>
-                          {share.is_owner ? (
-                            <span className="text-xs font-medium text-zinc-500">Locked</span>
-                          ) : (
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                                {image.image_name}:{image.image_tag}
+                              </p>
+                              <p
+                                className="font-mono text-xs text-zinc-500 truncate"
+                                title={image.image_digest}
+                              >
+                                {image.image_digest.length > 64
+                                  ? `${image.image_digest.slice(0, 64)}…`
+                                  : image.image_digest}
+                              </p>
+                              <p
+                                className="text-[11px] text-zinc-400"
+                                title={fullDate(image.latest_seen_at)}
+                              >
+                                Last seen: {timeAgo(image.latest_seen_at)}
+                              </p>
+                            </div>
                             <Button
-                              type="button"
-                              onPress={() => {
-                                void handleRevokeShare(share.org_id);
-                              }}
-                              isDisabled={shareSaving}
-                              className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
-                              isIconOnly
+                              size="sm"
                               variant="secondary"
+                              className="shrink-0"
+                              isDisabled={!image.latest_scan_id}
+                              onPress={() => {
+                                if (!image.latest_scan_id) return;
+                                imagesModal.close();
+                                router.push(`/scans/${image.latest_scan_id}`);
+                              }}
                             >
-                              <Delete01Icon size={15} />
+                              Open Scan
                             </Button>
-                          )}
-                        </div>
+                          </div>
+                        </Card>
                       ))}
                     </div>
                   )}
                 </div>
-
-                <div className="space-y-2">
-                  <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-                      Grant access
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      Share this suppression with another organization you manage.
-                    </p>
-                  </div>
-                  {availableShareTargets.length === 0 ? (
-                    <p className="text-sm text-zinc-500">
-                      No additional organizations are available for sharing.
-                    </p>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Select
-                        value={shareOrgId || '__none__'}
-                        onChange={(value) =>
-                          setShareOrgId(String(value === '__none__' ? '' : (value ?? '')))
-                        }
-                        className="flex-1"
-                      >
-                        <Select.Trigger className={selectTriggerCls}>
-                          <Select.Value />
-                          <Select.Indicator />
-                        </Select.Trigger>
-                        <Select.Popover>
-                          <ListBox>
-                            <ListBox.Item id="__none__">Select an organization</ListBox.Item>
-                            {availableShareTargets.map((org) => (
-                              <ListBox.Item key={org.id} id={org.id}>
-                                {org.name}
-                              </ListBox.Item>
-                            ))}
-                          </ListBox>
-                        </Select.Popover>
-                      </Select>
-                      <Button
-                        type="button"
-                        onPress={() => {
-                          void handleGrantShare();
-                        }}
-                        isDisabled={!shareOrgId || shareSaving}
-                        className="btn-primary disabled:opacity-60"
-                        variant="primary"
-                      >
-                        Grant
-                      </Button>
-                    </div>
-                  )}
-                </div>
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <Button
-                  onPress={shareModal.close}
-                  className="btn-secondary"
-                  type="button"
-                  variant="secondary"
-                >
+              <Modal.Footer>
+                <Button onPress={imagesModal.close} variant="secondary">
                   Close
                 </Button>
               </Modal.Footer>

@@ -140,12 +140,13 @@ func (r *PolicyRuleList) Scan(v interface{}) error {
 type OrgPolicy struct {
 	bun.BaseModel `bun:"table:org_policies"`
 
-	ID        uuid.UUID      `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
-	OrgID     uuid.UUID      `bun:"org_id,type:uuid,notnull" json:"org_id"`
-	Name      string         `bun:"name,type:text,notnull" json:"name"`
-	Rules     PolicyRuleList `bun:"rules,type:jsonb" json:"rules"`
-	CreatedAt time.Time      `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
-	UpdatedAt time.Time      `bun:"updated_at,type:timestamptz" json:"updated_at"`
+	ID                uuid.UUID      `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	OrgID             uuid.UUID      `bun:"org_id,type:uuid,notnull" json:"org_id"`
+	Name              string         `bun:"name,type:text,notnull" json:"name"`
+	Rules             PolicyRuleList `bun:"rules,type:jsonb" json:"rules"`
+	IncludeSuppressed bool           `bun:"include_suppressed,type:boolean,notnull,default:true" json:"include_suppressed"`
+	CreatedAt         time.Time      `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+	UpdatedAt         time.Time      `bun:"updated_at,type:timestamptz" json:"updated_at"`
 }
 
 type OrgScan struct {

@@ -76,6 +76,7 @@ export interface Suppression {
   id: string;
   vuln_id: string;
   image_digest: string;
+  applies_image_count?: number;
   status: 'accepted' | 'wont_fix' | 'false_positive' | 'xray_ignore';
   justification: string;
   user_id: string;
@@ -92,6 +93,14 @@ export interface Suppression {
   xray_rule_id?: string;
   xray_policy_name?: string;
   xray_watch_name?: string;
+}
+
+export interface SuppressionAppliedImage {
+  image_name: string;
+  image_tag: string;
+  image_digest: string;
+  latest_scan_id: string;
+  latest_seen_at: string;
 }
 
 export interface Comment {

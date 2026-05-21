@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/notifications"
 	"justscan-backend/pkg/models"
 
@@ -96,6 +97,50 @@ func EvaluatePolicy(policy *models.OrgPolicy, vulns []models.Vulnerability) (str
 	return status, violations
 }
 
+func filterSuppressedVulnerabilitiesForOrg(
+	ctx context.Context,
+	db *bun.DB,
+	scan *models.Scan,
+	orgID uuid.UUID,
+	vulns []models.Vulnerability,
+) ([]models.Vulnerability, error) {
+	localByVuln, err := effectivesuppressions.LoadLocalSuppressionsByDigest(
+		ctx,
+		db,
+		scan.ImageDigest,
+		nil,
+		[]uuid.UUID{orgID},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	xrayByVuln := map[string]*models.XraySuppression{}
+	if scan.ScanProvider == models.ScanProviderArtifactoryXray {
+		xrayByVuln, err = effectivesuppressions.LoadXraySuppressionsByScan(ctx, db, scan.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return filterSuppressedVulnerabilities(vulns, localByVuln, xrayByVuln), nil
+}
+
+func filterSuppressedVulnerabilities(
+	vulns []models.Vulnerability,
+	localByVuln map[string]*models.Suppression,
+	xrayByVuln map[string]*models.XraySuppression,
+) []models.Vulnerability {
+	filtered := make([]models.Vulnerability, 0, len(vulns))
+	for i := range vulns {
+		if effectivesuppressions.MergeEffectiveSuppression(localByVuln[vulns[i].VulnID], xrayByVuln[vulns[i].VulnID]) != nil {
+			continue
+		}
+		filtered = append(filtered, vulns[i])
+	}
+	return filtered
+}
+
 // RunForScan loads all orgs this scan belongs to, evaluates every policy, and upserts compliance_results.
 func RunForScan(db *bun.DB, scanID uuid.UUID) {
 	ctx := context.Background()
@@ -126,8 +171,25 @@ func RunForScan(db *bun.DB, scanID uuid.UUID) {
 		if err := db.NewSelect().Model(&policies).Where("org_id = ?", os.OrgID).Scan(ctx); err != nil {
 			continue
 		}
+
+		unsuppressedVulns := vulns
+		unsuppressedLoaded := false
 		for _, policy := range policies {
-			status, violations := EvaluatePolicy(&policy, vulns)
+			evaluationVulns := vulns
+			if !policy.IncludeSuppressed {
+				if !unsuppressedLoaded {
+					filteredVulns, filterErr := filterSuppressedVulnerabilitiesForOrg(ctx, db, scan, os.OrgID, vulns)
+					if filterErr != nil {
+						log.Errorf("compliance: failed to filter suppressions for scan %s org %s: %v", scanID, os.OrgID, filterErr)
+					} else {
+						unsuppressedVulns = filteredVulns
+					}
+					unsuppressedLoaded = true
+				}
+				evaluationVulns = unsuppressedVulns
+			}
+
+			status, violations := EvaluatePolicy(&policy, evaluationVulns)
 			result := &models.ComplianceResult{
 				ScanID:      scanID,
 				PolicyID:    policy.ID,

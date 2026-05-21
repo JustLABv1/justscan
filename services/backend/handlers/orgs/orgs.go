@@ -334,6 +334,10 @@ var validRuleTypes = map[string]bool{
 	"xray_policy_block": true,
 }
 
+func policyIncludeSuppressedOrDefault(includeSuppressed *bool) bool {
+	return includeSuppressed == nil || *includeSuppressed
+}
+
 // CreatePolicy creates a new policy for an org.
 func CreatePolicy(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -347,8 +351,9 @@ func CreatePolicy(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var body struct {
-			Name  string                `json:"name" binding:"required"`
-			Rules models.PolicyRuleList `json:"rules"`
+			Name              string                `json:"name" binding:"required"`
+			Rules             models.PolicyRuleList `json:"rules"`
+			IncludeSuppressed *bool                 `json:"include_suppressed"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -363,9 +368,10 @@ func CreatePolicy(db *bun.DB) gin.HandlerFunc {
 		}
 
 		policy := &models.OrgPolicy{
-			OrgID: orgID,
-			Name:  body.Name,
-			Rules: body.Rules,
+			OrgID:             orgID,
+			Name:              body.Name,
+			Rules:             body.Rules,
+			IncludeSuppressed: policyIncludeSuppressedOrDefault(body.IncludeSuppressed),
 		}
 		if _, err := db.NewInsert().Model(policy).Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create policy"})
@@ -394,8 +400,9 @@ func UpdatePolicy(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var body struct {
-			Name  string                `json:"name"`
-			Rules models.PolicyRuleList `json:"rules"`
+			Name              string                `json:"name"`
+			Rules             models.PolicyRuleList `json:"rules"`
+			IncludeSuppressed *bool                 `json:"include_suppressed"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -421,9 +428,12 @@ func UpdatePolicy(db *bun.DB) gin.HandlerFunc {
 		if body.Rules != nil {
 			policy.Rules = body.Rules
 		}
+		if body.IncludeSuppressed != nil {
+			policy.IncludeSuppressed = *body.IncludeSuppressed
+		}
 		policy.UpdatedAt = time.Now()
 
-		if _, err := db.NewUpdate().Model(policy).Column("name", "rules", "updated_at").Where("id = ?", policyID).Exec(c.Request.Context()); err != nil {
+		if _, err := db.NewUpdate().Model(policy).Column("name", "rules", "include_suppressed", "updated_at").Where("id = ?", policyID).Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update policy"})
 			return
 		}

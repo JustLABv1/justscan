@@ -46,7 +46,17 @@ import {
 import { deferEffect } from '@/lib/defer-effect';
 import { canManageOrg, canMutateOrg, canOwnOrg } from '@/lib/org-permissions';
 import { timeAgo } from '@/lib/time';
-import { Button, Card, Input, Label, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import {
+  Button,
+  Card,
+  Input,
+  Label,
+  ListBox,
+  Modal,
+  Select,
+  Switch,
+  useOverlayState,
+} from '@heroui/react';
 import { ArrowLeft01Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -122,6 +132,7 @@ export default function OrgDetailPage() {
   const [editingPolicy, setEditingPolicy] = useState<OrgPolicy | null>(null);
   const [policyName, setPolicyName] = useState('');
   const [policyRules, setPolicyRules] = useState<PolicyRule[]>([emptyRule()]);
+  const [policyIncludeSuppressed, setPolicyIncludeSuppressed] = useState(true);
   const [policyError, setPolicyError] = useState('');
   const [policySaving, setPolicySaving] = useState(false);
   const policyModal = useOverlayState();
@@ -323,6 +334,7 @@ export default function OrgDetailPage() {
     setEditingPolicy(null);
     setPolicyName('');
     setPolicyRules([emptyRule()]);
+    setPolicyIncludeSuppressed(true);
     setPolicyError('');
     policyModal.open();
   }
@@ -332,6 +344,7 @@ export default function OrgDetailPage() {
     setEditingPolicy(policy);
     setPolicyName(policy.name);
     setPolicyRules(policy.rules.length > 0 ? policy.rules : [emptyRule()]);
+    setPolicyIncludeSuppressed(policy.include_suppressed ?? true);
     setPolicyError('');
     policyModal.open();
   }
@@ -343,10 +356,16 @@ export default function OrgDetailPage() {
     setPolicySaving(true);
     try {
       if (editingPolicy) {
-        await updatePolicy(id, editingPolicy.id, policyName, policyRules);
+        await updatePolicy(
+          id,
+          editingPolicy.id,
+          policyName,
+          policyRules,
+          policyIncludeSuppressed
+        );
         toast.success('Policy updated');
       } else {
-        await createPolicy(id, policyName, policyRules);
+        await createPolicy(id, policyName, policyRules, policyIncludeSuppressed);
         toast.success('Policy created');
       }
       policyModal.close();
@@ -668,6 +687,26 @@ export default function OrgDetailPage() {
                       required
                     />
                   </div>
+
+                  <Card className="bg-surface-secondary p-3">
+                    <Switch
+                      isSelected={policyIncludeSuppressed}
+                      onChange={setPolicyIncludeSuppressed}
+                    >
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                      <Switch.Content>
+                        <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                          Count suppressed vulnerabilities in policy evaluation
+                        </Label>
+                        <p className="text-xs text-zinc-500">
+                          Turn off to ignore effectively suppressed vulnerabilities for this
+                          policy.
+                        </p>
+                      </Switch.Content>
+                    </Switch>
+                  </Card>
 
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between">

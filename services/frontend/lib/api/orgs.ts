@@ -74,11 +74,30 @@ export const listOrgAuditLog = (orgId: string, page = 1, limit = 50) => {
   return req<{ data: AuditEntry[]; total: number }>('GET', `/api/v1/orgs/${orgId}/audit?${params}`);
 };
 
-export const createPolicy = (orgId: string, name: string, rules: PolicyRule[]) =>
-  req<OrgPolicy>('POST', `/api/v1/orgs/${orgId}/policies`, { name, rules });
+export const createPolicy = (
+  orgId: string,
+  name: string,
+  rules: PolicyRule[],
+  includeSuppressed = true
+) =>
+  req<OrgPolicy>('POST', `/api/v1/orgs/${orgId}/policies`, {
+    name,
+    rules,
+    include_suppressed: includeSuppressed,
+  });
 
-export const updatePolicy = (orgId: string, policyId: string, name: string, rules: PolicyRule[]) =>
-  req<OrgPolicy>('PUT', `/api/v1/orgs/${orgId}/policies/${policyId}`, { name, rules });
+export const updatePolicy = (
+  orgId: string,
+  policyId: string,
+  name: string,
+  rules: PolicyRule[],
+  includeSuppressed: boolean
+) =>
+  req<OrgPolicy>('PUT', `/api/v1/orgs/${orgId}/policies/${policyId}`, {
+    name,
+    rules,
+    include_suppressed: includeSuppressed,
+  });
 
 export const deletePolicy = (orgId: string, policyId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/orgs/${orgId}/policies/${policyId}`);

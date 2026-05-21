@@ -5,9 +5,9 @@ import {
   clearToken,
   clearUser,
   getAISettings,
-  getWorkspaceTourState,
   getUser,
   getWorkScope,
+  getWorkspaceTourState,
   listMyOrgInvites,
   listOrgs,
   Org,
@@ -17,6 +17,7 @@ import {
 } from '@/lib/api';
 import {
   Avatar,
+  Badge,
   Button,
   Card,
   Chip,
@@ -187,6 +188,7 @@ function SidebarNavLink({
 }) {
   const iconOnly = mode === 'collapsed';
   const isMobile = mode === 'mobile';
+  const showCollapsedInviteBadge = href === '/orgs' && iconOnly && inviteCount > 0;
 
   return (
     <Link
@@ -221,6 +223,9 @@ function SidebarNavLink({
         className="relative z-10 shrink-0"
         style={{ color: active ? 'var(--accent-soft-foreground)' : 'var(--text-faint)' }}
       />
+      {showCollapsedInviteBadge ? (
+        <Badge className="pointer-events-none right-1" color="warning" size="sm" />
+      ) : null}
       {!iconOnly ? (
         <span className={`relative z-10 flex-1 ${isMobile ? '' : 'truncate'}`}>{itemLabel}</span>
       ) : null}
@@ -359,14 +364,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [
-    aiEnabled,
-    mounted,
-    pathname,
-    router,
-    workspaceTourCompleted,
-    workspaceTourPendingStart,
-  ]);
+  }, [aiEnabled, mounted, pathname, router, workspaceTourCompleted, workspaceTourPendingStart]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {

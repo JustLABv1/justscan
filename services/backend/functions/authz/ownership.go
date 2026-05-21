@@ -61,7 +61,16 @@ func ApplyOwnershipVisibility(query *bun.SelectQuery, alias, legacyUserColumn, o
 // alias, ownerUserColumn, ownerOrgColumn and shareTable/shareResourceColumn
 // mirror the same columns used in ApplyOwnershipVisibility.
 func ApplyWorkspaceScope(c *gin.Context, query *bun.SelectQuery, alias, ownerUserColumn, ownerOrgColumn, shareTable, shareResourceColumn string, userID uuid.UUID) *bun.SelectQuery {
-	scope := c.Query("scope")
+	return ApplyWorkspaceScopeValue(query, alias, ownerUserColumn, ownerOrgColumn, shareTable, shareResourceColumn, userID, c.Query("scope"))
+}
+
+// ApplyWorkspaceScopeValue applies a workspace scope to a query using an explicit scope value.
+//
+// scope values:
+//   - ""         => no additional scope filter
+//   - "personal" => user-owned resources
+//   - org UUID   => org-owned or org-shared resources
+func ApplyWorkspaceScopeValue(query *bun.SelectQuery, alias, ownerUserColumn, ownerOrgColumn, shareTable, shareResourceColumn string, userID uuid.UUID, scope string) *bun.SelectQuery {
 	if scope == "" {
 		return query
 	}

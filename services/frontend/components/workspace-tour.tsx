@@ -19,9 +19,9 @@ import {
 import {
   NextStep,
   NextStepProvider,
+  useNextStep,
   type CardComponentProps,
   type Tour,
-  useNextStep,
 } from 'nextstepjs';
 
 export const WORKSPACE_TOUR_NAME = 'justscan-workspace-tour';
@@ -182,7 +182,7 @@ function HeroTourCard({
         variant="default"
       >
         <Card.Header className="flex flex-col items-start gap-4">
-          <div className="flex w-full items-start gap-3">
+          <div className="flex w-full items-center gap-3">
             {step.icon ? (
               <div
                 className="flex size-10 shrink-0 items-center justify-center rounded-2xl"
@@ -196,7 +196,7 @@ function HeroTourCard({
                 {step.icon}
               </div>
             ) : null}
-            <div className="min-w-0 flex-1 space-y-3">
+            <div className="min-w-0 flex-1 space-y-1">
               <Chip color="accent" size="sm" variant="soft">
                 Step {currentStep + 1} of {totalSteps}
               </Chip>

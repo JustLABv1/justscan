@@ -138,7 +138,11 @@ export default function SuppressionsPage() {
   );
 
   function canManageAccess(suppression: Suppression) {
-    if (suppression.read_only || suppression.source === 'xray' || suppression.owner_type === 'system')
+    if (
+      suppression.read_only ||
+      suppression.source === 'xray' ||
+      suppression.owner_type === 'system'
+    )
       return false;
     if (isPlatformAdmin) return true;
     if (suppression.owner_type === 'org' && suppression.owner_org_id) {
@@ -629,11 +633,10 @@ export default function SuppressionsPage() {
                   ) : appliedImages.length === 0 ? (
                     <p className="text-sm text-zinc-500">No matching images were found.</p>
                   ) : (
-                    <div className="max-h-[320px] overflow-y-auto">
+                    <div className="max-h-[320px] overflow-y-auto flex flex-col gap-3">
                       {appliedImages.map((image) => (
                         <Card
                           key={`${image.image_name}:${image.image_tag}:${image.image_digest}`}
-                          className="py-3"
                           variant="secondary"
                         >
                           <div className="flex items-start justify-between gap-3">

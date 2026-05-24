@@ -34,6 +34,8 @@ type RuntimeWarning = {
   detail: string;
 };
 
+type StageTone = 'default' | 'accent' | 'success' | 'warning' | 'danger';
+
 type StatusTone = {
   color: string;
   background: string;
@@ -592,10 +594,40 @@ const CVE_CONVEYOR_ITEMS = [
   { label: 'CVE-2024-6387', color: 'danger' as const },
 ];
 
+const STAGE_SCENE_STATUS: Record<string, { eyebrow: string; tone: StageTone }> = {
+  queued: { eyebrow: 'Queue lane', tone: 'default' },
+  preparing_image: { eyebrow: 'Image prep', tone: 'accent' },
+  scanning_image: { eyebrow: 'Layer scan', tone: 'accent' },
+  processing_results: { eyebrow: 'Normalize', tone: 'warning' },
+  finalizing_report: { eyebrow: 'Persist', tone: 'success' },
+  warming_cache: { eyebrow: 'Cache warm-up', tone: 'warning' },
+  indexing_artifact: { eyebrow: 'Artifact index', tone: 'accent' },
+  queued_in_xray: { eyebrow: 'Xray queue', tone: 'warning' },
+  waiting_for_xray: { eyebrow: 'Provider wait', tone: 'warning' },
+  importing_results: { eyebrow: 'Import', tone: 'success' },
+};
+
 function visualLayerState(index: number, activeLayerIndex: number): ProgressStepState {
   if (index < activeLayerIndex) return 'complete';
   if (index === activeLayerIndex) return 'active';
   return 'pending';
+}
+
+function stageSceneStatus(activeKey: string): { eyebrow: string; tone: StageTone } {
+  return STAGE_SCENE_STATUS[activeKey] ?? { eyebrow: 'Backend activity', tone: 'accent' };
+}
+
+function motionTransition(
+  reduceMotion: boolean,
+  duration: number,
+  delay = 0
+): { duration: number; ease: 'easeInOut'; repeat: number; delay: number } {
+  return {
+    duration,
+    ease: 'easeInOut',
+    repeat: reduceMotion ? 0 : Infinity,
+    delay: reduceMotion ? 0 : delay,
+  };
 }
 
 function CveEmitter({ reduceMotion }: { reduceMotion: boolean }) {
@@ -636,17 +668,124 @@ function CveEmitter({ reduceMotion }: { reduceMotion: boolean }) {
   );
 }
 
-function ScanLayerScene({
-  progress,
-  progressPercent,
-  providerName,
-  image,
+function FloatingSignal({
+  label,
+  color,
+  index,
   reduceMotion,
 }: {
-  progress: ProgressModel;
+  label: string;
+  color: StageTone;
+  index: number;
+  reduceMotion: boolean;
+}) {
+  return (
+    <motion.div
+      className="absolute"
+      style={{ top: `${24 + index * 24}%`, left: 0 }}
+      animate={
+        reduceMotion
+          ? { left: 'calc(100% - 7rem)', opacity: 0.82 }
+          : {
+              left: ['0%', '46%', 'calc(100% - 7rem)'],
+              y: [0, index % 2 === 0 ? -8 : 8, 0],
+              opacity: [0, 1, 0.92],
+            }
+      }
+      transition={motionTransition(reduceMotion, 4.2, index * 0.7)}
+    >
+      <Chip color={color} size="sm" variant="soft" className="font-mono shadow-surface">
+        {label}
+      </Chip>
+    </motion.div>
+  );
+}
+
+function QueueLaneScene({ reduceMotion, xray = false }: { reduceMotion: boolean; xray?: boolean }) {
+  const jobs = xray
+    ? ['Submitted', 'Provider queue', 'Awaiting worker']
+    : ['Accepted', 'Queued', 'Worker'];
+
+  return (
+    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
+      <div className="absolute inset-x-6 top-1/2 h-2 -translate-y-1/2 rounded-full bg-default" />
+      <div className="relative grid h-[220px] content-center gap-4">
+        {jobs.map((job, index) => (
+          <motion.div
+            key={job}
+            className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 shadow-surface"
+            animate={
+              reduceMotion
+                ? { opacity: index === 1 ? 1 : 0.7, x: 0 }
+                : { opacity: [0.62, 1, 0.62], x: index === 1 ? [0, 8, 0] : 0 }
+            }
+            transition={motionTransition(reduceMotion, 2.8, index * 0.25)}
+          >
+            <span className="flex size-8 items-center justify-center rounded-xl bg-accent/15">
+              <span
+                className={`${index === 1 ? 'bg-accent' : 'bg-foreground/30'} size-2 rounded-full`}
+              />
+            </span>
+            <span className="text-sm font-medium text-foreground">{job}</span>
+            <span className="ml-auto text-xs text-muted">{index === 1 ? 'Active' : 'Ready'}</span>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PrepScene({ reduceMotion, xray = false }: { reduceMotion: boolean; xray?: boolean }) {
+  const blocks = xray
+    ? ['Registry path', 'Artifactory cache', 'Xray access']
+    : ['Registry auth', 'Image metadata', 'Scanner env'];
+
+  return (
+    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
+      <div className="grid h-[220px] place-items-center">
+        <div className="grid w-full max-w-sm gap-3">
+          {blocks.map((block, index) => (
+            <motion.div
+              key={block}
+              className="rounded-2xl bg-surface px-4 py-3 shadow-surface"
+              animate={
+                reduceMotion
+                  ? { x: 0, opacity: 1 }
+                  : { x: [index % 2 === 0 ? -16 : 16, 0], opacity: [0.55, 1] }
+              }
+              transition={{
+                duration: 1.5,
+                ease: 'easeInOut',
+                repeat: reduceMotion ? 0 : Infinity,
+                repeatType: 'reverse',
+                delay: index * 0.22,
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <span className="size-2 rounded-full bg-accent" />
+                <span className="text-sm font-medium text-foreground">{block}</span>
+                <Chip
+                  color={xray ? 'warning' : 'accent'}
+                  size="sm"
+                  variant="soft"
+                  className="ml-auto"
+                >
+                  Prep
+                </Chip>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DockerLayerScanScene({
+  progressPercent,
+  reduceMotion,
+}: {
   progressPercent: number;
-  providerName: string;
-  image?: string;
   reduceMotion: boolean;
 }) {
   const activeLayerIndex = Math.min(
@@ -655,97 +794,347 @@ function ScanLayerScene({
   );
 
   return (
-    <Card className="relative min-h-[380px] overflow-hidden">
-      <Card.Content className="relative min-h-[348px] justify-between gap-5">
-        <span aria-hidden className="absolute inset-x-8 top-3 h-px bg-divider/70" />
-        <span aria-hidden className="absolute inset-y-8 left-3 w-px bg-divider/50" />
+    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
+      <div className="relative mx-auto flex w-full max-w-md flex-col gap-3 px-2 py-3 sm:px-5">
+        {SCAN_SCENE_LAYERS.map((label, index) => {
+          const state = visualLayerState(index, activeLayerIndex);
 
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-muted">Docker image scan</p>
-            <p
-              className="mt-1 break-words font-mono text-sm text-foreground"
-              style={{ overflowWrap: 'anywhere' }}
-              title={image}
+          return (
+            <motion.div
+              key={label}
+              className={`relative z-10 rounded-2xl bg-surface px-3 py-3 shadow-surface sm:px-4 ${
+                state === 'active' ? 'overflow-visible' : 'overflow-hidden'
+              } ${state === 'active' ? 'ring-1 ring-accent/30' : ''}`}
+              animate={
+                reduceMotion || state !== 'active'
+                  ? { opacity: state === 'pending' ? 0.7 : 1, y: 0 }
+                  : { opacity: 1, y: [0, -3, 0] }
+              }
+              transition={{
+                duration: 2.2,
+                ease: 'easeInOut',
+                repeat: reduceMotion || state !== 'active' ? 0 : Infinity,
+              }}
             >
-              {image || 'Image queued for analysis'}
-            </p>
-          </div>
-          <Chip size="sm" variant="secondary">
-            {providerName}
-          </Chip>
-        </div>
-
-        <div className="relative mx-auto flex w-full max-w-md flex-col gap-3 px-2 py-3 sm:px-5">
-          {SCAN_SCENE_LAYERS.map((label, index) => {
-            const state = visualLayerState(index, activeLayerIndex);
-
-            return (
-              <motion.div
-                key={label}
-                className={`relative z-10 rounded-2xl bg-surface-secondary px-3 py-3 shadow-surface sm:px-4 ${
-                  state === 'active' ? 'overflow-visible' : 'overflow-hidden'
-                } ${state === 'active' ? 'ring-1 ring-accent/30' : ''}`}
-                animate={
-                  reduceMotion || state !== 'active'
-                    ? { opacity: state === 'pending' ? 0.7 : 1, y: 0 }
-                    : { opacity: 1, y: [0, -3, 0] }
-                }
-                transition={{
-                  duration: 2.2,
-                  ease: 'easeInOut',
-                  repeat: reduceMotion || state !== 'active' ? 0 : Infinity,
-                }}
-              >
-                <div className="flex min-w-0 items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  aria-hidden
+                  className={`flex size-8 shrink-0 items-center justify-center rounded-xl ${
+                    state === 'active' ? 'bg-accent/15' : 'bg-default'
+                  }`}
+                >
                   <span
-                    aria-hidden
-                    className={`flex size-8 shrink-0 items-center justify-center rounded-xl ${
-                      state === 'active' ? 'bg-accent/15' : 'bg-default'
-                    }`}
-                  >
-                    <span
-                      className={`size-2 rounded-full ${
-                        state === 'pending'
-                          ? 'bg-foreground/30'
-                          : state === 'complete'
-                            ? 'bg-success'
-                            : 'bg-accent'
-                      } ${state === 'active' && !reduceMotion ? 'animate-pulse' : ''}`}
-                    />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-muted">{label}</span>
-                      <span className="text-xs font-medium text-foreground">
-                        {state === 'complete'
-                          ? 'Inspected'
-                          : state === 'active'
-                            ? 'Scanning'
-                            : 'Queued'}
-                      </span>
-                    </div>
-                    <ProgressBar
-                      aria-label={`${label} visual scan state`}
-                      className="mt-2"
-                      color={state === 'complete' ? 'success' : 'accent'}
-                      isIndeterminate={state === 'active' && !reduceMotion}
-                      size="sm"
-                      value={state === 'complete' ? 100 : state === 'active' ? 66 : 12}
-                    >
-                      <ProgressBar.Track>
-                        <ProgressBar.Fill />
-                      </ProgressBar.Track>
-                    </ProgressBar>
+                    className={`size-2 rounded-full ${
+                      state === 'pending'
+                        ? 'bg-foreground/30'
+                        : state === 'complete'
+                          ? 'bg-success'
+                          : 'bg-accent'
+                    } ${state === 'active' && !reduceMotion ? 'animate-pulse' : ''}`}
+                  />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-mono text-xs text-muted">{label}</span>
+                    <span className="text-xs font-medium text-foreground">
+                      {state === 'complete'
+                        ? 'Inspected'
+                        : state === 'active'
+                          ? 'Scanning'
+                          : 'Queued'}
+                    </span>
                   </div>
+                  <ProgressBar
+                    aria-label={`${label} visual scan state`}
+                    className="mt-2"
+                    color={state === 'complete' ? 'success' : 'accent'}
+                    isIndeterminate={state === 'active' && !reduceMotion}
+                    size="sm"
+                    value={state === 'complete' ? 100 : state === 'active' ? 66 : 12}
+                  >
+                    <ProgressBar.Track>
+                      <ProgressBar.Fill />
+                    </ProgressBar.Track>
+                  </ProgressBar>
                 </div>
-                {state === 'active' ? <CveEmitter reduceMotion={reduceMotion} /> : null}
-              </motion.div>
-            );
-          })}
-        </div>
+              </div>
+              {state === 'active' ? <CveEmitter reduceMotion={reduceMotion} /> : null}
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-        <p className="max-w-md text-xs leading-5 text-muted">{progress.note}</p>
+function ProcessingScene({
+  reduceMotion,
+  importing = false,
+}: {
+  reduceMotion: boolean;
+  importing?: boolean;
+}) {
+  const incoming = importing
+    ? ['XRAY-001', 'XRAY-002', 'XRAY-003']
+    : ['Finding A', 'Finding B', 'Finding A'];
+
+  return (
+    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
+      <div className="grid min-h-[220px] gap-5 md:grid-cols-[minmax(0,1fr)_18rem] md:items-center">
+        <div className="relative h-40 min-w-0 overflow-visible rounded-2xl bg-surface/55 p-4 md:h-48">
+          <span
+            aria-hidden
+            className="absolute left-5 right-5 top-1/2 h-1 -translate-y-1/2 rounded-full bg-default"
+          />
+          <span
+            aria-hidden
+            className="absolute right-4 top-1/2 size-5 -translate-y-1/2 rounded-full bg-accent/20 ring-1 ring-accent/25"
+          />
+          {incoming.map((item, index) => (
+            <FloatingSignal
+              key={`${item}-${index}`}
+              color={index === 2 && !importing ? 'warning' : 'accent'}
+              index={index}
+              label={item}
+              reduceMotion={reduceMotion}
+            />
+          ))}
+        </div>
+        <div className="relative rounded-2xl bg-surface p-4 shadow-surface">
+          <span
+            aria-hidden
+            className="absolute -left-2 top-1/2 hidden size-4 -translate-y-1/2 rounded-full bg-accent md:block"
+          />
+          <p className="text-xs font-medium text-muted">
+            {importing ? 'JustScan results' : 'Normalized output'}
+          </p>
+          <div className="mt-3 space-y-2">
+            {['Deduplicated', 'Enriched', importing ? 'Imported' : 'Ready to persist'].map(
+              (row, index) => (
+                <motion.div
+                  key={row}
+                  className="flex items-center gap-2 rounded-xl bg-surface-secondary px-3 py-2"
+                  animate={reduceMotion ? { opacity: 1 } : { opacity: [0.55, 1, 0.75] }}
+                  transition={motionTransition(reduceMotion, 2.6, index * 0.32)}
+                >
+                  <span
+                    className={`size-2 rounded-full ${index === 2 ? 'bg-success' : 'bg-accent'}`}
+                  />
+                  <span className="text-xs font-medium text-foreground">{row}</span>
+                </motion.div>
+              )
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FinalizingScene({ reduceMotion }: { reduceMotion: boolean }) {
+  return (
+    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
+      <div className="mx-auto grid h-[220px] max-w-sm content-center gap-3">
+        {['Findings', 'Metadata', 'Report summary'].map((row, index) => (
+          <motion.div
+            key={row}
+            className="rounded-2xl bg-surface p-4 shadow-surface"
+            animate={reduceMotion ? { opacity: 1 } : { opacity: [0.55, 1, 1], x: [12, 0, 0] }}
+            transition={motionTransition(reduceMotion, 2.8, index * 0.55)}
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex size-7 items-center justify-center rounded-full bg-success/15">
+                <span className="size-2 rounded-full bg-success" />
+              </span>
+              <span className="text-sm font-medium text-foreground">{row}</span>
+              <Chip color="success" size="sm" variant="soft" className="ml-auto">
+                Saved
+              </Chip>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function IndexingScene({ reduceMotion }: { reduceMotion: boolean }) {
+  return (
+    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
+      <div className="grid h-[220px] grid-cols-[0.8fr_1.2fr] items-center gap-4">
+        <div className="rounded-2xl bg-surface p-4 shadow-surface">
+          <p className="text-xs font-medium text-muted">Manifest</p>
+          <p className="mt-2 font-mono text-sm text-foreground">layers[]</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {['Layer A', 'Layer B', 'Layer C', 'Layer D'].map((node, index) => (
+            <motion.div
+              key={node}
+              className="rounded-2xl bg-surface px-3 py-4 text-center shadow-surface"
+              animate={
+                reduceMotion
+                  ? { scale: 1, opacity: 1 }
+                  : { scale: [0.96, 1.03, 1], opacity: [0.6, 1, 0.85] }
+              }
+              transition={motionTransition(reduceMotion, 2.4, index * 0.24)}
+            >
+              <span className="font-mono text-xs text-foreground">{node}</span>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WaitingXrayScene({ reduceMotion }: { reduceMotion: boolean }) {
+  return (
+    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
+      <div className="grid h-[220px] place-items-center">
+        <div className="relative flex size-44 items-center justify-center rounded-full bg-surface shadow-surface">
+          {[0, 1, 2].map((index) => (
+            <motion.span
+              key={index}
+              aria-hidden
+              className="absolute rounded-full border border-warning/35"
+              style={{ inset: `${index * 18}px` }}
+              animate={
+                reduceMotion
+                  ? { opacity: 0.45, scale: 1 }
+                  : { opacity: [0.25, 0.7, 0.25], scale: [0.96, 1.05, 0.96] }
+              }
+              transition={motionTransition(reduceMotion, 3.4, index * 0.45)}
+            />
+          ))}
+          <div className="text-center">
+            <p className="font-mono text-sm text-foreground">Xray</p>
+            <p className="mt-1 text-xs text-muted">Polling provider</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GenericActivityScene({
+  activeTitle,
+  reduceMotion,
+}: {
+  activeTitle: string;
+  reduceMotion: boolean;
+}) {
+  return (
+    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
+      <div className="mx-auto grid h-[220px] max-w-sm content-center gap-3">
+        {['Accepted', activeTitle, 'Next update'].map((row, index) => (
+          <motion.div
+            key={`${row}-${index}`}
+            className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 shadow-surface"
+            animate={
+              reduceMotion ? { opacity: 1 } : { opacity: index === 1 ? [0.7, 1, 0.7] : 0.74 }
+            }
+            transition={motionTransition(reduceMotion, 2.7, index * 0.18)}
+          >
+            <span
+              className={`${index === 1 ? 'bg-accent' : 'bg-foreground/30'} size-2 rounded-full`}
+            />
+            <span className="text-sm font-medium text-foreground">{row}</span>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StageSceneVisual({
+  activeKey,
+  progressPercent,
+  title,
+  reduceMotion,
+}: {
+  activeKey: string;
+  progressPercent: number;
+  title: string;
+  reduceMotion: boolean;
+}) {
+  switch (activeKey) {
+    case 'queued':
+      return <QueueLaneScene reduceMotion={reduceMotion} />;
+    case 'preparing_image':
+      return <PrepScene reduceMotion={reduceMotion} />;
+    case 'scanning_image':
+      return <DockerLayerScanScene progressPercent={progressPercent} reduceMotion={reduceMotion} />;
+    case 'processing_results':
+      return <ProcessingScene reduceMotion={reduceMotion} />;
+    case 'finalizing_report':
+      return <FinalizingScene reduceMotion={reduceMotion} />;
+    case 'warming_cache':
+      return <PrepScene reduceMotion={reduceMotion} xray />;
+    case 'indexing_artifact':
+      return <IndexingScene reduceMotion={reduceMotion} />;
+    case 'queued_in_xray':
+      return <QueueLaneScene reduceMotion={reduceMotion} xray />;
+    case 'waiting_for_xray':
+      return <WaitingXrayScene reduceMotion={reduceMotion} />;
+    case 'importing_results':
+      return <ProcessingScene reduceMotion={reduceMotion} importing />;
+    default:
+      return <GenericActivityScene activeTitle={title} reduceMotion={reduceMotion} />;
+  }
+}
+
+function ScanStageScene({
+  progress,
+  progressPercent,
+  providerName,
+  image,
+  detailMessage,
+  reduceMotion,
+}: {
+  progress: ProgressModel;
+  progressPercent: number;
+  providerName: string;
+  image?: string;
+  detailMessage: string;
+  reduceMotion: boolean;
+}) {
+  const sceneStatus = stageSceneStatus(progress.activeKey);
+
+  return (
+    <Card className="relative min-h-[380px] overflow-hidden">
+      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Chip color={sceneStatus.tone} size="sm" variant="soft">
+              {sceneStatus.eyebrow}
+            </Chip>
+            <Chip size="sm" variant="secondary">
+              {providerName}
+            </Chip>
+          </div>
+          <Card.Title className="mt-3 text-xl">{progress.title}</Card.Title>
+          <Card.Description className="mt-2 max-w-2xl leading-6">{detailMessage}</Card.Description>
+        </div>
+      </Card.Header>
+
+      <Card.Content className="gap-4">
+        <StageSceneVisual
+          activeKey={progress.activeKey}
+          progressPercent={progressPercent}
+          reduceMotion={reduceMotion}
+          title={progress.title}
+        />
+        <div>
+          <p className="text-xs text-muted">Image</p>
+          <p
+            className="mt-1 break-words font-mono text-sm text-foreground"
+            style={{ overflowWrap: 'anywhere' }}
+            title={image}
+          >
+            {image || 'Image queued for analysis'}
+          </p>
+        </div>
+        <p className="text-xs leading-5 text-muted">{progress.note}</p>
       </Card.Content>
     </Card>
   );
@@ -1002,55 +1391,20 @@ export function ScanningAnimation({
 
   return (
     <section className="space-y-4">
-      <Card>
-        <Card.Header className="gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Chip color="accent" size="sm" variant="soft">
-                Scan running
-              </Chip>
-              <Chip size="sm" variant="secondary">
-                {providerName}
-              </Chip>
-            </div>
-            <Card.Title className="mt-3 text-2xl">Inspecting image layers</Card.Title>
-            <Card.Description className="mt-2 max-w-2xl leading-6">
-              Packages, dependencies, and provider results are being inspected before the report is
-              ready.
-            </Card.Description>
-          </div>
-
-          <div className="flex flex-wrap gap-2 md:justify-end">
-            <Chip color="accent" size="sm" variant="soft" className="font-mono">
-              {progress.eyebrow}
-            </Chip>
-            {(startedAt || elapsed > 0) && (
-              <Chip size="sm" variant="secondary" className="font-mono">
-                total {formatElapsed(elapsed)}
-              </Chip>
-            )}
-            {activeStepElapsed !== null ? (
-              <Chip size="sm" variant="secondary" className="font-mono">
-                step {formatElapsed(activeStepElapsed)}
-              </Chip>
-            ) : null}
-          </div>
-        </Card.Header>
-      </Card>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.98fr)]">
-        <ScanLayerScene
-          image={image}
-          progress={progress}
-          progressPercent={progressPercent}
-          providerName={providerName}
-          reduceMotion={reduceMotion}
-        />
+      <div className="grid gap-4 xl:grid-cols-[minmax(360px,0.98fr)_minmax(0,1.02fr)]">
         <ScanStageRail
           detailKey={`${progress.activeKey}-${detailTick}`}
           detailMessage={detailMessage}
           progress={progress}
           progressPercent={progressPercent}
+          reduceMotion={reduceMotion}
+        />
+        <ScanStageScene
+          detailMessage={detailMessage}
+          image={image}
+          progress={progress}
+          progressPercent={progressPercent}
+          providerName={providerName}
           reduceMotion={reduceMotion}
         />
       </div>

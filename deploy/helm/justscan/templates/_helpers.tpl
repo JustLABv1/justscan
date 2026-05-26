@@ -174,28 +174,6 @@ Otherwise we read from the generated JustScan secret.
 {{- end }}
 
 {{/*
-OIDC redirect URI.
-When backend.config.oidc.redirectUri is set, use it directly.
-Otherwise derive it from the first ingress host.
-*/}}
-{{- define "justscan.oidc.redirectUri" -}}
-{{- if .Values.backend.config.oidc.redirectUri }}
-{{- .Values.backend.config.oidc.redirectUri }}
-{{- else if and .Values.ingress.enabled (gt (len .Values.ingress.hosts) 0) }}
-{{- $host := (index .Values.ingress.hosts 0).host }}
-{{- $scheme := "https" }}
-{{- if .Values.ingress.tls }}
-{{- $scheme = "https" }}
-{{- else }}
-{{- $scheme = "http" }}
-{{- end }}
-{{- printf "%s://%s/api/v1/auth/oidc/callback" $scheme $host }}
-{{- else }}
-{{- "" }}
-{{- end }}
-{{- end }}
-
-{{/*
 Frontend API URL.
 When frontend.config.apiUrl is set, use it. Otherwise point to the backend Service.
 */}}

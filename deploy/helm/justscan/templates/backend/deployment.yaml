@@ -61,14 +61,6 @@ spec:
                   name: {{ include "justscan.backend.secretName" . }}
                   key: {{ if .Values.backend.secrets.existingSecret }}{{ .Values.backend.secrets.existingSecretKeys.encryptionKey }}{{ else }}encryption-key{{ end }}
 
-            {{- if .Values.backend.config.oidc.enabled }}
-            - name: BACKEND_OIDC_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "justscan.backend.secretName" . }}
-                  key: {{ if .Values.backend.secrets.existingSecret }}{{ .Values.backend.secrets.existingSecretKeys.oidcClientSecret }}{{ else }}oidc-client-secret{{ end }}
-            {{- end }}
-
             - name: BACKEND_VULN_KB_NVD_API_KEY
               valueFrom:
                 secretKeyRef:

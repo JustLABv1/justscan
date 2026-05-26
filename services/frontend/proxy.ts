@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { PATHNAME_HEADER_NAME } from '@/lib/metadata';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -78,16 +79,26 @@ async function getMaintenanceSettings(): Promise<MaintenanceSettings | null> {
   }
 }
 
+function continueWithPathnameHeader(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(PATHNAME_HEADER_NAME, request.nextUrl.pathname);
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isAllowlisted(pathname) || isAdmin(request)) {
-    return NextResponse.next();
+    return continueWithPathnameHeader(request);
   }
 
   const maintenance = await getMaintenanceSettings();
   if (!maintenance?.enabled) {
-    return NextResponse.next();
+    return continueWithPathnameHeader(request);
   }
 
   const url = request.nextUrl.clone();

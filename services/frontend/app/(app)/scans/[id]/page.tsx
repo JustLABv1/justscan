@@ -5,6 +5,7 @@ import { ManageSuppressionAccessModal } from '@/components/suppressions/manage-s
 import { useToast } from '@/components/toast';
 import {
   OwnershipBadge,
+  resolveDisplayStatus,
   SeverityBadge,
   SourceBadge,
   StatusBadge,
@@ -133,6 +134,15 @@ const DEFAULT_VULNERABILITY_VIEW_SETTINGS: VulnerabilityViewSettings = {
   xray_policy_first: false,
   policy_failed_only: false,
 };
+
+const ACTIVE_SCAN_STATUSES = new Set([
+  'pending',
+  'running',
+  'warming_cache',
+  'indexing_artifact',
+  'queued_in_xray',
+  'waiting_for_xray',
+]);
 
 const VULNERABILITY_SORT_LABELS: Record<VulnerabilityViewSettings['sort_by'], string> = {
   vuln_id: 'CVE ID',
@@ -1544,6 +1554,8 @@ export default function ScanDetailPage() {
     );
 
   if (!scan) return null;
+  const effectiveScanStatus = resolveDisplayStatus(scan.status, scan.external_status);
+  const isScanInProgress = ACTIVE_SCAN_STATUSES.has(effectiveScanStatus);
 
   const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
   const isPlatformAdmin = getTokenType() === 'admin' || currentUser?.role === 'admin';
@@ -1763,12 +1775,12 @@ export default function ScanDetailPage() {
         <ArrowLeft01Icon size={15} />
         Back to scans
       </Button>
-      {(scan.status === 'pending' || scan.status === 'running') && (
+      {isScanInProgress && (
         <Button
-          className="btn-warning"
+          className="bg-warning-soft-hover text-warning"
           isDisabled={cancelling || !canMutateCurrentScan}
           onPress={handleCancel}
-          variant="secondary"
+          variant="primary"
         >
           {cancelling ? (
             <span className="size-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
@@ -1781,11 +1793,7 @@ export default function ScanDetailPage() {
       <Button
         className="btn-primary"
         isDisabled={
-          reScanning ||
-          !canMutateCurrentScan ||
-          scan.status === 'running' ||
-          scan.status === 'pending' ||
-          Boolean(rescanDisabledReason)
+          reScanning || !canMutateCurrentScan || isScanInProgress || Boolean(rescanDisabledReason)
         }
         onPress={handleReScan}
         variant="primary"
@@ -1825,7 +1833,7 @@ export default function ScanDetailPage() {
           </Dropdown.Trigger>
           <Dropdown.Popover className="min-w-[220px]">
             <Dropdown.Menu
-              onAction={(key) => {
+              onAction={(key: any) => {
                 if (key === 'export') {
                   window.open(`/reports/print?scans=${scan.id}`, '_blank', 'noopener,noreferrer');
                 }
@@ -2162,14 +2170,14 @@ export default function ScanDetailPage() {
               label="Filter components by name"
               type="text"
               value={sbomNameInput}
-              onChange={(e) => setSbomNameInput(e.target.value)}
+              onChange={(e: any) => setSbomNameInput(e.target.value)}
               placeholder="Filter by name..."
               className="min-w-0 md:flex-1"
               containerClassName="min-w-0 md:flex-1"
             />
             <Select
               value={sbomTypeFilter || '__all__'}
-              onChange={(value) => {
+              onChange={(value: any) => {
                 setSbomTypeFilter(String(value === '__all__' ? '' : (value ?? '')));
                 setSbomLoaded(false);
               }}
@@ -2401,7 +2409,7 @@ export default function ScanDetailPage() {
                     <SearchField.Input
                       placeholder="Search package..."
                       value={pkgInput}
-                      onChange={(event) => setPkgInput(event.target.value)}
+                      onChange={(event: any) => setPkgInput(event.target.value)}
                     />
                     <SearchField.ClearButton />
                   </SearchField.Group>
@@ -2412,7 +2420,7 @@ export default function ScanDetailPage() {
                     <SearchField.Input
                       placeholder="Search CVE (e.g. CVE-2026-31789)..."
                       value={cveInput}
-                      onChange={(event) => setCveInput(event.target.value)}
+                      onChange={(event: any) => setCveInput(event.target.value)}
                     />
                     <SearchField.ClearButton />
                   </SearchField.Group>
@@ -2421,7 +2429,7 @@ export default function ScanDetailPage() {
                   aria-label="Sort vulnerabilities by"
                   value={sortBy}
                   className="w-full"
-                  onChange={(value) => {
+                  onChange={(value: any) => {
                     setSortBy(value as VulnerabilityViewSettings['sort_by']);
                     setPage(1);
                   }}
@@ -2445,7 +2453,7 @@ export default function ScanDetailPage() {
                   aria-label="Sort direction"
                   value={sortDir}
                   className="w-full"
-                  onChange={(value) => {
+                  onChange={(value: any) => {
                     setSortDir(value as VulnerabilityViewSettings['sort_dir']);
                     setPage(1);
                   }}
@@ -2470,7 +2478,7 @@ export default function ScanDetailPage() {
                   step={0.1}
                   value={minCvss || ''}
                   placeholder="Min CVSS"
-                  onChange={(e) => {
+                  onChange={(e: any) => {
                     const val = parseFloat(e.target.value);
                     setMinCvss(!isNaN(val) ? val : 0);
                     setPage(1);
@@ -2939,7 +2947,7 @@ export default function ScanDetailPage() {
                                               <div className="grid gap-2 sm:grid-cols-2">
                                                 <Select
                                                   value={suppressStatus}
-                                                  onChange={(value) =>
+                                                  onChange={(value: any) =>
                                                     setSuppressStatus(
                                                       value as Suppression['status']
                                                     )
@@ -2967,7 +2975,7 @@ export default function ScanDetailPage() {
                                                 </Select>
                                                 <Select
                                                   value={suppressScope}
-                                                  onChange={(value) =>
+                                                  onChange={(value: any) =>
                                                     setSuppressScope(
                                                       (value as
                                                         | 'personal'
@@ -2990,14 +2998,15 @@ export default function ScanDetailPage() {
                                                       <ListBox.Item id="personal">
                                                         Personal
                                                       </ListBox.Item>
-                                                    {(workScope.kind === 'org' ||
-                                                      suppressScope === 'workspace') && (
-                                                      <ListBox.Item id="workspace">
-                                                        {workScope.kind === 'org' && workScope.orgName
-                                                          ? `Workspace: ${workScope.orgName}`
-                                                          : 'Organization workspace'}
-                                                      </ListBox.Item>
-                                                    )}
+                                                      {(workScope.kind === 'org' ||
+                                                        suppressScope === 'workspace') && (
+                                                        <ListBox.Item id="workspace">
+                                                          {workScope.kind === 'org' &&
+                                                          workScope.orgName
+                                                            ? `Workspace: ${workScope.orgName}`
+                                                            : 'Organization workspace'}
+                                                        </ListBox.Item>
+                                                      )}
                                                       {isPlatformAdmin && (
                                                         <ListBox.Item id="global">
                                                           Global (all workspaces)
@@ -3012,7 +3021,7 @@ export default function ScanDetailPage() {
                                                 label="Suppression justification"
                                                 type="text"
                                                 value={suppressJustification}
-                                                onChange={(e) =>
+                                                onChange={(e: any) =>
                                                   setSuppressJustification(e.target.value)
                                                 }
                                                 placeholder="Suppression justification"
@@ -3040,7 +3049,7 @@ export default function ScanDetailPage() {
                                                       className={`${inputCls} flex min-h-10 items-center justify-between gap-1`}
                                                     >
                                                       <DateField.Input>
-                                                        {(seg) => (
+                                                        {(seg: any) => (
                                                           <DateField.Segment segment={seg} />
                                                         )}
                                                       </DateField.Input>
@@ -3062,21 +3071,21 @@ export default function ScanDetailPage() {
                                                         </Calendar.Header>
                                                         <Calendar.Grid>
                                                           <Calendar.GridHeader>
-                                                            {(day) => (
+                                                            {(day: any) => (
                                                               <Calendar.HeaderCell>
                                                                 {day}
                                                               </Calendar.HeaderCell>
                                                             )}
                                                           </Calendar.GridHeader>
                                                           <Calendar.GridBody>
-                                                            {(date) => (
+                                                            {(date: any) => (
                                                               <Calendar.Cell date={date} />
                                                             )}
                                                           </Calendar.GridBody>
                                                         </Calendar.Grid>
                                                         <Calendar.YearPickerGrid>
                                                           <Calendar.YearPickerGridBody>
-                                                            {({ year }) => (
+                                                            {({ year }: any) => (
                                                               <Calendar.YearPickerCell
                                                                 year={year}
                                                               />
@@ -3209,7 +3218,7 @@ export default function ScanDetailPage() {
                                         <TextArea
                                           className="w-full"
                                           value={commentText}
-                                          onChange={(e) => setCommentText(e.target.value)}
+                                          onChange={(e: any) => setCommentText(e.target.value)}
                                           placeholder="Add a note..."
                                           rows={3}
                                         />
@@ -3304,7 +3313,7 @@ export default function ScanDetailPage() {
               <div className="flex gap-2">
                 <Select
                   value={selectedOrgToAssign || '__none__'}
-                  onChange={(value) =>
+                  onChange={(value: any) =>
                     setSelectedOrgToAssign(String(value === '__none__' ? '' : (value ?? '')))
                   }
                   className="flex-1"
@@ -3865,13 +3874,13 @@ export default function ScanDetailPage() {
                 <div className="flex gap-2">
                   <Select
                     value={selectedTagToAdd || '__none__'}
-                    onChange={(value) =>
+                    onChange={(value: any) =>
                       setSelectedTagToAdd(String(value === '__none__' ? '' : (value ?? '')))
                     }
                     className="flex-1"
                     isDisabled={!canMutateCurrentScan}
                   >
-                    <Select.Trigger className={selectTriggerCls}>
+                    <Select.Trigger className="bg-surface-secondary">
                       <Select.Value />
                       <Select.Indicator />
                     </Select.Trigger>
@@ -4036,7 +4045,7 @@ export default function ScanDetailPage() {
                     <div className="flex gap-2">
                       <Select
                         value={scanOrgGrantOrgId || '__none__'}
-                        onChange={(value) =>
+                        onChange={(value: any) =>
                           setScanOrgGrantOrgId(String(value === '__none__' ? '' : (value ?? '')))
                         }
                         className="flex-1"

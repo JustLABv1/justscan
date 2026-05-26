@@ -1555,10 +1555,7 @@ export function ScanStepTimeline({
   };
 
   return (
-    <Card
-      className="surface-card overflow-hidden rounded-[28px] p-5 md:px-6 md:py-6"
-      style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
-    >
+    <Card>
       <style>{`
 				@keyframes timelineRise { 0% { opacity: 0; transform: translateY(12px); } 100% { opacity: 1; transform: translateY(0); } }
 				@keyframes timelineGlow { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.9; } }
@@ -1577,17 +1574,6 @@ export function ScanStepTimeline({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {canShowXrayDebug && (
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={() => {
-                void handleOpenXrayDebug();
-              }}
-            >
-              Xray debug
-            </Button>
-          )}
           {effectiveStatus && (
             <span
               className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
@@ -1600,11 +1586,22 @@ export function ScanStepTimeline({
               {statusTone.label}
             </span>
           )}
+          {canShowXrayDebug && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onPress={() => {
+                void handleOpenXrayDebug();
+              }}
+            >
+              Xray debug
+            </Button>
+          )}
         </div>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card>
+        <Card variant="secondary">
           <div className="flex flex-wrap items-center justify-between">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
               Total duration
@@ -1615,7 +1612,7 @@ export function ScanStepTimeline({
           </div>
           <p className="text-xs text-zinc-500">Across {orderedLogs.length} recorded steps</p>
         </Card>
-        <Card>
+        <Card variant="secondary">
           <div className="flex flex-wrap items-center justify-between">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
               Slowest step
@@ -1628,7 +1625,7 @@ export function ScanStepTimeline({
             {slowestStep ? formatDuration(slowestStep.durationMs) : 'No completed duration yet'}
           </p>
         </Card>
-        <Card>
+        <Card variant="secondary">
           <div className="flex flex-wrap items-center justify-between">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
               Provider
@@ -1639,7 +1636,7 @@ export function ScanStepTimeline({
             {totalOutputs} backend update{totalOutputs === 1 ? '' : 's'} captured
           </p>
         </Card>
-        <Card>
+        <Card variant="secondary">
           <div className="flex flex-wrap items-center justify-between">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
               Finished
@@ -1654,7 +1651,7 @@ export function ScanStepTimeline({
         </Card>
       </div>
 
-      <Card className="mt-5 p-4 md:p-5">
+      <Card variant="secondary">
         <div className="hidden md:block">
           <div className="overflow-x-auto">
             <div className="flex min-w-[900px] px-4 py-4">
@@ -1814,7 +1811,7 @@ export function ScanStepTimeline({
         </div>
       </Card>
 
-      <Card className="mt-4 rounded-2xl p-4 md:p-5">
+      <Card variant="secondary">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
@@ -1846,7 +1843,7 @@ export function ScanStepTimeline({
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Card variant="secondary">
+          <Card>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
               Started
             </p>
@@ -1858,7 +1855,7 @@ export function ScanStepTimeline({
             </p>
           </Card>
           {selectedResolvedEnd && (
-            <Card variant="secondary">
+            <Card>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
                 Finished
               </p>
@@ -1872,7 +1869,7 @@ export function ScanStepTimeline({
           )}
         </div>
 
-        <Card className="mt-4" variant="secondary">
+        <Card>
           <div className="flex items-center gap-2">
             <span
               className="size-2 rounded-full"
@@ -1908,21 +1905,18 @@ export function ScanStepTimeline({
       <Modal state={xrayDebugModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="full" placement="center">
-            <Modal.Dialog className="surface-modal max-h-[85vh] overflow-hidden rounded-2xl">
-              <Modal.Header
-                className="border-b px-6 py-4"
-                style={{ borderColor: 'var(--surface-border)' }}
-              >
+            <Modal.Dialog className="max-h-[85vh] overflow-hidden">
+              <Modal.Header>
                 <Modal.Heading className="text-base font-semibold text-zinc-900 dark:text-white">
                   Xray request timeline debug
                 </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="min-h-0 px-0 py-0">
+              <Modal.Body>
                 <div className="grid h-[70vh] grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]">
                   <div
                     className="border-b p-3 lg:border-b-0 lg:border-r"
-                    style={{ borderColor: 'var(--surface-border)' }}
+                    style={{ borderColor: 'var(--separator-secondary)' }}
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
@@ -1944,7 +1938,7 @@ export function ScanStepTimeline({
                         {xrayLogsError}
                       </p>
                     )}
-                    <div className="max-h-[60vh] space-y-1 overflow-y-auto pr-1">
+                    <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
                       {xrayLogs.map((entry, index) => {
                         const isActive = selectedXrayLog?.id === entry.id;
                         return (
@@ -1955,8 +1949,10 @@ export function ScanStepTimeline({
                             style={{
                               borderColor: isActive
                                 ? 'rgba(20,184,166,0.35)'
-                                : 'var(--surface-border)',
-                              background: isActive ? 'rgba(20,184,166,0.10)' : 'var(--card-bg)',
+                                : 'var(--separator-secondary)',
+                              background: isActive
+                                ? 'rgba(20,184,166,0.10)'
+                                : 'var(--surface-secondary)',
                             }}
                             onClick={() => setSelectedXrayLogID(entry.id)}
                           >
@@ -1987,7 +1983,7 @@ export function ScanStepTimeline({
                   <div className="min-h-0 overflow-y-auto p-4 md:p-5">
                     {selectedXrayLog ? (
                       <div className="space-y-3">
-                        <Card variant="secondary" className="space-y-1">
+                        <Card variant="secondary">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
                             Request
                           </p>
@@ -2002,9 +1998,13 @@ export function ScanStepTimeline({
                             - Status {selectedXrayLog.status_code}
                           </p>
                           {selectedXrayLog.error && (
-                            <p className="rounded-md border border-red-500/20 bg-red-500/10 px-2 py-1 text-xs text-red-500">
-                              {selectedXrayLog.error}
-                            </p>
+                            <Alert status="danger" className="bg-danger-soft">
+                              <Alert.Indicator />
+                              <Alert.Content>
+                                <Alert.Title>Unable to connect to server</Alert.Title>
+                                <Alert.Description>{selectedXrayLog.error}</Alert.Description>
+                              </Alert.Content>
+                            </Alert>
                           )}
                         </Card>
 
@@ -2014,7 +2014,7 @@ export function ScanStepTimeline({
                           </p>
                           <pre
                             className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border p-2 text-xs"
-                            style={{ borderColor: 'var(--surface-border)' }}
+                            style={{ borderColor: 'var(--separator-tertiary)' }}
                           >
                             {prettyXrayValue(selectedXrayLog.request_headers ?? {})}
                           </pre>
@@ -2026,7 +2026,7 @@ export function ScanStepTimeline({
                           </p>
                           <pre
                             className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border p-2 text-xs"
-                            style={{ borderColor: 'var(--surface-border)' }}
+                            style={{ borderColor: 'var(--separator-tertiary)' }}
                           >
                             {prettyXrayValue(selectedXrayLog.request_body ?? '')}
                           </pre>
@@ -2038,7 +2038,7 @@ export function ScanStepTimeline({
                           </p>
                           <pre
                             className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border p-2 text-xs"
-                            style={{ borderColor: 'var(--surface-border)' }}
+                            style={{ borderColor: 'var(--separator-tertiary)' }}
                           >
                             {prettyXrayValue(selectedXrayLog.response_headers ?? {})}
                           </pre>
@@ -2050,7 +2050,7 @@ export function ScanStepTimeline({
                           </p>
                           <pre
                             className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border p-2 text-xs"
-                            style={{ borderColor: 'var(--surface-border)' }}
+                            style={{ borderColor: 'var(--separator-tertiary)' }}
                           >
                             {prettyXrayValue(selectedXrayLog.response_body ?? '')}
                           </pre>

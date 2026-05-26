@@ -1,11 +1,10 @@
 'use client';
 import { Logo } from '@/components/logo';
+import { getApiBase } from '@/lib/api/base';
 import { setToken, setUser } from '@/lib/api';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
 export default function OIDCCallbackPage() {
   const router = useRouter();
@@ -31,7 +30,8 @@ export default function OIDCCallbackPage() {
     }
 
     // Fetch the current user details using the new token.
-    fetch(`${API}/api/v1/user/`, {
+    const apiBase = getApiBase();
+    fetch(`${apiBase}/api/v1/user/`, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',

@@ -1,4 +1,5 @@
 import { clearToken, clearUser, getToken } from './auth-store';
+import { getApiBase } from './base';
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -46,7 +47,7 @@ async function getErrorMessage(response: Response): Promise<string> {
 }
 
 export async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${API}${path}`, {
+  const response = await fetch(`${getApiBase()}${path}`, {
     method,
     headers: authHeaders(),
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -69,7 +70,7 @@ export async function req<T>(method: string, path: string, body?: unknown): Prom
 }
 
 export async function reqForm<T>(method: string, path: string, body: FormData): Promise<T> {
-  const response = await fetch(`${API}${path}`, {
+  const response = await fetch(`${getApiBase()}${path}`, {
     method,
     headers: authHeadersWithoutContentType(),
     body,
@@ -92,7 +93,7 @@ export async function reqForm<T>(method: string, path: string, body: FormData): 
 }
 
 export async function publicReq<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${API}${path}`, {
+  const response = await fetch(`${getApiBase()}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -113,7 +114,7 @@ export class ApiError extends Error {
 }
 
 export async function sharedReq<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${API}${path}`, {
+  const response = await fetch(`${getApiBase()}${path}`, {
     method,
     headers: authHeaders(),
     body: body !== undefined ? JSON.stringify(body) : undefined,

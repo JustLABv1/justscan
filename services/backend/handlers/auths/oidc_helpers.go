@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"justscan-backend/config"
@@ -12,13 +13,56 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// deriveFrontendOrigin returns the first allow_origins entry, stripping trailing slashes.
-// Falls back to an empty string (relative redirect) if none is configured.
-func deriveFrontendOrigin(cfg *config.RestfulConf) string {
-	if len(cfg.AllowOrigins) > 0 {
-		return strings.TrimRight(cfg.AllowOrigins[0], "/")
+func normalizeOrigin(value string) string {
+	return strings.TrimRight(strings.TrimSpace(value), "/")
+}
+
+func firstHeaderValue(value string) string {
+	if value == "" {
+		return ""
 	}
-	return ""
+	return strings.TrimSpace(strings.Split(value, ",")[0])
+}
+
+func requestOrigin(r *http.Request) string {
+	proto := firstHeaderValue(r.Header.Get("X-Forwarded-Proto"))
+	if proto == "" {
+		if r.TLS != nil {
+			proto = "https"
+		} else {
+			proto = "http"
+		}
+	}
+
+	host := firstHeaderValue(r.Header.Get("X-Forwarded-Host"))
+	if host == "" {
+		host = strings.TrimSpace(r.Host)
+	}
+	if host == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("%s://%s", proto, host)
+}
+
+// deriveFrontendOrigin prefers the current request origin when it is present in
+// allow_origins. This keeps multi-ingress deployments on the same host.
+func deriveFrontendOrigin(cfg *config.RestfulConf, r *http.Request) string {
+	candidate := normalizeOrigin(requestOrigin(r))
+	if candidate != "" {
+		if len(cfg.AllowOrigins) == 0 {
+			return candidate
+		}
+		for _, allowed := range cfg.AllowOrigins {
+			if normalizeOrigin(allowed) == candidate {
+				return candidate
+			}
+		}
+	}
+	if len(cfg.AllowOrigins) > 0 {
+		return normalizeOrigin(cfg.AllowOrigins[0])
+	}
+	return candidate
 }
 
 // sanitiseUsername removes characters not suitable for a username while preserving

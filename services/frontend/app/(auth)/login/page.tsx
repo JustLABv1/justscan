@@ -2,13 +2,12 @@
 import { AuthCard } from '@/components/auth-card';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
+import { getApiBase } from '@/lib/api/base';
 import { getOIDCAvailability, listOIDCProviders, login, OIDCProvider, setToken, setUser } from '@/lib/api';
 import { Button, Form } from '@heroui/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,6 +18,7 @@ export default function LoginPage() {
   const [localAuthEnabled, setLocalAuthEnabled] = useState(true);
   const [oidcProviders, setOidcProviders] = useState<OIDCProvider[]>([]);
   const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
+  const [oidcApiBase, setOidcApiBase] = useState('');
 
   useEffect(() => {
     Promise.allSettled([
@@ -32,6 +32,10 @@ export default function LoginPage() {
         setOidcProviders(providers.value);
       }
     }).finally(() => setAvailabilityLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    setOidcApiBase(getApiBase());
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -121,7 +125,7 @@ export default function LoginPage() {
             {oidcProviders.map((provider) => (
               <a
                 key={provider.name}
-                href={`${API}/api/v1/auth/oidc/${encodeURIComponent(provider.name)}/login`}
+                href={`${oidcApiBase}/api/v1/auth/oidc/${encodeURIComponent(provider.name)}/login`}
                 className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98]"
                 style={{
                   background: provider.button_color

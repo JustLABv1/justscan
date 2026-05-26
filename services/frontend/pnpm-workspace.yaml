@@ -2,3 +2,6 @@ allowBuilds:
   msw: true
   sharp: true
   unrs-resolver: true
+minimumReleaseAgeExclude:
+  - '@heroui/react'
+  - '@heroui/styles'

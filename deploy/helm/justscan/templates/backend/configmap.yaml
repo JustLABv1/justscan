@@ -49,28 +49,5 @@ data:
       nvd_api_key: ""
       cache_days: {{ .Values.backend.config.vulnKb.cacheDays }}
 
-    oidc:
-      enabled: {{ .Values.backend.config.oidc.enabled }}
-      debug: {{ .Values.backend.config.oidc.debug }}
-      issuer_url: {{ .Values.backend.config.oidc.issuerUrl | quote }}
-      client_id: {{ .Values.backend.config.oidc.clientId | quote }}
-      # client_secret is injected via BACKEND_OIDC_CLIENT_SECRET env var
-      client_secret: ""
-      redirect_uri: {{ include "justscan.oidc.redirectUri" . | quote }}
-      scopes:
-        {{- range .Values.backend.config.oidc.scopes }}
-        - {{ . | quote }}
-        {{- end }}
-      admin_groups:
-        {{- range .Values.backend.config.oidc.adminGroups }}
-        - {{ . | quote }}
-        {{- end }}
-      admin_roles:
-        {{- range .Values.backend.config.oidc.adminRoles }}
-        - {{ . | quote }}
-        {{- end }}
-      groups_claim: {{ .Values.backend.config.oidc.groupsClaim | quote }}
-      roles_claim: {{ .Values.backend.config.oidc.rolesClaim | quote }}
-
     local_auth:
       enabled: {{ .Values.backend.config.localAuth.enabled }}

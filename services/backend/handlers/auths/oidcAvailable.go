@@ -8,13 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// OIDCAvailable returns whether OIDC and local auth are enabled.
-// This endpoint requires no authentication and is used by the frontend
-// to decide which login options to display.
+// OIDCAvailable returns login-method availability for the frontend.
+// OIDC provider availability is determined by GET /api/v1/auth/oidc/providers.
 func OIDCAvailable(c *gin.Context) {
 	cfg := config.Config
 	c.JSON(http.StatusOK, gin.H{
-		"oidc_enabled":       cfg.OIDC.Enabled,
+		"oidc_enabled":       true,
 		"local_auth_enabled": cfg.LocalAuth.Enabled,
 	})
 }

@@ -114,7 +114,7 @@ func OIDCCallbackMulti(db *bun.DB) gin.HandlerFunc {
 
 		// --- 7. Re-evaluate admin role ---
 		newRole := "user"
-		if auth.IsAdminForProvider(claims, m) || (providerName == "default" && auth.IsAdmin(claims)) {
+		if auth.IsAdminForProvider(claims, m) {
 			newRole = "admin"
 		}
 		if user.Role != newRole {

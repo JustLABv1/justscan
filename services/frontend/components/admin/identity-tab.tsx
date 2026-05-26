@@ -50,6 +50,46 @@ function parseDelimitedList(value: string) {
     .filter(Boolean);
 }
 
+function trimTrailingSlash(value: string) {
+  return value.trim().replace(/\/+$/, '');
+}
+
+function buildSuggestedRedirectUri(apiBase: string, providerName: string) {
+  const base = trimTrailingSlash(apiBase);
+  const name = providerName.trim();
+  if (!base || !name) {
+    return '';
+  }
+  return `${base}/api/v1/auth/oidc/${encodeURIComponent(name)}/callback`;
+}
+
+function renderClaimMappingPreview(
+  template: string,
+  providerName: string,
+  matchType: 'exact' | 'prefix',
+  matchValue: string
+) {
+  const normalizedMatchValue = matchValue.trim();
+  const exampleClaim =
+    matchType === 'prefix'
+      ? `${normalizedMatchValue || 'team:'}platform`
+      : normalizedMatchValue || 'platform-admins';
+  const exampleSuffix =
+    matchType === 'prefix' && exampleClaim.startsWith(normalizedMatchValue)
+      ? exampleClaim.slice(normalizedMatchValue.length).trim()
+      : '';
+  const preview = (template || '{claim}')
+    .replaceAll('{claim}', exampleClaim)
+    .replaceAll('{suffix}', exampleSuffix)
+    .replaceAll('{provider}', providerName || 'provider');
+
+  return {
+    claim: exampleClaim,
+    suffix: exampleSuffix,
+    preview,
+  };
+}
+
 function Banner({ type, text }: { type: 'success' | 'error'; text: string }) {
   return (
     <Card
@@ -97,6 +137,7 @@ export function IdentityTab() {
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [redirectUri, setRedirectUri] = useState('');
+  const [redirectUriEdited, setRedirectUriEdited] = useState(false);
   const [scopesInput, setScopesInput] = useState('openid, profile, email');
   const [adminGroupsInput, setAdminGroupsInput] = useState('');
   const [adminRolesInput, setAdminRolesInput] = useState('');
@@ -136,6 +177,40 @@ export function IdentityTab() {
   const [overrideOrgNameTemplate, setOverrideOrgNameTemplate] = useState('{claim}');
   const [overrideRole, setOverrideRole] = useState<'viewer' | 'editor' | 'admin'>('admin');
 
+  const apiBase = useMemo(() => {
+    const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+    if (configured) {
+      return trimTrailingSlash(configured);
+    }
+    if (typeof window !== 'undefined') {
+      return trimTrailingSlash(window.location.origin);
+    }
+    return '';
+  }, []);
+
+  const suggestedRedirectUri = useMemo(
+    () => buildSuggestedRedirectUri(apiBase, providerName),
+    [apiBase, providerName]
+  );
+
+  const redirectUriMismatch = useMemo(() => {
+    if (!suggestedRedirectUri || !redirectUri.trim()) {
+      return false;
+    }
+    return trimTrailingSlash(redirectUri) !== trimTrailingSlash(suggestedRedirectUri);
+  }, [redirectUri, suggestedRedirectUri]);
+
+  const mappingTemplatePreview = useMemo(
+    () =>
+      renderClaimMappingPreview(
+        mappingOrgNameTemplate,
+        selectedProvider?.name ?? 'provider',
+        mappingMatchType,
+        mappingMatchValue
+      ),
+    [mappingOrgNameTemplate, selectedProvider?.name, mappingMatchType, mappingMatchValue]
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -173,6 +248,12 @@ export function IdentityTab() {
 
   useEffect(() => deferEffect(load), [load]);
   useEffect(() => deferEffect(loadSelectedDetails), [loadSelectedDetails]);
+  useEffect(() => {
+    if (!providerModal.isOpen || redirectUriEdited) {
+      return;
+    }
+    setRedirectUri(suggestedRedirectUri);
+  }, [providerModal.isOpen, redirectUriEdited, suggestedRedirectUri]);
 
   const filteredProviders = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -193,6 +274,7 @@ export function IdentityTab() {
     setClientId('');
     setClientSecret('');
     setRedirectUri('');
+    setRedirectUriEdited(false);
     setScopesInput('openid, profile, email');
     setAdminGroupsInput('');
     setAdminRolesInput('');
@@ -218,6 +300,7 @@ export function IdentityTab() {
     setClientId(provider.client_id);
     setClientSecret('');
     setRedirectUri(provider.redirect_uri);
+    setRedirectUriEdited(true);
     setScopesInput((provider.scopes ?? []).join(', '));
     setAdminGroupsInput((provider.admin_groups ?? []).join(', '));
     setAdminRolesInput((provider.admin_roles ?? []).join(', '));
@@ -257,6 +340,18 @@ export function IdentityTab() {
         {text} <span className="text-danger">*</span>
       </span>
     );
+  }
+
+  function providerStepTitle(step: number) {
+    if (step === 0) return 'Connection Basics';
+    if (step === 1) return 'Access Rules';
+    return 'Claims and Ordering';
+  }
+
+  function providerStepDescription(step: number) {
+    if (step === 0) return 'Define provider identity and OIDC connection details.';
+    if (step === 1) return 'Control scopes and provider-level claim filtering behavior.';
+    return 'Finalize claim extraction, login button styling, and provider order.';
   }
 
   function goToNextProviderStep() {
@@ -812,62 +907,132 @@ export function IdentityTab() {
 
       <Modal state={providerModal}>
         <Modal.Backdrop isDismissable>
-          <Modal.Container size="lg" placement="center">
-            <Modal.Dialog>
+          <Modal.Container size="cover" placement="center">
+            <Modal.Dialog className="mx-auto w-full max-w-[1040px]">
               <Modal.Header>
                 <Modal.Heading>{editingProvider ? 'Edit Provider' : 'Add Provider'}</Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body>
-                <div className="space-y-4">
+              <Modal.Body className="min-h-0 max-h-[80vh] overflow-y-auto py-5">
+                <div className="space-y-5">
                   <p className="text-sm text-zinc-500">
                     Configure identity provider details in three steps. {editingProvider ? 'Update connection details and policy controls.' : 'Create a new OIDC provider with claim governance defaults.'}
                   </p>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <Chip variant={providerStep === 0 ? 'primary' : 'soft'} color={providerStep === 0 ? 'accent' : 'default'}>1. Basics</Chip>
                     <Chip variant={providerStep === 1 ? 'primary' : 'soft'} color={providerStep === 1 ? 'accent' : 'default'}>2. Access Rules</Chip>
                     <Chip variant={providerStep === 2 ? 'primary' : 'soft'} color={providerStep === 2 ? 'accent' : 'default'}>3. Claims & Order</Chip>
                   </div>
+                  <Card className="border border-divider/60 bg-content2/30">
+                    <Card.Content>
+                      <p className="text-sm font-semibold">{providerStepTitle(providerStep)}</p>
+                      <p className="mt-1 text-sm text-zinc-500">{providerStepDescription(providerStep)}</p>
+                    </Card.Content>
+                  </Card>
 
-                  <form id="identity-provider-form" className="space-y-4" onSubmit={handleProviderSubmit}>
+                  <form id="identity-provider-form" className="space-y-5" onSubmit={handleProviderSubmit}>
                     {providerFormError && <p className="text-sm text-danger">{providerFormError}</p>}
 
                     {providerStep === 0 && (
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">{requiredLabel('Provider Name')}</p><Input variant="secondary" placeholder="e.g. keycloak-main" value={providerName} onChange={(event) => setProviderName(event.target.value)} required /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">{requiredLabel('Display Name')}</p><Input variant="secondary" placeholder="Shown on login button" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">{requiredLabel('Issuer URL')}</p><Input variant="secondary" placeholder="https://issuer.example.com/realms/main" value={issuerUrl} onChange={(event) => setIssuerUrl(event.target.value)} required /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">{requiredLabel('Client ID')}</p><Input variant="secondary" placeholder="OIDC client identifier" value={clientId} onChange={(event) => setClientId(event.target.value)} required /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">{editingProvider ? 'Client Secret' : requiredLabel('Client Secret')}</p><Input type="password" variant="secondary" placeholder={editingProvider ? 'Leave blank to keep current secret' : 'Client secret'} value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} required={!editingProvider} /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">{requiredLabel('Redirect URI')}</p><Input variant="secondary" placeholder="https://app.example.com/auth/callback" value={redirectUri} onChange={(event) => setRedirectUri(event.target.value)} required /></div>
+                      <div className="space-y-4">
+                        <Card className="border border-divider/60 bg-content1">
+                          <Card.Content className="space-y-4">
+                            <p className="text-sm font-semibold">Provider Identity</p>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">{requiredLabel('Provider Name')}</p><Input className="w-full" size="lg" variant="secondary" placeholder="e.g. keycloak-main" value={providerName} onChange={(event) => setProviderName(event.target.value)} required /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">{requiredLabel('Display Name')}</p><Input className="w-full" size="lg" variant="secondary" placeholder="Shown on login button" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></div>
+                            </div>
+                          </Card.Content>
+                        </Card>
+                        <Card className="border border-divider/60 bg-content1">
+                          <Card.Content className="space-y-4">
+                            <p className="text-sm font-semibold">OIDC Handshake</p>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="space-y-1.5 md:col-span-2"><p className="text-sm text-zinc-500">{requiredLabel('Issuer URL')}</p><Input className="w-full" size="lg" variant="secondary" placeholder="https://issuer.example.com/realms/main" value={issuerUrl} onChange={(event) => setIssuerUrl(event.target.value)} required /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">{requiredLabel('Client ID')}</p><Input className="w-full" size="lg" variant="secondary" placeholder="OIDC client identifier" value={clientId} onChange={(event) => setClientId(event.target.value)} required /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">{editingProvider ? 'Client Secret' : requiredLabel('Client Secret')}</p><Input className="w-full" size="lg" type="password" variant="secondary" placeholder={editingProvider ? 'Leave blank to keep current secret' : 'Client secret'} value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} required={!editingProvider} /></div>
+                            </div>
+                          </Card.Content>
+                        </Card>
+                        <div className="space-y-1">
+                          <p className="text-sm text-zinc-500">{requiredLabel('Redirect URI')}</p>
+                          <Input
+                            className="w-full"
+                            size="lg"
+                            variant="secondary"
+                            placeholder={suggestedRedirectUri || 'Enter provider name to auto-generate callback URI'}
+                            value={redirectUri}
+                            onChange={(event) => {
+                              setRedirectUri(event.target.value);
+                              setRedirectUriEdited(true);
+                            }}
+                            required
+                          />
+                          <p className="text-sm text-zinc-500">
+                            Recommended: {suggestedRedirectUri || 'Enter a provider name first.'}
+                          </p>
+                          {redirectUriMismatch && (
+                            <p className="text-sm text-amber-600 dark:text-amber-400">
+                              This URI differs from the recommended provider callback path.
+                            </p>
+                          )}
+                        </div>
                       </div>
                     )}
 
                     {providerStep === 1 && (
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div className="space-y-1 md:col-span-2"><p className="text-xs text-zinc-500">{requiredLabel('Scopes')}</p><Input variant="secondary" placeholder="openid, profile, email" value={scopesInput} onChange={(event) => setScopesInput(event.target.value)} required /><p className="text-xs text-zinc-500">Comma-separated scopes requested during sign-in.</p></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">Admin Groups</p><Input variant="secondary" placeholder="platform-admins, secops" value={adminGroupsInput} onChange={(event) => setAdminGroupsInput(event.target.value)} /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">Admin Roles</p><Input variant="secondary" placeholder="admin, superuser" value={adminRolesInput} onChange={(event) => setAdminRolesInput(event.target.value)} /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">Included Groups</p><Input variant="secondary" placeholder="Only allow these groups" value={includedGroupsInput} onChange={(event) => setIncludedGroupsInput(event.target.value)} /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">Excluded Groups</p><Input variant="secondary" placeholder="Always deny these groups" value={excludedGroupsInput} onChange={(event) => setExcludedGroupsInput(event.target.value)} /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">Included Org Names</p><Input variant="secondary" placeholder="engineering, ops" value={includedOrgNamesInput} onChange={(event) => setIncludedOrgNamesInput(event.target.value)} /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">Excluded Org Names</p><Input variant="secondary" placeholder="contractors, archived" value={excludedOrgNamesInput} onChange={(event) => setExcludedOrgNamesInput(event.target.value)} /></div>
+                      <div className="space-y-4">
+                        <Card className="border border-divider/60 bg-content1">
+                          <Card.Content className="space-y-4">
+                            <p className="text-sm font-semibold">Scope and Admin Signals</p>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="space-y-1.5 md:col-span-2"><p className="text-sm text-zinc-500">{requiredLabel('Scopes')}</p><Input className="w-full" size="lg" variant="secondary" placeholder="openid, profile, email" value={scopesInput} onChange={(event) => setScopesInput(event.target.value)} required /><p className="text-sm text-zinc-500">Comma-separated scopes requested during sign-in.</p></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Admin Groups</p><Input className="w-full" size="lg" variant="secondary" placeholder="platform-admins, secops" value={adminGroupsInput} onChange={(event) => setAdminGroupsInput(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Admin Roles</p><Input className="w-full" size="lg" variant="secondary" placeholder="admin, superuser" value={adminRolesInput} onChange={(event) => setAdminRolesInput(event.target.value)} /></div>
+                            </div>
+                          </Card.Content>
+                        </Card>
+                        <Card className="border border-divider/60 bg-content1">
+                          <Card.Content className="space-y-4">
+                            <p className="text-sm font-semibold">Provider Filters</p>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Included Groups</p><Input className="w-full" size="lg" variant="secondary" placeholder="Only allow these groups" value={includedGroupsInput} onChange={(event) => setIncludedGroupsInput(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Excluded Groups</p><Input className="w-full" size="lg" variant="secondary" placeholder="Always deny these groups" value={excludedGroupsInput} onChange={(event) => setExcludedGroupsInput(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Included Org Names</p><Input className="w-full" size="lg" variant="secondary" placeholder="engineering, ops" value={includedOrgNamesInput} onChange={(event) => setIncludedOrgNamesInput(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Excluded Org Names</p><Input className="w-full" size="lg" variant="secondary" placeholder="contractors, archived" value={excludedOrgNamesInput} onChange={(event) => setExcludedOrgNamesInput(event.target.value)} /></div>
+                            </div>
+                          </Card.Content>
+                        </Card>
                       </div>
                     )}
 
                     {providerStep === 2 && (
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">Groups Claim</p><Input variant="secondary" placeholder="groups" value={groupsClaim} onChange={(event) => setGroupsClaim(event.target.value)} /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">Roles Claim</p><Input variant="secondary" placeholder="roles" value={rolesClaim} onChange={(event) => setRolesClaim(event.target.value)} /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">Button Color</p><Input variant="secondary" placeholder="#7C3AED (optional)" value={buttonColor} onChange={(event) => setButtonColor(event.target.value)} /></div>
-                        <div className="space-y-1"><p className="text-xs text-zinc-500">Sort Order</p><Input type="number" variant="secondary" placeholder="0" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} /></div>
-                        <div className="md:col-span-2 rounded-medium border border-divider/60 bg-content2/20 p-3">
-                          <Switch isSelected={providerEnabled} onChange={setProviderEnabled}>
-                            <Switch.Control><Switch.Thumb /></Switch.Control>
-                            <Switch.Content>Provider enabled</Switch.Content>
-                          </Switch>
-                          <p className="mt-1 text-xs text-zinc-500">Disabled providers stay configured but are hidden from the login screen.</p>
-                        </div>
+                      <div className="space-y-4">
+                        <Card className="border border-divider/60 bg-content1">
+                          <Card.Content className="space-y-4">
+                            <p className="text-sm font-semibold">Claim Extraction</p>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Groups Claim</p><Input className="w-full" size="lg" variant="secondary" placeholder="groups" value={groupsClaim} onChange={(event) => setGroupsClaim(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Roles Claim</p><Input className="w-full" size="lg" variant="secondary" placeholder="roles" value={rolesClaim} onChange={(event) => setRolesClaim(event.target.value)} /></div>
+                            </div>
+                          </Card.Content>
+                        </Card>
+                        <Card className="border border-divider/60 bg-content1">
+                          <Card.Content className="space-y-4">
+                            <p className="text-sm font-semibold">Presentation and Ordering</p>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Button Color</p><Input className="w-full" size="lg" variant="secondary" placeholder="#0F766E (optional)" value={buttonColor} onChange={(event) => setButtonColor(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Sort Order</p><Input className="w-full" size="lg" type="number" variant="secondary" placeholder="0" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} /></div>
+                            </div>
+                            <div className="rounded-medium border border-divider/60 bg-content2/20 p-4">
+                              <Switch isSelected={providerEnabled} onChange={setProviderEnabled}>
+                                <Switch.Control><Switch.Thumb /></Switch.Control>
+                                <Switch.Content>Provider enabled</Switch.Content>
+                              </Switch>
+                              <p className="mt-2 text-sm text-zinc-500">Disabled providers stay configured but are hidden from the login screen.</p>
+                            </div>
+                          </Card.Content>
+                        </Card>
                       </div>
                     )}
                   </form>
@@ -906,6 +1071,12 @@ export function IdentityTab() {
               <Modal.Body>
                 <form id="identity-mapping-form" className="space-y-3" onSubmit={handleMappingSubmit}>
                   {mappingFormError && <p className="text-sm text-danger">{mappingFormError}</p>}
+                  <Card className="border border-divider/60 bg-content2/30">
+                    <Card.Content className="space-y-1.5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">Template Variables</p>
+                      <p className="text-sm text-zinc-500">Use {'{claim}'} for the full claim, {'{suffix}'} for prefix leftovers, and {'{provider}'} for the identity provider name.</p>
+                    </Card.Content>
+                  </Card>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Select value={mappingEffect} onChange={(value) => setMappingEffect(value as 'allow' | 'exclude')} variant="secondary">
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
@@ -919,7 +1090,7 @@ export function IdentityTab() {
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                       <Select.Popover><ListBox><ListBox.Item id="exact">Exact</ListBox.Item><ListBox.Item id="prefix">Prefix</ListBox.Item></ListBox></Select.Popover>
                     </Select>
-                    <Input variant="secondary" placeholder="Claim value" value={mappingMatchValue} onChange={(event) => setMappingMatchValue(event.target.value)} required />
+                    <Input className="w-full" size="lg" variant="secondary" placeholder="Claim value" value={mappingMatchValue} onChange={(event) => setMappingMatchValue(event.target.value)} required />
                   </div>
                   {mappingEffect !== 'exclude' && (
                     <>
@@ -933,6 +1104,7 @@ export function IdentityTab() {
                           <Select.Popover><ListBox><ListBox.Item id="viewer">Viewer</ListBox.Item><ListBox.Item id="editor">Editor</ListBox.Item><ListBox.Item id="admin">Admin</ListBox.Item></ListBox></Select.Popover>
                         </Select>
                       </div>
+                      <p className="text-sm text-zinc-500">Create org uses the template to provision orgs from claim values. Recreate missing org re-creates previously deleted orgs when a matching claim returns.</p>
                       {mappingProvisioningMode === 'existing_org' && (
                         <Select value={mappingOrgId} onChange={(value) => setMappingOrgId(String(value))} variant="secondary">
                         <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
@@ -945,12 +1117,29 @@ export function IdentityTab() {
                           </Select.Popover>
                         </Select>
                       )}
-                      <Input variant="secondary" placeholder="Org template" value={mappingOrgNameTemplate} onChange={(event) => setMappingOrgNameTemplate(event.target.value)} />
+                      <Input className="w-full" size="lg" variant="secondary" placeholder="Org template" value={mappingOrgNameTemplate} onChange={(event) => setMappingOrgNameTemplate(event.target.value)} />
+                      <p className="text-sm text-zinc-500">Example: {'{provider}'}-{'{suffix}'} with prefix match value <span className="font-mono">team:</span> maps <span className="font-mono">team:platform</span> to <span className="font-mono">provider-platform</span>.</p>
+                      {(mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg) && (
+                        <Card className="border border-divider/60 bg-content2/30">
+                          <Card.Content className="space-y-1.5">
+                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">Live Preview</p>
+                            <p className="text-sm text-zinc-500">Claim: <span className="font-mono">{mappingTemplatePreview.claim}</span></p>
+                            <p className="text-sm text-zinc-500">Suffix: <span className="font-mono">{mappingTemplatePreview.suffix || '(empty)'}</span></p>
+                            <p className="text-sm text-zinc-500">Resolved org name: <span className="font-mono">{mappingTemplatePreview.preview}</span></p>
+                          </Card.Content>
+                        </Card>
+                      )}
                       <div className="grid gap-2">
-                        <Switch isSelected={mappingRecreateMissingOrg} onChange={setMappingRecreateMissingOrg}>
-                          <Switch.Control><Switch.Thumb /></Switch.Control>
-                          <Switch.Content>Recreate missing org</Switch.Content>
-                        </Switch>
+                        {mappingProvisioningMode === 'existing_org' ? (
+                          <Switch isSelected={mappingRecreateMissingOrg} onChange={setMappingRecreateMissingOrg}>
+                            <Switch.Control><Switch.Thumb /></Switch.Control>
+                            <Switch.Content>Recreate missing org</Switch.Content>
+                          </Switch>
+                        ) : (
+                          <p className="text-sm text-zinc-500">
+                            Create org mappings already create missing orgs automatically from the rendered template.
+                          </p>
+                        )}
                         <Switch isSelected={mappingRemoveOnUnsync} onChange={setMappingRemoveOnUnsync}>
                           <Switch.Control><Switch.Thumb /></Switch.Control>
                           <Switch.Content>Remove on unsync</Switch.Content>
@@ -991,7 +1180,7 @@ export function IdentityTab() {
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                       <Select.Popover><ListBox><ListBox.Item id="exact">Exact</ListBox.Item><ListBox.Item id="prefix">Prefix</ListBox.Item></ListBox></Select.Popover>
                     </Select>
-                    <Input variant="secondary" placeholder="Claim value" value={overrideMatchValue} onChange={(event) => setOverrideMatchValue(event.target.value)} required />
+                    <Input className="w-full" size="lg" variant="secondary" placeholder="Claim value" value={overrideMatchValue} onChange={(event) => setOverrideMatchValue(event.target.value)} required />
                     <Select value={overrideTargetType} onChange={(value) => setOverrideTargetType(value as 'org_id' | 'rendered_name')} variant="secondary">
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                       <Select.Popover><ListBox><ListBox.Item id="org_id">Organization</ListBox.Item><ListBox.Item id="rendered_name">Rendered name</ListBox.Item></ListBox></Select.Popover>
@@ -1009,7 +1198,7 @@ export function IdentityTab() {
                       </Select.Popover>
                     </Select>
                   ) : (
-                    <Input variant="secondary" placeholder="Org template" value={overrideOrgNameTemplate} onChange={(event) => setOverrideOrgNameTemplate(event.target.value)} />
+                    <Input className="w-full" size="lg" variant="secondary" placeholder="Org template" value={overrideOrgNameTemplate} onChange={(event) => setOverrideOrgNameTemplate(event.target.value)} />
                   )}
                   <Select value={overrideRole} onChange={(value) => setOverrideRole(value as 'viewer' | 'editor' | 'admin')} variant="secondary">
                     <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>

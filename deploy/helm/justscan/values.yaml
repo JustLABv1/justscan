@@ -71,30 +71,8 @@ backend:
     vulnKb:
       cacheDays: 7
 
-    # OIDC single sign-on (Keycloak, Authentik, Okta, Azure AD, …)
-    oidc:
-      enabled: false
-      debug: false
-      # The base issuer URL of your OIDC provider (without /.well-known/openid-configuration)
-      issuerUrl: ""
-      clientId: ""
-      # redirect_uri is auto-derived from ingress.hosts[0].host when left empty.
-      # Override here if your external URL differs from the ingress host.
-      redirectUri: ""
-      scopes:
-        - openid
-        - email
-        - profile
-      # Users in any of these groups or roles will receive the "admin" role in JustScan.
-      # Role is re-evaluated on every login.
-      adminGroups: []
-      adminRoles: []
-      # The claim names in the ID token that carry group / role memberships.
-      groupsClaim: "groups"
-      rolesClaim: "roles"
-
     # Set to false to disable local username/password authentication.
-    # When false, only OIDC login is available.
+    # When false, only external identity providers are available.
     localAuth:
       enabled: true
 
@@ -103,7 +81,7 @@ backend:
   # ------------------------------------------------------------------
   # Sensitive values are stored in a Kubernetes Secret and injected as
   # environment variables (BACKEND_JWT_SECRET, BACKEND_DATABASE_PASSWORD,
-  # BACKEND_ENCRYPTION_KEY, BACKEND_OIDC_CLIENT_SECRET, BACKEND_VULN_KB_NVD_API_KEY).
+  # BACKEND_ENCRYPTION_KEY, BACKEND_VULN_KB_NVD_API_KEY).
   #
   # Option A (default): provide values here — the chart creates the Secret.
   # Option B: use a pre-existing Secret (set existingSecret to its name and
@@ -113,8 +91,6 @@ backend:
     dbPassword: ""
     # Random 32-character string used to encrypt registry credentials.
     encryptionKey: ""
-    # Required only when oidc.enabled=true
-    oidcClientSecret: ""
     # Optional — speeds up CVE enrichment
     nvdApiKey: ""
 
@@ -125,7 +101,6 @@ backend:
       jwtSecret: "jwt-secret"
       dbPassword: "db-password"
       encryptionKey: "encryption-key"
-      oidcClientSecret: "oidc-client-secret"
       nvdApiKey: "nvd-api-key"
 
   service:

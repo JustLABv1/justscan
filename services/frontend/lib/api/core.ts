@@ -8,6 +8,25 @@ type ApiErrorPayload = {
   error_description?: string;
 };
 
+function hasNoBody(response: Response): boolean {
+  if (response.status === 204 || response.status === 205 || response.status === 304) {
+    return true;
+  }
+  const contentLength = response.headers.get('content-length');
+  return contentLength === '0';
+}
+
+async function parseResponseBody<T>(response: Response): Promise<T> {
+  if (hasNoBody(response)) {
+    return undefined as T;
+  }
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+  return JSON.parse(text) as T;
+}
+
 function authHeaders(): HeadersInit {
   const token = getToken();
   return {
@@ -46,7 +65,7 @@ export async function req<T>(method: string, path: string, body?: unknown): Prom
     throw new Error(await getErrorMessage(response));
   }
 
-  return response.json();
+  return parseResponseBody<T>(response);
 }
 
 export async function reqForm<T>(method: string, path: string, body: FormData): Promise<T> {
@@ -69,7 +88,7 @@ export async function reqForm<T>(method: string, path: string, body: FormData): 
     throw new Error(await getErrorMessage(response));
   }
 
-  return response.json();
+  return parseResponseBody<T>(response);
 }
 
 export async function publicReq<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -83,7 +102,7 @@ export async function publicReq<T>(method: string, path: string, body?: unknown)
     throw new Error(await getErrorMessage(response));
   }
 
-  return response.json();
+  return parseResponseBody<T>(response);
 }
 
 export class ApiError extends Error {
@@ -104,5 +123,5 @@ export async function sharedReq<T>(method: string, path: string, body?: unknown)
     throw new ApiError(response.status, await getErrorMessage(response));
   }
 
-  return response.json();
+  return parseResponseBody<T>(response);
 }

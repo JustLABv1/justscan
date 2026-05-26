@@ -152,7 +152,7 @@ func OIDCCallbackMulti(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		frontendOrigin := deriveFrontendOrigin(config.Config)
+		frontendOrigin := deriveFrontendOrigin(config.Config, c.Request)
 		c.Redirect(http.StatusFound, frontendOrigin+"/auth/oidc/callback#token="+tokenString)
 	}
 }

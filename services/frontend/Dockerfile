@@ -4,14 +4,14 @@ FROM base AS platform
 WORKDIR /app
 
 # Install pnpm using the secret mount for CA trust
-RUN npm install -g pnpm@10.33.4
+RUN npm install -g pnpm
 
 FROM platform AS deps
 WORKDIR /app
 
 RUN apk add --no-cache libc6-compat
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 RUN pnpm install --frozen-lockfile
 

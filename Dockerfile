@@ -6,10 +6,10 @@ FROM node:25.9.0-alpine AS base
 FROM node:25.9.0-alpine AS frontend-builder
 WORKDIR /app/frontend
 
-RUN npm install -g pnpm@10.33.4
+RUN npm install -g pnpm
 RUN apk add --no-cache libc6-compat
 
-COPY services/frontend/package.json services/frontend/pnpm-lock.yaml ./
+COPY services/frontend/package.json services/frontend/pnpm-lock.yaml services/frontend/pnpm-workspace.yaml ./
 RUN pnpm install
 
 COPY services/frontend/ ./

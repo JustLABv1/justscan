@@ -939,8 +939,8 @@ export function IdentityTab() {
                           <Card.Content className="space-y-4">
                             <p className="text-sm font-semibold">Provider Identity</p>
                             <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">{requiredLabel('Provider Name')}</p><Input className="w-full" size="lg" variant="secondary" placeholder="e.g. keycloak-main" value={providerName} onChange={(event) => setProviderName(event.target.value)} required /></div>
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">{requiredLabel('Display Name')}</p><Input className="w-full" size="lg" variant="secondary" placeholder="Shown on login button" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">{requiredLabel('Provider Name')}</p><Input className="w-full" variant="secondary" placeholder="e.g. keycloak-main" value={providerName} onChange={(event) => setProviderName(event.target.value)} required /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">{requiredLabel('Display Name')}</p><Input className="w-full" variant="secondary" placeholder="Shown on login button" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></div>
                             </div>
                           </Card.Content>
                         </Card>
@@ -948,9 +948,9 @@ export function IdentityTab() {
                           <Card.Content className="space-y-4">
                             <p className="text-sm font-semibold">OIDC Handshake</p>
                             <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-1.5 md:col-span-2"><p className="text-sm text-zinc-500">{requiredLabel('Issuer URL')}</p><Input className="w-full" size="lg" variant="secondary" placeholder="https://issuer.example.com/realms/main" value={issuerUrl} onChange={(event) => setIssuerUrl(event.target.value)} required /></div>
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">{requiredLabel('Client ID')}</p><Input className="w-full" size="lg" variant="secondary" placeholder="OIDC client identifier" value={clientId} onChange={(event) => setClientId(event.target.value)} required /></div>
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">{editingProvider ? 'Client Secret' : requiredLabel('Client Secret')}</p><Input className="w-full" size="lg" type="password" variant="secondary" placeholder={editingProvider ? 'Leave blank to keep current secret' : 'Client secret'} value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} required={!editingProvider} /></div>
+                              <div className="space-y-1.5 md:col-span-2"><p className="text-sm text-zinc-500">{requiredLabel('Issuer URL')}</p><Input className="w-full" variant="secondary" placeholder="https://issuer.example.com/realms/main" value={issuerUrl} onChange={(event) => setIssuerUrl(event.target.value)} required /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">{requiredLabel('Client ID')}</p><Input className="w-full" variant="secondary" placeholder="OIDC client identifier" value={clientId} onChange={(event) => setClientId(event.target.value)} required /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">{editingProvider ? 'Client Secret' : requiredLabel('Client Secret')}</p><Input className="w-full" type="password" variant="secondary" placeholder={editingProvider ? 'Leave blank to keep current secret' : 'Client secret'} value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} required={!editingProvider} /></div>
                             </div>
                           </Card.Content>
                         </Card>
@@ -958,7 +958,6 @@ export function IdentityTab() {
                           <p className="text-sm text-zinc-500">{requiredLabel('Redirect URI')}</p>
                           <Input
                             className="w-full"
-                            size="lg"
                             variant="secondary"
                             placeholder={suggestedRedirectUri || 'Enter provider name to auto-generate callback URI'}
                             value={redirectUri}
@@ -986,9 +985,9 @@ export function IdentityTab() {
                           <Card.Content className="space-y-4">
                             <p className="text-sm font-semibold">Scope and Admin Signals</p>
                             <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-1.5 md:col-span-2"><p className="text-sm text-zinc-500">{requiredLabel('Scopes')}</p><Input className="w-full" size="lg" variant="secondary" placeholder="openid, profile, email" value={scopesInput} onChange={(event) => setScopesInput(event.target.value)} required /><p className="text-sm text-zinc-500">Comma-separated scopes requested during sign-in.</p></div>
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Admin Groups</p><Input className="w-full" size="lg" variant="secondary" placeholder="platform-admins, secops" value={adminGroupsInput} onChange={(event) => setAdminGroupsInput(event.target.value)} /></div>
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Admin Roles</p><Input className="w-full" size="lg" variant="secondary" placeholder="admin, superuser" value={adminRolesInput} onChange={(event) => setAdminRolesInput(event.target.value)} /></div>
+                              <div className="space-y-1.5 md:col-span-2"><p className="text-sm text-zinc-500">{requiredLabel('Scopes')}</p><Input className="w-full" variant="secondary" placeholder="openid, profile, email" value={scopesInput} onChange={(event) => setScopesInput(event.target.value)} required /><p className="text-sm text-zinc-500">Comma-separated scopes requested during sign-in.</p></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Admin Groups</p><Input className="w-full" variant="secondary" placeholder="platform-admins, secops" value={adminGroupsInput} onChange={(event) => setAdminGroupsInput(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Admin Roles</p><Input className="w-full" variant="secondary" placeholder="admin, superuser" value={adminRolesInput} onChange={(event) => setAdminRolesInput(event.target.value)} /></div>
                             </div>
                           </Card.Content>
                         </Card>
@@ -996,10 +995,10 @@ export function IdentityTab() {
                           <Card.Content className="space-y-4">
                             <p className="text-sm font-semibold">Provider Filters</p>
                             <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Included Groups</p><Input className="w-full" size="lg" variant="secondary" placeholder="Only allow these groups" value={includedGroupsInput} onChange={(event) => setIncludedGroupsInput(event.target.value)} /></div>
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Excluded Groups</p><Input className="w-full" size="lg" variant="secondary" placeholder="Always deny these groups" value={excludedGroupsInput} onChange={(event) => setExcludedGroupsInput(event.target.value)} /></div>
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Included Org Names</p><Input className="w-full" size="lg" variant="secondary" placeholder="engineering, ops" value={includedOrgNamesInput} onChange={(event) => setIncludedOrgNamesInput(event.target.value)} /></div>
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Excluded Org Names</p><Input className="w-full" size="lg" variant="secondary" placeholder="contractors, archived" value={excludedOrgNamesInput} onChange={(event) => setExcludedOrgNamesInput(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Included Groups</p><Input className="w-full" variant="secondary" placeholder="Only allow these groups" value={includedGroupsInput} onChange={(event) => setIncludedGroupsInput(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Excluded Groups</p><Input className="w-full" variant="secondary" placeholder="Always deny these groups" value={excludedGroupsInput} onChange={(event) => setExcludedGroupsInput(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Included Org Names</p><Input className="w-full" variant="secondary" placeholder="engineering, ops" value={includedOrgNamesInput} onChange={(event) => setIncludedOrgNamesInput(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Excluded Org Names</p><Input className="w-full" variant="secondary" placeholder="contractors, archived" value={excludedOrgNamesInput} onChange={(event) => setExcludedOrgNamesInput(event.target.value)} /></div>
                             </div>
                           </Card.Content>
                         </Card>
@@ -1012,8 +1011,8 @@ export function IdentityTab() {
                           <Card.Content className="space-y-4">
                             <p className="text-sm font-semibold">Claim Extraction</p>
                             <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Groups Claim</p><Input className="w-full" size="lg" variant="secondary" placeholder="groups" value={groupsClaim} onChange={(event) => setGroupsClaim(event.target.value)} /></div>
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Roles Claim</p><Input className="w-full" size="lg" variant="secondary" placeholder="roles" value={rolesClaim} onChange={(event) => setRolesClaim(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Groups Claim</p><Input className="w-full" variant="secondary" placeholder="groups" value={groupsClaim} onChange={(event) => setGroupsClaim(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Roles Claim</p><Input className="w-full" variant="secondary" placeholder="roles" value={rolesClaim} onChange={(event) => setRolesClaim(event.target.value)} /></div>
                             </div>
                           </Card.Content>
                         </Card>
@@ -1021,8 +1020,8 @@ export function IdentityTab() {
                           <Card.Content className="space-y-4">
                             <p className="text-sm font-semibold">Presentation and Ordering</p>
                             <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Button Color</p><Input className="w-full" size="lg" variant="secondary" placeholder="#0F766E (optional)" value={buttonColor} onChange={(event) => setButtonColor(event.target.value)} /></div>
-                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Sort Order</p><Input className="w-full" size="lg" type="number" variant="secondary" placeholder="0" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Button Color</p><Input className="w-full" variant="secondary" placeholder="#0F766E (optional)" value={buttonColor} onChange={(event) => setButtonColor(event.target.value)} /></div>
+                              <div className="space-y-1.5"><p className="text-sm text-zinc-500">Sort Order</p><Input className="w-full" type="number" variant="secondary" placeholder="0" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} /></div>
                             </div>
                             <div className="rounded-medium border border-divider/60 bg-content2/20 p-4">
                               <Switch isSelected={providerEnabled} onChange={setProviderEnabled}>
@@ -1090,7 +1089,7 @@ export function IdentityTab() {
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                       <Select.Popover><ListBox><ListBox.Item id="exact">Exact</ListBox.Item><ListBox.Item id="prefix">Prefix</ListBox.Item></ListBox></Select.Popover>
                     </Select>
-                    <Input className="w-full" size="lg" variant="secondary" placeholder="Claim value" value={mappingMatchValue} onChange={(event) => setMappingMatchValue(event.target.value)} required />
+                    <Input className="w-full" variant="secondary" placeholder="Claim value" value={mappingMatchValue} onChange={(event) => setMappingMatchValue(event.target.value)} required />
                   </div>
                   {mappingEffect !== 'exclude' && (
                     <>
@@ -1117,7 +1116,7 @@ export function IdentityTab() {
                           </Select.Popover>
                         </Select>
                       )}
-                      <Input className="w-full" size="lg" variant="secondary" placeholder="Org template" value={mappingOrgNameTemplate} onChange={(event) => setMappingOrgNameTemplate(event.target.value)} />
+                      <Input className="w-full" variant="secondary" placeholder="Org template" value={mappingOrgNameTemplate} onChange={(event) => setMappingOrgNameTemplate(event.target.value)} />
                       <p className="text-sm text-zinc-500">Example: {'{provider}'}-{'{suffix}'} with prefix match value <span className="font-mono">team:</span> maps <span className="font-mono">team:platform</span> to <span className="font-mono">provider-platform</span>.</p>
                       {(mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg) && (
                         <Card className="border border-divider/60 bg-content2/30">
@@ -1180,7 +1179,7 @@ export function IdentityTab() {
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                       <Select.Popover><ListBox><ListBox.Item id="exact">Exact</ListBox.Item><ListBox.Item id="prefix">Prefix</ListBox.Item></ListBox></Select.Popover>
                     </Select>
-                    <Input className="w-full" size="lg" variant="secondary" placeholder="Claim value" value={overrideMatchValue} onChange={(event) => setOverrideMatchValue(event.target.value)} required />
+                    <Input className="w-full" variant="secondary" placeholder="Claim value" value={overrideMatchValue} onChange={(event) => setOverrideMatchValue(event.target.value)} required />
                     <Select value={overrideTargetType} onChange={(value) => setOverrideTargetType(value as 'org_id' | 'rendered_name')} variant="secondary">
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                       <Select.Popover><ListBox><ListBox.Item id="org_id">Organization</ListBox.Item><ListBox.Item id="rendered_name">Rendered name</ListBox.Item></ListBox></Select.Popover>
@@ -1198,7 +1197,7 @@ export function IdentityTab() {
                       </Select.Popover>
                     </Select>
                   ) : (
-                    <Input className="w-full" size="lg" variant="secondary" placeholder="Org template" value={overrideOrgNameTemplate} onChange={(event) => setOverrideOrgNameTemplate(event.target.value)} />
+                    <Input className="w-full" variant="secondary" placeholder="Org template" value={overrideOrgNameTemplate} onChange={(event) => setOverrideOrgNameTemplate(event.target.value)} />
                   )}
                   <Select value={overrideRole} onChange={(value) => setOverrideRole(value as 'viewer' | 'editor' | 'admin')} variant="secondary">
                     <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>

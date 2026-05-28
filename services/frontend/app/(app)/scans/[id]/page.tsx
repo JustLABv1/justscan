@@ -600,6 +600,7 @@ export default function ScanDetailPage() {
   const loadScanInFlightRef = useRef<Promise<Scan> | null>(null);
   const defaultTabInitializedRef = useRef(false);
   const vulnerabilityViewInitializedRef = useRef(false);
+  const vulnerabilityViewScopeKeyRef = useRef('');
 
   const [suppressStatus, setSuppressStatus] = useState<Suppression['status']>('accepted');
   const [suppressScope, setSuppressScope] = useState<'personal' | 'workspace' | 'global'>(
@@ -634,6 +635,8 @@ export default function ScanDetailPage() {
   const cveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanStatus = scan?.status;
   const activeWorkScopeOrgId = workScope.kind === 'org' ? workScope.orgId : '';
+  const vulnerabilityViewScopeKey =
+    workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const blockedPolicyDetails = getBlockedPolicyDetails(
     scan?.external_status,
     scan?.blocked_policy_details,
@@ -826,6 +829,10 @@ export default function ScanDetailPage() {
   useEffect(() => {
     let cancelled = false;
     const cancelDeferred = deferEffect(() => {
+      if (vulnerabilityViewScopeKeyRef.current !== vulnerabilityViewScopeKey) {
+        vulnerabilityViewScopeKeyRef.current = vulnerabilityViewScopeKey;
+        vulnerabilityViewInitializedRef.current = false;
+      }
       if (!scan) return;
       if (scan.status === 'pending' || scan.status === 'running') {
         setViewSettingsReady(true);
@@ -860,7 +867,7 @@ export default function ScanDetailPage() {
       cancelled = true;
       cancelDeferred();
     };
-  }, [applyVulnerabilityViewPreference, id, scan]);
+  }, [applyVulnerabilityViewPreference, id, scan, vulnerabilityViewScopeKey]);
 
   useEffect(() => {
     if (!scan || scan.status === 'pending' || scan.status === 'running') return;

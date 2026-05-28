@@ -26,7 +26,13 @@ import {
   Table,
   useOverlayState,
 } from '@heroui/react';
-import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon } from 'hugeicons-react';
+import {
+  Delete01Icon,
+  PencilEdit01Icon,
+  PlusSignIcon,
+  Refresh01Icon,
+  Shield01Icon,
+} from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const PAGE_SIZE = 10;
@@ -327,6 +333,7 @@ export function UsersTab() {
                             {
                               id: 'toggle',
                               label: user.disabled ? 'Enable user' : 'Disable user',
+                              icon: <Refresh01Icon size={15} />,
                               onAction: () => {
                                 void handleToggleDisable(user);
                               },

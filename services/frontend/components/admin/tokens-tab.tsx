@@ -20,7 +20,7 @@ import {
   TextArea,
   useOverlayState,
 } from '@heroui/react';
-import { Delete01Icon, PencilEdit01Icon } from 'hugeicons-react';
+import { Delete01Icon, PencilEdit01Icon, Refresh01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const PAGE_SIZE = 10;
@@ -253,6 +253,7 @@ export function TokensTab() {
                             {
                               id: 'toggle',
                               label: token.disabled ? 'Enable token' : 'Disable token',
+                              icon: <Refresh01Icon size={15} />,
                               onAction: () => {
                                 void handleToggle(token);
                               },

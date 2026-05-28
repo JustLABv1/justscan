@@ -21,7 +21,14 @@ import {
   Table,
   useOverlayState,
 } from '@heroui/react';
-import { Tag01Icon } from 'hugeicons-react';
+import {
+  Cancel01Icon,
+  CopyLinkIcon,
+  Delete01Icon,
+  Refresh01Icon,
+  Share01Icon,
+  Tag01Icon,
+} from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const PAGE_SIZE = 20;
@@ -365,6 +372,7 @@ export function ScansTab() {
                             {
                               id: 'rescan',
                               label: 'Rescan',
+                              icon: <Refresh01Icon size={15} />,
                               onAction: () => {
                                 void handleRescan(scan);
                               },
@@ -374,6 +382,7 @@ export function ScansTab() {
                                   {
                                     id: 'cancel',
                                     label: 'Cancel',
+                                    icon: <Cancel01Icon size={15} />,
                                     onAction: () => {
                                       void handleCancel(scan);
                                     },
@@ -385,6 +394,7 @@ export function ScansTab() {
                                   {
                                     id: 'share',
                                     label: 'Create share link',
+                                    icon: <Share01Icon size={15} />,
                                     onAction: () => {
                                       void handleCreateShare(scan);
                                     },
@@ -394,6 +404,7 @@ export function ScansTab() {
                                   {
                                     id: 'copy-share',
                                     label: 'Copy share link',
+                                    icon: <CopyLinkIcon size={15} />,
                                     onAction: () => {
                                       void handleCopyShare(scan);
                                     },
@@ -401,6 +412,7 @@ export function ScansTab() {
                                   {
                                     id: 'revoke-share',
                                     label: 'Revoke share link',
+                                    icon: <Delete01Icon size={15} />,
                                     variant: 'danger' as const,
                                     onAction: () => {
                                       void handleRevokeShare(scan);
@@ -410,6 +422,7 @@ export function ScansTab() {
                             {
                               id: 'tag',
                               label: 'Add tag',
+                              icon: <Tag01Icon size={15} />,
                               onAction: () => openTagModal(scan),
                             },
                           ]}

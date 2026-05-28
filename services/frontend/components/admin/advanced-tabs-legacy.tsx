@@ -102,6 +102,7 @@ import {
     Notification01Icon,
     PencilEdit01Icon,
     PlusSignIcon,
+    Refresh01Icon,
     Shield01Icon,
     Tag01Icon,
 } from 'hugeicons-react';
@@ -1664,6 +1665,7 @@ function UsersTab() {
                           {
                             id: 'toggle',
                             label: u.disabled ? 'Enable user' : 'Disable user',
+                            icon: <Refresh01Icon size={15} />,
                             onAction: () => {
                               void handleToggleDisable(u);
                             },
@@ -2074,6 +2076,7 @@ function TokensTab() {
                           {
                             id: 'toggle',
                             label: token.disabled ? 'Enable token' : 'Disable token',
+                            icon: <Refresh01Icon size={15} />,
                             onAction: () => {
                               void handleToggle(token);
                             },
@@ -3189,6 +3192,12 @@ export function NotificationsTab() {
                             {
                               id: 'history',
                               label: historyChannelId === ch.id ? 'Hide history' : 'Show history',
+                              icon:
+                                historyChannelId === ch.id ? (
+                                  <ArrowDown01Icon size={15} />
+                                ) : (
+                                  <ArrowRight01Icon size={15} />
+                                ),
                               onAction: () => {
                                 void toggleHistory(ch);
                               },
@@ -3196,6 +3205,7 @@ export function NotificationsTab() {
                             {
                               id: 'toggle',
                               label: ch.enabled ? 'Disable channel' : 'Enable channel',
+                              icon: <Refresh01Icon size={15} />,
                               onAction: () => {
                                 void handleToggleEnabled(ch);
                               },
@@ -6104,6 +6114,7 @@ export function IdentityProvidersTab() {
                           {
                             id: 'toggle',
                             label: provider.enabled ? 'Disable provider' : 'Enable provider',
+                            icon: <Refresh01Icon size={15} />,
                             onAction: () => {
                               void handleToggleEnabled(provider);
                             },
@@ -7730,6 +7741,7 @@ export function GlobalRegistriesTab() {
                           {
                             id: 'default',
                             label: registry.is_default ? 'Unset default' : 'Set as default',
+                            icon: <Shield01Icon size={15} />,
                             onAction: () => {
                               void handleSetDefault(registry);
                             },

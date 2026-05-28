@@ -13,7 +13,7 @@ import {
 import type { Registry, RegistryWithHealth, ScanProvider } from '@/lib/api/types/registries';
 import { deferEffect } from '@/lib/defer-effect';
 import { Button, Card, Chip, Input, ListBox, Modal, SearchField, Select, Table, useOverlayState } from '@heroui/react';
-import { Delete01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
+import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 function Banner({ type, text }: { type: 'success' | 'error'; text: string }) {
@@ -287,6 +287,7 @@ export function RegistriesTab() {
                             {
                               id: 'toggle-default',
                               label: registry.is_default ? 'Unset default' : 'Set as default',
+                              icon: <Shield01Icon size={15} />,
                               onAction: () => {
                                 void handleSetDefault(registry);
                               },

@@ -51,7 +51,16 @@ import {
   TextField,
   type SortDescriptor,
 } from '@heroui/react';
-import { ArrowLeft01Icon, PackageIcon, Refresh01Icon } from 'hugeicons-react';
+import {
+  ArrowLeft01Icon,
+  CopyLinkIcon,
+  Delete01Icon,
+  EyeIcon,
+  FileValidationIcon,
+  PackageIcon,
+  Refresh01Icon,
+  Share01Icon,
+} from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -1073,11 +1082,13 @@ function HelmRunHistory({
                                 {
                                   id: 'open',
                                   label: 'Open run',
+                                  icon: <EyeIcon size={15} />,
                                   onAction: () => router.push(`/helm/runs/${run.id}`),
                                 },
                                 {
                                   id: 'report',
                                   label: 'Generate report',
+                                  icon: <FileValidationIcon size={15} />,
                                   disabled: run.active_images > 0 || run.total_images === 0,
                                   onAction: () =>
                                     router.push(
@@ -1087,6 +1098,7 @@ function HelmRunHistory({
                                 {
                                   id: 'share',
                                   label: actionRunId === run.id ? 'Sharing...' : 'Share all scans',
+                                  icon: <Share01Icon size={15} />,
                                   disabled:
                                     actionRunId === run.id ||
                                     run.total_images === 0 ||
@@ -1099,6 +1111,7 @@ function HelmRunHistory({
                                     actionRunId === run.id
                                       ? 'Preparing link...'
                                       : 'Copy share link',
+                                  icon: <CopyLinkIcon size={15} />,
                                   disabled:
                                     actionRunId === run.id ||
                                     run.total_images === 0 ||
@@ -1108,6 +1121,7 @@ function HelmRunHistory({
                                 {
                                   id: 'delete',
                                   label: actionRunId === run.id ? 'Deleting...' : 'Delete run',
+                                  icon: <Delete01Icon size={15} />,
                                   variant: 'danger',
                                   disabled: actionRunId === run.id,
                                   onAction: () => onDeleteRun(run),

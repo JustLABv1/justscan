@@ -40,7 +40,7 @@ import {
   TextArea,
   useOverlayState,
 } from '@heroui/react';
-import { Delete01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
+import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Refresh01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 function parseDelimitedList(value: string) {
@@ -706,6 +706,7 @@ export function IdentityTab() {
                             {
                               id: 'toggle',
                               label: provider.enabled ? 'Disable provider' : 'Enable provider',
+                              icon: <Refresh01Icon size={15} />,
                               onAction: () => {
                                 void handleToggleEnabled(provider);
                               },

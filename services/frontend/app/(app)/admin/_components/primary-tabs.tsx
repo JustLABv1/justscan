@@ -5,6 +5,7 @@ import {
     Delete01Icon,
     PencilEdit01Icon,
     PlusSignIcon,
+    Refresh01Icon,
     Shield01Icon,
     Tag01Icon,
 } from 'hugeicons-react';
@@ -1532,6 +1533,7 @@ export function UsersTab() {
                           {
                             id: 'toggle',
                             label: user.disabled ? 'Enable user' : 'Disable user',
+                            icon: <Refresh01Icon size={15} />,
                             onAction: () => {
                               void handleToggleDisable(user);
                             },
@@ -1942,6 +1944,7 @@ export function TokensTab() {
                           {
                             id: 'toggle',
                             label: token.disabled ? 'Enable token' : 'Disable token',
+                            icon: <Refresh01Icon size={15} />,
                             onAction: () => {
                               void handleToggle(token);
                             },

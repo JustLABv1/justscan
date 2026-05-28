@@ -18,6 +18,7 @@ import {
   Select,
   Table,
 } from '@heroui/react';
+import { Delete01Icon, Notification01Icon, Refresh01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RowActionsMenu } from '../ui/row-actions-menu';
 
@@ -296,6 +297,7 @@ export function NotificationsTab() {
                             {
                               id: 'test',
                               label: 'Send test',
+                              icon: <Notification01Icon size={15} />,
                               onAction: () => {
                                 void handleTest(channel);
                               },
@@ -303,6 +305,7 @@ export function NotificationsTab() {
                             {
                               id: 'toggle',
                               label: channel.enabled ? 'Disable channel' : 'Enable channel',
+                              icon: <Refresh01Icon size={15} />,
                               onAction: () => {
                                 void handleToggleEnabled(channel);
                               },
@@ -310,6 +313,7 @@ export function NotificationsTab() {
                             {
                               id: 'delete',
                               label: 'Delete channel',
+                              icon: <Delete01Icon size={15} />,
                               variant: 'danger',
                               onAction: () => {
                                 void handleDelete(channel);

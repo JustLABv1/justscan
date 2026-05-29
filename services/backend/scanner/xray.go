@@ -542,7 +542,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 
 	go compliance.AutoAssignOrgs(db, scan.ImageName, scan.ImageTag, scan.ID)
 	go applyAutoTags(db, scan)
-	go notifications.Dispatch(db, models.NotificationEventScanComplete, notifications.Payload{
+	notifications.Dispatch(db, models.NotificationEventScanComplete, notifications.Payload{
 		ScanID:    scan.ID.String(),
 		ImageName: scan.ImageName,
 		ImageTag:  scan.ImageTag,

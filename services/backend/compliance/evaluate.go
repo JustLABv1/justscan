@@ -215,12 +215,17 @@ func RunForScan(db *bun.DB, scanID uuid.UUID) {
 			}
 			db.NewInsert().Model(history).Exec(ctx) //nolint:errcheck
 			if status == "fail" {
-				go notifications.Dispatch(db, models.NotificationEventComplianceFailed, notifications.Payload{
-					ScanID:    scanID.String(),
-					ImageName: scan.ImageName,
-					ImageTag:  scan.ImageTag,
-					Status:    status,
-					Details:   fmt.Sprintf("Policy %s failed for org %s with %d violation(s).", policy.Name, os.OrgID.String(), len(violations)),
+				notifications.Dispatch(db, models.NotificationEventComplianceFailed, notifications.Payload{
+					ScanID:           scanID.String(),
+					ImageName:        scan.ImageName,
+					ImageTag:         scan.ImageTag,
+					OrgIDs:           []string{os.OrgID.String()},
+					Status:           status,
+					ComplianceStatus: status,
+					ComplianceFailed: true,
+					PolicyIDs:        []string{policy.ID.String()},
+					PolicyNames:      []string{policy.Name},
+					Details:          fmt.Sprintf("Policy %s failed for org %s with %d violation(s).", policy.Name, os.OrgID.String(), len(violations)),
 					Extra: map[string]string{
 						"org_id":      os.OrgID.String(),
 						"policy_id":   policy.ID.String(),

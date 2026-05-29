@@ -2,6 +2,7 @@ package router
 
 import (
 	"justscan-backend/handlers/admins"
+	notificationhandlers "justscan-backend/handlers/notifications"
 	"justscan-backend/middlewares"
 
 	"github.com/gin-gonic/gin"
@@ -77,24 +78,59 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.GET("/audit", func(c *gin.Context) {
 			admins.GetAuditLogs(c, db)
 		})
-		// notification channels
 		admin.GET("/notifications", func(c *gin.Context) {
-			admins.ListNotificationChannels(c, db)
+			notificationhandlers.ListChannels(c, db, notificationhandlers.SystemScope())
 		})
 		admin.POST("/notifications", func(c *gin.Context) {
-			admins.CreateNotificationChannel(c, db)
+			notificationhandlers.CreateChannel(c, db, notificationhandlers.SystemScope())
 		})
 		admin.PUT("/notifications/:channelID", func(c *gin.Context) {
-			admins.UpdateNotificationChannel(c, db)
+			notificationhandlers.UpdateChannel(c, db, notificationhandlers.SystemScope())
 		})
 		admin.POST("/notifications/:channelID/test", func(c *gin.Context) {
-			admins.TestNotificationChannel(c, db)
+			notificationhandlers.TestChannel(c, db, notificationhandlers.SystemScope())
 		})
 		admin.GET("/notifications/:channelID/deliveries", func(c *gin.Context) {
-			admins.ListNotificationDeliveries(c, db)
+			notificationhandlers.ListDeliveries(c, db, notificationhandlers.SystemScope())
 		})
 		admin.DELETE("/notifications/:channelID", func(c *gin.Context) {
-			admins.DeleteNotificationChannel(c, db)
+			notificationhandlers.DeleteChannel(c, db, notificationhandlers.SystemScope())
+		})
+		admin.GET("/notifications/channels", func(c *gin.Context) {
+			notificationhandlers.ListChannels(c, db, notificationhandlers.SystemScope())
+		})
+		admin.POST("/notifications/channels", func(c *gin.Context) {
+			notificationhandlers.CreateChannel(c, db, notificationhandlers.SystemScope())
+		})
+		admin.PUT("/notifications/channels/:channelID", func(c *gin.Context) {
+			notificationhandlers.UpdateChannel(c, db, notificationhandlers.SystemScope())
+		})
+		admin.DELETE("/notifications/channels/:channelID", func(c *gin.Context) {
+			notificationhandlers.DeleteChannel(c, db, notificationhandlers.SystemScope())
+		})
+		admin.POST("/notifications/channels/:channelID/test", func(c *gin.Context) {
+			notificationhandlers.TestChannel(c, db, notificationhandlers.SystemScope())
+		})
+		admin.GET("/notifications/rules", func(c *gin.Context) {
+			notificationhandlers.ListRules(c, db, notificationhandlers.SystemScope())
+		})
+		admin.POST("/notifications/rules", func(c *gin.Context) {
+			notificationhandlers.CreateRule(c, db, notificationhandlers.SystemScope())
+		})
+		admin.PUT("/notifications/rules/:ruleID", func(c *gin.Context) {
+			notificationhandlers.UpdateRule(c, db, notificationhandlers.SystemScope())
+		})
+		admin.DELETE("/notifications/rules/:ruleID", func(c *gin.Context) {
+			notificationhandlers.DeleteRule(c, db, notificationhandlers.SystemScope())
+		})
+		admin.GET("/notifications/deliveries", func(c *gin.Context) {
+			notificationhandlers.ListDeliveries(c, db, notificationhandlers.SystemScope())
+		})
+		admin.GET("/notifications/queue", func(c *gin.Context) {
+			notificationhandlers.ListQueue(c, db, notificationhandlers.SystemScope())
+		})
+		admin.POST("/notifications/queue/:jobID/retry", func(c *gin.Context) {
+			notificationhandlers.RetryQueueJob(c, db, notificationhandlers.SystemScope())
 		})
 		// insights — API request log
 		admin.GET("/api-logs", func(c *gin.Context) {

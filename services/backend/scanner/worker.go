@@ -443,7 +443,7 @@ func processScan(job ScanJob, cacheDir string) {
 	go applyAutoTags(db, scan)
 
 	// Fire completion notification
-	go notifications.Dispatch(db, models.NotificationEventScanComplete, notifications.Payload{
+	notifications.Dispatch(db, models.NotificationEventScanComplete, notifications.Payload{
 		ScanID:    scanID.String(),
 		ImageName: scan.ImageName,
 		ImageTag:  scan.ImageTag,
@@ -498,7 +498,7 @@ func setFailed(db *bun.DB, scan *models.Scan, msg string) {
 	}
 	recordScanStepOutput(ctx, db, scan.ID, msg)
 
-	go notifications.Dispatch(db, models.NotificationEventScanFailed, notifications.Payload{
+	notifications.Dispatch(db, models.NotificationEventScanFailed, notifications.Payload{
 		ScanID:    scan.ID.String(),
 		ImageName: scan.ImageName,
 		ImageTag:  scan.ImageTag,

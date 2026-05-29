@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 const profileNavItems = [
   { href: '/profile', label: 'My Profile' },
   { href: '/profile/tokens', label: 'API Tokens' },
+  { href: '/profile/notifications', label: 'Notifications' },
 ];
 
 export default function ProfileLayout({ children }: { children: React.ReactNode }) {

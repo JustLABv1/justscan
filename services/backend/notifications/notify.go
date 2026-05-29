@@ -15,65 +15,38 @@ import (
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
-	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
 )
 
 // Payload is the structured event data sent to notification channels.
 type Payload struct {
-	Event         string            `json:"event"`
-	ScanID        string            `json:"scan_id,omitempty"`
-	ImageName     string            `json:"image_name,omitempty"`
-	ImageTag      string            `json:"image_tag,omitempty"`
-	OrgIDs        []string          `json:"org_ids,omitempty"`
-	Status        string            `json:"status,omitempty"`
-	CriticalCount int               `json:"critical_count,omitempty"`
-	HighCount     int               `json:"high_count,omitempty"`
-	MediumCount   int               `json:"medium_count,omitempty"`
-	LowCount      int               `json:"low_count,omitempty"`
-	UnknownCount  int               `json:"unknown_count,omitempty"`
-	Details       string            `json:"details,omitempty"`
-	Extra         map[string]string `json:"extra,omitempty"`
-	Timestamp     time.Time         `json:"timestamp"`
-}
-
-// Dispatch sends a notification to all enabled channels subscribed to the given event.
-func Dispatch(db *bun.DB, event string, p Payload) {
-	p.Timestamp = time.Now()
-	p.Event = event
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	enrichPayload(ctx, db, &p)
-
-	var channels []models.NotificationChannel
-	if err := db.NewSelect().Model(&channels).Where("enabled = true").Scan(ctx); err != nil {
-		log.Warnf("notifications.Dispatch: failed to load channels: %v", err)
-		return
-	}
-
-	for i := range channels {
-		ch := channels[i]
-		subscribed := false
-		for _, ev := range ch.Events {
-			if ev == event {
-				subscribed = true
-				break
-			}
-		}
-		if !subscribed {
-			continue
-		}
-		if !channelMatches(ch, p) {
-			continue
-		}
-		go func(c models.NotificationChannel) {
-			err := sendAndRecord(db, c, p, "dispatch")
-			if err != nil {
-				log.Warnf("notifications: channel %q (%s) failed: %v", c.Name, c.Type, err)
-			}
-		}(ch)
-	}
+	Event            string            `json:"event"`
+	ScanID           string            `json:"scan_id,omitempty"`
+	ImageName        string            `json:"image_name,omitempty"`
+	ImageTag         string            `json:"image_tag,omitempty"`
+	ImageRef         string            `json:"image_ref,omitempty"`
+	OrgIDs           []string          `json:"org_ids,omitempty"`
+	Status           string            `json:"status,omitempty"`
+	ScanProvider     string            `json:"scan_provider,omitempty"`
+	HighestSeverity  string            `json:"highest_severity,omitempty"`
+	HighestCVSS      float64           `json:"highest_cvss,omitempty"`
+	ComplianceStatus string            `json:"compliance_status,omitempty"`
+	ComplianceFailed bool              `json:"compliance_failed,omitempty"`
+	CriticalCount    int               `json:"critical_count,omitempty"`
+	HighCount        int               `json:"high_count,omitempty"`
+	MediumCount      int               `json:"medium_count,omitempty"`
+	LowCount         int               `json:"low_count,omitempty"`
+	UnknownCount     int               `json:"unknown_count,omitempty"`
+	SuppressedCount  int               `json:"suppressed_count,omitempty"`
+	XrayBlocked      bool              `json:"xray_blocked,omitempty"`
+	PolicyIDs        []string          `json:"policy_ids,omitempty"`
+	PolicyNames      []string          `json:"policy_names,omitempty"`
+	XrayPolicyNames  []string          `json:"xray_policy_names,omitempty"`
+	XrayWatchNames   []string          `json:"xray_watch_names,omitempty"`
+	Tags             []string          `json:"tags,omitempty"`
+	Details          string            `json:"details,omitempty"`
+	Extra            map[string]string `json:"extra,omitempty"`
+	Timestamp        time.Time         `json:"timestamp"`
 }
 
 func SendTest(db *bun.DB, channel models.NotificationChannel, event string) error {
@@ -98,7 +71,16 @@ func sendAndRecord(db *bun.DB, channel models.NotificationChannel, payload Paylo
 		status = "failed"
 		errorMessage = err.Error()
 	}
-	recordDelivery(db, channel.ID, payload.Event, triggeredBy, status, errorMessage, payload.Details)
+	recordDeliveryWithContext(db, deliveryContext{
+		ChannelID:   channel.ID,
+		Event:       payload.Event,
+		TriggeredBy: triggeredBy,
+		Status:      status,
+		Error:       errorMessage,
+		Details:     payload.Details,
+		ScopeType:   channel.ScopeType,
+		ScopeRef:    channel.ScopeRef,
+	})
 	return err
 }
 
@@ -147,6 +129,16 @@ func enrichPayload(ctx context.Context, db *bun.DB, payload *Payload) {
 			payload.LowCount = scan.LowCount
 			payload.UnknownCount = scan.UnknownCount
 		}
+		if payload.ScanProvider == "" {
+			payload.ScanProvider = scan.ScanProvider
+		}
+		if payload.HighestSeverity == "" {
+			payload.HighestSeverity = highestSeverity(*payload)
+		}
+		if payload.SuppressedCount == 0 {
+			payload.SuppressedCount = scan.SuppressedCount
+		}
+		payload.XrayBlocked = payload.XrayBlocked || scan.ExternalStatus == models.ScanExternalStatusBlockedByXrayPolicy
 	}
 	if len(payload.OrgIDs) == 0 {
 		var orgScans []models.OrgScan
@@ -156,6 +148,35 @@ func enrichPayload(ctx context.Context, db *bun.DB, payload *Payload) {
 				payload.OrgIDs = append(payload.OrgIDs, orgScan.OrgID.String())
 			}
 		}
+	}
+	if payload.HighestCVSS == 0 {
+		var maxCVSS float64
+		if err := db.NewSelect().
+			Table("vulnerabilities").
+			ColumnExpr("COALESCE(MAX(cvss_score), 0)").
+			Where("scan_id = ?", scanID).
+			Scan(ctx, &maxCVSS); err == nil {
+			payload.HighestCVSS = maxCVSS
+		}
+	}
+	if len(payload.Tags) == 0 {
+		var tags []struct {
+			Name string `bun:"name"`
+		}
+		if err := db.NewSelect().
+			TableExpr("tags t").
+			Column("t.name").
+			Join("JOIN scan_tags st ON st.tag_id = t.id").
+			Where("st.scan_id = ?", scanID).
+			Scan(ctx, &tags); err == nil {
+			payload.Tags = make([]string, 0, len(tags))
+			for _, tag := range tags {
+				payload.Tags = append(payload.Tags, tag.Name)
+			}
+		}
+	}
+	if payload.ImageRef == "" {
+		payload.ImageRef = strings.TrimSuffix(strings.TrimSpace(payload.ImageName)+":"+strings.TrimSpace(payload.ImageTag), ":")
 	}
 }
 
@@ -268,24 +289,16 @@ func severityRank(severity string) int {
 }
 
 func recordDelivery(db *bun.DB, channelID uuid.UUID, event, triggeredBy, status, errorMessage, details string) {
-	if db == nil {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	entry := &models.NotificationDelivery{
+	recordDeliveryWithContext(db, deliveryContext{
 		ChannelID:   channelID,
 		Event:       event,
 		TriggeredBy: triggeredBy,
 		Status:      status,
 		Error:       errorMessage,
 		Details:     details,
-	}
-	if _, err := db.NewInsert().Model(entry).Exec(ctx); err != nil {
-		log.Warnf("notifications.recordDelivery: failed to persist delivery log: %v", err)
-	}
+		ScopeType:   models.NotificationScopeSystem,
+		ScopeRef:    "",
+	})
 }
 
 type discordEmbed struct {

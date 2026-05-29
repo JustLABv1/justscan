@@ -7,6 +7,7 @@ export * from './api/core';
 export * from './api/dashboard';
 export * from './api/helm';
 export * from './api/maintenance';
+export * from './api/notifications';
 export * from './api/orgs';
 export * from './api/public';
 export * from './api/registries';

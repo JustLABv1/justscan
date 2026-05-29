@@ -197,6 +197,8 @@ export interface NotificationChannel {
   id: string;
   name: string;
   type: 'discord' | 'email' | 'webhook' | 'slack' | 'teams' | 'telegram';
+  scope_type: 'system' | 'org' | 'user';
+  scope_ref: string;
   config: NotificationConfig;
   enabled: boolean;
   events: string[];
@@ -207,16 +209,73 @@ export interface NotificationChannel {
   updated_at: string;
 }
 
+export interface NotificationConditionPredicate {
+  field: string;
+  operator: string;
+  value: string | number | boolean | string[];
+}
+
+export interface NotificationConditionGroup {
+  op: 'all' | 'any';
+  conditions: NotificationConditionPredicate[];
+}
+
+export interface NotificationRule {
+  id: string;
+  name: string;
+  scope_type: 'system' | 'org' | 'user';
+  scope_ref: string;
+  enabled: boolean;
+  channel_ids: string[];
+  event_types: string[];
+  conditions: NotificationConditionGroup;
+  delivery_mode: 'immediate' | 'digest';
+  digest_window_minutes: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface NotificationDelivery {
   id: string;
   channel_id: string;
+  rule_id?: string | null;
+  event_id?: string | null;
+  queue_job_id?: string | null;
   event: string;
   triggered_by: string;
   status: string;
   error: string;
   details: string;
+  scope_type: 'system' | 'org' | 'user';
+  scope_ref: string;
   created_at: string;
   channel_name?: string;
+  rule_name?: string;
+}
+
+export interface NotificationQueueJob {
+  id: string;
+  event_id?: string | null;
+  rule_id: string;
+  channel_id: string;
+  digest_id?: string | null;
+  scope_type: 'system' | 'org' | 'user';
+  scope_ref: string;
+  delivery_mode: 'immediate' | 'digest';
+  status: 'pending' | 'leased' | 'delivered' | 'failed' | 'dead_letter';
+  attempt_count: number;
+  max_attempts: number;
+  next_attempt_at: string;
+  lease_owner: string;
+  leased_until?: string | null;
+  payload: Record<string, unknown>;
+  last_error: string;
+  last_attempt_at?: string | null;
+  delivered_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  channel_name?: string;
+  rule_name?: string;
 }
 
 export interface AdminOrg {

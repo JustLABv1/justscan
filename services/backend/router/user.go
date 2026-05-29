@@ -1,6 +1,7 @@
 package router
 
 import (
+	notificationhandlers "justscan-backend/handlers/notifications"
 	"justscan-backend/handlers/users"
 	"justscan-backend/middlewares"
 
@@ -44,6 +45,91 @@ func User(router *gin.RouterGroup, db *bun.DB) {
 		})
 		user.PUT("/onboarding/workspace-tour", func(c *gin.Context) {
 			users.UpdateWorkspaceTourState(c, db)
+		})
+
+		user.GET("/notifications/channels", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.ListChannels(c, db, scope)
+		})
+		user.POST("/notifications/channels", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.CreateChannel(c, db, scope)
+		})
+		user.PUT("/notifications/channels/:channelID", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.UpdateChannel(c, db, scope)
+		})
+		user.DELETE("/notifications/channels/:channelID", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.DeleteChannel(c, db, scope)
+		})
+		user.POST("/notifications/channels/:channelID/test", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.TestChannel(c, db, scope)
+		})
+		user.GET("/notifications/rules", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.ListRules(c, db, scope)
+		})
+		user.POST("/notifications/rules", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.CreateRule(c, db, scope)
+		})
+		user.PUT("/notifications/rules/:ruleID", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.UpdateRule(c, db, scope)
+		})
+		user.DELETE("/notifications/rules/:ruleID", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.DeleteRule(c, db, scope)
+		})
+		user.GET("/notifications/deliveries", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.ListDeliveries(c, db, scope)
+		})
+		user.GET("/notifications/queue", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.ListQueue(c, db, scope)
+		})
+		user.POST("/notifications/queue/:jobID/retry", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.RetryQueueJob(c, db, scope)
 		})
 	}
 }

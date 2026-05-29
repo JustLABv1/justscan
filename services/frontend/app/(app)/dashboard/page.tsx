@@ -88,24 +88,24 @@ const SEV = [
   },
 ];
 
-function buildScansHref(filters?: {
-  status?: string;
-  image?: string;
-  range?: RecentActivityRange;
-}): string {
-  const params = new URLSearchParams();
-  if (filters?.status) params.set('status', filters.status);
-  if (filters?.image) params.set('image', filters.image);
-  if (filters?.range) params.set('range', filters.range);
-  const query = params.toString();
-  return query ? `/scans?${query}` : '/scans';
-}
-
 function formatChartDate(date: string, options?: Intl.DateTimeFormatOptions): string {
   if (options?.year) {
     return formatChartDateShared(date, true);
   }
   return formatChartDateShared(date);
+}
+
+function buildTriageHref(filters?: {
+  kind?: 'scan' | 'policy' | 'fix' | 'watchlist';
+  priority?: 'critical' | 'high' | 'medium';
+  query?: string;
+}): string {
+  const params = new URLSearchParams();
+  if (filters?.kind) params.set('kind', filters.kind);
+  if (filters?.priority) params.set('priority', filters.priority);
+  if (filters?.query) params.set('q', filters.query);
+  const query = params.toString();
+  return query ? `/triage?${query}` : '/triage';
 }
 
 function toTimestamp(value?: string | null): number | null {
@@ -358,25 +358,6 @@ function getReadinessSummary({
   };
 }
 
-function mergeUniqueScans(groups: Scan[][]): Scan[] {
-  const seen = new Set<string>();
-  const merged: Scan[] = [];
-
-  for (const group of groups) {
-    for (const scan of group) {
-      if (seen.has(scan.id)) continue;
-      seen.add(scan.id);
-      merged.push(scan);
-    }
-  }
-
-  return merged.sort((left, right) => {
-    const leftTime = new Date(left.started_at ?? left.created_at).getTime();
-    const rightTime = new Date(right.started_at ?? right.created_at).getTime();
-    return rightTime - leftTime;
-  });
-}
-
 function PosturePill({ summary }: { summary: PostureSummary }) {
   const tone = TONE_STYLES[summary.tone];
 
@@ -395,6 +376,7 @@ function BriefingMetric({
   value,
   detail,
   tone = 'neutral',
+  href,
   onPress,
   className,
 }: {
@@ -402,6 +384,7 @@ function BriefingMetric({
   value: React.ReactNode;
   detail: React.ReactNode;
   tone?: PostureTone;
+  href?: string;
   onPress?: () => void;
   className?: string;
 }) {
@@ -427,6 +410,17 @@ function BriefingMetric({
     </Card>
   );
 
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="group block h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
+      >
+        {content}
+      </Link>
+    );
+  }
+
   if (!onPress) return content;
 
   return (
@@ -450,7 +444,9 @@ function ExecutivePostureCard({
   watchlistPolicyAttentionCount,
   coverage7d,
   successRate,
-  onOpenAttention,
+  triageDefaultHref,
+  triageCriticalHighHref,
+  triageAttentionHref,
   onOpenWatchlist,
   onOpenCompleted,
 }: {
@@ -462,7 +458,9 @@ function ExecutivePostureCard({
   watchlistPolicyAttentionCount: number;
   coverage7d: number;
   successRate: number;
-  onOpenAttention: () => void;
+  triageDefaultHref: string;
+  triageCriticalHighHref: string;
+  triageAttentionHref: string;
   onOpenWatchlist: () => void;
   onOpenCompleted: () => void;
 }) {
@@ -470,21 +468,21 @@ function ExecutivePostureCard({
   const readinessTone = TONE_STYLES[readiness.tone];
 
   return (
-    <section className="space-y-3 rounded-2xl px-1 py-1">
+    <section className="space-y-3 rounded-2xl p-1">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <BriefingMetric
           label="Critical + high"
           value={formatCompactNumber(criticalHighCount)}
           detail={`${formatCompactNumber(totalVulns)} total findings`}
           tone={risk.tone}
-          onPress={onOpenAttention}
+          href={triageCriticalHighHref}
         />
         <BriefingMetric
           label="Attention"
           value={needsAttentionTotal.toLocaleString()}
           detail="failed or policy-blocked scans"
           tone={needsAttentionTotal > 0 ? 'danger' : 'success'}
-          onPress={onOpenAttention}
+          href={triageAttentionHref}
         />
         <BriefingMetric
           label="Watched policy"
@@ -543,16 +541,24 @@ function AttentionQueueCard({
   watchlistPolicyAttentionCount,
   activeQueueCount,
   staleItems,
-  onOpenAttention,
-  onOpenWatchlist,
+  triageDefaultHref,
+  triageWatchlistPolicyHref,
+  triageWatchlistStaleHref,
+  triagePolicyHref,
+  triageFailedHref,
+  triageRunningHref,
 }: {
   genericFailedCount: number;
   blockedPolicyCount: number;
   watchlistPolicyAttentionCount: number;
   activeQueueCount: number;
   staleItems: WatchlistItem[];
-  onOpenAttention: () => void;
-  onOpenWatchlist: () => void;
+  triageDefaultHref: string;
+  triageWatchlistPolicyHref: string;
+  triageWatchlistStaleHref: string;
+  triagePolicyHref: string;
+  triageFailedHref: string;
+  triageRunningHref: string;
 }) {
   const items = [
     {
@@ -561,7 +567,7 @@ function AttentionQueueCard({
       value: watchlistPolicyAttentionCount,
       detail: 'Watched images blocked or failing org policy',
       tone: 'danger' as const,
-      onPress: onOpenWatchlist,
+      href: triageWatchlistPolicyHref,
     },
     {
       key: 'blocked',
@@ -569,7 +575,7 @@ function AttentionQueueCard({
       value: blockedPolicyCount,
       detail: 'Xray policy decisions awaiting review',
       tone: 'danger' as const,
-      onPress: onOpenAttention,
+      href: triagePolicyHref,
     },
     {
       key: 'failed',
@@ -577,7 +583,7 @@ function AttentionQueueCard({
       value: genericFailedCount,
       detail: 'Scans that did not complete cleanly',
       tone: 'danger' as const,
-      onPress: onOpenAttention,
+      href: triageFailedHref,
     },
     {
       key: 'stale',
@@ -585,7 +591,7 @@ function AttentionQueueCard({
       value: staleItems.length,
       detail: 'Scheduled images not scanned in 7 days',
       tone: 'warning' as const,
-      onPress: onOpenWatchlist,
+      href: triageWatchlistStaleHref,
     },
     {
       key: 'running',
@@ -593,7 +599,7 @@ function AttentionQueueCard({
       value: activeQueueCount,
       detail: 'Queued or running scan work',
       tone: 'accent' as const,
-      onPress: onOpenAttention,
+      href: triageRunningHref,
     },
   ].filter((item) => item.value > 0);
 
@@ -601,12 +607,14 @@ function AttentionQueueCard({
     <Card>
       <DashboardSectionHeader
         title="Needs attention"
-        description="Prioritized by executive impact"
+        description="Open the triage queue for the next best action"
         action={
-          <Button onClick={onOpenAttention} variant="secondary">
-            Open triage
-            <ArrowRight01Icon />
-          </Button>
+          <Link href={triageDefaultHref}>
+            <Button variant="secondary">
+              Open triage
+              <ArrowRight01Icon />
+            </Button>
+          </Link>
         }
       />
 
@@ -630,13 +638,11 @@ function AttentionQueueCard({
           {items.map((item) => {
             const tone = TONE_STYLES[item.tone];
             return (
-              <button
+              <Link
                 key={item.key}
-                type="button"
-                onClick={item.onPress}
+                href={item.href}
                 className="group flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
                 style={{ background: tone.softBg, borderColor: tone.border }}
-                aria-haspopup="dialog"
               >
                 <span>
                   <span
@@ -655,7 +661,7 @@ function AttentionQueueCard({
                 >
                   {item.value.toLocaleString()}
                 </span>
-              </button>
+              </Link>
             );
           })}
         </div>
@@ -932,6 +938,7 @@ function VulnTrendChart({
           {PERIODS.map((d) => (
             <button
               key={d}
+              type="button"
               onClick={() => onPeriod(d)}
               className="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150"
               style={
@@ -1041,9 +1048,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeDrilldown, setActiveDrilldown] = useState<DashboardDrilldownKey | null>(null);
-  const [attentionFilter, setAttentionFilter] = useState<'all' | 'failed' | 'blocked' | 'running'>(
-    'all'
-  );
   const [recentActivityRange, setRecentActivityRange] = useState<RecentActivityRange>('24h');
   const [modalScans, setModalScans] = useState<Scan[]>([]);
   const [modalScansLoading, setModalScansLoading] = useState(false);
@@ -1116,26 +1120,17 @@ export default function DashboardPage() {
 
     const { from, to } = getRecentActivityBounds(recentActivityRange);
 
-    const request =
-      activeDrilldown === 'attention'
-        ? Promise.all([
-            listScans(1, 50, undefined, 'failed'),
-            listScans(1, 50, undefined, 'running'),
-            listScans(1, 50, undefined, 'pending'),
-          ]).then(([failed, running, pending]) =>
-            mergeUniqueScans([failed.data ?? [], running.data ?? [], pending.data ?? []])
-          )
-        : listScans(
-            1,
-            50,
-            undefined,
-            activeDrilldown === 'completed' ? 'completed' : undefined,
-            undefined,
-            undefined,
-            undefined,
-            from,
-            to
-          ).then((result) => result.data ?? []);
+    const request = listScans(
+      1,
+      50,
+      undefined,
+      activeDrilldown === 'completed' ? 'completed' : undefined,
+      undefined,
+      undefined,
+      undefined,
+      from,
+      to
+    ).then((result) => result.data ?? []);
 
     request
       .then((scans) => setModalScans(scans))
@@ -1236,30 +1231,15 @@ export default function DashboardPage() {
     scannerHealthError,
     staleCount: watchlistCoverage.staleItems.length,
   });
-  const totalAttentionForFilter =
-    attentionFilter === 'failed'
-      ? genericFailedCount
-      : attentionFilter === 'blocked'
-        ? blockedPolicyCount
-        : attentionFilter === 'running'
-          ? activeQueueCount
-          : needsAttentionTotal;
-  const displayedModalScans =
-    activeDrilldown === 'attention'
-      ? modalScans.filter((scan) => {
-          const isFailed = scan.status === 'failed';
-          const isBlocked = scan.external_status === 'blocked_by_xray_policy';
-          const isRunning = scan.status === 'running' || scan.status === 'pending';
-          if (attentionFilter === 'failed') return isFailed && !isBlocked;
-          if (attentionFilter === 'blocked') return isBlocked;
-          if (attentionFilter === 'running') return isRunning;
-          return isFailed || isBlocked || isRunning;
-        })
-      : modalScans;
-  const triageHref =
-    attentionFilter === 'running'
-      ? buildScansHref({ status: 'running' })
-      : buildScansHref({ status: 'failed' });
+  const triageDefaultHref = buildTriageHref();
+  const triageWatchlistPolicyHref = buildTriageHref({ kind: 'watchlist', priority: 'high', query: 'policy' });
+  const triageWatchlistStaleHref = buildTriageHref({ kind: 'watchlist', priority: 'medium', query: 'stale' });
+  const triagePolicyHref = buildTriageHref({ kind: 'policy', priority: 'critical', query: 'xray blocked' });
+  const triageFailedHref = buildTriageHref({ kind: 'scan', query: 'failed' });
+  const triageRunningHref = buildTriageHref({ kind: 'scan', priority: 'medium', query: 'in flight' });
+  const triageCriticalHighHref = buildTriageHref({ kind: 'fix', priority: 'high' });
+  const triageAttentionHref = buildTriageHref({ query: 'failed' });
+  const displayedModalScans = modalScans;
   const recentActivityRangeLabel =
     RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === recentActivityRange)?.label ??
     'Last 24 hours';
@@ -1278,9 +1258,6 @@ export default function DashboardPage() {
 
   function openDrilldown(card: DashboardDrilldownKey) {
     setActiveDrilldown(card);
-    if (card !== 'attention') {
-      setAttentionFilter('all');
-    }
     prepareDrilldown(card);
     drilldownModal.open();
   }
@@ -1337,7 +1314,9 @@ export default function DashboardPage() {
         watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
         coverage7d={watchlistCoverage.coverage7d}
         successRate={successRate}
-        onOpenAttention={() => openDrilldown('attention')}
+        triageDefaultHref={triageDefaultHref}
+        triageCriticalHighHref={triageCriticalHighHref}
+        triageAttentionHref={triageAttentionHref}
         onOpenWatchlist={() => openDrilldown('watchlist')}
         onOpenCompleted={() => openDrilldown('completed')}
       />
@@ -1354,8 +1333,12 @@ export default function DashboardPage() {
           watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
           activeQueueCount={activeQueueCount}
           staleItems={watchlistCoverage.staleItems}
-          onOpenAttention={() => openDrilldown('attention')}
-          onOpenWatchlist={() => openDrilldown('watchlist')}
+          triageDefaultHref={triageDefaultHref}
+          triageWatchlistPolicyHref={triageWatchlistPolicyHref}
+          triageWatchlistStaleHref={triageWatchlistStaleHref}
+          triagePolicyHref={triagePolicyHref}
+          triageFailedHref={triageFailedHref}
+          triageRunningHref={triageRunningHref}
         />
       </div>
 
@@ -1422,23 +1405,15 @@ export default function DashboardPage() {
         totalScans={stats.total_scans}
         completedCount={completedCount}
         watchlistCount={stats.watchlist_count}
-        needsAttentionTotal={needsAttentionTotal}
-        attentionFilter={attentionFilter}
-        onAttentionFilterChange={setAttentionFilter}
         recentActivityRange={recentActivityRange}
         onRecentActivityRangeChange={handleRecentActivityRangeChange}
         recentActivityRangeLabel={recentActivityRangeLabel}
-        totalAttentionForFilter={totalAttentionForFilter}
-        genericFailedCount={genericFailedCount}
-        blockedPolicyCount={blockedPolicyCount}
-        activeQueueCount={activeQueueCount}
         scans={displayedModalScans}
         scansLoading={modalScansLoading}
         scansError={modalScansError}
         watchlistItems={watchlistItems}
         watchlistLoading={watchlistLoading}
         watchlistError={watchlistError}
-        triageHref={triageHref}
         recentActivityHref={recentActivityHref}
       />
     </div>

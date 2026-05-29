@@ -82,6 +82,7 @@ const navGroups = [
     label: 'Primary',
     items: [
       { href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon },
+      { href: '/triage', label: 'Triage', Icon: ShieldKeyIcon },
       { href: '/assistant', label: 'Assistant', Icon: AiContentGenerator01Icon },
       { href: '/scans', label: 'Scans', Icon: Shield01Icon },
     ],

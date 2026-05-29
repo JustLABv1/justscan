@@ -17,7 +17,6 @@ import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/u
 import { PageHeader } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
-import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -1614,27 +1613,6 @@ export default function ScanDetailPage() {
       )
     : [];
 
-  const sevCards = [
-    {
-      count: scan.critical_count,
-      label: 'Critical',
-      color: 'text-red-400',
-      border: '',
-    },
-    {
-      count: scan.high_count,
-      label: 'High',
-      color: 'text-orange-400',
-      border: '',
-    },
-    {
-      count: scan.medium_count,
-      label: 'Medium',
-      color: 'text-yellow-400',
-      border: '',
-    },
-    { count: scan.low_count, label: 'Low', color: 'text-blue-400', border: '' },
-  ];
   const complianceByOrg = Object.values(
     compliance.reduce(
       (acc, result) => {
@@ -1775,6 +1753,65 @@ export default function ScanDetailPage() {
   const dominantSeverity = severityDistribution.reduce((best, current) =>
     current.value > best.value ? current : best
   );
+  const remediationItems = [
+    {
+      label: 'Critical/high exposure',
+      value: criticalAndHigh,
+      detail:
+        criticalAndHigh > 0
+          ? 'Start here before reviewing medium and low findings.'
+          : 'No critical or high findings in the current view.',
+      tone: criticalAndHigh > 0 ? 'danger' : 'success',
+      action: () => {
+        setActiveTab('vulns');
+        setSeverityFilter(criticalAndHigh > 0 && (vulnSummary?.critical ?? 0) > 0 ? 'CRITICAL' : 'HIGH');
+      },
+      actionLabel: 'Review highest risk',
+    },
+    {
+      label: 'Fixes available',
+      value: vulnerabilitiesWithFix,
+      detail:
+        vulnerabilitiesWithFix > 0
+          ? `${fixCoveragePercent}% of visible findings have a fixed version.`
+          : 'No fixed versions are currently reported.',
+      tone: vulnerabilitiesWithFix > 0 ? 'warning' : 'default',
+      action: () => {
+        setActiveTab('vulns');
+        setHasFix(true);
+      },
+      actionLabel: 'Show fixable',
+    },
+    {
+      label: 'Policy blockers',
+      value: complianceViolationRows.length + xrayPolicyMatches,
+      detail:
+        complianceViolationRows.length + xrayPolicyMatches > 0
+          ? 'Policy signals should be resolved or explicitly accepted.'
+          : 'No policy blockers are visible in this scan.',
+      tone: complianceViolationRows.length + xrayPolicyMatches > 0 ? 'danger' : 'success',
+      action: () => {
+        setActiveTab(complianceViolationRows.length > 0 ? 'compliance' : 'vulns');
+        setXrayPolicyFirst(xrayPolicyMatches > 0);
+        setPolicyFailedOnly(complianceViolationRows.length > 0);
+      },
+      actionLabel: 'Review policy',
+    },
+  ] as const;
+  const focusSeverityCounts = [
+    { label: 'Critical', value: scan.critical_count, className: 'text-red-400' },
+    { label: 'High', value: scan.high_count, className: 'text-orange-400' },
+    { label: 'Medium', value: scan.medium_count, className: 'text-yellow-400' },
+    { label: 'Low', value: scan.low_count, className: 'text-blue-400' },
+  ];
+  const focusLead =
+    scan.external_status === 'blocked_by_xray_policy'
+      ? 'Xray blocked this artifact before the normal scan completion path.'
+      : criticalAndHigh > 0
+        ? 'Start with critical and high findings before moving into broader cleanup.'
+        : vulnerabilitiesWithFix > 0
+          ? 'No critical/high exposure in this view. Apply available fixes next.'
+          : 'This scan has no urgent remediation signal in the current view.';
 
   const headerActions = (
     <div className="relative flex flex-wrap items-center justify-end gap-2">
@@ -2054,56 +2091,109 @@ export default function ScanDetailPage() {
         </Modal.Backdrop>
       </Modal>
 
-      {/* Status + severity cards */}
       {scan.status !== 'pending' && scan.status !== 'running' && (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <StatCard
-            label="Status"
-            value={<StatusBadge status={scan.status} externalStatus={scan.external_status} />}
-            valueClassName="text-sm font-semibold"
-          />
-          {sevCards.map(({ label, count, color, border }) => (
-            <StatCard
-              key={label}
-              label={label}
-              value={count ?? 0}
-              valueClassName={`text-xl font-semibold tabular-nums ${color}`}
-            />
-          ))}
-        </div>
+        <Card className="overflow-hidden">
+          <Card.Content className="gap-5 p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+                  <Chip color={dominantSeverity.value > 0 ? 'warning' : 'success'} variant="soft">
+                    Dominant: {dominantSeverity.label}
+                  </Chip>
+                  {xrayPolicyMatches > 0 ? (
+                    <Chip color="warning" variant="soft">
+                      {xrayPolicyMatches} Xray signal{xrayPolicyMatches === 1 ? '' : 's'}
+                    </Chip>
+                  ) : null}
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                    Remediation focus
+                  </h2>
+                  <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">{focusLead}</p>
+                  {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
+                    <p className="mt-2 max-w-3xl text-xs leading-relaxed text-warning">
+                      {blockedPolicyDetails.summary}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 xl:min-w-[28rem]">
+                {focusSeverityCounts.map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-2xl px-3 py-2"
+                    style={{ background: 'var(--surface-secondary)' }}
+                  >
+                    <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-muted">
+                      {item.label}
+                    </p>
+                    <p className={`mt-1 text-lg font-semibold tabular-nums ${item.className}`}>
+                      {item.value ?? 0}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-2 lg:grid-cols-3">
+              {remediationItems.map((item) => (
+                <button
+                  key={item.label}
+                  className="group rounded-2xl px-3.5 py-3 text-left transition-colors hover:bg-[var(--row-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-55"
+                  disabled={item.value === 0}
+                  onClick={item.action}
+                  style={{ background: 'var(--surface-secondary)' }}
+                  type="button"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-muted">
+                        {item.label}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-muted">{item.detail}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-lg font-semibold tabular-nums text-foreground">
+                        {item.value}
+                      </span>
+                      {item.value > 0 ? (
+                        <span className="text-xs font-medium text-accent transition-transform group-hover:translate-x-0.5">
+                          Open →
+                        </span>
+                      ) : (
+                        <Chip color="success" size="sm" variant="soft">
+                          Clear
+                        </Chip>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Card.Content>
+        </Card>
       )}
 
       {/* Scanner info moved to Details tab */}
 
-      {/* Error banner - shown when scan failed */}
-      {scan.status === 'failed' && scan.error_message && (
+      {/* Error banner - shown when scan failed outside the Xray policy summary */}
+      {scan.status === 'failed' &&
+        scan.error_message &&
+        scan.external_status !== 'blocked_by_xray_policy' && (
         <Alert status="danger" className="border border-danger bg-danger-soft">
           <Alert.Indicator />
           <Alert.Content>
-            <Alert.Title>
-              {scan.external_status === 'blocked_by_xray_policy'
-                ? 'Blocked by Xray policy'
-                : 'Scan failed'}
-            </Alert.Title>
+            <Alert.Title>Scan failed</Alert.Title>
             <Alert.Description>
-              {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
-                <div className="space-y-1.5">
-                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                    {blockedPolicyDetails.summary}
-                  </p>
-                  <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                    See vulnerability-level Xray policy details for matched watches, policies, and
-                    blocking status.
-                  </p>
-                </div>
-              ) : (
-                <pre
-                  className="text-xs whitespace-pre-wrap break-all  leading-relaxed"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {scan.error_message}
-                </pre>
-              )}
+              <pre
+                className="text-xs whitespace-pre-wrap break-all  leading-relaxed"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                {scan.error_message}
+              </pre>
             </Alert.Description>
             <Button className="mt-2 sm:hidden" size="sm" variant="primary">
               Refresh

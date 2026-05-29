@@ -1,6 +1,7 @@
 package router
 
 import (
+	notificationhandlers "justscan-backend/handlers/notifications"
 	"justscan-backend/handlers/orgs"
 	"justscan-backend/middlewares"
 
@@ -48,5 +49,90 @@ func Orgs(router *gin.RouterGroup, db *bun.DB) {
 		r.DELETE("/:id/tokens/:tokenId", orgs.RevokeOrgToken(db))
 
 		r.GET("/:id/audit", orgs.ListOrgAuditLog(db))
+
+		r.GET("/:id/notifications/channels", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgViewerScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.ListChannels(c, db, scope)
+		})
+		r.POST("/:id/notifications/channels", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgAdminScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.CreateChannel(c, db, scope)
+		})
+		r.PUT("/:id/notifications/channels/:channelID", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgAdminScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.UpdateChannel(c, db, scope)
+		})
+		r.DELETE("/:id/notifications/channels/:channelID", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgAdminScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.DeleteChannel(c, db, scope)
+		})
+		r.POST("/:id/notifications/channels/:channelID/test", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgAdminScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.TestChannel(c, db, scope)
+		})
+		r.GET("/:id/notifications/rules", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgViewerScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.ListRules(c, db, scope)
+		})
+		r.POST("/:id/notifications/rules", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgAdminScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.CreateRule(c, db, scope)
+		})
+		r.PUT("/:id/notifications/rules/:ruleID", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgAdminScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.UpdateRule(c, db, scope)
+		})
+		r.DELETE("/:id/notifications/rules/:ruleID", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgAdminScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.DeleteRule(c, db, scope)
+		})
+		r.GET("/:id/notifications/deliveries", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgViewerScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.ListDeliveries(c, db, scope)
+		})
+		r.GET("/:id/notifications/queue", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgViewerScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.ListQueue(c, db, scope)
+		})
+		r.POST("/:id/notifications/queue/:jobID/retry", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgAdminScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.RetryQueueJob(c, db, scope)
+		})
 	}
 }

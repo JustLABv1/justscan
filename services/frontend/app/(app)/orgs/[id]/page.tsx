@@ -1,6 +1,7 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OrgAutomationTab } from '@/components/org-detail/automation-tab';
+import { NotificationManager } from '@/components/notifications/notification-manager';
 import { OrgOverviewTab } from '@/components/org-detail/overview-tab';
 import { OrgScansTab } from '@/components/org-detail/scans-tab';
 import { OrgScanItem, StatusBadge } from '@/components/org-detail/shared';
@@ -92,6 +93,7 @@ function emptyRule(): PolicyRule {
 const ORG_TABS = [
   { id: 'overview', label: 'Overview', description: 'Risk and compliance' },
   { id: 'automation', label: 'Automation', description: 'Patterns and policies' },
+  { id: 'notifications', label: 'Notifications', description: 'Channels and rules' },
   { id: 'team', label: 'Team', description: 'Members and invites' },
   { id: 'scans', label: 'Scans', description: 'Assigned assets' },
   { id: 'tokens', label: 'Tokens', description: 'API access tokens' },
@@ -627,6 +629,13 @@ export default function OrgDetailPage() {
                   ? 'Member invites are disabled by organization policy.'
                   : undefined
             }
+          />
+        )}
+        {activeTab === 'notifications' && (
+          <NotificationManager
+            basePath={`/api/v1/orgs/${id}/notifications`}
+            heading="Organization Notifications"
+            description="Manage org-owned notification channels, rule conditions, queue retries, and delivery history."
           />
         )}
         {activeTab === 'scans' && (

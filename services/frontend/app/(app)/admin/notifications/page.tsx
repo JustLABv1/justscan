@@ -1,10 +1,14 @@
 import { AdminPageShell } from '@/components/admin/admin-page-shell';
-import { NotificationsTab } from '@/components/admin/notifications-tab';
+import { NotificationManager } from '@/components/notifications/notification-manager';
 
 export default function AdminNotificationsPage() {
   return (
     <AdminPageShell>
-      <NotificationsTab />
+      <NotificationManager
+        basePath="/api/v1/admin/notifications"
+        heading="System Notifications"
+        description="Configure platform-wide channels, matching rules, queue retries, and delivery history."
+      />
     </AdminPageShell>
   );
 }

@@ -70,7 +70,7 @@ import {
   unshareSuppression,
   upsertSuppression,
 } from '@/lib/api';
-import { formatIgnoreRuleStatusLabel, getBlockedPolicyDetails } from '@/lib/blocked-policy';
+import { getBlockedPolicyDetails } from '@/lib/blocked-policy';
 import { deferEffect } from '@/lib/defer-effect';
 import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -175,158 +175,6 @@ function vulnerabilityViewSettingsEqual(
     a.has_fix === b.has_fix &&
     a.xray_policy_first === b.xray_policy_first &&
     a.policy_failed_only === b.policy_failed_only
-  );
-}
-
-function DetailBlock({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value?: string;
-  mono?: boolean;
-}) {
-  if (!value) return null;
-
-  return (
-    <div
-      className="rounded-xl p-4"
-      style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
-    >
-      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-2">{label}</p>
-      <p
-        className={
-          mono
-            ? 'text-xs  text-zinc-700 dark:text-zinc-300 break-all leading-relaxed'
-            : 'text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed'
-        }
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function PolicyListSection({
-  label,
-  items,
-  mono = false,
-}: {
-  label: string;
-  items: string[];
-  mono?: boolean;
-}) {
-  if (items.length === 0) return null;
-
-  return (
-    <div
-      className="rounded-xl p-4"
-      style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
-    >
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">{label}</p>
-        <span
-          className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
-          style={{
-            borderColor: 'var(--surface-border)',
-            color: 'var(--text-secondary)',
-            background: 'var(--app-bg)',
-          }}
-        >
-          {items.length}
-        </span>
-      </div>
-      <div className="space-y-2">
-        {items.map((item) => (
-          <div
-            key={item}
-            className={`rounded-lg border px-3 py-2 text-sm leading-relaxed ${mono ? ' text-xs break-all' : ''}`}
-            style={{
-              borderColor: 'var(--surface-border)',
-              color: 'var(--text-primary)',
-              background: 'var(--app-bg)',
-            }}
-          >
-            {item}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function WatchStatusBadge({
-  status,
-}: {
-  status: 'active_ignore' | 'no_ignore' | 'status_unavailable';
-}) {
-  const palette =
-    status === 'active_ignore'
-      ? { color: '#b45309', background: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.26)' }
-      : status === 'status_unavailable'
-        ? { color: '#7c2d12', background: 'rgba(251,146,60,0.12)', border: 'rgba(251,146,60,0.28)' }
-        : {
-            color: 'var(--text-secondary)',
-            background: 'var(--app-bg)',
-            border: 'var(--surface-border)',
-          };
-
-  return (
-    <span
-      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
-      style={{ color: palette.color, background: palette.background, borderColor: palette.border }}
-    >
-      {formatIgnoreRuleStatusLabel(status)}
-    </span>
-  );
-}
-
-function PolicyWatchList({
-  watches,
-}: {
-  watches: Array<{
-    name: string;
-    ignoreRuleStatus: 'active_ignore' | 'no_ignore' | 'status_unavailable';
-  }>;
-}) {
-  if (watches.length === 0) return null;
-
-  return (
-    <div
-      className="rounded-xl p-4"
-      style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
-    >
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-          Matched Watches
-        </p>
-        <span
-          className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
-          style={{
-            borderColor: 'var(--surface-border)',
-            color: 'var(--text-secondary)',
-            background: 'var(--app-bg)',
-          }}
-        >
-          {watches.length}
-        </span>
-      </div>
-      <div className="space-y-2">
-        {watches.map((watch) => (
-          <div
-            key={watch.name}
-            className="flex flex-col gap-2 rounded-lg border px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
-            style={{ borderColor: 'var(--surface-border)', background: 'var(--app-bg)' }}
-          >
-            <span className="text-sm break-all" style={{ color: 'var(--text-primary)' }}>
-              {watch.name}
-            </span>
-            <WatchStatusBadge status={watch.ignoreRuleStatus} />
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -658,6 +506,11 @@ export default function ScanDetailPage() {
       currentVulnerabilityViewSettings,
       effectiveVulnerabilityViewSettings
     );
+  const hasTransientVulnerabilityFilters =
+    pkgInput.trim().length > 0 ||
+    pkgFilter.trim().length > 0 ||
+    cveInput.trim().length > 0 ||
+    cveFilter.trim().length > 0;
   const vulnerabilityViewSourceLabel = viewPreference?.has_user_override
     ? 'My saved default'
     : viewPreference?.source === 'org'
@@ -1175,6 +1028,21 @@ export default function ScanDetailPage() {
     } finally {
       setViewPreferenceSaving(false);
     }
+  }
+
+  function resetToSavedVulnerabilityView() {
+    if (!viewSettingsReady) return;
+    setPkgInput('');
+    setPkgFilter('');
+    setCveInput('');
+    setCveFilter('');
+    applyVulnerabilityViewPreference({
+      settings: effectiveVulnerabilityViewSettings,
+      source: viewPreference?.source ?? 'system',
+      scope_type: viewPreference?.scope_type ?? 'personal',
+      scope_ref: viewPreference?.scope_ref ?? '',
+      has_user_override: Boolean(viewPreference?.has_user_override),
+    });
   }
 
   async function toggleTag(tag: Tag) {
@@ -1764,7 +1632,9 @@ export default function ScanDetailPage() {
       tone: criticalAndHigh > 0 ? 'danger' : 'success',
       action: () => {
         setActiveTab('vulns');
-        setSeverityFilter(criticalAndHigh > 0 && (vulnSummary?.critical ?? 0) > 0 ? 'CRITICAL' : 'HIGH');
+        setSeverityFilter(
+          criticalAndHigh > 0 && (vulnSummary?.critical ?? 0) > 0 ? 'CRITICAL' : 'HIGH'
+        );
       },
       actionLabel: 'Review highest risk',
     },
@@ -1849,12 +1719,6 @@ export default function ScanDetailPage() {
         )}
         Re-scan
       </Button>
-      {canManageScanAccess() && (
-        <Button className="btn-secondary" onPress={openScanAccessModal} variant="secondary">
-          <Shield01Icon size={15} />
-          Manage Access
-        </Button>
-      )}
       <div className="relative">
         <Dropdown>
           <Dropdown.Trigger>
@@ -1884,6 +1748,10 @@ export default function ScanDetailPage() {
                 if (key === 'compare') {
                   void handleComparePrev();
                 }
+                if (key === 'manage_access') {
+                  if (!canManageScanAccess()) return;
+                  openScanAccessModal();
+                }
                 if (key === 'share') {
                   if (!canManageScanAccess()) return;
                   if (scan.share_visibility)
@@ -1908,6 +1776,14 @@ export default function ScanDetailPage() {
                   <Label>{comparingPrev ? 'Compare…' : 'Compare'}</Label>
                 </div>
               </Dropdown.Item>
+              {canManageScanAccess() ? (
+                <Dropdown.Item id="manage_access" textValue="Manage scan access">
+                  <div className="flex items-center gap-2">
+                    <Shield01Icon size={15} />
+                    <Label>Manage Access</Label>
+                  </div>
+                </Dropdown.Item>
+              ) : null}
               {canManageScanAccess() ? (
                 <Dropdown.Item id="share" textValue="Manage scan sharing">
                   <div className="flex items-center gap-2">
@@ -2093,7 +1969,7 @@ export default function ScanDetailPage() {
 
       {scan.status !== 'pending' && scan.status !== 'running' && (
         <Card className="overflow-hidden">
-          <Card.Content className="gap-5 p-5">
+          <Card.Content className="gap-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -2183,24 +2059,24 @@ export default function ScanDetailPage() {
       {scan.status === 'failed' &&
         scan.error_message &&
         scan.external_status !== 'blocked_by_xray_policy' && (
-        <Alert status="danger" className="border border-danger bg-danger-soft">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>Scan failed</Alert.Title>
-            <Alert.Description>
-              <pre
-                className="text-xs whitespace-pre-wrap break-all  leading-relaxed"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                {scan.error_message}
-              </pre>
-            </Alert.Description>
-            <Button className="mt-2 sm:hidden" size="sm" variant="primary">
-              Refresh
-            </Button>
-          </Alert.Content>
-        </Alert>
-      )}
+          <Alert status="danger" className="border border-danger bg-danger-soft">
+            <Alert.Indicator />
+            <Alert.Content>
+              <Alert.Title>Scan failed</Alert.Title>
+              <Alert.Description>
+                <pre
+                  className="text-xs whitespace-pre-wrap break-all  leading-relaxed"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  {scan.error_message}
+                </pre>
+              </Alert.Description>
+              <Button className="mt-2 sm:hidden" size="sm" variant="primary">
+                Refresh
+              </Button>
+            </Alert.Content>
+          </Alert>
+        )}
 
       {/* Tags + Compliance + Scanner info → moved to Details tab */}
 
@@ -2390,6 +2266,18 @@ export default function ScanDetailPage() {
                   {viewPreferenceSaving && vulnerabilityViewHasChanges
                     ? 'Saving...'
                     : 'Save as my default'}
+                </Button>
+                <Button
+                  className="btn-secondary"
+                  isDisabled={
+                    !viewSettingsReady ||
+                    viewPreferenceSaving ||
+                    (!vulnerabilityViewHasChanges && !hasTransientVulnerabilityFilters)
+                  }
+                  onPress={() => resetToSavedVulnerabilityView()}
+                  variant="secondary"
+                >
+                  Reset to saved
                 </Button>
                 <Button
                   className="btn-secondary"

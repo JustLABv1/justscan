@@ -8,7 +8,7 @@ import { timeAgo } from '@/lib/time';
 import { getWatchlistPosture } from '@/lib/watchlist-posture';
 import { Button, Card, Chip, Link as HeroLink, Modal, useOverlayState } from '@heroui/react';
 
-export type DashboardDrilldownKey = 'total' | 'completed' | 'attention' | 'watchlist';
+export type DashboardDrilldownKey = 'total' | 'completed' | 'watchlist';
 
 function WatchlistModalRow({ item }: { item: WatchlistItem }) {
   const posture = getWatchlistPosture(item);
@@ -253,23 +253,15 @@ type DashboardDrilldownModalProps = {
   totalScans: number;
   completedCount: number;
   watchlistCount: number;
-  needsAttentionTotal: number;
-  attentionFilter: 'all' | 'failed' | 'blocked' | 'running';
-  onAttentionFilterChange: (value: 'all' | 'failed' | 'blocked' | 'running') => void;
   recentActivityRange: RecentActivityRange;
   onRecentActivityRangeChange: (value: RecentActivityRange) => void;
   recentActivityRangeLabel: string;
-  totalAttentionForFilter: number;
-  genericFailedCount: number;
-  blockedPolicyCount: number;
-  activeQueueCount: number;
   scans: Scan[];
   scansLoading: boolean;
   scansError: string;
   watchlistItems: WatchlistItem[];
   watchlistLoading: boolean;
   watchlistError: string;
-  triageHref: string;
   recentActivityHref: string;
 };
 
@@ -279,59 +271,38 @@ export function DashboardDrilldownModal({
   totalScans,
   completedCount,
   watchlistCount,
-  needsAttentionTotal,
-  attentionFilter,
-  onAttentionFilterChange,
   recentActivityRange,
   onRecentActivityRangeChange,
   recentActivityRangeLabel,
-  totalAttentionForFilter,
-  genericFailedCount,
-  blockedPolicyCount,
-  activeQueueCount,
   scans,
   scansLoading,
   scansError,
   watchlistItems,
   watchlistLoading,
   watchlistError,
-  triageHref,
   recentActivityHref,
 }: DashboardDrilldownModalProps) {
   if (!activeCard) return null;
 
-  const isAttention = activeCard === 'attention';
   const isWatchlist = activeCard === 'watchlist';
   const heading =
     activeCard === 'total'
       ? 'Recent scans'
       : activeCard === 'completed'
         ? 'Completed scans'
-        : activeCard === 'attention'
-          ? 'Needs attention'
-          : 'Watchlist';
+        : 'Watchlist';
   const description =
     activeCard === 'total'
       ? `${totalScans.toLocaleString()} total scans overall. Showing activity from ${recentActivityRangeLabel.toLowerCase()}.`
       : activeCard === 'completed'
         ? `${completedCount.toLocaleString()} completed scans overall. Showing completions from ${recentActivityRangeLabel.toLowerCase()}.`
-        : activeCard === 'attention'
-          ? `${needsAttentionTotal.toLocaleString()} scans currently need intervention.`
-          : `${watchlistCount.toLocaleString()} watchlist item${watchlistCount === 1 ? '' : 's'} in the current scope.`;
+        : `${watchlistCount.toLocaleString()} watchlist item${watchlistCount === 1 ? '' : 's'} in the current scope.`;
   const emptyMessage =
     activeCard === 'completed'
       ? `No completed scans in ${recentActivityRangeLabel.toLowerCase()}.`
-      : activeCard === 'attention'
-        ? attentionFilter === 'all'
-          ? 'No failed, blocked, or in-flight scans right now.'
-          : `No ${attentionFilter === 'blocked' ? 'policy-blocked' : attentionFilter} scans right now.`
-        : `No scans started in ${recentActivityRangeLabel.toLowerCase()}.`;
-  const primaryHref = isAttention ? triageHref : isWatchlist ? '/watchlist' : recentActivityHref;
-  const primaryLabel = isAttention
-    ? 'Open full triage'
-    : isWatchlist
-      ? 'Open watchlist'
-      : 'Open full list';
+      : `No scans started in ${recentActivityRangeLabel.toLowerCase()}.`;
+  const primaryHref = isWatchlist ? '/watchlist' : recentActivityHref;
+  const primaryLabel = isWatchlist ? 'Open watchlist' : 'Open full list';
   const displayedWatchlistItems = isWatchlist
     ? watchlistItems.toSorted((left, right) => {
         const rank = (item: WatchlistItem) => {
@@ -375,82 +346,13 @@ export function DashboardDrilldownModal({
               ) : (
                 <>
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    {isAttention ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        {(
-                          [
-                            {
-                              key: 'all' as const,
-                              label: 'All',
-                              count: needsAttentionTotal,
-                              activeBg: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-                              activeBorder: 'color-mix(in srgb, var(--accent) 30%, transparent)',
-                              activeColor: 'color-mix(in srgb, var(--accent) 78%, white)',
-                            },
-                            {
-                              key: 'failed' as const,
-                              label: 'Failed',
-                              count: genericFailedCount,
-                              activeBg: 'rgba(239,68,68,0.1)',
-                              activeBorder: 'rgba(239,68,68,0.3)',
-                              activeColor: '#f87171',
-                            },
-                            {
-                              key: 'blocked' as const,
-                              label: 'Policy blocked',
-                              count: blockedPolicyCount,
-                              activeBg: 'rgba(249,115,22,0.1)',
-                              activeBorder: 'rgba(249,115,22,0.3)',
-                              activeColor: '#fb923c',
-                            },
-                            {
-                              key: 'running' as const,
-                              label: 'Running',
-                              count: activeQueueCount,
-                              activeBg: 'rgba(59,130,246,0.1)',
-                              activeBorder: 'rgba(59,130,246,0.3)',
-                              activeColor: '#60a5fa',
-                            },
-                          ] as const
-                        ).map(({ key, label, count, activeBg, activeBorder, activeColor }) => {
-                          const isActive = attentionFilter === key;
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              onClick={() => onAttentionFilterChange(key)}
-                              className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition-all"
-                              style={
-                                isActive
-                                  ? {
-                                      background: activeBg,
-                                      border: `1px solid ${activeBorder}`,
-                                      color: activeColor,
-                                    }
-                                  : {
-                                      background: 'transparent',
-                                      border: '1px solid var(--border)',
-                                      color: 'var(--muted)',
-                                    }
-                              }
-                            >
-                              {label}
-                              <span className="tabular-nums opacity-70">{count}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <RecentActivityRangePicker
-                        value={recentActivityRange}
-                        onChange={onRecentActivityRangeChange}
-                      />
-                    )}
+                    <RecentActivityRangePicker
+                      value={recentActivityRange}
+                      onChange={onRecentActivityRangeChange}
+                    />
 
                     <span className="text-[11px] text-muted">
-                      {isAttention
-                        ? `${totalAttentionForFilter} scan${totalAttentionForFilter === 1 ? '' : 's'}`
-                        : `${scans.length} item${scans.length === 1 ? '' : 's'} loaded`}
+                      {scans.length} item{scans.length === 1 ? '' : 's'} loaded
                     </span>
                   </div>
 
@@ -469,7 +371,7 @@ export function DashboardDrilldownModal({
                   ) : (
                     <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
                       {scans.map((scan) => (
-                        <CompactScanRow key={scan.id} scan={scan} showActions={isAttention} />
+                        <CompactScanRow key={scan.id} scan={scan} />
                       ))}
                     </div>
                   )}

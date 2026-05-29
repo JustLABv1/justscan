@@ -257,6 +257,7 @@ func matchesQuery(item triageItem, query string) bool {
 func loadAttentionScans(c *gin.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) ([]models.Scan, error) {
 	var scans []models.Scan
 	q := db.NewSelect().Model(&scans).
+		Where("scan.id IN (?)", latestVisibleScanIDsQuery(c, db, userID, isAdmin, accessibleOrgIDs, "latest_scan")).
 		WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
 			return q.Where("scan.status = ?", models.ScanStatusFailed).
 				WhereOr("scan.status IN (?)", bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
@@ -332,6 +333,7 @@ func loadPolicyRows(c *gin.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, 
 		ColumnExpr("MAX(cr.evaluated_at) AS evaluated_at").
 		Join("JOIN scans AS s ON s.id = cr.scan_id").
 		Join("LEFT JOIN org_policies AS p ON p.id = cr.policy_id").
+		Where("cr.scan_id IN (?)", latestVisibleScanIDsQuery(c, db, userID, isAdmin, accessibleOrgIDs, "latest_scan")).
 		Where("cr.status = ?", "fail").
 		GroupExpr("cr.scan_id, p.name").
 		OrderExpr("MAX(cr.evaluated_at) DESC").
@@ -362,6 +364,27 @@ func loadWatchlistItems(c *gin.Context, db *bun.DB, userID uuid.UUID, isAdmin bo
 		return nil, err
 	}
 	return items, attachLastScans(c.Request.Context(), db, items)
+}
+
+func latestVisibleScanIDsQuery(c *gin.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, alias string) *bun.SelectQuery {
+	q := db.NewSelect().
+		TableExpr("scans AS " + alias).
+		ColumnExpr(
+			"DISTINCT ON (" + alias + ".image_name, " + alias + ".image_tag, COALESCE(" + alias + ".platform, ''), " + alias + ".owner_type, COALESCE(" + alias + ".owner_user_id::text, ''), COALESCE(" + alias + ".owner_org_id::text, '')) " + alias + ".id",
+		).
+		OrderExpr(
+			alias + ".image_name, " +
+				alias + ".image_tag, " +
+				"COALESCE(" + alias + ".platform, ''), " +
+				alias + ".owner_type, " +
+				"COALESCE(" + alias + ".owner_user_id::text, ''), " +
+				"COALESCE(" + alias + ".owner_org_id::text, ''), " +
+				alias + ".created_at DESC, " +
+				alias + ".id DESC",
+		)
+	q = authz.ApplyOwnershipVisibility(q, alias, "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+	q = authz.ApplyWorkspaceScope(c, q, alias, "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
+	return q
 }
 
 func attachLastScans(ctx context.Context, db *bun.DB, items []models.WatchlistItem) error {

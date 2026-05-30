@@ -246,6 +246,7 @@ local_auth:
 - `oidc.redirect_uri` must be the public backend callback URL and must exactly match the redirect URI registered in your OIDC provider.
 - The frontend URL must be listed in `allow_origins`.
 - Put your primary frontend URL first in `allow_origins`. After a successful OIDC login, JustScan redirects the browser to the first `allow_origins` entry plus `/auth/oidc/callback`.
+- Notification messages also use the first `allow_origins` entry when building direct links to scan detail pages such as `/scans/<scanId>`.
 
 Example:
 

@@ -6,6 +6,7 @@ import {
   heroSelectTriggerClassName,
   heroTextAreaClassName,
 } from '@/components/ui/form-styles';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
   createScopedNotificationChannel,
   createScopedNotificationRule,
@@ -41,13 +42,7 @@ import {
   TextArea,
   useOverlayState,
 } from '@heroui/react';
-import {
-  Add01Icon,
-  Delete01Icon,
-  Notification01Icon,
-  Refresh01Icon,
-  Setting07Icon,
-} from 'hugeicons-react';
+import { Add01Icon, Delete01Icon, Notification01Icon, Refresh01Icon, Setting07Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const channelTypeOptions: Array<{ value: NotificationChannel['type']; label: string }> = [
@@ -162,7 +157,7 @@ const operatorLabels: Record<string, string> = {
 
 const deliveryModeLabels: Record<'immediate' | 'digest', string> = {
   immediate: 'Immediate',
-  digest: 'Digest',
+  digest: 'Summary',
 };
 
 const groupOpLabels: Record<'all' | 'any', string> = {
@@ -652,23 +647,40 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                         </Chip>
                       </Table.Cell>
                       <Table.Cell>
-                        <Chip size="sm" color={channel.enabled ? 'success' : 'default'} variant="soft">
+                        <Chip size="sm" color={channel.enabled ? 'success' : 'danger'} variant="soft">
                           {channel.enabled ? 'Enabled' : 'Disabled'}
                         </Chip>
                       </Table.Cell>
                       <Table.Cell>
-                        <div className="flex justify-end gap-2">
-                          <Button variant="secondary" size="sm" onPress={() => openEditChannel(channel)}>
-                            <Setting07Icon size={14} />
-                            Edit
-                          </Button>
-                          <Button variant="secondary" size="sm" onPress={() => void handleTestChannel(channel)}>
-                            <Notification01Icon size={14} />
-                            Test
-                          </Button>
-                          <Button variant="danger-soft" size="sm" onPress={() => void handleDeleteChannel(channel)}>
-                            <Delete01Icon size={14} />
-                          </Button>
+                        <div className="flex justify-end">
+                          <RowActionsMenu
+                            label={`Open actions for ${channel.name}`}
+                            items={[
+                              {
+                                id: 'edit-channel',
+                                label: 'Edit channel',
+                                icon: <Setting07Icon size={14} />,
+                                onAction: () => openEditChannel(channel),
+                              },
+                              {
+                                id: 'test-channel',
+                                label: 'Send test',
+                                icon: <Notification01Icon size={14} />,
+                                onAction: () => {
+                                  void handleTestChannel(channel);
+                                },
+                              },
+                              {
+                                id: 'delete-channel',
+                                label: 'Delete channel',
+                                icon: <Delete01Icon size={14} />,
+                                variant: 'danger',
+                                onAction: () => {
+                                  void handleDeleteChannel(channel);
+                                },
+                              },
+                            ]}
+                          />
                         </div>
                       </Table.Cell>
                     </Table.Row>
@@ -704,22 +716,36 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{rule.name}</p>
-                          <Chip size="sm" color={rule.enabled ? 'success' : 'default'} variant="soft">
+                          <Chip size="sm" color={rule.enabled ? 'success' : 'danger'} variant="soft">
                             {rule.enabled ? 'Enabled' : 'Disabled'}
                           </Chip>
                           <Chip size="sm" variant="soft">
-                            {rule.delivery_mode === 'digest' ? `Digest ${rule.digest_window_minutes}m` : 'Immediate'}
+                            {rule.delivery_mode === 'digest' ? `Summary ${rule.digest_window_minutes}m` : 'Immediate'}
                           </Chip>
                         </div>
                         <p className="mt-1 text-xs text-zinc-500">{summarizeRule(rule, channels)}</p>
                       </div>
-                      <div className="flex gap-2">
-                        <Button variant="secondary" size="sm" onPress={() => openEditRule(rule)}>
-                          Edit
-                        </Button>
-                        <Button variant="danger-soft" size="sm" onPress={() => void handleDeleteRule(rule)}>
-                          <Delete01Icon size={14} />
-                        </Button>
+                      <div className="flex">
+                        <RowActionsMenu
+                          label={`Open actions for ${rule.name}`}
+                          items={[
+                            {
+                              id: 'edit-rule',
+                              label: 'Edit rule',
+                              icon: <Setting07Icon size={14} />,
+                              onAction: () => openEditRule(rule),
+                            },
+                            {
+                              id: 'delete-rule',
+                              label: 'Delete rule',
+                              icon: <Delete01Icon size={14} />,
+                              variant: 'danger',
+                              onAction: () => {
+                                void handleDeleteRule(rule);
+                              },
+                            },
+                          ]}
+                        />
                       </div>
                     </div>
                   </Card.Content>
@@ -773,10 +799,19 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                       <Table.Cell>
                         <div className="flex justify-end">
                           {job.status === 'dead_letter' || job.status === 'failed' ? (
-                            <Button variant="secondary" size="sm" onPress={() => void handleRetryJob(job)}>
-                              <Refresh01Icon size={14} />
-                              Retry
-                            </Button>
+                            <RowActionsMenu
+                              label={`Open actions for ${job.rule_name ?? 'notification job'}`}
+                              items={[
+                                {
+                                  id: 'retry-job',
+                                  label: 'Retry job',
+                                  icon: <Refresh01Icon size={14} />,
+                                  onAction: () => {
+                                    void handleRetryJob(job);
+                                  },
+                                },
+                              ]}
+                            />
                           ) : (
                             <span className="text-xs text-zinc-500">
                               {job.last_error ? job.last_error : 'Ready'}
@@ -1055,8 +1090,8 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                             Immediate
                             <ListBox.ItemIndicator />
                           </ListBox.Item>
-                          <ListBox.Item id="digest" textValue="Digest">
-                            Digest
+                          <ListBox.Item id="digest" textValue="Summary">
+                            Summary
                             <ListBox.ItemIndicator />
                           </ListBox.Item>
                         </ListBox>
@@ -1065,7 +1100,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                   </div>
 
                   {ruleForm.delivery_mode === 'digest' ? (
-                    <FormField label="Digest window (minutes)" value={ruleForm.digest_window_minutes} onChange={(event) => setRuleForm((current) => ({ ...current, digest_window_minutes: event.target.value }))} placeholder="15" required />
+                    <FormField label="Summary window (minutes)" value={ruleForm.digest_window_minutes} onChange={(event) => setRuleForm((current) => ({ ...current, digest_window_minutes: event.target.value }))} placeholder="15" required />
                   ) : null}
 
                   <Select value={ruleForm.op} onChange={(value) => setRuleForm((current) => ({ ...current, op: String(value) as 'all' | 'any' }))} variant="secondary">

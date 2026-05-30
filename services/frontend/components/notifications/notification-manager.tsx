@@ -985,7 +985,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
 
       <Modal state={ruleModal}>
         <Modal.Backdrop isDismissable>
-          <Modal.Container size="xl" placement="center">
+          <Modal.Container size="cover" placement="center">
             <Modal.Dialog>
               <Modal.Header>
                 <Modal.Heading>{ruleForm.id ? 'Edit Notification Rule' : 'Add Notification Rule'}</Modal.Heading>

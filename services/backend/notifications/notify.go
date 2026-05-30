@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"justscan-backend/config"
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
@@ -26,6 +27,7 @@ type Payload struct {
 	ImageTag         string            `json:"image_tag,omitempty"`
 	ImageRef         string            `json:"image_ref,omitempty"`
 	OrgIDs           []string          `json:"org_ids,omitempty"`
+	OrgNames         []string          `json:"org_names,omitempty"`
 	Status           string            `json:"status,omitempty"`
 	ScanProvider     string            `json:"scan_provider,omitempty"`
 	HighestSeverity  string            `json:"highest_severity,omitempty"`
@@ -44,6 +46,7 @@ type Payload struct {
 	XrayPolicyNames  []string          `json:"xray_policy_names,omitempty"`
 	XrayWatchNames   []string          `json:"xray_watch_names,omitempty"`
 	Tags             []string          `json:"tags,omitempty"`
+	ScanURL          string            `json:"scan_url,omitempty"`
 	Details          string            `json:"details,omitempty"`
 	Extra            map[string]string `json:"extra,omitempty"`
 	Timestamp        time.Time         `json:"timestamp"`
@@ -139,6 +142,9 @@ func enrichPayload(ctx context.Context, db *bun.DB, payload *Payload) {
 			payload.SuppressedCount = scan.SuppressedCount
 		}
 		payload.XrayBlocked = payload.XrayBlocked || scan.ExternalStatus == models.ScanExternalStatusBlockedByXrayPolicy
+		if len(payload.OrgIDs) == 0 && scan.OwnerOrgID != nil {
+			payload.OrgIDs = []string{scan.OwnerOrgID.String()}
+		}
 	}
 	if len(payload.OrgIDs) == 0 {
 		var orgScans []models.OrgScan
@@ -148,6 +154,9 @@ func enrichPayload(ctx context.Context, db *bun.DB, payload *Payload) {
 				payload.OrgIDs = append(payload.OrgIDs, orgScan.OrgID.String())
 			}
 		}
+	}
+	if len(payload.OrgNames) == 0 && len(payload.OrgIDs) > 0 {
+		payload.OrgNames = resolveOrgNames(ctx, db, payload.OrgIDs)
 	}
 	if payload.HighestCVSS == 0 {
 		var maxCVSS float64
@@ -178,6 +187,82 @@ func enrichPayload(ctx context.Context, db *bun.DB, payload *Payload) {
 	if payload.ImageRef == "" {
 		payload.ImageRef = strings.TrimSuffix(strings.TrimSpace(payload.ImageName)+":"+strings.TrimSpace(payload.ImageTag), ":")
 	}
+	if payload.ScanURL == "" {
+		payload.ScanURL = buildScanURL(payload.ScanID)
+	}
+}
+
+func resolveOrgNames(ctx context.Context, db *bun.DB, orgIDs []string) []string {
+	if len(orgIDs) == 0 {
+		return nil
+	}
+
+	parsedIDs := make([]uuid.UUID, 0, len(orgIDs))
+	orderedIDs := make([]string, 0, len(orgIDs))
+	seen := make(map[string]struct{}, len(orgIDs))
+	for _, orgID := range orgIDs {
+		trimmed := strings.TrimSpace(orgID)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		orderedIDs = append(orderedIDs, trimmed)
+		parsedID, err := uuid.Parse(trimmed)
+		if err != nil {
+			continue
+		}
+		parsedIDs = append(parsedIDs, parsedID)
+	}
+	if len(parsedIDs) == 0 {
+		return nil
+	}
+
+	var orgs []models.Org
+	if err := db.NewSelect().
+		Model(&orgs).
+		Column("id", "name").
+		Where("id IN (?)", bun.In(parsedIDs)).
+		Scan(ctx); err != nil {
+		return nil
+	}
+
+	namesByID := make(map[string]string, len(orgs))
+	for _, org := range orgs {
+		namesByID[org.ID.String()] = strings.TrimSpace(org.Name)
+	}
+
+	names := make([]string, 0, len(orderedIDs))
+	for _, orgID := range orderedIDs {
+		if name := namesByID[orgID]; name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func buildScanURL(scanID string) string {
+	trimmedScanID := strings.TrimSpace(scanID)
+	if trimmedScanID == "" {
+		return ""
+	}
+
+	baseURL := ""
+	if config.Config != nil {
+		for _, origin := range config.Config.AllowOrigins {
+			trimmedOrigin := strings.TrimRight(strings.TrimSpace(origin), "/")
+			if trimmedOrigin != "" {
+				baseURL = trimmedOrigin
+				break
+			}
+		}
+	}
+	if baseURL == "" {
+		return ""
+	}
+	return baseURL + "/scans/" + trimmedScanID
 }
 
 func channelMatches(channel models.NotificationChannel, payload Payload) bool {
@@ -303,6 +388,7 @@ func recordDelivery(db *bun.DB, channelID uuid.UUID, event, triggeredBy, status,
 
 type discordEmbed struct {
 	Title       string         `json:"title"`
+	URL         string         `json:"url,omitempty"`
 	Description string         `json:"description"`
 	Color       int            `json:"color"`
 	Fields      []discordField `json:"fields,omitempty"`
@@ -353,8 +439,22 @@ func sendDiscord(cfg models.NotificationConfig, p Payload) error {
 	if p.ScanID != "" {
 		fields = append(fields, discordField{Name: "Scan ID", Value: p.ScanID, Inline: true})
 	}
+	if len(p.OrgNames) > 0 {
+		label := "Organization"
+		if len(p.OrgNames) > 1 {
+			label = "Organizations"
+		}
+		fields = append(fields, discordField{Name: label, Value: strings.Join(p.OrgNames, ", "), Inline: false})
+	}
+	if severity := highestSeverity(p); severity != "" {
+		fields = append(fields, discordField{Name: "Highest Severity", Value: severity, Inline: true})
+	}
+	if p.ScanURL != "" {
+		fields = append(fields, discordField{Name: "Open Scan", Value: p.ScanURL, Inline: false})
+	}
 	embed := discordEmbed{
 		Title:       eventTitle(p.Event),
+		URL:         p.ScanURL,
 		Description: p.Details,
 		Color:       colorForEvent(p.Event),
 		Fields:      fields,
@@ -490,7 +590,9 @@ func buildPlainMessage(p Payload) string {
 	if p.ScanID != "" {
 		sb.WriteString(fmt.Sprintf("Scan ID: %s\n", p.ScanID))
 	}
-	if len(p.OrgIDs) > 0 {
+	if len(p.OrgNames) > 0 {
+		sb.WriteString(fmt.Sprintf("Orgs:    %s\n", strings.Join(p.OrgNames, ", ")))
+	} else if len(p.OrgIDs) > 0 {
 		sb.WriteString(fmt.Sprintf("Orgs:    %s\n", strings.Join(p.OrgIDs, ", ")))
 	}
 	if severity := highestSeverity(p); severity != "" {
@@ -501,6 +603,9 @@ func buildPlainMessage(p Payload) string {
 	}
 	if p.Details != "" {
 		sb.WriteString(fmt.Sprintf("\n%s\n", p.Details))
+	}
+	if p.ScanURL != "" {
+		sb.WriteString(fmt.Sprintf("\nOpen scan: %s\n", p.ScanURL))
 	}
 	if len(p.Extra) > 0 {
 		for key, value := range p.Extra {

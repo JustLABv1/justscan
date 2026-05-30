@@ -165,6 +165,24 @@ func RunForScan(db *bun.DB, scanID uuid.UUID) {
 		return
 	}
 
+	orgNamesByID := make(map[uuid.UUID]string, len(orgScans))
+	if len(orgScans) > 0 {
+		orgIDs := make([]uuid.UUID, 0, len(orgScans))
+		for _, orgScan := range orgScans {
+			orgIDs = append(orgIDs, orgScan.OrgID)
+		}
+		var orgs []models.Org
+		if err := db.NewSelect().
+			Model(&orgs).
+			Column("id", "name").
+			Where("id IN (?)", bun.In(orgIDs)).
+			Scan(ctx); err == nil {
+			for _, org := range orgs {
+				orgNamesByID[org.ID] = org.Name
+			}
+		}
+	}
+
 	for _, os := range orgScans {
 		// Load policies for this org
 		var policies []models.OrgPolicy
@@ -215,6 +233,10 @@ func RunForScan(db *bun.DB, scanID uuid.UUID) {
 			}
 			db.NewInsert().Model(history).Exec(ctx) //nolint:errcheck
 			if status == "fail" {
+				orgLabel := strings.TrimSpace(orgNamesByID[os.OrgID])
+				if orgLabel == "" {
+					orgLabel = os.OrgID.String()
+				}
 				notifications.Dispatch(db, models.NotificationEventComplianceFailed, notifications.Payload{
 					ScanID:           scanID.String(),
 					ImageName:        scan.ImageName,
@@ -225,9 +247,10 @@ func RunForScan(db *bun.DB, scanID uuid.UUID) {
 					ComplianceFailed: true,
 					PolicyIDs:        []string{policy.ID.String()},
 					PolicyNames:      []string{policy.Name},
-					Details:          fmt.Sprintf("Policy %s failed for org %s with %d violation(s).", policy.Name, os.OrgID.String(), len(violations)),
+					Details:          fmt.Sprintf("Policy %s failed for %s with %d violation(s).", policy.Name, orgLabel, len(violations)),
 					Extra: map[string]string{
 						"org_id":      os.OrgID.String(),
+						"org_name":    orgLabel,
 						"policy_id":   policy.ID.String(),
 						"policy_name": policy.Name,
 					},

@@ -36,6 +36,7 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   getWatchlistPolicyAttentionItems,
   getWatchlistPosture,
+  watchlistNeedsPolicyAttention,
   type WatchlistPosture,
 } from '@/lib/watchlist-posture';
 import {
@@ -53,6 +54,7 @@ import {
   useOverlayState,
 } from '@heroui/react';
 import {
+  ArrowRight01Icon,
   BiometricAccessIcon,
   Clock01Icon,
   Delete01Icon,
@@ -83,7 +85,40 @@ const postureChipColor: Record<
   neutral: 'default',
 };
 
-function WatchlistPostureSummary({
+type WatchlistFocus = 'all' | 'attention' | 'stale' | 'healthy' | 'never_scanned';
+
+function buildWatchlistScansHref(imageName: string) {
+  return `/scans?image=${encodeURIComponent(imageName)}`;
+}
+
+function buildWatchlistTriageHref(imageName?: string) {
+  const params = new URLSearchParams({ kind: 'watchlist' });
+  if (imageName) params.set('q', imageName);
+  return `/triage?${params.toString()}`;
+}
+
+function isNeverScannedItem(item: WatchlistItem) {
+  return item.enabled && !item.last_scan_id;
+}
+
+function isStaleWatchlistItem(item: WatchlistItem, now: number) {
+  if (!item.enabled || !item.last_scanned_at || now === 0) return false;
+  const scannedAt = Date.parse(item.last_scanned_at);
+  return !Number.isNaN(scannedAt) && now - scannedAt > 7 * 24 * 60 * 60 * 1000;
+}
+
+function isHealthyWatchlistItem(item: WatchlistItem, now: number) {
+  const posture = getWatchlistPosture(item);
+  return (
+    item.enabled &&
+    !watchlistNeedsPolicyAttention(item) &&
+    !isNeverScannedItem(item) &&
+    !isStaleWatchlistItem(item, now) &&
+    posture.kind !== 'running'
+  );
+}
+
+function getWatchlistOverviewSummary({
   activeCount,
   attentionCount,
   neverScannedCount,
@@ -91,6 +126,62 @@ function WatchlistPostureSummary({
 }: {
   activeCount: number;
   attentionCount: number;
+  neverScannedCount: number;
+  staleCount: number;
+}): {
+  description: string;
+  label: string;
+  title: string;
+  tone: 'success' | 'warning' | 'danger' | 'accent' | 'neutral';
+} {
+  if (activeCount === 0) {
+    return {
+      label: 'Idle',
+      title: 'No active watchlist coverage is running',
+      description: 'Enable a recurring image schedule to start building watchlist coverage.',
+      tone: 'neutral',
+    };
+  }
+
+  if (attentionCount > 0) {
+    return {
+      label: 'Needs action',
+      title: 'Policy or scan failures need review',
+      description:
+        'Blocked, failed, or non-compliant watchlist items should be reviewed before treating coverage as healthy.',
+      tone: 'danger',
+    };
+  }
+
+  if (staleCount > 0 || neverScannedCount > 0) {
+    return {
+      label: 'Coverage gaps',
+      title: 'Watchlist freshness needs review',
+      description:
+        'Some scheduled items are stale or still missing a baseline scan result.',
+      tone: 'warning',
+    };
+  }
+
+  return {
+    label: 'Healthy',
+    title: 'Watchlist coverage is current',
+    description:
+      'Recurring scans are up to date and there are no current policy or failure signals.',
+    tone: 'success',
+  };
+}
+
+function WatchlistPostureSummary({
+  activeCount,
+  attentionCount,
+  healthyCount,
+  neverScannedCount,
+  staleCount,
+}: {
+  activeCount: number;
+  attentionCount: number;
+  healthyCount: number;
   neverScannedCount: number;
   staleCount: number;
 }) {
@@ -108,6 +199,12 @@ function WatchlistPostureSummary({
       hintClassName: attentionCount > 0 ? 'text-danger' : 'text-muted-foreground',
     },
     {
+      label: 'Healthy coverage',
+      value: healthyCount,
+      detail: 'current and not attention-bound',
+      hintClassName: healthyCount > 0 ? 'text-success' : 'text-muted-foreground',
+    },
+    {
       label: 'Never scanned',
       value: neverScannedCount,
       detail: 'no baseline result yet',
@@ -122,7 +219,7 @@ function WatchlistPostureSummary({
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
       {cards.map((card) => (
         <Card key={card.label} variant="default" className="h-full border border-divider/70">
           <Card.Content className="gap-1">
@@ -137,6 +234,126 @@ function WatchlistPostureSummary({
         </Card>
       ))}
     </div>
+  );
+}
+
+function WatchlistNarrativeCard({
+  triageHref,
+  summary,
+  activeCount,
+  onShowHealthy,
+}: {
+  triageHref: string;
+  summary: ReturnType<typeof getWatchlistOverviewSummary>;
+  activeCount: number;
+  onShowHealthy: () => void;
+}) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">Watchlist posture</p>
+          <p className="mt-1 text-base font-medium text-foreground">{summary.title}</p>
+        </div>
+        <Chip color={postureChipColor[summary.tone]} variant="soft" size="sm">
+          {summary.label}
+        </Chip>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-muted">
+        {summary.description}{' '}
+        {activeCount > 0 ? (
+          <>
+            <span className="font-medium text-foreground">{activeCount}</span> active schedules are
+            currently contributing to watchlist coverage.
+          </>
+        ) : null}
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link href={triageHref}>
+          <Button variant="secondary">Open triage</Button>
+        </Link>
+        <Button variant="tertiary" onPress={onShowHealthy}>
+          Show healthy items
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+type WatchlistQueueEntry = {
+  description: string;
+  href: string;
+  id: string;
+  image: string;
+  label: string;
+  tone: 'success' | 'warning' | 'danger' | 'accent' | 'neutral';
+};
+
+function WatchlistActionQueue({
+  items,
+  onShowAttention,
+  onShowStale,
+  onShowNeverScanned,
+}: {
+  items: WatchlistQueueEntry[];
+  onShowAttention: () => void;
+  onShowStale: () => void;
+  onShowNeverScanned: () => void;
+}) {
+  return (
+    <Card className="p-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Needs attention</p>
+          <p className="mt-1 text-xs text-muted">
+            Review the next watchlist items that need scan or policy follow-up.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="tertiary" size="sm" onPress={onShowAttention}>
+            Attention
+          </Button>
+          <Button variant="tertiary" size="sm" onPress={onShowStale}>
+            Stale
+          </Button>
+          <Button variant="tertiary" size="sm" onPress={onShowNeverScanned}>
+            Never scanned
+          </Button>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-success/20 bg-success/8 px-4 py-5">
+          <p className="text-sm font-medium text-success">No urgent watchlist items right now.</p>
+          <p className="mt-1 text-xs text-muted">
+            Attention, stale schedules, and missing baseline scans will surface here first.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-2">
+          {items.map((item) => (
+            <Link
+              key={item.id}
+              href={item.href}
+              className="flex items-start justify-between gap-3 rounded-xl border border-divider bg-surface px-3 py-3 transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Chip color={postureChipColor[item.tone]} variant="soft" size="sm">
+                    {item.label}
+                  </Chip>
+                  <p className="truncate font-mono text-sm font-medium text-foreground">
+                    {item.image}
+                  </p>
+                </div>
+                <p className="mt-1 line-clamp-2 text-xs text-muted">{item.description}</p>
+              </div>
+              <ArrowRight01Icon size={16} className="mt-1 shrink-0 text-muted" />
+            </Link>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -238,6 +455,7 @@ export default function WatchlistPage() {
   const [shareSaving, setShareSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
+  const [focusFilter, setFocusFilter] = useState<WatchlistFocus>('all');
   const [postureNow] = useState(() => Date.now());
   const modal = useOverlayState();
   const shareModal = useOverlayState();
@@ -472,6 +690,13 @@ export default function WatchlistPage() {
         const statusMatches =
           statusFilter === 'all' || (statusFilter === 'active' ? item.enabled : !item.enabled);
         if (!statusMatches) return false;
+        const focusMatches =
+          focusFilter === 'all' ||
+          (focusFilter === 'attention' && item.enabled && watchlistNeedsPolicyAttention(item)) ||
+          (focusFilter === 'stale' && isStaleWatchlistItem(item, postureNow)) ||
+          (focusFilter === 'healthy' && isHealthyWatchlistItem(item, postureNow)) ||
+          (focusFilter === 'never_scanned' && isNeverScannedItem(item));
+        if (!focusMatches) return false;
         if (!query) return true;
         return [item.image_name, item.image_tag]
           .filter((value): value is string => Boolean(value))
@@ -491,21 +716,71 @@ export default function WatchlistPage() {
         if (rankDiff !== 0) return rankDiff;
         return Date.parse(right.created_at) - Date.parse(left.created_at);
       });
-  }, [items, searchQuery, statusFilter]);
+  }, [focusFilter, items, postureNow, searchQuery, statusFilter]);
   const attentionItems = getWatchlistPolicyAttentionItems(items);
   const activeItems = items.filter((item) => item.enabled);
   const neverScannedCount = activeItems.filter((item) => !item.last_scan_id).length;
-  const staleCount = activeItems.filter((item) => {
-    if (!item.last_scanned_at || postureNow === 0) return false;
-    const scannedAt = Date.parse(item.last_scanned_at);
-    return !Number.isNaN(scannedAt) && postureNow - scannedAt > 7 * 24 * 60 * 60 * 1000;
-  }).length;
+  const staleItems = activeItems.filter((item) => isStaleWatchlistItem(item, postureNow));
+  const staleCount = staleItems.length;
+  const healthyItems = activeItems.filter((item) => isHealthyWatchlistItem(item, postureNow));
+  const overviewSummary = getWatchlistOverviewSummary({
+    activeCount: activeItems.length,
+    attentionCount: attentionItems.length,
+    neverScannedCount,
+    staleCount,
+  });
+  const actionQueueItems: WatchlistQueueEntry[] = [
+    ...attentionItems.map((item) => {
+      const posture = getWatchlistPosture(item);
+      return {
+        id: `attention-${item.id}`,
+        image: `${item.image_name}:${item.image_tag}`,
+        label: posture.label,
+        description: posture.description,
+        href: item.last_scan_id ? `/scans/${item.last_scan_id}` : buildWatchlistTriageHref(item.image_name),
+        tone: posture.tone,
+      };
+    }),
+    ...staleItems
+      .filter((item) => !attentionItems.some((candidate) => candidate.id === item.id))
+      .map((item) => ({
+        id: `stale-${item.id}`,
+        image: `${item.image_name}:${item.image_tag}`,
+        label: 'Stale schedule',
+        description: item.last_scanned_at
+          ? `Last scan ${timeAgo(item.last_scanned_at, {
+              hourCycle,
+              timeZone: item.timezone,
+            })}`
+          : 'Scheduled item has no recent scan result.',
+        href: buildWatchlistScansHref(item.image_name),
+        tone: 'warning' as const,
+      })),
+    ...activeItems
+      .filter((item) => isNeverScannedItem(item))
+      .filter((item) => !attentionItems.some((candidate) => candidate.id === item.id))
+      .map((item) => ({
+        id: `never-${item.id}`,
+        image: `${item.image_name}:${item.image_tag}`,
+        label: 'Never scanned',
+        description: 'No baseline scan result exists for this scheduled image yet.',
+        href: buildWatchlistScansHref(item.image_name),
+        tone: 'warning' as const,
+      })),
+  ].slice(0, 5);
+  const focusCounts: Record<WatchlistFocus, number> = {
+    all: items.length,
+    attention: attentionItems.length,
+    stale: staleItems.length,
+    healthy: healthyItems.length,
+    never_scanned: neverScannedCount,
+  };
 
   return (
     <div className="p-6 space-y-5">
       <PageHeader
         title="Watchlist"
-        description="Auto-scan images on a schedule."
+        description="Recurring image monitoring, freshness tracking, and policy follow-up for your active workspace."
         actions={
           <div className="flex items-center gap-3 flex-wrap">
             <SegmentedControl
@@ -519,6 +794,9 @@ export default function WatchlistPage() {
               onChange={(next) => setHourCycle(next as HourCyclePreference)}
               size="sm"
             />
+            <Link href={buildWatchlistTriageHref()}>
+              <Button variant="secondary">Open Triage</Button>
+            </Link>
             <Button
               onPress={openCreate}
               className="btn-primary inline-flex items-center gap-2"
@@ -534,22 +812,34 @@ export default function WatchlistPage() {
       <WatchlistPostureSummary
         activeCount={activeItems.length}
         attentionCount={attentionItems.length}
+        healthyCount={healthyItems.length}
         neverScannedCount={neverScannedCount}
         staleCount={staleCount}
       />
 
-      {error && (
-        <div
-          className="rounded-xl px-4 py-3 text-sm"
-          style={{
-            background: 'rgba(239,68,68,0.08)',
-            border: '1px solid rgba(239,68,68,0.18)',
-            color: '#f87171',
-          }}
-        >
-          {error}
-        </div>
-      )}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <WatchlistNarrativeCard
+          triageHref={buildWatchlistTriageHref()}
+          summary={overviewSummary}
+          activeCount={activeItems.length}
+          onShowHealthy={() => setFocusFilter('healthy')}
+        />
+        <WatchlistActionQueue
+          items={actionQueueItems}
+          onShowAttention={() => setFocusFilter('attention')}
+          onShowStale={() => setFocusFilter('stale')}
+          onShowNeverScanned={() => setFocusFilter('never_scanned')}
+        />
+      </div>
+
+      {error ? (
+        <Alert status="danger" className="bg-danger-soft">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>{error}</Alert.Title>
+          </Alert.Content>
+        </Alert>
+      ) : null}
 
       <Card className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -586,6 +876,33 @@ export default function WatchlistPage() {
               </ListBox>
             </Select.Popover>
           </Select>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: 'all' as const, label: 'All' },
+            { id: 'attention' as const, label: 'Attention' },
+            { id: 'stale' as const, label: 'Stale' },
+            { id: 'never_scanned' as const, label: 'Never scanned' },
+            { id: 'healthy' as const, label: 'Healthy' },
+          ].map((option) => (
+            <Button
+              key={option.id}
+              variant={focusFilter === option.id ? 'secondary' : 'tertiary'}
+              size="sm"
+              onPress={() => setFocusFilter(option.id)}
+            >
+              {option.label}
+              <Chip
+                size="sm"
+                variant="soft"
+                color={focusFilter === option.id ? 'accent' : 'default'}
+                className="ml-1 font-mono"
+              >
+                {focusCounts[option.id]}
+              </Chip>
+            </Button>
+          ))}
         </div>
 
         {loading ? (
@@ -633,6 +950,8 @@ export default function WatchlistPage() {
             description={
               items.length > 0
                 ? 'Try a different search or status filter.'
+                : focusFilter !== 'all'
+                  ? 'Try a different focus view or clear the filters.'
                 : 'Add a Docker image to auto-scan it on a recurring schedule and get notified when new vulnerabilities appear.'
             }
             action={
@@ -642,6 +961,7 @@ export default function WatchlistPage() {
                     onClick: () => {
                       setSearchQuery('');
                       setStatusFilter('all');
+                      setFocusFilter('all');
                     },
                   }
                 : canMutateActiveScope

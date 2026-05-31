@@ -71,6 +71,7 @@ func GetVulnTrends(db *bun.DB) gin.HandlerFunc {
 			Where("completed_at >= ?", cutoff).
 			OrderExpr("completed_at ASC")
 		query = authz.ApplyOwnershipVisibility(query, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		query = authz.ApplyWorkspaceScope(c, query, "", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 		query.Scan(ctx, &samples) //nolint:errcheck
 
 		rows := aggregateVulnTrendRows(samples)

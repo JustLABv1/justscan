@@ -39,6 +39,7 @@ func GetTrends(db *bun.DB) gin.HandlerFunc {
 			GroupExpr("date").
 			OrderExpr("date ASC")
 		query = authz.ApplyOwnershipVisibility(query, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+		query = authz.ApplyWorkspaceScope(c, query, "", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 		query.Scan(ctx, &rows) //nolint:errcheck
 
 		if rows == nil {

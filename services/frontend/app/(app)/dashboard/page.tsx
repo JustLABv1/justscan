@@ -1,5 +1,4 @@
 'use client';
-import SplitText from '@/components/SplitText';
 import {
   DashboardDrilldownKey,
   DashboardDrilldownModal,
@@ -18,13 +17,14 @@ import {
   RECENT_ACTIVITY_RANGE_OPTIONS,
   RecentActivityRange,
 } from '@/components/scans/recent-activity';
+import { StatusBadge } from '@/components/ui/badges';
 import {
   formatChartDate as formatChartDateShared,
   singleSeriesConfig,
   typedChartConfigFromSeries,
 } from '@/components/ui/chart-adapter';
 import { PageHeader } from '@/components/ui/page-header';
-import { ChartSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
+import { DashboardLoadingSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   DashboardStats,
@@ -43,9 +43,10 @@ import {
   WatchlistItem,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { fullDate, timeAgo } from '@/lib/time';
 import { getWatchlistPolicyAttentionItems } from '@/lib/watchlist-posture';
-import { Button, Card, useOverlayState } from '@heroui/react';
-import { Add01Icon, ArrowRight01Icon } from 'hugeicons-react';
+import { Button, Card, Chip, useOverlayState } from '@heroui/react';
+import { ArrowRight01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -154,6 +155,11 @@ type WatchlistCoverage = {
   neverScannedCount: number;
   coverage7d: number;
   topSchedule: [string, number] | null;
+};
+
+type TrendChip = {
+  label: string;
+  tone: PostureTone;
 };
 
 const TONE_STYLES: Record<
@@ -271,15 +277,95 @@ function getCriticalHighTrend(data: DashboardVulnTrendPoint[]): number {
   return latest && previous ? latest.value - previous.value : 0;
 }
 
+function buildVulnerabilityTrendSeries(
+  data: DashboardVulnTrendPoint[],
+  days: number,
+  selectValue: (point: DashboardVulnTrendPoint) => number
+): { date: string; value: number }[] {
+  return fillDates(data, days).map((point) => ({
+    date: point.date,
+    value: selectValue(point),
+  }));
+}
+
+function getSeriesWindowAverage(
+  series: { date: string; value: number }[],
+  start: number,
+  end: number
+): number {
+  const slice = series.slice(start, end);
+  if (slice.length === 0) return 0;
+  return slice.reduce((sum, point) => sum + point.value, 0) / slice.length;
+}
+
+function getTrendChip(
+  series: { date: string; value: number }[],
+  options?: {
+    higherIsBetter?: boolean;
+    stableLabel?: string;
+    noDataLabel?: string;
+    usePercent?: boolean;
+  }
+): TrendChip {
+  const higherIsBetter = options?.higherIsBetter ?? false;
+  const stableLabel = options?.stableLabel ?? 'Stable';
+  const noDataLabel = options?.noDataLabel ?? 'No trend yet';
+  const usePercent = options?.usePercent ?? true;
+
+  if (series.length < 2) {
+    return { label: noDataLabel, tone: 'neutral' };
+  }
+
+  const midpoint = Math.max(1, Math.floor(series.length / 2));
+  const previousAvg = getSeriesWindowAverage(series, 0, midpoint);
+  const recentAvg = getSeriesWindowAverage(series, midpoint, series.length);
+  const delta = recentAvg - previousAvg;
+
+  if (Math.abs(delta) < 0.5) {
+    return { label: stableLabel, tone: 'neutral' };
+  }
+
+  const tone =
+    delta > 0 ? (higherIsBetter ? 'success' : 'danger') : higherIsBetter ? 'danger' : 'success';
+  const direction = delta > 0 ? '↑' : '↓';
+
+  if (usePercent && previousAvg > 0) {
+    const percentChange = Math.round((Math.abs(delta) / previousAvg) * 100);
+    return {
+      label: `${direction} ${percentChange}%`,
+      tone,
+    };
+  }
+
+  if (usePercent && previousAvg === 0 && recentAvg > 0) {
+    return {
+      label: `${direction} +${Math.round(recentAvg)}`,
+      tone,
+    };
+  }
+
+  const roundedDelta = Math.round(Math.abs(delta) * 10) / 10;
+
+  return {
+    label: `${direction} ${roundedDelta}`,
+    tone,
+  };
+}
+
+function isFlatSeries(series: { date: string; value: number }[]) {
+  if (series.length < 2) return true;
+  return series.every((point) => point.value === series[0]?.value);
+}
+
 function getRiskSummary({
   criticalHighCount,
   needsAttentionTotal,
-  blockedPolicyCount,
+  policyIssueCount,
   criticalHighTrend,
 }: {
   criticalHighCount: number;
   needsAttentionTotal: number;
-  blockedPolicyCount: number;
+  policyIssueCount: number;
   criticalHighTrend: number;
 }): PostureSummary {
   if (criticalHighCount === 0 && needsAttentionTotal === 0) {
@@ -291,13 +377,13 @@ function getRiskSummary({
     };
   }
 
-  if (blockedPolicyCount > 0 || criticalHighCount >= 1000 || criticalHighTrend > 0) {
+  if (policyIssueCount > 0 || criticalHighCount >= 1000 || criticalHighTrend > 0) {
     return {
       label: 'Elevated risk',
       title: 'Critical/high exposure needs review',
       description:
-        blockedPolicyCount > 0
-          ? 'Policy-blocked scans and severe findings should be reviewed first.'
+        policyIssueCount > 0
+          ? 'Policy-related scan issues and severe findings should be reviewed first.'
           : 'Severe findings are present and the latest risk signal is moving up.',
       tone: 'danger',
     };
@@ -308,53 +394,6 @@ function getRiskSummary({
     title: 'Severe findings exist but are not accelerating',
     description: 'Keep an eye on critical and high findings while current coverage remains active.',
     tone: 'warning',
-  };
-}
-
-function getReadinessSummary({
-  coverage7d,
-  successRate,
-  activeQueueCount,
-  scannerHealth,
-  scannerHealthError,
-  staleCount,
-}: {
-  coverage7d: number;
-  successRate: number;
-  activeQueueCount: number;
-  scannerHealth: ScannerHealth | null;
-  scannerHealthError: string;
-  staleCount: number;
-}): PostureSummary {
-  const scannerDegraded =
-    Boolean(scannerHealthError) ||
-    Boolean(scannerHealth?.local_scanner_enabled && scannerHealth.stale_workers > 0) ||
-    Boolean(scannerHealth?.local_scanner_enabled && scannerHealth.error_workers > 0);
-
-  if (scannerDegraded || staleCount > 0 || successRate < 70) {
-    return {
-      label: 'Readiness degraded',
-      title: 'Coverage confidence needs attention',
-      description:
-        'Stale schedules, scanner health, or scan failures may reduce trust in coverage.',
-      tone: 'warning',
-    };
-  }
-
-  if (coverage7d >= 90 && successRate >= 85 && activeQueueCount === 0) {
-    return {
-      label: 'Ready',
-      title: 'Coverage is current and stable',
-      description: 'Watchlist scans are fresh and the scanner queue is clear.',
-      tone: 'success',
-    };
-  }
-
-  return {
-    label: 'Monitoring',
-    title: 'Coverage is active with some movement',
-    description: 'Scanning is running, but the readiness signal is not fully settled yet.',
-    tone: 'accent',
   };
 }
 
@@ -371,11 +410,122 @@ function PosturePill({ summary }: { summary: PostureSummary }) {
   );
 }
 
+function isScannerReady({
+  isAdmin,
+  scannerHealth,
+  scannerHealthError,
+}: {
+  isAdmin: boolean;
+  scannerHealth: ScannerHealth | null;
+  scannerHealthError: string;
+}) {
+  return (
+    !isAdmin ||
+    (!scannerHealthError &&
+      (!scannerHealth?.local_scanner_enabled ||
+        (scannerHealth.healthy_workers > 0 &&
+          scannerHealth.stale_workers === 0 &&
+          scannerHealth.error_workers === 0)))
+  );
+}
+
+function getDashboardFocus({
+  criticalHighCount,
+  totalVulns,
+  genericFailedCount,
+  policyIssueCount,
+  watchlistPolicyAttentionCount,
+  watchlistCoverage,
+  scannerReady,
+}: {
+  criticalHighCount: number;
+  totalVulns: number;
+  genericFailedCount: number;
+  policyIssueCount: number;
+  watchlistPolicyAttentionCount: number;
+  watchlistCoverage: WatchlistCoverage;
+  scannerReady: boolean;
+}): {
+  summary: PostureSummary;
+  title: string;
+  description: string;
+  primaryActionHref: string;
+  primaryActionLabel: string;
+  secondaryActionHref?: string;
+  secondaryActionLabel?: string;
+} {
+  if (policyIssueCount > 0 || genericFailedCount > 0) {
+    const total = policyIssueCount + genericFailedCount;
+    return {
+      summary: {
+        label: 'Needs action',
+        title: 'Blocked or failed scans need review',
+        description: 'Delivery-impacting scan outcomes should be reviewed before broader hygiene work.',
+        tone: 'danger',
+      },
+      title: 'Start with policy issues or failed scans',
+      description: `${total.toLocaleString()} scan result${total === 1 ? '' : 's'} need immediate attention, including ${policyIssueCount.toLocaleString()} policy-affected and ${genericFailedCount.toLocaleString()} failed scans.`,
+      primaryActionHref: buildTriageHref(),
+      primaryActionLabel: 'Open triage',
+      secondaryActionHref: buildRecentActivityHref('7d'),
+      secondaryActionLabel: 'Open scan activity',
+    };
+  }
+
+  if (
+    watchlistPolicyAttentionCount > 0 ||
+    watchlistCoverage.staleItems.length > 0 ||
+    watchlistCoverage.neverScannedCount > 0 ||
+    !scannerReady
+  ) {
+    return {
+      summary: {
+        label: 'Coverage gaps',
+        title: 'Coverage confidence needs follow-up',
+        description: 'Freshness gaps or scanner health issues reduce trust in the dashboard signal.',
+        tone: 'warning',
+      },
+      title: 'Coverage needs a quick review',
+      description: `${watchlistCoverage.staleItems.length.toLocaleString()} stale schedule${watchlistCoverage.staleItems.length === 1 ? '' : 's'}, ${watchlistCoverage.neverScannedCount.toLocaleString()} never-scanned image${watchlistCoverage.neverScannedCount === 1 ? '' : 's'}, and ${watchlistPolicyAttentionCount.toLocaleString()} watched policy issue${watchlistPolicyAttentionCount === 1 ? '' : 's'} are affecting confidence.`,
+      primaryActionHref: '/watchlist',
+      primaryActionLabel: 'Review watchlist',
+      secondaryActionHref: buildTriageHref({ kind: 'watchlist' }),
+      secondaryActionLabel: 'Open watchlist triage',
+    };
+  }
+
+  return {
+    summary: {
+      label: criticalHighCount > 0 ? 'Operationally clear' : 'Clear',
+      title: 'No failed scans or policy violations need immediate review',
+      description:
+        criticalHighCount > 0
+          ? 'Scan operations are healthy, and the remaining work is planned remediation rather than an active blocker.'
+          : 'Current scan outcomes and watchlist coverage are stable.',
+      tone: criticalHighCount > 0 ? 'accent' : 'success',
+    },
+    title:
+      criticalHighCount > 0
+        ? 'No active blockers, but remediation work remains'
+        : 'Nothing urgent is competing for attention right now',
+    description:
+      criticalHighCount > 0
+        ? `${formatCompactNumber(criticalHighCount)} critical or high findings remain visible across ${formatCompactNumber(totalVulns)} total findings, but there are no failed scans or policy blocks driving immediate action.`
+        : 'Use this dashboard as a quick status check, then move into scans or triage only if you want to investigate proactively.',
+    primaryActionHref: buildTriageHref(),
+    primaryActionLabel: criticalHighCount > 0 ? 'Open triage' : 'Start new scan',
+    secondaryActionHref: criticalHighCount > 0 ? '/scans/new' : buildTriageHref(),
+    secondaryActionLabel: criticalHighCount > 0 ? 'Start new scan' : 'Open triage',
+  };
+}
+
 function BriefingMetric({
   label,
   value,
   detail,
   tone = 'neutral',
+  trend,
+  sparkline,
   href,
   onPress,
   className,
@@ -384,15 +534,18 @@ function BriefingMetric({
   value: React.ReactNode;
   detail: React.ReactNode;
   tone?: PostureTone;
+  trend?: TrendChip;
+  sparkline?: { data: { date: string; value: number }[]; valueLabel?: string };
   href?: string;
   onPress?: () => void;
   className?: string;
 }) {
   const toneStyle = TONE_STYLES[tone];
+  const sparklineIsFlat = sparkline ? isFlatSeries(sparkline.data) : false;
   const content = (
-    <Card className={`${className ?? ''}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+    <Card className={className}>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
+        <div className="min-w-0 space-y-2">
           <p className="text-[11px] font-medium uppercase">{label}</p>
           <p
             className="mt-0.5 text-lg font-semibold tabular-nums"
@@ -400,13 +553,51 @@ function BriefingMetric({
           >
             {value}
           </p>
+          <p className="text-[11px] leading-4 text-muted">{detail}</p>
         </div>
-        <span
-          className="mt-1.5 size-1.5 rounded-full"
-          style={{ background: toneStyle.color, opacity: 0.9 }}
-        />
+        <div className="flex min-w-[92px] flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            {trend ? (
+              <Chip
+                size="sm"
+                variant="soft"
+                color={
+                  trend.tone === 'danger'
+                    ? 'danger'
+                    : trend.tone === 'warning'
+                      ? 'warning'
+                      : trend.tone === 'success'
+                        ? 'success'
+                        : trend.tone === 'accent'
+                          ? 'accent'
+                          : 'default'
+                }
+              >
+                {trend.label}
+              </Chip>
+            ) : null}
+            <span
+              className="size-1.5 rounded-full"
+              style={{ background: toneStyle.color, opacity: 0.9 }}
+            />
+          </div>
+          {sparkline ? (
+            sparklineIsFlat ? (
+              <div className="flex h-8 w-20 items-center justify-end">
+                <span className="block h-px w-20 rounded-full bg-default-500/60" />
+              </div>
+            ) : (
+              <MiniSparkline
+                data={sparkline.data}
+                color={toneStyle.color}
+                compact
+                showArea={false}
+                valueLabel={sparkline.valueLabel ?? 'events'}
+              />
+            )
+          ) : null}
+        </div>
       </div>
-      <p className="text-[11px] leading-4 text-muted">{detail}</p>
     </Card>
   );
 
@@ -435,80 +626,35 @@ function BriefingMetric({
   );
 }
 
-function ExecutivePostureCard({
-  risk,
-  readiness,
-  criticalHighCount,
-  totalVulns,
-  needsAttentionTotal,
-  watchlistPolicyAttentionCount,
-  coverage7d,
-  successRate,
-  triageDefaultHref,
-  triageCriticalHighHref,
-  triageAttentionHref,
-  onOpenWatchlist,
-  onOpenCompleted,
+function DashboardFocusCard({
+  summary,
+  title,
+  description,
+  primaryAction,
+  secondaryAction,
 }: {
-  risk: PostureSummary;
-  readiness: PostureSummary;
-  criticalHighCount: number;
-  totalVulns: number;
-  needsAttentionTotal: number;
-  watchlistPolicyAttentionCount: number;
-  coverage7d: number;
-  successRate: number;
-  triageDefaultHref: string;
-  triageCriticalHighHref: string;
-  triageAttentionHref: string;
-  onOpenWatchlist: () => void;
-  onOpenCompleted: () => void;
+  summary: PostureSummary;
+  title: string;
+  description: React.ReactNode;
+  primaryAction: React.ReactNode;
+  secondaryAction?: React.ReactNode;
 }) {
-  const riskTone = TONE_STYLES[risk.tone];
-  const readinessTone = TONE_STYLES[readiness.tone];
-
   return (
-    <section className="space-y-3 rounded-2xl p-1">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <BriefingMetric
-          label="Critical + high"
-          value={formatCompactNumber(criticalHighCount)}
-          detail={`${formatCompactNumber(totalVulns)} total findings`}
-          tone={risk.tone}
-          href={triageCriticalHighHref}
-        />
-        <BriefingMetric
-          label="Attention"
-          value={needsAttentionTotal.toLocaleString()}
-          detail="failed or policy-blocked scans"
-          tone={needsAttentionTotal > 0 ? 'danger' : 'success'}
-          href={triageAttentionHref}
-        />
-        <BriefingMetric
-          label="Watched policy"
-          value={watchlistPolicyAttentionCount.toLocaleString()}
-          detail="images non-compliant"
-          tone={watchlistPolicyAttentionCount > 0 ? 'danger' : 'success'}
-          onPress={onOpenWatchlist}
-        />
-        <BriefingMetric
-          label="Freshness"
-          value={`${coverage7d}%`}
-          detail="watchlist scanned in 7 days"
-          tone={coverage7d >= 90 ? 'success' : 'warning'}
-          onPress={onOpenWatchlist}
-        />
-        <BriefingMetric
-          label="Success"
-          value={`${successRate}%`}
-          detail="completed scans overall"
-          tone={successRate >= 85 ? 'success' : 'warning'}
-          onPress={onOpenCompleted}
-        />
+    <Card className="p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 space-y-3">
+          <PosturePill summary={summary} />
+          <div className="space-y-1.5">
+            <p className="text-lg font-semibold text-foreground">{title}</p>
+            <p className="text-sm leading-6 text-muted">{description}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">{primaryAction}{secondaryAction}</div>
       </div>
-    </section>
+    </Card>
   );
 }
+
 function DashboardSectionHeader({
   title,
   description,
@@ -537,7 +683,9 @@ function DashboardSectionHeader({
 
 function AttentionQueueCard({
   genericFailedCount,
-  blockedPolicyCount,
+  policyIssueCount,
+  xrayBlockedCount,
+  orgPolicyFailCount,
   watchlistPolicyAttentionCount,
   activeQueueCount,
   staleItems,
@@ -549,7 +697,9 @@ function AttentionQueueCard({
   triageRunningHref,
 }: {
   genericFailedCount: number;
-  blockedPolicyCount: number;
+  policyIssueCount: number;
+  xrayBlockedCount: number;
+  orgPolicyFailCount: number;
   watchlistPolicyAttentionCount: number;
   activeQueueCount: number;
   staleItems: WatchlistItem[];
@@ -571,9 +721,9 @@ function AttentionQueueCard({
     },
     {
       key: 'blocked',
-      label: 'Policy blocks',
-      value: blockedPolicyCount,
-      detail: 'Xray policy decisions awaiting review',
+      label: 'Policy issues',
+      value: policyIssueCount,
+      detail: `${xrayBlockedCount.toLocaleString()} Xray blocked · ${orgPolicyFailCount.toLocaleString()} org policy failed`,
       tone: 'danger' as const,
       href: triagePolicyHref,
     },
@@ -606,8 +756,8 @@ function AttentionQueueCard({
   return (
     <Card>
       <DashboardSectionHeader
-        title="Needs attention"
-        description="Open the triage queue for the next best action"
+        title="Next actions"
+        description="The highest-signal follow-up items from the active workspace"
         action={
           <Link href={triageDefaultHref}>
             <Button variant="secondary">
@@ -619,18 +769,10 @@ function AttentionQueueCard({
       />
 
       {items.length === 0 ? (
-        <div
-          className="mt-4 rounded-2xl border px-4 py-5"
-          style={{
-            background: TONE_STYLES.success.softBg,
-            borderColor: TONE_STYLES.success.border,
-          }}
-        >
-          <p className="text-sm font-medium" style={{ color: '#34d399' }}>
-            No urgent scan or coverage items right now.
-          </p>
-          <p className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>
-            Failed scans, policy blocks, and stale schedules will surface here.
+        <div className="mt-4 rounded-xl border border-surface-border bg-surface-secondary px-4 py-4">
+          <p className="text-sm font-medium text-foreground">No urgent follow-up right now.</p>
+          <p className="mt-1 text-xs text-muted">
+            Failed scans, policy blocks, and stale coverage will surface here when they need review.
           </p>
         </div>
       ) : (
@@ -670,122 +812,94 @@ function AttentionQueueCard({
   );
 }
 
-function ReadinessPanel({
-  coverage,
-  watchlistPolicyAttentionCount,
-  activeQueueCount,
-  startedTodayCount,
-  scannerHealth,
-  scannerHealthError,
-  isAdmin,
-  watchlistLoading,
-  watchlistError,
-}: {
-  coverage: WatchlistCoverage;
-  watchlistPolicyAttentionCount: number;
-  activeQueueCount: number;
-  startedTodayCount: number;
-  scannerHealth: ScannerHealth | null;
-  scannerHealthError: string;
-  isAdmin: boolean;
-  watchlistLoading: boolean;
-  watchlistError: string;
-}) {
-  const scannerReady =
-    !isAdmin ||
-    (!scannerHealthError &&
-      (!scannerHealth?.local_scanner_enabled ||
-        (scannerHealth.healthy_workers > 0 &&
-          scannerHealth.stale_workers === 0 &&
-          scannerHealth.error_workers === 0)));
+function isProblemScan(scan: Scan): boolean {
+  return scan.status === 'failed' || scan.external_status === 'blocked_by_xray_policy';
+}
 
+function problemScanTime(scan: Scan): string {
+  return scan.completed_at ?? scan.started_at ?? scan.created_at;
+}
+
+function RecentProblemScansCard({
+  scans,
+  loading,
+  error,
+  href,
+}: {
+  scans: Scan[];
+  loading: boolean;
+  error: string;
+  href: string;
+}) {
   return (
     <Card className="p-4">
       <DashboardSectionHeader
-        title="Readiness confidence"
-        description="Signals that determine how much trust to place in current coverage"
+        title="Recent problem scans"
+        description="Latest failed or policy-blocked runs from the active workspace"
+        action={
+          <Link href={href}>
+            <Button variant="secondary">
+              Open scan activity
+              <ArrowRight01Icon />
+            </Button>
+          </Link>
+        }
       />
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <Card variant="secondary">
-          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-            Watchlist freshness
+
+      {loading ? (
+        <div className="mt-4 space-y-1.5">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <RecentScanRowSkeleton key={index} />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="mt-4 rounded-2xl border border-danger/20 bg-danger/8 px-4 py-3 text-sm text-danger">
+          {error}
+        </div>
+      ) : scans.length === 0 ? (
+        <div className="mt-4 rounded-xl border border-surface-border bg-surface-secondary px-4 py-4">
+          <p className="text-sm font-medium text-foreground">No recent failed or blocked scans.</p>
+          <p className="mt-1 text-xs text-muted">
+            When scans fail or Xray blocks a result, it will appear here first.
           </p>
-          <p
-            className="mt-2 text-2xl font-semibold tabular-nums"
-            style={{ color: coverage.coverage7d >= 90 ? '#34d399' : '#fbbf24' }}
-          >
-            {coverage.coverage7d}%
-          </p>
-          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-            {watchlistLoading
-              ? 'Refreshing watchlist coverage'
-              : watchlistError
-                ? watchlistError
-                : `${coverage.scanned7dCount} of ${coverage.enabledCount || 0} active schedules scanned in 7d`}
-          </p>
-        </Card>
-        <Card variant="secondary">
-          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-            Watchlist posture
-          </p>
-          <p
-            className="mt-2 text-2xl font-semibold tabular-nums"
-            style={{ color: watchlistPolicyAttentionCount > 0 ? '#f87171' : '#34d399' }}
-          >
-            {watchlistPolicyAttentionCount.toLocaleString()}
-          </p>
-          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-            watched images failing policy checks
-          </p>
-        </Card>
-        <Card variant="secondary">
-          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-            Scanner state
-          </p>
-          <p
-            className="mt-2 text-lg font-semibold"
-            style={{ color: scannerReady ? '#34d399' : '#fbbf24' }}
-          >
-            {scannerReady ? 'Healthy' : 'Needs review'}
-          </p>
-          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-            {scannerHealthError ||
-              scannerHealth?.message ||
-              (scannerHealth?.local_scanner_enabled
-                ? `${scannerHealth.healthy_workers} healthy workers`
-                : 'External scanner coverage')}
-          </p>
-        </Card>
-        <Card variant="secondary">
-          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-            In-flight work
-          </p>
-          <p className="mt-2 text-2xl font-semibold tabular-nums" style={{ color: '#60a5fa' }}>
-            {activeQueueCount.toLocaleString()}
-          </p>
-          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-            queued or running scans
-          </p>
-        </Card>
-        <Card variant="secondary">
-          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-            Started today
-          </p>
-          <p
-            className="mt-2 text-2xl font-semibold tabular-nums"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            {startedTodayCount.toLocaleString()}
-          </p>
-          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-            {coverage.neverScannedCount > 0
-              ? `${coverage.neverScannedCount} watchlist items never scanned`
-              : coverage.topSchedule
-                ? `Common schedule ${coverage.topSchedule[0]}`
-                : 'recent scan volume signal'}
-          </p>
-        </Card>
-      </div>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-2">
+          {scans.map((scan) => (
+            <Link
+              key={scan.id}
+              href={`/scans/${scan.id}`}
+              className="block rounded-xl border border-surface-border p-3 transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p
+                    className="truncate font-mono text-sm font-medium text-foreground"
+                    title={`${scan.image_name}:${scan.image_tag}`}
+                  >
+                    {scan.image_name}:{scan.image_tag}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+                    <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+                    <span className="text-muted" title={fullDate(problemScanTime(scan))}>
+                      {timeAgo(problemScanTime(scan))}
+                    </span>
+                  </div>
+                  {scan.error_message ? (
+                    <p className="mt-2 line-clamp-2 text-xs text-muted">{scan.error_message}</p>
+                  ) : null}
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-semibold tabular-nums text-danger">
+                    {scan.critical_count + scan.high_count}
+                  </p>
+                  <p className="text-[11px] text-muted">critical + high</p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
@@ -1053,8 +1167,9 @@ export default function DashboardPage() {
   const [modalScansLoading, setModalScansLoading] = useState(false);
   const [modalScansError, setModalScansError] = useState('');
   const [watchlistOverviewItems, setWatchlistOverviewItems] = useState<WatchlistItem[]>([]);
-  const [watchlistOverviewLoading, setWatchlistOverviewLoading] = useState(true);
-  const [watchlistOverviewError, setWatchlistOverviewError] = useState('');
+  const [recentProblemScans, setRecentProblemScans] = useState<Scan[]>([]);
+  const [recentProblemScansLoading, setRecentProblemScansLoading] = useState(true);
+  const [recentProblemScansError, setRecentProblemScansError] = useState('');
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
   const [watchlistError, setWatchlistError] = useState('');
@@ -1063,6 +1178,14 @@ export default function DashboardPage() {
 
   const scanVolumeTrend = useMemo(
     () => buildTrendSeries(trends, 30, (point) => point.total),
+    [trends]
+  );
+  const severeFindingsTrend = useMemo(
+    () => buildVulnerabilityTrendSeries(vulnTrends, 7, (point) => point.critical + point.high),
+    [vulnTrends]
+  );
+  const failedScansTrend = useMemo(
+    () => buildTrendSeries(trends, 7, (point) => point.failed),
     [trends]
   );
 
@@ -1092,15 +1215,36 @@ export default function DashboardPage() {
 
   useEffect(() => {
     return deferEffect(() => {
-      setWatchlistOverviewLoading(true);
-      setWatchlistOverviewError('');
       listWatchlist()
         .then((items) => setWatchlistOverviewItems(items))
         .catch((watchlistLoadError: Error) => {
           setWatchlistOverviewItems([]);
-          setWatchlistOverviewError(watchlistLoadError.message);
+          console.warn('Failed to load watchlist overview', watchlistLoadError);
         })
-        .finally(() => setWatchlistOverviewLoading(false));
+    });
+  }, [scopeKey]);
+
+  useEffect(() => {
+    return deferEffect(() => {
+      const { from, to } = getRecentActivityBounds('7d');
+      setRecentProblemScansLoading(true);
+      setRecentProblemScansError('');
+
+      listScans(1, 20, undefined, undefined, undefined, undefined, undefined, from, to)
+        .then((result) => {
+          const items = (result.data ?? [])
+            .filter(isProblemScan)
+            .sort((left, right) => {
+              return Date.parse(problemScanTime(right)) - Date.parse(problemScanTime(left));
+            })
+            .slice(0, 5);
+          setRecentProblemScans(items);
+        })
+        .catch((recentProblemError: Error) => {
+          setRecentProblemScans([]);
+          setRecentProblemScansError(recentProblemError.message);
+        })
+        .finally(() => setRecentProblemScansLoading(false));
     });
   }, [scopeKey]);
 
@@ -1148,35 +1292,7 @@ export default function DashboardPage() {
       .catch(() => setVulnTrends([]));
   }
 
-  if (loading)
-    return (
-      <div className="p-6 space-y-4">
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
-            <div className="skeleton h-7 w-32 rounded-lg" />
-            <div className="skeleton h-3.5 w-48 rounded" />
-          </div>
-          <div className="skeleton h-9 w-28 rounded-xl" />
-        </div>
-        <div className="skeleton h-20 w-full rounded-xl" />
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
-          <div
-            className="rounded-2xl p-5"
-            style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
-          >
-            <div className="skeleton h-4 w-32 rounded mb-4" />
-            {Array.from({ length: 5 }).map((_, i) => (
-              <RecentScanRowSkeleton key={i} />
-            ))}
-          </div>
-          <div className="flex flex-col gap-3">
-            <div className="skeleton h-44 w-full rounded-2xl" />
-            <div className="skeleton h-28 w-full rounded-2xl" />
-          </div>
-        </div>
-        <ChartSkeleton />
-      </div>
-    );
+  if (loading) return <DashboardLoadingSkeleton />;
 
   if (error)
     return (
@@ -1199,20 +1315,17 @@ export default function DashboardPage() {
   const totalVulns = Object.values(stats.severity_totals).reduce((a, b) => a + b, 0);
   const criticalHighCount =
     (stats.severity_totals.critical ?? 0) + (stats.severity_totals.high ?? 0);
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const startedTodayCount =
-    [...trends].reverse().find((point) => point.date === todayKey)?.total ?? 0;
   const failedStatusCount = stats.status_counts['failed'] ?? 0;
   const activeQueueCount =
     (stats.status_counts['running'] ?? 0) + (stats.status_counts['pending'] ?? 0);
-  const blockedPolicyCount =
+  const policyIssueCount =
     stats.operations?.blocked_policy_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
-  const genericFailedCount = Math.max(0, failedStatusCount - blockedPolicyCount);
+  const xrayBlockedCount = stats.operations?.xray_blocked_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
+  const orgPolicyFailCount = stats.operations?.org_policy_fail_count ?? 0;
+  const genericFailedCount = Math.max(0, failedStatusCount - xrayBlockedCount);
   const activeXrayCount = stats.operations?.active_xray_count ?? 0;
   const completedCount = stats.status_counts['completed'] ?? 0;
-  const needsAttentionTotal = genericFailedCount + blockedPolicyCount;
-  const successRate =
-    stats.total_scans > 0 ? Math.round((completedCount / stats.total_scans) * 100) : 0;
+  const needsAttentionTotal = genericFailedCount + policyIssueCount;
   const watchlistCoverage = getWatchlistCoverage(watchlistOverviewItems, stats.watchlist_count);
   const watchlistPolicyAttentionItems = getWatchlistPolicyAttentionItems(watchlistOverviewItems);
   const watchlistPolicyAttentionCount = watchlistPolicyAttentionItems.length;
@@ -1220,30 +1333,52 @@ export default function DashboardPage() {
   const riskSummary = getRiskSummary({
     criticalHighCount,
     needsAttentionTotal,
-    blockedPolicyCount,
+    policyIssueCount,
     criticalHighTrend,
   });
-  const readinessSummary = getReadinessSummary({
-    coverage7d: watchlistCoverage.coverage7d,
-    successRate,
-    activeQueueCount,
+  const scannerReady = isScannerReady({
+    isAdmin,
     scannerHealth,
     scannerHealthError,
-    staleCount: watchlistCoverage.staleItems.length,
+  });
+  const dashboardFocus = getDashboardFocus({
+    criticalHighCount,
+    totalVulns,
+    genericFailedCount,
+    policyIssueCount,
+    watchlistPolicyAttentionCount,
+    watchlistCoverage,
+    scannerReady,
   });
   const triageDefaultHref = buildTriageHref();
   const triageWatchlistPolicyHref = buildTriageHref({ kind: 'watchlist', priority: 'high', query: 'policy' });
   const triageWatchlistStaleHref = buildTriageHref({ kind: 'watchlist', priority: 'medium', query: 'stale' });
-  const triagePolicyHref = buildTriageHref({ kind: 'policy', priority: 'critical', query: 'xray blocked' });
+  const triagePolicyHref = buildTriageHref({ kind: 'policy', priority: 'critical' });
   const triageFailedHref = buildTriageHref({ kind: 'scan', query: 'failed' });
   const triageRunningHref = buildTriageHref({ kind: 'scan', priority: 'medium', query: 'in flight' });
   const triageCriticalHighHref = buildTriageHref({ kind: 'fix', priority: 'high' });
-  const triageAttentionHref = buildTriageHref({ query: 'failed' });
   const displayedModalScans = modalScans;
   const recentActivityRangeLabel =
     RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === recentActivityRange)?.label ??
     'Last 24 hours';
   const recentActivityHref = buildRecentActivityHref(recentActivityRange);
+  const recentProblemScansHref = buildRecentActivityHref('7d');
+  const severeFindingsTrendChip = getTrendChip(severeFindingsTrend, {
+    stableLabel: 'Severity stable',
+    noDataLabel: 'No trend yet',
+  });
+  const blockedFailedTrendChip = getTrendChip(failedScansTrend, {
+    stableLabel: 'Failures stable',
+    noDataLabel: 'No failures trend',
+  });
+  const coverageTrendChip: TrendChip =
+    watchlistCoverage.coverage7d >= 90 && watchlistCoverage.staleItems.length === 0
+      ? { label: 'Fresh', tone: 'success' }
+      : watchlistCoverage.coverage7d === 0 && watchlistCoverage.enabledCount === 0
+        ? { label: 'No schedules', tone: 'neutral' }
+        : watchlistCoverage.staleItems.length > 0 || watchlistCoverage.neverScannedCount > 0
+          ? { label: 'Needs review', tone: 'warning' }
+          : { label: 'Monitoring', tone: 'accent' };
 
   function prepareDrilldown(card: DashboardDrilldownKey) {
     if (card === 'watchlist') {
@@ -1272,93 +1407,109 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <PageHeader
-        title={`Welcome back, `}
-        titleCom={
-          <SplitText
-            text={getUser()?.username ? getUser()?.username : 'User'}
-            delay={50}
-            duration={1.25}
-            ease="power3.out"
-            splitType="chars"
-            from={{ opacity: 0, y: 40 }}
-            to={{ opacity: 1, y: 0 }}
-            threshold={0.1}
-            rootMargin="-100px"
-            textAlign="center"
-            onLetterAnimationComplete={false}
-          />
-        }
-        description={new Date().toLocaleDateString('en', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })}
-        actions={
-          <Link href="/scans">
+      <PageHeader hidden title="Dashboard" />
+
+      <DashboardFocusCard
+        summary={dashboardFocus.summary}
+        title={dashboardFocus.title}
+        description={dashboardFocus.description}
+        primaryAction={
+          <Link href={dashboardFocus.primaryActionHref}>
             <Button>
-              <Add01Icon size={14} />
-              New Scan
+              {dashboardFocus.primaryActionLabel}
+              <ArrowRight01Icon />
             </Button>
           </Link>
         }
+        secondaryAction={
+          dashboardFocus.secondaryActionHref && dashboardFocus.secondaryActionLabel ? (
+            <Link href={dashboardFocus.secondaryActionHref}>
+              <Button variant="secondary">{dashboardFocus.secondaryActionLabel}</Button>
+            </Link>
+          ) : undefined
+        }
       />
 
-      <ExecutivePostureCard
-        risk={riskSummary}
-        readiness={readinessSummary}
-        criticalHighCount={criticalHighCount}
-        totalVulns={totalVulns}
-        needsAttentionTotal={needsAttentionTotal}
-        watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
-        coverage7d={watchlistCoverage.coverage7d}
-        successRate={successRate}
-        triageDefaultHref={triageDefaultHref}
-        triageCriticalHighHref={triageCriticalHighHref}
-        triageAttentionHref={triageAttentionHref}
-        onOpenWatchlist={() => openDrilldown('watchlist')}
-        onOpenCompleted={() => openDrilldown('completed')}
-      />
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <BriefingMetric
+          label="Severe findings"
+          value={formatCompactNumber(criticalHighCount)}
+          detail={`${formatCompactNumber(totalVulns)} total findings visible`}
+          tone={riskSummary.tone}
+          trend={severeFindingsTrendChip}
+          sparkline={{ data: severeFindingsTrend, valueLabel: 'critical and high findings' }}
+          href={triageCriticalHighHref}
+        />
+        <BriefingMetric
+          label="Blocked or failed"
+          value={needsAttentionTotal.toLocaleString()}
+          detail={`${policyIssueCount.toLocaleString()} policy issues · ${genericFailedCount.toLocaleString()} failed`}
+          tone={needsAttentionTotal > 0 ? 'danger' : 'success'}
+          trend={blockedFailedTrendChip}
+          sparkline={{ data: failedScansTrend, valueLabel: 'failed scans' }}
+          href={triageDefaultHref}
+        />
+        <BriefingMetric
+          label="Coverage freshness"
+          value={`${watchlistCoverage.coverage7d}%`}
+          detail={`${watchlistCoverage.staleItems.length.toLocaleString()} stale · ${watchlistCoverage.neverScannedCount.toLocaleString()} never scanned`}
+          tone={watchlistCoverage.coverage7d >= 90 && scannerReady ? 'success' : 'warning'}
+          trend={coverageTrendChip}
+          href="/watchlist"
+        />
+      </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+      {genericFailedCount > 0 ||
+      policyIssueCount > 0 ||
+      watchlistPolicyAttentionCount > 0 ||
+      activeQueueCount > 0 ||
+      watchlistCoverage.staleItems.length > 0 ||
+      recentProblemScansLoading ||
+      Boolean(recentProblemScansError) ||
+      recentProblemScans.length > 0 ? (
+        <div className="space-y-4">
+          {genericFailedCount > 0 ||
+          policyIssueCount > 0 ||
+          watchlistPolicyAttentionCount > 0 ||
+          activeQueueCount > 0 ||
+          watchlistCoverage.staleItems.length > 0 ? (
+            <AttentionQueueCard
+              genericFailedCount={genericFailedCount}
+              policyIssueCount={policyIssueCount}
+              xrayBlockedCount={xrayBlockedCount}
+              orgPolicyFailCount={orgPolicyFailCount}
+              watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
+              activeQueueCount={activeQueueCount}
+              staleItems={watchlistCoverage.staleItems}
+              triageDefaultHref={triageDefaultHref}
+              triageWatchlistPolicyHref={triageWatchlistPolicyHref}
+              triageWatchlistStaleHref={triageWatchlistStaleHref}
+              triagePolicyHref={triagePolicyHref}
+              triageFailedHref={triageFailedHref}
+              triageRunningHref={triageRunningHref}
+            />
+          ) : null}
+          {recentProblemScansLoading || Boolean(recentProblemScansError) || recentProblemScans.length > 0 ? (
+            <RecentProblemScansCard
+              scans={recentProblemScans}
+              loading={recentProblemScansLoading}
+              error={recentProblemScansError}
+              href={recentProblemScansHref}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.55fr)]">
         <VulnTrendChart
           data={vulnTrends}
           period={vulnTrendPeriod}
           onPeriod={handleVulnPeriodChange}
         />
-        <AttentionQueueCard
-          genericFailedCount={genericFailedCount}
-          blockedPolicyCount={blockedPolicyCount}
-          watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
-          activeQueueCount={activeQueueCount}
-          staleItems={watchlistCoverage.staleItems}
-          triageDefaultHref={triageDefaultHref}
-          triageWatchlistPolicyHref={triageWatchlistPolicyHref}
-          triageWatchlistStaleHref={triageWatchlistStaleHref}
-          triagePolicyHref={triagePolicyHref}
-          triageFailedHref={triageFailedHref}
-          triageRunningHref={triageRunningHref}
-        />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.45fr)]">
-        <ReadinessPanel
-          coverage={watchlistCoverage}
-          watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
-          activeQueueCount={activeQueueCount}
-          startedTodayCount={startedTodayCount}
-          scannerHealth={scannerHealth}
-          scannerHealthError={scannerHealthError}
-          isAdmin={isAdmin}
-          watchlistLoading={watchlistOverviewLoading}
-          watchlistError={watchlistOverviewError}
-        />
-
         <Card className="flex min-h-[240px] flex-col p-5">
           <DashboardSectionHeader
             title="Scan volume"
-            description="Total scans per day, last 30 days"
+            description="Secondary throughput view for the last 30 days"
             action={
               <Link
                 href="/scans"
@@ -1373,7 +1524,7 @@ export default function DashboardPage() {
             <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
               {scanVolumeTrend.reduce((sum, point) => sum + point.value, 0).toLocaleString()}
             </span>{' '}
-            total over 30 days
+            total scans over 30 days
           </p>
           {scanVolumeTrend.length >= 2 ? (
             <div className="mt-4 flex-1">

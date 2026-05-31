@@ -6,6 +6,61 @@ export function Skeleton({ className = '', style }: { className?: string; style?
 }
 
 // ── Dashboard skeletons ────────────────────────────────────────────────
+export function DashboardFocusCardSkeleton() {
+  return (
+    <div
+      className="rounded-3xl p-6"
+      style={{
+        background: 'var(--surface-bg)',
+        border: '1px solid var(--surface-border)',
+        boxShadow: 'var(--surface-shadow)',
+      }}
+    >
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1 space-y-4">
+          <Skeleton className="h-9 w-28 rounded-full" />
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-[min(100%,28rem)] rounded-xl" />
+            <Skeleton className="h-5 w-[min(100%,22rem)] rounded-lg" />
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-3">
+          <Skeleton className="h-10 w-44 rounded-full" />
+          <Skeleton className="h-10 w-32 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DashboardBriefingMetricSkeleton() {
+  return (
+    <div
+      className="rounded-3xl px-5 py-4"
+      style={{
+        background: 'var(--surface-bg)',
+        border: '1px solid var(--surface-border)',
+        boxShadow: 'var(--surface-shadow)',
+      }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-3">
+          <Skeleton className="h-3.5 w-28 rounded" />
+          <Skeleton className="h-9 w-14 rounded-lg" />
+          <Skeleton className="h-4 w-40 rounded" />
+        </div>
+        <div className="flex shrink-0 items-start gap-2">
+          <Skeleton className="h-7 w-24 rounded-full" />
+          <Skeleton className="mt-2 size-2 rounded-full" />
+        </div>
+      </div>
+      <div className="mt-4 flex justify-end">
+        <Skeleton className="h-10 w-28 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
 export function StatCardSkeleton() {
   return (
     <div className="relative flex flex-col rounded-xl px-4 pt-3 pb-2 gap-3"
@@ -60,6 +115,44 @@ export function ChartSkeleton() {
         </div>
       </div>
       <Skeleton className="h-36 w-full rounded-lg" />
+    </div>
+  );
+}
+
+export function DashboardLoadingSkeleton() {
+  return (
+    <div className="p-6 space-y-4">
+      <DashboardFocusCardSkeleton />
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <DashboardBriefingMetricSkeleton />
+        <DashboardBriefingMetricSkeleton />
+        <DashboardBriefingMetricSkeleton />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.55fr)]">
+        <ChartSkeleton />
+        <div
+          className="flex min-h-[240px] flex-col rounded-2xl p-5"
+          style={{
+            background: 'var(--surface-bg)',
+            border: '1px solid var(--surface-border)',
+            boxShadow: 'var(--surface-shadow)',
+          }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-28 rounded-lg" />
+              <Skeleton className="h-4 w-44 rounded" />
+            </div>
+            <Skeleton className="h-4 w-16 rounded" />
+          </div>
+          <Skeleton className="mt-4 h-4 w-32 rounded" />
+          <div className="mt-4 flex-1">
+            <Skeleton className="h-full min-h-[152px] w-full rounded-xl" />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

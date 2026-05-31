@@ -13,6 +13,7 @@ export interface PageHeaderConfig {
   description?: string;
   actions?: ReactNode;
   breadcrumbs?: BreadcrumbItem[];
+  hidden?: boolean;
 }
 
 type PageHeaderContextValue = {
@@ -29,6 +30,7 @@ export function PageHeader({
   description,
   actions,
   breadcrumbs,
+  hidden,
 }: PageHeaderProps) {
   const context = useContext(PageHeaderContext);
   const breadcrumbsKey = useMemo(
@@ -45,13 +47,14 @@ export function PageHeader({
       description,
       actions,
       breadcrumbs,
+      hidden,
     });
 
     return () => context.setHeader(null);
     // ReactNode props like actions/titleCom are often recreated every render.
     // Depending on their identity causes recursive setState loops via AppShell.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [breadcrumbsKey, context, description, title]);
+  }, [breadcrumbsKey, context, description, hidden, title]);
 
   return null;
 }

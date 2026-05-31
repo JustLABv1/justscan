@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
@@ -25,6 +26,8 @@ type statsResult struct {
 
 type operationsResult struct {
 	BlockedPolicyCount int            `json:"blocked_policy_count"`
+	XrayBlockedCount   int            `json:"xray_blocked_count"`
+	OrgPolicyFailCount int            `json:"org_policy_fail_count"`
 	ActiveXrayCount    int            `json:"active_xray_count"`
 	ActiveXraySteps    map[string]int `json:"active_xray_step_counts"`
 	ActiveXrayScans    []models.Scan  `json:"active_xray_scans"`
@@ -78,8 +81,14 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 			result.StatusCounts[r.Status] += r.Count
 			if isBlockedByXrayPolicyStatus(r.Status, r.ExternalStatus) {
 				result.StatusCounts[models.ScanExternalStatusBlockedByXrayPolicy] += r.Count
-				result.Operations.BlockedPolicyCount += r.Count
 			}
+		}
+
+		policyCounts, policyCountErr := loadPolicyIssueCounts(c, ctx, db, userID, isAdmin, accessibleOrgIDs)
+		if policyCountErr == nil {
+			result.Operations.BlockedPolicyCount = policyCounts.total
+			result.Operations.XrayBlockedCount = policyCounts.xrayBlocked
+			result.Operations.OrgPolicyFailCount = policyCounts.orgPolicyFailed
 		}
 
 		// Severity totals across scans with finalized findings.
@@ -107,7 +116,12 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		// Attention scans back the dashboard triage list and are broader than the
 		// compact recent-scans list.
 		attentionQuery := db.NewSelect().Model(&result.AttentionScans).
-			Where("(status = ? OR status IN (?))", models.ScanStatusFailed, bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
+			Where(
+				"(status = ? OR status IN (?) OR external_status = ?)",
+				models.ScanStatusFailed,
+				bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning}),
+				models.ScanExternalStatusBlockedByXrayPolicy,
+			).
 			OrderExpr("created_at DESC").
 			Limit(dashboardAttentionScanLimit)
 		attentionQuery = authz.ApplyOwnershipVisibility(attentionQuery, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
@@ -160,7 +174,7 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 }
 
 func isBlockedByXrayPolicyStatus(status, externalStatus string) bool {
-	return status == models.ScanStatusFailed && externalStatus == models.ScanExternalStatusBlockedByXrayPolicy
+	return externalStatus == models.ScanExternalStatusBlockedByXrayPolicy
 }
 
 func countsTowardDashboardFindings(status, externalStatus string) bool {
@@ -199,4 +213,91 @@ func topImages(c *gin.Context, ctx context.Context, db *bun.DB, userID uuid.UUID
 		result[i] = topImage{ImageName: r.ImageName, Count: r.Count}
 	}
 	return result
+}
+
+type dashboardPolicyIssueCounts struct {
+	total           int
+	xrayBlocked     int
+	orgPolicyFailed int
+}
+
+func loadPolicyIssueCounts(c *gin.Context, ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) (dashboardPolicyIssueCounts, error) {
+	result := dashboardPolicyIssueCounts{}
+	issueScanIDs := make(map[uuid.UUID]struct{})
+
+	var xrayBlockedScanIDs []uuid.UUID
+	xrayBlockedQuery := db.NewSelect().
+		TableExpr("scans").
+		Column("id").
+		Where("id IN (?)", latestVisibleScanIDsQuery(c, db, userID, isAdmin, accessibleOrgIDs, "latest_policy_scan")).
+		Where("external_status = ?", models.ScanExternalStatusBlockedByXrayPolicy)
+	xrayBlockedQuery = authz.ApplyOwnershipVisibility(xrayBlockedQuery, "", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+	xrayBlockedQuery = authz.ApplyWorkspaceScope(c, xrayBlockedQuery, "", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
+	if err := xrayBlockedQuery.Scan(ctx, &xrayBlockedScanIDs); err != nil {
+		return result, err
+	}
+	result.xrayBlocked = len(xrayBlockedScanIDs)
+	for _, scanID := range xrayBlockedScanIDs {
+		issueScanIDs[scanID] = struct{}{}
+	}
+
+	var orgPolicyFailedScanIDs []uuid.UUID
+	orgPolicyQuery := db.NewSelect().
+		TableExpr("compliance_results AS cr").
+		ColumnExpr("DISTINCT cr.scan_id").
+		Join("JOIN scans AS s ON s.id = cr.scan_id").
+		Where("cr.scan_id IN (?)", latestVisibleScanIDsQuery(c, db, userID, isAdmin, accessibleOrgIDs, "latest_policy_scan")).
+		Where("cr.status = ?", "fail")
+	orgPolicyQuery = authz.ApplyOwnershipVisibility(orgPolicyQuery, "s", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+	orgPolicyQuery = authz.ApplyWorkspaceScope(c, orgPolicyQuery, "s", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
+	if !isAdmin {
+		if len(accessibleOrgIDs) == 0 {
+			result.total = len(issueScanIDs)
+			return result, nil
+		}
+		orgPolicyQuery = orgPolicyQuery.Where("cr.org_id IN (?)", bun.In(accessibleOrgIDs))
+	}
+	if orgID, scoped := scopedOrgID(c.Query("scope")); scoped {
+		orgPolicyQuery = orgPolicyQuery.Where("cr.org_id = ?", orgID)
+	}
+	if err := orgPolicyQuery.Scan(ctx, &orgPolicyFailedScanIDs); err != nil {
+		return result, err
+	}
+	result.orgPolicyFailed = len(orgPolicyFailedScanIDs)
+	for _, scanID := range orgPolicyFailedScanIDs {
+		issueScanIDs[scanID] = struct{}{}
+	}
+
+	result.total = len(issueScanIDs)
+	return result, nil
+}
+
+func latestVisibleScanIDsQuery(c *gin.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, alias string) *bun.SelectQuery {
+	q := db.NewSelect().
+		TableExpr("scans AS " + alias).
+		ColumnExpr(
+			"DISTINCT ON (" + alias + ".image_name, " + alias + ".image_tag, COALESCE(" + alias + ".platform, ''), " + alias + ".owner_type, COALESCE(" + alias + ".owner_user_id::text, ''), COALESCE(" + alias + ".owner_org_id::text, '')) " + alias + ".id",
+		).
+		OrderExpr(
+			alias + ".image_name, " +
+				alias + ".image_tag, " +
+				"COALESCE(" + alias + ".platform, ''), " +
+				alias + ".owner_type, " +
+				"COALESCE(" + alias + ".owner_user_id::text, ''), " +
+				"COALESCE(" + alias + ".owner_org_id::text, ''), " +
+				alias + ".created_at DESC, " +
+				alias + ".id DESC",
+		)
+	q = authz.ApplyOwnershipVisibility(q, alias, "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+	q = authz.ApplyWorkspaceScope(c, q, alias, "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
+	return q
+}
+
+func scopedOrgID(scope string) (uuid.UUID, bool) {
+	trimmed := strings.TrimSpace(scope)
+	if trimmed == "" || strings.EqualFold(trimmed, "personal") {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(trimmed)
+	return id, err == nil
 }

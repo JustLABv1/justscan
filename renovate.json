@@ -51,8 +51,6 @@
 
   "ignoreDeps": ["eslint"],
 
-  "schedule": ["before 5am every weekday"],
-
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2
 }

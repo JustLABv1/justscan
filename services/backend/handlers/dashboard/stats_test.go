@@ -10,8 +10,11 @@ func TestIsBlockedByXrayPolicyStatus(t *testing.T) {
 	if !isBlockedByXrayPolicyStatus(models.ScanStatusFailed, models.ScanExternalStatusBlockedByXrayPolicy) {
 		t.Fatal("expected blocked xray policy status to be detected")
 	}
-	if isBlockedByXrayPolicyStatus(models.ScanStatusRunning, models.ScanExternalStatusBlockedByXrayPolicy) {
-		t.Fatal("did not expect non-failed scans to be treated as blocked by policy")
+	if !isBlockedByXrayPolicyStatus(models.ScanStatusCompleted, models.ScanExternalStatusBlockedByXrayPolicy) {
+		t.Fatal("expected external blocked status to count even when scan status is completed")
+	}
+	if isBlockedByXrayPolicyStatus(models.ScanStatusFailed, models.ScanStatusFailed) {
+		t.Fatal("did not expect generic failures to be treated as blocked by policy")
 	}
 }
 
@@ -25,8 +28,8 @@ func TestCountsTowardDashboardFindings(t *testing.T) {
 	if countsTowardDashboardFindings(models.ScanStatusFailed, models.ScanStatusFailed) {
 		t.Fatal("did not expect generic failures to count toward dashboard findings")
 	}
-	if countsTowardDashboardFindings(models.ScanStatusRunning, models.ScanExternalStatusBlockedByXrayPolicy) {
-		t.Fatal("did not expect running scans to count toward dashboard findings")
+	if !countsTowardDashboardFindings(models.ScanStatusCompleted, models.ScanExternalStatusBlockedByXrayPolicy) {
+		t.Fatal("expected completed policy-blocked scans to count toward dashboard findings")
 	}
 }
 

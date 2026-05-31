@@ -18,6 +18,7 @@ import {
 import {
   Avatar,
   Badge,
+  Breadcrumbs,
   Button,
   Card,
   Chip,
@@ -36,6 +37,8 @@ import {
   AiContentGenerator01Icon,
   ArrowDown01Icon,
   Building04Icon,
+  BookOpen01Icon,
+  Clock01Icon,
   DashboardSquare01Icon,
   EyeIcon,
   FileExportIcon,
@@ -79,32 +82,34 @@ import { BreadcrumbItem, PageHeaderConfig, PageHeaderContext } from '@/component
 
 const navGroups = [
   {
-    label: 'Primary',
+    label: 'Overview',
     items: [
       { href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon },
+      { href: '/watchlist', label: 'Watchlist', Icon: Clock01Icon },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
       { href: '/triage', label: 'Triage', Icon: ShieldKeyIcon },
-      { href: '/assistant', label: 'Assistant', Icon: AiContentGenerator01Icon },
       { href: '/scans', label: 'Scans', Icon: Shield01Icon },
-    ],
-  },
-  {
-    label: 'Scanning',
-    items: [
       { href: '/helm', label: 'Helm Scan', Icon: PackageIcon },
-      { href: '/watchlist', label: 'Watchlist', Icon: AiContentGenerator01Icon },
     ],
   },
   {
-    label: 'Security',
+    label: 'Knowledge',
     items: [
-      { href: '/vulnkb', label: 'Vuln KB', Icon: ShieldKeyIcon },
+      { href: '/vulnkb', label: 'Vuln KB', Icon: BookOpen01Icon },
       { href: '/suppressions', label: 'Suppressions', Icon: GridTableIcon },
     ],
   },
   {
-    label: 'Manage',
+    label: 'Publishing',
+    items: [{ href: '/status', label: 'Status Pages', Icon: EyeIcon }],
+  },
+  {
+    label: 'Configuration',
     items: [
-      { href: '/status', label: 'Status Pages', Icon: EyeIcon },
       { href: '/registries', label: 'Registries', Icon: ServerStack01Icon },
       { href: '/tags', label: 'Tags', Icon: Tag01Icon },
       { href: '/orgs', label: 'Organizations', Icon: Building04Icon },
@@ -198,7 +203,7 @@ function SidebarNavLink({
       aria-label={iconOnly ? itemLabel : undefined}
       className={
         iconOnly
-          ? `group relative flex h-10 w-full items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`
+          ? `group relative flex h-10 w-full items-center justify-center rounded-2xl text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`
           : `group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${isMobile ? 'p-3' : 'overflow-hidden px-3 py-2.5 whitespace-nowrap'} ${active ? '' : 'text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100'}`
       }
       onClick={onNavigate}
@@ -523,6 +528,8 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
       : 'Switch to dark mode';
   const scopeLabel =
     workScope.kind === 'org' ? (workScope.orgName ?? 'Organization') : 'Personal workspace';
+  const workspaceTriggerLabel =
+    workScope.kind === 'org' ? (workScope.orgName ?? 'Organization') : 'Personal';
   const workspaceTitle = `Workspace: ${scopeLabel}`;
   const workspaceInitial = scopeLabel.trim().charAt(0).toUpperCase() || 'W';
   type WorkspaceAvatarColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
@@ -538,14 +545,10 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     workScope.kind === 'org' ? (workScope.orgName ?? workScope.orgId) : 'personal'
   );
   const desktopCollapsed = collapsed;
-  const filteredNavGroups = navGroups.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => item.href !== '/assistant' || aiEnabled !== false),
-  }));
   const navigationGroups = [
-    ...filteredNavGroups,
+    ...navGroups,
     ...(user?.role === 'admin'
-      ? [{ label: 'System', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
+      ? [{ label: 'Admin', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
       : []),
   ];
   const navItems = navigationGroups.flatMap((group) =>
@@ -554,6 +557,49 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const topbarHeader = pageHeader ?? resolveFallbackHeader(pathname, navItems);
   const contentRailClass = 'px-4 md:px-6';
   const pageHeaderContextValue = useMemo(() => ({ setHeader: setPageHeader }), []);
+
+  function renderWorkspaceMenu(onSelected?: () => void) {
+    return (
+      <Dropdown.Menu
+        onAction={(key) => {
+          handleScopeChange(key as string);
+          onSelected?.();
+        }}
+        selectionMode="single"
+        selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
+      >
+        <Dropdown.Item id="personal" textValue="Personal workspace">
+          <div className="flex items-center gap-2">
+            <Avatar className="size-6 rounded-lg" color="default" variant="soft">
+              <Avatar.Fallback>P</Avatar.Fallback>
+            </Avatar>
+            <Label>Personal workspace</Label>
+          </div>
+        </Dropdown.Item>
+        {orgs.length > 0 ? (
+          <Dropdown.Section>
+            <Header>Organizations</Header>
+            {orgs.map((org) => (
+              <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
+                <div className="flex items-center gap-2">
+                  <Avatar
+                    className="size-6 rounded-lg"
+                    color={workspaceColorFor('org', org.name)}
+                    variant="soft"
+                  >
+                    <Avatar.Fallback>
+                      {org.name.trim().charAt(0).toUpperCase() || 'O'}
+                    </Avatar.Fallback>
+                  </Avatar>
+                  <Label>{org.name}</Label>
+                </div>
+              </Dropdown.Item>
+            ))}
+          </Dropdown.Section>
+        ) : null}
+      </Dropdown.Menu>
+    );
+  }
 
   return (
     <WorkspaceTourProvider
@@ -567,7 +613,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
           <div id="tour-main-shell" className="flex h-dvh app-bg overflow-hidden">
             <Card
               className={`relative hidden rounded-none rounded-br-3xl bg-surface md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
-                desktopCollapsed ? 'w-[68px]' : 'w-72'
+                desktopCollapsed ? 'w-[76px]' : 'w-72'
               }`}
               style={{
                 border: 'none',
@@ -577,95 +623,9 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               <div className="absolute -top-10 -left-10 size-40 rounded-full pointer-events-none" />
               <div className="absolute inset-x-0 top-0 h-px pointer-events-none" />
 
-              <div id="tour-workspace-section" className="shrink-0 px-2 pb-1 pt-2">
-                <Dropdown>
-                  <Dropdown.Trigger
-                    id="tour-workspace-switcher"
-                    className={`group w-full flex items-center rounded-xl transition-all duration-150 outline-none ${desktopCollapsed ? 'justify-center py-1.5' : 'gap-2 px-2 py-1.5'}`}
-                    style={{
-                      background: desktopCollapsed
-                        ? undefined
-                        : 'linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, transparent) 0%, color-mix(in oklab, var(--accent) 5%, transparent) 100%)',
-                      border: desktopCollapsed
-                        ? 'none'
-                        : '1px solid color-mix(in oklab, var(--accent) 24%, transparent)',
-                      boxShadow: desktopCollapsed ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.05)',
-                    }}
-                    aria-label={workspaceTitle}
-                  >
-                    <div
-                      className="relative shrink-0"
-                      title={desktopCollapsed ? workspaceTitle : undefined}
-                    >
-                      <Avatar
-                        className="size-7 rounded-lg"
-                        color={activeWorkspaceColor}
-                        variant="soft"
-                      >
-                        <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
-                      </Avatar>
-                    </div>
-                    {!desktopCollapsed ? (
-                      <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                        <p className="min-w-0 flex-1 truncate text-sm font-medium tracking-tight text-zinc-700 dark:text-zinc-100">
-                          {scopeLabel}
-                        </p>
-                        <ArrowDown01Icon
-                          size={14}
-                          className="shrink-0 text-zinc-500 transition-transform duration-150 group-data-[pressed=true]:translate-y-[1px]"
-                        />
-                      </div>
-                    ) : null}
-                  </Dropdown.Trigger>
-
-                  <Dropdown.Popover
-                    className="min-w-[220px]"
-                    placement={desktopCollapsed ? 'right top' : 'bottom start'}
-                  >
-                    <Dropdown.Menu
-                      onAction={(key) => handleScopeChange(key as string)}
-                      selectionMode="single"
-                      selectedKeys={
-                        new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])
-                      }
-                    >
-                      <Dropdown.Item id="personal" textValue="Personal workspace">
-                        <div className="flex items-center gap-2">
-                          <Avatar className="size-6 rounded-lg" color="default" variant="soft">
-                            <Avatar.Fallback>P</Avatar.Fallback>
-                          </Avatar>
-                          <Label>Personal workspace</Label>
-                        </div>
-                      </Dropdown.Item>
-                      {orgs.length > 0 && (
-                        <Dropdown.Section>
-                          <Header>Organizations</Header>
-                          {orgs.map((org) => (
-                            <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
-                              <div className="flex items-center gap-2">
-                                <Avatar
-                                  className="size-6 rounded-lg"
-                                  color={workspaceColorFor('org', org.name)}
-                                  variant="soft"
-                                >
-                                  <Avatar.Fallback>
-                                    {org.name.trim().charAt(0).toUpperCase() || 'O'}
-                                  </Avatar.Fallback>
-                                </Avatar>
-                                <Label>{org.name}</Label>
-                              </div>
-                            </Dropdown.Item>
-                          ))}
-                        </Dropdown.Section>
-                      )}
-                    </Dropdown.Menu>
-                  </Dropdown.Popover>
-                </Dropdown>
-              </div>
-
               <nav
                 id="tour-primary-navigation"
-                className={`flex-1 overflow-y-auto overflow-x-hidden pb-2 pt-1.5${desktopCollapsed ? '' : ' px-2'}`}
+                className={`flex-1 overflow-y-auto overflow-x-hidden pb-2 pt-3 ${desktopCollapsed ? 'px-1' : 'px-2'}`}
               >
                 {navigationGroups.map(({ label, items }) => (
                   <div
@@ -701,14 +661,14 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                   <Button
                                     aria-current={active ? 'page' : undefined}
                                     aria-label={itemLabel}
-                                    className={`group relative h-10 w-full rounded-xl ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                                    className={`group relative h-10 w-full rounded-2xl ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
                                     isIconOnly
                                     style={active ? activeNavStyle : undefined}
                                     variant="ghost"
                                   >
                                     {!active && (
                                       <span
-                                        className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                                        className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
                                         style={{ background: 'var(--row-hover)' }}
                                       />
                                     )}
@@ -887,53 +847,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                 />
                               </Dropdown.Trigger>
                               <Dropdown.Popover className="w-[min(80vw,300px)]">
-                                <Dropdown.Menu
-                                  onAction={(key) => handleScopeChange(key as string)}
-                                  selectionMode="single"
-                                  selectedKeys={
-                                    new Set([
-                                      workScope.kind === 'org' ? workScope.orgId : 'personal',
-                                    ])
-                                  }
-                                >
-                                  <Dropdown.Item id="personal" textValue="Personal workspace">
-                                    <div className="flex items-center gap-2">
-                                      <Avatar
-                                        className="size-6 rounded-lg"
-                                        color="default"
-                                        variant="soft"
-                                      >
-                                        <Avatar.Fallback>P</Avatar.Fallback>
-                                      </Avatar>
-                                      <Label>Personal workspace</Label>
-                                    </div>
-                                  </Dropdown.Item>
-                                  {orgs.length > 0 && (
-                                    <Dropdown.Section>
-                                      <Header>Organizations</Header>
-                                      {orgs.map((org) => (
-                                        <Dropdown.Item
-                                          key={org.id}
-                                          id={org.id}
-                                          textValue={org.name}
-                                        >
-                                          <div className="flex items-center gap-2">
-                                            <Avatar
-                                              className="size-6 rounded-lg"
-                                              color={workspaceColorFor('org', org.name)}
-                                              variant="soft"
-                                            >
-                                              <Avatar.Fallback>
-                                                {org.name.trim().charAt(0).toUpperCase() || 'O'}
-                                              </Avatar.Fallback>
-                                            </Avatar>
-                                            <Label>{org.name}</Label>
-                                          </div>
-                                        </Dropdown.Item>
-                                      ))}
-                                    </Dropdown.Section>
-                                  )}
-                                </Dropdown.Menu>
+                                {renderWorkspaceMenu(() => mobileNav.close())}
                               </Dropdown.Popover>
                             </Dropdown>
 
@@ -1117,12 +1031,40 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     </Drawer.Content>
                   </Drawer.Backdrop>
                 </Drawer>
+                <div id="tour-workspace-section" className="hidden min-w-0 md:flex md:flex-1 md:items-center">
+                  <Dropdown>
+                    <Dropdown.Trigger id="tour-workspace-switcher">
+                      <Button
+                        aria-label={workspaceTitle}
+                        className="h-9 max-w-[180px] justify-between gap-1.5 rounded-full px-2 text-zinc-700 dark:text-zinc-200"
+                        variant="tertiary"
+                      >
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <Avatar
+                            className="size-5 shrink-0 rounded-full"
+                            color={activeWorkspaceColor}
+                            variant="soft"
+                          >
+                            <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
+                          </Avatar>
+                          <span className="min-w-0 truncate text-sm font-medium text-current">
+                            {workspaceTriggerLabel}
+                          </span>
+                        </div>
+                        <ArrowDown01Icon size={12} className="shrink-0 text-zinc-500" />
+                      </Button>
+                    </Dropdown.Trigger>
+                    <Dropdown.Popover className="min-w-[240px]" placement="bottom start">
+                      {renderWorkspaceMenu()}
+                    </Dropdown.Popover>
+                  </Dropdown>
+                </div>
                 <div
                   id="tour-topbar-actions"
                   className="ml-auto flex shrink-0 items-center gap-1.5"
                 >
                   <Button
-                    aria-label="Open search"
+                    aria-label="Open command palette"
                     className="rounded-full text-zinc-700 dark:text-zinc-200 md:hidden"
                     isIconOnly
                     onPress={() => setSearchOpen(true)}
@@ -1138,7 +1080,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                   >
                     <div className="flex items-center gap-2">
                       <Search01Icon size={14} />
-                      <Label className="inline-flex">Search...</Label>
+                      <Label className="inline-flex">Go to or search...</Label>
                     </div>
                     <Kbd>
                       <Kbd.Abbr keyValue="command" />
@@ -1217,7 +1159,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                   isAssistantRoute ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
                 }`}
               >
-                {!isAssistantRoute ? (
+                {!isAssistantRoute && !topbarHeader.hidden ? (
                   <div className={`border-b border-white/5 py-1.5 md:py-2 ${contentRailClass}`}>
                     <div
                       id="tour-page-header"
@@ -1234,45 +1176,25 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                           </Typography.Paragraph>
                         ) : null}
                         {topbarHeader.breadcrumbs && topbarHeader.breadcrumbs.length > 1 ? (
-                          <nav
-                            aria-label="Breadcrumb"
-                            className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-medium"
-                          >
+                          <Breadcrumbs className="mt-1 gap-1 text-[11px] font-medium">
                             {topbarHeader.breadcrumbs.map((item, index) => {
                               const isCurrent = index === topbarHeader.breadcrumbs!.length - 1;
 
                               return (
-                                <span
+                                <Breadcrumbs.Item
                                   key={`${item.label}-${index}`}
-                                  className="inline-flex items-center gap-1.5"
+                                  className={
+                                    isCurrent
+                                      ? 'text-default-600'
+                                      : 'text-default-500 hover:text-foreground'
+                                  }
+                                  href={!isCurrent ? item.href : undefined}
                                 >
-                                  {item.href && !isCurrent ? (
-                                    <Link
-                                      href={item.href}
-                                      className="transition-colors hover:text-zinc-900 dark:hover:text-white"
-                                      style={{ color: 'var(--text-faint)' }}
-                                    >
-                                      {item.label}
-                                    </Link>
-                                  ) : (
-                                    <span
-                                      aria-current={isCurrent ? 'page' : undefined}
-                                      style={{
-                                        color: isCurrent
-                                          ? 'var(--text-muted)'
-                                          : 'var(--text-faint)',
-                                      }}
-                                    >
-                                      {item.label}
-                                    </span>
-                                  )}
-                                  {!isCurrent ? (
-                                    <span style={{ color: 'var(--text-faint)' }}>/</span>
-                                  ) : null}
-                                </span>
+                                  {item.label}
+                                </Breadcrumbs.Item>
                               );
                             })}
-                          </nav>
+                          </Breadcrumbs>
                         ) : null}
                       </div>
 

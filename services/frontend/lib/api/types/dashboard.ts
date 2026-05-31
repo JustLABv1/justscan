@@ -13,6 +13,8 @@ export interface DashboardStats {
 
 export interface DashboardOperations {
   blocked_policy_count: number;
+  xray_blocked_count: number;
+  org_policy_fail_count: number;
   active_xray_count: number;
   active_xray_step_counts: Record<string, number>;
   active_xray_scans: Scan[] | null;

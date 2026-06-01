@@ -26,8 +26,19 @@ import {
   timeAgo,
   updateHelmPublicHistoryEntry,
 } from '@/lib/publicScanHistory';
-import { Button, Chip, Input, Label, Table } from '@heroui/react';
+import {
+  Button,
+  Card,
+  Chip,
+  Disclosure,
+  Input,
+  Table,
+  ToggleButton,
+  ToggleButtonGroup,
+  type Key,
+} from '@heroui/react';
 import { ArrowRight01Icon, IrisScanIcon, LinkSquare02Icon } from 'hugeicons-react';
+import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -39,6 +50,7 @@ const PLATFORMS = [
   { value: 'linux/arm/v7', label: 'linux/arm/v7' },
   { value: 'windows/amd64', label: 'windows/amd64' },
 ];
+const HISTORY_DISPLAY_LIMIT = 5;
 
 type Step = 'form' | 'extracting' | 'review' | 'scanning';
 
@@ -72,6 +84,101 @@ function toRunHistoryEntry(detail: {
     low_count: latestScans.reduce((sum, scan) => sum + (scan.low_count ?? 0), 0),
     created_at: detail.run.created_at,
   };
+}
+
+function HelmHistoryDisclosure({
+  history,
+  onOpenRun,
+}: {
+  history: PublicHelmRunHistoryEntry[];
+  onOpenRun: (run: PublicHelmRunHistoryEntry) => void;
+}) {
+  return (
+    <Card className="border border-divider/60 bg-surface/40 p-2 shadow-sm backdrop-blur">
+      <Disclosure className="rounded-[1.5rem]">
+        <Disclosure.Heading>
+          <Disclosure.Trigger className="flex w-full items-center justify-between gap-4 rounded-[1.25rem] px-4 py-3 text-left transition-colors hover:bg-background/45">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Recent Helm runs on this device</p>
+              <p className="mt-1 text-xs text-muted">
+                {history.length} saved locally. Reopen a run without crowding the main flow.
+              </p>
+            </div>
+            <Disclosure.Indicator />
+          </Disclosure.Trigger>
+        </Disclosure.Heading>
+        <Disclosure.Content>
+          <Disclosure.Body className="space-y-3 px-2 pb-2 pt-3">
+            <div className="grid gap-3">
+              {history.slice(0, HISTORY_DISPLAY_LIMIT).map((run) => {
+                const displayUrl = run.chart_url.replace(/^oci:\/\//, '');
+                const isGroupOCI = run.chart_url.startsWith('oci://');
+
+                return (
+                  <Card
+                    key={run.id}
+                    className="border border-divider/50 bg-background/55 transition-colors hover:border-accent/30 hover:bg-background/75"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onOpenRun(run)}
+                      className="flex w-full items-start justify-between gap-3 p-4 text-left"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="min-w-0 flex-1 truncate font-mono text-sm font-medium text-foreground">
+                            {displayUrl}
+                          </p>
+                          <Chip color="accent" size="sm" variant="soft">
+                            {isGroupOCI ? 'OCI' : 'HTTP'}
+                          </Chip>
+                          {run.chart_version ? (
+                            <Chip size="sm" variant="soft">
+                              v{run.chart_version}
+                            </Chip>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+                          <span>
+                            {run.completed_images + run.failed_images}/{run.total_images} scanned
+                          </span>
+                          {run.critical_count > 0 ? (
+                            <Chip color="danger" size="sm" variant="soft">
+                              {run.critical_count} critical
+                            </Chip>
+                          ) : null}
+                          {run.high_count > 0 ? (
+                            <Chip color="warning" size="sm" variant="soft">
+                              {run.high_count} high
+                            </Chip>
+                          ) : null}
+                          {run.critical_count === 0 &&
+                          run.high_count === 0 &&
+                          run.completed_images > 0 &&
+                          run.active_images === 0 &&
+                          run.failed_images === 0 ? (
+                            <Chip color="success" size="sm" variant="soft">
+                              Clean
+                            </Chip>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-2 text-xs text-muted">
+                        <span>{timeAgo(run.created_at)}</span>
+                        <ArrowRight01Icon aria-hidden size={14} className="hidden sm:block" />
+                      </div>
+                    </button>
+                  </Card>
+                );
+              })}
+            </div>
+          </Disclosure.Body>
+        </Disclosure.Content>
+      </Disclosure>
+    </Card>
+  );
 }
 
 export default function PublicHelmScanPage() {
@@ -262,343 +369,238 @@ export default function PublicHelmScanPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex flex-col"
-      style={{ background: 'var(--app-bg)', color: 'var(--text-primary)' }}
-    >
-      {/* Animated background */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <style>{`
-          @keyframes helmGridDrift {
-            0%   { background-position: 0 0; }
-            100% { background-position: 40px 40px; }
-          }
-          @keyframes helmSweepBeam {
-            0%   { transform: translateY(-100vh); opacity: 0; }
-            5%   { opacity: 1; }
-            95%  { opacity: 1; }
-            100% { transform: translateY(100vh); opacity: 0; }
-          }
-        `}</style>
-        <div
-          className="absolute -top-32 left-1/2 -translate-x-1/2 size-[600px] rounded-full"
-          style={{
-            background: isDark
-              ? 'radial-gradient(circle, color-mix(in srgb, var(--accent) 15%, transparent) 0%, transparent 65%)'
-              : 'radial-gradient(circle, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 65%)',
-          }}
-        />
-        <div
-          className="absolute bottom-0 left-1/4 size-[400px] rounded-full"
-          style={{
-            background: isDark
-              ? 'radial-gradient(circle, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 65%)'
-              : 'radial-gradient(circle, color-mix(in srgb, var(--accent) 5%, transparent) 0%, transparent 65%)',
-          }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: isDark
-              ? 'radial-gradient(circle, color-mix(in srgb, var(--accent) 10%, transparent) 1px, transparent 1px)'
-              : 'radial-gradient(circle, color-mix(in srgb, var(--accent) 6%, transparent) 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
-            animation: 'helmGridDrift 16s linear infinite',
-          }}
-        />
-        <div
-          className="absolute inset-x-0 h-px"
-          style={{
-            background: isDark
-              ? 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 30%, transparent), color-mix(in srgb, var(--accent) 40%, transparent), color-mix(in srgb, var(--accent) 30%, transparent), transparent)'
-              : 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 15%, transparent), color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 15%, transparent), transparent)',
-            animation: 'helmSweepBeam 11s ease-in-out infinite',
-            animationDelay: '2s',
-            top: 0,
-          }}
-        />
-      </div>
-
-      <PublicNavbar
-        isDark={isDark}
-        isLoggedIn={isLoggedIn}
-        onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
-        alternateAction={{
-          href: '/public/scan/image',
-          label: 'Scan Image',
-          icon: <IrisScanIcon size={16} />,
-          hideOnMobile: true,
+    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: isDark
+            ? 'linear-gradient(180deg, color-mix(in srgb, var(--background) 92%, #07111b) 0%, var(--background) 42%, color-mix(in srgb, var(--background) 96%, #05070c) 100%)'
+            : 'linear-gradient(180deg, color-mix(in srgb, var(--background) 88%, #f4f8fd) 0%, var(--background) 42%, color-mix(in srgb, var(--background) 94%, #eef4fa) 100%)',
         }}
       />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.55] dark:opacity-[0.42]"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 34%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px)',
+          backgroundPosition: 'center top, center top, center top',
+          backgroundSize: '24px 24px, 24px 24px, 24px 24px',
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: isDark
+            ? 'radial-gradient(circle at 50% 10%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 26%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 24%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 22%)'
+            : 'radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 22%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 18%)',
+        }}
+      />
+      <section className="relative z-10 overflow-hidden">
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: isDark
+              ? 'linear-gradient(180deg, color-mix(in srgb, var(--background) 82%, #05111c) 0%, color-mix(in srgb, var(--background) 50%, transparent) 72%, transparent 100%)'
+              : 'linear-gradient(180deg, color-mix(in srgb, var(--background) 76%, #edf7ff) 0%, color-mix(in srgb, var(--background) 44%, transparent) 72%, transparent 100%)',
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-45"
+          style={{
+            background:
+              'radial-gradient(circle at 64% 48%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 28%)',
+          }}
+        />
 
-      <main className="relative z-10 flex-1 flex flex-col items-center px-4 py-12">
+        <PublicNavbar
+          isDark={isDark}
+          isLoggedIn={isLoggedIn}
+          onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
+          alternateAction={{
+            href: '/public/scan/image',
+            label: 'Scan Image',
+            icon: <IrisScanIcon size={16} />,
+            hideOnMobile: true,
+          }}
+        />
+
+        <main className="relative z-10 flex-1 flex flex-col items-center px-4 py-12">
         <div
           className={`w-full space-y-8 my-auto ${
             step === 'review' || step === 'scanning' ? 'max-w-5xl' : 'max-w-2xl'
           }`}
         >
-          {/* Hero */}
-          <div className="text-center space-y-3">
+          <div className="text-center space-y-4">
             <div className="flex justify-center">
-              <Logo size={48} className="text-white" />
+              <Logo size={40} />
             </div>
-            <div>
-              <h1
-                className="text-3xl sm:text-4xl font-bold tracking-tight"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                Scan Helm chart{' '}
-                <span
-                  style={{
-                    background:
-                      'linear-gradient(135deg, color-mix(in srgb, var(--accent) 55%, white), var(--accent))',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                  }}
-                >
-                  images
-                </span>
+            <div className="mt-5">
+              <Chip color="accent" variant="soft">
+                Public Helm scanning
+              </Chip>
+            </div>
+            <div className="space-y-4">
+              <h1 className="text-4xl font-semibold leading-tight tracking-normal text-foreground sm:text-5xl">
+                Scan Helm chart images instantly.
               </h1>
-              <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                Extract all container images from your Helm chart and scan them for CVEs · No
-                account needed
+              <p className="mx-auto max-w-xl text-sm leading-7 text-muted sm:text-base">
+                Extract image references from a public chart, review what will be scanned, and run
+                the check without needing an account first.
               </p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-muted">
+              <span>{settings?.rate_limit_per_hour ?? 5} free scans per hour</span>
+              <span>Review extracted images first</span>
+              <span>Local recent runs</span>
             </div>
           </div>
 
-          {/* Step 1 - Chart URL form */}
           {(step === 'form' || step === 'extracting') && isDisabled && (
-            <div
-              className="rounded-2xl px-6 py-5 text-center"
-              style={{
-                background: 'rgba(239,68,68,0.08)',
-                border: '1px solid rgba(239,68,68,0.2)',
-              }}
-            >
-              <p className="text-red-500 dark:text-red-400 font-medium">
-                Public Helm scanning is temporarily disabled
-              </p>
-              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-                {disabledMessage}
-              </p>
-            </div>
+            <Card className="rounded-[2rem] border border-divider/60 bg-surface/50 px-5 py-5 text-center shadow-sm backdrop-blur sm:px-6 sm:py-6">
+              <div
+                className="rounded-[1.25rem] px-6 py-5"
+                style={{
+                  background: 'rgba(239,68,68,0.08)',
+                  border: '1px solid rgba(239,68,68,0.2)',
+                }}
+              >
+                <p className="font-medium text-red-500 dark:text-red-400">
+                  Public Helm scanning is temporarily disabled
+                </p>
+                <p className="mt-1 text-sm text-muted">{disabledMessage}</p>
+              </div>
+            </Card>
           )}
 
           {(step === 'form' || step === 'extracting') && !isDisabled && (
-            <form onSubmit={handleExtract} className="space-y-3">
-              {/* Chart URL */}
-              <div>
-                <Label>Chart URL</Label>
-                <div className="flex items-center gap-2 p-2">
-                  <div className="pl-2 shrink-0" style={{ color: 'var(--text-faint)' }}>
-                    <LinkSquare02Icon size={16} />
+            <Card className="rounded-[2rem] border border-divider/60 bg-surface/50 px-5 py-5 shadow-sm backdrop-blur sm:px-6 sm:py-6">
+              <form onSubmit={handleExtract} className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Extract chart images</p>
+                    <p className="mt-1 text-sm text-muted">
+                      Paste a public chart source, review the discovered images, then scan.
+                    </p>
                   </div>
-                  <Input
-                    value={chartUrl}
-                    onChange={(e) => setChartUrl(e.target.value)}
-                    placeholder="oci://ghcr.io/org/chart:1.0  or  https://charts.example.com"
-                    disabled={step === 'extracting'}
-                    aria-label="Chart URL"
-                    variant="secondary"
-                    className="flex-1 text-sm font-mono"
-                  />
+                  <Link href="/public/scan/image" className="hidden sm:block">
+                    <Button size="sm" variant="tertiary">
+                      <IrisScanIcon size={16} />
+                      Scan image
+                    </Button>
+                  </Link>
                 </div>
-              </div>
 
-              {/* Chart name + version (only required for HTTP repositories, not OCI) */}
-              {!isOCI && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label
-                      className="block text-xs font-medium mb-1.5"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      Chart name <span className="text-red-400">*</span>
-                    </label>
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 rounded-[1.25rem] border border-divider/60 px-4 py-4">
+                    <div className="flex items-center gap-3 text-muted">
+                      <LinkSquare02Icon size={18} />
+                      <span className="text-xs font-medium uppercase tracking-[0.18em]">
+                        Chart URL
+                      </span>
+                    </div>
                     <Input
-                      value={chartName}
-                      onChange={(e) => setChartName(e.target.value)}
-                      placeholder="e.g. nginx"
+                      value={chartUrl}
+                      onChange={(e) => setChartUrl(e.target.value)}
+                      placeholder="oci://ghcr.io/org/chart:1.0  or  https://charts.example.com"
                       disabled={step === 'extracting'}
-                      aria-label="Chart name"
+                      aria-label="Chart URL"
                       variant="secondary"
-                      className="w-full text-sm"
+                      className="w-full text-sm font-mono"
                     />
                   </div>
-                  <div>
-                    <label
-                      className="block text-xs font-medium mb-1.5"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      Version <span style={{ color: 'var(--text-faint)' }}>(optional)</span>
-                    </label>
-                    <Input
-                      value={chartVersion}
-                      onChange={(e) => setChartVersion(e.target.value)}
-                      placeholder="e.g. 1.2.3"
-                      disabled={step === 'extracting'}
-                      aria-label="Chart version"
-                      variant="secondary"
-                      className="w-full text-sm"
-                    />
-                  </div>
-                </div>
-              )}
-              {isOCI && (
-                <div>
-                  <label
-                    className="block text-xs font-medium mb-1.5"
-                    style={{ color: 'var(--text-muted)' }}
+
+                  {!isOCI && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <p className="mb-1.5 text-xs font-medium text-muted">
+                          Chart name <span className="text-red-400">*</span>
+                        </p>
+                        <Input
+                          value={chartName}
+                          onChange={(e) => setChartName(e.target.value)}
+                          placeholder="e.g. nginx"
+                          disabled={step === 'extracting'}
+                          aria-label="Chart name"
+                          variant="secondary"
+                          className="w-full text-sm"
+                        />
+                      </div>
+                      <div>
+                        <p className="mb-1.5 text-xs font-medium text-muted">
+                          Version <span className="text-[var(--text-faint)]">(optional)</span>
+                        </p>
+                        <Input
+                          value={chartVersion}
+                          onChange={(e) => setChartVersion(e.target.value)}
+                          placeholder="e.g. 1.2.3"
+                          disabled={step === 'extracting'}
+                          aria-label="Chart version"
+                          variant="secondary"
+                          className="w-full text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {isOCI ? (
+                    <div>
+                      <p className="mb-1.5 text-xs font-medium text-muted">
+                        Version / tag{' '}
+                        <span className="text-[var(--text-faint)]">
+                          (optional - overrides tag in URL)
+                        </span>
+                      </p>
+                      <Input
+                        value={chartVersion}
+                        onChange={(e) => setChartVersion(e.target.value)}
+                        placeholder="e.g. 1.2.3"
+                        disabled={step === 'extracting'}
+                        aria-label="OCI chart version"
+                        variant="secondary"
+                        className="w-full text-sm font-mono"
+                      />
+                    </div>
+                  ) : null}
+
+                  {extractError && (
+                    <p className="text-sm text-red-500 dark:text-red-400">{extractError}</p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    fullWidth
+                    isDisabled={
+                      step === 'extracting' || !chartUrl.trim() || (!isOCI && !chartName.trim())
+                    }
+                    isPending={step === 'extracting'}
+                    size="lg"
                   >
-                    Version / tag{' '}
-                    <span style={{ color: 'var(--text-faint)' }}>
-                      (optional - overrides tag in URL)
-                    </span>
-                  </label>
-                  <Input
-                    value={chartVersion}
-                    onChange={(e) => setChartVersion(e.target.value)}
-                    placeholder="e.g. 1.2.3"
-                    disabled={step === 'extracting'}
-                    aria-label="OCI chart version"
-                    variant="secondary"
-                    className="w-full px-3 py-2.5 rounded-xl text-sm outline-none font-mono border border-[var(--surface-border)] shadow-none"
-                    style={{
-                      background: 'var(--surface-bg)',
-                      color: 'var(--text-primary)',
-                      caretColor: 'var(--accent)',
-                    }}
-                  />
+                    {step === 'extracting' ? 'Extracting images…' : 'Extract images'}
+                  </Button>
+
+                  <div className="flex flex-col gap-3 border-t border-divider/50 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-muted">
+                      Public charts only. Sign in later for saved history and shared workflows.
+                    </p>
+                    <Link href="/login">
+                      <Button size="sm" variant="secondary">
+                        Sign in
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
-              )}
-
-              {extractError && (
-                <p className="text-sm text-red-500 dark:text-red-400">{extractError}</p>
-              )}
-
-              <Button
-                type="submit"
-                isDisabled={
-                  step === 'extracting' || !chartUrl.trim() || (!isOCI && !chartName.trim())
-                }
-                className="w-full py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90"
-                style={{
-                  background:
-                    'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 80%, black))',
-                  boxShadow:
-                    '0 0 24px color-mix(in srgb, var(--accent) 35%, transparent), inset 0 1px 0 rgba(255,255,255,0.15)',
-                }}
-              >
-                {step === 'extracting' ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="size-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                    Extracting images…
-                  </span>
-                ) : (
-                  'Extract images →'
-                )}
-              </Button>
-
-              <p className="text-xs text-center" style={{ color: 'var(--text-faint)' }}>
-                {settings?.rate_limit_per_hour ?? 5} free scans per hour · Public charts only
-              </p>
-            </form>
+              </form>
+            </Card>
           )}
 
-          {/* Helm scan history - shown only on form step */}
           {(step === 'form' || step === 'extracting') && helmHistory.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
-                <span className="text-xs font-medium px-2" style={{ color: 'var(--text-faint)' }}>
-                  Recent scans
-                </span>
-                <div className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
-              </div>
-              <div
-                className="rounded-2xl overflow-hidden divide-y"
-                style={{
-                  background: 'var(--surface-bg)',
-                  border: '1px solid var(--surface-border)',
-                }}
-              >
-                {helmHistory.slice(0, 5).map((run) => {
-                  const displayUrl = run.chart_url.replace(/^oci:\/\//, '');
-                  const isGroupOCI = run.chart_url.startsWith('oci://');
-                  return (
-                    <button
-                      key={run.id}
-                      onClick={() => openRun(run)}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors group"
-                      style={{ borderTop: '1px solid var(--row-divider)' }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--row-hover)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p
-                          className="font-mono text-sm font-medium truncate"
-                          style={{ color: 'var(--text-primary)' }}
-                        >
-                          {displayUrl}
-                        </p>
-                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span
-                            className="text-xs px-1.5 py-0.5 rounded font-medium shrink-0"
-                            style={{
-                              background: isGroupOCI
-                                ? 'color-mix(in srgb, var(--accent) 10%, transparent)'
-                                : 'rgba(59,130,246,0.1)',
-                              color: isGroupOCI
-                                ? 'color-mix(in srgb, var(--accent) 55%, white)'
-                                : '#60a5fa',
-                            }}
-                          >
-                            {isGroupOCI ? 'OCI' : 'HTTP'}
-                          </span>
-                          {run.chart_version && (
-                            <span
-                              className="text-xs font-mono"
-                              style={{ color: 'var(--text-faint)' }}
-                            >
-                              v{run.chart_version}
-                            </span>
-                          )}
-                          <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
-                            {run.completed_images + run.failed_images}/{run.total_images} scanned ·{' '}
-                            {timeAgo(run.created_at)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="hidden sm:flex items-center gap-2 shrink-0 text-xs font-mono">
-                        {run.critical_count > 0 && (
-                          <span className="text-red-500">{run.critical_count}C</span>
-                        )}
-                        {run.high_count > 0 && (
-                          <span className="text-orange-500">{run.high_count}H</span>
-                        )}
-                        {run.critical_count === 0 &&
-                          run.high_count === 0 &&
-                          run.completed_images > 0 &&
-                          run.active_images === 0 &&
-                          run.failed_images === 0 && (
-                            <span className="text-emerald-600">Clean</span>
-                          )}
-                      </div>
-                      <ArrowRight01Icon
-                        size={14}
-                        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        style={{ color: 'var(--text-muted)' }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <HelmHistoryDisclosure history={helmHistory} onOpenRun={openRun} />
           )}
 
           {/* Step 2 - Review images */}
           {(step === 'review' || step === 'scanning') && (
-            <div className="space-y-4">
+            <Card className="rounded-[2rem] border border-divider/60 bg-surface/50 px-5 py-5 shadow-sm backdrop-blur sm:px-6 sm:py-6">
+              <div className="space-y-4">
               {/* Chart info */}
               <div className="flex items-center justify-between">
                 <div>
@@ -714,70 +716,71 @@ export default function PublicHelmScanPage() {
               </Table>
 
               {/* Platform & scan button */}
-              <div className="space-y-2">
+              <div className="space-y-3 border-t border-divider/50 pt-4">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
-                    Platform:
+                  <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted">
+                    Platform
                   </span>
-                  {PLATFORMS.map((p) => (
-                    <button
-                      key={p.value}
-                      type="button"
-                      onClick={() => setPlatform(p.value)}
-                      className="text-xs px-2.5 py-1 rounded-lg font-mono transition-all"
-                      style={
-                        platform === p.value
-                          ? {
-                              background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
-                              border:
-                                '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
-                              color: 'var(--accent)',
-                            }
-                          : {
-                              background: 'var(--row-hover)',
-                              border: '1px solid var(--border-subtle)',
-                              color: 'var(--text-muted)',
-                            }
-                      }
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+                  <span className="text-xs text-muted">Optional</span>
                 </div>
+                <ToggleButtonGroup
+                  selectionMode="single"
+                  selectedKeys={[platform || '__auto_platform__']}
+                  disallowEmptySelection
+                  onSelectionChange={(keys) => {
+                    const key = Array.from(keys)[0] as Key | undefined;
+                    const next = key ? String(key) : '__auto_platform__';
+                    setPlatform(next === '__auto_platform__' ? '' : next);
+                  }}
+                  size="sm"
+                  className="font-mono"
+                >
+                  {PLATFORMS.map((p, i) => (
+                    <ToggleButton
+                      key={p.value || '__auto_platform__'}
+                      id={p.value || '__auto_platform__'}
+                      className="text-xs"
+                    >
+                      {i > 0 ? <ToggleButtonGroup.Separator /> : null}
+                      {p.label}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
 
-                {scanError && <p className="text-sm text-red-500 dark:text-red-400">{scanError}</p>}
+                {scanError && (
+                  <p className="text-sm text-red-500 dark:text-red-400">{scanError}</p>
+                )}
 
                 <Button
                   onPress={handleScan}
                   isDisabled={selected.size === 0 || step === 'scanning' || hasInvalidSelection}
-                  className="w-full py-3 rounded-2xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:opacity-90"
-                  style={{
-                    background:
-                      'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 80%, black))',
-                    boxShadow: '0 0 24px color-mix(in srgb, var(--accent) 35%, transparent)',
-                  }}
+                  isPending={step === 'scanning'}
+                  fullWidth
+                  size="lg"
                 >
-                  {step === 'scanning' ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <span className="size-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                      Creating Helm run…
-                    </span>
-                  ) : (
-                    `Scan ${selected.size} image${selected.size !== 1 ? 's' : ''} →`
-                  )}
+                  {step === 'scanning'
+                    ? 'Creating Helm run…'
+                    : `Scan ${selected.size} image${selected.size !== 1 ? 's' : ''}`}
                 </Button>
               </div>
-            </div>
+              </div>
+            </Card>
           )}
         </div>
       </main>
 
-      <footer
-        className="relative z-10 text-center py-6 text-xs"
-        style={{ color: 'var(--text-faint)', borderTop: '1px solid var(--border-subtle)' }}
-      >
-        JustScan · Self-hosted image vulnerability scanner
-      </footer>
+        <footer className="relative z-10 px-6 pb-10">
+          <div className="mx-auto flex max-w-5xl flex-col gap-3 rounded-[2rem] border border-divider/50 bg-surface/35 px-6 py-5 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+            <p>JustScan keeps the public path fast, then grows with you when scans need to be shared.</p>
+            <Link href={isLoggedIn ? '/scans' : '/login'}>
+              <Button variant="secondary">
+                {isLoggedIn ? 'Open dashboard' : 'Create workspace'}
+                <ArrowRight01Icon aria-hidden size={16} />
+              </Button>
+            </Link>
+          </div>
+        </footer>
+      </section>
     </div>
   );
 }

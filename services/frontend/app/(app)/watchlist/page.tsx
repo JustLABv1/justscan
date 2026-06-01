@@ -1,6 +1,6 @@
 'use client';
-import { CollectionBadgeList } from '@/components/scans/collection-badge-list';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { CollectionBadgeList } from '@/components/scans/collection-badge-list';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -15,11 +15,11 @@ import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   Collection,
   createWatchlistItem,
-  listCollections,
   deleteWatchlistItem,
   getDefaultScannerCapabilities,
   getTokenType,
   getWorkScope,
+  listCollections,
   listRegistriesWithCapabilities,
   listWatchlist,
   listWatchlistShares,
@@ -58,7 +58,6 @@ import {
   useOverlayState,
 } from '@heroui/react';
 import {
-  ArrowRight01Icon,
   BiometricAccessIcon,
   Clock01Icon,
   Delete01Icon,
@@ -161,8 +160,7 @@ function getWatchlistOverviewSummary({
     return {
       label: 'Coverage gaps',
       title: 'Watchlist freshness needs review',
-      description:
-        'Some scheduled items are stale or still missing a baseline scan result.',
+      description: 'Some scheduled items are stale or still missing a baseline scan result.',
       tone: 'warning',
     };
   }
@@ -241,49 +239,6 @@ function WatchlistPostureSummary({
   );
 }
 
-function WatchlistNarrativeCard({
-  triageHref,
-  summary,
-  activeCount,
-  onShowHealthy,
-}: {
-  triageHref: string;
-  summary: ReturnType<typeof getWatchlistOverviewSummary>;
-  activeCount: number;
-  onShowHealthy: () => void;
-}) {
-  return (
-    <Card className="p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground">Watchlist posture</p>
-          <p className="mt-1 text-base font-medium text-foreground">{summary.title}</p>
-        </div>
-        <Chip color={postureChipColor[summary.tone]} variant="soft" size="sm">
-          {summary.label}
-        </Chip>
-      </div>
-      <p className="mt-2 text-sm leading-6 text-muted">
-        {summary.description}{' '}
-        {activeCount > 0 ? (
-          <>
-            <span className="font-medium text-foreground">{activeCount}</span> active schedules are
-            currently contributing to watchlist coverage.
-          </>
-        ) : null}
-      </p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Link href={triageHref}>
-          <Button variant="secondary">Open triage</Button>
-        </Link>
-        <Button variant="tertiary" onPress={onShowHealthy}>
-          Show healthy items
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
 type WatchlistQueueEntry = {
   description: string;
   href: string;
@@ -292,74 +247,6 @@ type WatchlistQueueEntry = {
   label: string;
   tone: 'success' | 'warning' | 'danger' | 'accent' | 'neutral';
 };
-
-function WatchlistActionQueue({
-  items,
-  onShowAttention,
-  onShowStale,
-  onShowNeverScanned,
-}: {
-  items: WatchlistQueueEntry[];
-  onShowAttention: () => void;
-  onShowStale: () => void;
-  onShowNeverScanned: () => void;
-}) {
-  return (
-    <Card className="p-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-foreground">Needs attention</p>
-          <p className="mt-1 text-xs text-muted">
-            Review the next watchlist items that need scan or policy follow-up.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="tertiary" size="sm" onPress={onShowAttention}>
-            Attention
-          </Button>
-          <Button variant="tertiary" size="sm" onPress={onShowStale}>
-            Stale
-          </Button>
-          <Button variant="tertiary" size="sm" onPress={onShowNeverScanned}>
-            Never scanned
-          </Button>
-        </div>
-      </div>
-
-      {items.length === 0 ? (
-        <div className="mt-4 rounded-2xl border border-success/20 bg-success/8 px-4 py-5">
-          <p className="text-sm font-medium text-success">No urgent watchlist items right now.</p>
-          <p className="mt-1 text-xs text-muted">
-            Attention, stale schedules, and missing baseline scans will surface here first.
-          </p>
-        </div>
-      ) : (
-        <div className="mt-4 space-y-2">
-          {items.map((item) => (
-            <Link
-              key={item.id}
-              href={item.href}
-              className="flex items-start justify-between gap-3 rounded-xl border border-divider bg-surface px-3 py-3 transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Chip color={postureChipColor[item.tone]} variant="soft" size="sm">
-                    {item.label}
-                  </Chip>
-                  <p className="truncate font-mono text-sm font-medium text-foreground">
-                    {item.image}
-                  </p>
-                </div>
-                <p className="mt-1 line-clamp-2 text-xs text-muted">{item.description}</p>
-              </div>
-              <ArrowRight01Icon size={16} className="mt-1 shrink-0 text-muted" />
-            </Link>
-          ))}
-        </div>
-      )}
-    </Card>
-  );
-}
 
 function LastScanState({
   item,
@@ -469,20 +356,13 @@ export default function WatchlistPage() {
   const toast = useToast();
   const isPlatformAdmin = getTokenType() === 'admin';
   const orgRoleById = useMemo(
-    () =>
-      new Map(
-        orgs.map((org) => [org.id, org.current_user_role] as const)
-      ),
+    () => new Map(orgs.map((org) => [org.id, org.current_user_role] as const)),
     [orgs]
   );
   const canMutateActiveScope =
-    isPlatformAdmin ||
-    workScope.kind !== 'org' ||
-    canMutateOrg(orgRoleById.get(workScope.orgId));
+    isPlatformAdmin || workScope.kind !== 'org' || canMutateOrg(orgRoleById.get(workScope.orgId));
   const manageableOrgIds = new Set(
-    orgs
-      .filter((org) => canManageOrg(org.current_user_role))
-      .map((org) => org.id)
+    orgs.filter((org) => canManageOrg(org.current_user_role)).map((org) => org.id)
   );
 
   const load = useCallback(async () => {
@@ -749,7 +629,9 @@ export default function WatchlistPage() {
         image: `${item.image_name}:${item.image_tag}`,
         label: posture.label,
         description: posture.description,
-        href: item.last_scan_id ? `/scans/${item.last_scan_id}` : buildWatchlistTriageHref(item.image_name),
+        href: item.last_scan_id
+          ? `/scans/${item.last_scan_id}`
+          : buildWatchlistTriageHref(item.image_name),
         tone: posture.tone,
       };
     }),
@@ -828,21 +710,6 @@ export default function WatchlistPage() {
         neverScannedCount={neverScannedCount}
         staleCount={staleCount}
       />
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <WatchlistNarrativeCard
-          triageHref={buildWatchlistTriageHref()}
-          summary={overviewSummary}
-          activeCount={activeItems.length}
-          onShowHealthy={() => setFocusFilter('healthy')}
-        />
-        <WatchlistActionQueue
-          items={actionQueueItems}
-          onShowAttention={() => setFocusFilter('attention')}
-          onShowStale={() => setFocusFilter('stale')}
-          onShowNeverScanned={() => setFocusFilter('never_scanned')}
-        />
-      </div>
 
       {error ? (
         <Alert status="danger" className="bg-danger-soft">
@@ -964,7 +831,7 @@ export default function WatchlistPage() {
                 ? 'Try a different search or status filter.'
                 : focusFilter !== 'all'
                   ? 'Try a different focus view or clear the filters.'
-                : 'Add a Docker image to auto-scan it on a recurring schedule and get notified when new vulnerabilities appear.'
+                  : 'Add a Docker image to auto-scan it on a recurring schedule and get notified when new vulnerabilities appear.'
             }
             action={
               items.length > 0
@@ -1278,7 +1145,9 @@ export default function WatchlistPage() {
                       </p>
                     </div>
                     {availableCollections.length === 0 ? (
-                      <p className="text-sm text-zinc-500">No collections available in this workspace yet.</p>
+                      <p className="text-sm text-zinc-500">
+                        No collections available in this workspace yet.
+                      </p>
                     ) : (
                       <div className="grid gap-2 sm:grid-cols-2">
                         {availableCollections.map((collection) => {

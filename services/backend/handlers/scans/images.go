@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"justscan-backend/functions/authz"
+	collectionhandlers "justscan-backend/handlers/collections"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -31,6 +32,7 @@ type ImageSummary struct {
 	MediumCount          int                           `json:"medium_count"`
 	LowCount             int                           `json:"low_count"`
 	ComplianceSummary    *models.ScanComplianceSummary `json:"compliance_summary,omitempty"`
+	Collections          []models.ScanCollection       `json:"collections,omitempty"`
 }
 
 func latestImageStatusWhereClause(raw string) (string, []interface{}) {
@@ -84,9 +86,20 @@ func ListScanImages(db *bun.DB) gin.HandlerFunc {
 			imageWhere = "image_name ILIKE ?"
 			imageArgs = []interface{}{"%" + imageFilter + "%"}
 		}
+		collectionWhere := "1=1"
+		var collectionArgs []interface{}
+		if collectionID := strings.TrimSpace(c.Query("collection")); collectionID != "" {
+			if collectionID == "__none__" {
+				collectionWhere = "NOT EXISTS (SELECT 1 FROM scan_collection_memberships scm WHERE scm.scan_id = scans.id)"
+			} else {
+				collectionWhere = "id IN (SELECT scan_id FROM scan_collection_memberships WHERE collection_id = ?)"
+				collectionArgs = []interface{}{collectionID}
+			}
+		}
 
 		allArgs := append(userArgs, scopeArgs...)
 		allArgs = append(allArgs, imageArgs...)
+		allArgs = append(allArgs, collectionArgs...)
 		latestStatusWhere, latestStatusArgs := latestImageStatusWhereClause(statusFilter)
 
 		countQuery := `
@@ -96,7 +109,7 @@ WITH latest AS (
         status               AS latest_status,
         COALESCE(external_status, '') AS latest_external_status
     FROM scans
-    WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND ` + imageWhere + `
+    WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND ` + imageWhere + ` AND ` + collectionWhere + `
     ORDER BY image_name, created_at DESC
 )
 SELECT COUNT(*) FROM latest WHERE ` + latestStatusWhere
@@ -127,13 +140,13 @@ WITH latest AS (
         medium_count,
         low_count
     FROM scans
-    WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND ` + imageWhere + `
+    WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND ` + imageWhere + ` AND ` + collectionWhere + `
     ORDER BY image_name, created_at DESC
 ),
 counts AS (
     SELECT image_name, COUNT(*) AS scan_count
     FROM scans
-    WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND ` + imageWhere + `
+    WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND ` + imageWhere + ` AND ` + collectionWhere + `
     GROUP BY image_name
 )
 SELECT
@@ -195,6 +208,37 @@ LIMIT ? OFFSET ?`
 		}
 		if images == nil {
 			images = []ImageSummary{}
+		}
+		if len(images) > 0 {
+			scanIDs := make([]uuid.UUID, 0, len(images))
+			for _, image := range images {
+				scanID, parseErr := uuid.Parse(strings.TrimSpace(image.LatestScanID))
+				if parseErr == nil {
+					scanIDs = append(scanIDs, scanID)
+				}
+			}
+			if len(scanIDs) > 0 {
+				latestScans := make([]models.Scan, 0, len(scanIDs))
+				if err := db.NewSelect().Model(&latestScans).Where("id IN (?)", bun.In(scanIDs)).Scan(c.Request.Context()); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load image collections"})
+					return
+				}
+				if err := collectionhandlers.AttachCollectionsToScans(c.Request.Context(), db, latestScans, userID, isAdmin, c.Query("scope")); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load image collections"})
+					return
+				}
+				collectionsByScanID := make(map[uuid.UUID][]models.ScanCollection, len(latestScans))
+				for _, scan := range latestScans {
+					collectionsByScanID[scan.ID] = scan.Collections
+				}
+				for index := range images {
+					scanID, parseErr := uuid.Parse(strings.TrimSpace(images[index].LatestScanID))
+					if parseErr != nil {
+						continue
+					}
+					images[index].Collections = collectionsByScanID[scanID]
+				}
+			}
 		}
 
 		if scopedOrgID, scoped := scopedOrgIDFromRequest(c); scoped {

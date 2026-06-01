@@ -1,23 +1,23 @@
 import { req, reqForm } from './core';
 import { appendScope } from './scope';
 import type {
-    ResourceShare,
-    VulnerabilityViewPreferenceResponse,
-    VulnerabilityViewSettings,
+  ResourceShare,
+  VulnerabilityViewPreferenceResponse,
+  VulnerabilityViewSettings,
 } from './types/orgs';
 import type {
-    BulkDeleteScansResponse,
-    ImageSummary,
-    SBOMComponent,
-    Scan,
-    ScanComparison,
-    ScanShareResponse,
-    ScanTrendPoint,
-    SharedScanRescanResponse,
-    Vulnerability,
-    VulnerabilitySummary,
-    VulnerabilityContextAnalysis,
-    XRayRequestLog,
+  BulkDeleteScansResponse,
+  ImageSummary,
+  SBOMComponent,
+  Scan,
+  ScanComparison,
+  ScanShareResponse,
+  ScanTrendPoint,
+  SharedScanRescanResponse,
+  Vulnerability,
+  VulnerabilitySummary,
+  VulnerabilityContextAnalysis,
+  XRayRequestLog,
 } from './types/scans';
 
 export const listScans = (
@@ -28,6 +28,7 @@ export const listScans = (
   exact?: boolean,
   helmOnly?: boolean,
   helmChart?: string,
+  collection?: string,
   from?: string,
   to?: string
 ) => {
@@ -37,16 +38,24 @@ export const listScans = (
   if (exact) params.set('exact', 'true');
   if (helmOnly) params.set('helm_only', 'true');
   if (helmChart) params.set('helm_chart', helmChart);
+  if (collection) params.set('collection', collection);
   if (from) params.set('from', from);
   if (to) params.set('to', to);
   appendScope(params);
   return req<{ data: Scan[]; total: number }>('GET', `/api/v1/scans/?${params}`);
 };
 
-export const listScanImages = (page = 1, limit = 30, image?: string, status?: string) => {
+export const listScanImages = (
+  page = 1,
+  limit = 30,
+  image?: string,
+  status?: string,
+  collection?: string
+) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
   if (status) params.set('status', status);
+  if (collection) params.set('collection', collection);
   appendScope(params);
   return req<{ data: ImageSummary[]; total: number }>('GET', `/api/v1/scans/images?${params}`);
 };
@@ -221,6 +230,28 @@ export const bulkDeleteScans = (ids: string[]) =>
 
 export const bulkAddTagToScans = (tagId: string, ids: string[]) =>
   req<{ result: string }>('POST', `/api/v1/scans/bulk/tags/${tagId}`, { ids });
+
+export const bulkAddCollectionToScans = (collectionId: string, ids: string[]) => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const qs = params.toString();
+  return req<{ result: string }>(
+    'POST',
+    `/api/v1/scans/bulk/collections/${collectionId}${qs ? `?${qs}` : ''}`,
+    { ids }
+  );
+};
+
+export const bulkRemoveCollectionFromScans = (collectionId: string, ids: string[]) => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const qs = params.toString();
+  return req<{ result: string }>(
+    'DELETE',
+    `/api/v1/scans/bulk/collections/${collectionId}${qs ? `?${qs}` : ''}`,
+    { ids }
+  );
+};
 
 export const getScanSBOM = (scanId: string, name?: string, type?: string) => {
   const params = new URLSearchParams();

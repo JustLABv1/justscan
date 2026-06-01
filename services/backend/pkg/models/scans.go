@@ -59,9 +59,10 @@ type Scan struct {
 	ComplianceSummary       *ScanComplianceSummary `bun:"-" json:"compliance_summary,omitempty"`
 
 	// Relations (not stored in DB, populated on join)
-	Tags            []Tag           `bun:"m2m:scan_tags,join:Scan=Tag" json:"tags,omitempty"`
-	Vulnerabilities []Vulnerability `bun:"rel:has-many,join:id=scan_id" json:"vulnerabilities,omitempty"`
-	StepLogs        []ScanStepLog   `bun:"rel:has-many,join:id=scan_id" json:"step_logs,omitempty"`
+	Tags            []Tag            `bun:"m2m:scan_tags,join:Scan=Tag" json:"tags,omitempty"`
+	Collections     []ScanCollection `bun:"-" json:"collections,omitempty"`
+	Vulnerabilities []Vulnerability  `bun:"rel:has-many,join:id=scan_id" json:"vulnerabilities,omitempty"`
+	StepLogs        []ScanStepLog    `bun:"rel:has-many,join:id=scan_id" json:"step_logs,omitempty"`
 }
 
 type BlockedPolicyDetails struct {

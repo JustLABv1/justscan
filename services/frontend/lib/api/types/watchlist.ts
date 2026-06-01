@@ -1,4 +1,5 @@
 import type { OwnerType } from './common';
+import type { Collection } from './collections';
 import type { Scan } from './scans';
 
 export interface WatchlistComplianceSummary {
@@ -16,6 +17,7 @@ export interface WatchlistItem {
   image_name: string;
   image_tag: string;
   registry_id?: string | null;
+  collection_ids?: string[];
   schedule: string;
   timezone: string;
   enabled: boolean;
@@ -27,4 +29,5 @@ export interface WatchlistItem {
   owner_org_id?: string | null;
   last_scan?: Scan | null;
   compliance_summary?: WatchlistComplianceSummary | null;
+  collections?: Collection[] | null;
 }

@@ -1,4 +1,5 @@
 'use client';
+import { CollectionBadgeList } from '@/components/scans/collection-badge-list';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { ImageScansTable } from '@/components/scans/image-scans-table';
 import {
@@ -17,11 +18,15 @@ import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useOrgNameMap } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
+  Collection,
+  createCollection,
   cancelScan,
+  deleteCollection,
   deleteScan,
   getTokenType,
   getUserDetails,
   ImageSummary,
+  listCollections,
   listOrgMembers,
   listOrgs,
   Org,
@@ -30,6 +35,7 @@ import {
   listTags,
   Scan,
   Tag,
+  updateCollection,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { canMutateOrg } from '@/lib/org-permissions';
@@ -39,11 +45,20 @@ import {
   Input,
   Label,
   ListBox,
+  Modal,
   Pagination,
   Popover,
   Select,
+  useOverlayState,
 } from '@heroui/react';
-import { FilterIcon, GitCompareIcon, PlusSignIcon, Shield01Icon } from 'hugeicons-react';
+import {
+  Delete01Icon,
+  FilterIcon,
+  GitCompareIcon,
+  PencilEdit01Icon,
+  PlusSignIcon,
+  Shield01Icon,
+} from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -122,6 +137,7 @@ function MobileSevStat({ label, count, tone }: { label: string; count: number; t
 }
 
 type ScansTimeRange = '' | RecentActivityRange;
+type ScansGroupingMode = '' | 'collections';
 
 const DEFAULT_ACTIVITY_RANGE: RecentActivityRange = '24h';
 
@@ -142,6 +158,10 @@ function normalizeCriticalFilter(value?: string | null): '' | 'yes' | 'no' {
   }
 
   return '';
+}
+
+function normalizeGroupingMode(value?: string | null): ScansGroupingMode {
+  return value === 'collections' ? 'collections' : '';
 }
 
 function matchesStatusFilter(
@@ -166,12 +186,16 @@ function buildScansRoute({
   range,
   tag,
   critical,
+  collection,
+  group,
 }: {
   image?: string;
   status?: string;
   range?: ScansTimeRange;
   tag?: string;
   critical?: '' | 'yes' | 'no';
+  collection?: string;
+  group?: ScansGroupingMode;
 }) {
   const params = new URLSearchParams();
 
@@ -180,6 +204,8 @@ function buildScansRoute({
   if (range) params.set('range', range);
   if (tag) params.set('tag', tag);
   if (critical) params.set('critical', critical);
+  if (collection) params.set('collection', collection);
+  if (group) params.set('group', group);
 
   const query = params.toString();
   return query ? `/scans?${query}` : '/scans';
@@ -208,6 +234,10 @@ export default function ScansPage() {
     normalizeScansTimeRange(searchParams.get('range'), searchParams.get('view'))
   );
   const [tagFilter, setTagFilter] = useState(searchParams.get('tag') ?? '');
+  const [collectionFilter, setCollectionFilter] = useState(searchParams.get('collection') ?? '');
+  const [groupingMode, setGroupingMode] = useState<ScansGroupingMode>(
+    normalizeGroupingMode(searchParams.get('group'))
+  );
   const [criticalFilter, setCriticalFilter] = useState<'' | 'yes' | 'no'>(
     normalizeCriticalFilter(searchParams.get('critical'))
   );
@@ -223,23 +253,40 @@ export default function ScansPage() {
 
   // Available tags for bulk tagging
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [availableCollections, setAvailableCollections] = useState<Collection[]>([]);
   const [scanUsersById, setScanUsersById] = useState<Record<string, { displayName: string }>>({});
   const [scopedOrgPolicy, setScopedOrgPolicy] = useState<Org | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const collectionModal = useOverlayState();
+  const [collectionName, setCollectionName] = useState('');
+  const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
+  const [collectionSaving, setCollectionSaving] = useState(false);
   const isPlatformAdmin = getTokenType() === 'admin';
   const LIMIT = 30;
   const hasRecentWindow = activityRange !== '';
   const resolvedActivityRange = activityRange || DEFAULT_ACTIVITY_RANGE;
 
   const loadImages = useCallback(
-    async (p: number, img: string, status: string, options?: { silent?: boolean }) => {
+    async (
+      p: number,
+      img: string,
+      status: string,
+      collection: string,
+      options?: { silent?: boolean }
+    ) => {
       const silent = options?.silent ?? false;
       if (!silent) {
         setLoading(true);
         setError('');
       }
       try {
-        const res = await listScanImages(p, LIMIT, img || undefined, status || undefined);
+        const res = await listScanImages(
+          p,
+          LIMIT,
+          img || undefined,
+          status || undefined,
+          collection || undefined
+        );
         setImages(res.data ?? []);
         setTotal(res.total);
         if (silent) {
@@ -259,7 +306,13 @@ export default function ScansPage() {
   );
 
   const loadActivity = useCallback(
-    async (p: number, img: string, range: RecentActivityRange, options?: { silent?: boolean }) => {
+    async (
+      p: number,
+      img: string,
+      range: RecentActivityRange,
+      collection: string,
+      options?: { silent?: boolean }
+    ) => {
       const silent = options?.silent ?? false;
       if (!silent) {
         setLoading(true);
@@ -276,6 +329,7 @@ export default function ScansPage() {
           undefined,
           undefined,
           undefined,
+          collection || undefined,
           from,
           to
         );
@@ -300,21 +354,22 @@ export default function ScansPage() {
   useEffect(() => {
     return deferEffect(() => {
       if (hasRecentWindow) {
-        void loadActivity(page, appliedImageFilter, resolvedActivityRange);
+        void loadActivity(page, appliedImageFilter, resolvedActivityRange, collectionFilter);
         return;
       }
 
-      void loadImages(page, appliedImageFilter, statusFilter);
+      void loadImages(page, appliedImageFilter, statusFilter, collectionFilter);
     });
   }, [
     appliedImageFilter,
+    collectionFilter,
     hasRecentWindow,
     loadActivity,
     loadImages,
     page,
     resolvedActivityRange,
     scopeKey,
-    statusFilter,
+      statusFilter,
   ]);
 
   useEffect(
@@ -325,8 +380,11 @@ export default function ScansPage() {
   );
 
   useEffect(() => {
-    listTags()
-      .then(setAvailableTags)
+    Promise.all([listTags().catch(() => []), listCollections().catch(() => [])])
+      .then(([tags, collections]) => {
+        setAvailableTags(tags);
+        setAvailableCollections(collections);
+      })
       .catch(() => {});
   }, [scopeKey]);
 
@@ -411,12 +469,13 @@ export default function ScansPage() {
   const refreshCurrentView = useCallback(
     (options?: { silent?: boolean }) => {
       if (hasRecentWindow) {
-        return loadActivity(page, appliedImageFilter, resolvedActivityRange, options);
+        return loadActivity(page, appliedImageFilter, resolvedActivityRange, collectionFilter, options);
       }
 
-      return loadImages(page, appliedImageFilter, statusFilter, options);
+      return loadImages(page, appliedImageFilter, statusFilter, collectionFilter, options);
     },
     [
+      collectionFilter,
       appliedImageFilter,
       hasRecentWindow,
       loadActivity,
@@ -446,6 +505,8 @@ export default function ScansPage() {
       range: ScansTimeRange;
       tag: string;
       critical: '' | 'yes' | 'no';
+      collection: string;
+      group: ScansGroupingMode;
     }>
   ) {
     router.replace(
@@ -455,6 +516,8 @@ export default function ScansPage() {
         range: next.range ?? activityRange,
         tag: next.tag ?? tagFilter,
         critical: next.critical ?? criticalFilter,
+        collection: next.collection ?? collectionFilter,
+        group: next.group ?? groupingMode,
       })
     );
   }
@@ -487,9 +550,11 @@ export default function ScansPage() {
     setStatusFilter('');
     setActivityRange('');
     setTagFilter('');
+    setCollectionFilter('');
+    setGroupingMode('');
     setCriticalFilter('');
     setPage(1);
-    syncRoute({ image: '', status: '', range: '', tag: '', critical: '' });
+    syncRoute({ image: '', status: '', range: '', tag: '', critical: '', collection: '', group: '' });
   }
 
   function handleImageFilterChange(value: string) {
@@ -515,6 +580,18 @@ export default function ScansPage() {
     setTagFilter(value);
     setPage(1);
     syncRoute({ tag: value });
+  }
+
+  function handleCollectionFilterChange(value: string) {
+    clearPendingImageCommit();
+    setCollectionFilter(value);
+    setPage(1);
+    syncRoute({ collection: value });
+  }
+
+  function handleGroupingModeChange(value: ScansGroupingMode) {
+    setGroupingMode(value);
+    syncRoute({ group: value });
   }
 
   function handleCriticalFilterChange(value: '' | 'yes' | 'no') {
@@ -599,6 +676,93 @@ export default function ScansPage() {
     }
   }
 
+  async function handleBulkAddCollection(collectionId: string) {
+    if (!canMutateCurrentScope || selectedScans.size === 0) return;
+    try {
+      const { bulkAddCollectionToScans } = await import('@/lib/api');
+      await bulkAddCollectionToScans(collectionId, Array.from(selectedScans));
+      toast.success(
+        `Collection added to ${selectedScans.size} scan${selectedScans.size !== 1 ? 's' : ''}`
+      );
+      setSelectedScans(new Set());
+      refreshCurrentView();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add collection');
+    }
+  }
+
+  async function handleBulkRemoveCollection(collectionId: string) {
+    if (!canMutateCurrentScope || selectedScans.size === 0) return;
+    try {
+      const { bulkRemoveCollectionFromScans } = await import('@/lib/api');
+      await bulkRemoveCollectionFromScans(collectionId, Array.from(selectedScans));
+      toast.success(
+        `Collection removed from ${selectedScans.size} scan${selectedScans.size !== 1 ? 's' : ''}`
+      );
+      setSelectedScans(new Set());
+      refreshCurrentView();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove collection');
+    }
+  }
+
+  function openCollectionModal(collection?: Collection) {
+    setEditingCollection(collection ?? null);
+    setCollectionName(collection?.name ?? '');
+    collectionModal.open();
+  }
+
+  async function handleSaveCollection() {
+    const trimmedName = collectionName.trim();
+    if (!trimmedName) {
+      toast.error('Collection name is required');
+      return;
+    }
+    setCollectionSaving(true);
+    try {
+      if (editingCollection) {
+        await updateCollection(editingCollection.id, trimmedName);
+        toast.success('Collection updated');
+      } else {
+        await createCollection(trimmedName, workScope.kind === 'org' ? workScope.orgId : undefined);
+        toast.success('Collection created');
+      }
+      const nextCollections = await listCollections();
+      setAvailableCollections(nextCollections);
+      collectionModal.close();
+      setEditingCollection(null);
+      setCollectionName('');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save collection');
+    } finally {
+      setCollectionSaving(false);
+    }
+  }
+
+  async function handleDeleteCollection(collection: Collection) {
+    const ok = await confirm({
+      title: `Delete ${collection.name}?`,
+      message: 'This removes the collection from scans and watchlist assignments in this workspace.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    try {
+      await deleteCollection(collection.id);
+      toast.success('Collection deleted');
+      const nextCollections = await listCollections();
+      setAvailableCollections(nextCollections);
+      if (collectionFilter === collection.id) {
+        handleCollectionFilterChange('');
+      } else {
+        void refreshCurrentView();
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete collection');
+    }
+  }
+
   function handleGenerateReport() {
     if (selectedScans.size === 0) return;
     const scanIds = Array.from(selectedScans).join(',');
@@ -614,14 +778,23 @@ export default function ScansPage() {
     let targetIds = visibleScanIds;
 
     // If child rows have not reported visible IDs yet, fetch only the first child page
-    // so selection still maps to visible rows instead of selecting a hidden latest scan ID.
-    if (targetIds.length === 0) {
-      try {
-        const res = await listScans(1, 10, imageName, undefined, true);
-        targetIds = (res.data ?? []).map((scan) => scan.id);
-      } catch {
-        targetIds = [];
-      }
+      // so selection still maps to visible rows instead of selecting a hidden latest scan ID.
+      if (targetIds.length === 0) {
+        try {
+          const res = await listScans(
+            1,
+            10,
+            imageName,
+            undefined,
+            true,
+            undefined,
+            undefined,
+            collectionFilter || undefined
+          );
+          targetIds = (res.data ?? []).map((scan) => scan.id);
+        } catch {
+          targetIds = [];
+        }
     }
 
     if (targetIds.length === 0) {
@@ -696,10 +869,46 @@ export default function ScansPage() {
       }),
     [criticalFilter, images, tagFilter]
   );
+  const selectedCollection = useMemo(
+    () => availableCollections.find((collection) => collection.id === collectionFilter) ?? null,
+    [availableCollections, collectionFilter]
+  );
+  const groupedImages = useMemo(() => {
+    if (groupingMode !== 'collections') return [];
+
+    const buckets = new Map<string, { key: string; label: string; images: ImageSummary[] }>();
+    filteredImages.forEach((image) => {
+      if (!image.collections || image.collections.length === 0) {
+        const existing = buckets.get('__unassigned__') ?? {
+          key: '__unassigned__',
+          label: 'Unassigned',
+          images: [],
+        };
+        existing.images.push(image);
+        buckets.set(existing.key, existing);
+        return;
+      }
+
+      image.collections.forEach((collection) => {
+        const existing = buckets.get(collection.id) ?? {
+          key: collection.id,
+          label: collection.name,
+          images: [],
+        };
+        existing.images.push(image);
+        buckets.set(existing.key, existing);
+      });
+    });
+
+    return Array.from(buckets.values()).sort((left, right) => left.label.localeCompare(right.label));
+  }, [filteredImages, groupingMode]);
 
   const visibleRows = hasRecentWindow ? filteredActivityScans.length : filteredImages.length;
   const hasClientSideFilters =
-    Boolean(tagFilter) || Boolean(criticalFilter) || (hasRecentWindow && Boolean(statusFilter));
+    Boolean(tagFilter) ||
+    Boolean(collectionFilter) ||
+    Boolean(criticalFilter) ||
+    (hasRecentWindow && Boolean(statusFilter));
   const totalForDisplay = hasClientSideFilters ? visibleRows : total;
   const totalPages = hasClientSideFilters ? 1 : Math.max(1, Math.ceil(total / LIMIT));
   const activityRangeLabel =
@@ -710,6 +919,7 @@ export default function ScansPage() {
     Boolean(statusFilter) ||
     hasRecentWindow ||
     Boolean(tagFilter) ||
+    Boolean(collectionFilter) ||
     Boolean(criticalFilter);
   const headerDescription = hasRecentWindow
     ? totalForDisplay > 0
@@ -850,6 +1060,34 @@ export default function ScansPage() {
             </Select>
           </div>
 
+          <div className="min-w-[220px] space-y-1.5">
+            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+              Collection
+            </Label>
+            <Select
+              value={collectionFilter || '__all__'}
+              onChange={(value) =>
+                handleCollectionFilterChange(String(value === '__all__' ? '' : (value ?? '')))
+              }
+              className="min-w-0"
+            >
+              <Select.Trigger className="bg-surface-secondary">
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="__all__">All collections</ListBox.Item>
+                  {availableCollections.map((collection) => (
+                    <ListBox.Item key={collection.id} id={collection.id}>
+                      {collection.name}
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+
           <div className="min-w-[180px] space-y-1.5">
             <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
               Has Critical
@@ -879,27 +1117,78 @@ export default function ScansPage() {
             </Select>
           </div>
 
-          <div className="ml-auto flex min-w-[140px] items-end justify-end">
-            {hasActiveFilters ? (
-              <Button
-                onClick={handleClearFilters}
-                className="flex w-full items-center justify-center gap-1.5 md:w-auto"
-                variant="secondary"
+          {!hasRecentWindow ? (
+            <div className="min-w-[180px] space-y-1.5">
+              <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                Group By
+              </Label>
+              <Select
+                value={groupingMode || '__none__'}
+                onChange={(value) =>
+                  handleGroupingModeChange(
+                    (value === '__none__' ? '' : (value ?? '')) as ScansGroupingMode
+                  )
+                }
+                className="min-w-0"
               >
-                <FilterIcon size={12} />
-                Clear Filters
+                <Select.Trigger className="bg-surface-secondary">
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item id="__none__">No grouping</ListBox.Item>
+                    <ListBox.Item id="collections">Collections</ListBox.Item>
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </div>
+          ) : null}
+
+          <div className="ml-auto flex min-w-[140px] items-end justify-end">
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto">
+              <Button variant="secondary" onPress={() => openCollectionModal()}>
+                Manage Collections
               </Button>
-            ) : (
-              <p className="text-sm text-zinc-500 md:text-right">
-                {totalForDisplay}{' '}
-                {hasRecentWindow
-                  ? `scan event${totalForDisplay !== 1 ? 's' : ''}`
-                  : `image${totalForDisplay !== 1 ? 's' : ''}`}
-              </p>
-            )}
+              {hasActiveFilters ? (
+                <Button
+                  onClick={handleClearFilters}
+                  className="flex items-center justify-center gap-1.5"
+                  variant="secondary"
+                >
+                  <FilterIcon size={12} />
+                  Clear Filters
+                </Button>
+              ) : (
+                <p className="text-sm text-zinc-500 md:text-right">
+                  {totalForDisplay}{' '}
+                  {hasRecentWindow
+                    ? `scan event${totalForDisplay !== 1 ? 's' : ''}`
+                    : `image${totalForDisplay !== 1 ? 's' : ''}`}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </Card>
+
+      {selectedCollection ? (
+        <Card className="surface-panel rounded-2xl px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                Filtering by collection
+              </p>
+              <div className="mt-2">
+                <CollectionBadgeList collections={[selectedCollection]} />
+              </div>
+            </div>
+            <Button variant="secondary" onPress={() => handleCollectionFilterChange('')}>
+              Show all collections
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       {error ? <FormAlert description={error} title="Scan list failed to load" /> : null}
 
@@ -942,6 +1231,54 @@ export default function ScansPage() {
                             style={{ background: tag.color }}
                           />
                           {tag.name}
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  )}
+                </Popover.Dialog>
+              </Popover.Content>
+            </Popover>
+            <Popover>
+              <Popover.Trigger>
+                <Button variant="secondary">Add Collection</Button>
+              </Popover.Trigger>
+              <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
+                <Popover.Dialog className="p-1">
+                  {availableCollections.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-zinc-500">No collections created yet</div>
+                  ) : (
+                    <ListBox onAction={(key) => void handleBulkAddCollection(String(key))}>
+                      {availableCollections.map((collection) => (
+                        <ListBox.Item
+                          key={collection.id}
+                          id={collection.id}
+                          className="px-3 py-1.5 text-sm rounded-lg cursor-pointer"
+                        >
+                          {collection.name}
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  )}
+                </Popover.Dialog>
+              </Popover.Content>
+            </Popover>
+            <Popover>
+              <Popover.Trigger>
+                <Button variant="secondary">Remove Collection</Button>
+              </Popover.Trigger>
+              <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
+                <Popover.Dialog className="p-1">
+                  {availableCollections.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-zinc-500">No collections created yet</div>
+                  ) : (
+                    <ListBox onAction={(key) => void handleBulkRemoveCollection(String(key))}>
+                      {availableCollections.map((collection) => (
+                        <ListBox.Item
+                          key={collection.id}
+                          id={collection.id}
+                          className="px-3 py-1.5 text-sm rounded-lg cursor-pointer"
+                        >
+                          {collection.name}
                         </ListBox.Item>
                       ))}
                     </ListBox>
@@ -1019,37 +1356,121 @@ export default function ScansPage() {
         </Card>
       ) : (
         <>
-          {/* Tree table */}
-          <ImageScansTable
-            childRefreshKey={childRefreshKey}
-            expanded={expanded}
-            hasActiveFilters={hasActiveFilters}
-            images={filteredImages}
-            loading={loading}
-            onCancel={(scanId, imageName) => handleCancel(scanId, imageName)}
-            onClearFilters={handleClearFilters}
-            onDelete={(scanId, imageName) => handleDelete(scanId, imageName)}
-            onExpandedChange={setExpanded}
-            onOpenCreateModal={openCreatePage}
-            allowMutationActions={canMutateCurrentScope}
-            onSelectedScansChange={setSelectedScans}
-            onSelectImageScans={(imageName, selected, latestScanId, visibleScanIds) =>
-              handleParentScanSelection(imageName, selected, latestScanId, visibleScanIds)
-            }
-            onSelectScan={(scanId, selected) => {
-              if (selected) {
-                setSelectedScans((previous) => new Set(previous).add(scanId));
-              } else {
-                setSelectedScans((previous) => {
-                  const next = new Set(previous);
-                  next.delete(scanId);
-                  return next;
-                });
+          {groupingMode === 'collections' ? (
+            groupedImages.length === 0 && !loading ? (
+              <ImageScansTable
+                childRefreshKey={childRefreshKey}
+                collectionFilter={collectionFilter}
+                expanded={expanded}
+                hasActiveFilters={hasActiveFilters}
+                images={filteredImages}
+                loading={loading}
+                onCancel={(scanId, imageName) => handleCancel(scanId, imageName)}
+                onClearFilters={handleClearFilters}
+                onDelete={(scanId, imageName) => handleDelete(scanId, imageName)}
+                onExpandedChange={setExpanded}
+                onOpenCreateModal={openCreatePage}
+                allowMutationActions={canMutateCurrentScope}
+                onSelectedScansChange={setSelectedScans}
+                onSelectImageScans={(imageName, selected, latestScanId, visibleScanIds) =>
+                  handleParentScanSelection(imageName, selected, latestScanId, visibleScanIds)
+                }
+                onSelectScan={(scanId, selected) => {
+                  if (selected) {
+                    setSelectedScans((previous) => new Set(previous).add(scanId));
+                  } else {
+                    setSelectedScans((previous) => {
+                      const next = new Set(previous);
+                      next.delete(scanId);
+                      return next;
+                    });
+                  }
+                }}
+                scanUsersById={scanUsersById}
+                selectedScans={selectedScans}
+              />
+            ) : (
+              <div className="space-y-5">
+                {groupedImages.map((group) => (
+                  <Card key={group.key} className="surface-panel rounded-2xl p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                          {group.label}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {group.images.length} image{group.images.length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <ImageScansTable
+                      childRefreshKey={childRefreshKey}
+                      collectionFilter={collectionFilter || (group.key === '__unassigned__' ? '__none__' : group.key)}
+                      expanded={expanded}
+                      hasActiveFilters={hasActiveFilters}
+                      images={group.images}
+                      loading={loading}
+                      onCancel={(scanId, imageName) => handleCancel(scanId, imageName)}
+                      onClearFilters={handleClearFilters}
+                      onDelete={(scanId, imageName) => handleDelete(scanId, imageName)}
+                      onExpandedChange={setExpanded}
+                      onOpenCreateModal={openCreatePage}
+                      allowMutationActions={canMutateCurrentScope}
+                      onSelectedScansChange={setSelectedScans}
+                      onSelectImageScans={(imageName, selected, latestScanId, visibleScanIds) =>
+                        handleParentScanSelection(imageName, selected, latestScanId, visibleScanIds)
+                      }
+                      onSelectScan={(scanId, selected) => {
+                        if (selected) {
+                          setSelectedScans((previous) => new Set(previous).add(scanId));
+                        } else {
+                          setSelectedScans((previous) => {
+                            const next = new Set(previous);
+                            next.delete(scanId);
+                            return next;
+                          });
+                        }
+                      }}
+                      scanUsersById={scanUsersById}
+                      selectedScans={selectedScans}
+                    />
+                  </Card>
+                ))}
+              </div>
+            )
+          ) : (
+            <ImageScansTable
+              childRefreshKey={childRefreshKey}
+              collectionFilter={collectionFilter}
+              expanded={expanded}
+              hasActiveFilters={hasActiveFilters}
+              images={filteredImages}
+              loading={loading}
+              onCancel={(scanId, imageName) => handleCancel(scanId, imageName)}
+              onClearFilters={handleClearFilters}
+              onDelete={(scanId, imageName) => handleDelete(scanId, imageName)}
+              onExpandedChange={setExpanded}
+              onOpenCreateModal={openCreatePage}
+              allowMutationActions={canMutateCurrentScope}
+              onSelectedScansChange={setSelectedScans}
+              onSelectImageScans={(imageName, selected, latestScanId, visibleScanIds) =>
+                handleParentScanSelection(imageName, selected, latestScanId, visibleScanIds)
               }
-            }}
-            scanUsersById={scanUsersById}
-            selectedScans={selectedScans}
-          />
+              onSelectScan={(scanId, selected) => {
+                if (selected) {
+                  setSelectedScans((previous) => new Set(previous).add(scanId));
+                } else {
+                  setSelectedScans((previous) => {
+                    const next = new Set(previous);
+                    next.delete(scanId);
+                    return next;
+                  });
+                }
+              }}
+              scanUsersById={scanUsersById}
+              selectedScans={selectedScans}
+            />
+          )}
         </>
       )}
 
@@ -1084,6 +1505,98 @@ export default function ScansPage() {
           </Pagination>
         </>
       )}
+      <Modal state={collectionModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="overflow-hidden">
+              <Modal.Header>
+                <Modal.Heading className="font-semibold">
+                  {editingCollection ? 'Edit Collection' : 'Manage Collections'}
+                </Modal.Heading>
+                <Modal.CloseTrigger />
+              </Modal.Header>
+              <Modal.Body className="space-y-5 py-5">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    {editingCollection ? 'Rename collection' : 'Create collection'}
+                  </Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      className={inputCls}
+                      placeholder="Production"
+                      value={collectionName}
+                      onChange={(event) => setCollectionName(event.target.value)}
+                    />
+                    <Button isDisabled={collectionSaving} onPress={handleSaveCollection}>
+                      {editingCollection ? 'Save' : 'Create'}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-zinc-500">
+                    Collections are scoped to the current workspace and can be assigned to multiple scans.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      Existing collections
+                    </p>
+                    {editingCollection ? (
+                      <Button
+                        variant="secondary"
+                        onPress={() => {
+                          setEditingCollection(null);
+                          setCollectionName('');
+                        }}
+                      >
+                        Cancel edit
+                      </Button>
+                    ) : null}
+                  </div>
+                  {availableCollections.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No collections in this workspace yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {availableCollections.map((collection) => (
+                        <Card key={collection.id} className="rounded-xl border border-divider/70 px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-zinc-900 dark:text-white">
+                                {collection.name}
+                              </p>
+                              <p className="mt-1 text-xs text-zinc-500">
+                                {collection.owner_type === 'org' ? 'Organization collection' : 'Personal collection'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                isIconOnly
+                                variant="secondary"
+                                aria-label={`Edit ${collection.name}`}
+                                onPress={() => openCollectionModal(collection)}
+                              >
+                                <PencilEdit01Icon size={14} />
+                              </Button>
+                              <Button
+                                isIconOnly
+                                variant="danger-soft"
+                                aria-label={`Delete ${collection.name}`}
+                                onPress={() => void handleDeleteCollection(collection)}
+                              >
+                                <Delete01Icon size={14} />
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Modal.Body>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
       {confirmDialog}
     </div>
   );

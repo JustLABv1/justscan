@@ -21,6 +21,8 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 		s.POST("/upload", scans.CreateUploadedArchiveScan(db))
 		s.DELETE("/bulk", scans.BulkDeleteScans(db))
 		s.POST("/bulk/tags/:tagId", scans.BulkAddTagToScans(db))
+		s.POST("/bulk/collections/:collectionId", scans.BulkAddCollectionToScans(db))
+		s.DELETE("/bulk/collections/:collectionId", scans.BulkRemoveCollectionFromScans(db))
 		s.GET("/compare", scans.Compare(db))
 		s.GET("/trends", scans.GetTrends(db))
 		s.GET("/:id", scans.GetScan(db))

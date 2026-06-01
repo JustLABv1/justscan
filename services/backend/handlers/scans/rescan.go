@@ -8,6 +8,7 @@ import (
 
 	"justscan-backend/functions/audit"
 	"justscan-backend/functions/authz"
+	collectionhandlers "justscan-backend/handlers/collections"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -78,6 +79,10 @@ func ReScan(db *bun.DB) gin.HandlerFunc {
 		}
 		if err := CopyOrgScanLinks(c.Request.Context(), db, orig.ID, newScan.ID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to scope rescan"})
+			return
+		}
+		if err := collectionhandlers.CopyScanCollectionMemberships(c.Request.Context(), db, orig.ID, newScan.ID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign rescan collections"})
 			return
 		}
 		if registry != nil {

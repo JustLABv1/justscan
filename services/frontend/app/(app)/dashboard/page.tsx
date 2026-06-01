@@ -1230,7 +1230,7 @@ export default function DashboardPage() {
       setRecentProblemScansLoading(true);
       setRecentProblemScansError('');
 
-      listScans(1, 20, undefined, undefined, undefined, undefined, undefined, from, to)
+      listScans(1, 20, undefined, undefined, undefined, undefined, undefined, undefined, from, to)
         .then((result) => {
           const items = (result.data ?? [])
             .filter(isProblemScan)
@@ -1269,6 +1269,7 @@ export default function DashboardPage() {
       50,
       undefined,
       activeDrilldown === 'completed' ? 'completed' : undefined,
+      undefined,
       undefined,
       undefined,
       undefined,

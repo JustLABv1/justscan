@@ -1,4 +1,5 @@
 import type { OwnerType } from './common';
+import type { Collection } from './collections';
 import type { ResourceShare } from './orgs';
 import type { ScanProvider } from './registries';
 
@@ -146,6 +147,7 @@ export interface Scan {
   owner_org_id?: string | null;
   registry_id?: string;
   tags?: Tag[];
+  collections?: Collection[];
   architecture?: string;
   os_family?: string;
   os_name?: string;
@@ -257,6 +259,7 @@ export interface ImageSummary {
   medium_count: number;
   low_count: number;
   compliance_summary?: ScanComplianceSummary | null;
+  collections?: Collection[];
 }
 
 export interface SBOMComponent {

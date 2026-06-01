@@ -1,4 +1,5 @@
 'use client';
+import { CollectionBadgeList } from '@/components/scans/collection-badge-list';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, StatusBadge } from '@/components/ui/badges';
@@ -12,7 +13,9 @@ import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
+  Collection,
   createWatchlistItem,
+  listCollections,
   deleteWatchlistItem,
   getDefaultScannerCapabilities,
   getTokenType,
@@ -43,6 +46,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Chip,
   Label,
   ListBox,
@@ -431,6 +435,7 @@ export default function WatchlistPage() {
   const { orgs, orgNamesById } = useOrgDirectory();
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
+  const [availableCollections, setAvailableCollections] = useState<Collection[]>([]);
   const [capabilities, setCapabilities] = useState<ScannerCapabilities>(() =>
     getDefaultScannerCapabilities()
   );
@@ -444,6 +449,7 @@ export default function WatchlistPage() {
   const [hourCycle, setHourCycle] = useState<HourCyclePreference>('locale');
   const [enabled, setEnabled] = useState(true);
   const [registryId, setRegistryId] = useState('');
+  const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [triggering, setTriggering] = useState('');
@@ -493,6 +499,9 @@ export default function WatchlistPage() {
   useEffect(() => {
     return deferEffect(() => {
       void load();
+      void listCollections()
+        .then(setAvailableCollections)
+        .catch(() => {});
       void listRegistriesWithCapabilities()
         .then((response) => {
           setRegistries(response.data);
@@ -525,6 +534,7 @@ export default function WatchlistPage() {
     setTimezone(getBrowserTimezone());
     setEnabled(true);
     setRegistryId(defaultRegistryId);
+    setSelectedCollectionIds([]);
     setFormError('');
     modal.open();
   }
@@ -537,6 +547,7 @@ export default function WatchlistPage() {
     setEnabled(item.enabled);
     setTimezone(item.timezone || getBrowserTimezone());
     setRegistryId(item.registry_id ?? '');
+    setSelectedCollectionIds(item.collection_ids ?? []);
     setFormError('');
     modal.open();
   }
@@ -558,6 +569,7 @@ export default function WatchlistPage() {
         timezone,
         enabled,
         registry_id: registryId || null,
+        collection_ids: selectedCollectionIds,
         ...(currentScope.kind === 'org' ? { org_id: currentScope.orgId } : {}),
       };
       if (editing) {
@@ -1050,6 +1062,10 @@ export default function WatchlistPage() {
                               ownerOrgId={item.owner_org_id}
                               orgNamesById={orgNamesById}
                             />
+                            <CollectionBadgeList
+                              collections={item.collections ?? []}
+                              emptyLabel="No collections"
+                            />
                           </div>
                         </Table.Cell>
                         <Table.Cell>
@@ -1254,6 +1270,48 @@ export default function WatchlistPage() {
                       )}
                     </div>
                   )}
+                  <div className="space-y-2">
+                    <div>
+                      <Label className="text-sm font-medium">Collections</Label>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        New scans created from this watchlist item will inherit these collections.
+                      </p>
+                    </div>
+                    {availableCollections.length === 0 ? (
+                      <p className="text-sm text-zinc-500">No collections available in this workspace yet.</p>
+                    ) : (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {availableCollections.map((collection) => {
+                          const isSelected = selectedCollectionIds.includes(collection.id);
+                          return (
+                            <label
+                              key={collection.id}
+                              className="flex items-center gap-3 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-2"
+                            >
+                              <Checkbox
+                                aria-label={`Assign ${collection.name}`}
+                                isSelected={isSelected}
+                                onChange={(selected) =>
+                                  setSelectedCollectionIds((previous) =>
+                                    selected
+                                      ? [...previous, collection.id]
+                                      : previous.filter((id) => id !== collection.id)
+                                  )
+                                }
+                              >
+                                <Checkbox.Control>
+                                  <Checkbox.Indicator />
+                                </Checkbox.Control>
+                              </Checkbox>
+                              <span className="text-sm text-zinc-800 dark:text-zinc-200">
+                                {collection.name}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                   <Switch isSelected={enabled} onChange={setEnabled}>
                     <Switch.Control>
                       <Switch.Thumb />

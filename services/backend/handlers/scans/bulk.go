@@ -8,6 +8,7 @@ import (
 	"justscan-backend/functions/audit"
 	"justscan-backend/functions/auth"
 	"justscan-backend/functions/authz"
+	collectionhandlers "justscan-backend/handlers/collections"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -117,5 +118,105 @@ func BulkAddTagToScans(db *bun.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"result": "success", "count": len(scanTags)})
+	}
+}
+
+type bulkCollectionRequest struct {
+	IDs []string `json:"ids" binding:"required,min=1"`
+}
+
+func BulkAddCollectionToScans(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+
+		collectionID, err := uuid.Parse(c.Param("collectionId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid collection ID"})
+			return
+		}
+		if _, err := collectionhandlers.ValidateManageableCollectionsForScope(c.Request.Context(), db, []uuid.UUID{collectionID}, userID, isAdmin, c.Query("scope")); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "collection not found"})
+			return
+		}
+
+		var req bulkCollectionRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
+			return
+		}
+
+		for _, raw := range req.IDs {
+			id, err := uuid.Parse(raw)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID: " + raw})
+				return
+			}
+			scan := &models.Scan{}
+			if err := db.NewSelect().Model(scan).Where("id = ?", id).Scan(c.Request.Context()); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "scan not found: " + raw})
+				return
+			}
+			if !canWriteScan(c.Request.Context(), db, scan, userID, isAdmin) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "scan not found: " + raw})
+				return
+			}
+			if err := collectionhandlers.AddScanCollectionMemberships(c.Request.Context(), db, id, []uuid.UUID{collectionID}); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to attach collection"})
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"result": "success", "count": len(req.IDs)})
+	}
+}
+
+func BulkRemoveCollectionFromScans(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+
+		collectionID, err := uuid.Parse(c.Param("collectionId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid collection ID"})
+			return
+		}
+		if _, err := collectionhandlers.ValidateManageableCollectionsForScope(c.Request.Context(), db, []uuid.UUID{collectionID}, userID, isAdmin, c.Query("scope")); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "collection not found"})
+			return
+		}
+
+		var req bulkCollectionRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
+			return
+		}
+
+		for _, raw := range req.IDs {
+			id, err := uuid.Parse(raw)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID: " + raw})
+				return
+			}
+			scan := &models.Scan{}
+			if err := db.NewSelect().Model(scan).Where("id = ?", id).Scan(c.Request.Context()); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "scan not found: " + raw})
+				return
+			}
+			if !canWriteScan(c.Request.Context(), db, scan, userID, isAdmin) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "scan not found: " + raw})
+				return
+			}
+			if err := collectionhandlers.RemoveScanCollectionMemberships(c.Request.Context(), db, id, []uuid.UUID{collectionID}); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove collection"})
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"result": "success", "count": len(req.IDs)})
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	collectionhandlers "justscan-backend/handlers/collections"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -76,24 +77,32 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 		return
 	}
 	entryID, err := cronRunner.AddFunc(spec, func() {
-		log.Infof("scheduler: triggering scan for %s:%s", itemCopy.ImageName, itemCopy.ImageTag)
-		registry, envVars, err := scanner.ResolveRegistryForScan(context.Background(), db, itemCopy.ImageName, itemCopy.RegistryID)
+		currentItem := itemCopy
+		if err := db.NewSelect().Model(&currentItem).Where("id = ?", itemCopy.ID).Scan(context.Background()); err != nil {
+			log.Errorf("scheduler: failed to refresh watchlist item %s: %v", itemCopy.ID, err)
+			return
+		}
+		log.Infof("scheduler: triggering scan for %s:%s", currentItem.ImageName, currentItem.ImageTag)
+		registry, envVars, err := scanner.ResolveRegistryForScan(context.Background(), db, currentItem.ImageName, currentItem.RegistryID)
 		if err != nil {
-			log.Errorf("scheduler: failed to resolve registry for %s:%s: %v", itemCopy.ImageName, itemCopy.ImageTag, err)
+			log.Errorf("scheduler: failed to resolve registry for %s:%s: %v", currentItem.ImageName, currentItem.ImageTag, err)
 			return
 		}
 		provider, err := scanner.ProviderForRegistry(registry)
 		if err != nil {
-			log.Errorf("scheduler: unavailable provider for %s:%s: %v", itemCopy.ImageName, itemCopy.ImageTag, err)
+			log.Errorf("scheduler: unavailable provider for %s:%s: %v", currentItem.ImageName, currentItem.ImageTag, err)
 			return
 		}
-		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(itemCopy.ImageName, itemCopy.ImageTag, registry)
-		scan := newScheduledScan(itemCopy, normalizedImageName, normalizedImageTag, provider, itemCopy.RegistryID, time.Now())
+		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(currentItem.ImageName, currentItem.ImageTag, registry)
+		scan := newScheduledScan(currentItem, normalizedImageName, normalizedImageTag, provider, currentItem.RegistryID, time.Now())
 		if registry != nil {
 			scan.RegistryID = &registry.ID
 		}
 		if err := db.RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
 			if _, err := tx.NewInsert().Model(scan).Exec(ctx); err != nil {
+				return err
+			}
+			if err := collectionhandlers.AddScanCollectionMemberships(ctx, tx, scan.ID, currentItem.CollectionIDs); err != nil {
 				return err
 			}
 			if scan.OwnerOrgID != nil {
@@ -103,7 +112,7 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 			}
 			return nil
 		}); err != nil {
-			log.Errorf("scheduler: failed to create scan for %s: %v", itemCopy.ImageName, err)
+			log.Errorf("scheduler: failed to create scan for %s: %v", currentItem.ImageName, err)
 			return
 		}
 		if err := scanner.DispatchScan(context.Background(), db, scan, envVars, ""); err != nil {
@@ -113,11 +122,11 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 			}
 		}
 		now := time.Now()
-		itemCopy.LastScannedAt = &now
-		itemCopy.LastScanID = &scan.ID
-		db.NewUpdate().Model(&itemCopy).
+		currentItem.LastScannedAt = &now
+		currentItem.LastScanID = &scan.ID
+		db.NewUpdate().Model(&currentItem).
 			Column("last_scanned_at", "last_scan_id").
-			Where("id = ?", itemCopy.ID).
+			Where("id = ?", currentItem.ID).
 			Exec(context.Background()) //nolint:errcheck
 	})
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"justscan-backend/functions/authz"
+	collectionhandlers "justscan-backend/handlers/collections"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -54,6 +55,13 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 			tagIDs := strings.Split(tags, ",")
 			q = q.Where("id IN (SELECT scan_id FROM scan_tags WHERE tag_id = ANY(?))", bun.In(tagIDs))
 		}
+		if collectionID := strings.TrimSpace(c.Query("collection")); collectionID != "" {
+			if collectionID == "__none__" {
+				q = q.Where("NOT EXISTS (SELECT 1 FROM scan_collection_memberships scm WHERE scm.scan_id = scan.id)")
+			} else {
+				q = q.Where("id IN (SELECT scan_id FROM scan_collection_memberships WHERE collection_id = ?)", collectionID)
+			}
+		}
 		if c.Query("helm_only") == "true" {
 			q = q.Where("helm_chart != ''")
 		}
@@ -92,6 +100,10 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 				Where("st.scan_id = ?", scans[i].ID).
 				Scan(c.Request.Context(), &tags) //nolint:errcheck
 			scans[i].Tags = tags
+		}
+		if err := collectionhandlers.AttachCollectionsToScans(c.Request.Context(), db, scans, userID, isAdmin, c.Query("scope")); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan collections"})
+			return
 		}
 
 		if scopedOrgID, scoped := scopedOrgIDFromRequest(c); scoped {

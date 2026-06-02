@@ -249,6 +249,7 @@ func processScan(job ScanJob, cacheDir string) {
 		recordScanStepOutput(ctx, db, scanID, "Scanning uploaded OCI archive input with Trivy.")
 		trivyOut, trivyVersion, err = RunScanFromArchive(ctx, job.ArchivePath, job.Platform, cacheDir)
 	} else {
+		recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Scanning registry image %s:%s with Trivy.", scan.ImageName, scan.ImageTag))
 		trivyOut, trivyVersion, err = RunScanWithRegistryRetry(ctx, db, scan, job.EnvVars, job.Platform, cacheDir)
 	}
 	stopHeartbeat()
@@ -273,23 +274,29 @@ func processScan(job ScanJob, cacheDir string) {
 	vulns := ParseVulnerabilities(trivyOut, scanID)
 	grypeVersion := ""
 	kbEntries := ExtractKBEntries(trivyOut)
+	recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Parsed %d vulnerability findings and %d knowledge-base entries from Trivy.", len(vulns), len(kbEntries)))
 	if GrypeEnabled() {
+		recordScanStepOutput(ctx, db, scanID, "Starting secondary Grype analysis to catch findings Trivy may not report.")
 		stopHeartbeat = startScanProgressHeartbeat(ctx, db, scanID)
 		var grypeOut *GrypeOutput
 		var version string
 		var grypeErr error
 		if scan.ScanSource == models.ScanSourceUploadedArchive {
+			recordScanStepOutput(ctx, db, scanID, "Scanning uploaded OCI archive input with Grype.")
 			grypeOut, version, grypeErr = RunGrypeScanFromArchive(ctx, job.ArchivePath, job.Platform, cacheDir)
 		} else {
+			recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Scanning registry image %s:%s with Grype.", scan.ImageName, scan.ImageTag))
 			grypeOut, version, grypeErr = RunGrypeScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
 		}
 		stopHeartbeat()
 		if grypeErr != nil {
 			if ctx.Err() == nil {
 				log.Warnf("Worker: Grype scan failed for %s (non-fatal): %v", scanID, grypeErr)
+				recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Grype analysis failed but the scan can continue with Trivy results: %v", grypeErr))
 			}
 		} else if grypeOut != nil {
 			grypeVersion = version
+			recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Grype completed using version %s.", version))
 			beforeCount := len(vulns)
 			vulns = MergeLocalScannerFindings(vulns, ParseGrypeVulnerabilities(grypeOut, scanID))
 			addedCount := len(vulns) - beforeCount
@@ -319,11 +326,16 @@ func processScan(job ScanJob, cacheDir string) {
 	// Persist KB entries before the worker finishes so new scan data is available
 	// immediately and does not depend on a later startup backfill.
 	if len(kbEntries) > 0 {
+		recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Upserting %d vulnerability knowledge-base entries.", len(kbEntries)))
 		if err := upsertKBEntries(context.Background(), db, kbEntries); err != nil {
 			log.Warnf("Worker: KB upsert failed for scan %s (non-fatal): %v", scanID, err)
+			recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Knowledge-base upsert failed but the scan can continue: %v", err))
 		} else {
 			log.Debugf("Worker: upserted %d KB entries for scan %s", len(kbEntries), scanID)
+			recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Knowledge-base entries updated for %d vulnerabilities.", len(kbEntries)))
 		}
+	} else {
+		recordScanStepOutput(ctx, db, scanID, "No vulnerability knowledge-base entries were produced for this scan.")
 	}
 
 	var osvVulns []models.Vulnerability
@@ -339,14 +351,17 @@ func processScan(job ScanJob, cacheDir string) {
 	var sbomOut *TrivySBOMOutput
 	var sbomErr error
 	if scan.ScanSource == models.ScanSourceUploadedArchive {
+		recordScanStepOutput(ctx, db, scanID, "Collecting SBOM components from the uploaded OCI archive.")
 		sbomOut, sbomErr = RunSBOMScanFromArchive(ctx, job.ArchivePath, job.Platform, cacheDir)
 	} else {
+		recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Collecting SBOM components from %s:%s.", scan.ImageName, scan.ImageTag))
 		sbomOut, sbomErr = RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
 	}
 	stopHeartbeat()
 	if sbomErr != nil {
 		if ctx.Err() == nil {
 			log.Warnf("Worker: SBOM scan failed for %s (non-fatal): %v", scanID, sbomErr)
+			recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("SBOM collection failed but vulnerability results are still available: %v", sbomErr))
 		}
 	} else if sbomOut != nil {
 		components := ParseSBOMComponents(sbomOut, scanID)
@@ -362,11 +377,14 @@ func processScan(job ScanJob, cacheDir string) {
 			if len(osvVulns) > 0 {
 				if _, err := db.NewInsert().Model(&osvVulns).Exec(context.Background()); err != nil {
 					log.Warnf("Worker: failed to store OSV augmented findings for %s: %v", scanID, err)
+					recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("OSV enrichment found supplemental Java findings, but storing them failed: %v", err))
 					osvVulns = nil
 				} else {
 					log.Infof("Worker: added %d OSV Java findings for scan %s", len(osvVulns), scanID)
 					recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("OSV added %d supplemental Java findings.", len(osvVulns)))
 				}
+			} else {
+				recordScanStepOutput(ctx, db, scanID, "OSV enrichment did not add supplemental Java findings.")
 			}
 		} else {
 			recordScanStepOutput(ctx, db, scanID, "SBOM scan completed without component records.")
@@ -374,6 +392,7 @@ func processScan(job ScanJob, cacheDir string) {
 	}
 
 	severityCounts := CountSeverities(append(vulns, osvVulns...))
+	recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Severity counts calculated: %d critical, %d high, %d medium, %d low, %d unknown.", severityCounts[models.SeverityCritical], severityCounts[models.SeverityHigh], severityCounts[models.SeverityMedium], severityCounts[models.SeverityLow], severityCounts[models.SeverityUnknown]))
 
 	// If context was cancelled during SBOM, don't mark as completed
 	if ctx.Err() != nil {
@@ -412,8 +431,10 @@ func processScan(job ScanJob, cacheDir string) {
 	scan.UnknownCount = severityCounts[models.SeverityUnknown]
 	if suppressedCount, err := effectivesuppressions.RecalculateSuppressedCount(context.Background(), db, scan); err != nil {
 		log.Warnf("Worker: failed to recalculate suppressed count for scan %s (non-fatal): %v", scanID, err)
+		recordScanStepOutput(context.Background(), db, scanID, fmt.Sprintf("Suppression count recalculation failed but the report can still be saved: %v", err))
 	} else {
 		scan.SuppressedCount = suppressedCount
+		recordScanStepOutput(context.Background(), db, scanID, fmt.Sprintf("Suppression count recalculated: %d findings suppressed.", suppressedCount))
 	}
 
 	if _, err := db.NewUpdate().Model(scan).
@@ -431,6 +452,7 @@ func processScan(job ScanJob, cacheDir string) {
 		return
 	}
 	recordScanStepOutput(context.Background(), db, scanID, fmt.Sprintf("Scan completed with %d total findings.", len(vulns)+len(osvVulns)))
+	recordScanStepOutput(context.Background(), db, scanID, "Queued org auto-assignment, compliance evaluation, auto-tagging, and completion notifications.")
 
 	log.Infof("Worker: scan %s completed — CRIT:%d HIGH:%d MED:%d LOW:%d UNK:%d",
 		scanID,

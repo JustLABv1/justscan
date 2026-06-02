@@ -346,6 +346,10 @@ func sortCollections(collections []models.ScanCollection) {
 	})
 }
 
+func SortCollectionsForDisplay(collections []models.ScanCollection) {
+	sortCollections(collections)
+}
+
 func uniqueUUIDs(ids []uuid.UUID) []uuid.UUID {
 	seen := make(map[uuid.UUID]struct{}, len(ids))
 	result := make([]uuid.UUID, 0, len(ids))

@@ -138,8 +138,18 @@ function MobileSevStat({ label, count, tone }: { label: string; count: number; t
 
 type ScansTimeRange = '' | RecentActivityRange;
 type ScansGroupingMode = '' | 'collections';
+type ScansViewState = {
+  image: string;
+  status: string;
+  range: ScansTimeRange;
+  tag: string;
+  critical: '' | 'yes' | 'no';
+  collection: string;
+  group: ScansGroupingMode;
+};
 
 const DEFAULT_ACTIVITY_RANGE: RecentActivityRange = '24h';
+const SCANS_VIEW_STORAGE_KEY_PREFIX = 'justscan:scans-view';
 
 function normalizeScansTimeRange(
   value?: string | null,
@@ -211,6 +221,30 @@ function buildScansRoute({
   return query ? `/scans?${query}` : '/scans';
 }
 
+function readScansViewFromSearchParams(searchParams: { get(name: string): string | null }): ScansViewState {
+  return {
+    image: searchParams.get('image') ?? '',
+    status: searchParams.get('status') ?? '',
+    range: normalizeScansTimeRange(searchParams.get('range'), searchParams.get('view')),
+    tag: searchParams.get('tag') ?? '',
+    critical: normalizeCriticalFilter(searchParams.get('critical')),
+    collection: searchParams.get('collection') ?? '',
+    group: normalizeGroupingMode(searchParams.get('group')),
+  };
+}
+
+function areScansViewStatesEqual(left: ScansViewState, right: ScansViewState) {
+  return (
+    left.image === right.image &&
+    left.status === right.status &&
+    left.range === right.range &&
+    left.tag === right.tag &&
+    left.critical === right.critical &&
+    left.collection === right.collection &&
+    left.group === right.group
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────
 export default function ScansPage() {
   const router = useRouter();
@@ -219,6 +253,10 @@ export default function ScansPage() {
   const orgNamesById = useOrgNameMap();
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
+  const savedViewStorageKey = `${SCANS_VIEW_STORAGE_KEY_PREFIX}:${scopeKey}`;
+  const initialViewState = useMemo(() => readScansViewFromSearchParams(searchParams), [searchParams]);
+  const searchParamsString = searchParams.toString();
+  const didAttemptInitialRestoreRef = useRef(false);
 
   const [images, setImages] = useState<ImageSummary[]>([]);
   const [activityScans, setActivityScans] = useState<Scan[]>([]);
@@ -227,20 +265,14 @@ export default function ScansPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [imageFilter, setImageFilter] = useState(searchParams.get('image') ?? '');
-  const [appliedImageFilter, setAppliedImageFilter] = useState(searchParams.get('image') ?? '');
-  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? '');
-  const [activityRange, setActivityRange] = useState<ScansTimeRange>(
-    normalizeScansTimeRange(searchParams.get('range'), searchParams.get('view'))
-  );
-  const [tagFilter, setTagFilter] = useState(searchParams.get('tag') ?? '');
-  const [collectionFilter, setCollectionFilter] = useState(searchParams.get('collection') ?? '');
-  const [groupingMode, setGroupingMode] = useState<ScansGroupingMode>(
-    normalizeGroupingMode(searchParams.get('group'))
-  );
-  const [criticalFilter, setCriticalFilter] = useState<'' | 'yes' | 'no'>(
-    normalizeCriticalFilter(searchParams.get('critical'))
-  );
+  const [imageFilter, setImageFilter] = useState(initialViewState.image);
+  const [appliedImageFilter, setAppliedImageFilter] = useState(initialViewState.image);
+  const [statusFilter, setStatusFilter] = useState(initialViewState.status);
+  const [activityRange, setActivityRange] = useState<ScansTimeRange>(initialViewState.range);
+  const [tagFilter, setTagFilter] = useState(initialViewState.tag);
+  const [collectionFilter, setCollectionFilter] = useState(initialViewState.collection);
+  const [groupingMode, setGroupingMode] = useState<ScansGroupingMode>(initialViewState.group);
+  const [criticalFilter, setCriticalFilter] = useState<'' | 'yes' | 'no'>(initialViewState.critical);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Which image names are expanded
@@ -378,6 +410,88 @@ export default function ScansPage() {
     },
     []
   );
+
+  useEffect(() => {
+    return deferEffect(() => {
+      const nextViewState = readScansViewFromSearchParams(searchParams);
+      const currentViewState: ScansViewState = {
+        image: appliedImageFilter,
+        status: statusFilter,
+        range: activityRange,
+        tag: tagFilter,
+        critical: criticalFilter,
+        collection: collectionFilter,
+        group: groupingMode,
+      };
+
+      if (areScansViewStatesEqual(nextViewState, currentViewState)) {
+        if (imageFilter !== nextViewState.image) {
+          setImageFilter(nextViewState.image);
+        }
+        return;
+      }
+
+      clearPendingImageCommit();
+      setImageFilter(nextViewState.image);
+      setAppliedImageFilter(nextViewState.image);
+      setStatusFilter(nextViewState.status);
+      setActivityRange(nextViewState.range);
+      setTagFilter(nextViewState.tag);
+      setCollectionFilter(nextViewState.collection);
+      setGroupingMode(nextViewState.group);
+      setCriticalFilter(nextViewState.critical);
+      setPage(1);
+    });
+  }, [
+    activityRange,
+    appliedImageFilter,
+    collectionFilter,
+    criticalFilter,
+    groupingMode,
+    imageFilter,
+    searchParams,
+    statusFilter,
+    tagFilter,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (didAttemptInitialRestoreRef.current) return;
+
+    didAttemptInitialRestoreRef.current = true;
+    if (searchParamsString) return;
+
+    const savedRoute = window.localStorage.getItem(savedViewStorageKey);
+    if (!savedRoute || savedRoute === '/scans') return;
+
+    router.replace(savedRoute);
+  }, [router, savedViewStorageKey, searchParamsString]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    window.localStorage.setItem(
+      savedViewStorageKey,
+      buildScansRoute({
+        image: appliedImageFilter,
+        status: statusFilter,
+        range: activityRange,
+        tag: tagFilter,
+        critical: criticalFilter,
+        collection: collectionFilter,
+        group: groupingMode,
+      })
+    );
+  }, [
+    activityRange,
+    appliedImageFilter,
+    collectionFilter,
+    criticalFilter,
+    groupingMode,
+    savedViewStorageKey,
+    statusFilter,
+    tagFilter,
+  ]);
 
   useEffect(() => {
     Promise.all([listTags().catch(() => []), listCollections().catch(() => [])])

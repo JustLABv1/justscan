@@ -3,6 +3,7 @@ package scans
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	effectivesuppressions "justscan-backend/functions/suppressions"
@@ -32,7 +33,21 @@ type VulnerabilitySummary struct {
 
 func applyVulnerabilityFilters(c *gin.Context, q *bun.SelectQuery) *bun.SelectQuery {
 	if sev := c.Query("severity"); sev != "" {
-		q = q.Where("severity = ?", sev)
+		parts := strings.Split(sev, ",")
+		values := make([]string, 0, len(parts))
+		for _, part := range parts {
+			trimmed := strings.ToUpper(strings.TrimSpace(part))
+			if trimmed != "" {
+				values = append(values, trimmed)
+			}
+		}
+		switch len(values) {
+		case 0:
+		case 1:
+			q = q.Where("severity = ?", values[0])
+		default:
+			q = q.Where("severity IN (?)", bun.In(values))
+		}
 	}
 	if pkg := c.Query("pkg"); pkg != "" {
 		q = q.Where("pkg_name ILIKE ?", "%"+pkg+"%")

@@ -77,8 +77,8 @@ func ListScanImages(db *bun.DB) gin.HandlerFunc {
 		imageFilter := c.Query("image")
 		statusFilter := c.Query("status")
 		// Build WHERE clause fragments based on role and filter
-		userWhere, userArgs := scanOwnershipWhere(userID, isAdmin, accessibleOrgIDs)
-		scopeWhere, scopeArgs := scanScopeWhere(c, userID)
+		userWhere, userArgs := scanOwnershipWhere(userID, isAdmin, accessibleOrgIDs, "scans")
+		scopeWhere, scopeArgs := scanScopeWhere(c, userID, "scans")
 
 		imageWhere := "1=1"
 		var imageArgs []interface{}
@@ -217,16 +217,18 @@ LIMIT ? OFFSET ?`
 				imageIndexByName[image.ImageName] = index
 			}
 
+			imageCollectionsUserWhere, imageCollectionsUserArgs := scanOwnershipWhere(userID, isAdmin, accessibleOrgIDs, "s")
+			imageCollectionsScopeWhere, imageCollectionsScopeArgs := scanScopeWhere(c, userID, "s")
 			imageCollectionsQuery := `
 SELECT DISTINCT
 	s.image_name,
 	scm.collection_id
 FROM scans s
 JOIN scan_collection_memberships scm ON scm.scan_id = s.id
-WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND s.image_name IN (?) AND ` + imageWhere + ` AND ` + collectionWhere
+WHERE ` + imageCollectionsUserWhere + ` AND ` + imageCollectionsScopeWhere + ` AND s.image_name IN (?) AND ` + imageWhere + ` AND ` + collectionWhere
 
-			imageCollectionArgs := append([]interface{}{}, userArgs...)
-			imageCollectionArgs = append(imageCollectionArgs, scopeArgs...)
+			imageCollectionArgs := append([]interface{}{}, imageCollectionsUserArgs...)
+			imageCollectionArgs = append(imageCollectionArgs, imageCollectionsScopeArgs...)
 			imageCollectionArgs = append(imageCollectionArgs, bun.In(imageNames))
 			imageCollectionArgs = append(imageCollectionArgs, imageArgs...)
 			imageCollectionArgs = append(imageCollectionArgs, collectionArgs...)
@@ -312,10 +314,12 @@ WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND s.image_name IN (?) AND ` + i
 	}
 }
 
-func scanOwnershipWhere(userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) (string, []interface{}) {
+func scanOwnershipWhere(userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, scanAlias string) (string, []interface{}) {
 	if isAdmin {
 		return "1=1", nil
 	}
+
+	idRef := qualifiedScanColumn(scanAlias, "id")
 
 	clauses := []string{"user_id = ?", "owner_user_id = ?"}
 	args := []interface{}{userID, userID}
@@ -332,13 +336,13 @@ func scanOwnershipWhere(userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.
 			args = append(args, orgID)
 		}
 		clauses = append(clauses, "owner_org_id IN ("+strings.Join(ownerOrgPlaceholders, ",")+")")
-		clauses = append(clauses, "EXISTS (SELECT 1 FROM org_scans os WHERE os.scan_id = scans.id AND os.org_id IN ("+strings.Join(sharedOrgPlaceholders, ",")+"))")
+		clauses = append(clauses, "EXISTS (SELECT 1 FROM org_scans os WHERE os.scan_id = "+idRef+" AND os.org_id IN ("+strings.Join(sharedOrgPlaceholders, ",")+"))")
 	}
 
 	return "(" + strings.Join(clauses, " OR ") + ")", args
 }
 
-func scanScopeWhere(c *gin.Context, userID uuid.UUID) (string, []interface{}) {
+func scanScopeWhere(c *gin.Context, userID uuid.UUID, scanAlias string) (string, []interface{}) {
 	scope := c.Query("scope")
 	if scope == "" {
 		return "1=1", nil
@@ -350,5 +354,14 @@ func scanScopeWhere(c *gin.Context, userID uuid.UUID) (string, []interface{}) {
 	if err != nil {
 		return "1=1", nil
 	}
-	return "(owner_org_id = ? OR EXISTS (SELECT 1 FROM org_scans os2 WHERE os2.scan_id = scans.id AND os2.org_id = ?))", []interface{}{orgID, orgID}
+	idRef := qualifiedScanColumn(scanAlias, "id")
+	return "(owner_org_id = ? OR EXISTS (SELECT 1 FROM org_scans os2 WHERE os2.scan_id = " + idRef + " AND os2.org_id = ?))", []interface{}{orgID, orgID}
+}
+
+func qualifiedScanColumn(scanAlias, column string) string {
+	alias := strings.TrimSpace(scanAlias)
+	if alias == "" {
+		alias = "scans"
+	}
+	return alias + "." + column
 }

@@ -3,6 +3,7 @@ package triage
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -510,17 +511,30 @@ func fixItem(scan *models.Scan, fixes vulnFixRow) triageItem {
 		description += "s"
 	}
 	description += " have a fixed version available."
-	return baseScanItem(scan, fixes, nil, kindFix, priorityHigh, "Fixes available", description, "Open fixable findings", latest(scan.CreatedAt, valueTime(scan.CompletedAt)), []string{"fix available"})
+	return baseScanItem(scan, fixes, nil, kindFix, priorityHigh, "Fixes available", description, "Acknowledge findings", latest(scan.CreatedAt, valueTime(scan.CompletedAt)), []string{"fix available"})
 }
 
 func baseScanItem(scan *models.Scan, fixes vulnFixRow, policies []string, kind itemKind, prio priority, title, description, action string, updatedAt time.Time, signals []string) triageItem {
+	href := "/scans/" + scan.ID.String()
+	if kind == kindFix {
+		params := url.Values{}
+		params.Set("tab", "vulns")
+		params.Set("severity", "CRITICAL,HIGH")
+		params.Set("has_fix", "true")
+		params.Set("suppressed", "false")
+		params.Set("sort_by", "severity")
+		params.Set("sort_dir", "desc")
+		params.Set("triage_focus", "acknowledge")
+		href += "?" + params.Encode()
+	}
+
 	return triageItem{
 		ID:             string(kind) + ":" + scan.ID.String(),
 		Kind:           kind,
 		Priority:       prio,
 		Title:          title,
 		Description:    description,
-		Href:           "/scans/" + scan.ID.String(),
+		Href:           href,
 		PrimaryAction:  action,
 		Signals:        dedupeStrings(signals),
 		SeverityCounts: severityCounts{Critical: scan.CriticalCount, High: scan.HighCount, Medium: scan.MediumCount, Low: scan.LowCount, Unknown: scan.UnknownCount},

@@ -123,6 +123,10 @@ const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
 
 type ScanTab = 'vulns' | 'sbom' | 'details' | 'timeline' | 'compliance';
+type ActiveVulnerabilitySeverityFilter = VulnerabilityViewSettings['severity'] | 'CRITICAL,HIGH';
+type ActiveVulnerabilityViewSettings = Omit<VulnerabilityViewSettings, 'severity'> & {
+  severity: ActiveVulnerabilitySeverityFilter;
+};
 
 const DEFAULT_VULNERABILITY_VIEW_SETTINGS: VulnerabilityViewSettings = {
   sort_by: 'severity',
@@ -152,9 +156,29 @@ const VULNERABILITY_SORT_LABELS: Record<VulnerabilityViewSettings['sort_by'], st
   fixed_version: 'Fixed In',
 };
 
-function vulnerabilityViewSummary(settings: VulnerabilityViewSettings) {
+function isPersistableSeverityFilter(
+  value: ActiveVulnerabilitySeverityFilter
+): value is VulnerabilityViewSettings['severity'] {
+  return (
+    value === '' ||
+    value === 'CRITICAL' ||
+    value === 'HIGH' ||
+    value === 'MEDIUM' ||
+    value === 'LOW' ||
+    value === 'UNKNOWN'
+  );
+}
+
+function severityFilterSummaryLabel(value: ActiveVulnerabilitySeverityFilter) {
+  if (value === 'CRITICAL,HIGH') {
+    return 'Critical + High';
+  }
+  return value || 'All severities';
+}
+
+function vulnerabilityViewSummary(settings: ActiveVulnerabilityViewSettings) {
   const filters = [
-    settings.severity ? settings.severity : 'All severities',
+    severityFilterSummaryLabel(settings.severity),
     settings.min_cvss > 0 ? `CVSS >= ${settings.min_cvss}` : '',
     settings.has_fix ? 'Has fix' : '',
     settings.xray_policy_first ? 'Xray policy first' : '',
@@ -265,6 +289,76 @@ function prioritizeXrayPolicyVulnerabilities(vulnerabilities: Vulnerability[]): 
       return left.index - right.index;
     })
     .map((entry) => entry.vulnerability);
+}
+
+function summarizeVisibleVulnerabilities(vulnerabilities: Vulnerability[]): VulnerabilitySummary {
+  const summary: VulnerabilitySummary = {
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+    with_fix: 0,
+    xray_policy: 0,
+  };
+
+  for (const vulnerability of vulnerabilities) {
+    switch ((vulnerability.severity ?? '').toUpperCase()) {
+      case 'CRITICAL':
+        summary.critical += 1;
+        break;
+      case 'HIGH':
+        summary.high += 1;
+        break;
+      case 'MEDIUM':
+        summary.medium += 1;
+        break;
+      case 'LOW':
+        summary.low += 1;
+        break;
+      default:
+        break;
+    }
+    if ((vulnerability.fixed_version ?? '').trim() !== '') {
+      summary.with_fix += 1;
+    }
+    if (vulnerabilityHasXrayPolicy(vulnerability)) {
+      summary.xray_policy += 1;
+    }
+  }
+
+  return summary;
+}
+
+function parseRouteSeverityFilter(raw: string | null): ActiveVulnerabilitySeverityFilter | null {
+  const normalized = (raw ?? '')
+    .split(',')
+    .map((part) => part.trim().toUpperCase())
+    .filter(Boolean);
+
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  const unique = Array.from(new Set(normalized));
+  if (unique.length === 2 && unique[0] === 'CRITICAL' && unique[1] === 'HIGH') {
+    return 'CRITICAL,HIGH';
+  }
+  if (unique.length === 2 && unique[0] === 'HIGH' && unique[1] === 'CRITICAL') {
+    return 'CRITICAL,HIGH';
+  }
+  if (unique.length === 1 && isPersistableSeverityFilter(unique[0] as ActiveVulnerabilitySeverityFilter)) {
+    return unique[0] as VulnerabilityViewSettings['severity'];
+  }
+
+  return null;
+}
+
+function routeHasFixFilter(raw: string | null) {
+  return raw === 'true' ? true : raw === 'false' ? false : null;
+}
+
+function routeHideSuppressedFilter(raw: string | null) {
+  return raw === 'false' ? true : raw === 'true' ? false : null;
 }
 
 function imageConfigObject(value: unknown): Record<string, unknown> | null {
@@ -398,13 +492,14 @@ export default function ScanDetailPage() {
   const [sbomNameInput, setSbomNameInput] = useState('');
   const [sbomTypeFilter, setSbomTypeFilter] = useState('');
   const sbomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [severityFilter, setSeverityFilter] = useState<VulnerabilityViewSettings['severity']>('');
+  const [severityFilter, setSeverityFilter] = useState<ActiveVulnerabilitySeverityFilter>('');
   const [pkgFilter, setPkgFilter] = useState('');
   const [pkgInput, setPkgInput] = useState('');
   const [cveFilter, setCveFilter] = useState('');
   const [cveInput, setCveInput] = useState('');
   const [minCvss, setMinCvss] = useState(0);
   const [hasFix, setHasFix] = useState(false);
+  const [hideSuppressed, setHideSuppressed] = useState(false);
   const [xrayPolicyFirst, setXrayPolicyFirst] = useState(false);
   const [policyFailedOnly, setPolicyFailedOnly] = useState(false);
   const [sortBy, setSortBy] = useState<VulnerabilityViewSettings['sort_by']>('severity');
@@ -417,6 +512,8 @@ export default function ScanDetailPage() {
   const [loading, setLoading] = useState(true);
   const [vulnLoading, setVulnLoading] = useState(false);
   const [vulnSummary, setVulnSummary] = useState<VulnerabilitySummary | null>(null);
+  const [filteredVulnSummaryOverride, setFilteredVulnSummaryOverride] =
+    useState<VulnerabilitySummary | null>(null);
   const [isVulnerabilityRadarCollapsed, setIsVulnerabilityRadarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     const userId = getUser()?.id ?? 'anonymous';
@@ -448,6 +545,7 @@ export default function ScanDetailPage() {
   const defaultTabInitializedRef = useRef(false);
   const vulnerabilityViewInitializedRef = useRef(false);
   const vulnerabilityViewScopeKeyRef = useRef('');
+  const appliedRouteVulnerabilityFocusKeyRef = useRef('');
 
   const [suppressStatus, setSuppressStatus] = useState<Suppression['status']>('accepted');
   const [suppressScope, setSuppressScope] = useState<'personal' | 'workspace' | 'global'>(
@@ -489,7 +587,7 @@ export default function ScanDetailPage() {
     scan?.blocked_policy_details,
     scan?.error_message
   );
-  const currentVulnerabilityViewSettings: VulnerabilityViewSettings = {
+  const currentVulnerabilityViewSettings: ActiveVulnerabilityViewSettings = {
     sort_by: sortBy,
     sort_dir: sortDir,
     severity: severityFilter,
@@ -500,17 +598,36 @@ export default function ScanDetailPage() {
   };
   const effectiveVulnerabilityViewSettings =
     viewPreference?.settings ?? DEFAULT_VULNERABILITY_VIEW_SETTINGS;
+  const persistableCurrentVulnerabilityViewSettings: VulnerabilityViewSettings = {
+    ...currentVulnerabilityViewSettings,
+    severity: isPersistableSeverityFilter(severityFilter) ? severityFilter : '',
+  };
   const vulnerabilityViewHasChanges =
     viewSettingsReady &&
     !vulnerabilityViewSettingsEqual(
-      currentVulnerabilityViewSettings,
+      persistableCurrentVulnerabilityViewSettings,
       effectiveVulnerabilityViewSettings
     );
+  const routeSeverityFilter = parseRouteSeverityFilter(searchParams.get('severity'));
+  const routeHasFix = routeHasFixFilter(searchParams.get('has_fix'));
+  const routeHideSuppressed = routeHideSuppressedFilter(searchParams.get('suppressed'));
+  const routeSortBy = searchParams.get('sort_by');
+  const routeSortDir = searchParams.get('sort_dir');
+  const hasRouteVulnerabilityFocus =
+    routeSeverityFilter !== null ||
+    routeHasFix !== null ||
+    routeHideSuppressed !== null ||
+    Boolean(routeSortBy) ||
+    Boolean(routeSortDir);
+  const triageFocusActive = searchParams.get('triage_focus') === 'acknowledge';
   const hasTransientVulnerabilityFilters =
     pkgInput.trim().length > 0 ||
     pkgFilter.trim().length > 0 ||
     cveInput.trim().length > 0 ||
-    cveFilter.trim().length > 0;
+    cveFilter.trim().length > 0 ||
+    hideSuppressed ||
+    !isPersistableSeverityFilter(severityFilter) ||
+    hasRouteVulnerabilityFocus;
   const vulnerabilityViewSourceLabel = viewPreference?.has_user_override
     ? 'My saved default'
     : viewPreference?.source === 'org'
@@ -597,14 +714,17 @@ export default function ScanDetailPage() {
       setSeverityFilter('');
       setMinCvss(0);
       setHasFix(false);
+      setHideSuppressed(false);
       setXrayPolicyFirst(false);
       setPolicyFailedOnly(false);
       setSortBy('severity');
       setSortDir('asc');
       setPage(1);
+      setFilteredVulnSummaryOverride(null);
       setComplianceVulnById({});
       setComplianceVulnLoaded(false);
       setComplianceVulnLoading(false);
+      appliedRouteVulnerabilityFocusKeyRef.current = '';
     });
   }, [id]);
 
@@ -742,6 +862,51 @@ export default function ScanDetailPage() {
 
   useEffect(() => {
     return deferEffect(() => {
+      if (!scan || scan.status === 'pending' || scan.status === 'running') return;
+      if (!viewSettingsReady || !hasRouteVulnerabilityFocus) return;
+
+      const focusKey = searchParams.toString();
+      if (appliedRouteVulnerabilityFocusKeyRef.current === focusKey) return;
+      appliedRouteVulnerabilityFocusKeyRef.current = focusKey;
+
+      if (routeSeverityFilter !== null) {
+        setSeverityFilter(routeSeverityFilter);
+      }
+      if (routeHasFix !== null) {
+        setHasFix(routeHasFix);
+      }
+      if (routeHideSuppressed !== null) {
+        setHideSuppressed(routeHideSuppressed);
+      }
+      if (
+        routeSortBy === 'vuln_id' ||
+        routeSortBy === 'pkg_name' ||
+        routeSortBy === 'severity' ||
+        routeSortBy === 'cvss_score' ||
+        routeSortBy === 'installed_version' ||
+        routeSortBy === 'fixed_version'
+      ) {
+        setSortBy(routeSortBy);
+      }
+      if (routeSortDir === 'asc' || routeSortDir === 'desc') {
+        setSortDir(routeSortDir);
+      }
+      setPage(1);
+    });
+  }, [
+    hasRouteVulnerabilityFocus,
+    routeHasFix,
+    routeHideSuppressed,
+    routeSeverityFilter,
+    routeSortBy,
+    routeSortDir,
+    scan,
+    searchParams,
+    viewSettingsReady,
+  ]);
+
+  useEffect(() => {
+    return deferEffect(() => {
       if (!vulnerabilityDetailsModal.isOpen) {
         setSelectedVulnerability(null);
       }
@@ -822,8 +987,13 @@ export default function ScanDetailPage() {
     if (!scan || scan.status === 'pending' || scan.status === 'running' || !viewSettingsReady)
       return;
     setVulnLoading(true);
+    const severityParts = severityFilter
+      .split(',')
+      .map((part) => part.trim().toUpperCase())
+      .filter(Boolean);
+    const apiSeverityFilter = severityParts.length > 0 ? severityParts.join(',') : undefined;
     const baseArgs = [
-      severityFilter || undefined,
+      apiSeverityFilter,
       pkgFilter || undefined,
       hasFix || undefined,
       minCvss || undefined,
@@ -848,7 +1018,15 @@ export default function ScanDetailPage() {
       }
     }
     const shouldLoadAllPages =
-      xrayPolicyFirst || normalizedCveFilter.length > 0 || policyFailedFilterActive;
+      xrayPolicyFirst ||
+      normalizedCveFilter.length > 0 ||
+      policyFailedFilterActive ||
+      hideSuppressed ||
+      severityParts.length > 1;
+
+    if (!shouldLoadAllPages) {
+      setFilteredVulnSummaryOverride(null);
+    }
 
     const loadPromise = shouldLoadAllPages
       ? (async () => {
@@ -880,18 +1058,30 @@ export default function ScanDetailPage() {
                 policyFailedVulnIdSet.has(normalizeVulnId(vulnerability.vuln_id))
               )
             : filteredByCve;
+          const filteredBySuppression = hideSuppressed
+            ? filteredByPolicy.filter((vulnerability) => !vulnerability.suppression)
+            : filteredByPolicy;
           const start = (page - 1) * LIMIT;
           const end = start + LIMIT;
-          return { data: filteredByPolicy.slice(start, end), total: filteredByPolicy.length };
+          setFilteredVulnSummaryOverride(summarizeVisibleVulnerabilities(filteredBySuppression));
+          return {
+            data: filteredBySuppression.slice(start, end),
+            total: filteredBySuppression.length,
+          };
         })()
       : listVulnerabilities(id, page, LIMIT, ...baseArgs);
 
     loadPromise
       .then((res) => {
-        setVulns(res.data ?? []);
-        setVulnTotal(res.total ?? 0);
+        const rows = hideSuppressed
+          ? (res.data ?? []).filter((vulnerability) => !vulnerability.suppression)
+          : (res.data ?? []);
+        setVulns(rows);
+        setVulnTotal(res.total ?? rows.length);
       })
-      .catch(() => {})
+      .catch(() => {
+        setFilteredVulnSummaryOverride(null);
+      })
       .finally(() => setVulnLoading(false));
   }
 
@@ -908,6 +1098,7 @@ export default function ScanDetailPage() {
     hasFix,
     xrayPolicyFirst,
     policyFailedOnly,
+    hideSuppressed,
     cveFilter,
     sortBy,
     sortDir,
@@ -923,6 +1114,10 @@ export default function ScanDetailPage() {
         setVulnSummary(null);
         return;
       }
+      if (filteredVulnSummaryOverride) {
+        setVulnSummary(filteredVulnSummaryOverride);
+        return;
+      }
 
       getVulnerabilitySummary(
         id,
@@ -934,7 +1129,16 @@ export default function ScanDetailPage() {
         .then(setVulnSummary)
         .catch(() => setVulnSummary(null));
     });
-  }, [id, scan, severityFilter, pkgFilter, minCvss, hasFix, viewSettingsReady]);
+  }, [
+    filteredVulnSummaryOverride,
+    hasFix,
+    id,
+    minCvss,
+    pkgFilter,
+    scan,
+    severityFilter,
+    viewSettingsReady,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1001,7 +1205,7 @@ export default function ScanDetailPage() {
     try {
       const preference = await saveScanVulnerabilityViewPreference(
         id,
-        currentVulnerabilityViewSettings
+        persistableCurrentVulnerabilityViewSettings
       );
       applyVulnerabilityViewPreference(preference);
       toast.success('Default vulnerability view saved');
@@ -1036,6 +1240,7 @@ export default function ScanDetailPage() {
     setPkgFilter('');
     setCveInput('');
     setCveFilter('');
+    setHideSuppressed(false);
     applyVulnerabilityViewPreference({
       settings: effectiveVulnerabilityViewSettings,
       source: viewPreference?.source ?? 'system',
@@ -2253,6 +2458,12 @@ export default function ScanDetailPage() {
                     ? `${vulnerabilityViewSourceLabel}: ${vulnerabilityViewSummary(currentVulnerabilityViewSettings)}`
                     : 'Loading default view...'}
                 </p>
+                {triageFocusActive && (
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    Triage focus is showing open critical and high vulnerabilities with fixes so
+                    you can acknowledge them quickly.
+                  </p>
+                )}
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Button
@@ -2471,7 +2682,7 @@ export default function ScanDetailPage() {
                   className="w-full h-11 bg-surface"
                   containerClassName="w-full"
                 />
-                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:col-span-2 2xl:col-span-1 2xl:grid-cols-3">
+                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:col-span-2 2xl:col-span-1 2xl:grid-cols-4">
                   <Button
                     onPress={() => {
                       setHasFix(!hasFix);
@@ -2481,6 +2692,16 @@ export default function ScanDetailPage() {
                     variant={hasFix ? 'primary' : 'secondary'}
                   >
                     Has Fix
+                  </Button>
+                  <Button
+                    onPress={() => {
+                      setHideSuppressed(!hideSuppressed);
+                      setPage(1);
+                    }}
+                    className="min-w-0 w-full"
+                    variant={hideSuppressed ? 'primary' : 'secondary'}
+                  >
+                    Hide Acknowledged
                   </Button>
                   <Button
                     onPress={() => {

@@ -1,6 +1,5 @@
 'use client';
 import { PublicNavbar } from '@/components/public/public-navbar';
-import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -16,7 +15,16 @@ import {
 import { deferEffect } from '@/lib/defer-effect';
 import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Card, ListBox, SearchField, Select, Table, useOverlayState } from '@heroui/react';
+import {
+  Button,
+  Card,
+  Chip,
+  ListBox,
+  SearchField,
+  Select,
+  Table,
+  useOverlayState,
+} from '@heroui/react';
 import { ArrowLeft01Icon, CpuIcon, FileExportIcon, Refresh01Icon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -143,6 +151,26 @@ function ScannerDatabaseCard({
 const LIMIT = 25;
 
 type ResultTab = 'overview' | 'timeline';
+
+function publicScanStatusTone(status?: string | null): {
+  color: 'success' | 'danger' | 'accent' | 'warning';
+  label: string;
+} {
+  switch (status) {
+    case 'completed':
+      return { color: 'success', label: 'Completed' };
+    case 'failed':
+      return { color: 'danger', label: 'Failed' };
+    case 'running':
+      return { color: 'accent', label: 'Running' };
+    default:
+      return { color: 'warning', label: 'Queued' };
+  }
+}
+
+function publicScanProviderLabel(scanProvider?: string | null): string {
+  return scanProvider === 'artifactory_xray' ? 'Artifactory Xray' : 'Built-in scanner';
+}
 
 export default function PublicScanResultPage() {
   const { id } = useParams<{ id: string }>();
@@ -336,556 +364,641 @@ export default function PublicScanResultPage() {
   );
   const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
   const imageName = scan ? `${scan.image_name}:${scan.image_tag}` : '…';
+  const statusTone = publicScanStatusTone(scan?.status);
+  const providerLabel = publicScanProviderLabel(scan?.scan_provider);
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--app-bg)' }}>
-      <div className="sticky top-0 z-20">
-        <PublicNavbar
-          isDark={isDark}
-          isLoggedIn={isLoggedIn}
-          onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
-          homeHref="/public/scan/image"
+    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: isDark
+            ? 'linear-gradient(180deg, color-mix(in srgb, var(--background) 94%, #07111b) 0%, var(--background) 38%, color-mix(in srgb, var(--background) 97%, #05070c) 100%)'
+            : 'linear-gradient(180deg, color-mix(in srgb, var(--background) 90%, #f4f8fd) 0%, var(--background) 38%, color-mix(in srgb, var(--background) 95%, #eef4fa) 100%)',
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.45] dark:opacity-[0.32]"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 28%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 3%, transparent) 1px, transparent 1px)',
+          backgroundPosition: 'center top, center top, center top',
+          backgroundSize: '24px 24px, 24px 24px, 24px 24px',
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: isDark
+            ? 'radial-gradient(circle at 16% 12%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 20%), radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 22%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 24%)'
+            : 'radial-gradient(circle at 16% 12%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 18%), radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 22%)',
+        }}
+      />
+
+      <section className="relative z-10 overflow-hidden">
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: isDark
+              ? 'linear-gradient(180deg, color-mix(in srgb, var(--background) 84%, #05111c) 0%, color-mix(in srgb, var(--background) 52%, transparent) 70%, transparent 100%)'
+              : 'linear-gradient(180deg, color-mix(in srgb, var(--background) 78%, #edf7ff) 0%, color-mix(in srgb, var(--background) 46%, transparent) 70%, transparent 100%)',
+          }}
         />
-      </div>
-
-      <main className="max-w-[1500px] mx-auto px-4 py-8 space-y-6">
-        {actionError && (
-          <div
-            className="rounded-2xl px-4 py-3 text-sm"
-            style={{
-              background: 'rgba(239,68,68,0.08)',
-              border: '1px solid rgba(239,68,68,0.18)',
-              color: '#f87171',
-            }}
-          >
-            {actionError}
-          </div>
-        )}
-
-        <ScanDetailHeader
-          title={imageName}
-          subtitle={scan?.image_digest ? <span>{scan.image_digest}</span> : undefined}
-          meta={
-            scan?.architecture ? (
-              <p
-                className="text-xs mt-1 flex items-center gap-1"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                <CpuIcon size={12} />
-                {scan.architecture} · {scan.os_family} {scan.os_name}
-              </p>
-            ) : undefined
-          }
-          actions={
-            <div
-              className="flex flex-wrap items-center gap-2"
-              role="toolbar"
-              aria-label="Public scan actions"
-            >
-              <Button
-                className="btn-secondary"
-                onPress={() => router.push('/public/scan/image')}
-                variant="secondary"
-              >
-                <ArrowLeft01Icon size={15} />
-                New scan
-              </Button>
-              {scan?.helm_scan_run_id && (
-                <Button
-                  className="btn-secondary"
-                  onPress={() => router.push(`/public/scan/helm/runs/${scan.helm_scan_run_id}`)}
-                  variant="secondary"
-                >
-                  <ArrowLeft01Icon size={15} />
-                  Back to Helm run
-                </Button>
-              )}
-              {(scan?.status === 'completed' || isBlockedByXrayPolicy) && (
-                <Button
-                  className="btn-secondary"
-                  onPress={() =>
-                    window.open(`/reports/print?scans=${id}`, '_blank', 'noopener,noreferrer')
-                  }
-                  variant="secondary"
-                >
-                  <FileExportIcon size={15} />
-                  Export
-                </Button>
-              )}
-              {(scan?.status === 'completed' || scan?.status === 'failed') && (
-                <Button
-                  className="btn-primary"
-                  isDisabled={reScanning}
-                  onPress={handleRescan}
-                  variant="primary"
-                >
-                  {reScanning ? (
-                    <span className="size-3.5 border-2 border-accent-400/30 border-t-accent-400 rounded-full animate-spin" />
-                  ) : (
-                    <Refresh01Icon size={15} />
-                  )}
-                  Re-scan
-                </Button>
-              )}
-            </div>
-          }
+        <div
+          className="pointer-events-none absolute inset-0 opacity-35"
+          style={{
+            background:
+              'radial-gradient(circle at 68% 24%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 24%)',
+          }}
         />
 
-        {isScanning && (
-          <ScanningAnimation
-            image={imageName}
-            status={scan?.status ?? 'pending'}
-            startedAt={scan?.started_at ?? null}
-            scanProvider={scan?.scan_provider}
-            currentStep={scan?.current_step ?? null}
-            stepLogs={scan?.step_logs ?? null}
+        <div className="sticky top-0 z-20">
+          <PublicNavbar
+            isDark={isDark}
+            isLoggedIn={isLoggedIn}
+            onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
+            homeHref="/public/scan/image"
           />
-        )}
+        </div>
 
-        {showResultTabs && (
-          <div className="w-full overflow-x-auto pb-1">
-            <SegmentedControl
-              ariaLabel="Result tabs"
-              className="min-w-max"
-              options={[
-                { id: 'overview', label: showRecoveredOverview ? 'Overview' : 'Status' },
-                {
-                  id: 'timeline',
-                  label: scan?.step_logs?.length
-                    ? `Timeline (${scan.step_logs.length})`
-                    : 'Timeline',
-                },
-              ]}
-              value={activeTab}
-              onChange={setActiveTab}
-            />
-          </div>
-        )}
-
-        {scan?.status === 'failed' && activeTab === 'overview' && !isBlockedByXrayPolicy && (
-          <>
-            <div
-              className="rounded-2xl px-6 py-5 text-center"
-              style={{
-                background: 'rgba(239,68,68,0.08)',
-                border: '1px solid rgba(239,68,68,0.2)',
-              }}
-            >
-              <p className="text-red-500 dark:text-red-400 font-medium">Scan failed</p>
-              {scan.error_message && (
-                <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-                  {scan.error_message}
-                </p>
-              )}
-              <Link
-                href="/public/scan/image"
-                className="inline-block mt-3 text-sm text-accent dark:text-accent hover:underline"
+        <main className="relative z-10 mx-auto w-full max-w-[1800px] px-6 pb-16 pt-8 lg:px-8">
+          <div className="space-y-6">
+            {actionError && (
+              <div
+                className="rounded-2xl px-4 py-3 text-sm"
+                style={{
+                  background: 'rgba(239,68,68,0.08)',
+                  border: '1px solid rgba(239,68,68,0.18)',
+                  color: '#f87171',
+                }}
               >
-                Try another image →
-              </Link>
-            </div>
-          </>
-        )}
-
-        {isBlockedByXrayPolicy && activeTab === 'overview' && (
-          <div
-            className="rounded-2xl px-6 py-5"
-            style={{
-              background: 'rgba(245,158,11,0.10)',
-              border: '1px solid rgba(245,158,11,0.22)',
-            }}
-          >
-            <p className="font-medium" style={{ color: '#f59e0b' }}>
-              Blocked by Xray policy
-            </p>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-              Xray blocked the normal scan path, but JustScan recovered any findings the provider
-              still exposed. The results below reflect that recovered data.
-            </p>
-            {scan?.error_message && (
-              <p
-                className="text-sm mt-3 whitespace-pre-wrap break-all"
-                style={{ color: 'var(--text-faint)' }}
-              >
-                {scan.error_message}
-              </p>
+                {actionError}
+              </div>
             )}
-          </div>
-        )}
 
-        {scan && !isScanning && activeTab === 'timeline' && (
-          <ScanStepTimeline
-            stepLogs={scan.step_logs}
-            completedAt={scan.completed_at}
-            status={scan.status}
-            externalStatus={scan.external_status}
-            scanProvider={scan.scan_provider}
-          />
-        )}
+            <Card className="overflow-hidden rounded-[2rem] border border-divider/60 bg-surface/40 p-5 shadow-sm backdrop-blur sm:p-6">
+              <div className="space-y-4">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Chip color="accent" size="sm" variant="soft">
+                      Public image scan
+                    </Chip>
+                    <Chip color={statusTone.color} size="sm" variant="soft">
+                      {statusTone.label}
+                    </Chip>
+                    <Chip size="sm" variant="secondary">
+                      {providerLabel}
+                    </Chip>
+                  </div>
+                  <div
+                    className="flex flex-wrap items-center justify-start gap-2 lg:justify-end"
+                    role="toolbar"
+                    aria-label="Public scan actions"
+                  >
+                    <Button
+                      className="btn-secondary"
+                      onPress={() => router.push('/public/scan/image')}
+                      variant="secondary"
+                    >
+                      <ArrowLeft01Icon size={15} />
+                      New scan
+                    </Button>
+                    {scan?.helm_scan_run_id && (
+                      <Button
+                        className="btn-secondary"
+                        onPress={() =>
+                          router.push(`/public/scan/helm/runs/${scan.helm_scan_run_id}`)
+                        }
+                        variant="secondary"
+                      >
+                        <ArrowLeft01Icon size={15} />
+                        Back to Helm run
+                      </Button>
+                    )}
+                    {(scan?.status === 'completed' || isBlockedByXrayPolicy) && (
+                      <Button
+                        className="btn-secondary"
+                        onPress={() =>
+                          window.open(`/reports/print?scans=${id}`, '_blank', 'noopener,noreferrer')
+                        }
+                        variant="secondary"
+                      >
+                        <FileExportIcon size={15} />
+                        Export
+                      </Button>
+                    )}
+                    {(scan?.status === 'completed' || scan?.status === 'failed') && (
+                      <Button
+                        className="btn-primary"
+                        isDisabled={reScanning}
+                        onPress={handleRescan}
+                        variant="primary"
+                      >
+                        {reScanning ? (
+                          <span className="size-3.5 rounded-full border-2 border-accent-400/30 border-t-accent-400 animate-spin" />
+                        ) : (
+                          <Refresh01Icon size={15} />
+                        )}
+                        Re-scan
+                      </Button>
+                    )}
+                  </div>
+                </div>
 
-        {scan && showRecoveredOverview && activeTab === 'overview' && (
-          <>
-            {/* Severity cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { ...SEV_CONFIG.CRITICAL, count: scan.critical_count },
-                { ...SEV_CONFIG.HIGH, count: scan.high_count },
-                { ...SEV_CONFIG.MEDIUM, count: scan.medium_count },
-                { ...SEV_CONFIG.LOW, count: scan.low_count },
-              ].map(({ label, count, color, border }) => (
-                <Card
-                  key={label}
-                  className={`rounded-2xl border ${border} p-4 cursor-pointer transition-all hover:scale-105`}
-                  variant="default"
-                  onClick={() => {
-                    setSeverityFilter((f) =>
-                      f === label.toUpperCase() ? '' : label.toUpperCase()
-                    );
-                    setPage(1);
-                  }}
-                >
-                  <Card.Content className="p-0">
-                    <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-                      {label}
-                    </p>
-                    <p className={`text-2xl font-bold ${color}`}>{count ?? 0}</p>
-                  </Card.Content>
-                </Card>
-              ))}
-            </div>
-
-            {/* Vulnerabilities */}
-            <div className="space-y-3">
-              <div className="space-y-3">
-                <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Vulnerabilities
-                  {vulnTotal > 0 && (
-                    <span
-                      className="text-sm font-normal ml-2"
+                <div className="min-w-0 space-y-1.5">
+                  <h1
+                    className="break-words text-2xl font-semibold tracking-tight text-foreground sm:text-[2rem]"
+                    style={{ overflowWrap: 'anywhere' }}
+                  >
+                    {imageName}
+                  </h1>
+                  {scan?.image_digest ? (
+                    <div
+                      className="break-words font-mono text-xs text-muted"
+                      style={{ overflowWrap: 'anywhere' }}
+                    >
+                      {scan.image_digest}
+                    </div>
+                  ) : null}
+                  {scan?.architecture ? (
+                    <p
+                      className="flex items-center gap-1 text-xs"
                       style={{ color: 'var(--text-muted)' }}
                     >
-                      {vulnTotal} found
-                    </span>
+                      <CpuIcon size={12} />
+                      {scan.architecture} · {scan.os_family} {scan.os_name}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </Card>
+
+            {isScanning && (
+              <ScanningAnimation
+                image={imageName}
+                status={scan?.status ?? 'pending'}
+                startedAt={scan?.started_at ?? null}
+                scanProvider={scan?.scan_provider}
+                currentStep={scan?.current_step ?? null}
+                stepLogs={scan?.step_logs ?? null}
+              />
+            )}
+
+            {showResultTabs && (
+              <div className="w-full overflow-x-auto pb-1">
+                <SegmentedControl
+                  ariaLabel="Result tabs"
+                  className="min-w-max"
+                  options={[
+                    { id: 'overview', label: showRecoveredOverview ? 'Overview' : 'Status' },
+                    {
+                      id: 'timeline',
+                      label: scan?.step_logs?.length
+                        ? `Timeline (${scan.step_logs.length})`
+                        : 'Timeline',
+                    },
+                  ]}
+                  value={activeTab}
+                  onChange={setActiveTab}
+                />
+              </div>
+            )}
+
+            {scan?.status === 'failed' && activeTab === 'overview' && !isBlockedByXrayPolicy && (
+              <>
+                <div
+                  className="rounded-2xl px-6 py-5 text-center"
+                  style={{
+                    background: 'rgba(239,68,68,0.08)',
+                    border: '1px solid rgba(239,68,68,0.2)',
+                  }}
+                >
+                  <p className="text-red-500 dark:text-red-400 font-medium">Scan failed</p>
+                  {scan.error_message && (
+                    <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                      {scan.error_message}
+                    </p>
                   )}
-                </h2>
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="w-full space-y-2">
-                    <Select
-                      value={severityFilter || '__all__'}
-                      onChange={(value) => {
-                        setSeverityFilter(String(value === '__all__' ? '' : (value ?? '')));
+                  <Link
+                    href="/public/scan/image"
+                    className="inline-block mt-3 text-sm text-accent dark:text-accent hover:underline"
+                  >
+                    Try another image →
+                  </Link>
+                </div>
+              </>
+            )}
+
+            {isBlockedByXrayPolicy && activeTab === 'overview' && (
+              <div
+                className="rounded-2xl px-6 py-5"
+                style={{
+                  background: 'rgba(245,158,11,0.10)',
+                  border: '1px solid rgba(245,158,11,0.22)',
+                }}
+              >
+                <p className="font-medium" style={{ color: '#f59e0b' }}>
+                  Blocked by Xray policy
+                </p>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                  Xray blocked the normal scan path, but JustScan recovered any findings the
+                  provider still exposed. The results below reflect that recovered data.
+                </p>
+                {scan?.error_message && (
+                  <p
+                    className="text-sm mt-3 whitespace-pre-wrap break-all"
+                    style={{ color: 'var(--text-faint)' }}
+                  >
+                    {scan.error_message}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {scan && !isScanning && activeTab === 'timeline' && (
+              <ScanStepTimeline
+                stepLogs={scan.step_logs}
+                completedAt={scan.completed_at}
+                status={scan.status}
+                externalStatus={scan.external_status}
+                scanProvider={scan.scan_provider}
+              />
+            )}
+
+            {scan && showRecoveredOverview && activeTab === 'overview' && (
+              <>
+                {/* Severity cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { ...SEV_CONFIG.CRITICAL, count: scan.critical_count },
+                    { ...SEV_CONFIG.HIGH, count: scan.high_count },
+                    { ...SEV_CONFIG.MEDIUM, count: scan.medium_count },
+                    { ...SEV_CONFIG.LOW, count: scan.low_count },
+                  ].map(({ label, count, color, border }) => (
+                    <Card
+                      key={label}
+                      className={`rounded-2xl border ${border} p-4 cursor-pointer transition-all hover:scale-105`}
+                      variant="default"
+                      onClick={() => {
+                        setSeverityFilter((f) =>
+                          f === label.toUpperCase() ? '' : label.toUpperCase()
+                        );
                         setPage(1);
                       }}
                     >
-                      <Select.Trigger className={`${selectTriggerCls} h-11`}>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          <ListBox.Item id="__all__">All Severities</ListBox.Item>
-                          <ListBox.Item id="CRITICAL">Critical</ListBox.Item>
-                          <ListBox.Item id="HIGH">High</ListBox.Item>
-                          <ListBox.Item id="MEDIUM">Medium</ListBox.Item>
-                          <ListBox.Item id="LOW">Low</ListBox.Item>
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                    <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_150px_150px_120px_120px]">
-                      <SearchField name="public-scan-vuln-search" className="w-full">
-                        <SearchField.Group className="h-11">
-                          <SearchField.SearchIcon />
-                          <SearchField.Input
-                            placeholder="Search package..."
-                            value={pkgInput}
-                            onChange={(event) => setPkgInput(event.target.value)}
+                      <Card.Content className="p-0">
+                        <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+                          {label}
+                        </p>
+                        <p className={`text-2xl font-bold ${color}`}>{count ?? 0}</p>
+                      </Card.Content>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Vulnerabilities */}
+                <div className="space-y-3">
+                  <div className="space-y-3">
+                    <h2
+                      className="text-base font-semibold"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      Vulnerabilities
+                      {vulnTotal > 0 && (
+                        <span
+                          className="text-sm font-normal ml-2"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          {vulnTotal} found
+                        </span>
+                      )}
+                    </h2>
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="w-full space-y-2">
+                        <Select
+                          value={severityFilter || '__all__'}
+                          onChange={(value) => {
+                            setSeverityFilter(String(value === '__all__' ? '' : (value ?? '')));
+                            setPage(1);
+                          }}
+                        >
+                          <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item id="__all__">All Severities</ListBox.Item>
+                              <ListBox.Item id="CRITICAL">Critical</ListBox.Item>
+                              <ListBox.Item id="HIGH">High</ListBox.Item>
+                              <ListBox.Item id="MEDIUM">Medium</ListBox.Item>
+                              <ListBox.Item id="LOW">Low</ListBox.Item>
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                        <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_150px_150px_120px_120px]">
+                          <SearchField name="public-scan-vuln-search" className="w-full">
+                            <SearchField.Group className="h-11">
+                              <SearchField.SearchIcon />
+                              <SearchField.Input
+                                placeholder="Search package..."
+                                value={pkgInput}
+                                onChange={(event) => setPkgInput(event.target.value)}
+                              />
+                              <SearchField.ClearButton />
+                            </SearchField.Group>
+                          </SearchField>
+                          <SearchField name="public-scan-vuln-cve-search" className="w-full">
+                            <SearchField.Group className="h-11">
+                              <SearchField.SearchIcon />
+                              <SearchField.Input
+                                placeholder="Search CVE (e.g. CVE-2026-31789)..."
+                                value={cveInput}
+                                onChange={(event) => setCveInput(event.target.value)}
+                              />
+                              <SearchField.ClearButton />
+                            </SearchField.Group>
+                          </SearchField>
+                          <Select
+                            aria-label="Sort vulnerabilities by"
+                            value={sortBy}
+                            className="w-full"
+                            onChange={(value) => {
+                              setSortBy(String(value ?? 'severity'));
+                              setPage(1);
+                            }}
+                          >
+                            <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Select.Popover>
+                              <ListBox>
+                                <ListBox.Item id="vuln_id">CVE ID</ListBox.Item>
+                                <ListBox.Item id="pkg_name">Package</ListBox.Item>
+                                <ListBox.Item id="severity">Severity</ListBox.Item>
+                                <ListBox.Item id="cvss_score">CVSS</ListBox.Item>
+                                <ListBox.Item id="installed_version">Installed</ListBox.Item>
+                                <ListBox.Item id="fixed_version">Fixed In</ListBox.Item>
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+                          <Select
+                            aria-label="Sort direction"
+                            value={sortDir}
+                            className="w-full"
+                            onChange={(value) => {
+                              setSortDir(value === 'desc' ? 'desc' : 'asc');
+                              setPage(1);
+                            }}
+                          >
+                            <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Select.Popover>
+                              <ListBox>
+                                <ListBox.Item id="asc">Ascending</ListBox.Item>
+                                <ListBox.Item id="desc">Descending</ListBox.Item>
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+                          <FormField
+                            hideLabel
+                            label="Minimum CVSS"
+                            type="number"
+                            min={0}
+                            max={10}
+                            step={0.1}
+                            value={minCvssInput}
+                            onChange={(e) => {
+                              setMinCvssInput(e.target.value);
+                              const v = parseFloat(e.target.value);
+                              setMinCvss(isNaN(v) ? 0 : v);
+                              setPage(1);
+                            }}
+                            placeholder="Min CVSS"
+                            className="w-full h-11"
+                            containerClassName="w-full"
                           />
-                          <SearchField.ClearButton />
-                        </SearchField.Group>
-                      </SearchField>
-                      <SearchField name="public-scan-vuln-cve-search" className="w-full">
-                        <SearchField.Group className="h-11">
-                          <SearchField.SearchIcon />
-                          <SearchField.Input
-                            placeholder="Search CVE (e.g. CVE-2026-31789)..."
-                            value={cveInput}
-                            onChange={(event) => setCveInput(event.target.value)}
-                          />
-                          <SearchField.ClearButton />
-                        </SearchField.Group>
-                      </SearchField>
-                      <Select
-                        aria-label="Sort vulnerabilities by"
-                        value={sortBy}
-                        className="w-full"
-                        onChange={(value) => {
-                          setSortBy(String(value ?? 'severity'));
-                          setPage(1);
-                        }}
-                      >
-                        <Select.Trigger className={`${selectTriggerCls} h-11`}>
-                          <Select.Value />
-                          <Select.Indicator />
-                        </Select.Trigger>
-                        <Select.Popover>
-                          <ListBox>
-                            <ListBox.Item id="vuln_id">CVE ID</ListBox.Item>
-                            <ListBox.Item id="pkg_name">Package</ListBox.Item>
-                            <ListBox.Item id="severity">Severity</ListBox.Item>
-                            <ListBox.Item id="cvss_score">CVSS</ListBox.Item>
-                            <ListBox.Item id="installed_version">Installed</ListBox.Item>
-                            <ListBox.Item id="fixed_version">Fixed In</ListBox.Item>
-                          </ListBox>
-                        </Select.Popover>
-                      </Select>
-                      <Select
-                        aria-label="Sort direction"
-                        value={sortDir}
-                        className="w-full"
-                        onChange={(value) => {
-                          setSortDir(value === 'desc' ? 'desc' : 'asc');
-                          setPage(1);
-                        }}
-                      >
-                        <Select.Trigger className={`${selectTriggerCls} h-11`}>
-                          <Select.Value />
-                          <Select.Indicator />
-                        </Select.Trigger>
-                        <Select.Popover>
-                          <ListBox>
-                            <ListBox.Item id="asc">Ascending</ListBox.Item>
-                            <ListBox.Item id="desc">Descending</ListBox.Item>
-                          </ListBox>
-                        </Select.Popover>
-                      </Select>
-                      <FormField
-                        hideLabel
-                        label="Minimum CVSS"
-                        type="number"
-                        min={0}
-                        max={10}
-                        step={0.1}
-                        value={minCvssInput}
-                        onChange={(e) => {
-                          setMinCvssInput(e.target.value);
-                          const v = parseFloat(e.target.value);
-                          setMinCvss(isNaN(v) ? 0 : v);
-                          setPage(1);
-                        }}
-                        placeholder="Min CVSS"
-                        className="w-full h-11"
-                        containerClassName="w-full"
-                      />
-                      <Button
-                        onPress={() => {
-                          setHasFix(!hasFix);
-                          setPage(1);
-                        }}
-                        className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full h-11`}
-                        variant={hasFix ? 'primary' : 'secondary'}
-                      >
-                        Has Fix
-                      </Button>
+                          <Button
+                            onPress={() => {
+                              setHasFix(!hasFix);
+                              setPage(1);
+                            }}
+                            className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full h-11`}
+                            variant={hasFix ? 'primary' : 'secondary'}
+                          >
+                            Has Fix
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Table */}
-              <div
-                className="rounded-2xl overflow-hidden"
-                style={{
-                  background: 'var(--surface-bg)',
-                  border: '1px solid var(--surface-border)',
-                }}
-              >
-                <Table>
-                  <Table.ScrollContainer>
-                    <Table.Content
-                      aria-label="Public scan vulnerabilities"
-                      className="min-w-[920px]"
-                    >
-                      <Table.Header>
-                        {(
-                          [
-                            { label: 'CVE ID', key: 'vuln_id' },
-                            { label: 'Package', key: 'pkg_name' },
-                            { label: 'Installed', key: 'installed_version' },
-                            { label: 'Fixed In', key: 'fixed_version' },
-                            { label: 'Severity', key: 'severity' },
-                            { label: 'CVSS', key: 'cvss_score' },
-                          ] as { label: string; key: string }[]
-                        ).map(({ label, key }) => {
-                          const active = sortBy === key;
-                          return (
-                            <Table.Column key={key} isRowHeader={key === 'vuln_id'}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (active) {
-                                    setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-                                  } else {
-                                    setSortBy(key);
-                                    setSortDir('asc');
-                                  }
-                                  setPage(1);
-                                }}
-                                className="inline-flex items-center gap-1 cursor-pointer select-none"
-                                style={{ color: active ? 'var(--accent)' : 'var(--text-faint)' }}
-                              >
-                                <span>{label}</span>
-                                {active && <span>{sortDir === 'desc' ? '↓' : '↑'}</span>}
-                              </button>
-                            </Table.Column>
-                          );
-                        })}
-                      </Table.Header>
-                      <Table.Body>
-                        {vulnLoading ? (
-                          <Table.Row key="loading" id="loading">
-                            <Table.Cell colSpan={6}>
-                              <div className="py-12 text-center">
-                                <div className="flex justify-center">
-                                  <div
-                                    className="size-6 rounded-full border-2 border-t-accent-500 animate-spin"
-                                    style={{
-                                      borderColor: 'var(--border-subtle)',
-                                      borderTopColor: 'var(--accent)',
+                  {/* Table */}
+                  <div
+                    className="rounded-2xl overflow-hidden"
+                    style={{
+                      background: 'var(--surface-bg)',
+                      border: '1px solid var(--surface-border)',
+                    }}
+                  >
+                    <Table>
+                      <Table.ScrollContainer>
+                        <Table.Content
+                          aria-label="Public scan vulnerabilities"
+                          className="min-w-[920px]"
+                        >
+                          <Table.Header>
+                            {(
+                              [
+                                { label: 'CVE ID', key: 'vuln_id' },
+                                { label: 'Package', key: 'pkg_name' },
+                                { label: 'Installed', key: 'installed_version' },
+                                { label: 'Fixed In', key: 'fixed_version' },
+                                { label: 'Severity', key: 'severity' },
+                                { label: 'CVSS', key: 'cvss_score' },
+                              ] as { label: string; key: string }[]
+                            ).map(({ label, key }) => {
+                              const active = sortBy === key;
+                              return (
+                                <Table.Column key={key} isRowHeader={key === 'vuln_id'}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (active) {
+                                        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+                                      } else {
+                                        setSortBy(key);
+                                        setSortDir('asc');
+                                      }
+                                      setPage(1);
                                     }}
-                                  />
-                                </div>
-                              </div>
-                            </Table.Cell>
-                          </Table.Row>
-                        ) : vulns.length === 0 ? (
-                          <Table.Row key="empty" id="empty">
-                            <Table.Cell colSpan={6}>
-                              <div
-                                className="py-12 text-center text-sm"
-                                style={{ color: 'var(--text-faint)' }}
-                              >
-                                {vulnTotal === 0
-                                  ? 'No vulnerabilities found.'
-                                  : 'No results match your filters.'}
-                              </div>
-                            </Table.Cell>
-                          </Table.Row>
-                        ) : (
-                          vulns.map((v) => (
-                            <Table.Row key={v.id} id={v.id} className="hover:bg-[var(--row-hover)]">
-                              <Table.Cell>
-                                {v.vuln_id ? (
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <button
-                                      type="button"
-                                      onClick={() => openVulnerabilityDetails(v)}
-                                      className="font-mono text-xs text-accent dark:text-accent hover:underline transition-colors"
-                                    >
-                                      {v.vuln_id}
-                                    </button>
-                                    <SourceBadge source={v.data_source} />
+                                    className="inline-flex items-center gap-1 cursor-pointer select-none"
+                                    style={{
+                                      color: active ? 'var(--accent)' : 'var(--text-faint)',
+                                    }}
+                                  >
+                                    <span>{label}</span>
+                                    {active && <span>{sortDir === 'desc' ? '↓' : '↑'}</span>}
+                                  </button>
+                                </Table.Column>
+                              );
+                            })}
+                          </Table.Header>
+                          <Table.Body>
+                            {vulnLoading ? (
+                              <Table.Row key="loading" id="loading">
+                                <Table.Cell colSpan={6}>
+                                  <div className="py-12 text-center">
+                                    <div className="flex justify-center">
+                                      <div
+                                        className="size-6 rounded-full border-2 border-t-accent-500 animate-spin"
+                                        style={{
+                                          borderColor: 'var(--border-subtle)',
+                                          borderTopColor: 'var(--accent)',
+                                        }}
+                                      />
+                                    </div>
                                   </div>
-                                ) : (
-                                  <span style={{ color: 'var(--text-faint)' }}>-</span>
-                                )}
-                              </Table.Cell>
-                              <Table.Cell
-                                className="font-mono text-xs"
-                                style={{ color: 'var(--text-secondary)' }}
-                              >
-                                {v.pkg_name}
-                              </Table.Cell>
-                              <Table.Cell
-                                className="font-mono text-xs"
-                                style={{ color: 'var(--text-muted)' }}
-                              >
-                                {v.installed_version}
-                              </Table.Cell>
-                              <Table.Cell className="font-mono text-xs text-emerald-600 dark:text-emerald-500">
-                                {v.fixed_version || (
-                                  <span style={{ color: 'var(--text-faint)' }}>-</span>
-                                )}
-                              </Table.Cell>
-                              <Table.Cell>
-                                <SeverityBadge severity={v.severity} />
-                              </Table.Cell>
-                              <Table.Cell
-                                className="font-mono text-xs"
-                                style={{ color: 'var(--text-muted)' }}
-                              >
-                                {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
-                              </Table.Cell>
-                            </Table.Row>
-                          ))
-                        )}
-                      </Table.Body>
-                    </Table.Content>
-                  </Table.ScrollContainer>
-                </Table>
-              </div>
-
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    {vulnTotal} total
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      isDisabled={page <= 1}
-                      onPress={() => setPage((p) => p - 1)}
-                      className="btn-secondary"
-                      variant="secondary"
-                    >
-                      ← Prev
-                    </Button>
-                    <span className="text-sm px-2" style={{ color: 'var(--text-muted)' }}>
-                      {page} / {totalPages}
-                    </span>
-                    <Button
-                      isDisabled={page >= totalPages}
-                      onPress={() => setPage((p) => p + 1)}
-                      className="btn-secondary"
-                      variant="secondary"
-                    >
-                      Next →
-                    </Button>
+                                </Table.Cell>
+                              </Table.Row>
+                            ) : vulns.length === 0 ? (
+                              <Table.Row key="empty" id="empty">
+                                <Table.Cell colSpan={6}>
+                                  <div
+                                    className="py-12 text-center text-sm"
+                                    style={{ color: 'var(--text-faint)' }}
+                                  >
+                                    {vulnTotal === 0
+                                      ? 'No vulnerabilities found.'
+                                      : 'No results match your filters.'}
+                                  </div>
+                                </Table.Cell>
+                              </Table.Row>
+                            ) : (
+                              vulns.map((v) => (
+                                <Table.Row
+                                  key={v.id}
+                                  id={v.id}
+                                  className="hover:bg-[var(--row-hover)]"
+                                >
+                                  <Table.Cell>
+                                    {v.vuln_id ? (
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <button
+                                          type="button"
+                                          onClick={() => openVulnerabilityDetails(v)}
+                                          className="font-mono text-xs text-accent dark:text-accent hover:underline transition-colors"
+                                        >
+                                          {v.vuln_id}
+                                        </button>
+                                        <SourceBadge source={v.data_source} />
+                                      </div>
+                                    ) : (
+                                      <span style={{ color: 'var(--text-faint)' }}>-</span>
+                                    )}
+                                  </Table.Cell>
+                                  <Table.Cell
+                                    className="font-mono text-xs"
+                                    style={{ color: 'var(--text-secondary)' }}
+                                  >
+                                    {v.pkg_name}
+                                  </Table.Cell>
+                                  <Table.Cell
+                                    className="font-mono text-xs"
+                                    style={{ color: 'var(--text-muted)' }}
+                                  >
+                                    {v.installed_version}
+                                  </Table.Cell>
+                                  <Table.Cell className="font-mono text-xs text-emerald-600 dark:text-emerald-500">
+                                    {v.fixed_version || (
+                                      <span style={{ color: 'var(--text-faint)' }}>-</span>
+                                    )}
+                                  </Table.Cell>
+                                  <Table.Cell>
+                                    <SeverityBadge severity={v.severity} />
+                                  </Table.Cell>
+                                  <Table.Cell
+                                    className="font-mono text-xs"
+                                    style={{ color: 'var(--text-muted)' }}
+                                  >
+                                    {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
+                                  </Table.Cell>
+                                </Table.Row>
+                              ))
+                            )}
+                          </Table.Body>
+                        </Table.Content>
+                      </Table.ScrollContainer>
+                    </Table>
                   </div>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                        {vulnTotal} total
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          isDisabled={page <= 1}
+                          onPress={() => setPage((p) => p - 1)}
+                          className="btn-secondary"
+                          variant="secondary"
+                        >
+                          ← Prev
+                        </Button>
+                        <span className="text-sm px-2" style={{ color: 'var(--text-muted)' }}>
+                          {page} / {totalPages}
+                        </span>
+                        <Button
+                          isDisabled={page >= totalPages}
+                          onPress={() => setPage((p) => p + 1)}
+                          className="btn-secondary"
+                          variant="secondary"
+                        >
+                          Next →
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Sign-in CTA */}
-            <div
-              className="rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-              style={{
-                background: 'color-mix(in srgb, var(--accent) 6%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
-              }}
-            >
-              <div>
-                <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Want more features?
-                </p>
-                <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Sign in to track scans, add tags, suppress findings, and more.
-                </p>
-              </div>
-              <Link href="/login" className="btn-primary">
-                Sign in →
-              </Link>
-            </div>
-          </>
-        )}
+                {/* Sign-in CTA */}
+                <div
+                  className="rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                  style={{
+                    background: 'color-mix(in srgb, var(--accent) 6%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
+                  }}
+                >
+                  <div>
+                    <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      Want more features?
+                    </p>
+                    <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      Sign in to track scans, add tags, suppress findings, and more.
+                    </p>
+                  </div>
+                  <Link href="/login" className="btn-primary">
+                    Sign in →
+                  </Link>
+                </div>
+              </>
+            )}
 
-        <VulnerabilityDetailsModal
-          vulnerability={selectedVulnerability}
-          state={vulnerabilityDetailsModal}
-          onClose={closeVulnerabilityDetails}
-          loadContextAnalysis={(vulnerability) =>
-            getPublicVulnerabilityContextAnalysis(id, vulnerability.id)
-          }
-        />
-      </main>
+            <VulnerabilityDetailsModal
+              vulnerability={selectedVulnerability}
+              state={vulnerabilityDetailsModal}
+              onClose={closeVulnerabilityDetails}
+              loadContextAnalysis={(vulnerability) =>
+                getPublicVulnerabilityContextAnalysis(id, vulnerability.id)
+              }
+            />
+          </div>
+        </main>
+      </section>
     </div>
   );
 }

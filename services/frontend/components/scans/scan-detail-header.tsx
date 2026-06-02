@@ -20,20 +20,22 @@ export function ScanDetailHeader({
   actions,
 }: ScanDetailHeaderProps) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0 flex-1 space-y-3">
-          {navigation ? <div className="flex flex-wrap items-center gap-2">{navigation}</div> : null}
+        <div className="min-w-0 flex-1 space-y-2.5">
+          {navigation ? (
+            <div className="flex flex-wrap items-center gap-2">{navigation}</div>
+          ) : null}
           <div className="min-w-0">
             <h1
-              className="text-xl font-bold font-mono text-zinc-900 dark:text-white break-words"
+              className="break-words text-2xl font-semibold tracking-tight text-foreground sm:text-[2rem]"
               style={{ overflowWrap: 'anywhere' }}
             >
               {title}
             </h1>
             {subtitle ? (
               <div
-                className="mt-1 text-xs font-mono text-zinc-500 break-words"
+                className="mt-1.5 break-words font-mono text-xs text-muted"
                 style={{ overflowWrap: 'anywhere' }}
               >
                 {subtitle}
@@ -44,7 +46,7 @@ export function ScanDetailHeader({
           </div>
         </div>
         {actions ? (
-          <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:max-w-[48%] xl:justify-end">
+          <div className="flex w-full self-start flex-wrap items-start gap-2 xl:w-auto xl:max-w-[48%] xl:justify-end">
             {actions}
           </div>
         ) : null}

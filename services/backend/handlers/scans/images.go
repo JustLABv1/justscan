@@ -210,33 +210,75 @@ LIMIT ? OFFSET ?`
 			images = []ImageSummary{}
 		}
 		if len(images) > 0 {
-			scanIDs := make([]uuid.UUID, 0, len(images))
-			for _, image := range images {
-				scanID, parseErr := uuid.Parse(strings.TrimSpace(image.LatestScanID))
-				if parseErr == nil {
-					scanIDs = append(scanIDs, scanID)
+			imageNames := make([]string, 0, len(images))
+			imageIndexByName := make(map[string]int, len(images))
+			for index, image := range images {
+				imageNames = append(imageNames, image.ImageName)
+				imageIndexByName[image.ImageName] = index
+			}
+
+			imageCollectionsQuery := `
+SELECT DISTINCT
+	s.image_name,
+	scm.collection_id
+FROM scans s
+JOIN scan_collection_memberships scm ON scm.scan_id = s.id
+WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND s.image_name IN (?) AND ` + imageWhere + ` AND ` + collectionWhere
+
+			imageCollectionArgs := append([]interface{}{}, userArgs...)
+			imageCollectionArgs = append(imageCollectionArgs, scopeArgs...)
+			imageCollectionArgs = append(imageCollectionArgs, bun.In(imageNames))
+			imageCollectionArgs = append(imageCollectionArgs, imageArgs...)
+			imageCollectionArgs = append(imageCollectionArgs, collectionArgs...)
+
+			type imageCollectionRow struct {
+				ImageName    string    `bun:"image_name"`
+				CollectionID uuid.UUID `bun:"collection_id"`
+			}
+
+			var rows []imageCollectionRow
+			if err := db.NewRaw(imageCollectionsQuery, imageCollectionArgs...).Scan(c.Request.Context(), &rows); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load image collections"})
+				return
+			}
+
+			collectionIDs := make([]uuid.UUID, 0, len(rows))
+			for _, row := range rows {
+				collectionIDs = append(collectionIDs, row.CollectionID)
+			}
+			collections, err := collectionhandlers.LoadCollectionsByIDs(c.Request.Context(), db, collectionIDs, userID, isAdmin, c.Query("scope"))
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load image collections"})
+				return
+			}
+			collectionsByID := make(map[uuid.UUID]models.ScanCollection, len(collections))
+			for _, collection := range collections {
+				collectionsByID[collection.ID] = collection
+			}
+
+			for _, row := range rows {
+				index, ok := imageIndexByName[row.ImageName]
+				if !ok {
+					continue
+				}
+				collection, ok := collectionsByID[row.CollectionID]
+				if !ok {
+					continue
+				}
+				alreadyPresent := false
+				for _, existing := range images[index].Collections {
+					if existing.ID == collection.ID {
+						alreadyPresent = true
+						break
+					}
+				}
+				if !alreadyPresent {
+					images[index].Collections = append(images[index].Collections, collection)
 				}
 			}
-			if len(scanIDs) > 0 {
-				latestScans := make([]models.Scan, 0, len(scanIDs))
-				if err := db.NewSelect().Model(&latestScans).Where("id IN (?)", bun.In(scanIDs)).Scan(c.Request.Context()); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load image collections"})
-					return
-				}
-				if err := collectionhandlers.AttachCollectionsToScans(c.Request.Context(), db, latestScans, userID, isAdmin, c.Query("scope")); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load image collections"})
-					return
-				}
-				collectionsByScanID := make(map[uuid.UUID][]models.ScanCollection, len(latestScans))
-				for _, scan := range latestScans {
-					collectionsByScanID[scan.ID] = scan.Collections
-				}
-				for index := range images {
-					scanID, parseErr := uuid.Parse(strings.TrimSpace(images[index].LatestScanID))
-					if parseErr != nil {
-						continue
-					}
-					images[index].Collections = collectionsByScanID[scanID]
+			for index := range images {
+				if len(images[index].Collections) > 1 {
+					collectionhandlers.SortCollectionsForDisplay(images[index].Collections)
 				}
 			}
 		}

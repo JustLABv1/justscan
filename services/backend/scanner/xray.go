@@ -396,11 +396,16 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 			if blockedSummary != nil {
 				if err := persistXraySummaryFindings(ctx, db, scan, blockedSummary); err != nil {
 					log.Warnf("Failed to persist Xray findings for blocked scan %s: %v", scan.ID, err)
+					recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Failed to persist blocked Xray findings: %v", err))
 				} else {
 					log.Infof("Imported Xray vulnerabilities for blocked scan %s", scan.ID)
+					recordScanStepOutput(ctx, db, scan.ID, "Imported available findings from the blocked Xray artifact summary.")
 				}
 				if err := persistXrayViolationContext(ctx, db, scan, violations); err != nil {
 					log.Warnf("Failed to persist Xray violation context for blocked scan %s (non-fatal): %v", scan.ID, err)
+					recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Failed to persist blocked Xray violation context: %v", err))
+				} else {
+					recordScanStepOutput(ctx, db, scan.ID, "Stored blocked Xray violation context for policy reporting.")
 				}
 			}
 
@@ -424,6 +429,9 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 				// CycloneDX fallback already persisted SBOM data when it succeeded.
 			} else if err := persistXraySBOMComponents(ctx, db, scan, client, exportComponentName, artifactPath, repoPath); err != nil {
 				log.Warnf("Failed to persist Xray SBOM components for blocked scan %s: %v", scan.ID, err)
+				recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXraySBOMImportError(err))
+			} else {
+				recordScanStepOutput(ctx, db, scan.ID, "Imported available Xray SBOM component details for the blocked artifact.")
 			}
 
 			if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, exportComponentName, repoPath, artifactPath); err != nil {
@@ -432,8 +440,10 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 			}
 			if suppressedCount, err := effectivesuppressions.RecalculateSuppressedCount(ctx, db, scan); err != nil {
 				log.Warnf("Failed to recalculate suppressed count for blocked scan %s: %v", scan.ID, err)
+				recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Suppression count recalculation failed for the blocked scan: %v", err))
 			} else {
 				scan.SuppressedCount = suppressedCount
+				recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Suppression count recalculated for blocked scan: %d findings suppressed.", suppressedCount))
 			}
 
 			return errors.New(normalizedMessage)
@@ -506,12 +516,18 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 	if violationContext, exportErr := client.exportViolations(ctx, exportComponentName, artifactPath, repoPath); exportErr != nil {
 		log.Warnf("Failed to fetch Xray exportDetails violation context for scan %s (non-fatal): %v", scan.ID, exportErr)
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray violation context export failed but vulnerability import can continue: %v", exportErr))
 	} else if err := persistXrayViolationContext(ctx, db, scan, violationContext); err != nil {
 		log.Warnf("Failed to persist Xray violation context for scan %s (non-fatal): %v", scan.ID, err)
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray violation context persistence failed but vulnerability import can continue: %v", err))
+	} else {
+		recordScanStepOutput(ctx, db, scan.ID, "Stored Xray violation context for policy reporting.")
 	}
 	if err := persistXraySBOMComponents(ctx, db, scan, client, exportComponentName, artifactPath, repoPath); err != nil {
 		log.Warnf("Failed to persist Xray SBOM components for scan %s (non-fatal): %v", scan.ID, err)
 		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXraySBOMImportError(err))
+	} else {
+		recordScanStepOutput(ctx, db, scan.ID, "Imported Xray SBOM component details.")
 	}
 	if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, exportComponentName, repoPath, artifactPath); err != nil {
 		log.Warnf("Failed to persist Xray ignore-rule snapshots for scan %s (non-fatal): %v", scan.ID, err)
@@ -519,8 +535,10 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 	if suppressedCount, err := effectivesuppressions.RecalculateSuppressedCount(ctx, db, scan); err != nil {
 		log.Warnf("Failed to recalculate suppressed count for scan %s: %v", scan.ID, err)
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Suppression count recalculation failed but the report can still be saved: %v", err))
 	} else {
 		scan.SuppressedCount = suppressedCount
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Suppression count recalculated: %d findings suppressed.", suppressedCount))
 	}
 
 	completedAt := time.Now()
@@ -539,6 +557,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		return err
 	}
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray scan completed with %d total findings.", scan.CriticalCount+scan.HighCount+scan.MediumCount+scan.LowCount+scan.UnknownCount))
+	recordScanStepOutput(ctx, db, scan.ID, "Queued org auto-assignment, compliance evaluation, auto-tagging, and completion notifications.")
 
 	go compliance.AutoAssignOrgs(db, scan.ImageName, scan.ImageTag, scan.ID)
 	go applyAutoTags(db, scan)

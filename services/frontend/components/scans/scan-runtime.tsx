@@ -3,9 +3,32 @@
 import { getScanXrayRequestLogs } from '@/lib/api/scans';
 import type { ScanStepLog, XRayRequestLog } from '@/lib/api/types/scans';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Alert, Button, Card, Chip, Modal, ProgressBar, useOverlayState } from '@heroui/react';
-import { motion, useReducedMotion } from 'motion/react';
-import { useEffect, useState } from 'react';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Chip,
+  Modal,
+  ProgressBar,
+  ScrollShadow,
+  useOverlayState,
+} from '@heroui/react';
+import {
+  Clock01Icon,
+  CloudUploadIcon,
+  DatabaseSyncIcon,
+  FileSearchIcon,
+  FileValidationIcon,
+  FileVerifiedIcon,
+  FolderFileStorageIcon,
+  PackageIcon,
+  Search01Icon,
+  ServerStack01Icon,
+  Shield01Icon,
+} from 'hugeicons-react';
+import type { ComponentType, ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type ProgressStepState = 'pending' | 'active' | 'complete';
 
@@ -19,6 +42,12 @@ type StepDefinition = {
 type StepView = StepDefinition & {
   state: ProgressStepState;
 };
+
+type StepIconComponent = ComponentType<{
+  'aria-hidden'?: boolean;
+  className?: string;
+  size?: number;
+}>;
 
 type ProgressModel = {
   activeKey: string;
@@ -34,51 +63,9 @@ type RuntimeWarning = {
   detail: string;
 };
 
-type StageTone = 'default' | 'accent' | 'success' | 'warning' | 'danger';
-
-type StatusTone = {
-  color: string;
-  background: string;
-  border: string;
-  label: string;
-};
-
 const PROVIDER_LABELS: Record<string, string> = {
   trivy: 'Built-in scanner',
   artifactory_xray: 'Artifactory Xray',
-};
-
-const TIMELINE_STATUS_TONES: Record<string, StatusTone> = {
-  completed: {
-    color: '#34d399',
-    background: 'rgba(16,185,129,0.12)',
-    border: 'rgba(16,185,129,0.22)',
-    label: 'completed',
-  },
-  failed: {
-    color: '#f87171',
-    background: 'rgba(239,68,68,0.12)',
-    border: 'rgba(239,68,68,0.22)',
-    label: 'failed',
-  },
-  cancelled: {
-    color: '#f59e0b',
-    background: 'rgba(245,158,11,0.10)',
-    border: 'rgba(245,158,11,0.20)',
-    label: 'cancelled',
-  },
-  blocked_by_xray_policy: {
-    color: '#f59e0b',
-    background: 'rgba(245,158,11,0.12)',
-    border: 'rgba(245,158,11,0.22)',
-    label: 'blocked by xray policy',
-  },
-  pending: {
-    color: '#a1a1aa',
-    background: 'rgba(161,161,170,0.08)',
-    border: 'rgba(161,161,170,0.15)',
-    label: 'queued',
-  },
 };
 
 const LOCAL_PROGRESS_STEPS: StepDefinition[] = [
@@ -222,6 +209,22 @@ const STEP_DEFINITION_MAP = new Map<string, StepDefinition>(
   ])
 );
 
+const STEP_IDENTITY_ICONS: Record<string, StepIconComponent> = {
+  cancelled: Clock01Icon,
+  completed: FileVerifiedIcon,
+  failed: Shield01Icon,
+  finalizing_report: FileValidationIcon,
+  importing_results: DatabaseSyncIcon,
+  indexing_artifact: FolderFileStorageIcon,
+  preparing_image: PackageIcon,
+  processing_results: DatabaseSyncIcon,
+  queued: Clock01Icon,
+  queued_in_xray: ServerStack01Icon,
+  scanning_image: Search01Icon,
+  waiting_for_xray: Clock01Icon,
+  warming_cache: CloudUploadIcon,
+};
+
 function formatElapsed(elapsedSeconds: number): string {
   const mins = Math.floor(elapsedSeconds / 60);
   const secs = elapsedSeconds % 60;
@@ -247,13 +250,6 @@ function formatDuration(durationMs: number): string {
   return `${seconds}s`;
 }
 
-function formatTimelineDate(timestamp: string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(timestamp));
-}
-
 function orderStepLogs(stepLogs?: ScanStepLog[] | null): ScanStepLog[] {
   return (stepLogs ?? []).toSorted((left, right) => left.position - right.position);
 }
@@ -264,13 +260,6 @@ function resolveStepLogEnd(
   completedAt?: string | null
 ): string | null {
   return stepLog.completed_at ?? nextStep?.started_at ?? completedAt ?? null;
-}
-
-function latestStepOutput(stepLog?: ScanStepLog | null): string | null {
-  if (!stepLog || stepLog.output.length === 0) {
-    return null;
-  }
-  return stepLog.output[stepLog.output.length - 1] ?? null;
 }
 
 function stepOutputCount(stepLog?: ScanStepLog | null): number {
@@ -342,59 +331,6 @@ function effectiveTimelineStatus(
     return 'blocked_by_xray_policy';
   }
   return status ?? null;
-}
-
-function timelineStatusTone(status?: string | null): StatusTone {
-  if (status && TIMELINE_STATUS_TONES[status]) {
-    return TIMELINE_STATUS_TONES[status];
-  }
-  return TIMELINE_STATUS_TONES.pending;
-}
-
-function terminalRowTone(step: string, blockedByPolicy: boolean) {
-  if (blockedByPolicy) {
-    return {
-      bubble: '#f59e0b',
-      glow: '0 0 10px rgba(245,158,11,0.18)',
-      border: 'rgba(245,158,11,0.24)',
-      badgeColor: '#f59e0b',
-      badgeBackground: 'rgba(245,158,11,0.12)',
-    };
-  }
-  if (step === 'completed') {
-    return {
-      bubble: '#34d399',
-      glow: '0 0 10px rgba(16,185,129,0.18)',
-      border: 'rgba(16,185,129,0.24)',
-      badgeColor: '#34d399',
-      badgeBackground: 'rgba(16,185,129,0.12)',
-    };
-  }
-  if (step === 'failed') {
-    return {
-      bubble: '#f87171',
-      glow: '0 0 10px rgba(239,68,68,0.18)',
-      border: 'rgba(239,68,68,0.24)',
-      badgeColor: '#f87171',
-      badgeBackground: 'rgba(239,68,68,0.12)',
-    };
-  }
-  if (step === 'cancelled') {
-    return {
-      bubble: '#f59e0b',
-      glow: '0 0 10px rgba(245,158,11,0.18)',
-      border: 'rgba(245,158,11,0.24)',
-      badgeColor: '#f59e0b',
-      badgeBackground: 'rgba(245,158,11,0.12)',
-    };
-  }
-  return {
-    bubble: 'color-mix(in srgb, var(--accent) 88%, white)',
-    glow: 'none',
-    border: 'color-mix(in srgb, var(--accent) 18%, transparent)',
-    badgeColor: 'color-mix(in srgb, var(--accent) 88%, white)',
-    badgeBackground: 'color-mix(in srgb, var(--accent) 8%, transparent)',
-  };
 }
 
 function buildRuntimeWarning(
@@ -586,734 +522,472 @@ export function ScannerDatabaseCard({
   );
 }
 
-const SCAN_SCENE_LAYERS = ['Layer 01', 'Layer 02', 'Layer 03', 'Layer 04', 'Layer 05', 'Layer 06'];
-const CVE_CONVEYOR_ITEMS = [
-  { label: 'CVE-2026-1842', color: 'danger' as const },
-  { label: 'CVE-2025-7710', color: 'warning' as const },
-  { label: 'CVE-2026-0914', color: 'accent' as const },
-  { label: 'CVE-2024-6387', color: 'danger' as const },
-];
-
-const STAGE_SCENE_STATUS: Record<string, { eyebrow: string; tone: StageTone }> = {
-  queued: { eyebrow: 'Queue lane', tone: 'default' },
-  preparing_image: { eyebrow: 'Image prep', tone: 'accent' },
-  scanning_image: { eyebrow: 'Layer scan', tone: 'accent' },
-  processing_results: { eyebrow: 'Normalize', tone: 'warning' },
-  finalizing_report: { eyebrow: 'Persist', tone: 'success' },
-  warming_cache: { eyebrow: 'Cache warm-up', tone: 'warning' },
-  indexing_artifact: { eyebrow: 'Artifact index', tone: 'accent' },
-  queued_in_xray: { eyebrow: 'Xray queue', tone: 'warning' },
-  waiting_for_xray: { eyebrow: 'Provider wait', tone: 'warning' },
-  importing_results: { eyebrow: 'Import', tone: 'success' },
+type PipelineStepRuntime = StepView & {
+  runtimeId: string;
+  durationLabel: string;
+  output: string[];
+  startedAt?: string | null;
+  completedAt?: string | null;
 };
 
-function visualLayerState(index: number, activeLayerIndex: number): ProgressStepState {
-  if (index < activeLayerIndex) return 'complete';
-  if (index === activeLayerIndex) return 'active';
-  return 'pending';
+function scanStatusLabel(status: string): string {
+  if (status === 'pending') return 'Queued';
+  if (status === 'running') return 'Running';
+  return titleCaseStep(status);
 }
 
-function stageSceneStatus(activeKey: string): { eyebrow: string; tone: StageTone } {
-  return STAGE_SCENE_STATUS[activeKey] ?? { eyebrow: 'Backend activity', tone: 'accent' };
+function pipelineStatusColor(
+  status: string
+): 'default' | 'accent' | 'success' | 'warning' | 'danger' {
+  if (status === 'completed') return 'success';
+  if (status === 'failed') return 'danger';
+  if (status === 'cancelled' || status === 'blocked_by_xray_policy') return 'warning';
+  if (status === 'pending') return 'default';
+  return 'accent';
 }
 
-function motionTransition(
-  reduceMotion: boolean,
-  duration: number,
-  delay = 0
-): { duration: number; ease: 'easeInOut'; repeat: number; delay: number } {
+function stepStateTone(state: ProgressStepState): {
+  color: 'default' | 'accent' | 'success';
+  label: string;
+  rowClassName: string;
+} {
+  if (state === 'complete') {
+    return {
+      color: 'success',
+      label: 'Done',
+      rowClassName: 'bg-success/5 text-success',
+    };
+  }
+  if (state === 'active') {
+    return {
+      color: 'accent',
+      label: 'Running',
+      rowClassName: 'bg-accent/5 text-accent',
+    };
+  }
   return {
-    duration,
-    ease: 'easeInOut',
-    repeat: reduceMotion ? 0 : Infinity,
-    delay: reduceMotion ? 0 : delay,
+    color: 'default',
+    label: 'Waiting',
+    rowClassName: 'bg-default/40 text-muted',
   };
 }
 
-function CveEmitter({ reduceMotion }: { reduceMotion: boolean }) {
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none absolute inset-y-0 left-[calc(100%-1rem)] z-20 hidden w-[min(26rem,72vw)] overflow-visible md:block"
-    >
-      {CVE_CONVEYOR_ITEMS.map((item, index) => (
-        <motion.div
-          key={item.label}
-          className="absolute left-0 top-1/2 -translate-y-1/2"
-          initial={reduceMotion ? false : { x: 0, scale: 0.7, opacity: 0 }}
-          animate={
-            reduceMotion
-              ? { x: 24 + index * 56, y: index % 2 === 0 ? -14 : 14, opacity: 0.72 }
-              : {
-                  x: [0, 30, 360],
-                  y: [0, index % 2 === 0 ? -10 : 10, index % 2 === 0 ? -16 : 16],
-                  scale: [0.65, 1, 0.92],
-                  opacity: [0, 1, 0],
-                }
-          }
-          transition={{
-            duration: 4.6,
-            ease: 'easeOut',
-            repeat: reduceMotion ? 0 : Infinity,
-            delay: reduceMotion ? 0 : index * 1.05,
-            repeatDelay: reduceMotion ? 0 : 0.7,
-          }}
+function StepStatusIcon({ state, title }: { state: ProgressStepState; title: string }) {
+  if (state === 'complete') {
+    return (
+      <span
+        aria-label={`${title} complete`}
+        className="flex size-5 items-center justify-center rounded-full bg-success text-success-foreground"
+      >
+        <svg
+          aria-hidden
+          className="size-3"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="3"
+          viewBox="0 0 24 24"
         >
-          <Chip className="font-mono shadow-surface" color={item.color} size="sm" variant="soft">
-            {item.label}
-          </Chip>
-        </motion.div>
-      ))}
-    </div>
-  );
-}
-
-function FloatingSignal({
-  label,
-  color,
-  index,
-  reduceMotion,
-}: {
-  label: string;
-  color: StageTone;
-  index: number;
-  reduceMotion: boolean;
-}) {
-  return (
-    <motion.div
-      className="absolute"
-      style={{ top: `${24 + index * 24}%`, left: 0 }}
-      animate={
-        reduceMotion
-          ? { left: 'calc(100% - 7rem)', opacity: 0.82 }
-          : {
-              left: ['0%', '46%', 'calc(100% - 7rem)'],
-              y: [0, index % 2 === 0 ? -8 : 8, 0],
-              opacity: [0, 1, 0.92],
-            }
-      }
-      transition={motionTransition(reduceMotion, 4.2, index * 0.7)}
-    >
-      <Chip color={color} size="sm" variant="soft" className="font-mono shadow-surface">
-        {label}
-      </Chip>
-    </motion.div>
-  );
-}
-
-function QueueLaneScene({ reduceMotion, xray = false }: { reduceMotion: boolean; xray?: boolean }) {
-  const jobs = xray
-    ? ['Submitted', 'Provider queue', 'Awaiting worker']
-    : ['Accepted', 'Queued', 'Worker'];
-
-  return (
-    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
-      <div className="absolute inset-x-6 top-1/2 h-2 -translate-y-1/2 rounded-full bg-default" />
-      <div className="relative grid h-[220px] content-center gap-4">
-        {jobs.map((job, index) => (
-          <motion.div
-            key={job}
-            className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 shadow-surface"
-            animate={
-              reduceMotion
-                ? { opacity: index === 1 ? 1 : 0.7, x: 0 }
-                : { opacity: [0.62, 1, 0.62], x: index === 1 ? [0, 8, 0] : 0 }
-            }
-            transition={motionTransition(reduceMotion, 2.8, index * 0.25)}
-          >
-            <span className="flex size-8 items-center justify-center rounded-xl bg-accent/15">
-              <span
-                className={`${index === 1 ? 'bg-accent' : 'bg-foreground/30'} size-2 rounded-full`}
-              />
-            </span>
-            <span className="text-sm font-medium text-foreground">{job}</span>
-            <span className="ml-auto text-xs text-muted">{index === 1 ? 'Active' : 'Ready'}</span>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PrepScene({ reduceMotion, xray = false }: { reduceMotion: boolean; xray?: boolean }) {
-  const blocks = xray
-    ? ['Registry path', 'Artifactory cache', 'Xray access']
-    : ['Registry auth', 'Image metadata', 'Scanner env'];
-
-  return (
-    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
-      <div className="grid h-[220px] place-items-center">
-        <div className="grid w-full max-w-sm gap-3">
-          {blocks.map((block, index) => (
-            <motion.div
-              key={block}
-              className="rounded-2xl bg-surface px-4 py-3 shadow-surface"
-              animate={
-                reduceMotion
-                  ? { x: 0, opacity: 1 }
-                  : { x: [index % 2 === 0 ? -16 : 16, 0], opacity: [0.55, 1] }
-              }
-              transition={{
-                duration: 1.5,
-                ease: 'easeInOut',
-                repeat: reduceMotion ? 0 : Infinity,
-                repeatType: 'reverse',
-                delay: index * 0.22,
-              }}
-            >
-              <div className="flex items-center gap-3">
-                <span className="size-2 rounded-full bg-accent" />
-                <span className="text-sm font-medium text-foreground">{block}</span>
-                <Chip
-                  color={xray ? 'warning' : 'accent'}
-                  size="sm"
-                  variant="soft"
-                  className="ml-auto"
-                >
-                  Prep
-                </Chip>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DockerLayerScanScene({
-  progressPercent,
-  reduceMotion,
-}: {
-  progressPercent: number;
-  reduceMotion: boolean;
-}) {
-  const activeLayerIndex = Math.min(
-    SCAN_SCENE_LAYERS.length - 1,
-    Math.round((progressPercent / 100) * (SCAN_SCENE_LAYERS.length - 1))
-  );
-
-  return (
-    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
-      <div className="relative mx-auto flex w-full max-w-md flex-col gap-3 px-2 py-3 sm:px-5">
-        {SCAN_SCENE_LAYERS.map((label, index) => {
-          const state = visualLayerState(index, activeLayerIndex);
-
-          return (
-            <motion.div
-              key={label}
-              className={`relative z-10 rounded-2xl bg-surface px-3 py-3 shadow-surface sm:px-4 ${
-                state === 'active' ? 'overflow-visible' : 'overflow-hidden'
-              } ${state === 'active' ? 'ring-1 ring-accent/30' : ''}`}
-              animate={
-                reduceMotion || state !== 'active'
-                  ? { opacity: state === 'pending' ? 0.7 : 1, y: 0 }
-                  : { opacity: 1, y: [0, -3, 0] }
-              }
-              transition={{
-                duration: 2.2,
-                ease: 'easeInOut',
-                repeat: reduceMotion || state !== 'active' ? 0 : Infinity,
-              }}
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <span
-                  aria-hidden
-                  className={`flex size-8 shrink-0 items-center justify-center rounded-xl ${
-                    state === 'active' ? 'bg-accent/15' : 'bg-default'
-                  }`}
-                >
-                  <span
-                    className={`size-2 rounded-full ${
-                      state === 'pending'
-                        ? 'bg-foreground/30'
-                        : state === 'complete'
-                          ? 'bg-success'
-                          : 'bg-accent'
-                    } ${state === 'active' && !reduceMotion ? 'animate-pulse' : ''}`}
-                  />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-mono text-xs text-muted">{label}</span>
-                    <span className="text-xs font-medium text-foreground">
-                      {state === 'complete'
-                        ? 'Inspected'
-                        : state === 'active'
-                          ? 'Scanning'
-                          : 'Queued'}
-                    </span>
-                  </div>
-                  <ProgressBar
-                    aria-label={`${label} visual scan state`}
-                    className="mt-2"
-                    color={state === 'complete' ? 'success' : 'accent'}
-                    isIndeterminate={state === 'active' && !reduceMotion}
-                    size="sm"
-                    value={state === 'complete' ? 100 : state === 'active' ? 66 : 12}
-                  >
-                    <ProgressBar.Track>
-                      <ProgressBar.Fill />
-                    </ProgressBar.Track>
-                  </ProgressBar>
-                </div>
-              </div>
-              {state === 'active' ? <CveEmitter reduceMotion={reduceMotion} /> : null}
-            </motion.div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function ProcessingScene({
-  reduceMotion,
-  importing = false,
-}: {
-  reduceMotion: boolean;
-  importing?: boolean;
-}) {
-  const incoming = importing
-    ? ['XRAY-001', 'XRAY-002', 'XRAY-003']
-    : ['Finding A', 'Finding B', 'Finding A'];
-
-  return (
-    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
-      <div className="grid min-h-[220px] gap-5 md:grid-cols-[minmax(0,1fr)_18rem] md:items-center">
-        <div className="relative h-40 min-w-0 overflow-visible rounded-2xl bg-surface/55 p-4 md:h-48">
-          <span
-            aria-hidden
-            className="absolute left-5 right-5 top-1/2 h-1 -translate-y-1/2 rounded-full bg-default"
-          />
-          <span
-            aria-hidden
-            className="absolute right-4 top-1/2 size-5 -translate-y-1/2 rounded-full bg-accent/20 ring-1 ring-accent/25"
-          />
-          {incoming.map((item, index) => (
-            <FloatingSignal
-              key={`${item}-${index}`}
-              color={index === 2 && !importing ? 'warning' : 'accent'}
-              index={index}
-              label={item}
-              reduceMotion={reduceMotion}
-            />
-          ))}
-        </div>
-        <div className="relative rounded-2xl bg-surface p-4 shadow-surface">
-          <span
-            aria-hidden
-            className="absolute -left-2 top-1/2 hidden size-4 -translate-y-1/2 rounded-full bg-accent md:block"
-          />
-          <p className="text-xs font-medium text-muted">
-            {importing ? 'JustScan results' : 'Normalized output'}
-          </p>
-          <div className="mt-3 space-y-2">
-            {['Deduplicated', 'Enriched', importing ? 'Imported' : 'Ready to persist'].map(
-              (row, index) => (
-                <motion.div
-                  key={row}
-                  className="flex items-center gap-2 rounded-xl bg-surface-secondary px-3 py-2"
-                  animate={reduceMotion ? { opacity: 1 } : { opacity: [0.55, 1, 0.75] }}
-                  transition={motionTransition(reduceMotion, 2.6, index * 0.32)}
-                >
-                  <span
-                    className={`size-2 rounded-full ${index === 2 ? 'bg-success' : 'bg-accent'}`}
-                  />
-                  <span className="text-xs font-medium text-foreground">{row}</span>
-                </motion.div>
-              )
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FinalizingScene({ reduceMotion }: { reduceMotion: boolean }) {
-  return (
-    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
-      <div className="mx-auto grid h-[220px] max-w-sm content-center gap-3">
-        {['Findings', 'Metadata', 'Report summary'].map((row, index) => (
-          <motion.div
-            key={row}
-            className="rounded-2xl bg-surface p-4 shadow-surface"
-            animate={reduceMotion ? { opacity: 1 } : { opacity: [0.55, 1, 1], x: [12, 0, 0] }}
-            transition={motionTransition(reduceMotion, 2.8, index * 0.55)}
-          >
-            <div className="flex items-center gap-3">
-              <span className="flex size-7 items-center justify-center rounded-full bg-success/15">
-                <span className="size-2 rounded-full bg-success" />
-              </span>
-              <span className="text-sm font-medium text-foreground">{row}</span>
-              <Chip color="success" size="sm" variant="soft" className="ml-auto">
-                Saved
-              </Chip>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function IndexingScene({ reduceMotion }: { reduceMotion: boolean }) {
-  return (
-    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
-      <div className="grid h-[220px] grid-cols-[0.8fr_1.2fr] items-center gap-4">
-        <div className="rounded-2xl bg-surface p-4 shadow-surface">
-          <p className="text-xs font-medium text-muted">Manifest</p>
-          <p className="mt-2 font-mono text-sm text-foreground">layers[]</p>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {['Layer A', 'Layer B', 'Layer C', 'Layer D'].map((node, index) => (
-            <motion.div
-              key={node}
-              className="rounded-2xl bg-surface px-3 py-4 text-center shadow-surface"
-              animate={
-                reduceMotion
-                  ? { scale: 1, opacity: 1 }
-                  : { scale: [0.96, 1.03, 1], opacity: [0.6, 1, 0.85] }
-              }
-              transition={motionTransition(reduceMotion, 2.4, index * 0.24)}
-            >
-              <span className="font-mono text-xs text-foreground">{node}</span>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function WaitingXrayScene({ reduceMotion }: { reduceMotion: boolean }) {
-  return (
-    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
-      <div className="grid h-[220px] place-items-center">
-        <div className="relative flex size-44 items-center justify-center rounded-full bg-surface shadow-surface">
-          {[0, 1, 2].map((index) => (
-            <motion.span
-              key={index}
-              aria-hidden
-              className="absolute rounded-full border border-warning/35"
-              style={{ inset: `${index * 18}px` }}
-              animate={
-                reduceMotion
-                  ? { opacity: 0.45, scale: 1 }
-                  : { opacity: [0.25, 0.7, 0.25], scale: [0.96, 1.05, 0.96] }
-              }
-              transition={motionTransition(reduceMotion, 3.4, index * 0.45)}
-            />
-          ))}
-          <div className="text-center">
-            <p className="font-mono text-sm text-foreground">Xray</p>
-            <p className="mt-1 text-xs text-muted">Polling provider</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function GenericActivityScene({
-  activeTitle,
-  reduceMotion,
-}: {
-  activeTitle: string;
-  reduceMotion: boolean;
-}) {
-  return (
-    <div className="relative min-h-[260px] overflow-hidden rounded-2xl bg-surface-secondary p-5">
-      <div className="mx-auto grid h-[220px] max-w-sm content-center gap-3">
-        {['Accepted', activeTitle, 'Next update'].map((row, index) => (
-          <motion.div
-            key={`${row}-${index}`}
-            className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 shadow-surface"
-            animate={
-              reduceMotion ? { opacity: 1 } : { opacity: index === 1 ? [0.7, 1, 0.7] : 0.74 }
-            }
-            transition={motionTransition(reduceMotion, 2.7, index * 0.18)}
-          >
-            <span
-              className={`${index === 1 ? 'bg-accent' : 'bg-foreground/30'} size-2 rounded-full`}
-            />
-            <span className="text-sm font-medium text-foreground">{row}</span>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function StageSceneVisual({
-  activeKey,
-  progressPercent,
-  title,
-  reduceMotion,
-}: {
-  activeKey: string;
-  progressPercent: number;
-  title: string;
-  reduceMotion: boolean;
-}) {
-  switch (activeKey) {
-    case 'queued':
-      return <QueueLaneScene reduceMotion={reduceMotion} />;
-    case 'preparing_image':
-      return <PrepScene reduceMotion={reduceMotion} />;
-    case 'scanning_image':
-      return <DockerLayerScanScene progressPercent={progressPercent} reduceMotion={reduceMotion} />;
-    case 'processing_results':
-      return <ProcessingScene reduceMotion={reduceMotion} />;
-    case 'finalizing_report':
-      return <FinalizingScene reduceMotion={reduceMotion} />;
-    case 'warming_cache':
-      return <PrepScene reduceMotion={reduceMotion} xray />;
-    case 'indexing_artifact':
-      return <IndexingScene reduceMotion={reduceMotion} />;
-    case 'queued_in_xray':
-      return <QueueLaneScene reduceMotion={reduceMotion} xray />;
-    case 'waiting_for_xray':
-      return <WaitingXrayScene reduceMotion={reduceMotion} />;
-    case 'importing_results':
-      return <ProcessingScene reduceMotion={reduceMotion} importing />;
-    default:
-      return <GenericActivityScene activeTitle={title} reduceMotion={reduceMotion} />;
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </span>
+    );
   }
-}
 
-function ScanStageScene({
-  progress,
-  progressPercent,
-  providerName,
-  image,
-  detailMessage,
-  reduceMotion,
-}: {
-  progress: ProgressModel;
-  progressPercent: number;
-  providerName: string;
-  image?: string;
-  detailMessage: string;
-  reduceMotion: boolean;
-}) {
-  const sceneStatus = stageSceneStatus(progress.activeKey);
+  if (state === 'active') {
+    return (
+      <span
+        aria-label={`${title} running`}
+        className="flex size-5 items-center justify-center rounded-full border-2 border-accent/25 border-t-accent motion-safe:animate-spin"
+      />
+    );
+  }
 
   return (
-    <Card className="relative min-h-[380px] overflow-hidden">
-      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Chip color={sceneStatus.tone} size="sm" variant="soft">
-              {sceneStatus.eyebrow}
-            </Chip>
-            <Chip size="sm" variant="secondary">
-              {providerName}
-            </Chip>
-          </div>
-          <Card.Title className="mt-3 text-xl">{progress.title}</Card.Title>
-          <Card.Description className="mt-2 max-w-2xl leading-6">{detailMessage}</Card.Description>
-        </div>
-      </Card.Header>
-
-      <Card.Content className="gap-4">
-        <StageSceneVisual
-          activeKey={progress.activeKey}
-          progressPercent={progressPercent}
-          reduceMotion={reduceMotion}
-          title={progress.title}
-        />
-        <div>
-          <p className="text-xs text-muted">Image</p>
-          <p
-            className="mt-1 break-words font-mono text-sm text-foreground"
-            style={{ overflowWrap: 'anywhere' }}
-            title={image}
-          >
-            {image || 'Image queued for analysis'}
-          </p>
-        </div>
-        <p className="text-xs leading-5 text-muted">{progress.note}</p>
-      </Card.Content>
-    </Card>
+    <span
+      aria-label={`${title} waiting`}
+      className="flex size-5 items-center justify-center rounded-full bg-default"
+    >
+      <span aria-hidden className="size-1.5 rounded-full bg-muted" />
+    </span>
   );
 }
 
-function ScanStageRail({
+function StepIdentityIcon({ state, stepKey }: { state: ProgressStepState; stepKey: string }) {
+  const Icon = STEP_IDENTITY_ICONS[stepKey] ?? FileSearchIcon;
+  const iconClassName =
+    state === 'pending' ? 'text-muted' : state === 'active' ? 'text-accent' : 'text-success';
+
+  return <Icon aria-hidden className={iconClassName} size={20} />;
+}
+
+function StepStatusBadge({ state, title }: { state: ProgressStepState; title: string }) {
+  if (state === 'complete') {
+    return (
+      <Badge
+        aria-label={`${title} completed successfully`}
+        color="success"
+        placement="bottom-right"
+        size="sm"
+      >
+        <svg
+          aria-hidden
+          className="size-2.5"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="3"
+          viewBox="0 0 24 24"
+        >
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </Badge>
+    );
+  }
+
+  if (state === 'active') {
+    return (
+      <Badge aria-label={`${title} is running`} color="accent" placement="bottom-right" size="sm">
+        <span aria-hidden className="size-2 rounded-full bg-current motion-safe:animate-pulse" />
+      </Badge>
+    );
+  }
+
+  return <Badge aria-label={`${title} is waiting`} color="default" placement="bottom-right" />;
+}
+
+function resolvePipelineStepRuntime({
   progress,
-  progressPercent,
-  detailMessage,
-  detailKey,
-  reduceMotion,
+  orderedLogs,
+  completedAt,
+  now,
 }: {
   progress: ProgressModel;
-  progressPercent: number;
-  detailMessage: string;
-  detailKey: string;
-  reduceMotion: boolean;
-}) {
+  orderedLogs: ScanStepLog[];
+  completedAt?: string | null;
+  now: number;
+}): PipelineStepRuntime[] {
+  return progress.steps.map((step) => {
+    const matchingLogs = orderedLogs.filter((stepLog) => stepLog.step === step.key);
+    const stepLog = matchingLogs[matchingLogs.length - 1] ?? null;
+    const stepLogIndex = stepLog
+      ? orderedLogs.findIndex((candidate) => candidate.id === stepLog.id)
+      : -1;
+    const resolvedEnd =
+      stepLog && stepLogIndex >= 0
+        ? resolveStepLogEnd(stepLog, orderedLogs[stepLogIndex + 1], completedAt)
+        : null;
+    const startedAtMs = stepLog?.started_at ? new Date(stepLog.started_at).getTime() : null;
+    const completedDurationMs =
+      startedAtMs && resolvedEnd
+        ? Math.max(0, new Date(resolvedEnd).getTime() - startedAtMs)
+        : null;
+    const activeDurationSeconds =
+      step.state === 'active' && startedAtMs
+        ? Math.max(0, Math.floor((now - startedAtMs) / 1000))
+        : null;
+    const durationLabel =
+      completedDurationMs !== null
+        ? formatDuration(completedDurationMs)
+        : activeDurationSeconds !== null
+          ? formatElapsed(activeDurationSeconds)
+          : step.state === 'pending'
+            ? 'Waiting'
+            : 'Starting';
+
+    return {
+      ...step,
+      runtimeId: stepLog?.id ?? `${step.key}-${step.state}`,
+      durationLabel,
+      output: stepLog?.output ?? [],
+      startedAt: stepLog?.started_at ?? null,
+      completedAt: resolvedEnd,
+    };
+  });
+}
+
+function activeRuntimeStep(
+  runtimeSteps: PipelineStepRuntime[],
+  orderedLogs: ScanStepLog[]
+): PipelineStepRuntime | null {
   return (
-    <Card>
-      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium text-muted">Backend stages</p>
-          <Card.Title className="mt-1 text-xl">{progress.title}</Card.Title>
-        </div>
-        <Chip color="accent" size="sm" variant="soft" className="font-mono">
-          {progress.eyebrow}
-        </Chip>
-      </Card.Header>
+    runtimeSteps.find((step) => step.state === 'active') ??
+    runtimeSteps[runtimeSteps.length - 1] ??
+    (orderedLogs.length > 0
+      ? {
+          ...describeStep(orderedLogs[orderedLogs.length - 1].step),
+          runtimeId: orderedLogs[orderedLogs.length - 1].id,
+          state: 'active',
+          durationLabel: 'Running',
+          output: orderedLogs[orderedLogs.length - 1].output,
+          startedAt: orderedLogs[orderedLogs.length - 1].started_at,
+          completedAt: orderedLogs[orderedLogs.length - 1].completed_at,
+        }
+      : null)
+  );
+}
 
-      <Card.Content>
-        <p key={detailKey} className="min-h-10 text-sm leading-5 text-muted">
-          {detailMessage}
-        </p>
+function resolveTimelinePipelineSteps({
+  orderedLogs,
+  completedAt,
+}: {
+  orderedLogs: ScanStepLog[];
+  completedAt?: string | null;
+}): PipelineStepRuntime[] {
+  return orderedLogs.map((stepLog, index) => {
+    const definition = describeStep(stepLog.step);
+    const resolvedEnd = resolveStepLogEnd(stepLog, orderedLogs[index + 1], completedAt);
+    const durationMs = resolvedEnd
+      ? Math.max(0, new Date(resolvedEnd).getTime() - new Date(stepLog.started_at).getTime())
+      : null;
 
-        <ProgressBar
-          aria-label="Scan stage progress"
-          className="mt-3"
-          color="accent"
-          size="sm"
-          value={progressPercent}
-        >
-          <ProgressBar.Track>
-            <ProgressBar.Fill />
-          </ProgressBar.Track>
-        </ProgressBar>
+    return {
+      ...definition,
+      runtimeId: stepLog.id,
+      state: resolvedEnd ? 'complete' : 'active',
+      durationLabel: durationMs !== null ? formatDuration(durationMs) : 'Running',
+      output: stepLog.output,
+      startedAt: stepLog.started_at,
+      completedAt: resolvedEnd,
+    };
+  });
+}
 
-        <ol className="mt-5 space-y-2.5">
-          {progress.steps.map((step, index) => {
-            const nextStep = progress.steps[index + 1];
+function PipelineStepOverview({ steps }: { steps: PipelineStepRuntime[] }) {
+  const activeStepId = steps.find((step) => step.state === 'active')?.runtimeId ?? null;
+  const activeStepRef = useRef<HTMLLIElement | null>(null);
+
+  useEffect(() => {
+    if (!activeStepId) {
+      return;
+    }
+
+    activeStepRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'center',
+    });
+  }, [activeStepId]);
+
+  return (
+    <div className="rounded-3xl mt-4">
+      <ScrollShadow
+        className="-mx-1 px-1 pb-2"
+        orientation="horizontal"
+        size={32}
+        visibility="auto"
+      >
+        <ol className="flex min-w-full gap-3">
+          {steps.map((step, index) => {
+            const isActive = step.state === 'active';
 
             return (
-              <li key={`${step.key}-${index}`} className="relative flex gap-3">
-                <div className="relative flex w-6 shrink-0 justify-center">
-                  {nextStep ? (
-                    <span
-                      aria-hidden
-                      className={`absolute top-5 h-[calc(100%+0.625rem)] w-px ${
-                        step.state === 'complete' ? 'bg-accent/35' : 'bg-divider'
-                      }`}
-                    />
-                  ) : null}
+              <li
+                key={`${step.key}-${index}`}
+                ref={step.runtimeId === activeStepId ? activeStepRef : undefined}
+                className={`relative min-w-[17rem] shrink-0 overflow-hidden rounded-2xl border p-px sm:min-w-[19rem] ${
+                  isActive
+                    ? 'border-accent/20 bg-accent/15 shadow-[0_0_20px_color-mix(in_srgb,var(--accent)_8%,transparent)]'
+                    : 'border-divider bg-surface-secondary'
+                }`}
+              >
+                {isActive ? (
                   <span
                     aria-hidden
-                    className={`relative z-10 mt-1 flex size-4 items-center justify-center rounded-full ${
-                      step.state === 'active'
-                        ? 'bg-accent'
-                        : step.state === 'complete'
-                          ? 'bg-accent/20'
-                          : 'bg-default'
-                    } ${step.state === 'active' && !reduceMotion ? 'animate-pulse' : ''}`}
-                  >
-                    {step.state === 'complete' ? (
-                      <span className="size-1.5 rounded-full bg-accent" />
-                    ) : null}
-                  </span>
-                </div>
-                <div
-                  className={`min-w-0 flex-1 rounded-2xl bg-surface-secondary px-3 py-2.5 ${
-                    step.state === 'active' ? 'ring-1 ring-accent/25' : ''
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-foreground">{step.title}</p>
-                    {step.state === 'active' ? (
-                      <Chip color="accent" size="sm" variant="soft">
-                        Active
-                      </Chip>
-                    ) : step.state === 'complete' ? (
-                      <Chip color="success" size="sm" variant="soft">
-                        Done
-                      </Chip>
-                    ) : (
-                      <span className="text-xs text-muted">Next</span>
-                    )}
+                    className="pointer-events-none absolute -inset-24 bg-[conic-gradient(from_90deg,transparent_0_68%,color-mix(in_srgb,var(--accent)_20%,transparent)_74%,var(--accent)_80%,color-mix(in_srgb,var(--accent)_20%,transparent)_86%,transparent_92%)] opacity-80 motion-safe:animate-spin motion-reduce:hidden"
+                  />
+                ) : null}
+                <div className="relative flex items-start gap-3 rounded-[calc(1rem-1px)] bg-surface-secondary px-4 py-3">
+                  <Badge.Anchor className="shrink-0">
+                    <span className="flex size-10 items-center justify-center rounded-2xl bg-surface">
+                      <StepIdentityIcon state={step.state} stepKey={step.key} />
+                    </span>
+                    <StepStatusBadge state={step.state} title={step.title} />
+                  </Badge.Anchor>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">{step.title}</p>
+                    <p className="mt-1 font-mono text-xs text-muted">{step.durationLabel}</p>
                   </div>
-                  <p className="mt-1 text-xs leading-5 text-muted">
-                    {step.state === 'active' ? detailMessage : step.description}
-                  </p>
                 </div>
               </li>
             );
           })}
         </ol>
-      </Card.Content>
-    </Card>
+      </ScrollShadow>
+    </div>
   );
 }
 
-function ScanSignalStrip({
-  image,
-  compactImage,
-  providerName,
-  elapsed,
-  activeStepElapsed,
-  latestOutput,
-  activeStepLog,
+function PipelineDurationList({
+  steps,
+  selectedStepId,
+  onStepSelect,
 }: {
-  image?: string;
-  compactImage: string | null;
-  providerName: string;
-  elapsed: number;
-  activeStepElapsed: number | null;
-  latestOutput: string | null;
-  activeStepLog: ScanStepLog | null;
+  steps: PipelineStepRuntime[];
+  selectedStepId?: string | null;
+  onStepSelect?: (stepId: string) => void;
 }) {
-  const outputCount = stepOutputCount(activeStepLog);
+  return (
+    <div className="rounded-3xl bg-surface-secondary p-3 sm:p-4">
+      <ol className="space-y-1.5">
+        {steps.map((step, index) => {
+          const tone = stepStateTone(step.state);
+          const isSelected = selectedStepId === step.runtimeId;
+          const rowClassName = `flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left ${
+            step.state === 'active' ? 'bg-accent/5' : ''
+          } ${isSelected ? 'ring-1 ring-accent/25' : ''}`;
+          const rowContent = (
+            <>
+              <StepStatusIcon state={step.state} title={step.title} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{step.title}</p>
+                {step.startedAt ? (
+                  <p className="mt-0.5 text-xs text-muted">Started {timeAgo(step.startedAt)}</p>
+                ) : null}
+              </div>
+              <span className={`rounded-full px-2.5 py-1 font-mono text-xs ${tone.rowClassName}`}>
+                {step.durationLabel}
+              </span>
+            </>
+          );
+
+          return (
+            <li key={`${step.runtimeId}-duration-${index}`}>
+              {onStepSelect ? (
+                <button
+                  type="button"
+                  className={rowClassName}
+                  onClick={() => onStepSelect(step.runtimeId)}
+                >
+                  {rowContent}
+                </button>
+              ) : (
+                <div className={rowClassName}>{rowContent}</div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+function PipelineLiveLogs({
+  activeStep,
+  detailMessage,
+}: {
+  activeStep: PipelineStepRuntime | null;
+  detailMessage: string;
+}) {
+  const visibleLogs =
+    activeStep && activeStep.output.length > 0
+      ? activeStep.output.slice(-7)
+      : [
+          `$ justscan scan --step ${activeStep?.key ?? 'queued'}`,
+          `-> ${detailMessage}`,
+          '-> waiting for the next backend update',
+        ];
 
   return (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-      <Card>
-        <Card.Content>
-          <dl className="grid gap-3 sm:grid-cols-3">
-            <div>
-              <dt className="text-xs text-muted">Provider</dt>
-              <dd className="mt-1 text-sm font-medium text-foreground">{providerName}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted">Total time</dt>
-              <dd className="mt-1 font-mono text-sm text-foreground">{formatElapsed(elapsed)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted">Active step</dt>
-              <dd className="mt-1 font-mono text-sm text-foreground">
-                {activeStepElapsed !== null ? formatElapsed(activeStepElapsed) : 'Waiting'}
-              </dd>
-            </div>
-          </dl>
-          <div className="mt-4 border-t border-divider pt-3">
-            <p className="text-xs text-muted">Image</p>
-            <p
-              className="mt-1 break-words font-mono text-sm text-foreground"
-              style={{ overflowWrap: 'anywhere' }}
-              title={image}
-            >
-              {image || compactImage || '-'}
-            </p>
-          </div>
-        </Card.Content>
-      </Card>
-
-      <Card>
-        <Card.Content>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-muted">Live signal</p>
-            <span className="text-xs text-muted">
-              {outputCount ? `${outputCount} update${outputCount === 1 ? '' : 's'}` : 'Awaiting'}
-            </span>
-          </div>
-          <p
-            className="mt-3 min-h-11 break-words font-mono text-sm leading-5 text-foreground"
-            style={{ overflowWrap: 'anywhere' }}
-            title={latestOutput ?? ''}
-          >
-            {latestOutput ?? 'No output recorded yet.'}
-          </p>
-        </Card.Content>
-      </Card>
+    <div className="rounded-3xl bg-surface-secondary p-4 shadow-surface sm:p-5">
+      <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-2xl font-mono text-xs text-foreground">
+        {visibleLogs
+          .map((line) => (line.startsWith('$') ? line : `-> ${line.replace(/^->\s?/, '')}`))
+          .join('\n')}
+      </pre>
     </div>
+  );
+}
+
+function ScanPipelineCard({
+  status,
+  image,
+  subtitle,
+  providerName,
+  progress,
+  progressPercent,
+  elapsed,
+  runtimeSteps,
+  activeStep,
+  detailMessage,
+  selectedStepId,
+  onStepSelect,
+  actions,
+}: {
+  status: string;
+  image?: string;
+  subtitle?: string;
+  providerName: string;
+  progress: ProgressModel;
+  progressPercent: number;
+  elapsed: number;
+  runtimeSteps: PipelineStepRuntime[];
+  activeStep: PipelineStepRuntime | null;
+  detailMessage: string;
+  selectedStepId?: string | null;
+  onStepSelect?: (stepId: string) => void;
+  actions?: ReactNode;
+}) {
+  const compactImage = compactImageLabel(image);
+  const description = image || compactImage || subtitle || progress.note;
+
+  return (
+    <Card className="overflow-hidden p-0">
+      <ProgressBar
+        aria-label="Running scan progress"
+        color={pipelineStatusColor(status)}
+        size="sm"
+        value={progressPercent}
+      >
+        <ProgressBar.Track className="rounded-none">
+          <ProgressBar.Fill className="rounded-none" />
+        </ProgressBar.Track>
+      </ProgressBar>
+
+      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3 px-5 pt-5 sm:px-6">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Card.Title className="text-lg">Scan pipeline</Card.Title>
+            <Chip size="sm" variant="secondary">
+              {providerName}
+            </Chip>
+          </div>
+          <Card.Description
+            className="mt-2 max-w-2xl font-mono text-xs"
+            title={image || compactImage || undefined}
+          >
+            {description}
+          </Card.Description>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip color={pipelineStatusColor(status)} size="sm" variant="soft">
+            {scanStatusLabel(status)} · {progress.title}
+          </Chip>
+          {actions}
+        </div>
+      </Card.Header>
+
+      <Card.Content className="gap-4 px-5 pb-5 sm:px-6 sm:pb-6">
+        <PipelineStepOverview steps={runtimeSteps} />
+        <PipelineDurationList
+          onStepSelect={onStepSelect}
+          selectedStepId={selectedStepId}
+          steps={runtimeSteps}
+        />
+        <PipelineLiveLogs activeStep={activeStep} detailMessage={detailMessage} />
+      </Card.Content>
+
+      <Card.Footer className="flex-row flex-wrap items-center justify-between gap-3 px-5 pb-5 pt-0 sm:px-6 sm:pb-6">
+        <p className="font-mono text-sm text-muted">
+          {formatElapsed(elapsed)} elapsed · {Math.round(progressPercent)}%
+        </p>
+        <Chip color={pipelineStatusColor(status)} size="sm" variant="soft">
+          {activeStep ? `${activeStep.title}...` : progress.eyebrow}
+        </Chip>
+      </Card.Footer>
+    </Card>
   );
 }
 
@@ -1332,7 +1006,6 @@ export function ScanningAnimation({
   currentStep?: string | null;
   stepLogs?: ScanStepLog[] | null;
 }) {
-  const reduceMotion = useReducedMotion() ?? false;
   const startedAtMs = startedAt ? new Date(startedAt).getTime() : null;
   const [fallbackStart, setFallbackStart] = useState<number | null>(startedAtMs);
   const [now, setNow] = useState(() => startedAtMs ?? 0);
@@ -1361,25 +1034,7 @@ export function ScanningAnimation({
     progress.detailMessages[detailTick % progress.detailMessages.length] ??
     progress.detailMessages[0];
   const orderedLogs = orderStepLogs(stepLogs);
-  const activeStepLog =
-    [...orderedLogs].reverse().find((stepLog) => stepLog.step === progress.activeKey) ??
-    orderedLogs[orderedLogs.length - 1] ??
-    null;
-  const activeStepStart = activeStepLog?.started_at
-    ? new Date(activeStepLog.started_at).getTime()
-    : null;
-  const activeStepElapsed = activeStepStart
-    ? Math.max(0, Math.floor((now - activeStepStart) / 1000))
-    : null;
-  const latestOutput = latestStepOutput(activeStepLog);
-  const runtimeWarning = buildRuntimeWarning(
-    progress.activeKey,
-    activeStepElapsed,
-    latestOutput,
-    scanProvider
-  );
   const providerName = providerLabel(scanProvider, orderedLogs);
-  const compactImage = compactImageLabel(image);
   const activeStepIndex = Math.max(
     0,
     progress.steps.findIndex((step) => step.state === 'active')
@@ -1388,35 +1043,42 @@ export function ScanningAnimation({
     progress.steps.length <= 1
       ? 100
       : Math.round((activeStepIndex / (progress.steps.length - 1)) * 100);
+  const runtimeSteps = resolvePipelineStepRuntime({
+    progress,
+    orderedLogs,
+    completedAt: null,
+    now,
+  });
+  const activeStep = activeRuntimeStep(runtimeSteps, orderedLogs);
+  const activeStepStartedAt = activeStep?.startedAt
+    ? new Date(activeStep.startedAt).getTime()
+    : null;
+  const activeStepElapsed = activeStepStartedAt
+    ? Math.max(0, Math.floor((now - activeStepStartedAt) / 1000))
+    : null;
+  const latestOutput =
+    activeStep && activeStep.output.length > 0
+      ? activeStep.output[activeStep.output.length - 1]
+      : null;
+  const runtimeWarning = buildRuntimeWarning(
+    progress.activeKey,
+    activeStepElapsed,
+    latestOutput,
+    scanProvider
+  );
 
   return (
     <section className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-[minmax(360px,0.98fr)_minmax(0,1.02fr)]">
-        <ScanStageRail
-          detailKey={`${progress.activeKey}-${detailTick}`}
-          detailMessage={detailMessage}
-          progress={progress}
-          progressPercent={progressPercent}
-          reduceMotion={reduceMotion}
-        />
-        <ScanStageScene
-          detailMessage={detailMessage}
-          image={image}
-          progress={progress}
-          progressPercent={progressPercent}
-          providerName={providerName}
-          reduceMotion={reduceMotion}
-        />
-      </div>
-
-      <ScanSignalStrip
-        activeStepElapsed={activeStepElapsed}
-        activeStepLog={activeStepLog}
-        compactImage={compactImage}
+      <ScanPipelineCard
+        activeStep={activeStep}
+        detailMessage={detailMessage}
         elapsed={elapsed}
         image={image}
-        latestOutput={latestOutput}
+        progress={progress}
+        progressPercent={progressPercent}
         providerName={providerName}
+        runtimeSteps={runtimeSteps}
+        status={status}
       />
 
       {runtimeWarning ? (
@@ -1465,65 +1127,50 @@ export function ScanStepTimeline({
     firstStartedAt && finalTimestamp
       ? Math.max(0, new Date(finalTimestamp).getTime() - new Date(firstStartedAt).getTime())
       : null;
+  const elapsedSeconds = totalDurationMs !== null ? Math.round(totalDurationMs / 1000) : 0;
   const providerName = providerLabel(scanProvider, orderedLogs);
   const totalOutputs = orderedLogs.reduce((count, stepLog) => count + stepOutputCount(stepLog), 0);
   const blockedByPolicy = isBlockedXrayPolicy(externalStatus, scanProvider);
   const recoveredBlockedSummary = blockedByPolicy && hasRecoveredBlockedSummary(orderedLogs);
   const effectiveStatus = effectiveTimelineStatus(status, externalStatus);
-  const statusTone = timelineStatusTone(effectiveStatus);
+  const timelineSteps = resolveTimelinePipelineSteps({ orderedLogs, completedAt });
   const canShowXrayDebug = scanProvider === 'artifactory_xray' && Boolean(scanId);
-
   const resolvedSelectedStepId =
     selectedStepId && orderedLogs.some((stepLog) => stepLog.id === selectedStepId)
       ? selectedStepId
       : orderedLogs[orderedLogs.length - 1]?.id;
-  const selectedStep =
-    orderedLogs.find((stepLog) => stepLog.id === resolvedSelectedStepId) ??
-    orderedLogs[orderedLogs.length - 1];
-  const selectedStepIndex = orderedLogs.findIndex((stepLog) => stepLog.id === selectedStep.id);
-  const selectedResolvedEnd = resolveStepLogEnd(
-    selectedStep,
-    orderedLogs[selectedStepIndex + 1],
-    completedAt
-  );
-  const selectedDurationMs = selectedResolvedEnd
-    ? Math.max(
-        0,
-        new Date(selectedResolvedEnd).getTime() - new Date(selectedStep.started_at).getTime()
-      )
-    : null;
-  const selectedDefinition = describeStep(selectedStep.step);
-  const selectedOutputPreview = latestStepOutput(selectedStep);
-  const selectedRowTone = terminalRowTone(
-    selectedStep.step,
-    blockedByPolicy && selectedStep.step === 'failed'
-  );
-  const selectedIsTerminal =
-    selectedStep.step === 'completed' ||
-    selectedStep.step === 'failed' ||
-    selectedStep.step === 'cancelled';
-  const firstActiveIndex = orderedLogs.findIndex(
-    (stepLog, index) => !resolveStepLogEnd(stepLog, orderedLogs[index + 1], completedAt)
-  );
-  const effectiveActiveIndex = firstActiveIndex === -1 ? orderedLogs.length - 1 : firstActiveIndex;
-  const timelineProgressPercent =
-    orderedLogs.length <= 1
+  const selectedPipelineStep =
+    timelineSteps.find((step) => step.runtimeId === resolvedSelectedStepId) ??
+    timelineSteps[timelineSteps.length - 1] ??
+    null;
+  const activeTimelineStepIndex = timelineSteps.findIndex((step) => step.state === 'active');
+  const timelineProgressPercent = finalTimestamp
+    ? 100
+    : timelineSteps.length <= 1
       ? 100
-      : Math.max(0, Math.min(100, (effectiveActiveIndex / (orderedLogs.length - 1)) * 100));
-
-  let slowestStep: { title: string; durationMs: number } | null = null;
-  for (let index = 0; index < orderedLogs.length; index += 1) {
-    const stepLog = orderedLogs[index];
-    const resolvedEnd = resolveStepLogEnd(stepLog, orderedLogs[index + 1], completedAt);
-    if (!resolvedEnd) continue;
-    const durationMs = Math.max(
-      0,
-      new Date(resolvedEnd).getTime() - new Date(stepLog.started_at).getTime()
-    );
-    if (!slowestStep || durationMs > slowestStep.durationMs) {
-      slowestStep = { title: describeStep(stepLog.step).title, durationMs };
-    }
-  }
+      : Math.max(
+          0,
+          Math.min(
+            100,
+            ((activeTimelineStepIndex === -1 ? timelineSteps.length - 1 : activeTimelineStepIndex) /
+              (timelineSteps.length - 1)) *
+              100
+          )
+        );
+  const timelineProgress: ProgressModel = {
+    activeKey: selectedPipelineStep?.key ?? 'completed',
+    eyebrow: `${orderedLogs.length} recorded step${orderedLogs.length === 1 ? '' : 's'}`,
+    title:
+      blockedByPolicy && selectedPipelineStep?.key === 'failed'
+        ? 'Blocked by Xray policy'
+        : (selectedPipelineStep?.title ?? scanStatusLabel(effectiveStatus ?? 'completed')),
+    detailMessages: [selectedPipelineStep?.description ?? 'The scan timeline has been recorded.'],
+    note:
+      blockedByPolicy && recoveredBlockedSummary
+        ? 'Xray blocked the normal scan path, but JustScan recovered artifact summary data and imported the provider findings it could access.'
+        : 'This pipeline is reconstructed from the backend step logs persisted for this scan.',
+    steps: timelineSteps,
+  };
 
   const selectedXrayLog =
     xrayLogs.find((entry) => entry.id === selectedXrayLogID) ??
@@ -1555,38 +1202,10 @@ export function ScanStepTimeline({
   };
 
   return (
-    <Card>
-      <style>{`
-				@keyframes timelineRise { 0% { opacity: 0; transform: translateY(12px); } 100% { opacity: 1; transform: translateY(0); } }
-				@keyframes timelineGlow { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.9; } }
-				@keyframes timelinePulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); } 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 10%, transparent); } }
-			`}</style>
-
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-white">
-            Backend step history
-          </h3>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            {blockedByPolicy && recoveredBlockedSummary
-              ? 'Xray blocked the normal scan path, but JustScan still recovered artifact summary data and imported whatever findings the provider exposed.'
-              : 'Each row is persisted by the backend, including timestamps and any step output that was produced.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {effectiveStatus && (
-            <span
-              className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
-              style={{
-                color: statusTone.color,
-                background: statusTone.background,
-                border: `1px solid ${statusTone.border}`,
-              }}
-            >
-              {statusTone.label}
-            </span>
-          )}
-          {canShowXrayDebug && (
+    <section className="space-y-4">
+      <ScanPipelineCard
+        actions={
+          canShowXrayDebug ? (
             <Button
               size="sm"
               variant="secondary"
@@ -1596,311 +1215,22 @@ export function ScanStepTimeline({
             >
               Xray debug
             </Button>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card variant="secondary">
-          <div className="flex flex-wrap items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Total duration
-            </p>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-white">
-              {totalDurationMs !== null ? formatDuration(totalDurationMs) : '—'}
-            </p>
-          </div>
-          <p className="text-xs text-zinc-500">Across {orderedLogs.length} recorded steps</p>
-        </Card>
-        <Card variant="secondary">
-          <div className="flex flex-wrap items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Slowest step
-            </p>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-white">
-              {slowestStep?.title ?? '—'}
-            </p>
-          </div>
-          <p className="text-xs text-zinc-500">
-            {slowestStep ? formatDuration(slowestStep.durationMs) : 'No completed duration yet'}
-          </p>
-        </Card>
-        <Card variant="secondary">
-          <div className="flex flex-wrap items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Provider
-            </p>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-white">{providerName}</p>
-          </div>
-          <p className="text-xs text-zinc-500">
-            {totalOutputs} backend update{totalOutputs === 1 ? '' : 's'} captured
-          </p>
-        </Card>
-        <Card variant="secondary">
-          <div className="flex flex-wrap items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Finished
-            </p>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-white">
-              {finalTimestamp ? timeAgo(finalTimestamp) : '—'}
-            </p>
-          </div>
-          <p className="text-xs text-zinc-500">
-            {finalTimestamp ? fullDate(finalTimestamp) : 'No completion time recorded'}
-          </p>
-        </Card>
-      </div>
-
-      <Card variant="secondary">
-        <div className="hidden md:block">
-          <div className="overflow-x-auto">
-            <div className="flex min-w-[900px] px-4 py-4">
-              {orderedLogs.map((stepLog, index) => {
-                const definition = describeStep(stepLog.step);
-                const resolvedEnd = resolveStepLogEnd(stepLog, orderedLogs[index + 1], completedAt);
-                const durationMs = resolvedEnd
-                  ? Math.max(
-                      0,
-                      new Date(resolvedEnd).getTime() - new Date(stepLog.started_at).getTime()
-                    )
-                  : null;
-                const blockedTerminalRow = blockedByPolicy && stepLog.step === 'failed';
-                const rowTone = terminalRowTone(stepLog.step, blockedTerminalRow);
-                const isSelected = selectedStep.id === stepLog.id;
-                const isCompleted = Boolean(resolvedEnd);
-                const isActive = index === effectiveActiveIndex && !isCompleted;
-                const isFirst = index === 0;
-                const isLast = index === orderedLogs.length - 1;
-                const leftDone = index <= effectiveActiveIndex;
-                const rightDone = index < effectiveActiveIndex;
-
-                return (
-                  <motion.button
-                    key={stepLog.id}
-                    type="button"
-                    onClick={() => setSelectedStepId(stepLog.id)}
-                    className="group m-0 flex flex-1 appearance-none flex-col items-center border-0 bg-transparent p-0 text-center"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.24, delay: index * 0.045 }}
-                  >
-                    {/* Date label */}
-                    <span className="mb-2 block text-[11px] font-semibold uppercase leading-4 tracking-[0.16em] text-zinc-500">
-                      {formatTimelineDate(stepLog.started_at)}
-                    </span>
-
-                    {/* Connector + circle in the same flex row — lines run through circle center by design */}
-                    <div className="flex w-full items-center">
-                      <div
-                        className="h-[3px] flex-1"
-                        style={{
-                          background: isFirst
-                            ? 'transparent'
-                            : leftDone
-                              ? '#10b981'
-                              : 'var(--surface-border)',
-                        }}
-                      />
-                      <motion.span
-                        className="z-10 flex flex-shrink-0 items-center justify-center rounded-full border text-xs font-bold"
-                        style={{
-                          width: 32,
-                          height: 32,
-                          background: isCompleted
-                            ? '#10b981'
-                            : isActive
-                              ? '#14b8a6'
-                              : 'var(--card-bg)',
-                          borderColor:
-                            isCompleted || isActive ? 'transparent' : 'var(--surface-border)',
-                          color: isCompleted || isActive ? '#ffffff' : '#71717a',
-                          boxShadow: isSelected
-                            ? `0 0 0 6px ${rowTone.badgeBackground}`
-                            : undefined,
-                        }}
-                        animate={isSelected || isActive ? { scale: [1, 1.06, 1] } : { scale: 1 }}
-                        transition={{
-                          duration: 1.5,
-                          repeat: isSelected || isActive ? Infinity : 0,
-                          ease: 'easeInOut',
-                        }}
-                      >
-                        {isCompleted ? (
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        ) : (
-                          index + 1
-                        )}
-                      </motion.span>
-                      <div
-                        className="h-[3px] flex-1"
-                        style={{
-                          background: isLast
-                            ? 'transparent'
-                            : rightDone
-                              ? '#10b981'
-                              : 'var(--surface-border)',
-                        }}
-                      />
-                    </div>
-
-                    {/* Labels below */}
-                    <div className="mt-3 px-1">
-                      <p className="text-xs font-semibold text-zinc-900 dark:text-white">
-                        {blockedTerminalRow ? 'Blocked by policy' : definition.title}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-zinc-500">
-                        {definition.description}
-                      </p>
-                      <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-zinc-500">
-                        {durationMs !== null ? formatDuration(durationMs) : 'Running'}
-                      </p>
-                    </div>
-                  </motion.button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-2 md:hidden">
-          {orderedLogs.map((stepLog, index) => {
-            const definition = describeStep(stepLog.step);
-            const resolvedEnd = resolveStepLogEnd(stepLog, orderedLogs[index + 1], completedAt);
-            const blockedTerminalRow = blockedByPolicy && stepLog.step === 'failed';
-            const isSelected = selectedStep.id === stepLog.id;
-
-            return (
-              <button
-                key={stepLog.id}
-                type="button"
-                onClick={() => setSelectedStepId(stepLog.id)}
-                className="w-full rounded-xl px-3 py-2 text-left"
-                style={{
-                  background: isSelected ? 'rgba(20,184,166,0.08)' : 'var(--card-bg)',
-                  border: `1px solid ${isSelected ? 'rgba(20,184,166,0.25)' : 'var(--surface-border)'}`,
-                }}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-zinc-900 dark:text-white">
-                      {blockedTerminalRow ? 'Blocked by Xray policy' : definition.title}
-                    </p>
-                    <p className="mt-0.5 text-xs text-zinc-500">{definition.description}</p>
-                  </div>
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                    {resolvedEnd ? 'Done' : 'Active'}
-                  </span>
-                </div>
-                <p className="mt-1 text-[11px] text-zinc-500">
-                  {formatTimelineDate(stepLog.started_at)} • {timeAgo(stepLog.started_at)}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      </Card>
-
-      <Card variant="secondary">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
-              Selected step
-            </p>
-            <h4 className="mt-1 text-base font-semibold text-zinc-900 dark:text-white">
-              {blockedByPolicy && selectedStep.step === 'failed'
-                ? 'Blocked by Xray policy'
-                : selectedDefinition.title}
-            </h4>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              {selectedDefinition.description}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2 text-xs">
-            <span
-              className="rounded-full px-2.5 py-1 text-zinc-600 dark:text-zinc-300"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
-            >
-              Started {timeAgo(selectedStep.started_at)}
-            </span>
-            <span
-              className="rounded-full px-2.5 py-1 text-zinc-600 dark:text-zinc-300"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
-            >
-              {selectedDurationMs !== null ? formatDuration(selectedDurationMs) : 'Running'}
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Card>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Started
-            </p>
-            <p
-              className="text-xs text-zinc-800 dark:text-zinc-200"
-              title={fullDate(selectedStep.started_at)}
-            >
-              {fullDate(selectedStep.started_at)}
-            </p>
-          </Card>
-          {selectedResolvedEnd && (
-            <Card>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                Finished
-              </p>
-              <p
-                className="text-xs text-zinc-800 dark:text-zinc-200"
-                title={fullDate(selectedResolvedEnd)}
-              >
-                {fullDate(selectedResolvedEnd)}
-              </p>
-            </Card>
-          )}
-        </div>
-
-        <Card>
-          <div className="flex items-center gap-2">
-            <span
-              className="size-2 rounded-full"
-              style={{
-                background: selectedIsTerminal
-                  ? selectedRowTone.bubble
-                  : 'color-mix(in srgb, var(--accent) 78%, white)',
-                animation: 'timelineGlow 1.7s ease-in-out infinite',
-              }}
-            />
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Live signal
-            </p>
-          </div>
-          <p className="text-sm leading-6 text-zinc-800 dark:text-zinc-200">
-            {selectedOutputPreview ?? 'No backend output was recorded for this step.'}
-          </p>
-          {selectedStep.output.length > 0 && (
-            <ul className="mt-3 space-y-1.5">
-              {selectedStep.output.map((line, outputIndex) => (
-                <li
-                  key={`${selectedStep.id}-output-${outputIndex}`}
-                  className="text-sm leading-5 text-zinc-700 dark:text-zinc-300"
-                >
-                  {line}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </Card>
+          ) : null
+        }
+        activeStep={selectedPipelineStep}
+        detailMessage={timelineProgress.note}
+        elapsed={elapsedSeconds}
+        onStepSelect={setSelectedStepId}
+        progress={timelineProgress}
+        progressPercent={timelineProgressPercent}
+        providerName={providerName}
+        runtimeSteps={timelineSteps}
+        selectedStepId={resolvedSelectedStepId}
+        status={effectiveStatus ?? 'completed'}
+        subtitle={`${totalOutputs} backend update${totalOutputs === 1 ? '' : 's'} captured${
+          finalTimestamp ? ` · Finished ${timeAgo(finalTimestamp)}` : ''
+        }`}
+      />
 
       <Modal state={xrayDebugModal}>
         <Modal.Backdrop isDismissable>
@@ -2068,6 +1398,6 @@ export function ScanStepTimeline({
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
-    </Card>
+    </section>
   );
 }

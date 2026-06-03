@@ -3,6 +3,7 @@ import { PublicNavbar } from '@/components/public/public-navbar';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type { Scan, Vulnerability } from '@/lib/api';
 import {
@@ -635,10 +636,10 @@ export default function PublicScanResultPage() {
                     { ...SEV_CONFIG.MEDIUM, count: scan.medium_count },
                     { ...SEV_CONFIG.LOW, count: scan.low_count },
                   ].map(({ label, count, color, border }) => (
-                    <Card
+                    <button
                       key={label}
-                      className={`rounded-2xl border ${border} p-4 cursor-pointer transition-all hover:scale-105`}
-                      variant="default"
+                      type="button"
+                      className="w-full text-left transition-transform hover:scale-[1.01]"
                       onClick={() => {
                         setSeverityFilter((f) =>
                           f === label.toUpperCase() ? '' : label.toUpperCase()
@@ -646,13 +647,28 @@ export default function PublicScanResultPage() {
                         setPage(1);
                       }}
                     >
-                      <Card.Content className="p-0">
-                        <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-                          {label}
-                        </p>
-                        <p className={`text-2xl font-bold ${color}`}>{count ?? 0}</p>
-                      </Card.Content>
-                    </Card>
+                      <StatCard
+                        label={label}
+                        value={count ?? 0}
+                        hint={
+                          severityFilter === label.toUpperCase()
+                            ? 'Filter active'
+                            : 'Click to filter the table'
+                        }
+                        className={`border ${border} bg-surface/50 shadow-sm backdrop-blur ${
+                          severityFilter === label.toUpperCase()
+                            ? 'ring-1 ring-accent/50'
+                            : 'border-divider/60'
+                        }`}
+                        valueClassName={`text-2xl font-bold ${color}`}
+                        hintStyle={{
+                          color:
+                            severityFilter === label.toUpperCase()
+                              ? 'var(--accent)'
+                              : 'var(--text-faint)',
+                        }}
+                      />
+                    </button>
                   ))}
                 </div>
 

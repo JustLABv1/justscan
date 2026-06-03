@@ -7,7 +7,11 @@ export const heroTextAreaClassName = 'surface-input w-full min-h-28 rounded-xl p
 
 export const heroSelectTriggerClassName = heroFieldClassName;
 
-export const fieldLabelClassName = 'block text-sm font-medium text-zinc-600 dark:text-zinc-300';
+export const fieldLabelClassName = 'block text-sm font-medium text-foreground/72';
+
+export const fieldDescriptionClassName = 'text-xs text-foreground/56';
+
+export const fieldErrorClassName = 'text-xs font-medium text-danger';
 
 export function joinClassNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ');

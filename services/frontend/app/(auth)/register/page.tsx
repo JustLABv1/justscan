@@ -75,7 +75,6 @@ export default function RegisterPage() {
           value={password}
         />
         <Button
-          className="btn-primary w-full"
           fullWidth
           isPending={loading}
           type="submit"

@@ -1,4 +1,5 @@
 'use client';
+import { AuthProviderButton } from '@/components/auth-provider-button';
 import { AuthCard } from '@/components/auth-card';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
@@ -18,7 +19,7 @@ export default function LoginPage() {
   const [localAuthEnabled, setLocalAuthEnabled] = useState(true);
   const [oidcProviders, setOidcProviders] = useState<OIDCProvider[]>([]);
   const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
-  const [oidcApiBase, setOidcApiBase] = useState('');
+  const oidcApiBase = getApiBase();
 
   useEffect(() => {
     Promise.allSettled([
@@ -32,10 +33,6 @@ export default function LoginPage() {
         setOidcProviders(providers.value);
       }
     }).finally(() => setAvailabilityLoaded(true));
-  }, []);
-
-  useEffect(() => {
-    setOidcApiBase(getApiBase());
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -96,7 +93,6 @@ export default function LoginPage() {
             value={password}
           />
           <Button
-            className="btn-primary w-full"
             fullWidth
             isPending={loading}
             type="submit"
@@ -123,27 +119,22 @@ export default function LoginPage() {
           ) : null}
           <div className="space-y-2">
             {oidcProviders.map((provider) => (
-              <a
+              <AuthProviderButton
                 key={provider.name}
                 href={`${oidcApiBase}/api/v1/auth/oidc/${encodeURIComponent(provider.name)}/login`}
-                className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98]"
-                style={{
-                  background: provider.button_color
-                    ? `${provider.button_color}1a`
-                    : 'color-mix(in oklab,var(--accent) 12%,transparent)',
-                  border: `1px solid ${
-                    provider.button_color
-                      ? `${provider.button_color}4d`
-                      : 'color-mix(in oklab,var(--accent) 30%,transparent)'
-                  }`,
-                  color: 'var(--text-primary)',
-                }}
-              >
-                <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                </svg>
-                {provider.display_name}
-              </a>
+                icon={
+                  <svg
+                    className="size-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                }
+                label={provider.display_name}
+              />
             ))}
           </div>
         </>

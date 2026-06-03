@@ -1,6 +1,7 @@
 'use client';
 
 import { PublicNavbar } from '@/components/public/public-navbar';
+import { StatCard } from '@/components/ui/stat-card';
 import {
     createPublicHelmScans,
     extractPublicHelmImages,
@@ -11,67 +12,39 @@ import {
     reScanPublic,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { getHelmImageSourceLabel } from '@/lib/helm-image-overrides';
 import { PublicHelmRunHistoryEntry, updateHelmPublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button } from '@heroui/react';
+import { Alert, Button, Card, Chip, Spinner, Table } from '@heroui/react';
+import { ArrowReloadHorizontalIcon, PackageIcon, Refresh01Icon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-const STATUS_STYLE: Record<string, { color: string; bg: string; border: string; label?: string }> =
-  {
-    completed: { color: '#34d399', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.22)' },
-    failed: { color: '#f87171', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.22)' },
-    running: { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.22)' },
-    pending: {
-      color: '#a1a1aa',
-      bg: 'rgba(161,161,170,0.08)',
-      border: 'rgba(161,161,170,0.15)',
-      label: 'queued',
-    },
-    cancelled: { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.20)' },
-  };
+type ChipColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
 
 function StatusBadge({ status }: { status: string }) {
-  const state = STATUS_STYLE[status] ?? STATUS_STYLE.pending;
+  const color: ChipColor =
+    status === 'completed'
+      ? 'success'
+      : status === 'failed'
+        ? 'danger'
+        : status === 'running'
+          ? 'accent'
+          : status === 'cancelled'
+            ? 'warning'
+            : 'default';
+  const label = status === 'pending' ? 'queued' : status;
   return (
-    <span
-      className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap"
-      style={{ color: state.color, background: state.bg, border: `1px solid ${state.border}` }}
-    >
+    <Chip color={color} size="sm" variant="soft">
       <span
-        className={`size-1.5 rounded-full bg-current shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`}
+        className={`mr-1.5 inline-block size-1.5 rounded-full bg-current ${
+          status === 'running' ? 'animate-pulse' : ''
+        }`}
       />
-      {state.label ?? status}
-    </span>
-  );
-}
-
-function StatBox({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string | number;
-  color?: string;
-}) {
-  return (
-    <div
-      className="flex flex-col gap-0.5 px-4 py-3 rounded-xl"
-      style={{ background: 'var(--table-header-bg)', border: '1px solid var(--border-subtle)' }}
-    >
-      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-        {label}
-      </span>
-      <span
-        className={`text-xl font-bold font-mono ${color ?? ''}`}
-        style={!color ? { color: 'var(--text-primary)' } : undefined}
-      >
-        {value}
-      </span>
-    </div>
+      {label}
+    </Chip>
   );
 }
 
@@ -107,7 +80,8 @@ export default function PublicHelmRunDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
-  const isDark = resolvedTheme === 'dark';
+  const [mounted, setMounted] = useState(false);
+  const isDark = mounted && resolvedTheme === 'dark';
   const runId = Array.isArray(params?.id) ? params.id[0] : params?.id;
 
   const [detail, setDetail] = useState<HelmScanRunDetail | null>(null);
@@ -140,7 +114,10 @@ export default function PublicHelmRunDetailPage() {
   );
 
   useEffect(() => {
-    return deferEffect(() => loadRun().catch(() => {}));
+    return deferEffect(() => {
+      setMounted(true);
+      void loadRun().catch(() => {});
+    });
   }, [loadRun]);
 
   const items = useMemo(() => detail?.items ?? [], [detail]);
@@ -159,6 +136,8 @@ export default function PublicHelmRunDetailPage() {
   const totalHigh = latestScans.reduce((sum, scan) => sum + (scan.high_count ?? 0), 0);
   const totalMedium = latestScans.reduce((sum, scan) => sum + (scan.medium_count ?? 0), 0);
   const totalLow = latestScans.reduce((sum, scan) => sum + (scan.low_count ?? 0), 0);
+  const statCardClassName = 'border border-divider/60 bg-surface/50 shadow-sm backdrop-blur';
+  const statValueClassName = 'text-lg font-semibold text-zinc-900 dark:text-white';
 
   useEffect(() => {
     if (
@@ -207,7 +186,7 @@ export default function PublicHelmRunDetailPage() {
       );
       const images = (extracted.images ?? []).map((img) => ({
         full_ref: img.full_ref,
-        source_path: img.source_path,
+        source_path: getHelmImageSourceLabel(img),
       }));
       if (images.length === 0) {
         throw new Error('No images were extracted from this chart');
@@ -235,18 +214,62 @@ export default function PublicHelmRunDetailPage() {
 
   if (!runId) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: 'var(--app-bg)', color: 'var(--text-primary)' }}
-      >
-        Invalid Helm run ID.
+      <div className="p-6">
+        <Alert status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Invalid Helm run ID</Alert.Title>
+            <Alert.Description>The requested Helm run could not be resolved.</Alert.Description>
+          </Alert.Content>
+        </Alert>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--app-bg)' }}>
-      <div className="sticky top-0 z-20">
+    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: isDark
+            ? 'linear-gradient(180deg, color-mix(in srgb, var(--background) 92%, #07111b) 0%, var(--background) 42%, color-mix(in srgb, var(--background) 96%, #05070c) 100%)'
+            : 'linear-gradient(180deg, color-mix(in srgb, var(--background) 88%, #f4f8fd) 0%, var(--background) 42%, color-mix(in srgb, var(--background) 94%, #eef4fa) 100%)',
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.55] dark:opacity-[0.42]"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 34%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px)',
+          backgroundPosition: 'center top, center top, center top',
+          backgroundSize: '24px 24px, 24px 24px, 24px 24px',
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: isDark
+            ? 'radial-gradient(circle at 50% 10%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 26%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 24%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 22%)'
+            : 'radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 22%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 18%)',
+        }}
+      />
+      <section className="relative z-10 overflow-hidden">
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: isDark
+              ? 'linear-gradient(180deg, color-mix(in srgb, var(--background) 82%, #05111c) 0%, color-mix(in srgb, var(--background) 50%, transparent) 72%, transparent 100%)'
+              : 'linear-gradient(180deg, color-mix(in srgb, var(--background) 76%, #edf7ff) 0%, color-mix(in srgb, var(--background) 44%, transparent) 72%, transparent 100%)',
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-45"
+          style={{
+            background:
+              'radial-gradient(circle at 64% 48%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 28%)',
+          }}
+        />
+        <div className="sticky top-0 z-20">
         <PublicNavbar
           isDark={isDark}
           isLoggedIn={isLoggedIn}
@@ -261,237 +284,267 @@ export default function PublicHelmRunDetailPage() {
                 onPress={handleRescanChart}
                 isDisabled={rescanningChart || !latestRun}
                 variant="secondary"
-                style={{
-                  background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-                  border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
-                  color: 'color-mix(in srgb, var(--accent) 55%, white)',
-                }}
+                isPending={rescanningChart}
               >
-                {rescanningChart ? 'Re-scanning…' : 'Re-scan chart'}
+                <ArrowReloadHorizontalIcon size={15} />
+                Re-scan chart
               </Button>
             </>
           }
         />
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 space-y-5">
-        {actionError && (
-          <div
-            className="rounded-2xl px-4 py-3 text-sm"
-            style={{
-              background: 'rgba(239,68,68,0.08)',
-              border: '1px solid rgba(239,68,68,0.18)',
-              color: '#f87171',
-            }}
-          >
-            {actionError}
-          </div>
-        )}
+      <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-6 pb-16 pt-8">
+        {actionError ? (
+          <Alert status="danger">
+            <Alert.Indicator />
+            <Alert.Content>
+              <Alert.Title>Helm run action failed</Alert.Title>
+              <Alert.Description>{actionError}</Alert.Description>
+            </Alert.Content>
+          </Alert>
+        ) : null}
 
-        <div>
-          <Link
-            href="/public/scan/helm"
-            className="inline-flex items-center gap-1.5 text-sm transition-colors mb-3"
-            style={{ color: 'var(--text-muted)' }}
-            onMouseEnter={(event) => (event.currentTarget.style.color = 'var(--text-secondary)')}
-            onMouseLeave={(event) => (event.currentTarget.style.color = 'var(--text-muted)')}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            Back to Helm scans
-          </Link>
-
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="min-w-0">
-              <h1
-                className="text-xl font-semibold truncate"
-                style={{ color: 'var(--text-primary)' }}
-                title={latestRun?.chart_name || chartUrl}
-              >
-                {latestRun?.chart_name || displayUrl || 'Helm run'}
-              </h1>
-              <p
-                className="text-xs mt-1 font-mono truncate"
-                style={{ color: 'var(--text-faint)' }}
-                title={chartUrl}
-              >
-                {displayUrl}
-              </p>
-              <div
-                className="flex items-center gap-3 mt-2 text-xs flex-wrap"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                {latestRun?.chart_version && <span>v{latestRun.chart_version}</span>}
-                {latestRun?.platform && <span>{latestRun.platform}</span>}
-                {latestRun?.created_at && (
-                  <span title={fullDate(latestRun.created_at)}>
-                    Started {timeAgo(latestRun.created_at)}
-                  </span>
-                )}
-                {latestRun && <span className="font-mono">Run {latestRun.id}</span>}
-              </div>
-            </div>
-
-            <span
-              className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium"
-              style={{
-                background: isOCI ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'rgba(59,130,246,0.1)',
-                color: isOCI ? 'color-mix(in srgb, var(--accent) 55%, white)' : '#60a5fa',
-                border: `1px solid ${isOCI ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'rgba(59,130,246,0.2)'}`,
-              }}
-            >
-              {isOCI ? 'OCI' : 'HTTP'}
-            </span>
-          </div>
-        </div>
-
-        {!loading && latestScans.length > 0 && (
-          <div className="flex gap-3 flex-wrap [&>*]:flex-1 [&>*]:min-w-[90px]">
-            <StatBox label="Images" value={totalImages} />
-            <StatBox label="Completed" value={completed} color="text-emerald-400" />
-            {pending > 0 && <StatBox label="Running" value={pending} color="text-blue-400" />}
-            {failed > 0 && <StatBox label="Failed" value={failed} color="text-red-400" />}
-            {totalCritical > 0 && (
-              <StatBox label="Critical" value={totalCritical} color="text-red-400 font-bold" />
-            )}
-            {totalHigh > 0 && <StatBox label="High" value={totalHigh} color="text-orange-400" />}
-            {totalMedium > 0 && (
-              <StatBox label="Medium" value={totalMedium} color="text-yellow-400" />
-            )}
-            {totalLow > 0 && <StatBox label="Low" value={totalLow} color="text-blue-400" />}
-            {totalCritical === 0 && totalHigh === 0 && completed > 0 && (
-              <StatBox label="Vulnerabilities" value="Clean ✓" color="text-emerald-400" />
-            )}
-          </div>
-        )}
-
-        {loading && (
-          <div
-            className="rounded-2xl px-6 py-10 flex items-center justify-center gap-3 text-sm"
-            style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
-          >
-            <span className="size-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
-            Loading Helm run…
-          </div>
-        )}
-
-        {!loading && items.length === 0 && (
-          <div
-            className="rounded-2xl px-6 py-10 text-center text-sm"
-            style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
-          >
-            No scans found for this Helm run.
-          </div>
-        )}
-
-        {!loading && items.length > 0 && (
-          <div
-            className="rounded-2xl overflow-hidden"
-            style={{ border: '1px solid var(--border-subtle)' }}
-          >
-            <div
-              className="grid px-4 py-2.5 text-xs font-medium uppercase tracking-wide"
-              style={{
-                gridTemplateColumns: 'minmax(0,1fr) 120px minmax(0,1fr) 90px 90px 120px',
-                background: 'var(--table-header-bg)',
-                borderBottom: '1px solid var(--border-subtle)',
-                color: 'var(--text-muted)',
-              }}
-            >
-              <span>Image</span>
-              <span>Tag</span>
-              <span>Source</span>
-              <span className="text-center">Attempts</span>
-              <span className="text-right">Status</span>
-              <span className="text-right">Action</span>
-            </div>
-
-            {items.map((item: HelmRunItem, index) => {
-              const scan = item.latest_scan;
-              const retrying = retryingScanId === scan.id;
-              return (
-                <div
-                  key={item.key}
-                  className="grid items-center px-4 py-3 gap-2"
-                  style={{
-                    gridTemplateColumns: 'minmax(0,1fr) 120px minmax(0,1fr) 90px 90px 120px',
-                    borderBottom:
-                      index < items.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                    background: 'var(--card-bg)',
-                  }}
-                >
-                  <Link
-                    href={`/public/scan/${scan.id}`}
-                    className="text-sm font-mono truncate"
-                    style={{ color: 'var(--text-primary)' }}
-                    title={scan.image_name}
-                  >
-                    {scan.image_name}
-                  </Link>
-                  <span
-                    className="text-xs font-mono truncate"
-                    style={{ color: 'var(--text-muted)' }}
-                    title={scan.image_tag}
-                  >
-                    {scan.image_tag || 'latest'}
-                  </span>
-                  <span
-                    className="text-xs truncate"
-                    style={{ color: 'var(--text-faint)' }}
-                    title={scan.helm_source_path ?? ''}
-                  >
-                    {scan.helm_source_path || '—'}
-                  </span>
-                  <span
-                    className="text-center text-xs font-mono"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    {item.attempt_count}
-                  </span>
-                  <span className="flex justify-end">
-                    <StatusBadge status={scan.status} />
-                  </span>
-                  <span className="flex justify-end">
-                    {scan.status === 'failed' ? (
-                      <button
-                        type="button"
-                        onClick={() => handleRetryScan(scan.id)}
-                        disabled={retrying}
-                        className="text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                        style={{
-                          background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-                          border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
-                          color: 'color-mix(in srgb, var(--accent) 62%, white)',
-                        }}
+        <Card className="border border-divider/60 bg-surface/50 shadow-sm backdrop-blur">
+          <Card.Content className="gap-6 px-6 py-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 space-y-4">
+                <div className="flex items-start gap-3">
+                  <PackageIcon size={20} className="mt-1 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1
+                        className="min-w-0 flex-1 truncate text-2xl font-semibold text-foreground"
+                        title={latestRun?.chart_name || chartUrl}
                       >
-                        {retrying ? 'Retrying…' : 'Retry failed'}
-                      </button>
-                    ) : (
-                      <Link
-                        href={`/public/scan/${scan.id}`}
-                        className="text-xs font-medium"
-                        style={{ color: 'color-mix(in srgb, var(--accent) 55%, white)' }}
-                      >
-                        View →
-                      </Link>
-                    )}
-                  </span>
+                        {latestRun?.chart_name || displayUrl || 'Helm run'}
+                      </h1>
+                      <Chip color={isOCI ? 'accent' : 'default'} size="sm" variant="soft">
+                        {isOCI ? 'OCI' : 'HTTP'}
+                      </Chip>
+                    </div>
+                    <p className="mt-1 truncate font-mono text-xs text-muted" title={chartUrl}>
+                      {displayUrl}
+                    </p>
+                  </div>
                 </div>
-              );
-            })}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {latestRun?.chart_version ? (
+                    <Chip size="sm" variant="secondary">
+                      v{latestRun.chart_version}
+                    </Chip>
+                  ) : null}
+                  {latestRun?.platform ? (
+                    <Chip color="accent" size="sm" variant="soft">
+                      {latestRun.platform}
+                    </Chip>
+                  ) : null}
+                  {latestRun?.created_at ? (
+                    <Chip size="sm" variant="secondary">
+                      {timeAgo(latestRun.created_at)}
+                    </Chip>
+                  ) : null}
+                  {latestRun ? (
+                    <Chip size="sm" variant="secondary">
+                      Run {latestRun.id.slice(0, 8)}
+                    </Chip>
+                  ) : null}
+                </div>
+              </div>
+
+              {latestRun?.created_at ? (
+                <div className="text-sm text-muted">
+                  <p>Started</p>
+                  <p className="font-mono text-xs text-foreground" title={fullDate(latestRun.created_at)}>
+                    {fullDate(latestRun.created_at)}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </Card.Content>
+        </Card>
+
+        {!loading && latestScans.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              label="Images"
+              value={totalImages}
+              hint="Latest child scans in this Helm run."
+              className={statCardClassName}
+              valueClassName={statValueClassName}
+            />
+            <StatCard
+              label="Completed"
+              value={completed}
+              hint="Finished successfully."
+              className={statCardClassName}
+              valueClassName={`${statValueClassName} text-emerald-600 dark:text-emerald-400`}
+            />
+            <StatCard
+              label="Running"
+              value={pending}
+              hint="Queued or currently scanning."
+              className={statCardClassName}
+              valueClassName={
+                pending > 0
+                  ? `${statValueClassName} text-sky-600 dark:text-sky-400`
+                  : statValueClassName
+              }
+            />
+            <StatCard
+              label="Failed"
+              value={failed}
+              hint="Latest attempts that need attention."
+              className={statCardClassName}
+              valueClassName={
+                failed > 0
+                  ? `${statValueClassName} text-red-600 dark:text-red-400`
+                  : statValueClassName
+              }
+            />
+            <StatCard
+              label="Critical"
+              value={totalCritical}
+              hint="Critical findings across latest scans."
+              className={statCardClassName}
+              valueClassName={
+                totalCritical > 0
+                  ? `${statValueClassName} text-red-600 dark:text-red-400`
+                  : statValueClassName
+              }
+            />
+            <StatCard
+              label="High"
+              value={totalHigh}
+              hint="High severity findings."
+              className={statCardClassName}
+              valueClassName={
+                totalHigh > 0
+                  ? `${statValueClassName} text-orange-600 dark:text-orange-400`
+                  : statValueClassName
+              }
+            />
+            <StatCard
+              label="Medium"
+              value={totalMedium}
+              hint="Medium severity findings."
+              className={statCardClassName}
+              valueClassName={
+                totalMedium > 0
+                  ? `${statValueClassName} text-yellow-600 dark:text-yellow-400`
+                  : statValueClassName
+              }
+            />
+            <StatCard
+              label="Low"
+              value={totalLow}
+              hint="Low severity findings."
+              className={statCardClassName}
+              valueClassName={statValueClassName}
+            />
           </div>
-        )}
+        ) : null}
+
+        {loading ? (
+          <Card className="border border-divider/60 bg-surface/50 shadow-sm backdrop-blur">
+            <Card.Content className="flex items-center justify-center gap-3 px-6 py-10 text-sm text-muted">
+              <Spinner size="sm" />
+              Loading Helm run…
+            </Card.Content>
+          </Card>
+        ) : null}
+
+        {!loading && items.length === 0 ? (
+          <Card className="border border-divider/60 bg-surface/50 shadow-sm backdrop-blur">
+            <Card.Content className="px-6 py-10 text-center text-sm text-muted">
+              No scans found for this Helm run.
+            </Card.Content>
+          </Card>
+        ) : null}
+
+        {!loading && items.length > 0 ? (
+          <Card className="border border-divider/60 bg-surface/50 shadow-sm backdrop-blur">
+            <Card.Content className="gap-4 px-0 py-0">
+              <div className="flex items-center justify-between gap-3 px-6 pt-6">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Images in this run</p>
+                  <p className="mt-1 text-sm text-muted">
+                    Retry failed scans or open any child scan for details.
+                  </p>
+                </div>
+                <Button onPress={() => loadRun(true)} isDisabled={refreshing} size="sm" variant="secondary">
+                  <Refresh01Icon size={15} className={refreshing ? 'animate-spin' : ''} />
+                  Refresh
+                </Button>
+              </div>
+
+              <Table variant="secondary">
+                <Table.ScrollContainer>
+                  <Table.Content aria-label="Helm run scans" className="min-w-[980px]">
+                    <Table.Header>
+                      <Table.Column isRowHeader>Image</Table.Column>
+                      <Table.Column>Tag</Table.Column>
+                      <Table.Column>Source</Table.Column>
+                      <Table.Column>Attempts</Table.Column>
+                      <Table.Column>Status</Table.Column>
+                      <Table.Column className="text-right">Action</Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {items.map((item: HelmRunItem) => {
+                        const scan = item.latest_scan;
+                        const retrying = retryingScanId === scan.id;
+                        return (
+                          <Table.Row key={item.key} id={scan.id}>
+                            <Table.Cell className="min-w-[260px]">
+                              <Link
+                                href={`/public/scan/${scan.id}`}
+                                className="block truncate font-mono text-sm text-foreground"
+                                title={scan.image_name}
+                              >
+                                {scan.image_name}
+                              </Link>
+                            </Table.Cell>
+                            <Table.Cell className="font-mono text-xs text-muted">
+                              {scan.image_tag || 'latest'}
+                            </Table.Cell>
+                            <Table.Cell className="max-w-[320px] truncate text-xs text-muted">
+                              <span title={scan.helm_source_path ?? ''}>{scan.helm_source_path || '—'}</span>
+                            </Table.Cell>
+                            <Table.Cell className="text-xs text-muted">{item.attempt_count}</Table.Cell>
+                            <Table.Cell>
+                              <StatusBadge status={scan.status} />
+                            </Table.Cell>
+                            <Table.Cell className="text-right">
+                              {scan.status === 'failed' ? (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  isPending={retrying}
+                                  onPress={() => handleRetryScan(scan.id)}
+                                >
+                                  Retry failed
+                                </Button>
+                              ) : (
+                                <Link href={`/public/scan/${scan.id}`}>
+                                  <Button size="sm" variant="tertiary">
+                                    View scan
+                                  </Button>
+                                </Link>
+                              )}
+                            </Table.Cell>
+                          </Table.Row>
+                        );
+                      })}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </Card.Content>
+          </Card>
+        ) : null}
       </main>
+      </section>
     </div>
   );
 }

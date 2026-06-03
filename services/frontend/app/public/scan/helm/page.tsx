@@ -27,8 +27,10 @@ import {
   updateHelmPublicHistoryEntry,
 } from '@/lib/publicScanHistory';
 import {
+  Alert,
   Button,
   Card,
+  Checkbox,
   Chip,
   Disclosure,
   Input,
@@ -654,13 +656,30 @@ export default function PublicHelmScanPage() {
                     selectedKeys={selected}
                     onSelectionChange={(keys) => {
                       if (keys === 'all') {
-                        setSelected(new Set(images.map((img) => img.id)));
+                        setSelected(new Set(images.map((image) => image.id)));
                         return;
                       }
                       setSelected(new Set(Array.from(keys, (key) => String(key))));
                     }}
                   >
                     <Table.Header>
+                      <Table.Column className="w-12">
+                        <Checkbox
+                          aria-label={
+                            selected.size === images.length && images.length > 0
+                              ? 'Deselect all images'
+                              : 'Select all images'
+                          }
+                          isSelected={images.length > 0 && selected.size === images.length}
+                          isIndeterminate={selected.size > 0 && selected.size < images.length}
+                          slot="selection"
+                          variant="secondary"
+                        >
+                          <Checkbox.Control>
+                            <Checkbox.Indicator />
+                          </Checkbox.Control>
+                        </Checkbox>
+                      </Table.Column>
                       <Table.Column className="w-[62%] min-w-[440px]">Image Reference</Table.Column>
                       <Table.Column className="w-[38%] min-w-[320px]">Parsed / Source</Table.Column>
                     </Table.Header>
@@ -669,10 +688,22 @@ export default function PublicHelmScanPage() {
                         const parsed = parseHelmImageRef(img.edited_ref);
                         return (
                           <Table.Row key={img.id} id={img.id}>
+                            <Table.Cell onClick={(event) => event.stopPropagation()}>
+                              <Checkbox
+                                aria-label={`Select ${img.edited_ref || 'image'}`}
+                                slot="selection"
+                                variant="secondary"
+                              >
+                                <Checkbox.Control>
+                                  <Checkbox.Indicator />
+                                </Checkbox.Control>
+                              </Checkbox>
+                            </Table.Cell>
                             <Table.Cell>
                               <Input
                                 value={img.edited_ref}
                                 onChange={(event) => updateEditedRef(img.id, event.target.value)}
+                                onClick={(event) => event.stopPropagation()}
                                 aria-label="Image reference"
                                 variant="secondary"
                                 className="w-full bg-transparent text-sm font-mono font-medium border-0 shadow-none"
@@ -747,9 +778,28 @@ export default function PublicHelmScanPage() {
                   ))}
                 </ToggleButtonGroup>
 
-                {scanError && (
-                  <p className="text-sm text-red-500 dark:text-red-400">{scanError}</p>
-                )}
+                {scanError ? (
+                  <Alert status="danger">
+                    <Alert.Indicator />
+                    <Alert.Content>
+                      <Alert.Title>Unable to create Helm run</Alert.Title>
+                      <Alert.Description>{scanError}</Alert.Description>
+                    </Alert.Content>
+                  </Alert>
+                ) : null}
+
+                {step === 'scanning' ? (
+                  <Alert status="accent">
+                    <Alert.Indicator />
+                    <Alert.Content>
+                      <Alert.Title>Creating Helm run</Alert.Title>
+                      <Alert.Description>
+                        Queueing the selected images now. This can take a few seconds before the
+                        run detail page is ready.
+                      </Alert.Description>
+                    </Alert.Content>
+                  </Alert>
+                ) : null}
 
                 <Button
                   onPress={handleScan}

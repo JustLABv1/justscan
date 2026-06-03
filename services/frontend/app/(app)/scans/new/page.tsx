@@ -28,6 +28,7 @@ import {
 import { deferEffect } from '@/lib/defer-effect';
 import { canMutateOrg } from '@/lib/org-permissions';
 import {
+  Accordion,
   Autocomplete,
   Button,
   Card,
@@ -41,7 +42,7 @@ import {
   TextArea,
   useFilter,
 } from '@heroui/react';
-import { ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon } from 'hugeicons-react';
+import { ArrowDown01Icon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import type { Key } from 'react';
 import { useEffect, useMemo, useState } from 'react';
@@ -169,6 +170,7 @@ export default function NewScanPage() {
   const [additionalImageDraft, setAdditionalImageDraft] = useState('');
   const [additionalImageEntries, setAdditionalImageEntries] = useState<string[]>([]);
   const [scanSource, setScanSource] = useState<ScanSourceKind | null>(null);
+  const [isSourceExpanded, setIsSourceExpanded] = useState(true);
   const [platform, setPlatform] = useState('');
   const [uploadedArchiveFile, setUploadedArchiveFile] = useState<File | null>(null);
   const [registryId, setRegistryId] = useState('');
@@ -319,6 +321,7 @@ export default function NewScanPage() {
 
   function selectScanSource(source: ScanSourceKind) {
     setScanSource(source);
+    setIsSourceExpanded(false);
     setCreateError('');
 
     if (source === 'public') {
@@ -549,6 +552,7 @@ export default function NewScanPage() {
     scanSource === 'public' || scanSource === 'local_archive'
       ? 'Direct'
       : selectedRegistry?.name || 'Not selected';
+  const sourceAccordionExpandedKeys = isSourceExpanded ? ['scan-source-section'] : [];
 
   return (
     <div className="space-y-5 p-6">
@@ -577,33 +581,73 @@ export default function NewScanPage() {
           />
         ) : null}
 
-        <ScanSection
-          title="Source"
-          description="Choose where the image lives. JustScan will only show the routing controls that matter for that source."
-        >
-          <RadioGroup
-            className="grid gap-3"
-            name="scan-source"
-            onChange={(value) => selectScanSource(String(value) as ScanSourceKind)}
-            value={scanSource}
+        <Card className="surface-panel overflow-hidden rounded-2xl">
+          <Accordion
+            hideSeparator
+            className="bg-transparent"
+            expandedKeys={sourceAccordionExpandedKeys}
+            onExpandedChange={(keys) => setIsSourceExpanded(keys.has('scan-source-section'))}
+            variant="surface"
           >
-            {scanSourceOptions.map((option) => (
-              <ScanSourceCard
-                key={option.source}
-                description={option.description}
-                disabled={option.disabled}
-                eyebrow={option.eyebrow}
-                source={option.source}
-                title={option.title}
-              />
-            ))}
-          </RadioGroup>
-          {availableScanSourceOptions.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              No scan source is currently available in this deployment.
-            </p>
-          ) : null}
-        </ScanSection>
+            <Accordion.Item
+              className="bg-transparent"
+              id="scan-source-section"
+            >
+              <Accordion.Heading>
+                <Accordion.Trigger className="flex items-start gap-4 px-5 py-5 text-left transition-colors hover:bg-surface-secondary/60">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                        Source
+                      </h2>
+                      {scanSource && !isSourceExpanded ? (
+                        <span className="rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-accent">
+                          {scanSourceLabel}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                      {scanSource && !isSourceExpanded
+                        ? 'Selected source is locked in for now. Reopen this section to change it.'
+                        : 'Choose where the image lives. JustScan will only show the routing controls that matter for that source.'}
+                    </p>
+                  </div>
+                  <Accordion.Indicator className="mt-1 shrink-0 text-zinc-400">
+                    <ArrowDown01Icon size={16} />
+                  </Accordion.Indicator>
+                </Accordion.Trigger>
+              </Accordion.Heading>
+              <Accordion.Panel>
+                <Accordion.Body className="px-5 pb-5 pt-0">
+                  <div className="space-y-4">
+                    <RadioGroup
+                      className="grid gap-3"
+                      name="scan-source"
+                      onChange={(value) => selectScanSource(String(value) as ScanSourceKind)}
+                      value={scanSource}
+                    >
+                      {scanSourceOptions.map((option) => (
+                        <ScanSourceCard
+                          key={option.source}
+                          description={option.description}
+                          disabled={option.disabled}
+                          eyebrow={option.eyebrow}
+                          source={option.source}
+                          title={option.title}
+                        />
+                      ))}
+                    </RadioGroup>
+                    {availableScanSourceOptions.length === 0 ? (
+                      <p className="text-sm text-zinc-500">
+                        No scan source is currently available in this deployment.
+                      </p>
+                    ) : null}
+                  </div>
+                </Accordion.Body>
+              </Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        </Card>
 
         {scanSource ? (
           <ScanSection

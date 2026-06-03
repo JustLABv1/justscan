@@ -1,6 +1,11 @@
 'use client';
 
 import { heroFieldClassName, joinClassNames } from '@/components/ui/form-styles';
+import {
+  fieldDescriptionClassName,
+  fieldErrorClassName,
+  fieldLabelClassName,
+} from '@/components/ui/form-styles';
 import { Description, FieldError, Input, Label, TextField } from '@heroui/react';
 import type { ClipboardEvent, ComponentProps, KeyboardEvent } from 'react';
 import { useId, useRef } from 'react';
@@ -112,9 +117,8 @@ export function FormField({
       type={type}
     >
       <Label
-        className={joinClassNames('text-sm font-medium', hideLabel ? 'sr-only' : '', labelClassName)}
+        className={joinClassNames(fieldLabelClassName, hideLabel ? 'sr-only' : '', labelClassName)}
         htmlFor={fieldId}
-        style={{ color: 'var(--text-secondary)' }}
       >
         {label}
       </Label>
@@ -136,15 +140,11 @@ export function FormField({
         type={type}
       />
       {description ? (
-        <Description className="text-xs" style={{ color: 'var(--text-faint)' }}>
+        <Description className={fieldDescriptionClassName}>
           {description}
         </Description>
       ) : null}
-      {error ? (
-        <FieldError className="text-xs font-medium" style={{ color: '#f87171' }}>
-          {error}
-        </FieldError>
-      ) : null}
+      {error ? <FieldError className={fieldErrorClassName}>{error}</FieldError> : null}
     </TextField>
   );
 }

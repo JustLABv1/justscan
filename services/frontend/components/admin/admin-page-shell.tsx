@@ -4,7 +4,12 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { PageHeader } from '@/components/ui/page-header';
-import { getAdminAreaForTab, getAdminTabMeta, resolveAdminTab } from '@/app/(app)/admin/_components/admin-tabs';
+import { PageTabs } from '@/components/ui/page-tabs';
+import {
+  getAdminAreaForTab,
+  getAdminTabMeta,
+  resolveAdminTab,
+} from '@/app/(app)/admin/_components/admin-tabs';
 
 interface AdminPageShellProps {
   children: ReactNode;
@@ -27,8 +32,16 @@ export function AdminPageShell({ children, actions }: AdminPageShellProps) {
 
   return (
     <div className="px-4 py-6 md:px-6 xl:py-7">
-      <div className="space-y-6">
+      <div className="space-y-5">
         <PageHeader title={title} description={mergedDescription} actions={actions} />
+        <PageTabs
+          currentPath={pathname}
+          items={activeArea.tabs.map((tab) => ({
+            href: tab.href,
+            label: tab.label,
+            description: tab.blurb,
+          }))}
+        />
         {children}
       </div>
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
-import { Card } from '@heroui/react';
+import { Tabs } from '@heroui/react';
+import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
 type PageTabItem = {
@@ -19,6 +20,10 @@ function isActivePath(currentPath: string, href: string) {
 }
 
 export function PageTabs({ items, currentPath }: PageTabsProps) {
+  if (items.length === 0) {
+    return null;
+  }
+
   const activeHref = items.reduce<string | undefined>((bestMatch, item) => {
     if (!isActivePath(currentPath, item.href)) return bestMatch;
     if (!bestMatch || item.href.length > bestMatch.length) return item.href;
@@ -26,34 +31,34 @@ export function PageTabs({ items, currentPath }: PageTabsProps) {
   }, undefined);
 
   return (
-    <Card className="surface-card rounded-2xl p-1.5">
-      <nav aria-label="Section navigation">
-        <div className="grid gap-1 sm:grid-cols-2">
-          {items.map((item) => {
-            const active = item.href === activeHref;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? 'page' : undefined}
-                className="rounded-xl px-4 py-3 text-left transition-all duration-150"
-                style={active
-                  ? {
-                      background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 15%, transparent) 0%, color-mix(in srgb, var(--accent) 8%, black) 100%)',
-                      boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent), 0 2px 8px color-mix(in srgb, var(--accent) 8%, transparent)',
-                    }
-                  : { background: 'transparent' }}
-              >
-                <p className={`text-sm font-semibold ${active ? 'text-accent dark:text-accent' : 'text-zinc-700 dark:text-zinc-200'}`}>
-                  {item.label}
-                </p>
-                {item.description ? <p className="mt-1 text-xs text-zinc-500">{item.description}</p> : null}
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
-    </Card>
+    <Tabs className="w-full" selectedKey={activeHref ?? items[0].href} variant="primary">
+      <Tabs.ListContainer className="overflow-x-auto">
+        <Tabs.List
+          aria-label="Section navigation"
+          className={cn(
+            'w-full min-w-max gap-1 rounded-2xl border border-divider/70 bg-content1/70 p-1',
+            '*:min-h-0 *:rounded-xl *:px-4 *:py-2.5 *:text-left *:text-sm *:font-medium *:transition-colors'
+          )}
+        >
+          {items.map((item) => (
+            <Tabs.Tab
+              className="min-w-fit"
+              key={item.href}
+              href={item.href}
+              id={item.href}
+              render={(domProps: any) => <Link {...domProps} href={item.href} />}
+            >
+              <span title={item.description ?? item.label}>{item.label}</span>
+              <Tabs.Indicator />
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
+      </Tabs.ListContainer>
+      {items.map((item) => (
+        <Tabs.Panel key={item.href} className="hidden" id={item.href}>
+          <span className="sr-only">{item.label}</span>
+        </Tabs.Panel>
+      ))}
+    </Tabs>
   );
 }

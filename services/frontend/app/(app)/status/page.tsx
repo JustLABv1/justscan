@@ -2,6 +2,8 @@
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { EmptyState } from '@/components/ui/empty-state';
+import { FilterToolbar } from '@/components/ui/filter-toolbar';
 import { OwnershipBadge } from '@/components/ui/badges';
 import {
   fieldLabelClassName,
@@ -46,6 +48,7 @@ import {
   Modal,
   SearchField,
   Select,
+  Spinner,
   Switch,
   Table,
   TextArea,
@@ -105,6 +108,14 @@ function describeScope(page: StatusPage) {
     return 'Exact tags + regex';
   }
   return 'Curated tags';
+}
+
+function visibilityTone(
+  visibility: StatusPage['visibility']
+): 'default' | 'accent' | 'success' {
+  if (visibility === 'public') return 'success';
+  if (visibility === 'authenticated') return 'accent';
+  return 'default';
 }
 
 export default function StatusPagesPage() {
@@ -481,7 +492,7 @@ export default function StatusPagesPage() {
         title="Status Pages"
         description="Publish current image-tag health internally or externally."
         actions={
-          <Button onPress={openCreate} className="btn-primary" isDisabled={!canMutateActiveScope}>
+          <Button onPress={openCreate} isDisabled={!canMutateActiveScope}>
             <PlusSignIcon size={15} /> New Status Page
           </Button>
         }
@@ -500,60 +511,78 @@ export default function StatusPagesPage() {
         </div>
       )}
 
-      <Card className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <SearchField name="status-pages-search" variant="secondary" className="w-full sm:max-w-sm">
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search name, slug, or description..."
-              />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
-          <Select
-            value={visibilityFilter}
-            onChange={(value) =>
-              setVisibilityFilter(
-                value === 'private' || value === 'authenticated' || value === 'public'
-                  ? value
-                  : 'all'
-              )
-            }
-            className="w-full sm:w-[180px]"
-            variant="secondary"
-          >
-            <Select.Trigger className={selectTriggerCls}>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="all">All visibility</ListBox.Item>
-                <ListBox.Item id="private">Private</ListBox.Item>
-                <ListBox.Item id="authenticated">Authenticated</ListBox.Item>
-                <ListBox.Item id="public">Public</ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
-        </div>
+      <div className="space-y-4">
+        <FilterToolbar
+          filters={
+            <Select
+              value={visibilityFilter}
+              onChange={(value) =>
+                setVisibilityFilter(
+                  value === 'private' || value === 'authenticated' || value === 'public'
+                    ? value
+                    : 'all'
+                )
+              }
+              className="w-full sm:w-[180px]"
+              variant="secondary"
+            >
+              <Select.Trigger className={selectTriggerCls}>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="all">All visibility</ListBox.Item>
+                  <ListBox.Item id="private">Private</ListBox.Item>
+                  <ListBox.Item id="authenticated">Authenticated</ListBox.Item>
+                  <ListBox.Item id="public">Public</ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          }
+          search={
+            <SearchField
+              name="status-pages-search"
+              variant="secondary"
+              className="w-full sm:max-w-sm"
+            >
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search name, slug, or description..."
+                />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
+          }
+        />
+
       {loading ? (
-        <div className="flex justify-center py-16">
-          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
+        <div className="surface-card flex justify-center rounded-3xl border border-divider/70 py-16">
+          <Spinner size="lg" />
         </div>
       ) : filteredPages.length === 0 ? (
-        <div className="surface-panel rounded-2xl py-16 flex flex-col items-center gap-3 text-center">
-          <EyeIcon size={32} color="rgba(113,113,122,0.5)" />
-          <p className="text-sm text-zinc-500 max-w-lg">
-            {pages.length > 0
-              ? 'No status pages match your filters.'
-              : 'No status pages yet. Create one to share the latest status of all image tags or a curated subset.'}
-          </p>
-        </div>
+        <EmptyState
+          action={
+            pages.length > 0 || !canMutateActiveScope
+              ? undefined
+              : { label: 'Create status page', onClick: openCreate }
+          }
+          description={
+            pages.length > 0
+              ? 'No status pages match the current filters. Adjust visibility or search terms to widen the results.'
+              : 'No status pages exist yet. Create one to publish current image-tag health for a curated or global set of workloads.'
+          }
+          eyebrow="Status pages"
+          icon={<EyeIcon size={28} />}
+          title={pages.length > 0 ? 'No matching pages' : 'No status pages yet'}
+        />
       ) : (
-        <Table variant="secondary">
+        <Card className="surface-card overflow-hidden rounded-3xl border border-divider/70">
+          <Card.Content className="p-0">
+            <Table variant="secondary">
           <Table.ScrollContainer>
             <Table.Content aria-label="Status pages" className="min-w-[920px]">
               <Table.Header>
@@ -577,30 +606,14 @@ export default function StatusPagesPage() {
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <span
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize"
-                        style={
-                          page.visibility === 'public'
-                            ? {
-                                background: 'rgba(34,197,94,0.12)',
-                                color: '#4ade80',
-                                border: '1px solid rgba(34,197,94,0.2)',
-                              }
-                            : page.visibility === 'authenticated'
-                              ? {
-                                  background: 'rgba(59,130,246,0.12)',
-                                  color: '#60a5fa',
-                                  border: '1px solid rgba(59,130,246,0.2)',
-                                }
-                              : {
-                                  background: 'rgba(113,113,122,0.12)',
-                                  color: '#a1a1aa',
-                                  border: '1px solid rgba(113,113,122,0.2)',
-                                }
-                        }
+                      <Chip
+                        className="capitalize"
+                        color={visibilityTone(page.visibility)}
+                        size="sm"
+                        variant="soft"
                       >
                         {page.visibility}
-                      </span>
+                      </Chip>
                     </Table.Cell>
                     <Table.Cell className="text-xs text-zinc-500">{describeScope(page)}</Table.Cell>
                     <Table.Cell className="font-mono text-xs text-zinc-600 dark:text-zinc-300">
@@ -663,9 +676,11 @@ export default function StatusPagesPage() {
               </Table.Body>
             </Table.Content>
           </Table.ScrollContainer>
-        </Table>
+            </Table>
+          </Card.Content>
+        </Card>
       )}
-      </Card>
+      </div>
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>

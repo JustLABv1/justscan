@@ -1,61 +1,75 @@
 'use client';
 
+import { Chip } from '@heroui/react';
+
 import { useWorkScope } from '@/hooks/use-work-scope';
 import type { OwnerType } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
-// ── StatusBadge ────────────────────────────────────────────────────────
+type BadgeTone = 'default' | 'accent' | 'success' | 'warning' | 'danger';
+
+type BadgeConfig = {
+  tone: BadgeTone;
+  label?: string;
+  animated?: boolean;
+};
+
+function SemanticBadge({
+  label,
+  tone,
+  className,
+  animated = false,
+  title,
+}: {
+  label: string;
+  tone: BadgeTone;
+  className?: string;
+  animated?: boolean;
+  title?: string;
+}) {
+  return (
+    <Chip
+      className={cn('gap-1.5 text-xs font-medium', className)}
+      color={tone}
+      size="sm"
+      title={title}
+      variant="soft"
+    >
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+        <span
+          aria-hidden
+          className={cn(
+            'size-1.5 rounded-full bg-current',
+            animated ? 'animate-pulse' : undefined
+          )}
+        />
+        {label}
+      </span>
+    </Chip>
+  );
+}
+
 const STATUS_ALIASES: Record<string, string> = {
   warming_artifactory_cache: 'warming_cache',
   indexing: 'indexing_artifact',
   queued: 'queued_in_xray',
 };
 
-const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; label?: string }> =
-  {
-    healthy: { color: '#34d399', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.22)' },
-    degraded: { color: '#f97316', bg: 'rgba(249,115,22,0.12)', border: 'rgba(249,115,22,0.22)' },
-    stale: { color: '#eab308', bg: 'rgba(234,179,8,0.12)', border: 'rgba(234,179,8,0.22)' },
-    completed: { color: '#34d399', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.22)' },
-    failed: { color: '#f87171', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.22)' },
-    running: { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.22)' },
-    pending: {
-      color: '#a1a1aa',
-      bg: 'rgba(161,161,170,0.08)',
-      border: 'rgba(161,161,170,0.15)',
-      label: 'queued',
-    },
-    cancelled: { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.20)' },
-    warming_cache: {
-      color: '#38bdf8',
-      bg: 'rgba(14,165,233,0.12)',
-      border: 'rgba(14,165,233,0.22)',
-      label: 'warming cache',
-    },
-    indexing_artifact: {
-      color: '#f97316',
-      bg: 'rgba(249,115,22,0.12)',
-      border: 'rgba(249,115,22,0.22)',
-      label: 'indexing artifact',
-    },
-    queued_in_xray: {
-      color: '#c084fc',
-      bg: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-      border: 'color-mix(in srgb, var(--accent) 22%, transparent)',
-      label: 'queued in xray',
-    },
-    blocked_by_xray_policy: {
-      color: '#f59e0b',
-      bg: 'rgba(245,158,11,0.12)',
-      border: 'rgba(245,158,11,0.22)',
-      label: 'blocked by xray policy',
-    },
-    waiting_for_xray: {
-      color: '#f59e0b',
-      bg: 'rgba(245,158,11,0.12)',
-      border: 'rgba(245,158,11,0.22)',
-      label: 'waiting for xray',
-    },
-  };
+const STATUS_CONFIG: Record<string, BadgeConfig> = {
+  healthy: { tone: 'success' },
+  degraded: { tone: 'warning' },
+  stale: { tone: 'warning' },
+  completed: { tone: 'success' },
+  failed: { tone: 'danger' },
+  running: { tone: 'accent', animated: true },
+  pending: { tone: 'default', label: 'queued' },
+  cancelled: { tone: 'warning' },
+  warming_cache: { tone: 'accent', label: 'warming cache', animated: true },
+  indexing_artifact: { tone: 'warning', label: 'indexing artifact', animated: true },
+  queued_in_xray: { tone: 'accent', label: 'queued in xray', animated: true },
+  blocked_by_xray_policy: { tone: 'warning', label: 'blocked by xray policy' },
+  waiting_for_xray: { tone: 'warning', label: 'waiting for xray', animated: true },
+};
 
 export function normalizeStatus(status?: string) {
   if (!status) {
@@ -105,138 +119,93 @@ export function StatusBadge({
   externalStatus?: string;
 }) {
   const effectiveStatus = resolveDisplayStatus(status, externalStatus);
-  const s = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.pending;
+  const config = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.pending;
+
   return (
-    <span
-      className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap"
-      style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}` }}
-    >
-      <span
-        className={`size-1.5 rounded-full bg-current shrink-0 ${effectiveStatus === 'warming_cache' ? 'animate-bounce' : effectiveStatus === 'running' || effectiveStatus === 'waiting_for_xray' || effectiveStatus === 'queued_in_xray' || effectiveStatus === 'indexing_artifact' ? 'animate-pulse' : ''}`}
-        aria-hidden
-      />
-      {s.label ?? formatStatusLabel(effectiveStatus)}
-    </span>
+    <SemanticBadge
+      animated={config.animated}
+      label={config.label ?? formatStatusLabel(effectiveStatus)}
+      title={formatStatusLabel(effectiveStatus)}
+      tone={config.tone}
+    />
   );
 }
 
-// ── SeverityBadge ──────────────────────────────────────────────────────
-const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  CRITICAL: {
-    label: 'Critical',
-    color: 'text-red-400',
-    bg: 'bg-red-500/10',
-    border: 'border-red-500/20',
-  },
-  HIGH: {
-    label: 'High',
-    color: 'text-orange-400',
-    bg: 'bg-orange-500/10',
-    border: 'border-orange-500/20',
-  },
-  MEDIUM: {
-    label: 'Medium',
-    color: 'text-yellow-400',
-    bg: 'bg-yellow-500/10',
-    border: 'border-yellow-500/20',
-  },
-  LOW: { label: 'Low', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
-  UNKNOWN: {
-    label: 'Unknown',
-    color: 'text-zinc-400',
-    bg: 'bg-zinc-500/10',
-    border: 'border-zinc-500/20',
-  },
+const SEVERITY_CONFIG: Record<string, { label: string; tone: BadgeTone }> = {
+  CRITICAL: { label: 'Critical', tone: 'danger' },
+  HIGH: { label: 'High', tone: 'warning' },
+  MEDIUM: { label: 'Medium', tone: 'accent' },
+  LOW: { label: 'Low', tone: 'default' },
+  UNKNOWN: { label: 'Unknown', tone: 'default' },
 };
 
 export function SeverityBadge({ severity }: { severity: string }) {
-  const cfg = SEV_CONFIG[severity] ?? SEV_CONFIG.UNKNOWN;
+  const config = SEVERITY_CONFIG[severity] ?? SEVERITY_CONFIG.UNKNOWN;
+
   return (
-    <span
-      className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}
-    >
-      {cfg.label}
-    </span>
+    <Chip color={config.tone} size="sm" variant="soft">
+      {config.label}
+    </Chip>
   );
 }
 
-// ── SourceBadge ────────────────────────────────────────────────────────
+const SEVERITY_COUNT_TONES: Record<'critical' | 'high' | 'medium' | 'low', BadgeTone> = {
+  critical: 'danger',
+  high: 'warning',
+  medium: 'accent',
+  low: 'default',
+};
+
+export function SevCount({
+  count,
+  level,
+}: {
+  count: number;
+  level: 'critical' | 'high' | 'medium' | 'low';
+}) {
+  const tone = count > 0 ? SEVERITY_COUNT_TONES[level] : 'default';
+
+  return (
+    <Chip className="min-w-10 justify-center tabular-nums" color={tone} size="sm" variant="soft">
+      {count}
+    </Chip>
+  );
+}
+
 export function SourceBadge({ source }: { source?: string }) {
   const normalized = (source ?? '').trim().toLowerCase();
   const isOSV = normalized === 'osv.dev';
   const isXray = normalized === 'jfrog xray' || normalized === 'xray';
   const label = isOSV ? 'OSV.dev' : isXray ? 'Xray' : source?.trim() || 'Trivy';
-  const style = isOSV
-    ? {
-        background: 'rgba(59,130,246,0.14)',
-        color: '#60a5fa',
-        border: '1px solid rgba(59,130,246,0.24)',
-      }
-    : isXray
-      ? {
-          background: 'rgba(245,158,11,0.12)',
-          color: '#f59e0b',
-          border: '1px solid rgba(245,158,11,0.22)',
-        }
-      : {
-          background: 'var(--color-accent-soft)',
-          color: 'var(--color-accent)',
-          border: '1px solid var(--color-accent-soft-hover)',
-        };
+  const tone: BadgeTone = isOSV ? 'accent' : isXray ? 'warning' : 'default';
+  const title =
+    source ||
+    (isOSV ? 'OSV supplemental finding' : isXray ? 'JFrog Xray finding' : 'Scanner finding');
+
   return (
-    <span
-      className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0"
-      style={style}
-      title={
-        source ||
-        (isOSV ? 'OSV supplemental finding' : isXray ? 'JFrog Xray finding' : 'Scanner finding')
-      }
-    >
+    <Chip color={tone} size="sm" title={title} variant="soft">
       {label}
-    </span>
+    </Chip>
   );
 }
 
 export function SuppressionSourceBadge({ source }: { source?: string }) {
   const normalized = (source ?? 'local').trim().toLowerCase();
   const label = normalized === 'xray' ? 'Xray' : normalized === 'mixed' ? 'Mixed' : 'Local';
-  const style =
-    normalized === 'xray'
-      ? {
-          background: 'rgba(245,158,11,0.12)',
-          color: '#f59e0b',
-          border: '1px solid rgba(245,158,11,0.22)',
-        }
-      : normalized === 'mixed'
-        ? {
-            background: 'rgba(236,72,153,0.12)',
-            color: '#f472b6',
-            border: '1px solid rgba(236,72,153,0.22)',
-          }
-        : {
-            background: 'rgba(96,165,250,0.12)',
-            color: '#60a5fa',
-            border: '1px solid rgba(96,165,250,0.22)',
-          };
+  const tone: BadgeTone =
+    normalized === 'xray' ? 'warning' : normalized === 'mixed' ? 'default' : 'accent';
 
   return (
-    <span
-      className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0"
-      style={style}
-      title={`Suppression source: ${label}`}
-    >
+    <Chip color={tone} size="sm" title={`Suppression source: ${label}`} variant="soft">
       {label}
-    </span>
+    </Chip>
   );
 }
 
-const OWNERSHIP_CONFIG: Record<
-  'user' | 'org' | 'system',
-  { color: string; bg: string; border: string }
-> = {
-  user: { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.22)' },
-  org: { color: 'color-mix(in srgb, var(--accent) 78%, white)', bg: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: 'color-mix(in srgb, var(--accent) 22%, transparent)' },
-  system: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.22)' },
+const OWNERSHIP_TONE: Record<'user' | 'org' | 'system', BadgeTone> = {
+  user: 'default',
+  org: 'accent',
+  system: 'warning',
 };
 
 export function OwnershipBadge({
@@ -252,7 +221,6 @@ export function OwnershipBadge({
 }) {
   const workScope = useWorkScope();
   const resolvedType = ownerType === 'org' || ownerType === 'system' ? ownerType : 'user';
-  const cfg = OWNERSHIP_CONFIG[resolvedType];
   const orgName = ownerOrgId ? orgNamesById?.[ownerOrgId] : undefined;
   const isSharedIntoCurrentOrg = workScope.kind === 'org' && resolvedType === 'user';
   const label = isSharedIntoCurrentOrg
@@ -260,54 +228,14 @@ export function OwnershipBadge({
     : resolvedType === 'org'
       ? orgName
         ? `Org: ${orgName}`
-        : 'Org workspace'
+        : 'Organization'
       : resolvedType === 'system'
         ? 'System'
         : 'Personal';
-  const title = isSharedIntoCurrentOrg
-    ? workScope.orgName
-      ? `User-owned item. You are viewing it in ${workScope.orgName}, but ownership stays with the original workspace.`
-      : 'User-owned item. You are viewing it in the current organization workspace, but ownership stays with the original workspace.'
-    : resolvedType === 'org'
-      ? orgName
-        ? `Organization-owned item. ${orgName} controls access based on member role.`
-        : 'Organization-owned item. Access is controlled by the owning organization workspace.'
-      : resolvedType === 'system'
-        ? 'System-owned item. It is provided globally by JustScan.'
-        : 'Personal item. It belongs to your personal workspace.';
 
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${className}`.trim()}
-      style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}
-      title={title}
-    >
-      <span className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden />
+    <Chip className={className} color={OWNERSHIP_TONE[resolvedType]} size="sm" variant="soft">
       {label}
-    </span>
-  );
-}
-
-// ── SevCount (table cell) ──────────────────────────────────────────────
-const SEV_TEXT: Record<string, string> = {
-  critical: 'text-red-400 font-bold',
-  high: 'text-orange-400',
-  medium: 'text-yellow-400',
-  low: 'text-blue-400',
-};
-
-export function SevCount({
-  count,
-  level,
-}: {
-  count: number;
-  level: 'critical' | 'high' | 'medium' | 'low';
-}) {
-  return (
-    <span
-      className={`font-mono text-sm ${count ? SEV_TEXT[level] : 'text-zinc-400 dark:text-zinc-700'}`}
-    >
-      {count || '—'}
-    </span>
+    </Chip>
   );
 }

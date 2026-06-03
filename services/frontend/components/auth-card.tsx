@@ -14,26 +14,16 @@ type AuthCardProps = {
 export function AuthCard({ title, subtitle, children, footer }: AuthCardProps) {
   return (
     <div className="space-y-6">
-      <div className="text-center space-y-3">
+      <div className="space-y-3 text-center">
         <Logo size={60} className="mx-auto" />
         <div>
-          <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-            {title}
-          </h1>
-          <p
-            className="mt-1 text-base font-medium"
-            style={{
-              color: 'color-mix(in oklab,var(--text-primary) 88%,var(--text-muted))',
-              textShadow: '0 1px 14px color-mix(in oklab,var(--background) 65%,transparent)',
-            }}
-          >
-            {subtitle}
-          </p>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">{title}</h1>
+          <p className="mt-1 text-base font-medium text-foreground/70">{subtitle}</p>
         </div>
       </div>
 
-      <Card className="surface-card rounded-2xl relative">
-        <Card.Content className="p-6 space-y-5">
+      <Card className="surface-card relative rounded-3xl border border-divider/70 shadow-lg shadow-black/5">
+        <Card.Content className="space-y-5 p-6">
           <div
             className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
             style={{
@@ -45,11 +35,7 @@ export function AuthCard({ title, subtitle, children, footer }: AuthCardProps) {
         </Card.Content>
       </Card>
 
-      {footer ? (
-        <div className="text-center text-sm" style={{ color: 'var(--text-faint)' }}>
-          {footer}
-        </div>
-      ) : null}
+      {footer ? <div className="text-center text-sm text-foreground/60">{footer}</div> : null}
     </div>
   );
 }

@@ -177,7 +177,7 @@ export function IdentityTab() {
   const [overrideOrgNameTemplate, setOverrideOrgNameTemplate] = useState('{claim}');
   const [overrideRole, setOverrideRole] = useState<'viewer' | 'editor' | 'admin'>('admin');
 
-  const apiBase = useMemo(() => {
+  const apiBase = (() => {
     const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
     if (configured) {
       return trimTrailingSlash(configured);
@@ -186,19 +186,21 @@ export function IdentityTab() {
       return trimTrailingSlash(window.location.origin);
     }
     return '';
-  }, []);
+  })();
 
   const suggestedRedirectUri = useMemo(
     () => buildSuggestedRedirectUri(apiBase, providerName),
     [apiBase, providerName]
   );
 
+  const resolvedRedirectUri = redirectUriEdited ? redirectUri : suggestedRedirectUri;
+
   const redirectUriMismatch = useMemo(() => {
-    if (!suggestedRedirectUri || !redirectUri.trim()) {
+    if (!suggestedRedirectUri || !resolvedRedirectUri.trim()) {
       return false;
     }
-    return trimTrailingSlash(redirectUri) !== trimTrailingSlash(suggestedRedirectUri);
-  }, [redirectUri, suggestedRedirectUri]);
+    return trimTrailingSlash(resolvedRedirectUri) !== trimTrailingSlash(suggestedRedirectUri);
+  }, [resolvedRedirectUri, suggestedRedirectUri]);
 
   const mappingTemplatePreview = useMemo(
     () =>
@@ -248,12 +250,6 @@ export function IdentityTab() {
 
   useEffect(() => deferEffect(load), [load]);
   useEffect(() => deferEffect(loadSelectedDetails), [loadSelectedDetails]);
-  useEffect(() => {
-    if (!providerModal.isOpen || redirectUriEdited) {
-      return;
-    }
-    setRedirectUri(suggestedRedirectUri);
-  }, [providerModal.isOpen, redirectUriEdited, suggestedRedirectUri]);
 
   const filteredProviders = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -319,7 +315,13 @@ export function IdentityTab() {
 
   function validateProviderStep(step: number) {
     if (step === 0) {
-      if (!providerName.trim() || !displayName.trim() || !issuerUrl.trim() || !clientId.trim() || !redirectUri.trim()) {
+      if (
+        !providerName.trim() ||
+        !displayName.trim() ||
+        !issuerUrl.trim() ||
+        !clientId.trim() ||
+        !resolvedRedirectUri.trim()
+      ) {
         return 'Please complete all required connection fields.';
       }
       if (!editingProvider && !clientSecret.trim()) {
@@ -385,7 +387,7 @@ export function IdentityTab() {
         issuer_url: issuerUrl.trim(),
         client_id: clientId.trim(),
         ...(clientSecret.trim() ? { client_secret: clientSecret.trim() } : {}),
-        redirect_uri: redirectUri.trim(),
+        redirect_uri: resolvedRedirectUri.trim(),
         scopes: parseDelimitedList(scopesInput),
         admin_groups: parseDelimitedList(adminGroupsInput),
         admin_roles: parseDelimitedList(adminRolesInput),
@@ -961,7 +963,7 @@ export function IdentityTab() {
                             className="w-full"
                             variant="secondary"
                             placeholder={suggestedRedirectUri || 'Enter provider name to auto-generate callback URI'}
-                            value={redirectUri}
+                            value={resolvedRedirectUri}
                             onChange={(event) => {
                               setRedirectUri(event.target.value);
                               setRedirectUriEdited(true);

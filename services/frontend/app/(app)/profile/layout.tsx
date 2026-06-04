@@ -2,6 +2,7 @@
 
 import { PageHeader } from '@/components/ui/page-header';
 import { PageTabs } from '@/components/ui/page-tabs';
+import { Settings01Icon } from 'hugeicons-react';
 import { usePathname } from 'next/navigation';
 
 const profileNavItems = [
@@ -29,6 +30,7 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
     <div className="space-y-5 px-4 py-6 sm:px-6 xl:py-7">
       <PageHeader
         title="Account Settings"
+        icon={<Settings01Icon size={16} />}
         description="Manage your profile, personal access, and notification behavior."
       />
       <PageTabs currentPath={pathname} items={profileNavItems} />

@@ -7,8 +7,18 @@ import { Scan, WatchlistItem } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { getWatchlistPosture } from '@/lib/watchlist-posture';
 import { Button, Card, Chip, Link as HeroLink, Modal, useOverlayState } from '@heroui/react';
+import { CheckmarkCircle02Icon, Clock01Icon, Shield01Icon } from 'hugeicons-react';
 
 export type DashboardDrilldownKey = 'total' | 'completed' | 'watchlist';
+
+const drilldownHeaderMeta = {
+  total: { Icon: Shield01Icon, className: 'bg-default text-foreground' },
+  completed: { Icon: CheckmarkCircle02Icon, className: 'bg-success/10 text-success' },
+  watchlist: { Icon: Clock01Icon, className: 'bg-warning/10 text-warning' },
+} satisfies Record<
+  DashboardDrilldownKey,
+  { Icon: typeof Shield01Icon; className: string }
+>;
 
 function WatchlistModalRow({ item }: { item: WatchlistItem }) {
   const posture = getWatchlistPosture(item);
@@ -327,11 +337,19 @@ export function DashboardDrilldownModal({
         <Modal.Container size="lg" placement="center">
           <Modal.Dialog className="surface-modal overflow-hidden rounded-[28px] w-[min(920px,calc(100vw-1.5rem))] max-w-none">
             <Modal.Header>
-              <div>
-                <Modal.Heading className="text-base font-semibold sm:text-lg">
-                  {heading}
-                </Modal.Heading>
-                <p className="mt-1 text-sm text-muted">{description}</p>
+              <div className="flex min-w-0 items-start gap-3">
+                <Modal.Icon className={drilldownHeaderMeta[activeCard].className}>
+                  {(() => {
+                    const HeaderIcon = drilldownHeaderMeta[activeCard].Icon;
+                    return <HeaderIcon className="size-5" />;
+                  })()}
+                </Modal.Icon>
+                <div>
+                  <Modal.Heading className="text-base font-semibold sm:text-lg">
+                    {heading}
+                  </Modal.Heading>
+                  <p className="mt-1 text-sm text-muted">{description}</p>
+                </div>
               </div>
               <Modal.CloseTrigger />
             </Modal.Header>

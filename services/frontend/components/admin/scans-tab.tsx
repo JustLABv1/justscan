@@ -483,7 +483,12 @@ export function ScansTab() {
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>
-                <Modal.Heading>Add Tag</Modal.Heading>
+                <div className="flex min-w-0 items-center gap-3">
+                  <Modal.Icon className="bg-default text-foreground">
+                    <Tag01Icon size={18} />
+                  </Modal.Icon>
+                  <Modal.Heading>Add Tag</Modal.Heading>
+                </div>
                 <Modal.CloseTrigger />
               </Modal.Header>
               <Modal.Body>

@@ -16,7 +16,14 @@ import { getHelmImageSourceLabel } from '@/lib/helm-image-overrides';
 import { PublicHelmRunHistoryEntry, updateHelmPublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Alert, Button, Card, Chip, Spinner, Table } from '@heroui/react';
-import { ArrowReloadHorizontalIcon, PackageIcon, Refresh01Icon } from 'hugeicons-react';
+import {
+  AlertCircleIcon,
+  ArrowReloadHorizontalIcon,
+  Bug02Icon,
+  CheckmarkCircle02Icon,
+  PackageIcon,
+  Refresh01Icon,
+} from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -370,6 +377,8 @@ export default function PublicHelmRunDetailPage() {
             <StatCard
               label="Images"
               value={totalImages}
+              icon={<PackageIcon size={16} />}
+              iconTone="accent"
               hint="Latest child scans in this Helm run."
               className={statCardClassName}
               valueClassName={statValueClassName}
@@ -377,6 +386,8 @@ export default function PublicHelmRunDetailPage() {
             <StatCard
               label="Completed"
               value={completed}
+              icon={<CheckmarkCircle02Icon size={16} />}
+              iconTone="success"
               hint="Finished successfully."
               className={statCardClassName}
               valueClassName={`${statValueClassName} text-emerald-600 dark:text-emerald-400`}
@@ -384,6 +395,8 @@ export default function PublicHelmRunDetailPage() {
             <StatCard
               label="Running"
               value={pending}
+              icon={<Refresh01Icon size={16} />}
+              iconTone="accent"
               hint="Queued or currently scanning."
               className={statCardClassName}
               valueClassName={
@@ -395,6 +408,8 @@ export default function PublicHelmRunDetailPage() {
             <StatCard
               label="Failed"
               value={failed}
+              icon={<AlertCircleIcon size={16} />}
+              iconTone="danger"
               hint="Latest attempts that need attention."
               className={statCardClassName}
               valueClassName={
@@ -406,6 +421,8 @@ export default function PublicHelmRunDetailPage() {
             <StatCard
               label="Critical"
               value={totalCritical}
+              icon={<Bug02Icon size={16} />}
+              iconTone="danger"
               hint="Critical findings across latest scans."
               className={statCardClassName}
               valueClassName={
@@ -417,6 +434,8 @@ export default function PublicHelmRunDetailPage() {
             <StatCard
               label="High"
               value={totalHigh}
+              icon={<Bug02Icon size={16} />}
+              iconTone="warning"
               hint="High severity findings."
               className={statCardClassName}
               valueClassName={
@@ -428,6 +447,8 @@ export default function PublicHelmRunDetailPage() {
             <StatCard
               label="Medium"
               value={totalMedium}
+              icon={<Bug02Icon size={16} />}
+              iconTone="accent"
               hint="Medium severity findings."
               className={statCardClassName}
               valueClassName={
@@ -439,6 +460,7 @@ export default function PublicHelmRunDetailPage() {
             <StatCard
               label="Low"
               value={totalLow}
+              icon={<Bug02Icon size={16} />}
               hint="Low severity findings."
               className={statCardClassName}
               valueClassName={statValueClassName}

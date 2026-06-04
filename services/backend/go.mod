@@ -21,7 +21,7 @@ require (
 	github.com/uptrace/bun/driver/pgdriver v1.2.18
 	github.com/uptrace/bun/extra/bunotel v1.2.18
 	golang.org/x/crypto v0.52.0
-	golang.org/x/net v0.54.0
+	golang.org/x/net v0.55.0
 	golang.org/x/oauth2 v0.36.0
 	helm.sh/helm/v4 v4.2.0
 	sigs.k8s.io/yaml v1.6.0

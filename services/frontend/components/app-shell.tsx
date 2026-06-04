@@ -79,6 +79,14 @@ import { Logo } from '@/components/logo';
 import { SearchModal } from '@/components/search';
 import { ToastProvider } from '@/components/toast';
 import { BreadcrumbItem, PageHeaderConfig, PageHeaderContext } from '@/components/ui/page-header';
+import { SurfaceIcon } from '@/components/ui/surface-icon';
+
+type SidebarIcon = ComponentType<{
+  size?: number;
+  className?: string;
+  style?: CSSProperties;
+  'aria-hidden'?: boolean;
+}>;
 
 const navGroups = [
   {
@@ -135,22 +143,18 @@ function titleFromPath(pathname: string) {
 
 function resolveFallbackHeader(
   pathname: string,
-  items: Array<{ href: string; label: string }>
+  items: Array<{ href: string; label: string; Icon: SidebarIcon }>
 ): PageHeaderConfig {
   const current = items.find((item) => isActiveRoute(pathname, item.href));
   const breadcrumbs: BreadcrumbItem[] = current ? [{ label: current.label }] : [];
+  const HeaderIcon = current?.Icon;
 
   return {
     title: current?.label ?? titleFromPath(pathname),
     breadcrumbs,
+    icon: HeaderIcon ? <HeaderIcon size={16} aria-hidden /> : undefined,
   };
 }
-
-type SidebarIcon = ComponentType<{
-  size?: number;
-  className?: string;
-  style?: CSSProperties;
-}>;
 
 const activeNavStyle = {
   color: 'var(--accent-soft-foreground)',
@@ -552,9 +556,12 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
       : []),
   ];
   const navItems = navigationGroups.flatMap((group) =>
-    group.items.map(({ href, label }) => ({ href, label }))
+    group.items.map(({ href, label, Icon }) => ({ href, label, Icon }))
   );
-  const topbarHeader = pageHeader ?? resolveFallbackHeader(pathname, navItems);
+  const fallbackHeader = resolveFallbackHeader(pathname, navItems);
+  const topbarHeader = pageHeader
+    ? { ...fallbackHeader, ...pageHeader, icon: pageHeader.icon ?? fallbackHeader.icon }
+    : fallbackHeader;
   const contentRailClass = 'px-4 md:px-6';
   const pageHeaderContextValue = useMemo(() => ({ setHeader: setPageHeader }), []);
 
@@ -1167,7 +1174,14 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     >
                       <div className="min-w-0 flex-1">
                         <h1 className="flex flex-wrap items-center gap-1.5 text-lg font-semibold tracking-tight md:text-xl">
-                          {topbarHeader.title}
+                          {topbarHeader.icon ? (
+                            <SurfaceIcon
+                              icon={topbarHeader.icon}
+                              size="sm"
+                              className="mr-0.5"
+                            />
+                          ) : null}
+                          <span>{topbarHeader.title}</span>
                           {topbarHeader.titleCom}
                         </h1>
                         {topbarHeader.description ? (

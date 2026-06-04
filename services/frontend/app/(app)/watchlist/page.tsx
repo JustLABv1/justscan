@@ -9,6 +9,7 @@ import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { StatCard } from '@/components/ui/stat-card';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -58,13 +59,16 @@ import {
   useOverlayState,
 } from '@heroui/react';
 import {
+  AlertCircleIcon,
   BiometricAccessIcon,
+  CheckmarkCircle02Icon,
   Clock01Icon,
   Delete01Icon,
   EyeIcon,
   PencilEdit01Icon,
   PlayIcon,
   PlusSignIcon,
+  Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -192,48 +196,58 @@ function WatchlistPostureSummary({
       label: 'Active schedules',
       value: activeCount,
       detail: 'images monitored automatically',
-      hintClassName: 'text-muted-foreground',
+      hintClassName: 'text-muted',
+      icon: <PlayIcon size={16} />,
+      tone: 'accent' as const,
     },
     {
       label: 'Need policy attention',
       value: attentionCount,
       detail: 'blocked, failed, or non-compliant',
-      hintClassName: attentionCount > 0 ? 'text-danger' : 'text-muted-foreground',
+      hintClassName: attentionCount > 0 ? 'text-danger' : 'text-muted',
+      icon: <Shield01Icon size={16} />,
+      tone: 'danger' as const,
     },
     {
       label: 'Healthy coverage',
       value: healthyCount,
       detail: 'current and not attention-bound',
-      hintClassName: healthyCount > 0 ? 'text-success' : 'text-muted-foreground',
+      hintClassName: healthyCount > 0 ? 'text-success' : 'text-muted',
+      icon: <CheckmarkCircle02Icon size={16} />,
+      tone: 'success' as const,
     },
     {
       label: 'Never scanned',
       value: neverScannedCount,
       detail: 'no baseline result yet',
-      hintClassName: neverScannedCount > 0 ? 'text-warning' : 'text-muted-foreground',
+      hintClassName: neverScannedCount > 0 ? 'text-warning' : 'text-muted',
+      icon: <AlertCircleIcon size={16} />,
+      tone: 'warning' as const,
     },
     {
       label: 'Stale',
       value: staleCount,
       detail: 'last scan older than 7 days',
-      hintClassName: staleCount > 0 ? 'text-warning' : 'text-muted-foreground',
+      hintClassName: staleCount > 0 ? 'text-warning' : 'text-muted',
+      icon: <Clock01Icon size={16} />,
+      tone: 'warning' as const,
     },
   ];
 
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
       {cards.map((card) => (
-        <Card key={card.label} variant="default" className="h-full border border-divider/70">
-          <Card.Content className="gap-1">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              {card.label}
-            </p>
-            <p className="text-2xl font-bold tabular-nums tracking-tight">
-              {card.value.toLocaleString()}
-            </p>
-            <p className={`text-xs ${card.hintClassName}`}>{card.detail}</p>
-          </Card.Content>
-        </Card>
+        <StatCard
+          key={card.label}
+          label={card.label}
+          value={card.value.toLocaleString()}
+          hint={card.detail}
+          icon={card.icon}
+          tone={card.tone}
+          variant="stacked"
+          className="h-full border border-divider/70"
+          hintClassName={card.hintClassName}
+        />
       ))}
     </div>
   );
@@ -1020,9 +1034,16 @@ export default function WatchlistPage() {
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
-                <Modal.Heading className="font-semibold">
-                  {editing ? 'Edit Watchlist Item' : 'Add to Watchlist'}
-                </Modal.Heading>
+                <div className="flex min-w-0 items-center gap-3">
+                  <Modal.Icon
+                    className={editing ? 'bg-default text-foreground' : 'bg-accent/10 text-accent'}
+                  >
+                    {editing ? <PencilEdit01Icon size={18} /> : <PlusSignIcon size={18} />}
+                  </Modal.Icon>
+                  <Modal.Heading className="font-semibold">
+                    {editing ? 'Edit Watchlist Item' : 'Add to Watchlist'}
+                  </Modal.Heading>
+                </div>
                 <Modal.CloseTrigger />
               </Modal.Header>
               <Modal.Body className="py-5">
@@ -1216,7 +1237,12 @@ export default function WatchlistPage() {
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
-                <Modal.Heading className="font-semibold">Manage Watchlist Access</Modal.Heading>
+                <div className="flex min-w-0 items-center gap-3">
+                  <Modal.Icon className="bg-default text-foreground">
+                    <BiometricAccessIcon size={18} />
+                  </Modal.Icon>
+                  <Modal.Heading className="font-semibold">Manage Watchlist Access</Modal.Heading>
+                </div>
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
               <Modal.Body className="py-5 space-y-4">

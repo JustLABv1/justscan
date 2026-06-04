@@ -25,6 +25,7 @@ import {
   Delete01Icon,
   FolderLibraryIcon,
   Key01Icon,
+  Settings01Icon,
 } from 'hugeicons-react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -205,10 +206,14 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
         <Modal.Container size="md" placement="center">
           <Modal.Dialog className="overflow-hidden">
             <Modal.Header>
-              <Modal.Heading className="text-zinc-900 dark:text-white font-semibold flex items-center gap-2">
-                <Key01Icon size={17} />
-                Token Created
-              </Modal.Heading>
+              <div className="flex min-w-0 items-center gap-3">
+                <Modal.Icon className="bg-accent/10 text-accent">
+                  <Key01Icon size={18} />
+                </Modal.Icon>
+                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                  Token Created
+                </Modal.Heading>
+              </div>
               <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
             </Modal.Header>
             <Modal.Body className="px-6 py-5 space-y-4">
@@ -274,7 +279,12 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
         <Modal.Container size="md" placement="center">
           <Modal.Dialog className="overflow-hidden">
             <Modal.Header>
-              <Modal.Heading className="font-semibold">New API Token</Modal.Heading>
+              <div className="flex min-w-0 items-center gap-3">
+                <Modal.Icon className="bg-default text-foreground">
+                  <Settings01Icon size={18} />
+                </Modal.Icon>
+                <Modal.Heading className="font-semibold">New API Token</Modal.Heading>
+              </div>
               <Modal.CloseTrigger />
             </Modal.Header>
             <Modal.Body>
@@ -423,6 +433,7 @@ export default function TokensPage() {
               value={tokens.length}
               hint="All tokens ever issued for this account."
               icon={<Key01Icon size={16} />}
+              iconTone="accent"
               valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
             />
             <StatCard
@@ -430,6 +441,7 @@ export default function TokensPage() {
               value={activeTokens.length}
               hint="Usable tokens that are not revoked or expired."
               icon={<Key01Icon size={16} />}
+              iconTone="success"
               valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
             />
             <StatCard
@@ -437,6 +449,7 @@ export default function TokensPage() {
               value={expiringSoon}
               hint="Tokens that expire within the next 30 days."
               icon={<Clock01Icon size={16} />}
+              iconTone="warning"
               valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
             />
             <StatCard
@@ -444,6 +457,7 @@ export default function TokensPage() {
               value={revokedTokens}
               hint="Disabled tokens retained for audit visibility."
               icon={<Delete01Icon size={16} />}
+              iconTone="danger"
               valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
             />
           </div>

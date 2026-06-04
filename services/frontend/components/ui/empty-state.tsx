@@ -2,6 +2,8 @@
 import { Button, Card, Chip } from '@heroui/react';
 import React from 'react';
 
+import { SurfaceIcon } from '@/components/ui/surface-icon';
+
 interface EmptyStateProps {
   icon: React.ReactNode;
   title: string;
@@ -25,9 +27,7 @@ export function EmptyState({
   return (
     <Card className="surface-card rounded-3xl border border-divider/70">
       <Card.Content className="flex flex-col items-center gap-4 px-6 py-16 text-center">
-        <div className="flex size-14 items-center justify-center rounded-2xl bg-surface-secondary text-foreground/56">
-          {icon}
-        </div>
+        <SurfaceIcon icon={icon} tone={tone} size="lg" />
         <div className="space-y-2">
           {eyebrow ? (
             <div className="flex justify-center">

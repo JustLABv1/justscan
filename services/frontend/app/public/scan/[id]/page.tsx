@@ -26,7 +26,7 @@ import {
   Table,
   useOverlayState,
 } from '@heroui/react';
-import { ArrowLeft01Icon, CpuIcon, FileExportIcon, Refresh01Icon } from 'hugeicons-react';
+import { ArrowLeft01Icon, Bug02Icon, CpuIcon, FileExportIcon, Refresh01Icon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -650,6 +650,16 @@ export default function PublicScanResultPage() {
                       <StatCard
                         label={label}
                         value={count ?? 0}
+                        icon={<Bug02Icon size={16} />}
+                        iconTone={
+                          label === 'Critical'
+                            ? 'danger'
+                            : label === 'High'
+                              ? 'warning'
+                              : label === 'Medium'
+                                ? 'accent'
+                                : 'default'
+                        }
                         hint={
                           severityFilter === label.toUpperCase()
                             ? 'Filter active'

@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"justscan-backend/config"
 	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/notifications"
+	"justscan-backend/pipelines"
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
@@ -473,6 +475,9 @@ func processScan(job ScanJob, cacheDir string) {
 		Details: fmt.Sprintf("Critical: %d  High: %d  Medium: %d  Low: %d",
 			scan.CriticalCount, scan.HighCount, scan.MediumCount, scan.LowCount),
 	})
+	if err := pipelines.QueueCallbackForScan(context.Background(), db, scanID.String()); err != nil && err != sql.ErrNoRows {
+		log.Warnf("Worker: failed to queue pipeline callback for completed scan %s: %v", scanID, err)
+	}
 }
 
 func applyAutoTags(db *bun.DB, scan *models.Scan) {
@@ -527,6 +532,9 @@ func setFailed(db *bun.DB, scan *models.Scan, msg string) {
 		Status:    models.ScanStatusFailed,
 		Details:   msg,
 	})
+	if err := pipelines.QueueCallbackForScan(ctx, db, scan.ID.String()); err != nil && err != sql.ErrNoRows {
+		log.Warnf("Worker: failed to queue pipeline callback for failed scan %s: %v", scan.ID, err)
+	}
 }
 
 func preserveXrayExternalStatusOnFailure(status string) bool {

@@ -3,6 +3,7 @@ package router
 import (
 	notificationhandlers "justscan-backend/handlers/notifications"
 	"justscan-backend/handlers/orgs"
+	"justscan-backend/handlers/scans"
 	"justscan-backend/middlewares"
 
 	"github.com/gin-gonic/gin"
@@ -39,6 +40,8 @@ func Orgs(router *gin.RouterGroup, db *bun.DB) {
 		r.GET("/:id/scans", orgs.ListOrgScans(db))
 		r.POST("/:id/scans/:scanId", orgs.AssignScan(db))
 		r.DELETE("/:id/scans/:scanId", orgs.RemoveScan(db))
+		r.POST("/:id/pipeline-scans", scans.CreatePipelineScan(db))
+		r.GET("/:id/pipeline-scans/:scanId", scans.GetPipelineScan(db))
 
 		r.GET("/:id/risk", orgs.GetRiskScore(db))
 

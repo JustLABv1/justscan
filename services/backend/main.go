@@ -13,6 +13,7 @@ import (
 	"justscan-backend/database"
 	"justscan-backend/handlers/registries"
 	"justscan-backend/notifications"
+	"justscan-backend/pipelines"
 	"justscan-backend/router"
 	"justscan-backend/scanner"
 	"justscan-backend/scheduler"
@@ -77,6 +78,7 @@ func main() {
 	// Start async scan worker pool
 	scanner.InitWorker(db)
 	notifications.Start(db)
+	pipelines.Start(db)
 
 	// Start watchlist scheduler
 	scheduler.Start(db)
@@ -94,6 +96,7 @@ func main() {
 	scheduler.Stop()
 	registries.StopHealthChecks()
 	notifications.Stop()
+	pipelines.Stop()
 
 	// The server has 30 seconds to finish the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -468,9 +468,9 @@ export default function TokensPage() {
                 <div>
                   <Card.Title>Tokens</Card.Title>
                   <Card.Description>
-                    Overview of your API tokens. Use API tokens to authenticate when accessing
-                    JustScan&apos;s API from scripts, CI/CD pipelines, or other services. Keep your
-                    tokens secure and revoke them if you suspect any compromise.
+                    Overview of your personal API tokens. Use them for user-scoped scripts and local
+                    automation. For shared CI/CD pipelines, prefer organization tokens so the
+                    pipeline is not tied to one user account.
                   </Card.Description>
                 </div>
 
@@ -557,10 +557,11 @@ export default function TokensPage() {
 
           <Card>
             <Card.Header>
-              <Card.Title>Using tokens in CI/CD</Card.Title>
+              <Card.Title>Using personal tokens</Card.Title>
               <Card.Description>
-                Set the token as a bearer credential in the Authorization header. Store it in your
-                CI secret store rather than hard-coding it into pipeline files.
+                Set the token as a bearer credential in the Authorization header. For shared
+                pipeline automation, create an org token instead and call the org-scoped pipeline
+                scan endpoint.
               </Card.Description>
             </Card.Header>
             <Card.Content className="gap-3">

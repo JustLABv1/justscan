@@ -226,6 +226,42 @@ func LoadAccessibleRegistry(c *gin.Context, db *bun.DB, registryID uuid.UUID) (*
 	return nil, uuid.Nil, false, false
 }
 
+func CanOrgAccessRegistry(ctx context.Context, db *bun.DB, orgID uuid.UUID, registry *models.Registry) (bool, error) {
+	if registry == nil {
+		return false, nil
+	}
+	if registry.OwnerType == models.OwnerTypeSystem {
+		return true, nil
+	}
+	if registry.OwnerOrgID != nil && *registry.OwnerOrgID == orgID {
+		return true, nil
+	}
+	shared, err := db.NewSelect().
+		Model((*models.OrgRegistry)(nil)).
+		Where("registry_id = ?", registry.ID).
+		Where("org_id = ?", orgID).
+		Exists(ctx)
+	if err != nil {
+		return false, err
+	}
+	return shared, nil
+}
+
+func LoadAccessibleRegistryForOrg(ctx context.Context, db *bun.DB, orgID, registryID uuid.UUID) (*models.Registry, error) {
+	registry := &models.Registry{}
+	if err := db.NewSelect().Model(registry).Where("id = ?", registryID).Scan(ctx); err != nil {
+		return nil, err
+	}
+	allowed, err := CanOrgAccessRegistry(ctx, db, orgID, registry)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, sql.ErrNoRows
+	}
+	return registry, nil
+}
+
 func LoadOrgMembership(ctx context.Context, db *bun.DB, orgID, userID uuid.UUID) (*models.OrgMember, error) {
 	membership := &models.OrgMember{}
 	if err := db.NewSelect().Model(membership).

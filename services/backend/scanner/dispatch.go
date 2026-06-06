@@ -2,9 +2,11 @@ package scanner
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
+	"justscan-backend/pipelines"
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
@@ -72,6 +74,9 @@ func MarkScanFailed(ctx context.Context, db *bun.DB, scanID uuid.UUID, message s
 		return err
 	}
 	recordScanStepOutput(ctx, db, scanID, message)
+	if queueErr := pipelines.QueueCallbackForScan(ctx, db, scanID.String()); queueErr != nil && queueErr != sql.ErrNoRows {
+		return queueErr
+	}
 	return nil
 }
 

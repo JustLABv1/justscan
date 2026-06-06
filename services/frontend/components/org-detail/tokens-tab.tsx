@@ -402,7 +402,7 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
           <h2 className="text-base font-semibold">Org API Tokens</h2>
           <p className="text-xs text-zinc-500 mt-0.5">
             Service-account tokens scoped to this organization. Use them for CI/CD pipelines and
-            automated scanning.
+            automated scanning via the org pipeline endpoint.
           </p>
         </div>
         {canManage && (

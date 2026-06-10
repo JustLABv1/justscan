@@ -32,7 +32,6 @@ import {
   Autocomplete,
   Button,
   Card,
-  Input,
   Label,
   ListBox,
   Radio,
@@ -45,7 +44,7 @@ import {
 import { ArrowDown01Icon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import type { Key } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
@@ -306,14 +305,16 @@ export default function NewScanPage() {
       source: 'artifactory_xray' as const,
       eyebrow: 'Xray pipeline',
       title: 'Artifactory Xray image',
-      description: 'Route the image through a configured Artifactory/Xray registry and optional repo override.',
+      description:
+        'Route the image through a configured Artifactory/Xray registry and optional repo override.',
       disabled: xrayRegistries.length === 0,
     },
     {
       source: 'local_archive' as const,
       eyebrow: 'Offline input',
       title: 'Local OCI/Docker archive',
-      description: 'Upload a tarball created from docker save or an OCI archive for one-off inspection.',
+      description:
+        'Upload a tarball created from docker save or an OCI archive for one-off inspection.',
       disabled: !capabilities.enable_trivy,
     },
   ];
@@ -532,8 +533,7 @@ export default function NewScanPage() {
     }
   }
 
-  const hasRoutingSection =
-    scanSource === 'private_registry' || scanSource === 'artifactory_xray';
+  const hasRoutingSection = scanSource === 'private_registry' || scanSource === 'artifactory_xray';
   const scanSourceLabel =
     scanSource === 'artifactory_xray'
       ? 'Artifactory Xray'
@@ -547,7 +547,8 @@ export default function NewScanPage() {
   const targetSummary =
     scanSource === 'local_archive'
       ? uploadedArchiveFile?.name || 'Archive upload'
-      : primaryImage || (requestedImages.length > 0 ? `${requestedImages.length} image targets` : 'No target yet');
+      : primaryImage ||
+        (requestedImages.length > 0 ? `${requestedImages.length} image targets` : 'No target yet');
   const routingSummary =
     scanSource === 'public' || scanSource === 'local_archive'
       ? 'Direct'
@@ -589,10 +590,7 @@ export default function NewScanPage() {
             onExpandedChange={(keys) => setIsSourceExpanded(keys.has('scan-source-section'))}
             variant="surface"
           >
-            <Accordion.Item
-              className="bg-transparent"
-              id="scan-source-section"
-            >
+            <Accordion.Item className="bg-transparent" id="scan-source-section">
               <Accordion.Heading>
                 <Accordion.Trigger className="flex items-start gap-4 px-5 py-5 text-left transition-colors hover:bg-surface-secondary/60">
                   <div className="min-w-0 flex-1 space-y-1.5">
@@ -682,9 +680,7 @@ export default function NewScanPage() {
                 label={scanSource === 'local_archive' ? 'Display name' : 'Image name'}
                 onChange={(e) => setImageName(e.target.value)}
                 placeholder={
-                  scanSource === 'artifactory_xray'
-                    ? 'n8nio/n8n'
-                    : 'ghcr.io/example/api'
+                  scanSource === 'artifactory_xray' ? 'n8nio/n8n' : 'ghcr.io/example/api'
                 }
                 required={scanSource !== 'local_archive'}
                 value={imageName}
@@ -765,8 +761,8 @@ export default function NewScanPage() {
                   optional
                   description={
                     <>
-                      Pick a repo like <span className="font-mono">docker-remote</span> so you
-                      can scan <span className="font-mono">n8nio/n8n</span> instead of typing{' '}
+                      Pick a repo like <span className="font-mono">docker-remote</span> so you can
+                      scan <span className="font-mono">n8nio/n8n</span> instead of typing{' '}
                       <span className="font-mono">docker-remote/n8nio/n8n</span>.
                     </>
                   }
@@ -825,9 +821,7 @@ export default function NewScanPage() {
                     </Autocomplete.Popover>
                   </Autocomplete>
                   {selectedRegistry && artifactoryRepositoriesLoading === selectedRegistry.id ? (
-                    <p className="text-xs text-zinc-500">
-                      Loading available Artifactory repos…
-                    </p>
+                    <p className="text-xs text-zinc-500">Loading available Artifactory repos…</p>
                   ) : null}
                   {selectedRegistryRepositoriesError ? (
                     <p className="text-xs" style={{ color: '#f59e0b' }}>
@@ -863,9 +857,7 @@ export default function NewScanPage() {
               >
                 <TextArea
                   className={joinClassNames(inputCls, 'min-h-24 bg-surface resize-y')}
-                  placeholder={
-                    'ghcr.io/example/api:1.2.3\nregistry.example.com/team/worker:latest'
-                  }
+                  placeholder={'ghcr.io/example/api:1.2.3\nregistry.example.com/team/worker:latest'}
                   value={additionalImageDraft}
                   onChange={(e) => setAdditionalImageDraft(e.target.value)}
                 />
@@ -934,11 +926,10 @@ export default function NewScanPage() {
             <ScanWizardField label="Platform" optional>
               <Select
                 value={platform || '__auto__'}
-                onChange={(value) =>
-                  setPlatform(String(value === '__auto__' ? '' : (value ?? '')))
-                }
+                onChange={(value) => setPlatform(String(value === '__auto__' ? '' : (value ?? '')))}
+                variant="secondary"
               >
-                <Select.Trigger className={selectTriggerCls}>
+                <Select.Trigger>
                   <Select.Value />
                   <Select.Indicator />
                 </Select.Trigger>

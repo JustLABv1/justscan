@@ -92,6 +92,24 @@ func TestDeriveStatusKeepsCompletedScanOperationallyHealthyDespiteFindings(t *te
 	}
 }
 
+func TestBuildStatusPageScanSummaryIncludesOrgComplianceStatus(t *testing.T) {
+	scan := &models.Scan{
+		ID:        uuid.New(),
+		Status:    models.ScanStatusCompleted,
+		ImageName: "ghcr.io/acme/api",
+		ImageTag:  "prod",
+	}
+
+	summary := buildStatusPageScanSummary(scan, scan.ID, "fail")
+
+	if summary.ComplianceStatus != "fail" {
+		t.Fatalf("expected compliance status fail, got %q", summary.ComplianceStatus)
+	}
+	if summary.ScanStatus != models.ScanStatusCompleted {
+		t.Fatalf("expected completed scan status to remain unchanged, got %q", summary.ScanStatus)
+	}
+}
+
 func TestRebindStatusPageRelationsUsesExistingPageID(t *testing.T) {
 	userID := uuid.New()
 	existingPageID := uuid.New()

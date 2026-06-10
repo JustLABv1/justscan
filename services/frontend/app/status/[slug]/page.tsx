@@ -2,35 +2,21 @@
 
 import { Logo } from '@/components/logo';
 import {
-  SeverityBadge,
-  SourceBadge,
-  StatusBadge,
-  formatStatusLabel,
-  resolveDisplayStatus,
-} from '@/components/ui/badges';
-import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
-import type {
-  StatusPageItem,
-  StatusPageResponse,
-  StatusPageScanSummary,
-  Vulnerability,
-} from '@/lib/api';
+  ActiveStatusUpdates,
+  OverallStatusBanner,
+  PublicStatusHeader,
+  StatusMetrics,
+} from './_components/public-status-chrome';
+import { StatusBadge, formatStatusLabel, resolveDisplayStatus } from '@/components/ui/badges';
+import type { StatusPageItem, StatusPageResponse, StatusPageScanSummary } from '@/lib/api';
 import {
   ApiError,
+  getScan,
   getStatusPageBySlug,
-  getStatusPageItemVulnerabilityContextAnalysis,
   getStatusPageTrackedScan,
   getToken,
-  listStatusPageItemVulnerabilities,
   listStatusPageScanHistory,
 } from '@/lib/api';
-import type { BlockedPolicyDetailsView } from '@/lib/blocked-policy';
-import {
-  compactBlockedPolicyList,
-  countBlockedPolicyList,
-  formatIgnoreRuleStatusLabel,
-  getBlockedPolicyDetails,
-} from '@/lib/blocked-policy';
 import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
 import {
@@ -41,19 +27,23 @@ import {
   Modal,
   SearchField,
   Select,
-  Spinner,
+  Skeleton,
   Table,
+  Tooltip,
   useOverlayState,
 } from '@heroui/react';
+import { ArrowRight01Icon, Cancel01Icon, PackageIcon, Shield01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const AUTO_REFRESH_MS = 30000;
-const VULN_PAGE_SIZE = 25;
-const STATUS_SELECT_TRIGGER_CLS = 'surface-input min-h-11 rounded-full px-3 text-sm';
-const STATUS_INPUT_CLS = 'surface-input min-h-11 rounded-xl px-3 text-sm outline-none';
 const RECENT_SCAN_SEGMENTS = 14;
+const SCAN_HISTORY_SKELETON_KEYS = Array.from(
+  { length: 8 },
+  (_, index) => `scan-history-skeleton-${index + 1}`
+);
 const STATUS_PRIORITY: Record<string, number> = {
   failed: 0,
   blocked_by_xray_policy: 1,
@@ -67,21 +57,6 @@ const STATUS_PRIORITY: Record<string, number> = {
   healthy: 6,
   cancelled: 7,
 };
-const VULN_SEVERITY_OPTIONS = [
-  { key: '__all__', label: 'All severities' },
-  { key: 'CRITICAL', label: 'Critical' },
-  { key: 'HIGH', label: 'High' },
-  { key: 'MEDIUM', label: 'Medium' },
-  { key: 'LOW', label: 'Low' },
-] as const;
-
-const SEV = {
-  critical: '#ef4444',
-  high: '#f97316',
-  medium: '#eab308',
-  low: '#71717a',
-} as const;
-
 const STATUS_COLOR: Record<string, string> = {
   healthy: '#22c55e',
   completed: '#22c55e',
@@ -119,14 +94,24 @@ const EXPOSURE_COLOR: Record<string, string> = {
   clear: '#22c55e',
 };
 
-type VulnerabilitySortKey =
-  | 'vuln_id'
-  | 'pkg_name'
-  | 'installed_version'
-  | 'fixed_version'
-  | 'severity'
-  | 'cvss_score';
 type ExposureStatus = 'high_risk' | 'findings_present' | 'unknown' | 'clear';
+type ImageStatusFilter = '__all__' | 'issues' | 'healthy' | 'scanning' | 'exposed';
+type DecisionFilter = '__all__' | PolicyDecision;
+
+const IMAGE_STATUS_FILTER_OPTIONS: Array<{ key: ImageStatusFilter; label: string }> = [
+  { key: '__all__', label: 'All image states' },
+  { key: 'issues', label: 'Operational issues' },
+  { key: 'healthy', label: 'Healthy' },
+  { key: 'scanning', label: 'Scanning' },
+  { key: 'exposed', label: 'Findings present' },
+];
+
+const DECISION_FILTER_OPTIONS: Array<{ key: DecisionFilter; label: string }> = [
+  { key: '__all__', label: 'All decisions' },
+  { key: 'blocked', label: 'Blocked' },
+  { key: 'warning', label: 'Warning' },
+  { key: 'allowed', label: 'Allowed' },
+];
 
 function getStatusRank(status: string) {
   return STATUS_PRIORITY[status] ?? 99;
@@ -134,14 +119,6 @@ function getStatusRank(status: string) {
 
 function getExposureRank(status: ExposureStatus) {
   return EXPOSURE_PRIORITY[status] ?? 99;
-}
-
-function getTintedChipStyle(accent: string, textColor = accent) {
-  return {
-    background: `color-mix(in srgb, ${accent} 14%, var(--status-card-bg))`,
-    border: `1px solid color-mix(in srgb, ${accent} 24%, var(--status-card-border))`,
-    color: textColor,
-  };
 }
 
 function getEffectiveScanStatus(status: string, externalStatus?: string) {
@@ -168,17 +145,6 @@ function getOperationalStatusLabel(status: string) {
   };
 
   return labels[status] ?? formatStatusLabel(status);
-}
-
-function formatExposureStatusLabel(status: ExposureStatus) {
-  const labels: Record<ExposureStatus, string> = {
-    high_risk: 'high risk',
-    findings_present: 'findings present',
-    unknown: 'unknown',
-    clear: 'clear',
-  };
-
-  return labels[status];
 }
 
 function getExposureStatus(
@@ -214,13 +180,6 @@ function isClearStatus(item: StatusPageItem, operationalStatus?: string) {
   );
 }
 
-function getPrimaryAccent(operationalStatus: string, exposureStatus: ExposureStatus) {
-  if (operationalStatus !== 'healthy') {
-    return STATUS_COLOR[operationalStatus] ?? STATUS_COLOR.pending;
-  }
-  return EXPOSURE_COLOR[exposureStatus] ?? STATUS_COLOR.healthy;
-}
-
 function compareItemsByPriority(left: StatusPageItem, right: StatusPageItem) {
   const leftStatus = getPresentationStatus(left);
   const rightStatus = getPresentationStatus(right);
@@ -239,27 +198,6 @@ function compareItemsByPriority(left: StatusPageItem, right: StatusPageItem) {
   );
 }
 
-function TagBadge({ tag }: { tag: string }) {
-  return (
-    <span
-      className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold"
-      style={{
-        background: 'var(--status-pill-bg)',
-        border: '1px solid var(--status-pill-border)',
-        color: 'var(--text-primary)',
-      }}
-    >
-      <span
-        className="text-[10px] font-semibold uppercase tracking-[0.14em]"
-        style={{ color: 'var(--text-muted)' }}
-      >
-        Tag
-      </span>
-      <span className="font-mono text-[12px] leading-none">{tag}</span>
-    </span>
-  );
-}
-
 function compactErrorSummary(message?: string) {
   const firstLine = message
     ?.split('\n')
@@ -267,127 +205,6 @@ function compactErrorSummary(message?: string) {
     .find(Boolean);
   if (!firstLine) return '';
   return firstLine.length > 180 ? `${firstLine.slice(0, 177)}...` : firstLine;
-}
-
-function summarizeWatchCoverage(blockedPolicyDetails: BlockedPolicyDetailsView) {
-  const totalWatches = blockedPolicyDetails.matchedWatches.length;
-  if (totalWatches === 0) return '';
-
-  const activeIgnoreCount = blockedPolicyDetails.matchedWatches.filter(
-    (watch) => watch.ignoreRuleStatus === 'active_ignore'
-  ).length;
-  if (activeIgnoreCount > 0) {
-    return `${activeIgnoreCount}/${totalWatches} watches have active ignore`;
-  }
-
-  const unavailableCount = blockedPolicyDetails.matchedWatches.filter(
-    (watch) => watch.ignoreRuleStatus === 'status_unavailable'
-  ).length;
-  if (unavailableCount > 0) {
-    return `${unavailableCount}/${totalWatches} watch statuses unavailable`;
-  }
-
-  return `${totalWatches} watches with no ignore`;
-}
-
-function buildItemNote(
-  item: StatusPageItem,
-  blockedPolicyDetails: BlockedPolicyDetailsView | null
-) {
-  if (blockedPolicyDetails) {
-    const details: string[] = [];
-    if (blockedPolicyDetails.totalViolations) {
-      details.push(`${blockedPolicyDetails.totalViolations} violations`);
-    }
-    if (blockedPolicyDetails.blockingPolicies.length > 0) {
-      details.push(
-        `${countBlockedPolicyList(blockedPolicyDetails.blockingPolicies)} blocking policies`
-      );
-    }
-    const watchCoverage = summarizeWatchCoverage(blockedPolicyDetails);
-    if (watchCoverage) {
-      details.push(watchCoverage);
-    }
-    return details.length > 0 ? details.join(' · ') : blockedPolicyDetails.summary;
-  }
-
-  if (item.error_message) {
-    return compactErrorSummary(item.error_message);
-  }
-
-  const parts: string[] = [];
-  if (item.critical_count > 0) parts.push(`${item.critical_count} critical`);
-  if (item.high_count > 0) parts.push(`${item.high_count} high`);
-  if (item.medium_count > 0) parts.push(`${item.medium_count} medium`);
-  if (item.low_count > 0) parts.push(`${item.low_count} low`);
-  return parts.length > 0 ? parts.join(' · ') : 'No active findings';
-}
-
-function BlockedPolicyWatchBadge({
-  status,
-}: {
-  status: 'active_ignore' | 'no_ignore' | 'status_unavailable';
-}) {
-  const palette =
-    status === 'active_ignore'
-      ? {
-          color: '#b45309',
-          background: 'rgba(245,158,11,0.12)',
-          borderColor: 'rgba(245,158,11,0.26)',
-        }
-      : status === 'status_unavailable'
-        ? {
-            color: '#9a3412',
-            background: 'rgba(251,146,60,0.12)',
-            borderColor: 'rgba(251,146,60,0.28)',
-          }
-        : {
-            color: 'var(--text-secondary)',
-            background: 'var(--status-pill-bg)',
-            borderColor: 'var(--status-pill-border)',
-          };
-
-  return (
-    <span
-      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
-      style={palette}
-    >
-      {formatIgnoreRuleStatusLabel(status)}
-    </span>
-  );
-}
-
-function BlockedPolicyWatchList({
-  watches,
-  compact = false,
-}: {
-  watches: BlockedPolicyDetailsView['matchedWatches'];
-  compact?: boolean;
-}) {
-  if (watches.length === 0) return null;
-
-  return (
-    <div className="space-y-2">
-      {watches.map((watch) => (
-        <div
-          key={`${watch.name}-${watch.ignoreRuleStatus}`}
-          className={`flex flex-col gap-2 rounded-xl border ${compact ? 'px-3 py-2' : 'px-3 py-2.5'} sm:flex-row sm:items-center sm:justify-between`}
-          style={{
-            borderColor: 'rgba(245,158,11,0.18)',
-            background: 'color-mix(in srgb, rgba(245,158,11,0.06) 60%, var(--status-card-bg))',
-          }}
-        >
-          <span
-            className={`break-all ${compact ? 'text-[12px]' : 'text-[13px]'}`}
-            style={{ color: 'var(--text-primary)' }}
-          >
-            {watch.name}
-          </span>
-          <BlockedPolicyWatchBadge status={watch.ignoreRuleStatus} />
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function getRefreshCadence(lastLoadedAt: number | null, now: number) {
@@ -414,109 +231,6 @@ function useTicker(intervalMs: number) {
   return now;
 }
 
-function RunningScanVisualization({
-  provider,
-  currentStep,
-  status,
-  externalStatus,
-  startedAt,
-  compact = false,
-}: {
-  provider?: string;
-  currentStep?: string;
-  status: string;
-  externalStatus?: string;
-  startedAt?: string;
-  compact?: boolean;
-}) {
-  const providerKey = (provider ?? '').toLowerCase();
-  const isXray = providerKey === 'xray';
-  const accent = isXray ? '#f59e0b' : '#60a5fa';
-  const accentSoft = isXray ? 'rgba(245,158,11,0.14)' : 'rgba(96,165,250,0.16)';
-  const resolvedStatus = getEffectiveScanStatus(status, externalStatus);
-  const detail = currentStep ? formatStatusLabel(currentStep) : formatStatusLabel(resolvedStatus);
-
-  return (
-    <div
-      className={`relative overflow-hidden rounded-[24px] border px-4 ${compact ? 'py-3' : 'py-4'}`}
-      style={{
-        background: `linear-gradient(135deg, ${accentSoft}, color-mix(in srgb, var(--status-card-bg) 88%, transparent))`,
-        borderColor: `color-mix(in srgb, ${accent} 22%, var(--status-card-border))`,
-      }}
-    >
-      <div
-        className="absolute inset-y-0 left-0 w-20 opacity-70"
-        style={{
-          background: `radial-gradient(circle at left center, ${accentSoft}, transparent 72%)`,
-        }}
-      />
-      <div className="relative flex items-center justify-between gap-4">
-        <div className="space-y-1.5">
-          <p
-            className="text-[11px] font-semibold uppercase tracking-[0.14em]"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            {isXray ? 'Xray pipeline active' : 'Scan pipeline active'}
-          </p>
-          <p
-            className={`font-semibold ${compact ? 'text-sm' : 'text-base'}`}
-            style={{ color: 'var(--text-primary)' }}
-          >
-            {detail}
-          </p>
-          <p className="text-[12px] leading-5" style={{ color: 'var(--text-secondary)' }}>
-            {startedAt
-              ? `Started ${timeAgo(startedAt)}`
-              : 'Live scan data is still arriving for this tag.'}
-          </p>
-        </div>
-
-        <div
-          className={`relative shrink-0 ${compact ? 'h-14 w-28' : 'h-16 w-32'}`}
-          aria-hidden="true"
-        >
-          {[0, 1, 2].map((lane) => (
-            <span
-              key={`lane-${lane}`}
-              className="absolute left-0 right-7 h-px"
-              style={{
-                top: `${18 + lane * 12}px`,
-                background: `linear-gradient(90deg, transparent, ${accent}, transparent)`,
-                opacity: 0.5,
-              }}
-            />
-          ))}
-          {[0, 1, 2].map((dot) => (
-            <span
-              key={`dot-${dot}`}
-              className="absolute"
-              style={{ left: `${12 + dot * 18}px`, top: `${13 + dot * 12}px` }}
-            >
-              <span
-                className="absolute inline-flex size-3 animate-ping rounded-full"
-                style={{
-                  background: accent,
-                  opacity: 0.45,
-                  animationDelay: `${dot * 220}ms`,
-                  animationDuration: '1.8s',
-                }}
-              />
-              <span
-                className="relative inline-flex size-3 rounded-full border border-white/50"
-                style={{ background: accent }}
-              />
-            </span>
-          ))}
-          <span
-            className="absolute right-1 top-1/2 size-8 -translate-y-1/2 rounded-full border-2 animate-pulse"
-            style={{ borderColor: accent, boxShadow: `0 0 0 4px ${accentSoft}` }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function StatusDot({ status }: { status: string }) {
   const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
   return (
@@ -541,28 +255,6 @@ function StatusDot({ status }: { status: string }) {
         />
       </span>
       {formatStatusLabel(status)}
-    </span>
-  );
-}
-
-function StateChip({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <span
-      className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-medium"
-      style={{
-        background: `color-mix(in srgb, ${color} 12%, var(--status-pill-bg))`,
-        border: `1px solid color-mix(in srgb, ${color} 22%, var(--status-pill-border))`,
-        color: 'var(--text-secondary)',
-      }}
-    >
-      <span className="size-2.5 rounded-full" style={{ background: color }} />
-      <span
-        className="text-[10px] font-semibold uppercase tracking-[0.12em]"
-        style={{ color: 'var(--text-muted)' }}
-      >
-        {label}
-      </span>
-      <span style={{ color: 'var(--text-primary)' }}>{value}</span>
     </span>
   );
 }
@@ -659,17 +351,6 @@ function getPolicyDecisionMeta(decision: PolicyDecision) {
   return { label: 'Allowed', color: 'success' as const, tone: '#34d399' };
 }
 
-function getRiskScore(item: StatusPageItem) {
-  const weighted =
-    item.critical_count * 20 + item.high_count * 8 + item.medium_count * 3 + item.low_count;
-  const operationalStatus = getPresentationStatus(item);
-  const withOperationalFloor =
-    operationalStatus === 'failed' || operationalStatus === 'blocked_by_xray_policy'
-      ? Math.max(weighted, 70)
-      : weighted;
-  return Math.min(99, withOperationalFloor);
-}
-
 function formatScanner(scanProvider?: string) {
   if (!scanProvider) return '-';
   if (scanProvider.toLowerCase() === 'xray') return 'Xray';
@@ -677,38 +358,9 @@ function formatScanner(scanProvider?: string) {
   return scanProvider;
 }
 
-function StatusBoardBadge({ label, color }: { label: string; color: string }) {
-  return (
-    <span
-      className="inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-full px-3 py-1 text-[13px] font-medium"
-      style={{ color }}
-    >
-      <span className="size-2.5 rounded-full" style={{ background: color }} />
-      {label}
-    </span>
-  );
-}
-
 function formatScanHistoryOptionLabel(scan: StatusPageScanSummary) {
   const effectiveStatus = getEffectiveScanStatus(scan.scan_status, scan.external_status);
   return `${scan.is_latest ? 'Latest' : 'Previous'} · ${formatStatusLabel(effectiveStatus)} · ${timeAgo(scan.observed_at)}`;
-}
-
-async function listStatusPageScanHistoryWithRetry(slug: string, scanId: string, attempts = 3) {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      return await listStatusPageScanHistory(slug, scanId);
-    } catch (error) {
-      lastError = error;
-      if (attempt < attempts - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
-      }
-    }
-  }
-
-  throw lastError;
 }
 
 function buildFallbackScanSummary(item: StatusPageItem): StatusPageScanSummary {
@@ -744,91 +396,56 @@ function getRecentScanStripScans(item: StatusPageItem, scans?: StatusPageScanSum
 }
 
 function RecentScanStrip({
-  slug,
   item,
   scans,
-  onHistoryLoaded,
   compact,
+  onOpen,
 }: {
-  slug: string;
   item: StatusPageItem;
   scans?: StatusPageScanSummary[];
-  onHistoryLoaded?: (scanId: string, scans: StatusPageScanSummary[]) => void;
   compact?: boolean;
+  onOpen: (item: StatusPageItem) => void;
 }) {
-  const [localScans, setLocalScans] = useState<StatusPageScanSummary[] | undefined>(scans);
-  const [localLoading, setLocalLoading] = useState(false);
-
-  useEffect(() => {
-    return deferEffect(() => {
-      setLocalScans(scans);
-    });
-  }, [scans]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const cancelDeferred = deferEffect(() => {
-      if (scans !== undefined || !item.latest_scan_id) {
-        return;
-      }
-
-      setLocalLoading(true);
-
-      listStatusPageScanHistoryWithRetry(slug, item.latest_scan_id)
-        .then((history) => {
-          if (cancelled) return;
-          setLocalScans(history);
-          onHistoryLoaded?.(item.latest_scan_id, history);
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setLocalScans([]);
-        })
-        .finally(() => {
-          if (!cancelled) {
-            setLocalLoading(false);
-          }
-        });
-    });
-
-    return () => {
-      cancelled = true;
-      cancelDeferred();
-    };
-  }, [item.latest_scan_id, onHistoryLoaded, scans, slug]);
-
   const tone = getServiceTone(item);
-  const effectiveScans = localScans ?? scans;
-  const recentScans = getRecentScanStripScans(item, effectiveScans);
+  const hasLoadedHistory = scans !== undefined;
+  const recentScans = getRecentScanStripScans(item, scans);
   const latestScan = recentScans[recentScans.length - 1] ?? buildFallbackScanSummary(item);
-  const leadingPlaceholders = Math.max(0, RECENT_SCAN_SEGMENTS - recentScans.length);
-  const latestLabel = localLoading
-    ? 'Loading older scans'
-    : recentScans.length === 1
-      ? 'Single recorded scan'
-      : `${recentScans.length} recent scans`;
+
+  if (!hasLoadedHistory) {
+    return (
+      <div className="flex gap-1.5" aria-label="Loading scan history">
+        {SCAN_HISTORY_SKELETON_KEYS.slice(0, compact ? 5 : 8).map((key) => (
+          <Skeleton
+            key={key}
+            className={compact ? 'h-14 w-2.5 rounded-[3px]' : 'h-10 flex-1 rounded-[3px]'}
+          />
+        ))}
+      </div>
+    );
+  }
 
   if (compact) {
     return (
       <div className="flex gap-1.5 overflow-hidden" aria-label="14 day scan history">
-        {Array.from({ length: leadingPlaceholders }, (_, index) => (
-          <span
-            key={`${item.latest_scan_id}:empty:${index}`}
-            className="h-14 w-2.5 shrink-0 rounded-[3px] bg-default-100"
-            aria-hidden="true"
-          />
-        ))}
         {recentScans.map((scan) => {
           const status = getEffectiveScanStatus(scan.scan_status, scan.external_status);
           const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
           return (
-            <span
-              key={scan.scan_id}
-              className="h-14 w-2.5 shrink-0 rounded-[3px]"
-              style={{ background: color, opacity: scan.is_latest ? 1 : 0.84 }}
-              title={formatScanHistoryOptionLabel(scan)}
-              aria-label={formatScanHistoryOptionLabel(scan)}
-            />
+            <Tooltip key={scan.scan_id} delay={100}>
+              <Tooltip.Trigger aria-label={formatScanHistoryOptionLabel(scan)}>
+                <button
+                  type="button"
+                  aria-label={formatScanHistoryOptionLabel(scan)}
+                  className="h-14 w-2.5 shrink-0 rounded-[3px] outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  style={{ background: color, opacity: scan.is_latest ? 1 : 0.84 }}
+                  onClick={() => onOpen(item)}
+                />
+              </Tooltip.Trigger>
+              <Tooltip.Content showArrow>
+                <Tooltip.Arrow />
+                {formatScanHistoryOptionLabel(scan)}
+              </Tooltip.Content>
+            </Tooltip>
           );
         })}
       </div>
@@ -838,13 +455,6 @@ function RecentScanStrip({
   return (
     <div className="space-y-3">
       <div className="flex gap-1.5 overflow-hidden" aria-label="Recent scan history">
-        {Array.from({ length: leadingPlaceholders }, (_, index) => (
-          <span
-            key={`${item.latest_scan_id}:empty:${index}`}
-            className="h-10 flex-1 rounded-[3px] bg-default-100"
-            aria-hidden="true"
-          />
-        ))}
         {recentScans.map((scan) => {
           const status = getEffectiveScanStatus(scan.scan_status, scan.external_status);
           const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
@@ -862,11 +472,128 @@ function RecentScanStrip({
       <div className="flex items-center gap-4 text-[12px] text-default-500">
         <span>Older scans</span>
         <span className="h-px flex-1 bg-divider" />
-        <span style={{ color: tone.color }}>{latestLabel}</span>
+        <span style={{ color: tone.color }}>{recentScans.length} recent scans</span>
         <span className="h-px flex-1 bg-divider" />
         <span>{timeAgo(latestScan.observed_at)}</span>
       </div>
     </div>
+  );
+}
+
+function ImageStatusChips({ item }: { item: StatusPageItem }) {
+  const decisionMeta = getPolicyDecisionMeta(getPolicyDecision(item));
+  const operationalStatus = getPresentationStatus(item);
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Chip color={decisionMeta.color} size="sm" variant="soft">
+        <Chip.Label>{decisionMeta.label}</Chip.Label>
+      </Chip>
+      <Chip size="sm" variant="secondary">
+        <Chip.Label>{getOperationalStatusLabel(operationalStatus)}</Chip.Label>
+      </Chip>
+    </div>
+  );
+}
+
+function FindingDeltas({ item }: { item: StatusPageItem }) {
+  const deltas = [
+    { label: 'critical', value: item.delta_critical_count },
+    { label: 'high', value: item.delta_high_count },
+    { label: 'medium', value: item.delta_medium_count },
+    { label: 'low', value: item.delta_low_count },
+  ];
+  const hasPreviousScan = deltas.some((delta) => delta.value !== undefined);
+  if (!hasPreviousScan) return null;
+
+  const changed = deltas.filter((delta) => delta.value && delta.value !== 0).slice(0, 2);
+  if (changed.length === 0) {
+    return <p className="mt-1 text-[11px] text-muted">No finding changes</p>;
+  }
+
+  return (
+    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] tabular-nums">
+      {changed.map((delta) => (
+        <span
+          key={delta.label}
+          className={Number(delta.value) > 0 ? 'text-danger' : 'text-success'}
+        >
+          {Number(delta.value) > 0 ? '+' : ''}
+          {delta.value} {delta.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function MobileImageStatusCard({
+  item,
+  scans,
+  onOpen,
+}: {
+  item: StatusPageItem;
+  scans?: StatusPageScanSummary[];
+  onOpen: (item: StatusPageItem) => void;
+}) {
+  const totalFindings = getFindingTotal(item);
+
+  return (
+    <Card className="border border-divider/70 bg-surface/70 p-4 shadow-sm" variant="secondary">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted">
+            <PackageIcon size={17} aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <button
+              type="button"
+              className="block max-w-full truncate text-left text-sm font-semibold text-foreground hover:underline"
+              onClick={() => onOpen(item)}
+            >
+              {item.image_name}
+            </button>
+            <p className="mt-0.5 truncate font-mono text-[11px] text-muted">{item.image_tag}</p>
+          </div>
+        </div>
+        <Button
+          isIconOnly
+          aria-label={`View scan history for ${item.image_name}:${item.image_tag}`}
+          size="sm"
+          variant="tertiary"
+          onPress={() => onOpen(item)}
+        >
+          <ArrowRight01Icon size={16} aria-hidden />
+        </Button>
+      </div>
+
+      <div className="mt-3">
+        <ImageStatusChips item={item} />
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+        <div>
+          <p className="text-muted">Critical</p>
+          <p className="mt-0.5 font-semibold tabular-nums text-danger">{item.critical_count}</p>
+        </div>
+        <div>
+          <p className="text-muted">High</p>
+          <p className="mt-0.5 font-semibold tabular-nums text-warning">{item.high_count}</p>
+        </div>
+        <div>
+          <p className="text-muted">All findings</p>
+          <p className="mt-0.5 font-semibold tabular-nums text-foreground">{totalFindings}</p>
+        </div>
+      </div>
+      <FindingDeltas item={item} />
+
+      <div className="mt-4 border-t border-divider/70 pt-3">
+        <RecentScanStrip compact item={item} onOpen={onOpen} scans={scans} />
+        <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted">
+          <span>{formatScanner(item.scan_provider)}</span>
+          <span>Scanned {timeAgo(item.observed_at)}</span>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -910,12 +637,17 @@ function ScanTimeline({
       </div>
 
       {isLoading ? (
-        <div className="flex h-10 items-center justify-center">
-          <div className="size-4 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500" />
+        <div className="flex h-12 items-center gap-3">
+          {Array.from({ length: 5 }, (_, index) => (
+            <Skeleton
+              key={index}
+              className={`size-4 shrink-0 rounded-full ${index < 4 ? 'mr-auto' : ''}`}
+            />
+          ))}
         </div>
       ) : (
         <div
-          className="flex items-center overflow-x-auto py-1"
+          className="flex w-full items-center py-1"
           role="radiogroup"
           aria-label="Scan history timeline"
         >
@@ -925,46 +657,55 @@ function ScanTimeline({
             const isSelected = scan.scan_id === selectedId;
 
             return (
-              <div key={scan.scan_id} className="flex shrink-0 items-center">
+              <div key={scan.scan_id} className="contents">
                 {i > 0 && (
                   <div
-                    className="h-[2px] w-6 shrink-0"
+                    className="h-px min-w-3 flex-1"
                     style={{ background: 'var(--border-subtle)' }}
                   />
                 )}
 
                 {/* Touch target wraps a smaller visual dot */}
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={isSelected}
-                  aria-label={formatScanHistoryOptionLabel(scan)}
-                  onClick={() => onSelect(scan.scan_id)}
-                  onMouseEnter={() => setHoveredId(scan.scan_id)}
-                  onMouseLeave={() => setHoveredId(null)}
-                  className="relative flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-                >
-                  <span
-                    className="relative flex size-4 shrink-0 items-center justify-center rounded-full transition-all duration-200"
-                    style={{
-                      background: color,
-                      boxShadow: isSelected
-                        ? `0 0 0 3px color-mix(in srgb, ${color} 28%, transparent)`
-                        : undefined,
-                      transform: isSelected ? 'scale(1.35)' : undefined,
-                    }}
-                  >
-                    {scan.is_latest && (
+                <Tooltip delay={100}>
+                  <Tooltip.Trigger aria-label={formatScanHistoryOptionLabel(scan)}>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => onSelect(scan.scan_id)}
+                      onFocus={() => setHoveredId(scan.scan_id)}
+                      onBlur={() => setHoveredId(null)}
+                      onMouseEnter={() => setHoveredId(scan.scan_id)}
+                      onMouseLeave={() => setHoveredId(null)}
+                      className="relative flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                    >
                       <span
-                        className="absolute -right-[3px] -top-[3px] size-[7px] rounded-full"
+                        className="relative flex size-4 shrink-0 items-center justify-center rounded-full transition-all duration-200"
                         style={{
-                          background: 'var(--status-card-bg)',
-                          border: `2px solid ${color}`,
+                          background: color,
+                          boxShadow: isSelected
+                            ? `0 0 0 3px color-mix(in srgb, ${color} 28%, transparent)`
+                            : undefined,
+                          transform: isSelected ? 'scale(1.35)' : undefined,
                         }}
-                      />
-                    )}
-                  </span>
-                </button>
+                      >
+                        {scan.is_latest && (
+                          <span
+                            className="absolute -right-[3px] -top-[3px] size-[7px] rounded-full"
+                            style={{
+                              background: 'var(--status-card-bg)',
+                              border: `2px solid ${color}`,
+                            }}
+                          />
+                        )}
+                      </span>
+                    </button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Content showArrow>
+                    <Tooltip.Arrow />
+                    {formatScanHistoryOptionLabel(scan)}
+                  </Tooltip.Content>
+                </Tooltip>
               </div>
             );
           })}
@@ -990,7 +731,7 @@ function ScanTimeline({
   );
 }
 
-function StatusItemVulnerabilityModal({
+function StatusItemHistoryModal({
   slug,
   item,
   state,
@@ -1005,30 +746,13 @@ function StatusItemVulnerabilityModal({
 }) {
   const [history, setHistory] = useState<StatusPageScanSummary[]>([]);
   const [selectedScanId, setSelectedScanId] = useState(() => item?.latest_scan_id ?? '');
-  const [page, setPage] = useState(1);
-  const [severityFilter, setSeverityFilter] = useState('');
-  const [pkgInput, setPkgInput] = useState('');
-  const [pkgFilter, setPkgFilter] = useState('');
-  const [minCvss, setMinCvss] = useState(0);
-  const [minCvssInput, setMinCvssInput] = useState('');
-  const [hasFix, setHasFix] = useState(false);
-  const [sortBy, setSortBy] = useState<VulnerabilitySortKey>('severity');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [historyResponseKey, setHistoryResponseKey] = useState('');
   const [historyError, setHistoryError] = useState('');
+  const [scanAccess, setScanAccess] = useState<'checking' | 'allowed' | 'denied'>('checking');
   const [fetchedSelectedScan, setFetchedSelectedScan] = useState<{
     scanId: string;
     scan: StatusPageScanSummary | null;
   }>({ scanId: '', scan: null });
-  const [vulnerabilityState, setVulnerabilityState] = useState<{
-    requestKey: string;
-    data: Vulnerability[];
-    total: number;
-    error: string;
-  }>({ requestKey: '', data: [], total: 0, error: '' });
-  const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
-  const vulnerabilityDetailsModal = useOverlayState();
-  const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const historyRequestKey = item?.latest_scan_id ? `${slug}:${item.latest_scan_id}` : '';
   const historyLoading = Boolean(historyRequestKey) && historyResponseKey !== historyRequestKey;
@@ -1039,53 +763,15 @@ function StatusItemVulnerabilityModal({
   const selectedScan =
     historyMatch ??
     (fetchedSelectedScan.scanId === selectedScanId ? fetchedSelectedScan.scan : null);
-  const vulnerabilityRequestKey = selectedScanId
-    ? [
-        slug,
-        selectedScanId,
-        page,
-        severityFilter,
-        pkgFilter,
-        hasFix ? '1' : '0',
-        String(minCvss),
-        sortBy,
-        sortDir,
-      ].join('|')
-    : '';
-  const loading =
-    Boolean(vulnerabilityRequestKey) && vulnerabilityState.requestKey !== vulnerabilityRequestKey;
-  const vulns =
-    vulnerabilityState.requestKey === vulnerabilityRequestKey ? vulnerabilityState.data : [];
-  const vulnTotal =
-    vulnerabilityState.requestKey === vulnerabilityRequestKey ? vulnerabilityState.total : 0;
-  const error =
-    vulnerabilityState.requestKey === vulnerabilityRequestKey ? vulnerabilityState.error : '';
-
-  const reportHref = (() => {
-    if (!selectedScanId) return '';
-    const params = new URLSearchParams({
-      scanId: selectedScanId,
-      sortBy,
-      sortDir,
-    });
-    if (severityFilter) params.set('severity', severityFilter);
-    if (pkgInput.trim()) params.set('pkg', pkgInput.trim());
-    if (minCvss > 0) params.set('minCvss', String(minCvss));
-    if (hasFix) params.set('hasFix', 'true');
-    return `/status/${encodeURIComponent(slug)}/report?${params.toString()}`;
-  })();
-
-  useEffect(() => {
-    if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
-    pkgDebounceRef.current = setTimeout(() => {
-      setPkgFilter(pkgInput);
-      setPage(1);
-    }, 350);
-
-    return () => {
-      if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
-    };
-  }, [pkgInput]);
+  const displayedScan = selectedScan ?? item;
+  const scanDetailsHref =
+    scanAccess === 'allowed' && selectedScanId ? `/scans/${selectedScanId}` : '';
+  const totalFindings = displayedScan
+    ? displayedScan.critical_count +
+      displayedScan.high_count +
+      displayedScan.medium_count +
+      displayedScan.low_count
+    : 0;
 
   useEffect(() => {
     if (!item?.latest_scan_id) return;
@@ -1098,14 +784,11 @@ function StatusItemVulnerabilityModal({
     ])
       .then(([historyResponse, trackedScan]) => {
         if (cancelled) return;
-
         const scans =
           historyResponse.length > 0 ? historyResponse : trackedScan ? [trackedScan] : [];
 
         setHistory(scans);
-        if (item?.latest_scan_id && scans.length > 0) {
-          onHistoryLoaded?.(item.latest_scan_id, scans);
-        }
+        if (scans.length > 0) onHistoryLoaded?.(item.latest_scan_id, scans);
         setHistoryResponseKey(requestKey);
         setSelectedScanId(
           (current) =>
@@ -1146,672 +829,220 @@ function StatusItemVulnerabilityModal({
     return () => {
       cancelled = true;
     };
-  }, [slug, selectedScanId, historyMatch]);
+  }, [historyMatch, selectedScanId, slug]);
 
   useEffect(() => {
-    if (!selectedScanId) return;
+    if (!selectedScanId || !getToken()) {
+      const cancelDenied = deferEffect(() => setScanAccess('denied'));
+      return cancelDenied;
+    }
 
-    const requestKey = [
-      slug,
-      selectedScanId,
-      page,
-      severityFilter,
-      pkgFilter,
-      hasFix ? '1' : '0',
-      String(minCvss),
-      sortBy,
-      sortDir,
-    ].join('|');
-    listStatusPageItemVulnerabilities(
-      slug,
-      selectedScanId,
-      page,
-      VULN_PAGE_SIZE,
-      severityFilter || undefined,
-      pkgFilter || undefined,
-      hasFix || undefined,
-      minCvss || undefined,
-      sortBy,
-      sortDir
-    )
-      .then((result) => {
-        setVulnerabilityState({
-          requestKey,
-          data: result.data ?? [],
-          total: result.total ?? 0,
-          error: '',
-        });
+    let cancelled = false;
+    const cancelChecking = deferEffect(() => setScanAccess('checking'));
+    getScan(selectedScanId)
+      .then(() => {
+        if (!cancelled) setScanAccess('allowed');
       })
-      .catch((err) => {
-        setVulnerabilityState({
-          requestKey,
-          data: [],
-          total: 0,
-          error: err instanceof Error ? err.message : 'Failed to load vulnerabilities',
-        });
+      .catch(() => {
+        if (!cancelled) setScanAccess('denied');
       });
-  }, [slug, selectedScanId, page, severityFilter, pkgFilter, hasFix, minCvss, sortBy, sortDir]);
 
-  const effectiveScanStatus = selectedScan
-    ? getEffectiveScanStatus(selectedScan.scan_status, selectedScan.external_status)
-    : item
-      ? getEffectiveScanStatus(item.scan_status, item.external_status)
-      : 'pending';
-  const displayedScan = selectedScan ?? item;
-  const blockedPolicyDetails = useMemo(() => {
-    return getBlockedPolicyDetails(
-      selectedScan?.external_status ?? item?.external_status,
-      selectedScan?.blocked_policy_details ?? item?.blocked_policy_details,
-      selectedScan?.error_message ?? item?.error_message ?? null
-    );
-  }, [
-    item?.blocked_policy_details,
-    item?.error_message,
-    item?.external_status,
-    selectedScan?.blocked_policy_details,
-    selectedScan?.error_message,
-    selectedScan?.external_status,
-  ]);
-
-  const totalPages = Math.max(1, Math.ceil(vulnTotal / VULN_PAGE_SIZE));
-
-  function openVulnerabilityDetails(vulnerability: Vulnerability) {
-    setSelectedVulnerability(vulnerability);
-    vulnerabilityDetailsModal.open();
-  }
-
-  function closeVulnerabilityDetails() {
-    vulnerabilityDetailsModal.close();
-    setSelectedVulnerability(null);
-  }
+    return () => {
+      cancelled = true;
+      cancelChecking();
+    };
+  }, [selectedScanId]);
 
   return (
     <Modal state={state}>
       <Modal.Backdrop>
-        <Modal.Container size="lg" placement="center">
-          <Modal.Dialog className="surface-modal overflow-hidden rounded-[28px] w-[min(1120px,calc(100vw-1.5rem))] max-w-none">
-            <Modal.Body className="p-0">
-              <div className="border-b px-6 py-5" style={{ borderColor: 'var(--border-subtle)' }}>
+        <Modal.Container size="md" placement="center">
+          <Modal.Dialog className="surface-modal w-[min(720px,calc(100vw-1.5rem))] max-w-none overflow-hidden rounded-[28px]">
+            <Modal.Body className="space-y-4 p-4 sm:p-6">
+              <Card className="border border-divider/70" variant="default">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                      Vulnerability drill-down
-                    </p>
-                    <div>
-                      <h3
-                        className="font-mono text-base font-semibold sm:text-lg"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {item ? item.image_name : 'Loading item'}
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted">
+                      <PackageIcon size={18} aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                        Scan history
+                      </p>
+                      <h3 className="mt-1 truncate font-mono text-sm font-semibold text-foreground sm:text-base">
+                        {item?.image_name ?? 'Loading image'}
                       </h3>
-                      {item && (
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <TagBadge tag={item.image_tag} />
-                          {selectedScan?.is_latest === false && (
-                            <span
-                              className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                              style={{
-                                background: 'var(--status-pill-bg)',
-                                border: '1px solid var(--status-pill-border)',
-                                color: 'var(--text-secondary)',
-                              }}
-                            >
-                              Historical snapshot
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {displayedScan && (
-                        <p className="mt-1 text-[13px] leading-6 text-zinc-500">
-                          Snapshot {timeAgo(displayedScan.observed_at)}.{' '}
-                          {vulnTotal.toLocaleString()} matching finding{vulnTotal === 1 ? '' : 's'}.
+                      {item ? (
+                        <p className="mt-1 truncate font-mono text-xs text-muted">
+                          {item.image_tag}
                         </p>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                   {selectedScan ? (
                     <StatusBadge
-                      status={selectedScan.scan_status}
                       externalStatus={selectedScan.external_status}
+                      status={selectedScan.scan_status}
                     />
                   ) : item ? (
                     <StatusDot status={getPresentationStatus(item)} />
                   ) : null}
                 </div>
-              </div>
+              </Card>
 
-              <div className="space-y-4 px-6 py-5">
-                {effectiveScanStatus === 'running' ||
-                effectiveScanStatus === 'pending' ||
-                selectedScan?.scan_status === 'running' ||
-                selectedScan?.scan_status === 'pending' ? (
-                  <RunningScanVisualization
-                    provider={selectedScan?.scan_provider ?? item?.scan_provider}
-                    currentStep={selectedScan?.current_step ?? item?.current_step}
-                    status={selectedScan?.scan_status ?? item?.scan_status ?? 'pending'}
-                    externalStatus={selectedScan?.external_status ?? item?.external_status}
-                    startedAt={selectedScan?.started_at ?? item?.started_at}
-                  />
+              <div className="space-y-4">
+                {historyError ? (
+                  <Card className="border border-danger/20 bg-danger/5 p-3 text-sm text-danger">
+                    {historyError}
+                  </Card>
                 ) : null}
 
-                {blockedPolicyDetails && (
-                  <div
-                    className="rounded-3xl border p-4"
-                    style={{
-                      borderColor: 'rgba(245,158,11,0.24)',
-                      background: 'rgba(245,158,11,0.08)',
-                    }}
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p
-                        className="text-[11px] font-semibold uppercase tracking-[0.16em]"
-                        style={{ color: '#b45309' }}
-                      >
-                        Xray policy violation
-                      </p>
-                      <span
-                        className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
-                        style={{ borderColor: 'rgba(245,158,11,0.24)', color: '#b45309' }}
-                      >
-                        Findings may still be available below
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-primary)' }}>
-                      {blockedPolicyDetails.summary}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {blockedPolicyDetails.totalViolations && (
-                        <span
-                          className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
-                          style={getTintedChipStyle('#f59e0b', '#b45309')}
-                        >
-                          {blockedPolicyDetails.totalViolations} violations
-                        </span>
-                      )}
-                      {blockedPolicyDetails.blockingPolicies.length > 0 && (
-                        <span
-                          className="rounded-full border px-2.5 py-1 text-[11px]"
-                          style={getTintedChipStyle('#f59e0b', 'var(--text-secondary)')}
-                        >
-                          {countBlockedPolicyList(blockedPolicyDetails.blockingPolicies)} blocking
-                          policies
-                        </span>
-                      )}
-                      {blockedPolicyDetails.matchedWatches.length > 0 && (
-                        <span
-                          className="rounded-full border px-2.5 py-1 text-[11px]"
-                          style={getTintedChipStyle('#f59e0b', 'var(--text-secondary)')}
-                        >
-                          {blockedPolicyDetails.matchedWatches.length} watches
-                        </span>
-                      )}
-                      {blockedPolicyDetails.matchedIssues.length > 0 && (
-                        <span
-                          className="rounded-full border px-2.5 py-1 text-[11px]"
-                          style={getTintedChipStyle('#f59e0b', 'var(--text-secondary)')}
-                        >
-                          {countBlockedPolicyList(blockedPolicyDetails.matchedIssues)} matched
-                          issues
-                        </span>
-                      )}
-                    </div>
-                    <details className="mt-3 group">
-                      <summary
-                        className="cursor-pointer list-none text-[12px] font-semibold"
-                        style={{ color: '#b45309' }}
-                      >
-                        Show Xray details
-                      </summary>
-                      <div className="mt-3 space-y-3">
-                        {blockedPolicyDetails.matchedWatches.length > 0 && (
-                          <div className="space-y-2">
-                            <p
-                              className="text-[12px] font-semibold"
-                              style={{ color: 'var(--text-primary)' }}
-                            >
-                              Matched watches
-                            </p>
-                            <BlockedPolicyWatchList
-                              watches={blockedPolicyDetails.matchedWatches}
-                              compact
-                            />
-                          </div>
-                        )}
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {blockedPolicyDetails.blockingPolicies.length > 0 && (
-                            <div className="text-[12px] leading-5">
-                              <span
-                                className="font-semibold"
-                                style={{ color: 'var(--text-primary)' }}
-                              >
-                                Blocking policies:
-                              </span>{' '}
-                              <span style={{ color: 'var(--text-secondary)' }}>
-                                {compactBlockedPolicyList(blockedPolicyDetails.blockingPolicies, 3)}
-                              </span>
-                            </div>
-                          )}
-                          {blockedPolicyDetails.matchedPolicies.length > 0 && (
-                            <div className="text-[12px] leading-5">
-                              <span
-                                className="font-semibold"
-                                style={{ color: 'var(--text-primary)' }}
-                              >
-                                Matched policies:
-                              </span>{' '}
-                              <span style={{ color: 'var(--text-secondary)' }}>
-                                {compactBlockedPolicyList(blockedPolicyDetails.matchedPolicies, 3)}
-                              </span>
-                            </div>
-                          )}
-                          {blockedPolicyDetails.matchedIssues.length > 0 && (
-                            <div className="text-[12px] leading-5">
-                              <span
-                                className="font-semibold"
-                                style={{ color: 'var(--text-primary)' }}
-                              >
-                                Matched issues:
-                              </span>{' '}
-                              <span style={{ color: 'var(--text-secondary)' }}>
-                                {compactBlockedPolicyList(blockedPolicyDetails.matchedIssues, 3)}
-                              </span>
-                            </div>
-                          )}
-                          {blockedPolicyDetails.artifact && (
-                            <div className="text-[12px] leading-5">
-                              <span
-                                className="font-semibold"
-                                style={{ color: 'var(--text-primary)' }}
-                              >
-                                Artifact:
-                              </span>{' '}
-                              <span
-                                className="break-all"
-                                style={{ color: 'var(--text-secondary)' }}
-                              >
-                                {blockedPolicyDetails.artifact}
-                              </span>
-                            </div>
-                          )}
-                          {blockedPolicyDetails.manifest && (
-                            <div className="text-[12px] leading-5">
-                              <span
-                                className="font-semibold"
-                                style={{ color: 'var(--text-primary)' }}
-                              >
-                                Manifest:
-                              </span>{' '}
-                              <span
-                                className="break-all"
-                                style={{ color: 'var(--text-secondary)' }}
-                              >
-                                {blockedPolicyDetails.manifest}
-                              </span>
-                            </div>
-                          )}
-                          {blockedPolicyDetails.jfrog && (
-                            <div className="text-[12px] leading-5 sm:col-span-2">
-                              <span
-                                className="font-semibold"
-                                style={{ color: 'var(--text-primary)' }}
-                              >
-                                JFrog:
-                              </span>{' '}
-                              <span
-                                className="break-all"
-                                style={{ color: 'var(--text-secondary)' }}
-                              >
-                                {blockedPolicyDetails.jfrog}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </details>
-                    <div
-                      className="mt-3 border-t pt-3 text-[12px]"
-                      style={{
-                        borderColor: 'rgba(245,158,11,0.16)',
-                        color: 'var(--text-secondary)',
-                      }}
-                    >
-                      Select a previous scan if you want to compare how the policy block and
-                      findings changed across snapshots.
-                    </div>
-                  </div>
-                )}
-
-                {historyError && (
-                  <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-500 dark:text-red-400">
-                    {historyError}
-                  </div>
-                )}
-
                 <ScanTimeline
+                  isLoading={historyLoading}
+                  onSelect={setSelectedScanId}
                   scans={history}
                   selectedId={selectedScanId}
-                  onSelect={(id) => {
-                    setSelectedScanId(id);
-                    setPage(1);
-                  }}
-                  isLoading={historyLoading}
                 />
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Select
-                    value={severityFilter || '__all__'}
-                    onChange={(value) => {
-                      setSeverityFilter(String(value === '__all__' ? '' : (value ?? '')));
-                      setPage(1);
-                    }}
-                    className="w-full min-w-[180px] sm:w-auto"
-                    aria-label="Filter vulnerabilities by severity"
+                {displayedScan ? (
+                  <Card
+                    className="border border-divider/70 bg-surface-secondary/70 p-4"
+                    variant="secondary"
                   >
-                    <Select.Trigger className={STATUS_SELECT_TRIGGER_CLS}>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {VULN_SEVERITY_OPTIONS.map((option) => (
-                          <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
-                            {option.label}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium text-muted">
+                          {selectedScan?.is_latest === false ? 'Previous scan' : 'Latest scan'}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">
+                          {formatScanner(displayedScan.scan_provider)} ·{' '}
+                          {timeAgo(displayedScan.observed_at)}
+                        </p>
+                      </div>
+                      <Chip size="sm" variant="secondary">
+                        <Chip.Label>{totalFindings.toLocaleString()} findings</Chip.Label>
+                      </Chip>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {[
+                        {
+                          label: 'Critical',
+                          value: displayedScan.critical_count,
+                          color: 'text-danger',
+                        },
+                        { label: 'High', value: displayedScan.high_count, color: 'text-warning' },
+                        {
+                          label: 'Medium',
+                          value: displayedScan.medium_count,
+                          color: 'text-warning',
+                        },
+                        { label: 'Low', value: displayedScan.low_count, color: 'text-muted' },
+                      ].map((metric) => (
+                        <div key={metric.label} className="rounded-xl bg-surface p-3">
+                          <p className="text-[11px] font-medium text-muted">{metric.label}</p>
+                          <p className={`mt-1 text-lg font-semibold tabular-nums ${metric.color}`}>
+                            {metric.value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                ) : null}
 
-                  <input
-                    type="text"
-                    value={pkgInput}
-                    onChange={(event) => {
-                      setPkgInput(event.target.value);
-                    }}
-                    placeholder="Package name"
-                    aria-label="Filter vulnerabilities by package name"
-                    className={`${STATUS_INPUT_CLS} min-w-[180px] flex-1`}
-                    style={{ color: 'var(--text-primary)' }}
-                  />
-
-                  <input
-                    type="number"
-                    min={0}
-                    max={10}
-                    step={0.1}
-                    value={minCvssInput}
-                    onChange={(event) => {
-                      setMinCvssInput(event.target.value);
-                      const value = parseFloat(event.target.value);
-                      setMinCvss(Number.isNaN(value) ? 0 : value);
-                      setPage(1);
-                    }}
-                    placeholder="Min CVSS"
-                    aria-label="Filter vulnerabilities by minimum CVSS score"
-                    className={`${STATUS_INPUT_CLS} w-[120px]`}
-                    style={{ color: 'var(--text-primary)' }}
-                  />
-
-                  <Button
-                    size="sm"
-                    variant={hasFix ? 'primary' : 'secondary'}
-                    onPress={() => {
-                      setHasFix((value) => !value);
-                      setPage(1);
-                    }}
-                    className="rounded-full px-4 text-sm font-medium"
-                  >
-                    Has Fix
-                  </Button>
-                </div>
-
-                {error && (
-                  <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-500 dark:text-red-400">
-                    {error}
-                  </div>
-                )}
-
-                <div
-                  className="overflow-hidden rounded-3xl"
-                  style={{
-                    background: 'var(--status-card-bg)',
-                    border: '1px solid var(--status-card-border)',
-                  }}
-                >
-                  <Table variant="secondary">
-                    <Table.ScrollContainer>
-                      <Table.Content
-                        aria-label="Status page vulnerabilities"
-                        className="min-w-[840px]"
-                      >
-                        <Table.Header>
-                          {(
-                            [
-                              { label: 'CVE ID', key: 'vuln_id' },
-                              { label: 'Package', key: 'pkg_name' },
-                              { label: 'Installed', key: 'installed_version' },
-                              { label: 'Fixed In', key: 'fixed_version' },
-                              { label: 'Severity', key: 'severity' },
-                              { label: 'CVSS', key: 'cvss_score' },
-                            ] as { label: string; key: VulnerabilitySortKey }[]
-                          ).map(({ label, key }) => {
-                            const active = sortBy === key;
-                            return (
-                              <Table.Column key={key} isRowHeader={key === 'vuln_id'}>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (active) {
-                                      setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'));
-                                    } else {
-                                      setSortBy(key);
-                                      setSortDir('asc');
-                                    }
-                                    setPage(1);
-                                  }}
-                                  className="inline-flex items-center gap-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-                                  style={{ color: active ? 'var(--accent)' : 'var(--text-faint)' }}
-                                  aria-label={`Sort vulnerabilities by ${label}`}
-                                >
-                                  <span>{label}</span>
-                                  {active && <span>{sortDir === 'desc' ? '↓' : '↑'}</span>}
-                                </button>
-                              </Table.Column>
-                            );
-                          })}
-                        </Table.Header>
-                        <Table.Body>
-                          {loading ? (
-                            <Table.Row id="loading">
-                              <Table.Cell colSpan={6}>
-                                <div className="py-12 text-center">
-                                  <div className="flex justify-center">
-                                    <div className="size-6 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500" />
-                                  </div>
-                                </div>
-                              </Table.Cell>
-                            </Table.Row>
-                          ) : vulns.length === 0 ? (
-                            <Table.Row id="empty">
-                              <Table.Cell colSpan={6}>
-                                <div
-                                  className="py-12 text-center text-sm"
-                                  style={{ color: 'var(--text-faint)' }}
-                                >
-                                  {vulnTotal === 0
-                                    ? blockedPolicyDetails
-                                      ? 'Xray blocked this snapshot with policy violations, but no vulnerability records were returned for this scan.'
-                                      : 'No vulnerabilities found for this image tag.'
-                                    : 'No results match your filters.'}
-                                </div>
-                              </Table.Cell>
-                            </Table.Row>
-                          ) : (
-                            vulns.map((vuln) => (
-                              <Table.Row
-                                key={vuln.id}
-                                id={vuln.id}
-                                className="hover:bg-[var(--row-hover)]"
-                              >
-                                <Table.Cell>
-                                  {vuln.vuln_id ? (
-                                    <div className="flex flex-col gap-1.5">
-                                      <div className="flex flex-wrap items-center gap-1.5">
-                                        <button
-                                          type="button"
-                                          onClick={() => openVulnerabilityDetails(vuln)}
-                                          className="font-mono text-xs text-accent transition-colors hover:underline dark:text-accent"
-                                        >
-                                          {vuln.vuln_id}
-                                        </button>
-                                        <SourceBadge source={vuln.data_source} />
-                                      </div>
-                                      {vuln.title && (
-                                        <p className="max-w-[280px] text-xs leading-5 text-zinc-500">
-                                          {vuln.title}
-                                        </p>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span style={{ color: 'var(--text-faint)' }}>-</span>
-                                  )}
-                                </Table.Cell>
-                                <Table.Cell
-                                  className="font-mono text-xs"
-                                  style={{ color: 'var(--text-secondary)' }}
-                                >
-                                  {vuln.pkg_name}
-                                </Table.Cell>
-                                <Table.Cell
-                                  className="font-mono text-xs"
-                                  style={{ color: 'var(--text-muted)' }}
-                                >
-                                  {vuln.installed_version || '-'}
-                                </Table.Cell>
-                                <Table.Cell className="font-mono text-xs text-emerald-600 dark:text-emerald-500">
-                                  {vuln.fixed_version || (
-                                    <span style={{ color: 'var(--text-faint)' }}>-</span>
-                                  )}
-                                </Table.Cell>
-                                <Table.Cell>
-                                  <SeverityBadge severity={vuln.severity} />
-                                </Table.Cell>
-                                <Table.Cell
-                                  className="font-mono text-xs"
-                                  style={{ color: 'var(--text-muted)' }}
-                                >
-                                  {vuln.cvss_score ? vuln.cvss_score.toFixed(1) : '-'}
-                                </Table.Cell>
-                              </Table.Row>
-                            ))
-                          )}
-                        </Table.Body>
-                      </Table.Content>
-                    </Table.ScrollContainer>
-                  </Table>
-                </div>
+                {scanAccess === 'denied' ? (
+                  <p className="text-xs leading-5 text-muted">
+                    Scan details are only available when your JustScan account has access to this
+                    scan.
+                  </p>
+                ) : null}
               </div>
             </Modal.Body>
 
-            <Modal.Footer
-              className="flex items-center justify-between gap-3 px-6 py-4"
-              style={{ borderTop: '1px solid var(--border-subtle)' }}
-            >
-              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                {vulnTotal.toLocaleString()} total findings
-              </span>
-              <div className="flex items-center gap-2">
-                {reportHref && (
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onPress={() => window.open(reportHref, '_blank', 'noopener,noreferrer')}
-                    className="rounded-full px-4"
-                  >
-                    Generate report
+            <Modal.Footer className="flex items-center justify-end gap-2 border-t border-divider/70 px-4 py-4 sm:px-6">
+              <Button size="sm" variant="secondary" onPress={onClose}>
+                Close
+              </Button>
+              {scanDetailsHref ? (
+                <Link href={scanDetailsHref}>
+                  <Button size="sm" variant="primary">
+                    View scan details
+                    <ArrowRight01Icon size={15} aria-hidden />
                   </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  isDisabled={page <= 1}
-                  onPress={() => {
-                    setPage((current) => Math.max(1, current - 1));
-                  }}
-                  className="rounded-full px-4"
-                >
-                  Prev
+                </Link>
+              ) : scanAccess === 'checking' ? (
+                <Button isPending size="sm" variant="primary">
+                  Checking access
                 </Button>
-                <span className="px-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                  {page} / {totalPages}
-                </span>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  isDisabled={page >= totalPages}
-                  onPress={() => {
-                    setPage((current) => Math.min(totalPages, current + 1));
-                  }}
-                  className="rounded-full px-4"
-                >
-                  Next
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onPress={onClose}
-                  className="rounded-full px-4"
-                >
-                  Close
-                </Button>
-              </div>
+              ) : null}
             </Modal.Footer>
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>
-
-      <VulnerabilityDetailsModal
-        vulnerability={selectedVulnerability}
-        state={vulnerabilityDetailsModal}
-        onClose={closeVulnerabilityDetails}
-        loadContextAnalysis={
-          selectedScanId
-            ? (vulnerability) =>
-                getStatusPageItemVulnerabilityContextAnalysis(
-                  slug,
-                  selectedScanId,
-                  vulnerability.id
-                )
-            : undefined
-        }
-      />
     </Modal>
+  );
+}
+
+function PublicStatusPageSkeleton() {
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="border-b border-divider/70 bg-background/85">
+        <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <Skeleton className="size-9 rounded-xl" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-2.5 w-20 rounded" />
+              <Skeleton className="h-3.5 w-32 rounded" />
+            </div>
+          </div>
+          <Skeleton className="size-8 rounded-xl" />
+        </div>
+      </div>
+      <main className="mx-auto w-full max-w-[1600px] space-y-5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-36 rounded" />
+          <Skeleton className="h-8 w-64 rounded-lg" />
+        </div>
+        <Skeleton className="h-24 w-full rounded-2xl" />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {Array.from({ length: 5 }, (_, index) => (
+            <Skeleton key={index} className="h-20 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-96 w-full rounded-2xl" />
+      </main>
+    </div>
   );
 }
 
 export default function PublicStatusPage() {
   const { slug } = useParams<{ slug: string }>();
+  const { resolvedTheme, setTheme } = useTheme();
   const [data, setData] = useState<StatusPageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [needsAuth, setNeedsAuth] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
   const [activeItem, setActiveItem] = useState<StatusPageItem | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ImageStatusFilter>('__all__');
+  const [decisionFilter, setDecisionFilter] = useState<DecisionFilter>('__all__');
   const [rowScanHistory, setRowScanHistory] = useState<Record<string, StatusPageScanSummary[]>>({});
+  const [isPageVisible, setIsPageVisible] = useState(true);
   const mountedRef = useRef(true);
-  const vulnerabilityModal = useOverlayState();
+  const filtersInitializedRef = useRef(false);
+  const scanHistoryRequestsRef = useRef<Set<string> | null>(null);
+  const historyModal = useOverlayState();
   const refreshClock = useTicker(1000);
 
   function openItemDetails(item: StatusPageItem) {
     setActiveItem(item);
-    vulnerabilityModal.open();
+    historyModal.open();
   }
 
   function closeItemDetails() {
-    vulnerabilityModal.close();
+    historyModal.close();
   }
 
   function syncRowHistory(scanId: string, scans: StatusPageScanSummary[]) {
@@ -1860,22 +1091,65 @@ export default function PublicStatusPage() {
   );
 
   useEffect(() => {
+    const cancelMounted = deferEffect(() => setMounted(true));
     return () => {
+      cancelMounted();
       mountedRef.current = false;
     };
   }, []);
 
   useEffect(() => {
     const cancelDeferred = deferEffect(() => load(true));
-    const interval = setInterval(() => {
-      void load(false);
-    }, AUTO_REFRESH_MS);
-
-    return () => {
-      cancelDeferred();
-      clearInterval(interval);
-    };
+    return cancelDeferred;
   }, [load]);
+
+  useEffect(() => {
+    if (!isPageVisible || historyModal.isOpen || !lastLoadedAt) return;
+    const elapsed = Math.max(0, Date.now() - lastLoadedAt);
+    const timeout = setTimeout(() => void load(false), Math.max(0, AUTO_REFRESH_MS - elapsed));
+    return () => clearTimeout(timeout);
+  }, [historyModal.isOpen, isPageVisible, lastLoadedAt, load]);
+
+  useEffect(() => {
+    const updateVisibility = () => setIsPageVisible(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', updateVisibility);
+    return () => document.removeEventListener('visibilitychange', updateVisibility);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const queryStatus = params.get('state');
+    const queryDecision = params.get('decision');
+    return deferEffect(() => {
+      setSearchQuery(params.get('q') ?? '');
+      setStatusFilter(
+        IMAGE_STATUS_FILTER_OPTIONS.some((option) => option.key === queryStatus)
+          ? (queryStatus as ImageStatusFilter)
+          : '__all__'
+      );
+      setDecisionFilter(
+        DECISION_FILTER_OPTIONS.some((option) => option.key === queryDecision)
+          ? (queryDecision as DecisionFilter)
+          : '__all__'
+      );
+      filtersInitializedRef.current = true;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!filtersInitializedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const query = searchQuery.trim();
+    if (query) params.set('q', query);
+    else params.delete('q');
+    if (statusFilter !== '__all__') params.set('state', statusFilter);
+    else params.delete('state');
+    if (decisionFilter !== '__all__') params.set('decision', decisionFilter);
+    else params.delete('decision');
+
+    const nextUrl = `${window.location.pathname}${params.size > 0 ? `?${params.toString()}` : ''}${window.location.hash}`;
+    window.history.replaceState(window.history.state, '', nextUrl);
+  }, [decisionFilter, searchQuery, statusFilter]);
 
   const summary = useMemo(() => {
     const items = data?.items ?? [];
@@ -1892,6 +1166,8 @@ export default function PublicStatusPage() {
         acc.low += item.low_count;
         acc.findings += getFindingTotal(item);
         acc.stale += operationalStatus === 'stale' ? 1 : 0;
+        acc.healthy += isClearStatus(item, operationalStatus) ? 1 : 0;
+        acc.scanning += ACTIVE_SCAN_STATUSES.has(operationalStatus) ? 1 : 0;
         acc.operations[operationalStatus] = (acc.operations[operationalStatus] ?? 0) + 1;
         acc.exposure[exposureStatus] = (acc.exposure[exposureStatus] ?? 0) + 1;
         return acc;
@@ -1905,6 +1181,8 @@ export default function PublicStatusPage() {
         low: 0,
         findings: 0,
         stale: 0,
+        healthy: 0,
+        scanning: 0,
         operations: {} as Record<string, number>,
         exposure: {} as Record<string, number>,
       }
@@ -1923,20 +1201,102 @@ export default function PublicStatusPage() {
 
   const filteredTrackedItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return trackedItems;
     return trackedItems.filter((item) => {
       const operationalStatus = getPresentationStatus(item);
-      const decisionLabel = getPolicyDecisionMeta(getPolicyDecision(item)).label.toLowerCase();
-      return (
+      const exposureStatus = getExposureStatus(item, operationalStatus);
+      const decision = getPolicyDecision(item);
+      const decisionLabel = getPolicyDecisionMeta(decision).label.toLowerCase();
+      const matchesSearch =
+        !query ||
         item.image_name.toLowerCase().includes(query) ||
         item.image_tag.toLowerCase().includes(query) ||
         `${item.image_name}:${item.image_tag}`.toLowerCase().includes(query) ||
         formatStatusLabel(operationalStatus).toLowerCase().includes(query) ||
         formatScanner(item.scan_provider).toLowerCase().includes(query) ||
-        decisionLabel.includes(query)
-      );
+        decisionLabel.includes(query);
+      const matchesDecision = decisionFilter === '__all__' || decision === decisionFilter;
+      const matchesStatus =
+        statusFilter === '__all__' ||
+        (statusFilter === 'issues' &&
+          (operationalStatus === 'failed' ||
+            operationalStatus === 'blocked_by_xray_policy' ||
+            operationalStatus === 'stale')) ||
+        (statusFilter === 'healthy' && isClearStatus(item, operationalStatus)) ||
+        (statusFilter === 'scanning' && ACTIVE_SCAN_STATUSES.has(operationalStatus)) ||
+        (statusFilter === 'exposed' && isExposedStatus(exposureStatus));
+
+      return matchesSearch && matchesDecision && matchesStatus;
     });
-  }, [searchQuery, trackedItems]);
+  }, [decisionFilter, searchQuery, statusFilter, trackedItems]);
+
+  useEffect(() => {
+    const requestedScanIds =
+      scanHistoryRequestsRef.current ?? (scanHistoryRequestsRef.current = new Set<string>());
+
+    filteredTrackedItems.forEach((item) => {
+      const scanId = item.latest_scan_id;
+      if (!scanId || rowScanHistory[scanId] !== undefined || requestedScanIds.has(scanId)) {
+        return;
+      }
+
+      requestedScanIds.add(scanId);
+      listStatusPageScanHistory(slug, scanId)
+        .then((scans) => {
+          if (!mountedRef.current) return;
+          setRowScanHistory((current) => ({ ...current, [scanId]: scans }));
+        })
+        .catch(() => {
+          if (!mountedRef.current) return;
+          setRowScanHistory((current) => ({ ...current, [scanId]: [] }));
+        });
+    });
+  }, [filteredTrackedItems, rowScanHistory, slug]);
+
+  const activeUpdates = useMemo(() => {
+    return [...(data?.page.updates ?? [])].toSorted(
+      (left, right) =>
+        new Date(right.created_at ?? right.updated_at ?? 0).getTime() -
+        new Date(left.created_at ?? left.updated_at ?? 0).getTime()
+    );
+  }, [data?.page.updates]);
+
+  const hasImageFilters =
+    searchQuery.trim().length > 0 || statusFilter !== '__all__' || decisionFilter !== '__all__';
+  const statusFilterLabel = IMAGE_STATUS_FILTER_OPTIONS.find(
+    (option) => option.key === statusFilter
+  )?.label;
+  const decisionFilterLabel = DECISION_FILTER_OPTIONS.find(
+    (option) => option.key === decisionFilter
+  )?.label;
+
+  function clearImageFilters() {
+    setSearchQuery('');
+    setStatusFilter('__all__');
+    setDecisionFilter('__all__');
+  }
+
+  function selectMetricFilter(key: string) {
+    setSearchQuery('');
+    if (key.startsWith('decision:')) {
+      const nextDecision = key.replace('decision:', '') as DecisionFilter;
+      setStatusFilter('__all__');
+      setDecisionFilter(decisionFilter === nextDecision ? '__all__' : nextDecision);
+      return;
+    }
+
+    const nextStatus = key.replace('status:', '') as ImageStatusFilter;
+    setDecisionFilter('__all__');
+    setStatusFilter(statusFilter === nextStatus ? '__all__' : nextStatus);
+  }
+
+  const activeMetricKey =
+    searchQuery.trim().length > 0
+      ? undefined
+      : decisionFilter !== '__all__' && statusFilter === '__all__'
+        ? `decision:${decisionFilter}`
+        : statusFilter !== '__all__' && decisionFilter === '__all__'
+          ? `status:${statusFilter}`
+          : undefined;
 
   const decisionSummary = useMemo(() => {
     return trackedItems.reduce(
@@ -1959,11 +1319,7 @@ export default function PublicStatusPage() {
   }, [trackedItems]);
 
   if (loading && !data) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Spinner size="lg" />
-      </div>
-    );
+    return <PublicStatusPageSkeleton />;
   }
 
   if (!data) {
@@ -1997,252 +1353,412 @@ export default function PublicStatusPage() {
     (summary.operations.blocked_by_xray_policy ?? 0) +
     (summary.operations.stale ?? 0);
   const exposedCount = (summary.exposure.high_risk ?? 0) + (summary.exposure.findings_present ?? 0);
-  const runningCount = summary.operations.running ?? 0;
-  const healthyCount = trackedItems.length - operationalIssueCount;
+  const runningCount = summary.scanning;
+  const healthyCount = summary.healthy;
+  const activeIncidentCount = activeUpdates.filter((update) => update.level === 'incident').length;
+  const activeMaintenanceCount = activeUpdates.filter(
+    (update) => update.level === 'maintenance'
+  ).length;
   const { secondsRemaining } = getRefreshCadence(lastLoadedAt, refreshClock);
   const pageTone =
-    operationalIssueCount > 0
+    activeIncidentCount > 0
       ? {
-          label: 'Investigating Issues',
+          label: 'Active Incident',
           color: STATUS_COLOR.failed,
-          description: `${summary.operations.failed ?? 0} failed, ${summary.operations.blocked_by_xray_policy ?? 0} policy blocked, and ${summary.operations.stale ?? 0} stale snapshot${operationalIssueCount === 1 ? '' : 's'} currently need attention.`,
+          description: `${activeIncidentCount} active incident notice${activeIncidentCount === 1 ? '' : 's'} currently require attention.`,
         }
-      : exposedCount > 0
+      : operationalIssueCount > 0
         ? {
-            label: 'Operational With Findings',
-            color: EXPOSURE_COLOR.findings_present,
-            description: `${summary.exposure.high_risk ?? 0} high-risk and ${summary.exposure.findings_present ?? 0} lower-severity finding set${exposedCount === 1 ? '' : 's'} are present in the latest scans.`,
+            label: 'Investigating Issues',
+            color: STATUS_COLOR.failed,
+            description: `${summary.operations.failed ?? 0} failed, ${summary.operations.blocked_by_xray_policy ?? 0} policy blocked, and ${summary.operations.stale ?? 0} stale snapshot${operationalIssueCount === 1 ? '' : 's'} currently need attention.`,
           }
-        : runningCount > 0
+        : activeMaintenanceCount > 0
           ? {
-              label: 'Operational, Scans Active',
-              color: STATUS_COLOR.running,
-              description: `${runningCount} scan${runningCount === 1 ? '' : 's'} are still processing, but there are no current operational failures on tracked services.`,
+              label: 'Maintenance In Progress',
+              color: STATUS_COLOR.blocked_by_xray_policy,
+              description: `${activeMaintenanceCount} active maintenance notice${activeMaintenanceCount === 1 ? '' : 's'} may affect tracked images.`,
             }
-          : {
-              label: 'All Systems Operational',
-              color: STATUS_COLOR.healthy,
-              description:
-                'Every tracked service is healthy in the latest snapshot and no known findings are currently present.',
-            };
+          : exposedCount > 0
+            ? {
+                label: 'Operational With Findings',
+                color: EXPOSURE_COLOR.findings_present,
+                description: `${summary.exposure.high_risk ?? 0} high-risk and ${summary.exposure.findings_present ?? 0} lower-severity finding set${exposedCount === 1 ? '' : 's'} are present in the latest scans.`,
+              }
+            : runningCount > 0
+              ? {
+                  label: 'Operational, Scans Active',
+                  color: STATUS_COLOR.running,
+                  description: `${runningCount} scan${runningCount === 1 ? '' : 's'} are still processing, but there are no current operational failures on tracked services.`,
+                }
+              : {
+                  label: 'All Systems Operational',
+                  color: STATUS_COLOR.healthy,
+                  description:
+                    'Every tracked service is healthy in the latest snapshot and no known findings are currently present.',
+                };
   const headerDescription = data.page.description?.trim() ?? '';
   const showHeaderDescription =
     headerDescription.length > 0 &&
     headerDescription.toLowerCase() !== data.page.name.trim().toLowerCase();
+  const isDark = mounted && resolvedTheme === 'dark';
 
   return (
-    <div className="light min-h-screen bg-background text-foreground" data-theme="light">
-      <main className="w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-        <section className="space-y-6">
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 rounded-full border border-divider bg-content1 px-3 py-1.5">
-                <Logo size={14} className="invert-0 dark:invert-0" />
-                <span className="text-sm font-medium text-default-700">JustScan Status</span>
-              </div>
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-divider bg-content1">
-                  <Logo size={20} className="invert-0 dark:invert-0" />
-                </div>
-                <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-                  {data.page.name}
-                </h1>
-              </div>
-              {showHeaderDescription ? (
-                <p className="max-w-4xl text-base leading-relaxed text-default-600">
-                  {headerDescription}
-                </p>
-              ) : null}
+    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.38] dark:opacity-[0.24]"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 22%, transparent) 1px, transparent 0)',
+          backgroundSize: '24px 24px',
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(circle at 12% 4%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 24%), radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 22%)',
+        }}
+      />
+
+      <PublicStatusHeader
+        isDark={isDark}
+        latestObservedAt={latestObservedAt}
+        mounted={mounted}
+        onRefresh={() => void load(false)}
+        onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
+        pageName={data.page.name}
+        refreshing={refreshing}
+        visibility={data.page.visibility}
+      />
+
+      <main className="relative z-10 mx-auto w-full max-w-[1600px] space-y-5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted">
+              <Shield01Icon size={15} aria-hidden />
+              Container image status
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Chip variant="soft" color="default">
-                Snapshot {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
-              </Chip>
-              <Chip variant="soft" color="default" className="capitalize">
-                {data.page.visibility}
-              </Chip>
-              <Button
-                size="sm"
-                variant="secondary"
-                isPending={refreshing}
-                onPress={() => void load(false)}
-                className="rounded-full px-4"
-              >
-                {refreshing ? 'Refreshing...' : 'Refresh'}
-              </Button>
-            </div>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+              {data.page.name}
+            </h1>
+            {showHeaderDescription ? (
+              <p className="mt-1.5 max-w-3xl text-sm leading-6 text-muted">{headerDescription}</p>
+            ) : null}
           </div>
-
-          <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-default-600">
-            <StatusBoardBadge label={pageTone.label} color={pageTone.color} />
-            <span>{healthyCount} healthy</span>
-            <span>{operationalIssueCount} issues</span>
-            <span>{exposedCount} exposed</span>
-            <span>{runningCount} scanning</span>
-            <span>{refreshing ? 'Refreshing now' : `Auto refresh in ${secondsRemaining}s`}</span>
-            <span>Stale after {data.page.stale_after_hours}h</span>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <Chip className="capitalize sm:hidden" size="sm" variant="secondary">
+              <Chip.Label>{data.page.visibility}</Chip.Label>
+            </Chip>
+            <Chip className="lg:hidden" size="sm" variant="secondary">
+              <Chip.Label>
+                Updated {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
+              </Chip.Label>
+            </Chip>
           </div>
-          <p className="text-sm text-default-600">{pageTone.description}</p>
+        </section>
 
-          <Card className="grid overflow-hidden sm:grid-cols-3 sm:divide-x sm:divide-divider" variant="secondary">
-            <div className="text-center">
-              <p className="text-3xl font-semibold text-success">{decisionSummary.allowed}</p>
-              <p className="mt-1 text-sm text-default-600">Allowed</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-semibold text-warning">{decisionSummary.warning}</p>
-              <p className="mt-1 text-sm text-default-600">Warnings</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-semibold text-danger">{decisionSummary.blocked}</p>
-              <p className="mt-1 text-sm text-default-600">Blocked</p>
-            </div>
-          </Card>
+        <OverallStatusBanner
+          autoRefreshPaused={!isPageVisible || historyModal.isOpen}
+          exposedCount={exposedCount}
+          healthyCount={healthyCount}
+          issueCount={operationalIssueCount}
+          refreshing={refreshing}
+          runningCount={runningCount}
+          secondsRemaining={secondsRemaining}
+          staleAfterHours={data.page.stale_after_hours}
+          tone={pageTone}
+        />
 
-          <Card variant="secondary">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <StatusMetrics
+          activeKey={activeMetricKey}
+          metrics={[
+            {
+              key: 'decision:allowed',
+              label: 'Allowed',
+              value: decisionSummary.allowed,
+              color: 'success',
+            },
+            {
+              key: 'decision:warning',
+              label: 'Warnings',
+              value: decisionSummary.warning,
+              color: 'warning',
+            },
+            {
+              key: 'decision:blocked',
+              label: 'Blocked',
+              value: decisionSummary.blocked,
+              color: 'danger',
+            },
+            { key: 'status:scanning', label: 'Scanning', value: runningCount, color: 'accent' },
+            {
+              key: 'status:exposed',
+              label: 'Total findings',
+              value: summary.findings,
+              color: 'default',
+            },
+          ]}
+          onSelect={selectMetricFilter}
+        />
+
+        <ActiveStatusUpdates updates={activeUpdates} />
+
+        <Card
+          className="overflow-hidden border border-divider/70 bg-surface/70 p-0 shadow-sm"
+          variant="secondary"
+        >
+          <div className="border-b border-divider/70 p-4 sm:p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
               <div>
-                <h2 className="text-2xl font-semibold tracking-tight text-foreground">Scanned images</h2>
-                <p className="mt-1 text-default-600">
-                  Latest policy decision per tracked image with 14-day history.
+                <div className="flex items-center gap-2">
+                  <PackageIcon size={17} className="text-muted" aria-hidden />
+                  <h2 className="text-base font-semibold text-foreground">Scanned images</h2>
+                  <Chip size="sm" variant="secondary">
+                    <Chip.Label>
+                      {filteredTrackedItems.length}
+                      {filteredTrackedItems.length !== trackedItems.length
+                        ? ` of ${trackedItems.length}`
+                        : ''}
+                    </Chip.Label>
+                  </Chip>
+                </div>
+                <p className="mt-1 text-xs text-muted">
+                  Latest decision, findings, and 14-day history for each tracked image tag.
                 </p>
               </div>
-              <SearchField
-                aria-label="Search images"
-                value={searchQuery}
-                onChange={setSearchQuery}
-                variant="secondary"
-                className="w-full sm:max-w-sm"
-              >
-                <SearchField.Group className="rounded-full">
-                  <SearchField.SearchIcon />
-                  <SearchField.Input placeholder="Search images..." />
-                  <SearchField.ClearButton />
-                </SearchField.Group>
-              </SearchField>
-            </div>
 
+              <div className="grid w-full gap-2 sm:grid-cols-2 xl:w-auto xl:grid-cols-[minmax(260px,1fr)_190px_170px_auto]">
+                <SearchField
+                  aria-label="Search images"
+                  className="sm:col-span-2 xl:col-span-1"
+                  value={searchQuery}
+                  variant="secondary"
+                  onChange={setSearchQuery}
+                >
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input placeholder="Search image, tag, scanner..." />
+                    <SearchField.ClearButton />
+                  </SearchField.Group>
+                </SearchField>
+                <Select
+                  aria-label="Filter images by state"
+                  variant="secondary"
+                  value={statusFilter}
+                  onChange={(value) => setStatusFilter(String(value) as ImageStatusFilter)}
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {IMAGE_STATUS_FILTER_OPTIONS.map((option) => (
+                        <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
+                          {option.label}
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                <Select
+                  aria-label="Filter images by decision"
+                  variant="secondary"
+                  value={decisionFilter}
+                  onChange={(value) => setDecisionFilter(String(value) as DecisionFilter)}
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {DECISION_FILTER_OPTIONS.map((option) => (
+                        <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
+                          {option.label}
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                <Button
+                  isDisabled={!hasImageFilters}
+                  variant="tertiary"
+                  onPress={clearImageFilters}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+            {hasImageFilters ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-medium text-muted">Active filters</span>
+                {searchQuery.trim() ? (
+                  <Button
+                    className="h-7 px-2 text-[11px]"
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => setSearchQuery('')}
+                  >
+                    Search: {searchQuery.trim()}
+                    <Cancel01Icon size={13} aria-hidden />
+                  </Button>
+                ) : null}
+                {statusFilter !== '__all__' ? (
+                  <Button
+                    className="h-7 px-2 text-[11px]"
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => setStatusFilter('__all__')}
+                  >
+                    {statusFilterLabel}
+                    <Cancel01Icon size={13} aria-hidden />
+                  </Button>
+                ) : null}
+                {decisionFilter !== '__all__' ? (
+                  <Button
+                    className="h-7 px-2 text-[11px]"
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => setDecisionFilter('__all__')}
+                  >
+                    {decisionFilterLabel}
+                    <Cancel01Icon size={13} aria-hidden />
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="space-y-3 p-3 md:hidden">
+            {filteredTrackedItems.length === 0 ? (
+              <div className="py-12 text-center text-sm text-muted">
+                {trackedItems.length === 0
+                  ? 'No images are currently tracked.'
+                  : 'No images match the current filters.'}
+              </div>
+            ) : (
+              filteredTrackedItems.map((item) => (
+                <MobileImageStatusCard
+                  item={item}
+                  key={`${item.image_name}:${item.image_tag}`}
+                  onOpen={openItemDetails}
+                  scans={rowScanHistory[item.latest_scan_id]}
+                />
+              ))
+            )}
+          </div>
+
+          <div className="hidden md:block">
             <Table variant="secondary">
               <Table.ScrollContainer>
-                <Table.Content aria-label="Image policy status table" className="min-w-[1180px]">
+                <Table.Content aria-label="Image policy status table" className="min-w-[1100px]">
                   <Table.Header>
                     <Table.Column isRowHeader>Image</Table.Column>
-                    <Table.Column>Status</Table.Column>
-                    <Table.Column>Risk</Table.Column>
+                    <Table.Column>State</Table.Column>
                     <Table.Column>Findings</Table.Column>
-                    <Table.Column>14 Days</Table.Column>
+                    <Table.Column>14 days</Table.Column>
                     <Table.Column>Scanner</Table.Column>
-                    <Table.Column>Last Scan</Table.Column>
-                    <Table.Column>Actions</Table.Column>
+                    <Table.Column>Last scan</Table.Column>
+                    <Table.Column>Action</Table.Column>
                   </Table.Header>
                   <Table.Body>
                     {filteredTrackedItems.length === 0 ? (
                       <Table.Row id="empty">
-                        <Table.Cell colSpan={8}>
-                          <div className="py-12 text-center text-sm text-default-600">
+                        <Table.Cell colSpan={7}>
+                          <div className="py-12 text-center text-sm text-muted">
                             {trackedItems.length === 0
-                              ? 'No services are currently tracked.'
-                              : 'No images match your search.'}
+                              ? 'No images are currently tracked.'
+                              : 'No images match the current filters.'}
                           </div>
                         </Table.Cell>
                       </Table.Row>
                     ) : (
-                      filteredTrackedItems.map((item) => {
-                        const decision = getPolicyDecision(item);
-                        const decisionMeta = getPolicyDecisionMeta(decision);
-                        const riskScore = getRiskScore(item);
-                        return (
-                          <Table.Row
-                            key={`${item.image_name}:${item.image_tag}`}
-                            id={`${item.image_name}:${item.image_tag}`}
-                            className="hover:bg-content2"
-                          >
-                            <Table.Cell>
-                              <div className="flex items-start gap-3">
-                                <span
-                                  className="mt-2 size-2.5 shrink-0 rounded-full"
-                                  style={{ background: decisionMeta.tone }}
-                                />
-                                <div className="min-w-0">
-                                  <button
-                                    type="button"
-                                    className="truncate text-left text-lg font-semibold hover:underline"
-                                    onClick={() => openItemDetails(item)}
-                                  >
-                                    {item.image_name}
-                                  </button>
-                                  <p className="mt-1 truncate font-mono text-xs text-default-500">
-                                    {item.image_name}:{item.image_tag}
-                                  </p>
-                                </div>
+                      filteredTrackedItems.map((item) => (
+                        <Table.Row
+                          key={`${item.image_name}:${item.image_tag}`}
+                          id={`${item.image_name}:${item.image_tag}`}
+                          className="hover:bg-surface-secondary"
+                        >
+                          <Table.Cell>
+                            <div className="flex max-w-[420px] items-start gap-3">
+                              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+                                <PackageIcon size={15} aria-hidden />
+                              </span>
+                              <div className="min-w-0">
+                                <button
+                                  type="button"
+                                  className="block max-w-full truncate text-left text-sm font-semibold text-foreground hover:underline"
+                                  onClick={() => openItemDetails(item)}
+                                >
+                                  {item.image_name}
+                                </button>
+                                <p className="mt-0.5 truncate font-mono text-[11px] text-muted">
+                                  {item.image_tag}
+                                </p>
                               </div>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <Chip
-                                color={decisionMeta.color}
-                                variant="soft"
-                                className="rounded-full"
-                              >
-                                {decisionMeta.label}
-                              </Chip>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <span className="text-3xl font-semibold">{riskScore}</span>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <span className="text-sm">
-                                <span className="text-danger">{item.critical_count}</span> critical
-                                <span className="mx-1 text-default-400">·</span>
-                                <span className="text-warning">{item.high_count}</span> high
-                              </span>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <RecentScanStrip
-                                slug={slug}
-                                item={item}
-                                scans={rowScanHistory[item.latest_scan_id]}
-                                onHistoryLoaded={syncRowHistory}
-                                compact
-                              />
-                            </Table.Cell>
-                            <Table.Cell>
-                              <span className="text-sm text-default-600">
-                                {formatScanner(item.scan_provider)}
-                              </span>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <span className="text-sm text-default-500">
-                                {timeAgo(item.observed_at)}
-                              </span>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onPress={() => openItemDetails(item)}
-                                className="rounded-full"
-                              >
-                                Details
-                              </Button>
-                            </Table.Cell>
-                          </Table.Row>
-                        );
-                      })
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <ImageStatusChips item={item} />
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div>
+                              <div className="flex items-center gap-3 text-xs tabular-nums">
+                                <span className="text-danger">{item.critical_count} critical</span>
+                                <span className="text-warning">{item.high_count} high</span>
+                                <span className="text-muted">{getFindingTotal(item)} total</span>
+                              </div>
+                              <FindingDeltas item={item} />
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <RecentScanStrip
+                              compact
+                              item={item}
+                              onOpen={openItemDetails}
+                              scans={rowScanHistory[item.latest_scan_id]}
+                            />
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-xs text-muted">
+                              {formatScanner(item.scan_provider)}
+                            </span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-xs text-muted">{timeAgo(item.observed_at)}</span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Button
+                              isIconOnly
+                              aria-label={`View scan history for ${item.image_name}:${item.image_tag}`}
+                              size="sm"
+                              variant="tertiary"
+                              onPress={() => openItemDetails(item)}
+                            >
+                              <ArrowRight01Icon size={16} aria-hidden />
+                            </Button>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))
                     )}
                   </Table.Body>
                 </Table.Content>
               </Table.ScrollContainer>
             </Table>
-          </Card>
-        </section>
+          </div>
+        </Card>
       </main>
 
-      {activeItem && vulnerabilityModal.isOpen && (
-        <StatusItemVulnerabilityModal
+      {activeItem && historyModal.isOpen && (
+        <StatusItemHistoryModal
           key={`${activeItem.image_name}:${activeItem.image_tag}`}
           slug={slug}
           item={activeItem}
-          state={vulnerabilityModal}
+          state={historyModal}
           onClose={closeItemDetails}
           onHistoryLoaded={syncRowHistory}
         />

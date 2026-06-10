@@ -18,8 +18,8 @@ importers:
         specifier: 3.1.0
         version: 3.1.0(tailwind-merge@3.6.0)(tailwindcss@4.3.0)
       '@internationalized/date':
-        specifier: ^3.12.2
-        version: 3.12.2
+        specifier: 3.12.1
+        version: 3.12.1
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -601,9 +601,6 @@ packages:
 
   '@internationalized/date@3.12.1':
     resolution: {integrity: sha512-6IedsVWXyq4P9Tj+TxuU8WGWM70hYLl12nbYU8jkikVpa6WXapFazPUcHUMDMoWftIDE2ILDkFFte6W2nFCkRQ==}
-
-  '@internationalized/date@3.12.2':
-    resolution: {integrity: sha512-FY1Y+H64NDs+HAF6omlnWxm3mEpfgaCSWtL5l551ZZfImA+kGjPFgrnJrGjH6lfmLL0g8Z/mBu1R3kufeCp6Jw==}
 
   '@internationalized/message@3.1.9':
     resolution: {integrity: sha512-x03MSVTaB/4JHtW1VAYaY/2cCuBrHbWM6ZvlgpKdnSdW28tZbqpR673RJrVJyXWRw1bpgYN89Tz7ohX5tgNgPA==}
@@ -4966,10 +4963,6 @@ snapshots:
       '@types/node': 25.9.2
 
   '@internationalized/date@3.12.1':
-    dependencies:
-      '@swc/helpers': 0.5.21
-
-  '@internationalized/date@3.12.2':
     dependencies:
       '@swc/helpers': 0.5.21
 

@@ -1,5 +1,6 @@
 'use client';
 import { PublicNavbar } from '@/components/public/public-navbar';
+import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -566,28 +567,18 @@ export default function PublicScanResultPage() {
             )}
 
             {scan?.status === 'failed' && activeTab === 'overview' && !isBlockedByXrayPolicy && (
-              <>
-                <div
-                  className="rounded-2xl px-6 py-5 text-center"
-                  style={{
-                    background: 'rgba(239,68,68,0.08)',
-                    border: '1px solid rgba(239,68,68,0.2)',
-                  }}
+              <div className="space-y-3">
+                <ScanFailureAlert
+                  errorMessage={scan.error_message}
+                  imageReference={`${scan.image_name}:${scan.image_tag}`}
+                />
+                <Link
+                  href="/public/scan/image"
+                  className="inline-block text-sm text-accent hover:underline"
                 >
-                  <p className="text-red-500 dark:text-red-400 font-medium">Scan failed</p>
-                  {scan.error_message && (
-                    <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-                      {scan.error_message}
-                    </p>
-                  )}
-                  <Link
-                    href="/public/scan/image"
-                    className="inline-block mt-3 text-sm text-accent dark:text-accent hover:underline"
-                  >
-                    Try another image →
-                  </Link>
-                </div>
-              </>
+                  Try another image →
+                </Link>
+              </div>
             )}
 
             {isBlockedByXrayPolicy && activeTab === 'overview' && (

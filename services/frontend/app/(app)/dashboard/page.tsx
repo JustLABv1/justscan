@@ -770,14 +770,14 @@ function AttentionQueueCard({
   ].filter((item) => item.value > 0);
 
   return (
-    <Card>
+    <Card className="h-full p-4">
       <DashboardSectionHeader
         title="Next actions"
         icon={<AlertCircleIcon size={16} />}
-        description="The highest-signal follow-up items from the active workspace"
+        description="Highest-signal follow-ups"
         action={
           <Link href={triageDefaultHref}>
-            <Button variant="secondary">
+            <Button size="sm" variant="secondary">
               Open triage
               <ArrowRight01Icon />
             </Button>
@@ -793,32 +793,25 @@ function AttentionQueueCard({
           </p>
         </div>
       ) : (
-        <div className="mt-4 space-y-2">
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {items.map((item) => {
-            const tone = TONE_STYLES[item.tone];
+            const chipColor = item.tone === 'neutral' ? 'default' : item.tone;
             return (
               <Link
                 key={item.key}
                 href={item.href}
-                className="group flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
-                style={{ background: tone.softBg, borderColor: tone.border }}
+                className="group min-w-0 rounded-xl border border-surface-border bg-surface-secondary px-3 py-2.5 text-left transition-colors hover:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
               >
-                <span>
-                  <span
-                    className="block text-sm font-semibold"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
+                <span className="flex items-center justify-between gap-3">
+                  <span className="truncate text-sm font-semibold text-foreground">
                     {item.label}
                   </span>
-                  <span className="mt-0.5 block text-xs" style={{ color: 'var(--text-faint)' }}>
-                    {item.detail}
-                  </span>
+                  <Chip color={chipColor} size="sm" variant="soft">
+                    {item.value.toLocaleString()}
+                  </Chip>
                 </span>
-                <span
-                  className="text-base font-semibold tabular-nums"
-                  style={{ color: tone.color }}
-                >
-                  {item.value.toLocaleString()}
+                <span className="mt-1 block truncate text-xs text-muted" title={item.detail}>
+                  {item.detail}
                 </span>
               </Link>
             );
@@ -849,14 +842,14 @@ function RecentProblemScansCard({
   href: string;
 }) {
   return (
-    <Card className="p-4">
+    <Card className="h-full p-4">
       <DashboardSectionHeader
         title="Recent problem scans"
         icon={<Shield01Icon size={16} />}
-        description="Latest failed or policy-blocked runs from the active workspace"
+        description="Latest failed or policy-blocked runs"
         action={
           <Link href={href}>
-            <Button variant="secondary">
+            <Button size="sm" variant="secondary">
               Open scan activity
               <ArrowRight01Icon />
             </Button>
@@ -882,37 +875,36 @@ function RecentProblemScansCard({
           </p>
         </div>
       ) : (
-        <div className="mt-4 space-y-2">
+        <div className="mt-3 grid gap-2">
           {scans.map((scan) => (
             <Link
               key={scan.id}
               href={`/scans/${scan.id}`}
-              className="block rounded-xl border border-surface-border p-3 transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
+              className="grid min-w-0 gap-2 rounded-xl border border-surface-border bg-surface-secondary px-3 py-2.5 transition-colors hover:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center 2xl:grid-cols-[minmax(150px,0.9fr)_auto_minmax(160px,1.2fr)_auto]"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p
-                    className="truncate font-mono text-sm font-medium text-foreground"
-                    title={`${scan.image_name}:${scan.image_tag}`}
-                  >
-                    {scan.image_name}:{scan.image_tag}
-                  </p>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
-                    <StatusBadge status={scan.status} externalStatus={scan.external_status} />
-                    <span className="text-muted" title={fullDate(problemScanTime(scan))}>
-                      {timeAgo(problemScanTime(scan))}
-                    </span>
-                  </div>
-                  {scan.error_message ? (
-                    <p className="mt-2 line-clamp-2 text-xs text-muted">{scan.error_message}</p>
-                  ) : null}
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-sm font-semibold tabular-nums text-danger">
-                    {scan.critical_count + scan.high_count}
-                  </p>
-                  <p className="text-[11px] text-muted">critical + high</p>
-                </div>
+              <p
+                className="truncate font-mono text-sm font-medium text-foreground"
+                title={`${scan.image_name}:${scan.image_tag}`}
+              >
+                {scan.image_name}:{scan.image_tag}
+              </p>
+              <div className="flex items-center gap-2 text-[11px]">
+                <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+                <span
+                  className="whitespace-nowrap text-muted"
+                  title={fullDate(problemScanTime(scan))}
+                >
+                  {timeAgo(problemScanTime(scan))}
+                </span>
+              </div>
+              <p className="truncate text-xs text-muted" title={scan.error_message || undefined}>
+                {scan.error_message || 'No error details reported'}
+              </p>
+              <div className="flex items-baseline justify-end gap-1.5 whitespace-nowrap">
+                <span className="text-sm font-semibold tabular-nums text-danger">
+                  {scan.critical_count + scan.high_count}
+                </span>
+                <span className="text-[11px] text-muted">critical + high</span>
               </div>
             </Link>
           ))}
@@ -1489,7 +1481,7 @@ export default function DashboardPage() {
       recentProblemScansLoading ||
       Boolean(recentProblemScansError) ||
       recentProblemScans.length > 0 ? (
-        <div className="space-y-4">
+        <div className="grid gap-4 xl:grid-cols-2">
           {genericFailedCount > 0 ||
           policyIssueCount > 0 ||
           watchlistPolicyAttentionCount > 0 ||

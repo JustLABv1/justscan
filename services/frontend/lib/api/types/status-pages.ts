@@ -47,6 +47,7 @@ export interface StatusPageItem {
   latest_scan_id: string;
   scan_status: string;
   external_status?: string;
+  compliance_status?: 'pass' | 'fail';
   scan_provider?: string;
   current_step?: string;
   started_at?: string;
@@ -78,6 +79,7 @@ export interface StatusPageScanSummary {
   image_tag: string;
   scan_status: string;
   external_status?: string;
+  compliance_status?: 'pass' | 'fail';
   scan_provider?: string;
   current_step?: string;
   error_message?: string;

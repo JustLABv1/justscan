@@ -13,6 +13,12 @@
 
   "packageRules": [
     {
+      "description": "Keep @internationalized/date aligned with HeroUI and React Aria",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@internationalized/date"],
+      "allowedVersions": "3.12.1"
+    },
+    {
       "description": "Automerge patch and minor updates",
       "matchUpdateTypes": ["patch", "minor"],
       "automerge": true,

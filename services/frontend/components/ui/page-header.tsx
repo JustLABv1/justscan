@@ -10,6 +10,7 @@ export type BreadcrumbItem = {
 export interface PageHeaderConfig {
   title: string;
   titleCom?: ReactNode;
+  icon?: ReactNode;
   description?: string;
   actions?: ReactNode;
   breadcrumbs?: BreadcrumbItem[];
@@ -27,6 +28,7 @@ interface PageHeaderProps extends PageHeaderConfig {}
 export function PageHeader({
   title,
   titleCom,
+  icon,
   description,
   actions,
   breadcrumbs,
@@ -44,6 +46,7 @@ export function PageHeader({
     context.setHeader({
       title,
       titleCom,
+      icon,
       description,
       actions,
       breadcrumbs,

@@ -24,6 +24,8 @@ import {
   typedChartConfigFromSeries,
 } from '@/components/ui/chart-adapter';
 import { PageHeader } from '@/components/ui/page-header';
+import { StatCard } from '@/components/ui/stat-card';
+import { SurfaceIcon } from '@/components/ui/surface-icon';
 import { DashboardLoadingSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
@@ -46,9 +48,15 @@ import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 import { getWatchlistPolicyAttentionItems } from '@/lib/watchlist-posture';
 import { Button, Card, Chip, useOverlayState } from '@heroui/react';
-import { ArrowRight01Icon } from 'hugeicons-react';
+import {
+  AlertCircleIcon,
+  ArrowRight01Icon,
+  ChartIcon,
+  Clock01Icon,
+  Shield01Icon,
+} from 'hugeicons-react';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 
 // ── severity config ──────────────────────────────────────────────────
 const SEV = [
@@ -523,6 +531,7 @@ function BriefingMetric({
   label,
   value,
   detail,
+  icon,
   tone = 'neutral',
   trend,
   sparkline,
@@ -533,6 +542,7 @@ function BriefingMetric({
   label: string;
   value: React.ReactNode;
   detail: React.ReactNode;
+  icon?: ReactNode;
   tone?: PostureTone;
   trend?: TrendChip;
   sparkline?: { data: { date: string; value: number }[]; valueLabel?: string };
@@ -541,21 +551,22 @@ function BriefingMetric({
   className?: string;
 }) {
   const toneStyle = TONE_STYLES[tone];
+  const statTone = tone === 'neutral' ? 'default' : tone;
   const sparklineIsFlat = sparkline ? isFlatSeries(sparkline.data) : false;
   const content = (
-    <Card className={className}>
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
-        <div className="min-w-0 space-y-2">
-          <p className="text-[11px] font-medium uppercase">{label}</p>
-          <p
-            className="mt-0.5 text-lg font-semibold tabular-nums"
-            style={{ color: toneStyle.color }}
-          >
-            {value}
-          </p>
-          <p className="text-[11px] leading-4 text-muted">{detail}</p>
-        </div>
-        <div className="flex min-w-[92px] flex-col items-end gap-2">
+    <StatCard
+      label={label}
+      value={value}
+      hint={detail}
+      icon={icon}
+      tone={statTone}
+      variant="stacked"
+      className={className}
+      valueClassName="text-lg font-semibold tabular-nums"
+      valueStyle={{ color: toneStyle.color }}
+      hintClassName="text-[11px] leading-4 text-muted"
+      aside={
+        <>
           <div className="flex items-center gap-2">
             {trend ? (
               <Chip
@@ -596,9 +607,9 @@ function BriefingMetric({
               />
             )
           ) : null}
-        </div>
-      </div>
-    </Card>
+        </>
+      }
+    />
   );
 
   if (href) {
@@ -657,19 +668,24 @@ function DashboardFocusCard({
 
 function DashboardSectionHeader({
   title,
+  icon,
   description,
   action,
 }: {
   title: string;
+  icon?: ReactNode;
   description?: string;
   action?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-          {title}
-        </h2>
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          {icon ? <SurfaceIcon icon={icon} size="sm" /> : null}
+          <h2 className="truncate text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {title}
+          </h2>
+        </div>
         {description && (
           <p className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>
             {description}
@@ -757,6 +773,7 @@ function AttentionQueueCard({
     <Card>
       <DashboardSectionHeader
         title="Next actions"
+        icon={<AlertCircleIcon size={16} />}
         description="The highest-signal follow-up items from the active workspace"
         action={
           <Link href={triageDefaultHref}>
@@ -835,6 +852,7 @@ function RecentProblemScansCard({
     <Card className="p-4">
       <DashboardSectionHeader
         title="Recent problem scans"
+        icon={<Shield01Icon size={16} />}
         description="Latest failed or policy-blocked runs from the active workspace"
         action={
           <Link href={href}>
@@ -1434,6 +1452,7 @@ export default function DashboardPage() {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <BriefingMetric
           label="Severe findings"
+          icon={<Shield01Icon size={16} />}
           value={formatCompactNumber(criticalHighCount)}
           detail={`${formatCompactNumber(totalVulns)} total findings visible`}
           tone={riskSummary.tone}
@@ -1443,6 +1462,7 @@ export default function DashboardPage() {
         />
         <BriefingMetric
           label="Blocked or failed"
+          icon={<AlertCircleIcon size={16} />}
           value={needsAttentionTotal.toLocaleString()}
           detail={`${policyIssueCount.toLocaleString()} policy issues · ${genericFailedCount.toLocaleString()} failed`}
           tone={needsAttentionTotal > 0 ? 'danger' : 'success'}
@@ -1452,6 +1472,7 @@ export default function DashboardPage() {
         />
         <BriefingMetric
           label="Coverage freshness"
+          icon={<Clock01Icon size={16} />}
           value={`${watchlistCoverage.coverage7d}%`}
           detail={`${watchlistCoverage.staleItems.length.toLocaleString()} stale · ${watchlistCoverage.neverScannedCount.toLocaleString()} never scanned`}
           tone={watchlistCoverage.coverage7d >= 90 && scannerReady ? 'success' : 'warning'}
@@ -1510,6 +1531,7 @@ export default function DashboardPage() {
         <Card className="flex min-h-[240px] flex-col p-5">
           <DashboardSectionHeader
             title="Scan volume"
+            icon={<ChartIcon size={16} />}
             description="Secondary throughput view for the last 30 days"
             action={
               <Link

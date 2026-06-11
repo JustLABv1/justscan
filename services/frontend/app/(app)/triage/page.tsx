@@ -3,6 +3,7 @@
 import { StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { getTriage, type TriageItem, type TriageItemKind, type TriagePriority } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
@@ -20,7 +21,10 @@ import {
   Table,
 } from '@heroui/react';
 import {
+  AlertCircleIcon,
   ArrowRight01Icon,
+  CheckmarkCircle02Icon,
+  Clock01Icon,
   FilterIcon,
   PackageIcon,
   Shield01Icon,
@@ -28,7 +32,7 @@ import {
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 type TriageQueueView =
   | 'all'
@@ -142,47 +146,26 @@ function SummaryCard({
   label,
   value,
   detail,
+  icon,
   tone = 'default',
 }: {
   label: string;
   value: number;
   detail: string;
+  icon?: ReactNode;
   tone?: ChipTone;
 }) {
-  const valueClass =
-    tone === 'danger'
-      ? 'text-danger'
-      : tone === 'warning'
-        ? 'text-warning'
-        : tone === 'accent'
-          ? 'text-accent'
-          : 'text-foreground';
-  const dotClass =
-    tone === 'danger'
-      ? 'bg-danger'
-      : tone === 'warning'
-        ? 'bg-warning'
-        : tone === 'accent'
-          ? 'bg-accent'
-          : 'bg-default-500';
-
   return (
-    <Card className="px-3.5 py-3">
-      <Card.Content className="p-0">
-        <div className="flex min-h-9 items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-foreground">
-              {label}
-            </p>
-            <p className={`mt-0.5 text-lg font-semibold tabular-nums ${valueClass}`}>
-              {value.toLocaleString()}
-            </p>
-          </div>
-          <span className={`size-1.5 rounded-full ${dotClass}`} />
-        </div>
-        <p className="mt-1.5 text-[11px] leading-4 text-muted">{detail}</p>
-      </Card.Content>
-    </Card>
+    <StatCard
+      label={label}
+      value={value.toLocaleString()}
+      hint={detail}
+      icon={icon}
+      tone={tone}
+      variant="stacked"
+      className="h-full border border-divider/70"
+      hintClassName="text-[11px] leading-4 text-muted"
+    />
   );
 }
 
@@ -438,30 +421,39 @@ export default function TriagePage() {
       />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard label="Open items" value={summary.total} detail="visible now" />
+        <SummaryCard
+          label="Open items"
+          value={summary.total}
+          detail="visible now"
+          icon={<ShieldKeyIcon size={16} />}
+        />
         <SummaryCard
           label="Critical now"
           value={summary.critical}
           detail="highest-priority items"
           tone="danger"
+          icon={<AlertCircleIcon size={16} />}
         />
         <SummaryCard
           label="Fixable first"
           value={summary.fixable}
           detail="remediation available"
           tone="accent"
+          icon={<CheckmarkCircle02Icon size={16} />}
         />
         <SummaryCard
           label="Policy blocked"
           value={summary.policy_failures}
           detail="policy or Xray blocked"
           tone="warning"
+          icon={<Shield01Icon size={16} />}
         />
         <SummaryCard
           label="Watchlist attention"
           value={summary.watchlist}
           detail="stale or failed coverage"
           tone="warning"
+          icon={<Clock01Icon size={16} />}
         />
       </div>
 

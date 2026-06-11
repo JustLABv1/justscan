@@ -794,28 +794,25 @@ function AttentionQueueCard({
         </div>
       ) : (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {items.map((item) => {
-            const chipColor = item.tone === 'neutral' ? 'default' : item.tone;
-            return (
-              <Link
-                key={item.key}
-                href={item.href}
-                className="group min-w-0 rounded-xl border border-surface-border bg-surface-secondary px-3 py-2.5 text-left transition-colors hover:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
-              >
-                <span className="flex items-center justify-between gap-3">
-                  <span className="truncate text-sm font-semibold text-foreground">
-                    {item.label}
-                  </span>
-                  <Chip color={chipColor} size="sm" variant="soft">
-                    {item.value.toLocaleString()}
-                  </Chip>
+          {items.map((item) => (
+            <Link
+              key={item.key}
+              href={item.href}
+              className="group min-w-0 rounded-xl border border-surface-border bg-surface-secondary px-3 py-2.5 text-left transition-colors hover:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
+            >
+              <span className="flex items-center justify-between gap-3">
+                <span className="truncate text-sm font-semibold text-foreground">
+                  {item.label}
                 </span>
-                <span className="mt-1 block truncate text-xs text-muted" title={item.detail}>
-                  {item.detail}
-                </span>
-              </Link>
-            );
-          })}
+                <Chip color={item.tone} size="sm" variant="soft">
+                  {item.value.toLocaleString()}
+                </Chip>
+              </span>
+              <span className="mt-1 block truncate text-xs text-muted" title={item.detail}>
+                {item.detail}
+              </span>
+            </Link>
+          ))}
         </div>
       )}
     </Card>

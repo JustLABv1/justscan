@@ -56,6 +56,7 @@ type StatusPageItem struct {
 	LatestScanID          string                       `json:"latest_scan_id"`
 	ScanStatus            string                       `json:"scan_status"`
 	ExternalStatus        string                       `json:"external_status,omitempty"`
+	ComplianceStatus      string                       `json:"compliance_status,omitempty"`
 	ScanProvider          string                       `json:"scan_provider,omitempty"`
 	CurrentStep           string                       `json:"current_step,omitempty"`
 	StartedAt             *time.Time                   `json:"started_at,omitempty"`
@@ -87,6 +88,7 @@ type statusPageScanSummary struct {
 	ImageTag             string                       `json:"image_tag"`
 	ScanStatus           string                       `json:"scan_status"`
 	ExternalStatus       string                       `json:"external_status,omitempty"`
+	ComplianceStatus     string                       `json:"compliance_status,omitempty"`
 	ScanProvider         string                       `json:"scan_provider,omitempty"`
 	CurrentStep          string                       `json:"current_step,omitempty"`
 	ErrorMessage         string                       `json:"error_message,omitempty"`
@@ -452,7 +454,12 @@ func ViewStatusPageScanBySlug(db *bun.DB) gin.HandlerFunc {
 		}
 
 		latestScanID, _ := latestTrackedScanID(c.Request.Context(), db, page, scan.ImageName, scan.ImageTag)
-		c.JSON(http.StatusOK, buildStatusPageScanSummary(scan, latestScanID))
+		complianceStatuses, err := loadStatusPageComplianceStatuses(c.Request.Context(), db, page, []uuid.UUID{scan.ID})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan compliance status"})
+			return
+		}
+		c.JSON(http.StatusOK, buildStatusPageScanSummary(scan, latestScanID, complianceStatuses[scan.ID]))
 	}
 }
 
@@ -490,12 +497,21 @@ func ViewStatusPageScanHistoryBySlug(db *bun.DB) gin.HandlerFunc {
 		}
 
 		items := make([]statusPageScanSummary, 0, len(scans))
+		scanIDs := make([]uuid.UUID, 0, len(scans))
+		for i := range scans {
+			scanIDs = append(scanIDs, scans[i].ID)
+		}
+		complianceStatuses, err := loadStatusPageComplianceStatuses(c.Request.Context(), db, page, scanIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan compliance statuses"})
+			return
+		}
 		for i := range scans {
 			if err := blockedpolicy.AttachScanDetails(c.Request.Context(), db, &scans[i]); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load blocked policy details"})
 				return
 			}
-			items = append(items, buildStatusPageScanSummary(&scans[i], scans[0].ID))
+			items = append(items, buildStatusPageScanSummary(&scans[i], scans[0].ID, complianceStatuses[scans[i].ID]))
 		}
 
 		c.JSON(http.StatusOK, gin.H{"data": items})
@@ -914,6 +930,29 @@ ORDER BY l.image_name ASC, l.image_tag ASC`
 		return nil, err
 	}
 
+	scanIDs := make([]uuid.UUID, 0, len(items)+len(exactItems)+len(patternItems))
+	for _, group := range [][]StatusPageItem{items, exactItems, patternItems} {
+		for _, item := range group {
+			if scanID, err := uuid.Parse(item.LatestScanID); err == nil {
+				scanIDs = append(scanIDs, scanID)
+			}
+		}
+	}
+	complianceStatuses, err := loadStatusPageComplianceStatuses(c.Request.Context(), db, page, scanIDs)
+	if err != nil {
+		return nil, err
+	}
+	applyComplianceStatuses := func(group []StatusPageItem) {
+		for index := range group {
+			if scanID, err := uuid.Parse(group[index].LatestScanID); err == nil {
+				group[index].ComplianceStatus = complianceStatuses[scanID]
+			}
+		}
+	}
+	applyComplianceStatuses(items)
+	applyComplianceStatuses(exactItems)
+	applyComplianceStatuses(patternItems)
+
 	if page.IncludeAllTags {
 		if items == nil {
 			return []StatusPageItem{}, nil
@@ -1026,7 +1065,7 @@ func latestTrackedScanID(ctx context.Context, db *bun.DB, page *models.StatusPag
 	return latestID, nil
 }
 
-func buildStatusPageScanSummary(scan *models.Scan, latestScanID uuid.UUID) statusPageScanSummary {
+func buildStatusPageScanSummary(scan *models.Scan, latestScanID uuid.UUID, complianceStatus string) statusPageScanSummary {
 	observedAt := scan.CreatedAt
 	if scan.CompletedAt != nil {
 		observedAt = *scan.CompletedAt
@@ -1038,6 +1077,7 @@ func buildStatusPageScanSummary(scan *models.Scan, latestScanID uuid.UUID) statu
 		ImageTag:             scan.ImageTag,
 		ScanStatus:           scan.Status,
 		ExternalStatus:       scan.ExternalStatus,
+		ComplianceStatus:     complianceStatus,
 		ScanProvider:         scan.ScanProvider,
 		CurrentStep:          scan.CurrentStep,
 		ErrorMessage:         scan.ErrorMessage,
@@ -1052,6 +1092,42 @@ func buildStatusPageScanSummary(scan *models.Scan, latestScanID uuid.UUID) statu
 		ObservedAt:           observedAt,
 		IsLatest:             latestScanID != uuid.Nil && scan.ID == latestScanID,
 	}
+}
+
+func loadStatusPageComplianceStatuses(
+	ctx context.Context,
+	db *bun.DB,
+	page *models.StatusPage,
+	scanIDs []uuid.UUID,
+) (map[uuid.UUID]string, error) {
+	statuses := make(map[uuid.UUID]string)
+	if page.OwnerOrgID == nil || len(scanIDs) == 0 {
+		return statuses, nil
+	}
+
+	var rows []struct {
+		ScanID    uuid.UUID `bun:"scan_id"`
+		HasFailed bool      `bun:"has_failed"`
+	}
+	if err := db.NewSelect().
+		Table("compliance_results").
+		Column("scan_id").
+		ColumnExpr("BOOL_OR(status = 'fail') AS has_failed").
+		Where("scan_id IN (?)", bun.In(scanIDs)).
+		Where("org_id = ?", *page.OwnerOrgID).
+		Group("scan_id").
+		Scan(ctx, &rows); err != nil {
+		return nil, err
+	}
+
+	for _, row := range rows {
+		if row.HasFailed {
+			statuses[row.ScanID] = "fail"
+		} else {
+			statuses[row.ScanID] = "pass"
+		}
+	}
+	return statuses, nil
 }
 
 func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.StatusPage, []models.StatusPageTarget, []models.StatusPageUpdate, error) {

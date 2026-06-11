@@ -1,6 +1,7 @@
 'use client';
 import { useAIContextBridge } from '@/components/assistant/ai-context-bridge';
 import { EvilRadarChart } from '@/components/evilcharts/charts/radar-chart';
+import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
 import { ManageSuppressionAccessModal } from '@/components/suppressions/manage-suppression-access-modal';
 import { useToast } from '@/components/toast';
 import {
@@ -2264,23 +2265,10 @@ export default function ScanDetailPage() {
       {scan.status === 'failed' &&
         scan.error_message &&
         scan.external_status !== 'blocked_by_xray_policy' && (
-          <Alert status="danger" className="border border-danger bg-danger-soft">
-            <Alert.Indicator />
-            <Alert.Content>
-              <Alert.Title>Scan failed</Alert.Title>
-              <Alert.Description>
-                <pre
-                  className="text-xs whitespace-pre-wrap break-all  leading-relaxed"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {scan.error_message}
-                </pre>
-              </Alert.Description>
-              <Button className="mt-2 sm:hidden" size="sm" variant="primary">
-                Refresh
-              </Button>
-            </Alert.Content>
-          </Alert>
+          <ScanFailureAlert
+            errorMessage={scan.error_message}
+            imageReference={`${scan.image_name}:${scan.image_tag}`}
+          />
         )}
 
       {/* Tags + Compliance + Scanner info → moved to Details tab */}

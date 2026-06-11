@@ -107,10 +107,10 @@ const IMAGE_STATUS_FILTER_OPTIONS: Array<{ key: ImageStatusFilter; label: string
 ];
 
 const DECISION_FILTER_OPTIONS: Array<{ key: DecisionFilter; label: string }> = [
-  { key: '__all__', label: 'All decisions' },
-  { key: 'blocked', label: 'Blocked' },
-  { key: 'warning', label: 'Warning' },
-  { key: 'allowed', label: 'Allowed' },
+  { key: '__all__', label: 'All org policies' },
+  { key: 'failed', label: 'Policy failed' },
+  { key: 'passed', label: 'Policy passed' },
+  { key: 'not_evaluated', label: 'Not evaluated' },
 ];
 
 function getStatusRank(status: string) {
@@ -176,6 +176,7 @@ function isClearStatus(item: StatusPageItem, operationalStatus?: string) {
   const resolvedOperationalStatus = operationalStatus ?? getPresentationStatus(item);
   return (
     resolvedOperationalStatus === 'healthy' &&
+    item.compliance_status !== 'fail' &&
     getExposureStatus(item, resolvedOperationalStatus) === 'clear'
   );
 }
@@ -188,6 +189,7 @@ function compareItemsByPriority(left: StatusPageItem, right: StatusPageItem) {
 
   return (
     getStatusRank(leftStatus) - getStatusRank(rightStatus) ||
+    Number(right.compliance_status === 'fail') - Number(left.compliance_status === 'fail') ||
     getExposureRank(leftExposure) - getExposureRank(rightExposure) ||
     right.critical_count - left.critical_count ||
     right.high_count - left.high_count ||
@@ -282,9 +284,17 @@ function getServiceTone(item: StatusPageItem) {
 
   if (operationalStatus === 'blocked_by_xray_policy') {
     return {
-      label: 'Policy Blocked',
+      label: 'Xray Policy Blocked',
       detail: 'Xray blocked the latest snapshot',
       color: STATUS_COLOR.blocked_by_xray_policy,
+    };
+  }
+
+  if (item.compliance_status === 'fail') {
+    return {
+      label: 'Organization Policy Failed',
+      detail: 'The latest completed scan failed an organization policy',
+      color: STATUS_COLOR.failed,
     };
   }
 
@@ -319,36 +329,72 @@ function getServiceTone(item: StatusPageItem) {
   };
 }
 
-type PolicyDecision = 'allowed' | 'warning' | 'blocked';
+type PolicyDecision = 'passed' | 'failed' | 'not_evaluated';
 
-function getPolicyDecision(item: StatusPageItem): PolicyDecision {
-  const operationalStatus = getPresentationStatus(item);
-  if (
-    operationalStatus === 'failed' ||
-    operationalStatus === 'blocked_by_xray_policy' ||
-    item.critical_count > 0
-  ) {
-    return 'blocked';
-  }
-  if (
-    operationalStatus !== 'healthy' ||
-    item.high_count > 0 ||
-    item.medium_count > 0 ||
-    item.low_count > 0
-  ) {
-    return 'warning';
-  }
-  return 'allowed';
+function getPolicyDecision(item: Pick<StatusPageItem, 'compliance_status'>): PolicyDecision {
+  if (item.compliance_status === 'fail') return 'failed';
+  if (item.compliance_status === 'pass') return 'passed';
+  return 'not_evaluated';
 }
 
 function getPolicyDecisionMeta(decision: PolicyDecision) {
-  if (decision === 'blocked') {
-    return { label: 'Blocked', color: 'danger' as const, tone: '#f87171' };
+  if (decision === 'failed') {
+    return { label: 'Org policy failed', color: 'danger' as const, tone: STATUS_COLOR.failed };
   }
-  if (decision === 'warning') {
-    return { label: 'Warning', color: 'warning' as const, tone: '#facc15' };
+  if (decision === 'passed') {
+    return { label: 'Org policy passed', color: 'success' as const, tone: STATUS_COLOR.healthy };
   }
-  return { label: 'Allowed', color: 'success' as const, tone: '#34d399' };
+  return { label: 'No org policy', color: 'default' as const, tone: EXPOSURE_COLOR.unknown };
+}
+
+function getOperationalStatusMeta(status: string) {
+  if (status === 'failed') {
+    return { label: 'Scan failed', color: 'danger' as const };
+  }
+  if (status === 'blocked_by_xray_policy') {
+    return { label: 'Xray policy blocked', color: 'warning' as const };
+  }
+  if (status === 'stale') {
+    return { label: 'Stale', color: 'warning' as const };
+  }
+  if (ACTIVE_SCAN_STATUSES.has(status)) {
+    return { label: getOperationalStatusLabel(status), color: 'accent' as const };
+  }
+  if (status === 'healthy' || status === 'completed') {
+    return { label: 'Operational', color: 'success' as const };
+  }
+  return { label: getOperationalStatusLabel(status), color: 'default' as const };
+}
+
+function getScanHistoryMeta(
+  scan: Pick<StatusPageScanSummary, 'scan_status' | 'external_status' | 'compliance_status'>
+) {
+  const operationalStatus = getEffectiveScanStatus(scan.scan_status, scan.external_status);
+  if (operationalStatus === 'failed') {
+    return { label: 'scan failed', color: STATUS_COLOR.failed };
+  }
+  if (operationalStatus === 'blocked_by_xray_policy') {
+    return { label: 'Xray policy blocked', color: STATUS_COLOR.blocked_by_xray_policy };
+  }
+  if (ACTIVE_SCAN_STATUSES.has(operationalStatus)) {
+    return {
+      label: getOperationalStatusLabel(operationalStatus),
+      color: STATUS_COLOR[operationalStatus] ?? STATUS_COLOR.running,
+    };
+  }
+  if (operationalStatus !== 'completed' && operationalStatus !== 'healthy') {
+    return {
+      label: getOperationalStatusLabel(operationalStatus),
+      color: STATUS_COLOR[operationalStatus] ?? EXPOSURE_COLOR.unknown,
+    };
+  }
+  if (scan.compliance_status === 'fail') {
+    return { label: 'org policy failed', color: STATUS_COLOR.failed };
+  }
+  return {
+    label: scan.compliance_status === 'pass' ? 'org policy passed' : 'completed',
+    color: STATUS_COLOR.completed,
+  };
 }
 
 function formatScanner(scanProvider?: string) {
@@ -359,8 +405,8 @@ function formatScanner(scanProvider?: string) {
 }
 
 function formatScanHistoryOptionLabel(scan: StatusPageScanSummary) {
-  const effectiveStatus = getEffectiveScanStatus(scan.scan_status, scan.external_status);
-  return `${scan.is_latest ? 'Latest' : 'Previous'} · ${formatStatusLabel(effectiveStatus)} · ${timeAgo(scan.observed_at)}`;
+  const meta = getScanHistoryMeta(scan);
+  return `${scan.is_latest ? 'Latest' : 'Previous'} · ${meta.label} · ${timeAgo(scan.observed_at)}`;
 }
 
 function buildFallbackScanSummary(item: StatusPageItem): StatusPageScanSummary {
@@ -370,6 +416,7 @@ function buildFallbackScanSummary(item: StatusPageItem): StatusPageScanSummary {
     image_tag: item.image_tag,
     scan_status: item.scan_status,
     external_status: item.external_status,
+    compliance_status: item.compliance_status,
     scan_provider: item.scan_provider,
     current_step: item.current_step,
     error_message: item.error_message,
@@ -428,8 +475,7 @@ function RecentScanStrip({
     return (
       <div className="flex gap-1.5 overflow-hidden" aria-label="14 day scan history">
         {recentScans.map((scan) => {
-          const status = getEffectiveScanStatus(scan.scan_status, scan.external_status);
-          const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
+          const { color } = getScanHistoryMeta(scan);
           return (
             <Tooltip key={scan.scan_id} delay={100}>
               <Tooltip.Trigger aria-label={formatScanHistoryOptionLabel(scan)}>
@@ -456,8 +502,7 @@ function RecentScanStrip({
     <div className="space-y-3">
       <div className="flex gap-1.5 overflow-hidden" aria-label="Recent scan history">
         {recentScans.map((scan) => {
-          const status = getEffectiveScanStatus(scan.scan_status, scan.external_status);
-          const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
+          const { color } = getScanHistoryMeta(scan);
           return (
             <span
               key={scan.scan_id}
@@ -482,15 +527,15 @@ function RecentScanStrip({
 
 function ImageStatusChips({ item }: { item: StatusPageItem }) {
   const decisionMeta = getPolicyDecisionMeta(getPolicyDecision(item));
-  const operationalStatus = getPresentationStatus(item);
+  const operationalMeta = getOperationalStatusMeta(getPresentationStatus(item));
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <Chip color={decisionMeta.color} size="sm" variant="soft">
         <Chip.Label>{decisionMeta.label}</Chip.Label>
       </Chip>
-      <Chip size="sm" variant="secondary">
-        <Chip.Label>{getOperationalStatusLabel(operationalStatus)}</Chip.Label>
+      <Chip color={operationalMeta.color} size="sm" variant="soft">
+        <Chip.Label>{operationalMeta.label}</Chip.Label>
       </Chip>
     </div>
   );
@@ -652,8 +697,7 @@ function ScanTimeline({
           aria-label="Scan history timeline"
         >
           {ordered.map((scan, i) => {
-            const status = getEffectiveScanStatus(scan.scan_status, scan.external_status);
-            const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
+            const { color } = getScanHistoryMeta(scan);
             const isSelected = scan.scan_id === selectedId;
 
             return (
@@ -715,8 +759,7 @@ function ScanTimeline({
       {/* Info strip - updates on hover, shows selected when not hovering */}
       {infoScan &&
         (() => {
-          const status = getEffectiveScanStatus(infoScan.scan_status, infoScan.external_status);
-          const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
+          const { color } = getScanHistoryMeta(infoScan);
           return (
             <div
               className="flex items-center gap-2 text-[12px]"
@@ -879,14 +922,27 @@ function StatusItemHistoryModal({
                       ) : null}
                     </div>
                   </div>
-                  {selectedScan ? (
-                    <StatusBadge
-                      externalStatus={selectedScan.external_status}
-                      status={selectedScan.scan_status}
-                    />
-                  ) : item ? (
-                    <StatusDot status={getPresentationStatus(item)} />
-                  ) : null}
+                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    {selectedScan ? (
+                      <>
+                        <Chip
+                          color={getPolicyDecisionMeta(getPolicyDecision(selectedScan)).color}
+                          size="sm"
+                          variant="soft"
+                        >
+                          <Chip.Label>
+                            {getPolicyDecisionMeta(getPolicyDecision(selectedScan)).label}
+                          </Chip.Label>
+                        </Chip>
+                        <StatusBadge
+                          externalStatus={selectedScan.external_status}
+                          status={selectedScan.scan_status}
+                        />
+                      </>
+                    ) : item ? (
+                      <ImageStatusChips item={item} />
+                    ) : null}
+                  </div>
                 </div>
               </Card>
 
@@ -1157,9 +1213,20 @@ export default function PublicStatusPage() {
       (acc, item) => {
         const operationalStatus = getPresentationStatus(item);
         const exposureStatus = getExposureStatus(item, operationalStatus);
+        const hasOperationalIssue =
+          operationalStatus === 'failed' ||
+          operationalStatus === 'blocked_by_xray_policy' ||
+          operationalStatus === 'stale';
+        const hasPolicyFailure = item.compliance_status === 'fail';
         acc.total += 1;
         acc.attention +=
-          operationalStatus === 'healthy' && !isExposedStatus(exposureStatus) ? 0 : 1;
+          operationalStatus === 'healthy' &&
+          !hasPolicyFailure &&
+          !isExposedStatus(exposureStatus)
+            ? 0
+            : 1;
+        acc.issues += hasOperationalIssue || hasPolicyFailure ? 1 : 0;
+        acc.policyFailed += hasPolicyFailure ? 1 : 0;
         acc.critical += item.critical_count;
         acc.high += item.high_count;
         acc.medium += item.medium_count;
@@ -1175,6 +1242,8 @@ export default function PublicStatusPage() {
       {
         total: 0,
         attention: 0,
+        issues: 0,
+        policyFailed: 0,
         critical: 0,
         high: 0,
         medium: 0,
@@ -1220,7 +1289,8 @@ export default function PublicStatusPage() {
         (statusFilter === 'issues' &&
           (operationalStatus === 'failed' ||
             operationalStatus === 'blocked_by_xray_policy' ||
-            operationalStatus === 'stale')) ||
+            operationalStatus === 'stale' ||
+            item.compliance_status === 'fail')) ||
         (statusFilter === 'healthy' && isClearStatus(item, operationalStatus)) ||
         (statusFilter === 'scanning' && ACTIVE_SCAN_STATUSES.has(operationalStatus)) ||
         (statusFilter === 'exposed' && isExposedStatus(exposureStatus));
@@ -1305,7 +1375,7 @@ export default function PublicStatusPage() {
         acc[decision] += 1;
         return acc;
       },
-      { allowed: 0, warning: 0, blocked: 0 }
+      { passed: 0, failed: 0, not_evaluated: 0 }
     );
   }, [trackedItems]);
 
@@ -1348,10 +1418,8 @@ export default function PublicStatusPage() {
     );
   }
 
-  const operationalIssueCount =
-    (summary.operations.failed ?? 0) +
-    (summary.operations.blocked_by_xray_policy ?? 0) +
-    (summary.operations.stale ?? 0);
+  const issueCount = summary.issues;
+  const policyFailureCount = summary.policyFailed;
   const exposedCount = (summary.exposure.high_risk ?? 0) + (summary.exposure.findings_present ?? 0);
   const runningCount = summary.scanning;
   const healthyCount = summary.healthy;
@@ -1367,11 +1435,11 @@ export default function PublicStatusPage() {
           color: STATUS_COLOR.failed,
           description: `${activeIncidentCount} active incident notice${activeIncidentCount === 1 ? '' : 's'} currently require attention.`,
         }
-      : operationalIssueCount > 0
+      : issueCount > 0
         ? {
             label: 'Investigating Issues',
             color: STATUS_COLOR.failed,
-            description: `${summary.operations.failed ?? 0} failed, ${summary.operations.blocked_by_xray_policy ?? 0} policy blocked, and ${summary.operations.stale ?? 0} stale snapshot${operationalIssueCount === 1 ? '' : 's'} currently need attention.`,
+            description: `${summary.operations.failed ?? 0} scan failed, ${summary.operations.blocked_by_xray_policy ?? 0} Xray blocked, ${policyFailureCount} org policy failed, and ${summary.operations.stale ?? 0} stale snapshot${issueCount === 1 ? '' : 's'} currently need attention.`,
           }
         : activeMaintenanceCount > 0
           ? {
@@ -1462,7 +1530,7 @@ export default function PublicStatusPage() {
           autoRefreshPaused={!isPageVisible || historyModal.isOpen}
           exposedCount={exposedCount}
           healthyCount={healthyCount}
-          issueCount={operationalIssueCount}
+          issueCount={issueCount}
           refreshing={refreshing}
           runningCount={runningCount}
           secondsRemaining={secondsRemaining}
@@ -1474,22 +1542,22 @@ export default function PublicStatusPage() {
           activeKey={activeMetricKey}
           metrics={[
             {
-              key: 'decision:allowed',
-              label: 'Allowed',
-              value: decisionSummary.allowed,
+              key: 'decision:passed',
+              label: 'Policy passed',
+              value: decisionSummary.passed,
               color: 'success',
             },
             {
-              key: 'decision:warning',
-              label: 'Warnings',
-              value: decisionSummary.warning,
-              color: 'warning',
+              key: 'decision:failed',
+              label: 'Policy failed',
+              value: decisionSummary.failed,
+              color: 'danger',
             },
             {
-              key: 'decision:blocked',
-              label: 'Blocked',
-              value: decisionSummary.blocked,
-              color: 'danger',
+              key: 'decision:not_evaluated',
+              label: 'Not evaluated',
+              value: decisionSummary.not_evaluated,
+              color: 'default',
             },
             { key: 'status:scanning', label: 'Scanning', value: runningCount, color: 'accent' },
             {
@@ -1524,7 +1592,7 @@ export default function PublicStatusPage() {
                   </Chip>
                 </div>
                 <p className="mt-1 text-xs text-muted">
-                  Latest decision, findings, and 14-day history for each tracked image tag.
+                  Latest operational state, org policy result, findings, and scan history.
                 </p>
               </div>
 
@@ -1564,7 +1632,7 @@ export default function PublicStatusPage() {
                   </Select.Popover>
                 </Select>
                 <Select
-                  aria-label="Filter images by decision"
+                  aria-label="Filter images by organization policy result"
                   variant="secondary"
                   value={decisionFilter}
                   onChange={(value) => setDecisionFilter(String(value) as DecisionFilter)}

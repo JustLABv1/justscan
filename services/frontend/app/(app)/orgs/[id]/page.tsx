@@ -1,7 +1,7 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
-import { OrgAutomationTab } from '@/components/org-detail/automation-tab';
 import { NotificationManager } from '@/components/notifications/notification-manager';
+import { OrgAutomationTab } from '@/components/org-detail/automation-tab';
 import { OrgOverviewTab } from '@/components/org-detail/overview-tab';
 import { OrgScansTab } from '@/components/org-detail/scans-tab';
 import { OrgScanItem, StatusBadge } from '@/components/org-detail/shared';
@@ -56,6 +56,7 @@ import {
   Modal,
   Select,
   Switch,
+  Tabs,
   useOverlayState,
 } from '@heroui/react';
 import { ArrowLeft01Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
@@ -91,15 +92,45 @@ function emptyRule(): PolicyRule {
 }
 
 const ORG_TABS = [
-  { id: 'overview', label: 'Overview', description: 'Risk and compliance' },
-  { id: 'automation', label: 'Automation', description: 'Patterns and policies' },
-  { id: 'notifications', label: 'Notifications', description: 'Channels and rules' },
-  { id: 'team', label: 'Team', description: 'Members and invites' },
-  { id: 'scans', label: 'Scans', description: 'Assigned assets' },
-  { id: 'tokens', label: 'Tokens', description: 'API access tokens' },
+  {
+    id: 'overview',
+    label: 'Overview',
+    description: 'Review this organization’s risk posture and recent compliance failures.',
+  },
+  {
+    id: 'scans',
+    label: 'Scans',
+    description: 'Manage assigned images, automatic routing, and vulnerability view defaults.',
+  },
+  {
+    id: 'policies',
+    label: 'Policies',
+    description: 'Define the compliance rules evaluated against organization scans.',
+  },
+  {
+    id: 'members',
+    label: 'Members',
+    description: 'Manage member roles, ownership, and pending invitations.',
+  },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    description: 'Configure organization channels, rules, retries, and delivery history.',
+  },
+  {
+    id: 'access',
+    label: 'Access',
+    description: 'Manage API tokens used by pipelines and automated tools.',
+  },
 ] as const;
 
 type OrgTabId = (typeof ORG_TABS)[number]['id'];
+
+const LEGACY_ORG_TABS: Record<string, OrgTabId> = {
+  automation: 'policies',
+  team: 'members',
+  tokens: 'access',
+};
 
 export default function OrgDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -217,7 +248,8 @@ export default function OrgDetailPage() {
   useEffect(() => {
     return deferEffect(() => {
       const requestedTab = searchParams.get('tab');
-      const match = ORG_TABS.find((tab) => tab.id === requestedTab);
+      const normalizedTab = requestedTab ? LEGACY_ORG_TABS[requestedTab] || requestedTab : null;
+      const match = ORG_TABS.find((tab) => tab.id === normalizedTab);
       if (match && match.id !== activeTab) {
         setActiveTab(match.id);
         return;
@@ -358,13 +390,7 @@ export default function OrgDetailPage() {
     setPolicySaving(true);
     try {
       if (editingPolicy) {
-        await updatePolicy(
-          id,
-          editingPolicy.id,
-          policyName,
-          policyRules,
-          policyIncludeSuppressed
-        );
+        await updatePolicy(id, editingPolicy.id, policyName, policyRules, policyIncludeSuppressed);
         toast.success('Policy updated');
       } else {
         await createPolicy(id, policyName, policyRules, policyIncludeSuppressed);
@@ -508,16 +534,6 @@ export default function OrgDetailPage() {
 
   if (!org) return null;
 
-  function handleTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
-    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
-    event.preventDefault();
-    const nextIndex =
-      event.key === 'ArrowRight'
-        ? (index + 1) % ORG_TABS.length
-        : (index - 1 + ORG_TABS.length) % ORG_TABS.length;
-    handleTabChange(ORG_TABS[nextIndex].id);
-  }
-
   function handleTabChange(nextTab: OrgTabId) {
     setActiveTab(nextTab);
     const params = new URLSearchParams(searchParams.toString());
@@ -545,50 +561,49 @@ export default function OrgDetailPage() {
         }
       />
 
-      <Card role="tablist" aria-label="Organization sections">
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-1">
-          {ORG_TABS.map((tab, index): any => {
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                id={`${tab.id}-tab`}
-                role="tab"
-                aria-controls={`${tab.id}-panel`}
-                aria-selected={active}
-                className="rounded-xl px-4 py-3 text-left transition-all duration-150"
-                onClick={() => handleTabChange(tab.id)}
-                onKeyDown={(event) => handleTabKeyDown(event, index)}
-                type="button"
-                style={
-                  active
-                    ? {
-                        background:
-                          'linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--surface)) 0%, color-mix(in srgb, var(--accent) 6%, var(--surface-secondary)) 100%)',
-                        boxShadow:
-                          'inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent), 0 2px 8px color-mix(in srgb, var(--accent) 8%, transparent)',
-                      }
-                    : { background: 'var(--surface)' }
-                }
-              >
-                <p
-                  className={`text-sm font-semibold ${active ? 'text-accent dark:text-accent' : 'text-zinc-700 dark:text-zinc-200'}`}
-                >
+      <div className="space-y-3">
+        <Tabs
+          className="w-full"
+          selectedKey={activeTab}
+          onSelectionChange={(key) => handleTabChange(String(key) as OrgTabId)}
+        >
+          <Tabs.ListContainer className="overflow-x-auto">
+            <Tabs.List
+              aria-label="Organization sections"
+              className="w-full min-w-max *:px-4 *:py-2.5 *:text-sm *:font-medium"
+            >
+              {ORG_TABS.map((tab) => (
+                <Tabs.Tab key={tab.id} id={tab.id}>
                   {tab.label}
-                </p>
-                <p className="text-xs text-zinc-500 mt-1">{tab.description}</p>
-              </button>
-            );
-          })}
-        </div>
-      </Card>
+                  <Tabs.Indicator />
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs.ListContainer>
+          {ORG_TABS.map((tab) => (
+            <Tabs.Panel key={tab.id} className="hidden" id={tab.id}>
+              <span className="sr-only">{tab.label}</span>
+            </Tabs.Panel>
+          ))}
+        </Tabs>
 
-      <div id={`${activeTab}-panel`} role="tabpanel" aria-labelledby={`${activeTab}-tab`}>
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">
+            {ORG_TABS.find((tab) => tab.id === activeTab)?.label}
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            {ORG_TABS.find((tab) => tab.id === activeTab)?.description}
+          </p>
+        </div>
+      </div>
+
+      <div>
         {activeTab === 'overview' && (
           <OrgOverviewTab riskScore={riskScore} trend={trend} orgScans={orgScans} />
         )}
-        {activeTab === 'automation' && (
+        {activeTab === 'policies' && (
           <OrgAutomationTab
+            section="policies"
             org={org}
             inputClassName={inputCls}
             canManageOrgSettings={canManageOrgSettings}
@@ -605,7 +620,7 @@ export default function OrgDetailPage() {
             onDeletePolicy={(policyId) => void handleDeletePolicy(policyId)}
           />
         )}
-        {activeTab === 'team' && (
+        {activeTab === 'members' && (
           <OrgTeamTab
             canEditRoles={canEditRoles}
             canManageMembers={canManageMembers}
@@ -639,14 +654,33 @@ export default function OrgDetailPage() {
           />
         )}
         {activeTab === 'scans' && (
-          <OrgScansTab
-            canManageScans={canMutateOrgScans}
-            onOpenAssignModal={() => void openAssignModal()}
-            onRemoveScan={(scanId) => void handleRemoveScan(scanId)}
-            orgScans={orgScans}
-          />
+          <div className="space-y-6">
+            <OrgScansTab
+              canManageScans={canMutateOrgScans}
+              onOpenAssignModal={() => void openAssignModal()}
+              onRemoveScan={(scanId) => void handleRemoveScan(scanId)}
+              orgScans={orgScans}
+            />
+            <OrgAutomationTab
+              section="scan-settings"
+              org={org}
+              inputClassName={inputCls}
+              canManageOrgSettings={canManageOrgSettings}
+              newPattern={newPattern}
+              vulnerabilityViewSettings={vulnerabilityViewSettings}
+              vulnerabilityViewSaving={vulnerabilityViewSaving}
+              onPatternChange={setNewPattern}
+              onAddPattern={() => void addPattern()}
+              onRemovePattern={(pattern) => void removePattern(pattern)}
+              onVulnerabilityViewSettingsChange={setVulnerabilityViewSettings}
+              onSaveVulnerabilityViewSettings={() => void saveVulnerabilityViewSettings()}
+              onCreatePolicy={openCreatePolicy}
+              onEditPolicy={openEditPolicy}
+              onDeletePolicy={(policyId) => void handleDeletePolicy(policyId)}
+            />
+          </div>
         )}
-        {activeTab === 'tokens' && (
+        {activeTab === 'access' && (
           <OrgTokensTab
             orgId={id}
             canManage={isSystemAdmin || canManageOrg(currentOrgRole)}
@@ -710,8 +744,7 @@ export default function OrgDetailPage() {
                           Count suppressed vulnerabilities in policy evaluation
                         </Label>
                         <p className="text-xs text-zinc-500">
-                          Turn off to ignore effectively suppressed vulnerabilities for this
-                          policy.
+                          Turn off to ignore effectively suppressed vulnerabilities for this policy.
                         </p>
                       </Switch.Content>
                     </Switch>
@@ -870,8 +903,7 @@ export default function OrgDetailPage() {
                           <div className="space-y-1">
                             <label className="text-xs text-zinc-500">Xray policy blocking</label>
                             <p className="text-xs text-zinc-500">
-                              Fails when any vulnerability has an active Xray blocking policy
-                              match.
+                              Fails when any vulnerability has an active Xray blocking policy match.
                             </p>
                           </div>
                         )}

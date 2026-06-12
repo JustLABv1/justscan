@@ -1,6 +1,8 @@
 'use client';
+import { Button, Label, NumberField, SearchField, Switch } from '@heroui/react';
+import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
 const SCAN_PAGE_SIZE = 100;
 const VULN_PAGE_SIZE = 500;
@@ -11,7 +13,9 @@ interface Tag { id: string; name: string; color: string; }
 interface Vulnerability {
   id: string; vuln_id: string; pkg_name: string; installed_version: string;
   fixed_version: string; severity: string; title: string; description: string;
-  cvss_score: number; references: string[];
+  cvss_score: number; references: string[]; data_source?: string; first_seen_at?: string | null;
+  xray_watch_name?: string; xray_watch_names?: string[]; xray_watch_policy_matches?: Array<Record<string, unknown>>;
+  xray_is_blocking?: boolean;
   suppression?: { status: string; justification: string; username?: string; source?: string; xray_policy_name?: string; xray_watch_name?: string } | null;
   comments?: Comment[];
 }
@@ -25,6 +29,16 @@ interface Scan {
   created_at: string; architecture?: string; os_family?: string; os_name?: string;
   image_location?: string; helm_chart?: string; helm_source_path?: string;
   tags?: Tag[];
+  scan_source?: string; owner_org_id?: string;
+  collections?: Array<{ id: string; name: string }>;
+  blocked_policy_details?: {
+    summary?: string; blocking_policies?: string[]; matched_policies?: string[];
+    matched_watches?: Array<{ name: string }>; total_violations?: number;
+  } | null;
+  compliance_summary?: {
+    status: 'pass' | 'fail'; pass_count: number; fail_count: number;
+    policy_names: string[]; failed_policy_names: string[];
+  } | null;
 }
 
 interface ManualFinding {
@@ -33,13 +47,24 @@ interface ManualFinding {
   title: string; description: string; cvss_score: number; justification: string;
   created_at: string;
 }
-interface ScanData { scan: Scan; vulns: Vulnerability[]; }
+interface ComplianceResult {
+  id: string;
+  org_id: string;
+  org_name?: string;
+  status: 'pass' | 'fail';
+  policy_name?: string;
+  violations?: Array<{ vuln_id?: string; message?: string; rule?: { cve_id?: string } }>;
+}
+interface ScanData { scan: Scan; vulns: Vulnerability[]; compliance: ComplianceResult[]; }
 interface CustomField { label: string; value: string; }
 
 interface Filters {
   minCvss: number;
   severities: string[];
   onlyHasFix: boolean;
+  search: string;
+  xrayPolicyOnly: boolean;
+  orgPolicyFailedOnly: boolean;
   showSuppressed: boolean;
   showComments: boolean;
   showDescription: boolean;
@@ -48,6 +73,7 @@ interface Filters {
   showStarted: boolean;
   showCompleted: boolean;
   showTrivyVersion: boolean;
+  showPolicyDetails: boolean;
 }
 
 interface PaginatedResponse<T> {
@@ -78,6 +104,36 @@ const SEV_COLORS: Record<string, { bg: string; text: string; light: string }> = 
 };
 
 const SEVS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
+const SEVERITY_DOT_COLORS: Record<string, string> = { CRITICAL: '#dc2626', HIGH: '#ea580c', MEDIUM: '#d97706', LOW: '#2563eb', UNKNOWN: '#6b7280' };
+const FILTER_TOGGLE_GROUPS: Array<{ label: string; rows: Array<[keyof Filters, string]> }> = [
+  {
+    label: 'Finding filters',
+    rows: [
+      ['onlyHasFix', 'Has fix only'],
+      ['xrayPolicyOnly', 'Xray policy findings only'],
+      ['orgPolicyFailedOnly', 'Org policy failures only'],
+      ['showSuppressed', 'Include acknowledged findings'],
+    ],
+  },
+  {
+    label: 'Finding content',
+    rows: [
+      ['showDescription', 'Descriptions'],
+      ['showReferences', 'References'],
+      ['showComments', 'Analyst comments'],
+      ['showPolicyDetails', 'Policy details'],
+    ],
+  },
+  {
+    label: 'Scan details',
+    rows: [
+      ['showScanId', 'Scan ID'],
+      ['showStarted', 'Started'],
+      ['showCompleted', 'Completed'],
+      ['showTrivyVersion', 'Scanner versions'],
+    ],
+  },
+];
 
 function fmt(iso: string | null) {
   if (!iso) return '-';
@@ -89,6 +145,28 @@ function SevBadge({ s }: { s: string }) {
   return (
     <span style={{ background: c.bg, color: c.text, fontSize: '12px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
       {s}
+    </span>
+  );
+}
+
+function BrandMark({ size = 34 }: { size?: number }) {
+  const imageSize = Math.round(size * 1.55);
+  return (
+    <span
+      className="report-brand-mark"
+      style={{
+        height: size,
+        width: size,
+      }}
+    >
+      <Image
+        src="/justscan-logo.png"
+        alt="JustScan logo"
+        width={imageSize}
+        height={imageSize}
+        style={{ filter: 'invert(1)', height: imageSize, maxWidth: 'none', width: imageSize }}
+        priority={size > 20}
+      />
     </span>
   );
 }
@@ -125,12 +203,58 @@ function formatStatusLabel(status: string): string {
   return status.replace(/_/g, ' ').toUpperCase();
 }
 
-function filterVulns(vulns: Vulnerability[], f: Filters): Vulnerability[] {
+function normalizeVulnId(value?: string | null): string {
+  return (value ?? '').trim().toUpperCase();
+}
+
+function vulnerabilityHasXrayPolicy(vulnerability: Vulnerability): boolean {
+  return Boolean(
+    vulnerability.xray_is_blocking ||
+    vulnerability.xray_watch_name?.trim() ||
+    vulnerability.xray_watch_names?.some((name) => name.trim()) ||
+    vulnerability.xray_watch_policy_matches?.length
+  );
+}
+
+function xrayPolicyLabels(vulnerability: Vulnerability): string[] {
+  const labels = [
+    vulnerability.xray_watch_name ?? '',
+    ...(vulnerability.xray_watch_names ?? []),
+    ...(vulnerability.xray_watch_policy_matches ?? []).flatMap((match) => {
+      const policy = typeof match.policy === 'string' ? match.policy : '';
+      const watch = typeof match.watch_name === 'string' ? match.watch_name : '';
+      return [policy, watch];
+    }),
+  ].flatMap((value) => value.trim() ? [value.trim()] : []);
+  if (labels.length === 0 && vulnerabilityHasXrayPolicy(vulnerability)) labels.push('Policy match');
+  return Array.from(new Set(labels));
+}
+
+function orgPolicyFailureMap(compliance: ComplianceResult[]): Map<string, string[]> {
+  const failures = new Map<string, Set<string>>();
+  for (const result of compliance) {
+    if (result.status !== 'fail') continue;
+    for (const violation of result.violations ?? []) {
+      const vulnId = normalizeVulnId(violation.vuln_id ?? violation.rule?.cve_id);
+      if (!vulnId) continue;
+      const labels = failures.get(vulnId) ?? new Set<string>();
+      labels.add(result.policy_name?.trim() || 'Organization policy');
+      failures.set(vulnId, labels);
+    }
+  }
+  return new Map(Array.from(failures, ([key, labels]) => [key, Array.from(labels).sort()]));
+}
+
+function filterVulns(vulns: Vulnerability[], f: Filters, policyFailures: Map<string, string[]>): Vulnerability[] {
+  const search = f.search.trim().toLowerCase();
   return vulns.filter(v => {
     if (v.suppression && !f.showSuppressed) return false;
     if (f.severities.length > 0 && !f.severities.includes(v.severity)) return false;
     if (f.minCvss > 0 && v.cvss_score < f.minCvss) return false;
     if (f.onlyHasFix && !v.fixed_version) return false;
+    if (f.xrayPolicyOnly && !vulnerabilityHasXrayPolicy(v)) return false;
+    if (f.orgPolicyFailedOnly && !policyFailures.has(normalizeVulnId(v.vuln_id))) return false;
+    if (search && ![v.vuln_id, v.pkg_name, v.title, v.data_source].some((value) => value?.toLowerCase().includes(search))) return false;
     return true;
   });
 }
@@ -186,6 +310,13 @@ async function fetchAllVulnerabilities(api: string, headers: HeadersInit, scanId
   }, VULN_PAGE_SIZE);
 }
 
+async function fetchCompliance(api: string, headers: HeadersInit, scanId: string): Promise<ComplianceResult[]> {
+  const response = await fetch(`${api}/api/v1/scans/${scanId}/compliance`, { headers });
+  if (!response.ok) return [];
+  const body: { data?: ComplianceResult[] } = await response.json();
+  return body.data ?? [];
+}
+
 async function fetchAllChartScans(api: string, headers: HeadersInit, helmChart: string): Promise<Scan[]> {
   return fetchPaginatedCollection<Scan>(async (page) => {
     const params = new URLSearchParams({
@@ -218,65 +349,93 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
     const sevs = f.severities.includes(sev) ? f.severities.filter(s => s !== sev) : [...f.severities, sev];
     onChange({ ...f, severities: sevs });
   }
-  const dotColors: Record<string, string> = { CRITICAL: '#dc2626', HIGH: '#ea580c', MEDIUM: '#d97706', LOW: '#2563eb', UNKNOWN: '#6b7280' };
   return (
-    <div className="print:hidden" style={{ position: 'fixed', top: 16, right: 16, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px', minWidth: 200, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', zIndex: 10, fontSize: 13 }}>
-      <p style={{ fontWeight: 700, color: '#111827', marginBottom: 12 }}>Filters</p>
+    <aside
+      className="print:hidden fixed right-4 top-4 z-10 max-h-[calc(100vh-2rem)] w-80 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-900 shadow-lg"
+      style={{ colorScheme: 'light' }}
+    >
+      <p className="mb-1 font-semibold text-zinc-900">Report filters</p>
+      <p className="mb-4 text-xs text-zinc-500">Changes apply immediately to the printable report.</p>
 
-      <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Min CVSS</p>
-      <input type="number" min={0} max={10} step={0.1} value={f.minCvss || ''} placeholder="0.0"
-        onChange={e => onChange({ ...f, minCvss: parseFloat(e.target.value) || 0 })}
-        style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 6, padding: '4px 8px', fontSize: 13, marginBottom: 12, boxSizing: 'border-box' }} />
+      <SearchField className="mb-3" value={f.search} onChange={(search) => onChange({ ...f, search })}>
+        <Label className="text-xs font-semibold text-zinc-700">CVE, package, or title</Label>
+        <SearchField.Group className="border-zinc-200 bg-white text-zinc-900">
+          <SearchField.SearchIcon />
+          <SearchField.Input className="text-zinc-900 placeholder:text-zinc-400" placeholder="Search findings" />
+          <SearchField.ClearButton />
+        </SearchField.Group>
+      </SearchField>
 
-      <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Severity</p>
+      <NumberField className="mb-4" minValue={0} maxValue={10} step={0.1} value={f.minCvss} onChange={(minCvss) => onChange({ ...f, minCvss })}>
+        <Label className="text-xs font-semibold text-zinc-700">Minimum CVSS</Label>
+        <NumberField.Group className="border-zinc-200 bg-white text-zinc-900">
+          <NumberField.DecrementButton className="text-zinc-700 hover:bg-zinc-100">
+            <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16">
+              <path d="M3 8h10" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.75" />
+            </svg>
+          </NumberField.DecrementButton>
+          <NumberField.Input className="text-zinc-900" />
+          <NumberField.IncrementButton className="text-zinc-700 hover:bg-zinc-100">
+            <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16">
+              <path d="M3 8h10M8 3v10" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.75" />
+            </svg>
+          </NumberField.IncrementButton>
+        </NumberField.Group>
+      </NumberField>
+
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Severity</p>
       {SEVS.map(s => (
-        <label key={s} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer' }}>
-          <input type="checkbox" checked={f.severities.length === 0 || f.severities.includes(s)}
+        <label key={s} className="mb-1 flex cursor-pointer items-center gap-2 text-xs text-zinc-800">
+          <input className="accent-blue-600" type="checkbox" checked={f.severities.length === 0 || f.severities.includes(s)}
             onChange={() => {
               if (f.severities.length === 0) onChange({ ...f, severities: SEVS.filter(x => x !== s) });
               else toggle(s);
             }} />
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColors[s], display: 'inline-block' }} />
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: SEVERITY_DOT_COLORS[s], display: 'inline-block' }} />
           {s}
         </label>
       ))}
 
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 12, cursor: 'pointer' }}>
-        <input type="checkbox" checked={f.onlyHasFix} onChange={e => onChange({ ...f, onlyHasFix: e.target.checked })} />
-        Has Fix Only
-      </label>
-
-      <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
-
-      <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Show</p>
-      {([['showDescription', 'Descriptions'], ['showReferences', 'References'], ['showComments', 'Comments'], ['showSuppressed', 'Suppressed']] as [keyof Filters, string][]).map(([k, label]) => (
-        <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer' }}>
-          <input type="checkbox" checked={f[k] as boolean} onChange={e => onChange({ ...f, [k]: e.target.checked })} />
-          {label}
-        </label>
+      {FILTER_TOGGLE_GROUPS.map((group) => (
+        <div key={group.label} className="mt-4 border-t border-zinc-200 pt-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">{group.label}</p>
+          <div className="space-y-2.5">
+            {group.rows.map(([key, label]) => (
+              <Switch
+                key={key}
+                className="flex w-full items-center justify-between gap-3"
+                isSelected={f[key] as boolean}
+                onChange={(value) => onChange({ ...f, [key]: value })}
+              >
+                {({ isSelected }) => (
+                  <>
+                    <Switch.Content className="min-w-0 flex-1">
+                      <Label className="block text-xs leading-4 text-zinc-800">{label}</Label>
+                    </Switch.Content>
+                    <Switch.Control className={`shrink-0 ${isSelected ? 'bg-blue-600' : 'bg-zinc-200'}`}>
+                      <Switch.Thumb className="bg-white" />
+                    </Switch.Control>
+                  </>
+                )}
+              </Switch>
+            ))}
+          </div>
+        </div>
       ))}
 
-      <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
-      <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Scan Details</p>
-      {([['showScanId', 'Scan ID'], ['showStarted', 'Started'], ['showCompleted', 'Completed'], ['showTrivyVersion', 'Scanner Versions']] as [keyof Filters, string][]).map(([k, label]) => (
-        <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer' }}>
-          <input type="checkbox" checked={f[k] as boolean} onChange={e => onChange({ ...f, [k]: e.target.checked })} />
-          {label}
-        </label>
-      ))}
-
-      <button onClick={() => window.print()}
-        style={{ width: '100%', marginTop: 16, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+      <Button className="mt-5 w-full bg-blue-600 text-white hover:bg-blue-700" variant="primary" onPress={() => window.print()}>
         Save as PDF
-      </button>
-    </div>
+      </Button>
+    </aside>
   );
 }
 
 function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filters; isFirst: boolean }) {
-  const { scan, vulns } = data;
-  const activeVulns = filterVulns(vulns.filter(v => !v.suppression), filters);
-  const suppressedVulns = filters.showSuppressed ? vulns.filter(v => v.suppression) : [];
+  const { scan, vulns, compliance } = data;
+  const policyFailures = orgPolicyFailureMap(compliance);
+  const filteredVulns = filterVulns(vulns, filters, policyFailures);
+  const activeVulns = filteredVulns.filter(v => !v.suppression);
+  const suppressedVulns = filteredVulns.filter(v => v.suppression);
   const ws = worstSeverity(scan);
   const accentColor = SEV_COLORS[ws]?.bg ?? 'var(--accent)';
   const imageRef = `${scan.image_name}:${scan.image_tag}`;
@@ -367,7 +526,9 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
             ...(scan.helm_source_path ? [['Helm Source', scan.helm_source_path, false] as [string, string, boolean]] : []),
             ...(scan.os_family ? [['OS', `${scan.os_family} ${scan.os_name}`.trim(), false] as [string, string, boolean]] : []),
             ...(scan.architecture ? [['Architecture', scan.architecture, false] as [string, string, boolean]] : []),
+            ...([['Provider / Source', `${scan.scan_provider === 'artifactory_xray' ? 'Artifactory Xray' : 'Trivy'} / ${scan.scan_source === 'uploaded_archive' ? 'Uploaded archive' : 'Registry'}`, false] as [string, string, boolean]]),
             ...(scan.tags && scan.tags.length > 0 ? [['Tags', scan.tags.map(t => t.name).join(', '), false] as [string, string, boolean]] : []),
+            ...(scan.collections && scan.collections.length > 0 ? [['Collections', scan.collections.map(collection => collection.name).join(', '), false] as [string, string, boolean]] : []),
             ...customFields.map(f => [f.label, f.value, false] as [string, string, boolean]),
           ] as [string, string, boolean][]).map(([label, value, mono]) => (
             <tr key={label}>
@@ -395,6 +556,25 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
           </tr>
         </tbody>
       </table>
+
+      {filters.showPolicyDetails && (scan.compliance_summary || scan.blocked_policy_details) && (
+        <div className="report-policy-summary" style={{ marginBottom: 20, padding: '10px 12px', border: '1px solid #e5e7eb', borderLeft: `4px solid ${scan.compliance_summary?.status === 'fail' || scan.blocked_policy_details ? '#dc2626' : '#16a34a'}`, borderRadius: 4, background: '#f9fafb', fontSize: 12 }}>
+          <strong style={{ color: '#111827' }}>Policy summary</strong>
+          {scan.compliance_summary && (
+            <p style={{ margin: '4px 0 0', color: '#374151' }}>
+              Organization policies: {scan.compliance_summary.status.toUpperCase()} · {scan.compliance_summary.pass_count} passed · {scan.compliance_summary.fail_count} failed
+              {scan.compliance_summary.failed_policy_names?.length ? ` · Failed: ${scan.compliance_summary.failed_policy_names.join(', ')}` : ''}
+            </p>
+          )}
+          {scan.blocked_policy_details && (
+            <p style={{ margin: '4px 0 0', color: '#374151', overflowWrap: 'anywhere' }}>
+              Xray: {scan.blocked_policy_details.summary || 'Artifact blocked by policy'}
+              {scan.blocked_policy_details.blocking_policies?.length ? ` · Policies: ${scan.blocked_policy_details.blocking_policies.join(', ')}` : ''}
+              {scan.blocked_policy_details.matched_watches?.length ? ` · Watches: ${scan.blocked_policy_details.matched_watches.map(watch => watch.name).join(', ')}` : ''}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Custom fields editor - screen only */}
       <div className="print:hidden" style={{ marginBottom: 16, padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#f9fafb' }}>
@@ -442,7 +622,15 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
       {activeVulns.length === 0 ? (
         <p style={{ fontSize: 13, color: '#6b7280', fontStyle: 'italic', margin: '8px 0 20px' }}>No vulnerabilities match current filters.</p>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 24 }}>
+        <table className="report-findings-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 12, marginBottom: 24 }}>
+          <colgroup>
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '27%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '9%' }} />
+          </colgroup>
           <thead>
             <tr style={{ background: '#f9fafb' }}>
               {['CVE ID', 'Package', 'Installed', 'Fixed In', 'Severity', 'CVSS'].map(h => (
@@ -452,24 +640,30 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
           </thead>
           <tbody>
             {activeVulns.map((v, vi) => (
-              <>
+              <Fragment key={v.id}>
                 <tr key={v.id} style={{ background: vi % 2 === 0 ? '#fff' : '#fafafa' }}>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>{v.vuln_id || '-'}</td>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12 }}>{v.pkg_name}</td>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#6b7280' }}>{v.installed_version}</td>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#15803d', fontWeight: v.fixed_version ? 600 : 400 }}>{v.fixed_version || '-'}</td>
+                  <td style={{ padding: '6px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: 'var(--accent)', fontWeight: 600, overflowWrap: 'anywhere' }}>{v.vuln_id || '-'}</td>
+                  <td style={{ padding: '6px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, overflowWrap: 'anywhere' }}>{v.pkg_name}</td>
+                  <td style={{ padding: '6px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#6b7280', overflowWrap: 'anywhere' }}>{v.installed_version}</td>
+                  <td style={{ padding: '6px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#15803d', fontWeight: v.fixed_version ? 600 : 400, overflowWrap: 'anywhere' }}>{v.fixed_version || '-'}</td>
                   <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb' }}><SevBadge s={v.severity} /></td>
                   <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, textAlign: 'right', fontWeight: v.cvss_score >= 7 ? 700 : 400, color: v.cvss_score >= 9 ? '#dc2626' : v.cvss_score >= 7 ? '#ea580c' : '#374151' }}>
                     {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
                   </td>
                 </tr>
-                {(filters.showDescription && v.description) && (
+                {(filters.showDescription || filters.showReferences || filters.showComments || filters.showPolicyDetails) && (
                   <tr key={`${v.id}-desc`} style={{ background: vi % 2 === 0 ? '#fafafa' : '#f5f5f5' }}>
-                    <td colSpan={6} style={{ padding: '4px 10px 8px 20px', border: '1px solid #e5e7eb', fontSize: 12, color: '#4b5563', lineHeight: 1.5, borderTop: 'none' }}>
-                      {v.title && <strong style={{ color: '#111827' }}>{v.title} - </strong>}
-                      {v.description.length > 400 ? v.description.slice(0, 400) + '…' : v.description}
+                    <td colSpan={6} className="report-detail-cell">
+                      {filters.showDescription && v.title && <strong style={{ color: '#111827' }}>{v.title} - </strong>}
+                      {filters.showDescription && v.description && (v.description.length > 400 ? v.description.slice(0, 400) + '…' : v.description)}
                       {filters.showReferences && v.references?.length > 0 && (
-                        <span style={{ color: 'var(--accent)', marginLeft: 8, fontSize: 12 }}>{v.references.slice(0, 2).join(' · ')}</span>
+                        <span style={{ color: 'var(--accent)', marginLeft: 8, fontSize: 12, overflowWrap: 'anywhere', wordBreak: 'break-all' }}>{v.references.slice(0, 2).join(' · ')}</span>
+                      )}
+                      {filters.showPolicyDetails && (vulnerabilityHasXrayPolicy(v) || policyFailures.has(normalizeVulnId(v.vuln_id))) && (
+                        <div style={{ marginTop: 5, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {xrayPolicyLabels(v).map(label => <span key={`xray-${label}`} style={{ padding: '2px 5px', borderRadius: 3, background: '#fff7ed', color: '#9a3412', border: '1px solid #fed7aa' }}>Xray: {label}</span>)}
+                          {(policyFailures.get(normalizeVulnId(v.vuln_id)) ?? []).map(label => <span key={`org-${label}`} style={{ padding: '2px 5px', borderRadius: 3, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>Org: {label}</span>)}
+                        </div>
                       )}
                       {filters.showComments && v.comments && v.comments.length > 0 && (
                         <div style={{ marginTop: '6px' }}>
@@ -487,7 +681,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -598,7 +792,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
       {suppressedVulns.length > 0 && (
         <div style={{ marginBottom: 20 }}>
           <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 8 }}>Suppressed ({suppressedVulns.length})</p>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <table className="report-suppressed-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#f9fafb' }}>
                 {['CVE ID', 'Package', 'Severity', 'Status', 'Source', 'Justification'].map(h => (
@@ -611,12 +805,12 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
                 const statusLabel: Record<string, string> = { accepted: 'Accepted', wont_fix: "Won't Fix", false_positive: 'False Positive', xray_ignore: 'Xray Ignore' };
                 return (
                   <tr key={v.id} style={{ color: '#6b7280' }}>
-                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace' }}>{v.vuln_id}</td>
-                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.pkg_name}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', overflowWrap: 'anywhere' }}>{v.vuln_id}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', overflowWrap: 'anywhere' }}>{v.pkg_name}</td>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.severity}</td>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.suppression ? (statusLabel[v.suppression.status] ?? v.suppression.status) : '-'}</td>
                     <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>{v.suppression?.source ?? 'local'}</td>
-                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', color: '#374151' }}>{[v.suppression?.justification, v.suppression?.xray_policy_name, v.suppression?.xray_watch_name].filter(Boolean).join(' · ') || '-'}</td>
+                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb', color: '#374151', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{[v.suppression?.justification, v.suppression?.xray_policy_name, v.suppression?.xray_watch_name].filter(Boolean).join(' · ') || '-'}</td>
                   </tr>
                 );
               })}
@@ -646,6 +840,9 @@ function PrintReport() {
     minCvss: 0,
     severities: [],
     onlyHasFix: false,
+    search: '',
+    xrayPolicyOnly: false,
+    orgPolicyFailedOnly: false,
     showSuppressed: true,
     showComments: true,
     showDescription: true,
@@ -654,6 +851,7 @@ function PrintReport() {
     showStarted: true,
     showCompleted: true,
     showTrivyVersion: true,
+    showPolicyDetails: true,
   });
 
   useEffect(() => {
@@ -681,10 +879,13 @@ function PrintReport() {
         return;
       }
 
-      const results = await Promise.all(scansToLoad.map(async (scan): Promise<ScanData> => ({
-        scan,
-        vulns: await fetchAllVulnerabilities(api, headers, scan.id),
-      })));
+      const results = await Promise.all(scansToLoad.map(async (scan): Promise<ScanData> => {
+        const [vulns, compliance] = await Promise.all([
+          fetchAllVulnerabilities(api, headers, scan.id),
+          fetchCompliance(api, headers, scan.id),
+        ]);
+        return { scan, vulns, compliance };
+      }));
 
       setData(results);
     }
@@ -702,7 +903,7 @@ function PrintReport() {
     </div>
   );
 
-  const totalActive = data.reduce((sum, d) => sum + filterVulns(d.vulns.filter(v => !v.suppression), filters).length, 0);
+  const totalActive = data.reduce((sum, d) => sum + filterVulns(d.vulns.filter(v => !v.suppression), filters, orgPolicyFailureMap(d.compliance)).length, 0);
   const resolvedHelmChart = helmChart || data.find(({ scan }) => scan.helm_chart)?.scan.helm_chart || '';
   const reportTitle = resolvedHelmChart ? 'Helm Chart Security Report' : 'Security Vulnerability Report';
 
@@ -716,10 +917,18 @@ function PrintReport() {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .page-break { page-break-before: always; }
           .print\\:hidden { display: none !important; }
+          .report-findings-table, .report-suppressed-table { width: 100% !important; max-width: 100% !important; }
+          .report-findings-table tr, .report-suppressed-table tr, .report-policy-summary { break-inside: avoid; page-break-inside: avoid; }
+          .report-findings-table th, .report-findings-table td, .report-suppressed-table th, .report-suppressed-table td {
+            overflow-wrap: anywhere !important;
+            word-break: break-word;
+          }
         }
         * { box-sizing: border-box; }
         html, body, #__next { margin: 0; padding: 0; min-height: 100%; background: #fff !important; color: #111827; color-scheme: light; }
         body { font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); }
+        .report-brand-mark { align-items: center; display: inline-flex; flex-shrink: 0; justify-content: center; overflow: hidden; }
+        .report-detail-cell { padding: 5px 10px 8px; border: 1px solid #e5e7eb; border-top: none; color: #4b5563; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; word-break: break-word; }
       `}</style>
 
       <div style={{ minHeight: '100vh', width: '100%', background: '#fff', color: '#111827' }}>
@@ -727,16 +936,25 @@ function PrintReport() {
 
         {/* Report header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: 20, marginBottom: 28 }}>
-          <div style={{ borderLeft: '5px solid var(--accent)', paddingLeft: 16 }}>
-            <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>{reportTitle}</h1>
-            <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 0' }}>
-              Generated {new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-            </p>
-            {resolvedHelmChart && (
-              <p style={{ fontFamily: 'monospace', fontSize: 12, color: '#6b7280', margin: '8px 0 0', wordBreak: 'break-all' }}>
-                Chart: {resolvedHelmChart}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
+              <BrandMark />
+              <div>
+                <p style={{ margin: 0, color: '#111827', fontSize: 16, fontWeight: 800, letterSpacing: '-0.02em' }}>JustScan</p>
+                <p style={{ margin: '1px 0 0', color: '#6b7280', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Security Intelligence</p>
+              </div>
+            </div>
+            <div style={{ borderLeft: '5px solid var(--accent)', paddingLeft: 16 }}>
+              <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>{reportTitle}</h1>
+              <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 0' }}>
+                Generated {new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </p>
-            )}
+              {resolvedHelmChart && (
+                <p style={{ fontFamily: 'monospace', fontSize: 12, color: '#6b7280', margin: '8px 0 0', wordBreak: 'break-all' }}>
+                  Chart: {resolvedHelmChart}
+                </p>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
             {resolvedHelmChart && (
@@ -800,8 +1018,11 @@ function PrintReport() {
 
         {/* Footer */}
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12, marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9ca3af' }}>
-          <span>JustScan Security Report</span>
-          <span>{data.map(d => `${d.scan.image_name}:${d.scan.image_tag}`).join(', ')}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#6b7280', fontWeight: 600 }}>
+            <BrandMark size={18} />
+            JustScan Security Report
+          </span>
+          <span style={{ maxWidth: '65%', textAlign: 'right', overflowWrap: 'anywhere' }}>{data.map(d => `${d.scan.image_name}:${d.scan.image_tag}`).join(', ')}</span>
         </div>
         </div>
       </div>

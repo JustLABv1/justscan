@@ -87,7 +87,12 @@ export function OrgScansTab({
   return (
     <Card>
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">Assigned Scans</h2>
+        <div>
+          <h2 className="text-base font-semibold">Assigned Images</h2>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Images and scan history currently owned by this organization.
+          </p>
+        </div>
         {canManageScans && (
           <Button onClick={() => void onOpenAssignModal()}>
             <PlusSignIcon size={14} />

@@ -18,7 +18,19 @@ const (
 	AuthContextIsAdminKey    = "auth.is_admin"
 	AuthContextOrgTokenIDKey = "auth.org_token_id"
 	AuthContextOrgTokenOrgID = "auth.org_token_org_id"
+	AuthContextOrgTokenScope = "auth.org_token_scope"
 )
+
+func pipelineTokenRouteAllowed(method, route string) bool {
+	switch {
+	case method == "POST" && route == "/api/v1/orgs/:id/pipeline-scans":
+		return true
+	case method == "GET" && route == "/api/v1/orgs/:id/pipeline-scans/:scanId":
+		return true
+	default:
+		return false
+	}
+}
 
 func Auth(db *bun.DB) gin.HandlerFunc {
 	return func(context *gin.Context) {
@@ -106,7 +118,7 @@ func Auth(db *bun.DB) gin.HandlerFunc {
 
 			var token models.Tokens
 			err = db.NewSelect().Model(&token).
-				Column("id", "disabled", "disabled_reason", "org_id").
+				Column("id", "disabled", "disabled_reason", "org_id", "scope").
 				Where("id = ?", tokenID).
 				Scan(context)
 			if err != nil {
@@ -119,6 +131,13 @@ func Auth(db *bun.DB) gin.HandlerFunc {
 			}
 			if token.OrgID == nil {
 				httperror.Unauthorized(context, "Org token has no associated organization", errors.New("org token missing org_id"))
+				return
+			}
+			if token.Scope == "" {
+				token.Scope = models.OrgTokenScopeAdmin
+			}
+			if token.Scope == models.OrgTokenScopePipelineScan && !pipelineTokenRouteAllowed(context.Request.Method, context.FullPath()) {
+				context.AbortWithStatusJSON(403, gin.H{"error": "pipeline-scoped token is not allowed to access this endpoint"})
 				return
 			}
 			org := &models.Org{}
@@ -140,6 +159,7 @@ func Auth(db *bun.DB) gin.HandlerFunc {
 
 			context.Set(AuthContextOrgTokenIDKey, token.ID)
 			context.Set(AuthContextOrgTokenOrgID, *token.OrgID)
+			context.Set(AuthContextOrgTokenScope, token.Scope)
 
 			context.Next()
 		} else {

@@ -2,7 +2,7 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { nativeFieldClassName } from '@/components/ui/form-styles';
-import { APIToken, createOrgToken, listOrgTokens, revokeOrgToken } from '@/lib/api';
+import { APIToken, createOrgToken, listOrgTokens, OrgTokenScope, revokeOrgToken } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo, timeUntil } from '@/lib/time';
 import {
@@ -178,8 +178,15 @@ interface CreateOrgTokenDialogProps {
 }
 
 function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogProps) {
-  const [description, setDescription] = useState('');
-  const [expiresIn, setExpiresIn] = useState(EXPIRY_OPTIONS[1].value);
+  const [form, setForm] = useState<{
+    description: string;
+    expiresIn: number;
+    scope: OrgTokenScope;
+  }>({
+    description: '',
+    expiresIn: EXPIRY_OPTIONS[1].value,
+    scope: 'org_admin',
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -188,9 +195,12 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
     setError('');
     setSaving(true);
     try {
-      const result = await createOrgToken(orgId, description, expiresIn);
-      setDescription('');
-      setExpiresIn(EXPIRY_OPTIONS[1].value);
+      const result = await createOrgToken(orgId, form.description, form.expiresIn, form.scope);
+      setForm({
+        description: '',
+        expiresIn: EXPIRY_OPTIONS[1].value,
+        scope: 'org_admin',
+      });
       state.close();
       onCreated(result.key);
     } catch (err: unknown) {
@@ -229,14 +239,37 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                   </div>
                 )}
                 <div className="space-y-1.5">
+                  <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                    Scope
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      ['org_admin', 'Org admin', 'Full organization API access'],
+                      ['pipeline_scan', 'Pipeline scan', 'Create and read pipeline scans only'],
+                    ] as const).map(([value, label, description]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setForm((current) => ({ ...current, scope: value }))}
+                        className={`rounded-xl border p-3 text-left ${form.scope === value ? 'border-accent bg-accent/10' : 'border-divider/70 bg-surface-secondary'}`}
+                      >
+                        <span className="block text-sm font-medium">{label}</span>
+                        <span className="mt-1 block text-xs text-muted">{description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
                   <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                     Token name <span className="text-red-400">*</span>
                   </label>
                   <input
                     className={nativeFieldClassName}
                     placeholder="e.g. GitLab CI/CD pipeline"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm((current) => ({ ...current, description: e.target.value }))
+                    }
                     required
                     minLength={2}
                     maxLength={128}
@@ -251,10 +284,10 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => setExpiresIn(opt.value)}
+                        onClick={() => setForm((current) => ({ ...current, expiresIn: opt.value }))}
                         className="rounded-lg p-2 text-xs font-medium transition-all"
                         style={
-                          expiresIn === opt.value
+                          form.expiresIn === opt.value
                             ? {
                                 background:
                                   'linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, transparent) 0%, color-mix(in srgb, var(--accent) 12%, black) 100%)',
@@ -479,12 +512,13 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
                     <Table.Column id="status" allowsSorting>
                       Status
                     </Table.Column>
+                    <Table.Column id="scope">Scope</Table.Column>
                     {canManage ? <Table.Column className="text-right">Actions</Table.Column> : null}
                   </Table.Header>
                   <Table.Body>
                     {sortedTokens.length === 0 ? (
                       <Table.Row id="empty">
-                        <Table.Cell colSpan={canManage ? 5 : 4}>
+                        <Table.Cell colSpan={canManage ? 6 : 5}>
                           <div className="px-4 py-8 text-center text-sm text-zinc-500">
                             No tokens match this filter.
                           </div>
@@ -506,6 +540,11 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
                           </Table.Cell>
                           <Table.Cell>
                             <OrgTokenStatusBadge token={token} />
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-sm text-zinc-500">
+                              {token.scope === 'pipeline_scan' ? 'Pipeline scan' : 'Org admin'}
+                            </span>
                           </Table.Cell>
                           {canManage ? (
                             <Table.Cell>

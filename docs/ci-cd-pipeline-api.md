@@ -4,12 +4,17 @@ JustScan can now accept container image scan requests from CI/CD systems by usin
 
 ## Recommended auth model
 
-Use an org token from the target organization:
-- Path: `Org API Tokens`
-- Scope: organization-owned scans only
+Use a pipeline-scoped org token from the target organization:
+- Path: organization `CI/CD` onboarding or `Access` → `Org API Tokens`
+- Token scope: `pipeline_scan`
+- Resource scope: organization-owned scans only
 - Best for: GitHub Actions, GitLab CI, n8n, and other shared automation
 
-Personal tokens still work for user-scoped scripting, but they are not the recommended choice for shared pipelines.
+Pipeline-scoped tokens can only create and read pipeline scans for their organization. Existing
+`org_admin` tokens remain compatible with the pipeline endpoints, but they grant broader
+organization API access and should not be placed in CI unless that access is intentional.
+
+Personal tokens are for user-scoped scripting and are not supported by the org pipeline endpoint.
 
 ## Trigger a pipeline scan
 
@@ -121,6 +126,14 @@ Delivery behavior:
 - `gitlab_ci`
 - `n8n`
 
+## Blocking CI behavior
+
+Triggering a scan only confirms that JustScan accepted it. A blocking CI integration must poll the
+returned `status_url` until `verdict` is `pass`, `fail`, or `error`, then map that verdict to the
+pipeline exit code. The organization `CI/CD` tab generates complete provider-specific templates.
+
+Shell-based templates require `curl`, `jq`, and a masked or encrypted `JUSTSCAN_ORG_TOKEN` secret.
+
 ## GitHub Actions example
 
 ```yaml
@@ -131,40 +144,67 @@ on:
     branches: [main]
 
 jobs:
-  trigger-justscan:
+  justscan:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger JustScan
+      - name: Scan with JustScan
+        env:
+          JUSTSCAN_ORG_TOKEN: ${{ secrets.JUSTSCAN_ORG_TOKEN }}
+          IMAGE_REF: ${{ vars.IMAGE_REF }}
         run: |
-          curl -fsS -X POST "${JUSTSCAN_URL}/api/v1/orgs/${JUSTSCAN_ORG_ID}/pipeline-scans" \
+          response="$(curl -fsS -X POST "${JUSTSCAN_URL}/api/v1/orgs/${JUSTSCAN_ORG_ID}/pipeline-scans" \
             -H "Authorization: Bearer ${JUSTSCAN_ORG_TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{
               "image": "'"${IMAGE_REF}"'",
               "source": "github_actions",
               "external_ref": "'"${GITHUB_RUN_ID}"'",
-              "callback": {
-                "url": "'"${CALLBACK_URL}"'",
-                "secret": "'"${JUSTSCAN_CALLBACK_SECRET}"'"
-              }
-            }'
+              "verdict": {"fail_on_severity": "high", "fail_on_scan_error": true, "fail_on_xray_block": true}
+            }')"
+          status_url="$(printf '%s' "$response" | jq -r '.status_url')"
+          deadline=$(( $(date +%s) + 1800 ))
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            result="$(curl -fsS "$status_url" -H "Authorization: Bearer ${JUSTSCAN_ORG_TOKEN}")"
+            verdict="$(printf '%s' "$result" | jq -r '.verdict')"
+            case "$verdict" in
+              pass) exit 0 ;;
+              fail|error) printf '%s\n' "$result" | jq; exit 1 ;;
+            esac
+            sleep 5
+          done
+          exit 1
 ```
 
 ## GitLab CI example
 
 ```yaml
 justscan:
-  image: curlimages/curl:8.8.0
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache curl jq
   script:
     - |
-      curl -fsS -X POST "${JUSTSCAN_URL}/api/v1/orgs/${JUSTSCAN_ORG_ID}/pipeline-scans" \
+      response="$(curl -fsS -X POST "${JUSTSCAN_URL}/api/v1/orgs/${JUSTSCAN_ORG_ID}/pipeline-scans" \
         -H "Authorization: Bearer ${JUSTSCAN_ORG_TOKEN}" \
         -H "Content-Type: application/json" \
         -d "{
           \"image\": \"${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHA}\",
           \"source\": \"gitlab_ci\",
-          \"external_ref\": \"${CI_PIPELINE_ID}\"
-        }"
+          \"external_ref\": \"${CI_PIPELINE_ID}\",
+          \"verdict\": {\"fail_on_severity\": \"high\", \"fail_on_scan_error\": true, \"fail_on_xray_block\": true}
+        }")"
+      status_url="$(printf '%s' "$response" | jq -r '.status_url')"
+      deadline=$(( $(date +%s) + 1800 ))
+      while [ "$(date +%s)" -lt "$deadline" ]; do
+        result="$(curl -fsS "$status_url" -H "Authorization: Bearer ${JUSTSCAN_ORG_TOKEN}")"
+        verdict="$(printf '%s' "$result" | jq -r '.verdict')"
+        case "$verdict" in
+          pass) exit 0 ;;
+          fail|error) printf '%s\n' "$result" | jq; exit 1 ;;
+        esac
+        sleep 5
+      done
+      exit 1
 ```
 
 ## n8n example

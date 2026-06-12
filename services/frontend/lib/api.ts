@@ -10,6 +10,7 @@ export * from './api/helm';
 export * from './api/maintenance';
 export * from './api/notifications';
 export * from './api/orgs';
+export * from './api/pipeline';
 export * from './api/public';
 export * from './api/registries';
 export * from './api/scans';

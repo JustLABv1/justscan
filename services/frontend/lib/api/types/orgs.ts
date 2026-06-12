@@ -144,7 +144,10 @@ export interface APIToken {
   expires_at: string;
   user_id: string;
   org_id?: string;
+  scope: OrgTokenScope;
 }
+
+export type OrgTokenScope = 'org_admin' | 'pipeline_scan';
 
 export interface PersonalToken {
   id: string;

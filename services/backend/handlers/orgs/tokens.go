@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"justscan-backend/functions/audit"
@@ -40,7 +41,7 @@ func ListOrgTokens(db *bun.DB) gin.HandlerFunc {
 
 		var tokens []models.Tokens
 		q := db.NewSelect().Model(&tokens).
-			Column("id", "description", "type", "disabled", "disabled_reason", "created_at", "expires_at", "user_id", "org_id").
+			Column("id", "description", "type", "disabled", "disabled_reason", "created_at", "expires_at", "user_id", "org_id", "scope").
 			Where("org_id = ?", orgID).
 			OrderExpr("created_at DESC").
 			Limit(limit).
@@ -82,6 +83,7 @@ func CreateOrgToken(db *bun.DB) gin.HandlerFunc {
 		var body struct {
 			Description string `json:"description" binding:"required"`
 			ExpiresIn   int    `json:"expires_in"` // seconds, 0 = 90 days default
+			Scope       string `json:"scope"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -93,6 +95,11 @@ func CreateOrgToken(db *bun.DB) gin.HandlerFunc {
 			expiry = time.Duration(body.ExpiresIn) * time.Second
 		}
 		expiresAt := time.Now().Add(expiry)
+		scope, validScope := normalizeOrgTokenScope(body.Scope)
+		if !validScope {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org token scope"})
+			return
+		}
 
 		// Pre-generate the token UUID so we can embed it in the JWT claim.
 		// The middleware will look up the record by this ID to obtain org_id.
@@ -110,6 +117,7 @@ func CreateOrgToken(db *bun.DB) gin.HandlerFunc {
 			Key:         tokenString,
 			Description: body.Description,
 			Type:        "org",
+			Scope:       scope,
 			ExpiresAt:   expiresAt,
 			CreatedAt:   time.Now(),
 		}
@@ -127,7 +135,21 @@ func CreateOrgToken(db *bun.DB) gin.HandlerFunc {
 			"description": token.Description,
 			"expires_at":  token.ExpiresAt,
 			"created_at":  token.CreatedAt,
+			"scope":       token.Scope,
 		})
+	}
+}
+
+func normalizeOrgTokenScope(raw string) (string, bool) {
+	switch strings.TrimSpace(raw) {
+	case "":
+		return models.OrgTokenScopeAdmin, true
+	case models.OrgTokenScopeAdmin:
+		return models.OrgTokenScopeAdmin, true
+	case models.OrgTokenScopePipelineScan:
+		return models.OrgTokenScopePipelineScan, true
+	default:
+		return "", false
 	}
 }
 

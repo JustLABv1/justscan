@@ -13,7 +13,7 @@ import {
 } from '@/lib/api/orgs';
 import { createOrgToken, listOrgTokens, revokeOrgToken } from '@/lib/api/tokens';
 import type { AdminOrg } from '@/lib/api/types/admin';
-import type { OrgInvite, OrgMember, OrgRole } from '@/lib/api/types/orgs';
+import type { APIToken, OrgInvite, OrgMember, OrgRole } from '@/lib/api/types/orgs';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
@@ -47,15 +47,7 @@ export function OrganizationsTab() {
 
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [invites, setInvites] = useState<OrgInvite[]>([]);
-  const [tokens, setTokens] = useState<
-    Array<{
-      id: string;
-      description: string;
-      created_at: string;
-      expires_at: string;
-      disabled: boolean;
-    }>
-  >([]);
+  const [tokens, setTokens] = useState<APIToken[]>([]);
 
   const [newInviteEmail, setNewInviteEmail] = useState('');
   const [newInviteRole, setNewInviteRole] = useState<'admin' | 'editor' | 'viewer'>('viewer');
@@ -92,17 +84,7 @@ export function OrganizationsTab() {
       ]);
       setMembers(nextMembers);
       setInvites(nextInvites);
-      setTokens(
-        (
-          nextTokens as Array<{
-            id: string;
-            description: string;
-            created_at: string;
-            expires_at: string;
-            disabled: boolean;
-          }>
-        ).filter((token) => !token.disabled)
-      );
+      setTokens(nextTokens.filter((token) => !token.disabled));
     } catch {
       setMembers([]);
       setInvites([]);
@@ -520,7 +502,7 @@ export function OrganizationsTab() {
                                 <div>
                                   <p className="text-xs font-medium">{token.description}</p>
                                   <p className="text-[11px] text-zinc-500">
-                                    Expires {timeAgo(token.expires_at)}
+                                    {token.scope === 'pipeline_scan' ? 'Pipeline scan' : 'Org admin'} · Expires {timeAgo(token.expires_at)}
                                   </p>
                                 </div>
                                 <Button

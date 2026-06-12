@@ -2,6 +2,7 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { NotificationManager } from '@/components/notifications/notification-manager';
 import { OrgAutomationTab } from '@/components/org-detail/automation-tab';
+import { OrgCICDTab } from '@/components/org-detail/ci-cd-tab';
 import { OrgOverviewTab } from '@/components/org-detail/overview-tab';
 import { OrgScansTab } from '@/components/org-detail/scans-tab';
 import { OrgScanItem, StatusBadge } from '@/components/org-detail/shared';
@@ -116,6 +117,11 @@ const ORG_TABS = [
     id: 'notifications',
     label: 'Notifications',
     description: 'Configure organization channels, rules, retries, and delivery history.',
+  },
+  {
+    id: 'ci-cd',
+    label: 'CI/CD',
+    description: 'Connect pipelines, generate least-privilege credentials, and verify automated scans.',
   },
   {
     id: 'access',
@@ -691,6 +697,12 @@ export default function OrgDetailPage() {
                   ? 'Organization tokens are disabled by organization policy.'
                   : undefined
             }
+          />
+        )}
+        {activeTab === 'ci-cd' && (
+          <OrgCICDTab
+            org={org}
+            canManageTokens={isSystemAdmin || canManageOrg(currentOrgRole)}
           />
         )}
       </div>

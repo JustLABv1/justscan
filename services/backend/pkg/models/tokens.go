@@ -7,6 +7,11 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const (
+	OrgTokenScopeAdmin        = "org_admin"
+	OrgTokenScopePipelineScan = "pipeline_scan"
+)
+
 type Tokens struct {
 	bun.BaseModel `bun:"table:tokens"`
 
@@ -20,6 +25,7 @@ type Tokens struct {
 	ExpiresAt      time.Time  `bun:"expires_at,type:timestamptz" json:"expires_at"`
 	UserID         string     `bun:"user_id,type:text,default:''" json:"user_id"`
 	OrgID          *uuid.UUID `bun:"org_id,type:uuid" json:"org_id,omitempty"`
+	Scope          string     `bun:"scope,type:text,notnull,default:'org_admin'" json:"scope"`
 }
 
 type IncExpireTokenRequest struct {

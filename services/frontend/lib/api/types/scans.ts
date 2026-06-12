@@ -258,6 +258,7 @@ export interface ImageSummary {
   high_count: number;
   medium_count: number;
   low_count: number;
+  has_unassigned_scans?: boolean;
   compliance_summary?: ScanComplianceSummary | null;
   collections?: Collection[];
 }

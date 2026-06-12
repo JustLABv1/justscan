@@ -275,7 +275,7 @@ export default function ScansPage() {
   const [criticalFilter, setCriticalFilter] = useState<'' | 'yes' | 'no'>(initialViewState.critical);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Which image names are expanded
+  // Which image rows are expanded; collection-grouped rows include their collection scope.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Track refresh tokens per expanded image (incremented to force child reload after delete/cancel)
   const [childRefreshKey, setChildRefreshKey] = useState<Record<string, number>>({});
@@ -992,7 +992,7 @@ export default function ScansPage() {
 
     const buckets = new Map<string, { key: string; label: string; images: ImageSummary[] }>();
     filteredImages.forEach((image) => {
-      if (!image.collections || image.collections.length === 0) {
+      if (image.has_unassigned_scans || !image.collections || image.collections.length === 0) {
         const existing = buckets.get('__unassigned__') ?? {
           key: '__unassigned__',
           label: 'Unassigned',
@@ -1000,10 +1000,9 @@ export default function ScansPage() {
         };
         existing.images.push(image);
         buckets.set(existing.key, existing);
-        return;
       }
 
-      image.collections.forEach((collection) => {
+      image.collections?.forEach((collection) => {
         const existing = buckets.get(collection.id) ?? {
           key: collection.id,
           label: collection.name,
@@ -1521,6 +1520,7 @@ export default function ScansPage() {
                       childRefreshKey={childRefreshKey}
                       collectionFilter={collectionFilter || (group.key === '__unassigned__' ? '__none__' : group.key)}
                       expanded={expanded}
+                      expansionScope={group.key}
                       hasActiveFilters={hasActiveFilters}
                       images={group.images}
                       loading={loading}

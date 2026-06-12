@@ -31,6 +31,7 @@ type ImageSummary struct {
 	HighCount            int                           `json:"high_count"`
 	MediumCount          int                           `json:"medium_count"`
 	LowCount             int                           `json:"low_count"`
+	HasUnassignedScans   bool                          `json:"has_unassigned_scans"`
 	ComplianceSummary    *models.ScanComplianceSummary `json:"compliance_summary,omitempty"`
 	Collections          []models.ScanCollection       `json:"collections,omitempty"`
 }
@@ -144,7 +145,14 @@ WITH latest AS (
     ORDER BY image_name, created_at DESC
 ),
 counts AS (
-    SELECT image_name, COUNT(*) AS scan_count
+    SELECT
+		image_name,
+		COUNT(*) AS scan_count,
+		BOOL_OR(NOT EXISTS (
+			SELECT 1
+			FROM scan_collection_memberships scm
+			WHERE scm.scan_id = scans.id
+		)) AS has_unassigned_scans
     FROM scans
     WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND ` + imageWhere + ` AND ` + collectionWhere + `
     GROUP BY image_name
@@ -163,7 +171,8 @@ SELECT
     l.critical_count,
     l.high_count,
     l.medium_count,
-    l.low_count
+    l.low_count,
+	c.has_unassigned_scans
 FROM latest l
 JOIN counts c ON c.image_name = l.image_name
 WHERE ` + latestStatusWhere + `
@@ -200,6 +209,7 @@ LIMIT ? OFFSET ?`
 				&img.HighCount,
 				&img.MediumCount,
 				&img.LowCount,
+				&img.HasUnassignedScans,
 			); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to scan image row"})
 				return

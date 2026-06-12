@@ -16,6 +16,7 @@ import {
   Cancel01Icon,
   Delete01Icon,
   FileSearchIcon,
+  LinkSquare02Icon,
   Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
@@ -28,6 +29,7 @@ import {
   useState,
   type Dispatch,
   type Key,
+  type ReactNode,
   type SetStateAction,
 } from 'react';
 
@@ -292,6 +294,32 @@ function ImageReferenceLabel({ imageName }: { imageName: string }) {
   );
 }
 
+function ScanLink({
+  ariaLabel,
+  children,
+  className,
+  scanId,
+  title = 'Open scan',
+}: {
+  ariaLabel?: string;
+  children?: ReactNode;
+  className?: string;
+  scanId: string;
+  title?: string;
+}) {
+  return (
+    <Link
+      aria-label={ariaLabel}
+      href={`/scans/${scanId}`}
+      className={className}
+      title={title}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {children}
+    </Link>
+  );
+}
+
 function useImageScanChildren(imageName: string, refreshToken: number, collectionFilter?: string) {
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
@@ -476,13 +504,29 @@ function ImageScansTreeChildrenRows({
           return null;
         }
 
-        const openScan = (event?: { stopPropagation?: () => void }) => {
+        const openScan = (event?: {
+          ctrlKey?: boolean;
+          metaKey?: boolean;
+          stopPropagation?: () => void;
+        }) => {
           event?.stopPropagation?.();
-          router.push(`/scans/${scan.id}`);
+          const href = `/scans/${scan.id}`;
+
+          if (event?.ctrlKey || event?.metaKey) {
+            window.open(href, '_blank', 'noopener,noreferrer');
+            return;
+          }
+
+          router.push(href);
         };
 
         return (
-          <Table.Row id={row.id} textValue={`:${scan.image_tag}`} className="cursor-pointer">
+          <Table.Row
+            id={row.id}
+            textValue={`:${scan.image_tag}`}
+            className="cursor-pointer"
+            onClick={openScan}
+          >
             <Table.Cell onClick={(event) => event.stopPropagation()}>
               <ScanSelectionCheckbox
                 ariaLabel={`Select scan ${scan.image_tag}`}
@@ -490,11 +534,20 @@ function ImageScansTreeChildrenRows({
                 onChange={(selected) => onSelectScan(scan.id, selected)}
               />
             </Table.Cell>
-            <Table.Cell onClick={openScan} />
             <Table.Cell onClick={openScan}>
-              <span className="font-mono text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              <ScanLink
+                ariaLabel={`Open scan ${scan.id}`}
+                className="block min-h-5"
+                scanId={scan.id}
+              />
+            </Table.Cell>
+            <Table.Cell onClick={openScan}>
+              <ScanLink
+                className="font-mono text-sm font-medium text-zinc-700 transition-colors hover:text-accent dark:text-zinc-200"
+                scanId={scan.id}
+              >
                 :{scan.image_tag}
-              </span>
+              </ScanLink>
             </Table.Cell>
             <Table.Cell onClick={openScan}>
               <div className="flex items-center gap-2">
@@ -510,30 +563,38 @@ function ImageScansTreeChildrenRows({
             </Table.Cell>
             <Table.Cell onClick={openScan}>
               <div className="min-w-0">
-                <div
+                <ScanLink
                   className="inline-block max-w-[96px] truncate font-mono text-xs text-zinc-500"
-                  title="Open scan"
+                  scanId={scan.id}
                 >
                   {scan.id.slice(0, 8)}…
-                </div>
+                </ScanLink>
                 <div className="mt-1 text-xs text-zinc-500" title={fullDate(scan.created_at)}>
                   {timeAgo(scan.created_at)}
                 </div>
               </div>
             </Table.Cell>
             <Table.Cell className="text-center" onClick={openScan}>
-              <SevCount count={scan.critical_count} level="critical" />
+              <ScanLink className="inline-block" scanId={scan.id}>
+                <SevCount count={scan.critical_count} level="critical" />
+              </ScanLink>
             </Table.Cell>
             <Table.Cell className="text-center" onClick={openScan}>
-              <SevCount count={scan.high_count} level="high" />
+              <ScanLink className="inline-block" scanId={scan.id}>
+                <SevCount count={scan.high_count} level="high" />
+              </ScanLink>
             </Table.Cell>
             <Table.Cell className="text-center" onClick={openScan}>
-              <SevCount count={scan.medium_count} level="medium" />
+              <ScanLink className="inline-block" scanId={scan.id}>
+                <SevCount count={scan.medium_count} level="medium" />
+              </ScanLink>
             </Table.Cell>
             <Table.Cell className="text-center" onClick={openScan}>
-              <SevCount count={scan.low_count} level="low" />
+              <ScanLink className="inline-block" scanId={scan.id}>
+                <SevCount count={scan.low_count} level="low" />
+              </ScanLink>
             </Table.Cell>
-            <Table.Cell>
+            <Table.Cell onClick={(event) => event.stopPropagation()}>
               <div className="flex justify-end">
                 <RowActionsMenu
                   label={`Open actions menu for scan ${scan.id}`}
@@ -544,6 +605,14 @@ function ImageScansTreeChildrenRows({
                       icon: <FileSearchIcon size={14} aria-hidden />,
                       onAction: () => {
                         router.push(`/scans/${scan.id}`);
+                      },
+                    },
+                    {
+                      id: 'open-new-tab',
+                      label: 'Open in new tab',
+                      icon: <LinkSquare02Icon size={14} aria-hidden />,
+                      onAction: () => {
+                        window.open(`/scans/${scan.id}`, '_blank', 'noopener,noreferrer');
                       },
                     },
                     ...(allowMutationActions &&

@@ -12,7 +12,7 @@ COPY . .
 
 RUN go build -o justscan-backend
 
-FROM alpine:3.23 AS runtime-base
+FROM alpine:3.24 AS runtime-base
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 WORKDIR /app
 

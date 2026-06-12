@@ -1,20 +1,28 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
-import { nativeFieldClassName } from '@/components/ui/form-styles';
+import { FormField } from '@/components/ui/form-field';
 import { APIToken, createOrgToken, listOrgTokens, OrgTokenScope, revokeOrgToken } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo, timeUntil } from '@/lib/time';
 import {
+  Alert,
   Button,
   Card,
+  Label,
   Modal,
   SearchField,
   Table,
   useOverlayState,
   type SortDescriptor,
 } from '@heroui/react';
-import { Copy01Icon, Delete01Icon, Key01Icon, PlusSignIcon } from 'hugeicons-react';
+import {
+  Copy01Icon,
+  Delete01Icon,
+  Key01Icon,
+  PlusSignIcon,
+  Settings01Icon,
+} from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const EXPIRY_OPTIONS = [
@@ -124,45 +132,37 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
     <Modal state={state}>
       <Modal.Backdrop>
         <Modal.Container size="md" placement="center">
-          <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-            <Modal.Header
-              className="px-6 py-4"
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
-            >
-              <Modal.Heading className="text-zinc-900 dark:text-white font-semibold flex items-center gap-2">
-                <Key01Icon size={17} />
-                Token Created
-              </Modal.Heading>
-              <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+          <Modal.Dialog className="overflow-hidden">
+            <Modal.Header>
+              <div className="flex min-w-0 items-center gap-3">
+                <Modal.Icon className="bg-accent/10 text-accent">
+                  <Key01Icon size={18} />
+                </Modal.Icon>
+                <Modal.Heading className="font-semibold">Token Created</Modal.Heading>
+              </div>
+              <Modal.CloseTrigger />
             </Modal.Header>
             <Modal.Body className="px-6 py-5 space-y-4">
-              <div
-                className="rounded-xl px-4 py-3 text-sm"
-                style={{
-                  background: 'rgba(245,158,11,0.08)',
-                  border: '1px solid rgba(245,158,11,0.2)',
-                  color: '#fbbf24',
-                }}
-              >
-                This token will not be shown again. Copy it now and store it somewhere safe.
-              </div>
-              <div
-                className="rounded-xl p-3 font-mono text-xs break-all"
-                style={{
-                  background: 'var(--row-hover)',
-                  border: '1px solid var(--surface-border)',
-                }}
-              >
+              <Alert status="warning">
+                <Alert.Indicator />
+                <Alert.Content>
+                  <Alert.Title>
+                    This token will not be shown again. Copy it now and store it somewhere safe.
+                  </Alert.Title>
+                </Alert.Content>
+              </Alert>
+              <div className="rounded-xl p-3 font-mono text-xs break-all bg-surface-secondary">
                 {rawToken}
               </div>
-              <button
+              <Button
                 type="button"
-                onClick={handleCopy}
+                onPress={handleCopy}
                 className="btn-primary w-full flex items-center justify-center gap-2"
+                variant="primary"
               >
                 <Copy01Icon size={15} />
                 {copied ? 'Copied!' : 'Copy Token'}
-              </button>
+              </Button>
             </Modal.Body>
           </Modal.Dialog>
         </Modal.Container>
@@ -213,96 +213,77 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
   return (
     <Modal state={state}>
       <Modal.Backdrop isDismissable>
-        <Modal.Container size="sm" placement="center">
-          <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-            <Modal.Header
-              className="px-6 py-4"
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
-            >
-              <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
-                New Org Token
-              </Modal.Heading>
-              <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+        <Modal.Container size="md" placement="center">
+          <Modal.Dialog className="overflow-hidden">
+            <Modal.Header>
+              <div className="flex min-w-0 items-center gap-3">
+                <Modal.Icon className="bg-default text-foreground">
+                  <Settings01Icon size={18} />
+                </Modal.Icon>
+                <Modal.Heading className="font-semibold">New Org Token</Modal.Heading>
+              </div>
+              <Modal.CloseTrigger />
             </Modal.Header>
-            <Modal.Body className="px-6 py-5">
+            <Modal.Body>
               <form id="create-org-token-form" onSubmit={handleSubmit} className="space-y-4">
                 {error && (
-                  <div
-                    className="rounded-xl px-3 py-2.5 text-sm"
-                    style={{
-                      background: 'rgba(239,68,68,0.1)',
-                      border: '1px solid rgba(239,68,68,0.2)',
-                      color: '#f87171',
-                    }}
-                  >
-                    {error}
-                  </div>
+                  <Alert status="danger">
+                    <Alert.Indicator />
+                    <Alert.Content>
+                      <Alert.Title>{error}</Alert.Title>
+                    </Alert.Content>
+                  </Alert>
                 )}
                 <div className="space-y-1.5">
-                  <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                  <Label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
                     Scope
-                  </p>
+                  </Label>
                   <div className="grid grid-cols-2 gap-2">
                     {([
                       ['org_admin', 'Org admin', 'Full organization API access'],
                       ['pipeline_scan', 'Pipeline scan', 'Create and read pipeline scans only'],
                     ] as const).map(([value, label, description]) => (
-                      <button
+                      <Button
                         key={value}
                         type="button"
-                        onClick={() => setForm((current) => ({ ...current, scope: value }))}
-                        className={`rounded-xl border p-3 text-left ${form.scope === value ? 'border-accent bg-accent/10' : 'border-divider/70 bg-surface-secondary'}`}
+                        onPress={() => setForm((current) => ({ ...current, scope: value }))}
+                        variant={form.scope === value ? 'primary' : 'outline'}
+                        className="h-auto min-h-20 items-start justify-start p-3 text-left"
                       >
-                        <span className="block text-sm font-medium">{label}</span>
-                        <span className="mt-1 block text-xs text-muted">{description}</span>
-                      </button>
+                        <span className="flex flex-col items-start gap-1 whitespace-normal">
+                          <span className="text-sm font-medium">{label}</span>
+                          <span className="text-xs opacity-75">{description}</span>
+                        </span>
+                      </Button>
                     ))}
                   </div>
                 </div>
+                <FormField
+                  label="Token name"
+                  placeholder="e.g. GitLab CI/CD pipeline"
+                  value={form.description}
+                  onChange={(e) =>
+                    setForm((current) => ({ ...current, description: e.target.value }))
+                  }
+                  required
+                  minLength={2}
+                  maxLength={128}
+                />
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                    Token name <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    className={nativeFieldClassName}
-                    placeholder="e.g. GitLab CI/CD pipeline"
-                    value={form.description}
-                    onChange={(e) =>
-                      setForm((current) => ({ ...current, description: e.target.value }))
-                    }
-                    required
-                    minLength={2}
-                    maxLength={128}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                  <Label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
                     Expiration
-                  </label>
-                  <div className="grid grid-cols-5 gap-1.5">
+                  </Label>
+                  <div className="flex flex-wrap gap-1.5">
                     {EXPIRY_OPTIONS.map((opt) => (
-                      <button
+                      <Button
                         key={opt.value}
+                        size="sm"
                         type="button"
-                        onClick={() => setForm((current) => ({ ...current, expiresIn: opt.value }))}
-                        className="rounded-lg p-2 text-xs font-medium transition-all"
-                        style={
-                          form.expiresIn === opt.value
-                            ? {
-                                background:
-                                  'linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, transparent) 0%, color-mix(in srgb, var(--accent) 12%, black) 100%)',
-                                border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
-                                color: 'color-mix(in srgb, var(--accent) 78%, white)',
-                              }
-                            : {
-                                background: 'var(--row-hover)',
-                                border: '1px solid var(--surface-border)',
-                                color: 'var(--text-secondary)',
-                              }
-                        }
+                        onPress={() => setForm((current) => ({ ...current, expiresIn: opt.value }))}
+                        variant={form.expiresIn === opt.value ? 'primary' : 'outline'}
                       >
                         {opt.label}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
@@ -312,20 +293,26 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
               className="px-6 py-4 flex justify-end gap-2"
               style={{ borderTop: '1px solid var(--border-subtle)' }}
             >
-              <button type="button" onClick={() => state.close()} className="btn-secondary">
+              <Button
+                type="button"
+                onPress={() => state.close()}
+                className="btn-secondary"
+                variant="secondary"
+              >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 form="create-org-token-form"
-                disabled={saving}
+                isDisabled={saving}
                 className="btn-primary inline-flex items-center gap-2"
+                variant="primary"
               >
                 {saving && (
                   <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 )}
                 Create Token
-              </button>
+              </Button>
             </Modal.Footer>
           </Modal.Dialog>
         </Modal.Container>

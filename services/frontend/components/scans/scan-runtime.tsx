@@ -655,7 +655,14 @@ function StepStatusBadge({ state, title }: { state: ProgressStepState; title: st
     );
   }
 
-  return <Badge aria-label={`${title} is waiting`} color="default" placement="bottom-right" />;
+  return (
+    <Badge
+      aria-label={`${title} is waiting`}
+      color="default"
+      placement="bottom-right"
+      size="sm"
+    />
+  );
 }
 
 function resolvePipelineStepRuntime({

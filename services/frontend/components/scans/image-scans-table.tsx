@@ -27,6 +27,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type Key,
   type SetStateAction,
 } from 'react';
 
@@ -43,6 +44,7 @@ interface ImageScansTableProps extends SharedChildProps {
   allowMutationActions?: boolean;
   collectionFilter?: string;
   expanded: Set<string>;
+  expansionScope?: string;
   hasActiveFilters: boolean;
   images: ImageSummary[];
   loading: boolean;
@@ -194,12 +196,16 @@ function TriggeredByAvatar({
   );
 }
 
-function toggleExpanded(current: Set<string>, imageName: string) {
+function imageExpansionKey(imageName: string, expansionScope?: string) {
+  return expansionScope ? JSON.stringify([expansionScope, imageName]) : imageName;
+}
+
+function toggleExpanded(current: Set<string>, expansionKey: string) {
   const next = new Set(current);
-  if (next.has(imageName)) {
-    next.delete(imageName);
+  if (next.has(expansionKey)) {
+    next.delete(expansionKey);
   } else {
-    next.add(imageName);
+    next.add(expansionKey);
   }
   return next;
 }
@@ -580,6 +586,7 @@ function ImageScansTreeChildrenRows({
 export function ImageScansTable({
   allowMutationActions = true,
   expanded,
+  expansionScope,
   hasActiveFilters,
   images,
   loading,
@@ -597,6 +604,14 @@ export function ImageScansTable({
   childRefreshKey,
 }: ImageScansTableProps) {
   const tableRows = useMemo(() => images, [images]);
+  const expansionKeys = useMemo(
+    () => new Set(tableRows.map((image) => imageExpansionKey(image.image_name, expansionScope))),
+    [expansionScope, tableRows]
+  );
+  const tableExpandedKeys = useMemo(
+    () => new Set(Array.from(expanded).filter((key) => expansionKeys.has(key))),
+    [expanded, expansionKeys]
+  );
   const [selectedImageNames, setSelectedImageNames] = useState<Set<string>>(new Set());
   const [visibleScanIdsByImage, setVisibleScanIdsByImage] = useState<Record<string, string[]>>({});
   const displaySelectedScans = selectedScans;
@@ -665,16 +680,34 @@ export function ImageScansTable({
     [onSelectedScansChange]
   );
 
+  const setTableExpandedKeys = useCallback(
+    (keys: Iterable<Key>) => {
+      const next = new Set(Array.from(expanded).filter((key) => !expansionKeys.has(key)));
+      for (const key of keys) {
+        next.add(String(key));
+      }
+      onExpandedChange(next);
+    },
+    [expanded, expansionKeys, onExpandedChange]
+  );
+
+  const toggleImageExpanded = useCallback(
+    (imageName: string) => {
+      onExpandedChange(toggleExpanded(expanded, imageExpansionKey(imageName, expansionScope)));
+    },
+    [expanded, expansionScope, onExpandedChange]
+  );
+
   return (
     <Table>
       <Table.ScrollContainer>
         <Table.Content
           aria-label="Scans by image"
           className="min-w-[980px]"
-          expandedKeys={expanded}
+          expandedKeys={tableExpandedKeys}
           treeColumn="expander"
           onExpandedChange={(keys) => {
-            onExpandedChange(new Set(Array.from(keys, (key) => String(key))));
+            setTableExpandedKeys(keys);
           }}
         >
           <Table.Header>
@@ -760,7 +793,10 @@ export function ImageScansTable({
                     targetIds.some((scanId) => displaySelectedScans.has(scanId));
 
                   return (
-                    <Table.Row id={img.image_name} textValue={img.image_name}>
+                    <Table.Row
+                      id={imageExpansionKey(img.image_name, expansionScope)}
+                      textValue={img.image_name}
+                    >
                       <Table.Cell onClick={(e) => e.stopPropagation()}>
                         <ScanSelectionCheckbox
                           ariaLabel={`Select scans for ${img.image_name}`}
@@ -795,7 +831,7 @@ export function ImageScansTable({
                       <Table.Cell
                         onClick={(event) => {
                           event.stopPropagation();
-                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                          toggleImageExpanded(img.image_name);
                         }}
                       >
                         {({ hasChildItems, isDisabled, isExpanded, isTreeColumn }) =>
@@ -825,7 +861,7 @@ export function ImageScansTable({
                       <Table.Cell
                         onClick={(event) => {
                           event.stopPropagation();
-                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                          toggleImageExpanded(img.image_name);
                         }}
                       >
                         <ImageReferenceLabel imageName={img.image_name} />
@@ -848,7 +884,7 @@ export function ImageScansTable({
                       <Table.Cell
                         onClick={(event) => {
                           event.stopPropagation();
-                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                          toggleImageExpanded(img.image_name);
                         }}
                       >
                         <div className="flex items-center gap-3">
@@ -870,7 +906,7 @@ export function ImageScansTable({
                       <Table.Cell
                         onClick={(event) => {
                           event.stopPropagation();
-                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                          toggleImageExpanded(img.image_name);
                         }}
                       >
                         <TriggeredByAvatar
@@ -893,7 +929,7 @@ export function ImageScansTable({
                         className="text-center"
                         onClick={(event) => {
                           event.stopPropagation();
-                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                          toggleImageExpanded(img.image_name);
                         }}
                       >
                         <SevCount count={img.critical_count} level="critical" />
@@ -902,7 +938,7 @@ export function ImageScansTable({
                         className="text-center"
                         onClick={(event) => {
                           event.stopPropagation();
-                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                          toggleImageExpanded(img.image_name);
                         }}
                       >
                         <SevCount count={img.high_count} level="high" />
@@ -911,7 +947,7 @@ export function ImageScansTable({
                         className="text-center"
                         onClick={(event) => {
                           event.stopPropagation();
-                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                          toggleImageExpanded(img.image_name);
                         }}
                       >
                         <SevCount count={img.medium_count} level="medium" />
@@ -920,7 +956,7 @@ export function ImageScansTable({
                         className="text-center"
                         onClick={(event) => {
                           event.stopPropagation();
-                          onExpandedChange(toggleExpanded(expanded, img.image_name));
+                          toggleImageExpanded(img.image_name);
                         }}
                       >
                         <SevCount count={img.low_count} level="low" />

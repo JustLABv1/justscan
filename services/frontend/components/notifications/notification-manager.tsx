@@ -2,11 +2,16 @@
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { FormField } from '@/components/ui/form-field';
-import {
-  heroSelectTriggerClassName,
-  heroTextAreaClassName,
-} from '@/components/ui/form-styles';
+import { heroSelectTriggerClassName, heroTextAreaClassName } from '@/components/ui/form-styles';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import type {
+  NotificationChannel,
+  NotificationConditionGroup,
+  NotificationConditionPredicate,
+  NotificationDelivery,
+  NotificationQueueJob,
+  NotificationRule,
+} from '@/lib/api';
 import {
   createScopedNotificationChannel,
   createScopedNotificationRule,
@@ -21,14 +26,6 @@ import {
   updateScopedNotificationChannel,
   updateScopedNotificationRule,
 } from '@/lib/api';
-import type {
-  NotificationChannel,
-  NotificationConditionGroup,
-  NotificationConditionPredicate,
-  NotificationDelivery,
-  NotificationQueueJob,
-  NotificationRule,
-} from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import {
   Button,
@@ -42,7 +39,13 @@ import {
   TextArea,
   useOverlayState,
 } from '@heroui/react';
-import { Add01Icon, Delete01Icon, Notification01Icon, Refresh01Icon, Setting07Icon } from 'hugeicons-react';
+import {
+  Add01Icon,
+  Delete01Icon,
+  Notification01Icon,
+  Refresh01Icon,
+  Setting07Icon,
+} from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const channelTypeOptions: Array<{ value: NotificationChannel['type']; label: string }> = [
@@ -108,7 +111,10 @@ const conditionFieldLabels: Record<(typeof conditionFieldOptions)[number], strin
   tag: 'Tag',
 };
 
-const conditionFieldKinds: Record<(typeof conditionFieldOptions)[number], 'enum' | 'text' | 'pattern' | 'numeric' | 'boolean' | 'severity'> = {
+const conditionFieldKinds: Record<
+  (typeof conditionFieldOptions)[number],
+  'enum' | 'text' | 'pattern' | 'numeric' | 'boolean' | 'severity'
+> = {
   event_type: 'enum',
   org_id: 'text',
   image_ref: 'pattern',
@@ -273,7 +279,10 @@ function decodeRuleConditions(group?: NotificationConditionGroup | null) {
   }));
 }
 
-function parseConditionValue(operator: string, rawValue: string): string | number | boolean | string[] {
+function parseConditionValue(
+  operator: string,
+  rawValue: string
+): string | number | boolean | string[] {
   const trimmed = rawValue.trim();
   if (operator === 'in' || operator === 'matches_any') {
     return trimmed
@@ -303,8 +312,7 @@ function parseHeaders(rawHeaders: string) {
 }
 
 function getOperatorOptions(field: string) {
-  const kind =
-    conditionFieldKinds[field as keyof typeof conditionFieldKinds] ?? 'text';
+  const kind = conditionFieldKinds[field as keyof typeof conditionFieldKinds] ?? 'text';
   return operatorOptionsByKind[kind];
 }
 
@@ -319,8 +327,12 @@ function summarizeRule(rule: NotificationRule, channels: NotificationChannel[]) 
     .filter(Boolean)
     .join(', ');
   const conditions =
-    rule.conditions?.conditions?.map((condition) => `${conditionFieldLabels[condition.field as keyof typeof conditionFieldLabels] ?? condition.field} ${operatorLabels[condition.operator] ?? condition.operator} ${formatConditionValue(condition.value)}`).join(' • ') ||
-    'No conditions';
+    rule.conditions?.conditions
+      ?.map(
+        (condition) =>
+          `${conditionFieldLabels[condition.field as keyof typeof conditionFieldLabels] ?? condition.field} ${operatorLabels[condition.operator] ?? condition.operator} ${formatConditionValue(condition.value)}`
+      )
+      .join(' • ') || 'No conditions';
   return `${rule.event_types.join(', ')} • ${channelNames || 'No channels'} • ${conditions}`;
 }
 
@@ -331,7 +343,9 @@ export function NotificationManager({ basePath, heading, description }: Notifica
   const [queueJobs, setQueueJobs] = useState<NotificationQueueJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(
+    null
+  );
   const [channelForm, setChannelForm] = useState<ChannelFormState>(emptyChannelForm());
   const [ruleForm, setRuleForm] = useState<RuleFormState>(emptyRuleForm());
 
@@ -370,12 +384,12 @@ export function NotificationManager({ basePath, heading, description }: Notifica
     () => Object.fromEntries(eventTypeOptions.map((option) => [option.value, option.label])),
     []
   );
-  const operatorNames = useMemo(
-    () => Object.fromEntries(Object.entries(operatorLabels)),
-    []
-  );
+  const operatorNames = useMemo(() => Object.fromEntries(Object.entries(operatorLabels)), []);
   const conditionFieldNames = useMemo(
-    () => Object.fromEntries(conditionFieldOptions.map((field) => [field, conditionFieldLabels[field]])),
+    () =>
+      Object.fromEntries(
+        conditionFieldOptions.map((field) => [field, conditionFieldLabels[field]])
+      ),
     []
   );
 
@@ -466,7 +480,8 @@ export function NotificationManager({ basePath, heading, description }: Notifica
     } catch (saveError: unknown) {
       setFeedback({
         type: 'error',
-        text: saveError instanceof Error ? saveError.message : 'Failed to save notification channel',
+        text:
+          saveError instanceof Error ? saveError.message : 'Failed to save notification channel',
       });
     }
   }
@@ -516,7 +531,8 @@ export function NotificationManager({ basePath, heading, description }: Notifica
   async function handleDeleteChannel(channel: NotificationChannel) {
     const ok = await confirm({
       title: `Delete "${channel.name}"?`,
-      message: 'Associated rules will need to be updated manually if they still reference this channel.',
+      message:
+        'Associated rules will need to be updated manually if they still reference this channel.',
       confirmLabel: 'Delete',
       variant: 'danger',
     });
@@ -597,9 +613,21 @@ export function NotificationManager({ basePath, heading, description }: Notifica
       ) : null}
 
       {feedback ? (
-        <Card className={feedback.type === 'success' ? 'border border-success/30 bg-success/10' : 'border border-danger/30 bg-danger/10'}>
+        <Card
+          className={
+            feedback.type === 'success'
+              ? 'border border-success/30 bg-success/10'
+              : 'border border-danger/30 bg-danger/10'
+          }
+        >
           <Card.Content>
-            <p className={feedback.type === 'success' ? 'text-sm text-success' : 'text-sm text-danger'}>{feedback.text}</p>
+            <p
+              className={
+                feedback.type === 'success' ? 'text-sm text-success' : 'text-sm text-danger'
+              }
+            >
+              {feedback.text}
+            </p>
           </Card.Content>
         </Card>
       ) : null}
@@ -647,7 +675,11 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                         </Chip>
                       </Table.Cell>
                       <Table.Cell>
-                        <Chip size="sm" color={channel.enabled ? 'success' : 'danger'} variant="soft">
+                        <Chip
+                          size="sm"
+                          color={channel.enabled ? 'success' : 'danger'}
+                          variant="soft"
+                        >
                           {channel.enabled ? 'Enabled' : 'Disabled'}
                         </Chip>
                       </Table.Cell>
@@ -695,7 +727,9 @@ export function NotificationManager({ basePath, heading, description }: Notifica
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Rules</h2>
-              <p className="text-sm text-zinc-500">Match scan events and route them through selected channels.</p>
+              <p className="text-sm text-zinc-500">
+                Match scan events and route them through selected channels.
+              </p>
             </div>
             <Button onPress={openCreateRule} isDisabled={channels.length === 0}>
               <Add01Icon size={15} />
@@ -716,14 +750,22 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{rule.name}</p>
-                          <Chip size="sm" color={rule.enabled ? 'success' : 'danger'} variant="soft">
+                          <Chip
+                            size="sm"
+                            color={rule.enabled ? 'success' : 'danger'}
+                            variant="soft"
+                          >
                             {rule.enabled ? 'Enabled' : 'Disabled'}
                           </Chip>
                           <Chip size="sm" variant="soft">
-                            {rule.delivery_mode === 'digest' ? `Summary ${rule.digest_window_minutes}m` : 'Immediate'}
+                            {rule.delivery_mode === 'digest'
+                              ? `Summary ${rule.digest_window_minutes}m`
+                              : 'Immediate'}
                           </Chip>
                         </div>
-                        <p className="mt-1 text-xs text-zinc-500">{summarizeRule(rule, channels)}</p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {summarizeRule(rule, channels)}
+                        </p>
                       </div>
                       <div className="flex">
                         <RowActionsMenu
@@ -760,7 +802,9 @@ export function NotificationManager({ basePath, heading, description }: Notifica
         <Card className="space-y-4">
           <div>
             <h2 className="text-base font-semibold">Queue</h2>
-            <p className="text-sm text-zinc-500">Recent notification jobs, retries, and dead letters.</p>
+            <p className="text-sm text-zinc-500">
+              Recent notification jobs, retries, and dead letters.
+            </p>
           </div>
           <Table variant="secondary">
             <Table.ScrollContainer>
@@ -783,19 +827,29 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                       <Table.Cell>
                         <div>
                           <p className="font-medium">{job.rule_name ?? 'Rule'}</p>
-                          <p className="text-xs text-zinc-500">{job.channel_name ?? channelNames[job.channel_id] ?? job.channel_id}</p>
+                          <p className="text-xs text-zinc-500">
+                            {job.channel_name ?? channelNames[job.channel_id] ?? job.channel_id}
+                          </p>
                         </div>
                       </Table.Cell>
                       <Table.Cell>
                         <Chip
                           size="sm"
-                          color={job.status === 'delivered' ? 'success' : job.status === 'dead_letter' ? 'danger' : 'default'}
+                          color={
+                            job.status === 'delivered'
+                              ? 'success'
+                              : job.status === 'dead_letter'
+                                ? 'danger'
+                                : 'default'
+                          }
                           variant="soft"
                         >
                           {job.status}
                         </Chip>
                       </Table.Cell>
-                      <Table.Cell>{job.attempt_count}/{job.max_attempts}</Table.Cell>
+                      <Table.Cell>
+                        {job.attempt_count}/{job.max_attempts}
+                      </Table.Cell>
                       <Table.Cell>
                         <div className="flex justify-end">
                           {job.status === 'dead_letter' || job.status === 'failed' ? (
@@ -830,7 +884,9 @@ export function NotificationManager({ basePath, heading, description }: Notifica
         <Card className="space-y-4">
           <div>
             <h2 className="text-base font-semibold">Deliveries</h2>
-            <p className="text-sm text-zinc-500">Latest delivery attempts across all channels in this scope.</p>
+            <p className="text-sm text-zinc-500">
+              Latest delivery attempts across all channels in this scope.
+            </p>
           </div>
           <Table variant="secondary">
             <Table.ScrollContainer>
@@ -851,15 +907,27 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                     <Table.Row key={delivery.id} id={delivery.id}>
                       <Table.Cell>
                         <div>
-                          <p className="font-medium">{delivery.channel_name ?? channelNames[delivery.channel_id] ?? delivery.channel_id}</p>
-                          {delivery.rule_name ? <p className="text-xs text-zinc-500">{delivery.rule_name}</p> : null}
+                          <p className="font-medium">
+                            {delivery.channel_name ??
+                              channelNames[delivery.channel_id] ??
+                              delivery.channel_id}
+                          </p>
+                          {delivery.rule_name ? (
+                            <p className="text-xs text-zinc-500">{delivery.rule_name}</p>
+                          ) : null}
                         </div>
                       </Table.Cell>
                       <Table.Cell className="font-mono text-xs">{delivery.event}</Table.Cell>
                       <Table.Cell>
                         <Chip
                           size="sm"
-                          color={delivery.status === 'delivered' ? 'success' : delivery.status === 'dead_letter' ? 'danger' : 'default'}
+                          color={
+                            delivery.status === 'delivered'
+                              ? 'success'
+                              : delivery.status === 'dead_letter'
+                                ? 'danger'
+                                : 'default'
+                          }
                           variant="soft"
                         >
                           {delivery.status}
@@ -879,20 +947,37 @@ export function NotificationManager({ basePath, heading, description }: Notifica
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog>
               <Modal.Header>
-                <Modal.Heading>{channelForm.id ? 'Edit Notification Channel' : 'Add Notification Channel'}</Modal.Heading>
+                <Modal.Heading>
+                  {channelForm.id ? 'Edit Notification Channel' : 'Add Notification Channel'}
+                </Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>
               <Modal.Body>
-                <form id="notification-channel-form" onSubmit={handleSaveChannel} className="space-y-4">
+                <form
+                  id="notification-channel-form"
+                  onSubmit={handleSaveChannel}
+                  className="space-y-4"
+                >
                   <FormField
                     label="Channel name"
                     value={channelForm.name}
-                    onChange={(event) => setChannelForm((current) => ({ ...current, name: event.target.value }))}
+                    onChange={(event) =>
+                      setChannelForm((current) => ({ ...current, name: event.target.value }))
+                    }
                     placeholder="Production Slack Alerts"
                     required
                   />
                   <div className="grid gap-4 md:grid-cols-2">
-                    <Select value={channelForm.type} onChange={(value) => setChannelForm((current) => ({ ...current, type: String(value) as NotificationChannel['type'] }))} variant="secondary">
+                    <Select
+                      value={channelForm.type}
+                      onChange={(value) =>
+                        setChannelForm((current) => ({
+                          ...current,
+                          type: String(value) as NotificationChannel['type'],
+                        }))
+                      }
+                      variant="secondary"
+                    >
                       <Select.Trigger className={heroSelectTriggerClassName}>
                         <Select.Value />
                         <Select.Indicator />
@@ -910,7 +995,9 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                     <div className="flex h-full items-center">
                       <Switch
                         isSelected={channelForm.enabled}
-                        onChange={(enabled) => setChannelForm((current) => ({ ...current, enabled }))}
+                        onChange={(enabled) =>
+                          setChannelForm((current) => ({ ...current, enabled }))
+                        }
                       >
                         <Switch.Control>
                           <Switch.Thumb />
@@ -920,12 +1007,20 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                     </div>
                   </div>
 
-                  {(channelForm.type === 'webhook' || channelForm.type === 'discord' || channelForm.type === 'slack' || channelForm.type === 'teams') ? (
+                  {channelForm.type === 'webhook' ||
+                  channelForm.type === 'discord' ||
+                  channelForm.type === 'slack' ||
+                  channelForm.type === 'teams' ? (
                     <>
                       <FormField
                         label="Webhook URL"
                         value={channelForm.webhook_url}
-                        onChange={(event) => setChannelForm((current) => ({ ...current, webhook_url: event.target.value }))}
+                        onChange={(event) =>
+                          setChannelForm((current) => ({
+                            ...current,
+                            webhook_url: event.target.value,
+                          }))
+                        }
                         placeholder="https://hooks.slack.com/services/..."
                         required
                       />
@@ -933,8 +1028,11 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                         aria-label="Headers"
                         className={heroTextAreaClassName}
                         rows={4}
+                        variant="secondary"
                         value={channelForm.headers}
-                        onChange={(event) => setChannelForm((current) => ({ ...current, headers: event.target.value }))}
+                        onChange={(event) =>
+                          setChannelForm((current) => ({ ...current, headers: event.target.value }))
+                        }
                         placeholder={'Authorization: Bearer secret\nX-Env: production'}
                       />
                     </>
@@ -942,15 +1040,74 @@ export function NotificationManager({ basePath, heading, description }: Notifica
 
                   {channelForm.type === 'email' ? (
                     <div className="grid gap-4 md:grid-cols-2">
-                      <FormField label="SMTP host" value={channelForm.smtp_host} onChange={(event) => setChannelForm((current) => ({ ...current, smtp_host: event.target.value }))} placeholder="smtp.postmarkapp.com" required />
-                      <FormField label="SMTP port" value={channelForm.smtp_port} onChange={(event) => setChannelForm((current) => ({ ...current, smtp_port: event.target.value }))} placeholder="587" required />
-                      <FormField label="SMTP username" value={channelForm.smtp_username} onChange={(event) => setChannelForm((current) => ({ ...current, smtp_username: event.target.value }))} placeholder="postmark-api-token" />
-                      <FormField label="SMTP password" type="password" description={channelForm.id ? 'Leave blank to keep the existing password.' : undefined} value={channelForm.smtp_password} onChange={(event) => setChannelForm((current) => ({ ...current, smtp_password: event.target.value }))} placeholder="smtp-password" />
-                      <FormField label="From address" value={channelForm.smtp_from} onChange={(event) => setChannelForm((current) => ({ ...current, smtp_from: event.target.value }))} placeholder="alerts@justscan.local" required />
+                      <FormField
+                        label="SMTP host"
+                        value={channelForm.smtp_host}
+                        onChange={(event) =>
+                          setChannelForm((current) => ({
+                            ...current,
+                            smtp_host: event.target.value,
+                          }))
+                        }
+                        placeholder="smtp.postmarkapp.com"
+                        required
+                      />
+                      <FormField
+                        label="SMTP port"
+                        value={channelForm.smtp_port}
+                        onChange={(event) =>
+                          setChannelForm((current) => ({
+                            ...current,
+                            smtp_port: event.target.value,
+                          }))
+                        }
+                        placeholder="587"
+                        required
+                      />
+                      <FormField
+                        label="SMTP username"
+                        value={channelForm.smtp_username}
+                        onChange={(event) =>
+                          setChannelForm((current) => ({
+                            ...current,
+                            smtp_username: event.target.value,
+                          }))
+                        }
+                        placeholder="postmark-api-token"
+                      />
+                      <FormField
+                        label="SMTP password"
+                        type="password"
+                        description={
+                          channelForm.id ? 'Leave blank to keep the existing password.' : undefined
+                        }
+                        value={channelForm.smtp_password}
+                        onChange={(event) =>
+                          setChannelForm((current) => ({
+                            ...current,
+                            smtp_password: event.target.value,
+                          }))
+                        }
+                        placeholder="smtp-password"
+                      />
+                      <FormField
+                        label="From address"
+                        value={channelForm.smtp_from}
+                        onChange={(event) =>
+                          setChannelForm((current) => ({
+                            ...current,
+                            smtp_from: event.target.value,
+                          }))
+                        }
+                        placeholder="alerts@justscan.local"
+                        required
+                      />
                       <div className="flex h-full items-center">
                         <Switch
                           isSelected={channelForm.smtp_tls}
-                          onChange={(smtp_tls) => setChannelForm((current) => ({ ...current, smtp_tls }))}
+                          onChange={(smtp_tls) =>
+                            setChannelForm((current) => ({ ...current, smtp_tls }))
+                          }
                         >
                           <Switch.Control>
                             <Switch.Thumb />
@@ -959,21 +1116,61 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                         </Switch>
                       </div>
                       <div className="md:col-span-2">
-                        <FormField label="Recipients" description="Comma-separated email addresses." value={channelForm.to_addresses} onChange={(event) => setChannelForm((current) => ({ ...current, to_addresses: event.target.value }))} placeholder="secops@acme.io, platform@acme.io" required />
+                        <FormField
+                          label="Recipients"
+                          description="Comma-separated email addresses."
+                          value={channelForm.to_addresses}
+                          onChange={(event) =>
+                            setChannelForm((current) => ({
+                              ...current,
+                              to_addresses: event.target.value,
+                            }))
+                          }
+                          placeholder="secops@acme.io, platform@acme.io"
+                          required
+                        />
                       </div>
                     </div>
                   ) : null}
 
                   {channelForm.type === 'telegram' ? (
                     <div className="grid gap-4 md:grid-cols-2">
-                      <FormField label="Bot token" type="password" description={channelForm.id ? 'Leave blank to keep the existing bot token.' : undefined} value={channelForm.telegram_bot_token} onChange={(event) => setChannelForm((current) => ({ ...current, telegram_bot_token: event.target.value }))} placeholder="123456789:AA..." required={!channelForm.id} />
-                      <FormField label="Chat ID" value={channelForm.telegram_chat_id} onChange={(event) => setChannelForm((current) => ({ ...current, telegram_chat_id: event.target.value }))} placeholder="-1001234567890" required />
+                      <FormField
+                        label="Bot token"
+                        type="password"
+                        description={
+                          channelForm.id ? 'Leave blank to keep the existing bot token.' : undefined
+                        }
+                        value={channelForm.telegram_bot_token}
+                        onChange={(event) =>
+                          setChannelForm((current) => ({
+                            ...current,
+                            telegram_bot_token: event.target.value,
+                          }))
+                        }
+                        placeholder="123456789:AA..."
+                        required={!channelForm.id}
+                      />
+                      <FormField
+                        label="Chat ID"
+                        value={channelForm.telegram_chat_id}
+                        onChange={(event) =>
+                          setChannelForm((current) => ({
+                            ...current,
+                            telegram_chat_id: event.target.value,
+                          }))
+                        }
+                        placeholder="-1001234567890"
+                        required
+                      />
                     </div>
                   ) : null}
                 </form>
               </Modal.Body>
               <Modal.Footer>
-                <Button variant="secondary" onPress={channelModal.close}>Cancel</Button>
+                <Button variant="secondary" onPress={channelModal.close}>
+                  Cancel
+                </Button>
                 <Button type="submit" form="notification-channel-form">
                   Save Channel
                 </Button>
@@ -988,13 +1185,23 @@ export function NotificationManager({ basePath, heading, description }: Notifica
           <Modal.Container size="cover" placement="center">
             <Modal.Dialog>
               <Modal.Header>
-                <Modal.Heading>{ruleForm.id ? 'Edit Notification Rule' : 'Add Notification Rule'}</Modal.Heading>
+                <Modal.Heading>
+                  {ruleForm.id ? 'Edit Notification Rule' : 'Add Notification Rule'}
+                </Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>
               <Modal.Body>
                 <form id="notification-rule-form" onSubmit={handleSaveRule} className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
-                    <FormField label="Rule name" value={ruleForm.name} onChange={(event) => setRuleForm((current) => ({ ...current, name: event.target.value }))} placeholder="Critical Production Findings" required />
+                    <FormField
+                      label="Rule name"
+                      value={ruleForm.name}
+                      onChange={(event) =>
+                        setRuleForm((current) => ({ ...current, name: event.target.value }))
+                      }
+                      placeholder="Critical Production Findings"
+                      required
+                    />
                     <div className="flex h-full items-start pt-7">
                       <Switch
                         isSelected={ruleForm.enabled}
@@ -1025,9 +1232,15 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                       variant="secondary"
                     >
                       <Select.Trigger className={heroSelectTriggerClassName}>
-                        <span className={ruleForm.channel_ids.length > 0 ? 'truncate' : 'truncate text-zinc-500'}>
+                        <span
+                          className={
+                            ruleForm.channel_ids.length > 0 ? 'truncate' : 'truncate text-zinc-500'
+                          }
+                        >
                           {ruleForm.channel_ids.length > 0
-                            ? ruleForm.channel_ids.map((channelId) => channelNames[channelId] ?? channelId).join(', ')
+                            ? ruleForm.channel_ids
+                                .map((channelId) => channelNames[channelId] ?? channelId)
+                                .join(', ')
                             : 'Select channels'}
                         </span>
                         <Select.Indicator />
@@ -1060,9 +1273,15 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                       variant="secondary"
                     >
                       <Select.Trigger className={heroSelectTriggerClassName}>
-                        <span className={ruleForm.event_types.length > 0 ? 'truncate' : 'truncate text-zinc-500'}>
+                        <span
+                          className={
+                            ruleForm.event_types.length > 0 ? 'truncate' : 'truncate text-zinc-500'
+                          }
+                        >
                           {ruleForm.event_types.length > 0
-                            ? ruleForm.event_types.map((eventType) => eventNames[eventType] ?? eventType).join(', ')
+                            ? ruleForm.event_types
+                                .map((eventType) => eventNames[eventType] ?? eventType)
+                                .join(', ')
                             : 'Select events'}
                         </span>
                         <Select.Indicator />
@@ -1070,7 +1289,11 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                       <Select.Popover>
                         <ListBox selectionMode="multiple">
                           {eventTypeOptions.map((option) => (
-                            <ListBox.Item key={option.value} id={option.value} textValue={option.label}>
+                            <ListBox.Item
+                              key={option.value}
+                              id={option.value}
+                              textValue={option.label}
+                            >
                               {option.label}
                               <ListBox.ItemIndicator />
                             </ListBox.Item>
@@ -1079,9 +1302,20 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                       </Select.Popover>
                     </Select>
 
-                    <Select value={ruleForm.delivery_mode} onChange={(value) => setRuleForm((current) => ({ ...current, delivery_mode: String(value) as 'immediate' | 'digest' }))} variant="secondary">
+                    <Select
+                      value={ruleForm.delivery_mode}
+                      onChange={(value) =>
+                        setRuleForm((current) => ({
+                          ...current,
+                          delivery_mode: String(value) as 'immediate' | 'digest',
+                        }))
+                      }
+                      variant="secondary"
+                    >
                       <Select.Trigger className={heroSelectTriggerClassName}>
-                        <span className="truncate">{deliveryModeLabels[ruleForm.delivery_mode]}</span>
+                        <span className="truncate">
+                          {deliveryModeLabels[ruleForm.delivery_mode]}
+                        </span>
                         <Select.Indicator />
                       </Select.Trigger>
                       <Select.Popover>
@@ -1100,10 +1334,27 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                   </div>
 
                   {ruleForm.delivery_mode === 'digest' ? (
-                    <FormField label="Summary window (minutes)" value={ruleForm.digest_window_minutes} onChange={(event) => setRuleForm((current) => ({ ...current, digest_window_minutes: event.target.value }))} placeholder="15" required />
+                    <FormField
+                      label="Summary window (minutes)"
+                      value={ruleForm.digest_window_minutes}
+                      onChange={(event) =>
+                        setRuleForm((current) => ({
+                          ...current,
+                          digest_window_minutes: event.target.value,
+                        }))
+                      }
+                      placeholder="15"
+                      required
+                    />
                   ) : null}
 
-                  <Select value={ruleForm.op} onChange={(value) => setRuleForm((current) => ({ ...current, op: String(value) as 'all' | 'any' }))} variant="secondary">
+                  <Select
+                    value={ruleForm.op}
+                    onChange={(value) =>
+                      setRuleForm((current) => ({ ...current, op: String(value) as 'all' | 'any' }))
+                    }
+                    variant="secondary"
+                  >
                     <Select.Trigger className={heroSelectTriggerClassName}>
                       <span className="truncate">{groupOpLabels[ruleForm.op]}</span>
                       <Select.Indicator />
@@ -1126,26 +1377,39 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                     {ruleForm.conditions.map((condition, index) => (
                       <Card key={condition.id} variant="secondary">
                         <Card.Content className="grid gap-3 lg:grid-cols-[1.1fr_1fr_1.2fr_auto]">
-                          <Select value={condition.field} onChange={(value) => setRuleForm((current) => ({
-                            ...current,
-                            conditions: current.conditions.map((item, itemIndex) =>
-                              itemIndex === index
-                                ? {
-                                    ...item,
-                                    field: String(value),
-                                    operator: getDefaultOperator(String(value)),
-                                  }
-                                : item
-                            ),
-                          }))} variant="secondary">
+                          <Select
+                            value={condition.field}
+                            onChange={(value) =>
+                              setRuleForm((current) => ({
+                                ...current,
+                                conditions: current.conditions.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        field: String(value),
+                                        operator: getDefaultOperator(String(value)),
+                                      }
+                                    : item
+                                ),
+                              }))
+                            }
+                            variant="secondary"
+                          >
                             <Select.Trigger className={heroSelectTriggerClassName}>
-                              <span className="truncate">{(conditionFieldNames[condition.field] ?? condition.field) || 'Select field'}</span>
+                              <span className="truncate">
+                                {(conditionFieldNames[condition.field] ?? condition.field) ||
+                                  'Select field'}
+                              </span>
                               <Select.Indicator />
                             </Select.Trigger>
                             <Select.Popover>
                               <ListBox>
                                 {conditionFieldOptions.map((field) => (
-                                  <ListBox.Item key={field} id={field} textValue={conditionFieldLabels[field]}>
+                                  <ListBox.Item
+                                    key={field}
+                                    id={field}
+                                    textValue={conditionFieldLabels[field]}
+                                  >
                                     {conditionFieldLabels[field]}
                                     <ListBox.ItemIndicator />
                                   </ListBox.Item>
@@ -1154,18 +1418,33 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                             </Select.Popover>
                           </Select>
 
-                          <Select value={condition.operator} onChange={(value) => setRuleForm((current) => ({
-                            ...current,
-                            conditions: current.conditions.map((item, itemIndex) => itemIndex === index ? { ...item, operator: String(value) } : item),
-                          }))} variant="secondary">
+                          <Select
+                            value={condition.operator}
+                            onChange={(value) =>
+                              setRuleForm((current) => ({
+                                ...current,
+                                conditions: current.conditions.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, operator: String(value) } : item
+                                ),
+                              }))
+                            }
+                            variant="secondary"
+                          >
                             <Select.Trigger className={heroSelectTriggerClassName}>
-                              <span className="truncate">{(operatorNames[condition.operator] ?? condition.operator) || 'Select operator'}</span>
+                              <span className="truncate">
+                                {(operatorNames[condition.operator] ?? condition.operator) ||
+                                  'Select operator'}
+                              </span>
                               <Select.Indicator />
                             </Select.Trigger>
                             <Select.Popover>
                               <ListBox>
                                 {getOperatorOptions(condition.field).map((operator) => (
-                                  <ListBox.Item key={operator} id={operator} textValue={operatorLabels[operator]}>
+                                  <ListBox.Item
+                                    key={operator}
+                                    id={operator}
+                                    textValue={operatorLabels[operator]}
+                                  >
                                     {operatorLabels[operator]}
                                     <ListBox.ItemIndicator />
                                   </ListBox.Item>
@@ -1178,21 +1457,34 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                             label="Value"
                             hideLabel
                             value={condition.value}
-                            onChange={(event) => setRuleForm((current) => ({
-                              ...current,
-                              conditions: current.conditions.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item),
-                            }))}
-                            placeholder={conditionValuePlaceholders[condition.field] ?? 'Value or comma-separated values'}
+                            onChange={(event) =>
+                              setRuleForm((current) => ({
+                                ...current,
+                                conditions: current.conditions.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, value: event.target.value }
+                                    : item
+                                ),
+                              }))
+                            }
+                            placeholder={
+                              conditionValuePlaceholders[condition.field] ??
+                              'Value or comma-separated values'
+                            }
                           />
 
                           <div className="flex items-center justify-end">
                             <Button
                               variant="danger-soft"
                               size="sm"
-                              onPress={() => setRuleForm((current) => ({
-                                ...current,
-                                conditions: current.conditions.filter((item) => item.id !== condition.id),
-                              }))}
+                              onPress={() =>
+                                setRuleForm((current) => ({
+                                  ...current,
+                                  conditions: current.conditions.filter(
+                                    (item) => item.id !== condition.id
+                                  ),
+                                }))
+                              }
                               isDisabled={ruleForm.conditions.length === 1}
                             >
                               <Delete01Icon size={14} />
@@ -1204,13 +1496,20 @@ export function NotificationManager({ basePath, heading, description }: Notifica
 
                     <Button
                       variant="secondary"
-                      onPress={() => setRuleForm((current) => ({
-                        ...current,
-                        conditions: [
-                          ...current.conditions,
-                          { id: crypto.randomUUID(), field: 'highest_cvss', operator: 'gte', value: '7' },
-                        ],
-                      }))}
+                      onPress={() =>
+                        setRuleForm((current) => ({
+                          ...current,
+                          conditions: [
+                            ...current.conditions,
+                            {
+                              id: crypto.randomUUID(),
+                              field: 'highest_cvss',
+                              operator: 'gte',
+                              value: '7',
+                            },
+                          ],
+                        }))
+                      }
                     >
                       <Add01Icon size={14} />
                       Add condition
@@ -1219,7 +1518,9 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                 </form>
               </Modal.Body>
               <Modal.Footer>
-                <Button variant="secondary" onPress={ruleModal.close}>Cancel</Button>
+                <Button variant="secondary" onPress={ruleModal.close}>
+                  Cancel
+                </Button>
                 <Button type="submit" form="notification-rule-form">
                   Save Rule
                 </Button>

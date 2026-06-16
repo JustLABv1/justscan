@@ -16,7 +16,7 @@ FROM alpine:3.24 AS runtime-base
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --upgrade --no-cache ca-certificates tzdata libcrypto3 libssl3
 
 COPY --from=builder /app/backend/justscan-backend /app/
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh

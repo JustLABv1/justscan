@@ -33,11 +33,13 @@ FROM base AS runner
 WORKDIR /app
 
 # Install necessary packages
-RUN apk update && apk add --no-cache \
+RUN apk add --upgrade --no-cache \
     ca-certificates \
     tini \
     postgresql-client \
-    tzdata
+    tzdata \
+    libcrypto3 \
+    libssl3
 
 COPY --from=trivy-bin /usr/local/bin/trivy /usr/local/bin/trivy
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh

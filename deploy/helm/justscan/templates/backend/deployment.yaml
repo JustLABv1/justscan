@@ -46,8 +46,8 @@ spec:
             - name: BACKEND_JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "justscan.backend.secretName" . }}
-                  key: {{ if .Values.backend.secrets.existingSecret }}{{ .Values.backend.secrets.existingSecretKeys.jwtSecret }}{{ else }}jwt-secret{{ end }}
+                  name: {{ include "justscan.backend.secretRefName" (list . "jwtSecret") }}
+                  key: {{ include "justscan.backend.secretRefKey" (list . "jwtSecret" "jwt-secret") }}
 
             - name: BACKEND_DATABASE_PASSWORD
               valueFrom:
@@ -58,14 +58,14 @@ spec:
             - name: BACKEND_ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "justscan.backend.secretName" . }}
-                  key: {{ if .Values.backend.secrets.existingSecret }}{{ .Values.backend.secrets.existingSecretKeys.encryptionKey }}{{ else }}encryption-key{{ end }}
+                  name: {{ include "justscan.backend.secretRefName" (list . "encryptionKey") }}
+                  key: {{ include "justscan.backend.secretRefKey" (list . "encryptionKey" "encryption-key") }}
 
             - name: BACKEND_VULN_KB_NVD_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "justscan.backend.secretName" . }}
-                  key: {{ if .Values.backend.secrets.existingSecret }}{{ .Values.backend.secrets.existingSecretKeys.nvdApiKey }}{{ else }}nvd-api-key{{ end }}
+                  name: {{ include "justscan.backend.secretRefName" (list . "nvdApiKey") }}
+                  key: {{ include "justscan.backend.secretRefKey" (list . "nvdApiKey" "nvd-api-key") }}
 
             - name: JUSTSCAN_CUSTOM_CA_BUNDLE_PATH
               value: {{ .Values.backend.customCAs.bundlePath | quote }}

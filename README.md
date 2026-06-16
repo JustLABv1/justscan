@@ -445,10 +445,36 @@ helm install justscan deploy/helm/justscan \
 - `postgresql.auth.password` is required when `postgresql.enabled=true`.
 - When `postgresql.enabled=true`, the backend automatically uses `postgresql.auth.database`, `postgresql.auth.username`, and the Bitnami PostgreSQL password secret. You only need `backend.config.database.*` for external databases.
 - `backend.secrets.dbPassword` is required when `postgresql.enabled=false` and you connect to an external PostgreSQL instance.
+- Use `backend.secrets.existingSecretRefs.<field>.key` to map backend secret keys. Set `backend.secrets.existingSecret` when most fields live in one Kubernetes Secret; any ref with an empty `name` uses that Secret. Set `backend.secrets.existingSecretRefs.<field>.name` only for fields that live in a different Secret.
 - `backend.config.allowOrigins` must include the URL users open in their browser.
 - If `backend.config.oidc.enabled=true`, also set `backend.secrets.oidcClientSecret`, `backend.config.oidc.issuerUrl`, `backend.config.oidc.clientId`, and either `backend.config.oidc.redirectUri` or `ingress.enabled=true` with a valid host.
 - If your OIDC provider or another outbound HTTPS dependency uses a private or self-signed CA, set `backend.customCAs.configMapName` and/or `backend.customCAs.secretName` to mount PEM CA files into the backend container.
 - `backend.persistence.enabled=true` is recommended for production so Trivy DB and cache data survive pod restarts.
+
+Example using different Secrets for the external database password and encryption key:
+
+```yaml
+postgresql:
+  enabled: false
+
+backend:
+  config:
+    database:
+      server: postgres.example.com
+      name: justscan
+      user: justscan
+  secrets:
+    existingSecret: justscan-auth
+    existingSecretRefs:
+      jwtSecret:
+        key: jwt-secret
+      dbPassword:
+        name: justscan-db-credentials
+        key: password
+      encryptionKey:
+        name: justscan-crypto
+        key: encryption-key
+```
 
 #### Supported chart configuration
 

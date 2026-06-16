@@ -96,6 +96,44 @@ Returns the existingSecret name when set, otherwise the generated name.
 {{- end }}
 
 {{/*
+Name of the Secret for a single backend secret field.
+Usage: include "justscan.backend.secretRefName" (list . "jwtSecret")
+An empty per-field name falls back to existingSecret, then to the generated Secret.
+*/}}
+{{- define "justscan.backend.secretRefName" -}}
+{{- $root := index . 0 -}}
+{{- $field := index . 1 -}}
+{{- $refs := default dict $root.Values.backend.secrets.existingSecretRefs -}}
+{{- $ref := default dict (index $refs $field) -}}
+{{- if $ref.name -}}
+{{- $ref.name -}}
+{{- else -}}
+{{- include "justscan.backend.secretName" $root -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Key in the Secret for a single backend secret field.
+Usage: include "justscan.backend.secretRefKey" (list . "jwtSecret" "jwt-secret")
+existingSecretRefs is the primary key mapping. existingSecretKeys remains a
+backwards-compatible fallback for older values files.
+*/}}
+{{- define "justscan.backend.secretRefKey" -}}
+{{- $root := index . 0 -}}
+{{- $field := index . 1 -}}
+{{- $defaultKey := index . 2 -}}
+{{- $refs := default dict $root.Values.backend.secrets.existingSecretRefs -}}
+{{- $ref := default dict (index $refs $field) -}}
+{{- if $ref.key -}}
+{{- $ref.key -}}
+{{- else if and $root.Values.backend.secrets.existingSecret (hasKey $root.Values.backend.secrets "existingSecretKeys") -}}
+{{- index $root.Values.backend.secrets.existingSecretKeys $field -}}
+{{- else -}}
+{{- $defaultKey -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 PersistentVolumeClaim name for backend cache/data.
 */}}
 {{- define "justscan.backend.persistence.claimName" -}}
@@ -148,7 +186,7 @@ Otherwise return the value configured in backend.config.database.user.
 {{/*
 PostgreSQL password secret name.
 When postgresql.enabled=true we read from the Bitnami subchart secret.
-When existingSecret is set for the backend we read from there.
+When an external DB secret ref or existingSecret is set for the backend we read from there.
 Otherwise we read from the generated JustScan secret.
 */}}
 {{- define "justscan.dbPassword.secretName" -}}
@@ -159,17 +197,15 @@ Otherwise we read from the generated JustScan secret.
 {{- printf "%s-postgresql" .Release.Name }}
 {{- end }}
 {{- else }}
-{{- include "justscan.backend.secretName" . }}
+{{- include "justscan.backend.secretRefName" (list . "dbPassword") }}
 {{- end }}
 {{- end }}
 
 {{- define "justscan.dbPassword.secretKey" -}}
 {{- if .Values.postgresql.enabled }}
 {{- "password" }}
-{{- else if .Values.backend.secrets.existingSecret }}
-{{- .Values.backend.secrets.existingSecretKeys.dbPassword }}
 {{- else }}
-{{- "db-password" }}
+{{- include "justscan.backend.secretRefKey" (list . "dbPassword" "db-password") }}
 {{- end }}
 {{- end }}
 

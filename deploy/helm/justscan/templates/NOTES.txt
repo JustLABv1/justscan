@@ -37,8 +37,11 @@ Access JustScan at:
   Trivy cache data will be rebuilt after pod restarts unless you enable backend.persistence.
 {{- end }}
 
+{{- $secretRefs := default dict .Values.backend.secrets.existingSecretRefs }}
+{{- $jwtSecretRef := default dict (index $secretRefs "jwtSecret") }}
+{{- $encryptionKeyRef := default dict (index $secretRefs "encryptionKey") }}
 {{- if not .Values.backend.secrets.existingSecret }}
-{{- if or (eq .Values.backend.secrets.jwtSecret "") (eq .Values.backend.secrets.encryptionKey "") }}
+{{- if or (and (not $jwtSecretRef.name) (eq .Values.backend.secrets.jwtSecret "")) (and (not $encryptionKeyRef.name) (eq .Values.backend.secrets.encryptionKey "")) }}
 
 ⚠️  WARNING: One or more required secrets are empty!
    Set the following values before going to production:
@@ -50,5 +53,8 @@ Access JustScan at:
    {{- end }}
    Or use an existing Kubernetes Secret:
    --set backend.secrets.existingSecret=<secret-name>
+
+   For split Secret management, set per-field names:
+   --set backend.secrets.existingSecretRefs.encryptionKey.name=<secret-name>
 {{- end }}
 {{- end }}

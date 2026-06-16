@@ -215,6 +215,16 @@ export const getScanTrends = (imageName?: string, imageTag?: string, days = 30) 
 
 export const reScan = (id: string) => req<Scan>('POST', `/api/v1/scans/${id}/rescan`);
 
+export const refreshScanXrayPolicy = (id: string) => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const query = params.toString();
+  return req<{ scan: Scan; violation_count: number }>(
+    'POST',
+    `/api/v1/scans/${id}/xray-policy-refresh${query ? `?${query}` : ''}`
+  );
+};
+
 export const cancelScan = (id: string) =>
   req<{
     result: string;

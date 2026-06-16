@@ -571,6 +571,124 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	return nil
 }
 
+type XrayPolicyRefreshResult struct {
+	ViolationCount int `json:"violation_count"`
+}
+
+func RefreshXrayPolicyViolations(ctx context.Context, db *bun.DB, scan *models.Scan) (*XrayPolicyRefreshResult, error) {
+	if scan == nil {
+		return nil, fmt.Errorf("scan is required")
+	}
+	if scan.ScanProvider != models.ScanProviderArtifactoryXray {
+		return nil, fmt.Errorf("policy violation refresh is only available for Artifactory Xray scans")
+	}
+	if scan.RegistryID == nil {
+		return nil, fmt.Errorf("xray scans require a registry selection")
+	}
+
+	registry := &models.Registry{}
+	if err := db.NewSelect().Model(registry).Where("id = ?", *scan.RegistryID).Scan(ctx); err != nil {
+		return nil, fmt.Errorf("failed to load registry for xray scan: %w", err)
+	}
+
+	client, err := newXrayClient(registry, db, scan.RegistryID)
+	if err != nil {
+		return nil, err
+	}
+	ctx = xrayScanContext(ctx, scan.ID, scan.RegistryID)
+
+	repoKey, artifactName, imageTag, err := xrayImageParts(scan.ImageName, scan.ImageTag, registry)
+	if err != nil {
+		return nil, err
+	}
+
+	imageRepoPath := repoKey + "/" + artifactName
+	manifestFilename := client.resolveManifestFilename(ctx, imageRepoPath, imageTag)
+	artifactCandidates := buildXrayArtifactPathCandidates(client.artifactoryID, repoKey, artifactName, imageTag, manifestFilename, scan.ImageDigest)
+	exportComponentName := xrayExportComponentName(artifactName, imageTag, scan.ImageDigest)
+	summary, resolvedArtifact, summaryErr := client.pollArtifactSummaryWithin(ctx, artifactCandidates, xrayBlockedSummaryWaitWindow)
+	if summaryErr != nil {
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray policy refresh could not read the latest artifact summary: %v", summaryErr))
+	} else if summary != nil {
+		resolvedName, resolvedPath := xraySummaryExportDetails(summary, client.artifactoryID)
+		if resolvedName != "" {
+			exportComponentName = resolvedName
+		}
+		if resolvedPath != "" {
+			resolvedArtifact.RepoPath = resolvedPath
+			resolvedArtifact.ArtifactPath = resolvedPath
+			if prefix := strings.Trim(strings.TrimSpace(client.artifactoryID), "/"); prefix != "" {
+				resolvedArtifact.ArtifactPath = prefix + "/" + resolvedPath
+			}
+			if parts := strings.SplitN(resolvedPath, "/", 2); len(parts) == 2 {
+				resolvedArtifact.Repository = parts[0]
+				resolvedArtifact.Path = parts[1]
+			}
+		}
+	}
+
+	if resolvedArtifact.Repository == "" {
+		resolvedArtifact = preferredXrayArtifactCandidate(artifactCandidates)
+	}
+	if resolvedArtifact.Repository == "" || resolvedArtifact.Path == "" {
+		return nil, fmt.Errorf("failed to resolve xray artifact path for policy refresh")
+	}
+
+	targets := []xrayViolationLookupTarget{{
+		Repository: resolvedArtifact.Repository,
+		Path:       resolvedArtifact.Path,
+	}}
+	violations, violationsErr := client.getViolations(ctx, targets)
+	if violationsErr != nil || violations == nil || len(violations.Violations) == 0 {
+		lookupErr := violationsErr
+		exportPaths := []string{resolvedArtifact.ArtifactPath, resolvedArtifact.RepoPath}
+		if exportViolations, exportErr := client.exportViolations(ctx, exportComponentName, exportPaths...); exportErr == nil {
+			violations = exportViolations
+			violationsErr = nil
+		} else if lookupErr != nil {
+			violationsErr = fmt.Errorf("%w; xray export fallback also failed: %v", lookupErr, exportErr)
+		} else if violations == nil {
+			violations = &xrayViolationsResponse{}
+			violationsErr = nil
+		}
+	}
+	if violationsErr != nil {
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray policy refresh failed while reading policy violations: %v", violationsErr))
+		return nil, violationsErr
+	}
+
+	if err := clearXrayViolationContext(ctx, db, scan.ID); err != nil {
+		return nil, err
+	}
+	if err := persistXrayViolationContext(ctx, db, scan, violations); err != nil {
+		return nil, err
+	}
+	if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, exportComponentName, resolvedArtifact.RepoPath, resolvedArtifact.ArtifactPath); err != nil {
+		log.Warnf("Failed to refresh Xray ignore-rule snapshots for scan %s: %v", scan.ID, err)
+		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIgnoreRuleSyncError(err))
+	}
+	if suppressedCount, err := effectivesuppressions.RecalculateSuppressedCount(ctx, db, scan); err != nil {
+		log.Warnf("Failed to recalculate suppressed count after Xray policy refresh for scan %s: %v", scan.ID, err)
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Suppression count recalculation failed after Xray policy refresh: %v", err))
+	} else {
+		scan.SuppressedCount = suppressedCount
+		if _, err := db.NewUpdate().Model(scan).Column("suppressed_count").Where("id = ?", scan.ID).Exec(ctx); err != nil {
+			return nil, fmt.Errorf("failed to persist suppressed count after xray policy refresh: %w", err)
+		}
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Suppression count recalculated after Xray policy refresh: %d findings suppressed.", suppressedCount))
+	}
+
+	count := 0
+	if violations != nil {
+		count = len(violations.Violations)
+		if violations.Total > count {
+			count = violations.Total
+		}
+	}
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray policy refresh completed with %d current policy violation(s).", count))
+	return &XrayPolicyRefreshResult{ViolationCount: count}, nil
+}
+
 func EnsureScanImageDigest(ctx context.Context, db *bun.DB, scan *models.Scan) (string, error) {
 	if scan == nil {
 		return "", fmt.Errorf("scan is required")
@@ -3066,6 +3184,28 @@ func persistXrayViolationContext(ctx context.Context, db *bun.DB, scan *models.S
 		}
 	}
 
+	return nil
+}
+
+func clearXrayViolationContext(ctx context.Context, db *bun.DB, scanID uuid.UUID) error {
+	if _, err := db.NewUpdate().Model((*models.Vulnerability)(nil)).
+		Set("xray_issue_id = ''").
+		Set("xray_violation_id = ''").
+		Set("xray_watch_name = ''").
+		Set("xray_watch_names = ?", []string{}).
+		Set("xray_watch_policy_matches = ?", []models.JSONObject{}).
+		Set("xray_matched_policies = ?", []models.JSONObject{}).
+		Set("xray_violation_paths = ?", []string{}).
+		Set("xray_component_physical_paths = ?", []string{}).
+		Set("xray_source = ''").
+		Set("xray_source_version = ''").
+		Set("xray_source_id = ''").
+		Set("xray_is_blocking = false").
+		Set("xray_violation_raw = ?", models.JSONObject{}).
+		Where("scan_id = ?", scanID).
+		Exec(ctx); err != nil {
+		return fmt.Errorf("failed to clear stale xray violation context for scan %s: %w", scanID, err)
+	}
 	return nil
 }
 

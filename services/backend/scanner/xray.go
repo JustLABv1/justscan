@@ -460,11 +460,10 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Requested Xray indexing for %s.", repoPath))
 
 	if err := client.scanNow(ctx, repoPath); err != nil {
-		var httpErr *xrayHTTPError
-		if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusConflict {
+		if !isNonFatalXrayIndexError(err) {
 			return fmt.Errorf("failed to trigger a fresh xray index run for %s: %w", repoPath, err)
 		}
-		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray reported that %s is already being indexed. Continuing with the current in-flight indexing run.", repoPath))
+		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIndexError(repoPath, err))
 	}
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "queued", models.ScanStepQueuedInXray); err != nil {
@@ -475,11 +474,10 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Submitted the artifact scan request for component %s.", componentID))
 
 	if err := client.scanArtifact(ctx, componentID); err != nil {
-		var httpErr *xrayHTTPError
-		if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusConflict {
+		if !isNonFatalXrayScanArtifactError(err) {
 			return fmt.Errorf("failed to trigger a fresh xray scanArtifact run for %s: %w", componentID, err)
 		}
-		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray reported that %s is already queued or scanning. Continuing with the current in-flight scan run.", componentID))
+		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayScanArtifactError(componentID, err))
 	}
 
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Waiting %s before polling Xray summary so we import from the active scan run.", xrayFreshScanSettleDelay))
@@ -3677,6 +3675,38 @@ func isRetriableXrayScanArtifactError(err error) bool {
 	return false
 }
 
+func isNonFatalXrayIndexError(err error) bool {
+	var httpErr *xrayHTTPError
+	if !errors.As(err, &httpErr) {
+		return false
+	}
+
+	switch httpErr.StatusCode {
+	case http.StatusForbidden, http.StatusUnauthorized, http.StatusConflict:
+		return true
+	default:
+		return false
+	}
+}
+
+func isNonFatalXrayScanArtifactError(err error) bool {
+	if isRetriableXrayScanArtifactError(err) {
+		return true
+	}
+
+	var httpErr *xrayHTTPError
+	if !errors.As(err, &httpErr) {
+		return false
+	}
+
+	switch httpErr.StatusCode {
+	case http.StatusForbidden, http.StatusUnauthorized:
+		return true
+	default:
+		return false
+	}
+}
+
 func isRetriableXrayRequestError(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
@@ -3723,6 +3753,9 @@ func describeNonFatalXrayScanArtifactError(componentID string, err error) string
 	var httpErr *xrayHTTPError
 	if errors.As(err, &httpErr) {
 		body := strings.ToLower(strings.TrimSpace(httpErr.Body))
+		if httpErr.StatusCode == http.StatusForbidden || httpErr.StatusCode == http.StatusUnauthorized {
+			return fmt.Sprintf("Xray skipped the optional scanArtifact request for %s because the configured credentials do not have scan trigger permissions. Continuing to poll the artifact summary.", componentID)
+		}
 		if httpErr.StatusCode == http.StatusInternalServerError && strings.Contains(body, "failed to scan component") {
 			return fmt.Sprintf("Xray did not accept the explicit scanArtifact request for %s, but the artifact summary endpoint can still return results. Continuing to poll Xray.", componentID)
 		}

@@ -84,8 +84,9 @@ backend:
   # BACKEND_ENCRYPTION_KEY, BACKEND_VULN_KB_NVD_API_KEY).
   #
   # Option A (default): provide values here — the chart creates the Secret.
-  # Option B: use a pre-existing Secret (set existingSecret to its name and
-  #           configure existingSecretKeys to map each field to the correct key).
+  # Option B: use pre-existing Secret references. Set existingSecret as a
+  #           default Secret name, then configure existingSecretRefs keys.
+  #           Set a per-field name only when that value lives in another Secret.
   secrets:
     jwtSecret: ""
     dbPassword: ""
@@ -94,14 +95,25 @@ backend:
     # Optional — speeds up CVE enrichment
     nvdApiKey: ""
 
-    # Set to the name of a pre-existing Secret to skip Secret creation.
+    # Default pre-existing Secret name. When set, the chart skips Secret
+    # creation and fields in existingSecretRefs with an empty name use this
+    # Secret.
     existingSecret: ""
-    # Key names inside the existing Secret (only used when existingSecret is set).
-    existingSecretKeys:
-      jwtSecret: "jwt-secret"
-      dbPassword: "db-password"
-      encryptionKey: "encryption-key"
-      nvdApiKey: "nvd-api-key"
+    # Per-field Secret references. Leave name empty to use existingSecret or,
+    # when existingSecret is empty, the chart-created Secret for that field.
+    existingSecretRefs:
+      jwtSecret:
+        name: ""
+        key: "jwt-secret"
+      dbPassword:
+        name: ""
+        key: "db-password"
+      encryptionKey:
+        name: ""
+        key: "encryption-key"
+      nvdApiKey:
+        name: ""
+        key: "nvd-api-key"
 
   service:
     type: ClusterIP

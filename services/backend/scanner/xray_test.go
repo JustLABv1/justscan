@@ -371,6 +371,48 @@ func TestIsRetriableXrayScanArtifactErrorTreatsGatewayTimeoutAsRetriable(t *test
 	}
 }
 
+func TestIsNonFatalXrayIndexErrorTreatsPermissionDeniedAsNonFatal(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "forbidden", err: &xrayHTTPError{StatusCode: http.StatusForbidden}, want: true},
+		{name: "unauthorized", err: &xrayHTTPError{StatusCode: http.StatusUnauthorized}, want: true},
+		{name: "conflict", err: &xrayHTTPError{StatusCode: http.StatusConflict}, want: true},
+		{name: "bad gateway", err: &xrayHTTPError{StatusCode: http.StatusBadGateway}, want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isNonFatalXrayIndexError(test.err); got != test.want {
+				t.Fatalf("isNonFatalXrayIndexError() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestIsNonFatalXrayScanArtifactErrorTreatsPermissionDeniedAsNonFatal(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "forbidden", err: &xrayHTTPError{StatusCode: http.StatusForbidden}, want: true},
+		{name: "unauthorized", err: &xrayHTTPError{StatusCode: http.StatusUnauthorized}, want: true},
+		{name: "conflict", err: &xrayHTTPError{StatusCode: http.StatusConflict}, want: true},
+		{name: "bad request", err: &xrayHTTPError{StatusCode: http.StatusBadRequest}, want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isNonFatalXrayScanArtifactError(test.err); got != test.want {
+				t.Fatalf("isNonFatalXrayScanArtifactError() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestParseXrayIgnoredViolationRulesFromExport(t *testing.T) {
 	payload, err := buildTestExportZip(map[string]any{
 		"violations": []any{

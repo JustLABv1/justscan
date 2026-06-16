@@ -50,11 +50,6 @@
     }
   ],
 
-  "lockFileMaintenance": {
-    "enabled": true,
-    "schedule": ["before 5am every weekday"]
-  },
-
   "ignoreDeps": ["eslint"],
 
   "prConcurrentLimit": 5,

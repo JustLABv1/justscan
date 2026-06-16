@@ -31,6 +31,7 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 		s.DELETE("/:id", scans.DeleteScan(db))
 		s.POST("/:id/cancel", scans.CancelScan(db))
 		s.POST("/:id/rescan", scans.ReScan(db))
+		s.POST("/:id/xray-policy-refresh", scans.RefreshXrayPolicyViolations(db))
 		s.GET("/:id/vulnerability-view", scans.GetVulnerabilityViewSettings(db))
 		s.PUT("/:id/vulnerability-view", scans.SaveVulnerabilityViewPreference(db))
 		s.DELETE("/:id/vulnerability-view", scans.ResetVulnerabilityViewPreference(db))

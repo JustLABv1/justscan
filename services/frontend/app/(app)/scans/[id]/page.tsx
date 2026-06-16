@@ -64,6 +64,7 @@ import {
   removeScanFromOrg,
   removeTagFromScan,
   reScan,
+  refreshScanXrayPolicy,
   resetScanVulnerabilityViewPreference,
   revokeScanOrgAccess,
   saveScanVulnerabilityViewPreference,
@@ -536,6 +537,7 @@ export default function ScanDetailPage() {
   const [complianceVulnLoading, setComplianceVulnLoading] = useState(false);
   const [complianceVulnLoaded, setComplianceVulnLoaded] = useState(false);
   const [reScanning, setReScanning] = useState(false);
+  const [xrayPolicyRefreshing, setXrayPolicyRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [comparingPrev, setComparingPrev] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
@@ -1334,6 +1336,28 @@ export default function ScanDetailPage() {
     }
   }
 
+  async function handleRefreshXrayPolicy() {
+    if (!scan || !canMutateScan()) return;
+    setXrayPolicyRefreshing(true);
+    try {
+      const result = await refreshScanXrayPolicy(id);
+      setScan(result.scan);
+      setFilteredVulnSummaryOverride(null);
+      setComplianceVulnById({});
+      setComplianceVulnLoaded(false);
+      setComplianceVulnLoading(false);
+      setPage(1);
+      const results = await getScanCompliance(id).catch(() => [] as ComplianceResult[]);
+      setCompliance(results);
+      const suffix = result.violation_count === 1 ? 'violation' : 'violations';
+      toast.success(`Xray policy data refreshed (${result.violation_count} ${suffix})`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to refresh Xray policy data');
+    } finally {
+      setXrayPolicyRefreshing(false);
+    }
+  }
+
   async function handleCancel() {
     if (!scan || !canMutateScan()) return;
     setCancelling(true);
@@ -1655,6 +1679,10 @@ export default function ScanDetailPage() {
     allOrgs.filter((org) => canManageOrg(org.current_user_role)).map((org) => org.id)
   );
   const canMutateCurrentScan = canMutateScan();
+  const canRefreshXrayPolicy =
+    scan.scan_provider === 'artifactory_xray' &&
+    (scan.status === 'completed' || scan.status === 'failed') &&
+    !isScanInProgress;
   const fullImageConfig = scan.image_config;
   const runtimeImageConfig = imageConfigObject(fullImageConfig?.['config']);
   const imageCreated = imageConfigString(fullImageConfig?.['created']);
@@ -1908,6 +1936,21 @@ export default function ScanDetailPage() {
             <Cancel01Icon size={15} />
           )}
           Cancel
+        </Button>
+      )}
+      {canRefreshXrayPolicy && (
+        <Button
+          className="btn-secondary"
+          isDisabled={xrayPolicyRefreshing || !canMutateCurrentScan}
+          onPress={handleRefreshXrayPolicy}
+          variant="secondary"
+        >
+          {xrayPolicyRefreshing ? (
+            <span className="size-3.5 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin" />
+          ) : (
+            <Refresh01Icon size={15} />
+          )}
+          Refresh Xray policy
         </Button>
       )}
       <Button

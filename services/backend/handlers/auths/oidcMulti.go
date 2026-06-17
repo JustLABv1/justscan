@@ -7,7 +7,10 @@ import (
 	"justscan-backend/functions/httperror"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/oauth2"
 )
+
+const oidcPKCEVerifierCookie = "oidc_pkce_verifier"
 
 // OIDCProviders returns the list of enabled OIDC providers for the login page.
 // This is a public endpoint — no authentication required.
@@ -44,14 +47,17 @@ func OIDCLoginForProvider(c *gin.Context) {
 		httperror.InternalServerError(c, "Failed to generate state token", err)
 		return
 	}
+	verifier := oauth2.GenerateVerifier()
 
-	// Store provider name in a cookie alongside the state so the callback knows
-	// which provider to use.
+	// Keep the state and PKCE verifier in HTTP-only cookies for the callback.
+	// The verifier never leaves the browser except in the server-to-server token
+	// exchange, while the S256 challenge is sent to the identity provider.
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("oidc_state", state, 600, "/", "", false, true)
 	c.SetCookie("oidc_provider", providerName, 600, "/", "", false, true)
+	c.SetCookie(oidcPKCEVerifierCookie, verifier, 600, "/", "", false, true)
 
 	cfg := entry.GetOAuth2Config()
-	authURL := cfg.AuthCodeURL(state)
+	authURL := cfg.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier))
 	c.Redirect(http.StatusFound, authURL)
 }

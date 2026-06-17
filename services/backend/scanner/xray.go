@@ -606,13 +606,14 @@ func RefreshXrayPolicyViolations(ctx context.Context, db *bun.DB, scan *models.S
 	manifestFilename := client.resolveManifestFilename(ctx, imageRepoPath, imageTag)
 	artifactCandidates := buildXrayArtifactPathCandidates(client.artifactoryID, repoKey, artifactName, imageTag, manifestFilename, scan.ImageDigest)
 	exportComponentName := xrayExportComponentName(artifactName, imageTag, scan.ImageDigest)
+	exportComponentNames := xrayExportComponentCandidates(exportComponentName, scan.ExternalScanID)
 	summary, resolvedArtifact, summaryErr := client.pollArtifactSummaryWithin(ctx, artifactCandidates, xrayBlockedSummaryWaitWindow)
 	if summaryErr != nil {
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray policy refresh could not read the latest artifact summary: %v", summaryErr))
 	} else if summary != nil {
 		resolvedName, resolvedPath := xraySummaryExportDetails(summary, client.artifactoryID)
 		if resolvedName != "" {
-			exportComponentName = resolvedName
+			exportComponentNames = xrayExportComponentCandidates(append(exportComponentNames, resolvedName)...)
 		}
 		if resolvedPath != "" {
 			resolvedArtifact.RepoPath = resolvedPath
@@ -634,22 +635,37 @@ func RefreshXrayPolicyViolations(ctx context.Context, db *bun.DB, scan *models.S
 		return nil, fmt.Errorf("failed to resolve xray artifact path for policy refresh")
 	}
 
-	targets := []xrayViolationLookupTarget{{
-		Repository: resolvedArtifact.Repository,
-		Path:       resolvedArtifact.Path,
-	}}
+	targets := xrayPolicyRefreshTargets(resolvedArtifact, artifactCandidates)
 	violations, violationsErr := client.getViolations(ctx, targets)
 	if violationsErr != nil || violations == nil || len(violations.Violations) == 0 {
 		lookupErr := violationsErr
-		exportPaths := []string{resolvedArtifact.ArtifactPath, resolvedArtifact.RepoPath}
-		if exportViolations, exportErr := client.exportViolations(ctx, exportComponentName, exportPaths...); exportErr == nil {
+		exportPaths := xrayPolicyRefreshExportPaths(resolvedArtifact, artifactCandidates)
+		var exportErr error
+		for _, componentName := range exportComponentNames {
+			exportViolations, err := client.exportViolations(ctx, componentName, exportPaths...)
+			if err != nil {
+				exportErr = err
+				continue
+			}
+			if exportViolations == nil || len(exportViolations.Violations) == 0 {
+				continue
+			}
 			violations = exportViolations
 			violationsErr = nil
-		} else if lookupErr != nil {
-			violationsErr = fmt.Errorf("%w; xray export fallback also failed: %v", lookupErr, exportErr)
-		} else if violations == nil {
-			violations = &xrayViolationsResponse{}
-			violationsErr = nil
+			exportComponentName = componentName
+			break
+		}
+		if violations == nil || len(violations.Violations) == 0 {
+			message := "Xray returned no policy violations for the resolved artifact; existing policy data was left unchanged"
+			if lookupErr != nil && exportErr != nil {
+				message = fmt.Sprintf("%s (violations lookup: %v; export lookup: %v)", message, lookupErr, exportErr)
+			} else if lookupErr != nil {
+				message = fmt.Sprintf("%s (violations lookup: %v)", message, lookupErr)
+			} else if exportErr != nil {
+				message = fmt.Sprintf("%s (export lookup: %v)", message, exportErr)
+			}
+			recordScanStepOutput(ctx, db, scan.ID, message+".")
+			return nil, fmt.Errorf("%s", message)
 		}
 	}
 	if violationsErr != nil {
@@ -687,6 +703,49 @@ func RefreshXrayPolicyViolations(ctx context.Context, db *bun.DB, scan *models.S
 	}
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray policy refresh completed with %d current policy violation(s).", count))
 	return &XrayPolicyRefreshResult{ViolationCount: count}, nil
+}
+
+func xrayExportComponentCandidates(values ...string) []string {
+	results := make([]string, 0, len(values))
+	seen := make(map[string]bool)
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		value = strings.TrimPrefix(value, "docker://")
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		results = append(results, value)
+	}
+	return results
+}
+
+func xrayPolicyRefreshTargets(resolved xrayArtifactPathCandidate, candidates []xrayArtifactPathCandidate) []xrayViolationLookupTarget {
+	results := make([]xrayViolationLookupTarget, 0, len(candidates)+1)
+	seen := make(map[string]bool)
+	add := func(candidate xrayArtifactPathCandidate) {
+		repository := strings.TrimSpace(candidate.Repository)
+		path := strings.TrimSpace(candidate.Path)
+		key := repository + "\x00" + path
+		if repository == "" || path == "" || seen[key] {
+			return
+		}
+		seen[key] = true
+		results = append(results, xrayViolationLookupTarget{Repository: repository, Path: path})
+	}
+	add(resolved)
+	for _, candidate := range candidates {
+		add(candidate)
+	}
+	return results
+}
+
+func xrayPolicyRefreshExportPaths(resolved xrayArtifactPathCandidate, candidates []xrayArtifactPathCandidate) []string {
+	paths := []string{resolved.ArtifactPath, resolved.RepoPath}
+	for _, candidate := range candidates {
+		paths = append(paths, candidate.ArtifactPath, candidate.RepoPath)
+	}
+	return dedupeStrings(paths)
 }
 
 func EnsureScanImageDigest(ctx context.Context, db *bun.DB, scan *models.Scan) (string, error) {

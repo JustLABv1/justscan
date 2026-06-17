@@ -184,6 +184,21 @@ func IsAdminForProvider(claims *OIDCClaims, m models.OIDCProvider) bool {
 // FetchUserInfoGroups calls the OIDC provider's UserInfo endpoint using the stored
 // access token and returns fresh group claims. Used for token-refresh group sync.
 func FetchUserInfoGroups(ctx context.Context, entry *providerEntry, accessToken string) ([]string, error) {
+	claims, err := FetchUserInfoClaims(ctx, entry, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	groupsClaim := entry.model.GroupsClaim
+	if groupsClaim == "" {
+		groupsClaim = "groups"
+	}
+	return uniqueStrings(extractStringSlice(claims, groupsClaim)), nil
+}
+
+// FetchUserInfoClaims calls the provider's UserInfo endpoint and returns its
+// decoded claims. Access and refresh tokens are deliberately not included.
+func FetchUserInfoClaims(ctx context.Context, entry *providerEntry, accessToken string) (map[string]any, error) {
 	userInfo, err := entry.provider.UserInfo(ctx, oauth2.StaticTokenSource(&oauth2.Token{
 		AccessToken: accessToken,
 		Expiry:      time.Now().Add(time.Minute), // assume valid; errors handled below
@@ -196,12 +211,7 @@ func FetchUserInfoGroups(ctx context.Context, entry *providerEntry, accessToken 
 	if err := userInfo.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("oidc: failed to parse userinfo claims: %w", err)
 	}
-
-	groupsClaim := entry.model.GroupsClaim
-	if groupsClaim == "" {
-		groupsClaim = "groups"
-	}
-	return uniqueStrings(extractStringSlice(claims, groupsClaim)), nil
+	return claims, nil
 }
 
 // extractClaimsGroupsClaim extracts the groups from claims using the provider's configured claim key.

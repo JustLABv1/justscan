@@ -24,6 +24,10 @@ import (
 func OIDCCallbackMulti(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		providerName := c.Param("provider")
+		if hasOIDCDebugSession(c) {
+			handleOIDCDebugCallback(c, providerName)
+			return
+		}
 
 		// --- 1. Verify state ---
 		stateParam := c.Query("state")

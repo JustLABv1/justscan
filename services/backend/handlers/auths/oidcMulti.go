@@ -35,6 +35,8 @@ func OIDCProviders(c *gin.Context) {
 // OIDCLoginForProvider initiates the OIDC authorization code flow for the named provider.
 func OIDCLoginForProvider(c *gin.Context) {
 	providerName := c.Param("provider")
+	// An abandoned diagnostic flow must not capture a later normal callback.
+	clearOIDCDebugCookies(c)
 
 	entry, err := auth.GetProviderEntry(c.Request.Context(), providerName)
 	if err != nil {

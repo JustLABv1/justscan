@@ -2,7 +2,7 @@ import { req } from './core';
 import { getDefaultScannerCapabilities } from './registries';
 import type { APIRequestLog, APIRequestLogFilters, APIUsageStats, AdminDashboard, AdminOrg, AdminToken, AdminUser, AdminXRayRequestLog, AuditLog, AuditLogFilters, NotificationChannel, NotificationDelivery, XRayRequestLogFilters, XRayUsageStats } from './types/admin';
 import type { AIProviderAdmin, AIProviderTestResult, AISettings, AISupportedProvider } from './types/ai';
-import type { AutoTagRule, OIDCClaimSyncPreview, OIDCGroupMapping, OIDCOrgRoleOverride, OIDCProviderAdmin, Registry, RegistryListResponse, ScannerSettings } from './types/registries';
+import type { AutoTagRule, OIDCClaimSyncPreview, OIDCDebugSession, OIDCGroupMapping, OIDCOrgRoleOverride, OIDCProviderAdmin, Registry, RegistryListResponse, ScannerSettings } from './types/registries';
 import type { AdminScan } from './types/scans';
 
 export const getAdminDashboard = () =>
@@ -34,6 +34,15 @@ export const adminDeleteGroupMapping = (providerName: string, mappingId: string)
 
 export const adminPreviewOIDCClaimSync = (providerName: string, data: { groups?: string[]; roles?: string[] }) =>
   req<{ data: OIDCClaimSyncPreview }>('POST', `/api/v1/admin/oidc-providers/${providerName}/claim-sync-preview`, data).then((result) => result.data);
+
+export const adminCreateOIDCDebugSession = (providerName: string) =>
+  req<{ session_id: string; expires_at: string; login_url: string }>(
+    'POST',
+    `/api/v1/admin/oidc-providers/${encodeURIComponent(providerName)}/debug-sessions`
+  );
+
+export const adminGetOIDCDebugSession = (sessionId: string) =>
+  req<OIDCDebugSession>('GET', `/api/v1/admin/oidc-debug-sessions/${encodeURIComponent(sessionId)}`);
 
 export const adminListOIDCRoleOverrides = (providerName: string) =>
   req<{ data: OIDCOrgRoleOverride[] }>('GET', `/api/v1/admin/oidc-providers/${providerName}/role-overrides`).then((result) => result.data ?? []);

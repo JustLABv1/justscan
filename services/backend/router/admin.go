@@ -198,6 +198,8 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.DELETE("/oidc-providers/:name", func(c *gin.Context) {
 			admins.DeleteOIDCProvider(c, db)
 		})
+		admin.POST("/oidc-providers/:name/debug-sessions", admins.CreateOIDCDebugSession)
+		admin.GET("/oidc-debug-sessions/:sessionID", admins.GetOIDCDebugSession)
 		// OIDC group→org mappings
 		admin.GET("/oidc-providers/:name/group-mappings", func(c *gin.Context) {
 			admins.ListGroupMappings(c, db)

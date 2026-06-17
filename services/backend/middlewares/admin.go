@@ -60,6 +60,7 @@ func Admin(db *bun.DB) gin.HandlerFunc {
 				httperror.Unauthorized(context, "You are not an admin", errors.New("user is not admin"))
 				return
 			}
+			context.Set(AuthContextUserIDKey, userID)
 			context.Next()
 		} else if tokenType == "service" {
 			tokenID, err := auth.GetIDFromToken(tokenString)

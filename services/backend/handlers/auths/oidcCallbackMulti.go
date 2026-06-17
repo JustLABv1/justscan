@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
+	"golang.org/x/oauth2"
 )
 
 // OIDCCallbackMulti handles the OIDC callback for any named provider.
@@ -31,9 +32,15 @@ func OIDCCallbackMulti(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or missing state parameter"})
 			return
 		}
+		pkceVerifier, err := c.Cookie(oidcPKCEVerifierCookie)
+		if err != nil || pkceVerifier == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or missing PKCE verifier"})
+			return
+		}
 		c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie("oidc_state", "", -1, "/", "", false, true)
 		c.SetCookie("oidc_provider", "", -1, "/", "", false, true)
+		c.SetCookie(oidcPKCEVerifierCookie, "", -1, "/", "", false, true)
 
 		if errParam := c.Query("error"); errParam != "" {
 			desc := c.Query("error_description")
@@ -56,7 +63,7 @@ func OIDCCallbackMulti(db *bun.DB) gin.HandlerFunc {
 
 		// --- 3. Exchange code for tokens ---
 		oauth2Cfg := entry.GetOAuth2Config()
-		token, err := oauth2Cfg.Exchange(c.Request.Context(), code)
+		token, err := oauth2Cfg.Exchange(c.Request.Context(), code, oauth2.VerifierOption(pkceVerifier))
 		if err != nil {
 			httperror.InternalServerError(c, "Failed to exchange authorization code", err)
 			return

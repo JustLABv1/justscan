@@ -69,6 +69,12 @@ func extractStringSlice(claims map[string]any, path string) []string {
 	}
 }
 
+// ExtractStringSliceForDebug exposes the same dotted-path resolution used by
+// normal login so the diagnostic report cannot disagree with authentication.
+func ExtractStringSliceForDebug(claims map[string]any, path string) []string {
+	return uniqueStrings(extractStringSlice(claims, path))
+}
+
 func splitSpaces(s string) []string {
 	var out []string
 	start := -1

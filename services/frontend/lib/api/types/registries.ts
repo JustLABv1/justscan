@@ -128,6 +128,30 @@ export interface OIDCClaimSyncPreview {
   final_memberships: OIDCClaimSyncMembership[];
 }
 
+export interface OIDCDebugReport {
+  provider_name: string;
+  id_token_claims: Record<string, unknown>;
+  userinfo_claims?: Record<string, unknown>;
+  userinfo_error?: string;
+  groups_claim_path: string;
+  roles_claim_path: string;
+  resolved_groups: string[];
+  resolved_roles: string[];
+  realm_roles: string[];
+  client_roles: string[];
+  client_roles_path: string;
+  would_be_admin: boolean;
+  completed_at: string;
+}
+
+export interface OIDCDebugSession {
+  session_id: string;
+  provider_name: string;
+  expires_at: string;
+  status: 'pending' | 'complete';
+  report?: OIDCDebugReport;
+}
+
 export interface ScannerSettings {
   enable_trivy?: boolean;
   enable_grype?: boolean;

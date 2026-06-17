@@ -26,6 +26,7 @@ func Auth(router *gin.RouterGroup, db *bun.DB) {
 		auth.GET("/oidc/available", auths.OIDCAvailable)
 		auth.GET("/oidc/providers", auths.OIDCProviders)
 		auth.GET("/oidc/:provider/login", middlewares.AuthRegisterRateLimit(), auths.OIDCLoginForProvider)
+		auth.GET("/oidc/:provider/debug/:session/login", middlewares.AuthRegisterRateLimit(), auths.OIDCDebugLogin)
 		auth.GET("/oidc/:provider/callback", auths.OIDCCallbackMulti(db))
 	}
 }

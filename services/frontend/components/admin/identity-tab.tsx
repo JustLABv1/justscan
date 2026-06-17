@@ -5,6 +5,7 @@ import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
   adminCreateGroupMapping,
   adminCreateOIDCProvider,
+  adminCreateOIDCDebugSession,
   adminCreateOIDCRoleOverride,
   adminDeleteGroupMapping,
   adminDeleteOIDCProvider,
@@ -13,13 +14,16 @@ import {
   adminListOIDCProviders,
   adminListOIDCRoleOverrides,
   adminPreviewOIDCClaimSync,
+  adminGetOIDCDebugSession,
   adminUpdateGroupMapping,
   adminUpdateOIDCProvider,
   adminUpdateOIDCRoleOverride,
 } from '@/lib/api/admin';
+import { getApiBase } from '@/lib/api/base';
 import { listOrgs } from '@/lib/api/orgs';
 import type {
   OIDCClaimSyncPreview,
+  OIDCDebugReport,
   OIDCGroupMapping,
   OIDCOrgRoleOverride,
   OIDCProviderAdmin,
@@ -37,6 +41,7 @@ import {
   Select,
   Switch,
   Table,
+  Tabs,
   TextArea,
   useOverlayState,
 } from '@heroui/react';
@@ -122,6 +127,8 @@ export function IdentityTab() {
   const [previewRolesInput, setPreviewRolesInput] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [preview, setPreview] = useState<OIDCClaimSyncPreview | null>(null);
+  const [debugLoading, setDebugLoading] = useState(false);
+  const [debugReport, setDebugReport] = useState<OIDCDebugReport | null>(null);
 
   const providerModal = useOverlayState();
   const mappingModal = useOverlayState();
@@ -250,6 +257,36 @@ export function IdentityTab() {
 
   useEffect(() => deferEffect(load), [load]);
   useEffect(() => deferEffect(loadSelectedDetails), [loadSelectedDetails]);
+  useEffect(
+    () =>
+      deferEffect(async () => {
+        if (loading) return;
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get('oidc_debug');
+        if (!sessionId) return;
+        setDebugLoading(true);
+        try {
+          const session = await adminGetOIDCDebugSession(sessionId);
+          if (session.status !== 'complete' || !session.report) {
+            throw new Error('OIDC diagnostic session has not completed');
+          }
+          setDebugReport(session.report);
+          setSelectedProvider((current) =>
+            current?.name === session.provider_name
+              ? current
+              : providers.find((provider) => provider.name === session.provider_name) ?? current
+          );
+          params.delete('oidc_debug');
+          const query = params.toString();
+          window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+        } catch (debugError: unknown) {
+          setError(debugError instanceof Error ? debugError.message : 'Failed to load OIDC diagnostic result');
+        } finally {
+          setDebugLoading(false);
+        }
+      }),
+    [loading, providers]
+  );
 
   const filteredProviders = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -628,6 +665,20 @@ export function IdentityTab() {
     }
   }
 
+  async function handleStartOIDCDebug() {
+    if (!selectedProvider) return;
+    setDebugLoading(true);
+    setDebugReport(null);
+    setError('');
+    try {
+      const session = await adminCreateOIDCDebugSession(selectedProvider.name);
+      window.location.assign(`${getApiBase()}${session.login_url}`);
+    } catch (debugError: unknown) {
+      setError(debugError instanceof Error ? debugError.message : 'Failed to start OIDC diagnostics');
+      setDebugLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {error && <Banner type="error" text={error} />}
@@ -858,6 +909,100 @@ export function IdentityTab() {
             </Table>
           </Card>
         </div>
+      )}
+
+      {selectedProvider && (
+        <Card className="space-y-4">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+            <div className="space-y-1">
+              <h3 className="text-base font-semibold">Live OIDC Diagnostics</h3>
+              <p className="max-w-3xl text-sm text-zinc-500">
+                Sign in through {selectedProvider.display_name} to inspect the verified ID token and UserInfo claims.
+                This does not provision a user, change roles, sync organizations, or create a JustScan session.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              isPending={debugLoading}
+              isDisabled={!selectedProvider.enabled}
+              onPress={() => void handleStartOIDCDebug()}
+            >
+              {debugLoading ? 'Starting…' : 'Sign in and inspect claims'}
+            </Button>
+          </div>
+
+          {!selectedProvider.enabled && (
+            <p className="text-sm text-warning">Enable this provider before starting a diagnostic login.</p>
+          )}
+
+          {debugReport && debugReport.provider_name === selectedProvider.name && (
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <Card variant="secondary">
+                  <Card.Header>
+                    <Card.Title>Groups</Card.Title>
+                    <Card.Description className="font-mono">{debugReport.groups_claim_path}</Card.Description>
+                  </Card.Header>
+                  <Card.Content className="flex flex-wrap gap-2">
+                    {debugReport.resolved_groups.length > 0
+                      ? debugReport.resolved_groups.map((group) => <Chip key={group} size="sm" variant="soft">{group}</Chip>)
+                      : <span className="text-sm text-zinc-500">No groups resolved</span>}
+                  </Card.Content>
+                </Card>
+                <Card variant="secondary">
+                  <Card.Header>
+                    <Card.Title>Roles</Card.Title>
+                    <Card.Description className="font-mono">{debugReport.roles_claim_path}</Card.Description>
+                  </Card.Header>
+                  <Card.Content className="flex flex-wrap gap-2">
+                    {debugReport.resolved_roles.length > 0
+                      ? debugReport.resolved_roles.map((role) => <Chip key={role} size="sm" variant="soft">{role}</Chip>)
+                      : <span className="text-sm text-zinc-500">No roles resolved</span>}
+                  </Card.Content>
+                </Card>
+                <Card variant="secondary">
+                  <Card.Header>
+                    <Card.Title>Keycloak paths</Card.Title>
+                    <Card.Description>Automatically included in role resolution</Card.Description>
+                  </Card.Header>
+                  <Card.Content className="space-y-2 text-xs">
+                    <p><span className="text-zinc-500">Realm:</span> <code>realm_access.roles</code> ({debugReport.realm_roles.length})</p>
+                    <p><span className="text-zinc-500">Client:</span> <code>{debugReport.client_roles_path}</code> ({debugReport.client_roles.length})</p>
+                    <Chip size="sm" variant="soft" color={debugReport.would_be_admin ? 'success' : 'default'}>
+                      {debugReport.would_be_admin ? 'Would receive admin role' : 'Would receive user role'}
+                    </Chip>
+                  </Card.Content>
+                </Card>
+              </div>
+
+              {debugReport.userinfo_error && (
+                <p className="text-sm text-warning">UserInfo could not be read: {debugReport.userinfo_error}</p>
+              )}
+
+              <Tabs defaultSelectedKey="id-token" variant="secondary">
+                <Tabs.ListContainer>
+                  <Tabs.List aria-label="OIDC diagnostic claim sources">
+                    <Tabs.Tab id="id-token">ID token<Tabs.Indicator /></Tabs.Tab>
+                    <Tabs.Tab id="userinfo">UserInfo<Tabs.Indicator /></Tabs.Tab>
+                  </Tabs.List>
+                </Tabs.ListContainer>
+                <Tabs.Panel id="id-token">
+                  <pre className="max-h-[32rem] overflow-auto rounded-xl bg-content2 p-4 text-xs leading-5">
+                    {JSON.stringify(debugReport.id_token_claims, null, 2)}
+                  </pre>
+                </Tabs.Panel>
+                <Tabs.Panel id="userinfo">
+                  <pre className="max-h-[32rem] overflow-auto rounded-xl bg-content2 p-4 text-xs leading-5">
+                    {JSON.stringify(debugReport.userinfo_claims ?? {}, null, 2)}
+                  </pre>
+                </Tabs.Panel>
+              </Tabs>
+              <p className="text-xs text-zinc-500">
+                OAuth tokens, authorization codes, and client credentials are never included. This result expires shortly.
+              </p>
+            </div>
+          )}
+        </Card>
       )}
 
       {selectedProvider && (

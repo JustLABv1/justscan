@@ -53,6 +53,53 @@ func containsFold(value, fragment string) bool {
 	return strings.Contains(strings.ToLower(value), strings.ToLower(fragment))
 }
 
+func TestXrayExportComponentCandidatesPreferOriginalAndNormalizeExternalID(t *testing.T) {
+	candidates := xrayExportComponentCandidates(
+		"grafana/grafana@sha256__abc",
+		"docker://grafana/grafana@sha256__abc",
+		"grafana/grafana:13.0-slim",
+	)
+
+	want := []string{
+		"grafana/grafana@sha256__abc",
+		"grafana/grafana:13.0-slim",
+	}
+	if fmt.Sprint(candidates) != fmt.Sprint(want) {
+		t.Fatalf("unexpected component candidates: got %v, want %v", candidates, want)
+	}
+}
+
+func TestXrayPolicyRefreshCandidatesIncludeResolvedAndOriginalPaths(t *testing.T) {
+	resolved := xrayArtifactPathCandidate{
+		Repository:   "docker-remote-cache",
+		Path:         "grafana/grafana/13.0-slim/manifest.json",
+		RepoPath:     "docker-remote-cache/grafana/grafana/13.0-slim/manifest.json",
+		ArtifactPath: "default/docker-remote-cache/grafana/grafana/13.0-slim/manifest.json",
+	}
+	original := xrayArtifactPathCandidate{
+		Repository:   "docker-remote-cache",
+		Path:         "grafana/grafana/sha256__abc/manifest.json",
+		RepoPath:     "docker-remote-cache/grafana/grafana/sha256__abc/manifest.json",
+		ArtifactPath: "default/docker-remote-cache/grafana/grafana/sha256__abc/manifest.json",
+	}
+
+	targets := xrayPolicyRefreshTargets(resolved, []xrayArtifactPathCandidate{resolved, original})
+	if len(targets) != 2 {
+		t.Fatalf("expected 2 unique refresh targets, got %d: %v", len(targets), targets)
+	}
+	if targets[0].Path != resolved.Path || targets[1].Path != original.Path {
+		t.Fatalf("unexpected refresh target order: %v", targets)
+	}
+
+	paths := xrayPolicyRefreshExportPaths(resolved, []xrayArtifactPathCandidate{resolved, original})
+	if len(paths) != 4 {
+		t.Fatalf("expected 4 unique export paths, got %d: %v", len(paths), paths)
+	}
+	if paths[0] != resolved.ArtifactPath || paths[1] != resolved.RepoPath {
+		t.Fatalf("resolved paths should be attempted first: %v", paths)
+	}
+}
+
 func TestParseXrayVulnerabilitiesReadsCombinedSummaryCVSS(t *testing.T) {
 	scanID := uuid.New()
 	summary := &xraySummaryResponse{

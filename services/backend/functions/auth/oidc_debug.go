@@ -95,9 +95,23 @@ func CompleteOIDCDebugSession(id, providerName string, report *OIDCDebugReport) 
 	if !ok || session.ProviderName != providerName || session.Report != nil {
 		return errOIDCDebugSessionNotFound
 	}
+	if report.IDTokenClaims == nil {
+		report.IDTokenClaims = make(map[string]any)
+	}
+	report.ResolvedGroups = nonNilStrings(report.ResolvedGroups)
+	report.ResolvedRoles = nonNilStrings(report.ResolvedRoles)
+	report.RealmRoles = nonNilStrings(report.RealmRoles)
+	report.ClientRoles = nonNilStrings(report.ClientRoles)
 	report.CompletedAt = now
 	session.Report = report
 	return nil
+}
+
+func nonNilStrings(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
 }
 
 func randomDebugID() (string, error) {

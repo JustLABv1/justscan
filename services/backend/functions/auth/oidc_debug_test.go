@@ -28,6 +28,10 @@ func TestOIDCDebugSessionIsBoundToOwnerAndProvider(t *testing.T) {
 	if completed.Report == nil || completed.Report.CompletedAt.IsZero() {
 		t.Fatal("completed debug session did not contain a timestamped report")
 	}
+	if completed.Report.ResolvedGroups == nil || completed.Report.ResolvedRoles == nil ||
+		completed.Report.RealmRoles == nil || completed.Report.ClientRoles == nil {
+		t.Fatal("completed debug session contained nullable claim lists")
+	}
 	if _, err := GetOIDCDebugSessionForFlow(session.ID, "keycloak"); err == nil {
 		t.Fatal("GetOIDCDebugSessionForFlow() allowed a completed session to restart")
 	}

@@ -944,8 +944,8 @@ export function IdentityTab() {
                     <Card.Description className="font-mono">{debugReport.groups_claim_path}</Card.Description>
                   </Card.Header>
                   <Card.Content className="flex flex-wrap gap-2">
-                    {debugReport.resolved_groups.length > 0
-                      ? debugReport.resolved_groups.map((group) => <Chip key={group} size="sm" variant="soft">{group}</Chip>)
+                    {(debugReport.resolved_groups ?? []).length > 0
+                      ? (debugReport.resolved_groups ?? []).map((group) => <Chip key={group} size="sm" variant="soft">{group}</Chip>)
                       : <span className="text-sm text-zinc-500">No groups resolved</span>}
                   </Card.Content>
                 </Card>
@@ -955,8 +955,8 @@ export function IdentityTab() {
                     <Card.Description className="font-mono">{debugReport.roles_claim_path}</Card.Description>
                   </Card.Header>
                   <Card.Content className="flex flex-wrap gap-2">
-                    {debugReport.resolved_roles.length > 0
-                      ? debugReport.resolved_roles.map((role) => <Chip key={role} size="sm" variant="soft">{role}</Chip>)
+                    {(debugReport.resolved_roles ?? []).length > 0
+                      ? (debugReport.resolved_roles ?? []).map((role) => <Chip key={role} size="sm" variant="soft">{role}</Chip>)
                       : <span className="text-sm text-zinc-500">No roles resolved</span>}
                   </Card.Content>
                 </Card>
@@ -966,8 +966,8 @@ export function IdentityTab() {
                     <Card.Description>Automatically included in role resolution</Card.Description>
                   </Card.Header>
                   <Card.Content className="space-y-2 text-xs">
-                    <p><span className="text-zinc-500">Realm:</span> <code>realm_access.roles</code> ({debugReport.realm_roles.length})</p>
-                    <p><span className="text-zinc-500">Client:</span> <code>{debugReport.client_roles_path}</code> ({debugReport.client_roles.length})</p>
+                    <p><span className="text-zinc-500">Realm:</span> <code>realm_access.roles</code> ({(debugReport.realm_roles ?? []).length})</p>
+                    <p><span className="text-zinc-500">Client:</span> <code>{debugReport.client_roles_path}</code> ({(debugReport.client_roles ?? []).length})</p>
                     <Chip size="sm" variant="soft" color={debugReport.would_be_admin ? 'success' : 'default'}>
                       {debugReport.would_be_admin ? 'Would receive admin role' : 'Would receive user role'}
                     </Chip>

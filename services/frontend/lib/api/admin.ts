@@ -42,7 +42,19 @@ export const adminCreateOIDCDebugSession = (providerName: string) =>
   );
 
 export const adminGetOIDCDebugSession = (sessionId: string) =>
-  req<OIDCDebugSession>('GET', `/api/v1/admin/oidc-debug-sessions/${encodeURIComponent(sessionId)}`);
+  req<OIDCDebugSession>('GET', `/api/v1/admin/oidc-debug-sessions/${encodeURIComponent(sessionId)}`).then((session) => ({
+    ...session,
+    report: session.report
+      ? {
+          ...session.report,
+          id_token_claims: session.report.id_token_claims ?? {},
+          resolved_groups: session.report.resolved_groups ?? [],
+          resolved_roles: session.report.resolved_roles ?? [],
+          realm_roles: session.report.realm_roles ?? [],
+          client_roles: session.report.client_roles ?? [],
+        }
+      : undefined,
+  }));
 
 export const adminListOIDCRoleOverrides = (providerName: string) =>
   req<{ data: OIDCOrgRoleOverride[] }>('GET', `/api/v1/admin/oidc-providers/${providerName}/role-overrides`).then((result) => result.data ?? []);

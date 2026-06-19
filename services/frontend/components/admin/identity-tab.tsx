@@ -71,18 +71,30 @@ function buildSuggestedRedirectUri(apiBase: string, providerName: string) {
 function renderClaimMappingPreview(
   template: string,
   providerName: string,
-  matchType: 'exact' | 'prefix',
-  matchValue: string
+  matchType: 'exact' | 'prefix' | 'regex',
+  matchValue: string,
+  previewClaim: string
 ) {
   const normalizedMatchValue = matchValue.trim();
-  const exampleClaim =
-    matchType === 'prefix'
-      ? `${normalizedMatchValue || 'team:'}platform`
-      : normalizedMatchValue || 'platform-admins';
-  const exampleSuffix =
-    matchType === 'prefix' && exampleClaim.startsWith(normalizedMatchValue)
-      ? exampleClaim.slice(normalizedMatchValue.length).trim()
-      : '';
+  const exampleClaim = previewClaim.trim() || (matchType === 'prefix'
+    ? `${normalizedMatchValue || 'team:'}platform`
+    : normalizedMatchValue || 'platform-admins');
+  let exampleSuffix = '';
+  let matches = true;
+  let error = '';
+  if (matchType === 'prefix') {
+    matches = exampleClaim.startsWith(normalizedMatchValue);
+    exampleSuffix = matches ? exampleClaim.slice(normalizedMatchValue.length).trim() : '';
+  } else if (matchType === 'regex') {
+    try {
+      const result = new RegExp(normalizedMatchValue).exec(exampleClaim);
+      matches = result !== null;
+      exampleSuffix = result?.[1]?.trim() ?? '';
+    } catch {
+      matches = false;
+      error = 'Invalid regular expression';
+    }
+  }
   const preview = (template || '{claim}')
     .replaceAll('{claim}', exampleClaim)
     .replaceAll('{suffix}', exampleSuffix)
@@ -92,6 +104,8 @@ function renderClaimMappingPreview(
     claim: exampleClaim,
     suffix: exampleSuffix,
     preview,
+    matches,
+    error,
   };
 }
 
@@ -164,8 +178,9 @@ export function IdentityTab() {
   const [mappingFormError, setMappingFormError] = useState('');
   const [mappingEffect, setMappingEffect] = useState<'allow' | 'exclude'>('allow');
   const [mappingClaimType, setMappingClaimType] = useState<'group' | 'role'>('group');
-  const [mappingMatchType, setMappingMatchType] = useState<'exact' | 'prefix'>('exact');
+  const [mappingMatchType, setMappingMatchType] = useState<'exact' | 'prefix' | 'regex'>('exact');
   const [mappingMatchValue, setMappingMatchValue] = useState('');
+  const [mappingPreviewClaim, setMappingPreviewClaim] = useState('m017-1_default-roles-m017-1');
   const [mappingProvisioningMode, setMappingProvisioningMode] = useState<'existing_org' | 'create_org'>('existing_org');
   const [mappingOrgId, setMappingOrgId] = useState('');
   const [mappingOrgNameTemplate, setMappingOrgNameTemplate] = useState('{claim}');
@@ -177,7 +192,7 @@ export function IdentityTab() {
   const [overrideSaving, setOverrideSaving] = useState(false);
   const [overrideFormError, setOverrideFormError] = useState('');
   const [overrideClaimType, setOverrideClaimType] = useState<'group' | 'role'>('group');
-  const [overrideMatchType, setOverrideMatchType] = useState<'exact' | 'prefix'>('exact');
+  const [overrideMatchType, setOverrideMatchType] = useState<'exact' | 'prefix' | 'regex'>('exact');
   const [overrideMatchValue, setOverrideMatchValue] = useState('');
   const [overrideTargetType, setOverrideTargetType] = useState<'org_id' | 'rendered_name'>('org_id');
   const [overrideOrgId, setOverrideOrgId] = useState('');
@@ -215,9 +230,10 @@ export function IdentityTab() {
         mappingOrgNameTemplate,
         selectedProvider?.name ?? 'provider',
         mappingMatchType,
-        mappingMatchValue
+        mappingMatchValue,
+        mappingPreviewClaim
       ),
-    [mappingOrgNameTemplate, selectedProvider?.name, mappingMatchType, mappingMatchValue]
+    [mappingOrgNameTemplate, selectedProvider?.name, mappingMatchType, mappingMatchValue, mappingPreviewClaim]
   );
 
   const load = useCallback(async () => {
@@ -491,6 +507,7 @@ export function IdentityTab() {
     setMappingClaimType('group');
     setMappingMatchType('exact');
     setMappingMatchValue('');
+    setMappingPreviewClaim('m017-1_default-roles-m017-1');
     setMappingProvisioningMode(orgs.length > 0 ? 'existing_org' : 'create_org');
     setMappingOrgId(orgs[0]?.id ?? '');
     setMappingOrgNameTemplate('{claim}');
@@ -507,6 +524,13 @@ export function IdentityTab() {
     setMappingClaimType(mapping.claim_type);
     setMappingMatchType(mapping.match_type);
     setMappingMatchValue(mapping.match_value);
+    setMappingPreviewClaim(
+      mapping.match_type === 'prefix'
+        ? `${mapping.match_value}platform`
+        : mapping.match_type === 'exact'
+          ? mapping.match_value
+          : 'm017-1_default-roles-m017-1'
+    );
     setMappingProvisioningMode(mapping.provisioning_mode);
     setMappingOrgId(mapping.org_id ?? '');
     setMappingOrgNameTemplate(mapping.org_name_template || '{claim}');
@@ -1221,7 +1245,7 @@ export function IdentityTab() {
                   <Card className="border border-divider/60 bg-content2/30">
                     <Card.Content className="space-y-1.5">
                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">Template Variables</p>
-                      <p className="text-sm text-zinc-500">Use {'{claim}'} for the full claim, {'{suffix}'} for prefix leftovers, and {'{provider}'} for the identity provider name.</p>
+                      <p className="text-sm text-zinc-500">Use {'{claim}'} for the full claim, {'{suffix}'} for prefix leftovers or the first regex capture group, and {'{provider}'} for the identity provider name.</p>
                     </Card.Content>
                   </Card>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -1233,11 +1257,11 @@ export function IdentityTab() {
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                       <Select.Popover><ListBox><ListBox.Item id="group">Group</ListBox.Item><ListBox.Item id="role">Role</ListBox.Item></ListBox></Select.Popover>
                     </Select>
-                    <Select value={mappingMatchType} onChange={(value) => setMappingMatchType(value as 'exact' | 'prefix')} variant="secondary">
+                    <Select value={mappingMatchType} onChange={(value) => setMappingMatchType(value as 'exact' | 'prefix' | 'regex')} variant="secondary">
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                      <Select.Popover><ListBox><ListBox.Item id="exact">Exact</ListBox.Item><ListBox.Item id="prefix">Prefix</ListBox.Item></ListBox></Select.Popover>
+                      <Select.Popover><ListBox><ListBox.Item id="exact">Exact</ListBox.Item><ListBox.Item id="prefix">Prefix</ListBox.Item><ListBox.Item id="regex">Regex</ListBox.Item></ListBox></Select.Popover>
                     </Select>
-                    <Input className="w-full" variant="secondary" placeholder="Claim value" value={mappingMatchValue} onChange={(event) => setMappingMatchValue(event.target.value)} required />
+                    <Input className="w-full" variant="secondary" placeholder={mappingMatchType === 'regex' ? '^m[^_]+_default-roles-(.+)$' : 'Claim value'} value={mappingMatchValue} onChange={(event) => setMappingMatchValue(event.target.value)} required />
                   </div>
                   {mappingEffect !== 'exclude' && (
                     <>
@@ -1265,12 +1289,15 @@ export function IdentityTab() {
                         </Select>
                       )}
                       <Input className="w-full" variant="secondary" placeholder="Org template" value={mappingOrgNameTemplate} onChange={(event) => setMappingOrgNameTemplate(event.target.value)} />
-                      <p className="text-sm text-zinc-500">Example: {'{provider}'}-{'{suffix}'} with prefix match value <span className="font-mono">team:</span> maps <span className="font-mono">team:platform</span> to <span className="font-mono">provider-platform</span>.</p>
+                      <p className="text-sm text-zinc-500">For prefix matches, {'{suffix}'} is the leftover value. For regex matches, it is the first capture group.</p>
                       {(mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg) && (
                         <Card className="border border-divider/60 bg-content2/30">
                           <Card.Content className="space-y-1.5">
                             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">Live Preview</p>
+                            <label className="text-sm text-zinc-500" htmlFor="mapping-preview-claim">Preview claim <span className="text-xs">(not saved)</span></label>
+                            <Input id="mapping-preview-claim" className="w-full" variant="secondary" placeholder="Paste a real group or role claim" value={mappingPreviewClaim} onChange={(event) => setMappingPreviewClaim(event.target.value)} />
                             <p className="text-sm text-zinc-500">Claim: <span className="font-mono">{mappingTemplatePreview.claim}</span></p>
+                            <p className={mappingTemplatePreview.matches ? 'text-sm text-success' : 'text-sm text-warning'}>{mappingTemplatePreview.error || (mappingTemplatePreview.matches ? 'Preview claim matches' : 'Preview claim does not match')}</p>
                             <p className="text-sm text-zinc-500">Suffix: <span className="font-mono">{mappingTemplatePreview.suffix || '(empty)'}</span></p>
                             <p className="text-sm text-zinc-500">Resolved org name: <span className="font-mono">{mappingTemplatePreview.preview}</span></p>
                           </Card.Content>
@@ -1323,11 +1350,11 @@ export function IdentityTab() {
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                       <Select.Popover><ListBox><ListBox.Item id="group">Group</ListBox.Item><ListBox.Item id="role">Role</ListBox.Item></ListBox></Select.Popover>
                     </Select>
-                    <Select value={overrideMatchType} onChange={(value) => setOverrideMatchType(value as 'exact' | 'prefix')} variant="secondary">
+                    <Select value={overrideMatchType} onChange={(value) => setOverrideMatchType(value as 'exact' | 'prefix' | 'regex')} variant="secondary">
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                      <Select.Popover><ListBox><ListBox.Item id="exact">Exact</ListBox.Item><ListBox.Item id="prefix">Prefix</ListBox.Item></ListBox></Select.Popover>
+                      <Select.Popover><ListBox><ListBox.Item id="exact">Exact</ListBox.Item><ListBox.Item id="prefix">Prefix</ListBox.Item><ListBox.Item id="regex">Regex</ListBox.Item></ListBox></Select.Popover>
                     </Select>
-                    <Input className="w-full" variant="secondary" placeholder="Claim value" value={overrideMatchValue} onChange={(event) => setOverrideMatchValue(event.target.value)} required />
+                    <Input className="w-full" variant="secondary" placeholder={overrideMatchType === 'regex' ? '^m[^_]+_default-roles-(.+)$' : 'Claim value'} value={overrideMatchValue} onChange={(event) => setOverrideMatchValue(event.target.value)} required />
                     <Select value={overrideTargetType} onChange={(value) => setOverrideTargetType(value as 'org_id' | 'rendered_name')} variant="secondary">
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                       <Select.Popover><ListBox><ListBox.Item id="org_id">Organization</ListBox.Item><ListBox.Item id="rendered_name">Rendered name</ListBox.Item></ListBox></Select.Popover>

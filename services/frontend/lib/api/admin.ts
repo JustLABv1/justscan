@@ -5,6 +5,10 @@ import type { AIProviderAdmin, AIProviderTestResult, AISettings, AISupportedProv
 import type { AutoTagRule, OIDCClaimSyncPreview, OIDCDebugSession, OIDCGroupMapping, OIDCOrgRoleOverride, OIDCProviderAdmin, Registry, RegistryListResponse, ScannerSettings } from './types/registries';
 import type { AdminScan } from './types/scans';
 
+type OIDCRegexMatchInput<T extends { match_type: string }> = Omit<Partial<T>, 'match_type'> & {
+  match_type?: 'exact' | 'prefix' | 'regex';
+};
+
 export const getAdminDashboard = () =>
   req<AdminDashboard>('GET', '/api/v1/admin/dashboard');
 
@@ -23,10 +27,10 @@ export const adminDeleteOIDCProvider = (name: string) =>
 export const adminListGroupMappings = (providerName: string) =>
   req<{ data: OIDCGroupMapping[] }>('GET', `/api/v1/admin/oidc-providers/${providerName}/group-mappings`).then((result) => result.data ?? []);
 
-export const adminCreateGroupMapping = (providerName: string, data: Partial<OIDCGroupMapping>) =>
+export const adminCreateGroupMapping = (providerName: string, data: OIDCRegexMatchInput<OIDCGroupMapping>) =>
   req<OIDCGroupMapping>('POST', `/api/v1/admin/oidc-providers/${providerName}/group-mappings`, data);
 
-export const adminUpdateGroupMapping = (providerName: string, mappingId: string, data: Partial<OIDCGroupMapping>) =>
+export const adminUpdateGroupMapping = (providerName: string, mappingId: string, data: OIDCRegexMatchInput<OIDCGroupMapping>) =>
   req<OIDCGroupMapping>('PUT', `/api/v1/admin/oidc-providers/${providerName}/group-mappings/${mappingId}`, data);
 
 export const adminDeleteGroupMapping = (providerName: string, mappingId: string) =>
@@ -59,10 +63,10 @@ export const adminGetOIDCDebugSession = (sessionId: string) =>
 export const adminListOIDCRoleOverrides = (providerName: string) =>
   req<{ data: OIDCOrgRoleOverride[] }>('GET', `/api/v1/admin/oidc-providers/${providerName}/role-overrides`).then((result) => result.data ?? []);
 
-export const adminCreateOIDCRoleOverride = (providerName: string, data: Partial<OIDCOrgRoleOverride>) =>
+export const adminCreateOIDCRoleOverride = (providerName: string, data: OIDCRegexMatchInput<OIDCOrgRoleOverride>) =>
   req<OIDCOrgRoleOverride>('POST', `/api/v1/admin/oidc-providers/${providerName}/role-overrides`, data);
 
-export const adminUpdateOIDCRoleOverride = (providerName: string, overrideId: string, data: Partial<OIDCOrgRoleOverride>) =>
+export const adminUpdateOIDCRoleOverride = (providerName: string, overrideId: string, data: OIDCRegexMatchInput<OIDCOrgRoleOverride>) =>
   req<OIDCOrgRoleOverride>('PUT', `/api/v1/admin/oidc-providers/${providerName}/role-overrides/${overrideId}`, data);
 
 export const adminDeleteOIDCRoleOverride = (providerName: string, overrideId: string) =>

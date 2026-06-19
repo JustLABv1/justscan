@@ -3,6 +3,7 @@ package auths
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -212,6 +213,19 @@ func mappingMatches(mapping models.OIDCGroupOrgMapping, claim string) (bool, str
 			return false, ""
 		}
 		return true, suffix
+	case "regex":
+		pattern, err := regexp.Compile(mapping.MatchValue)
+		if err != nil {
+			return false, ""
+		}
+		matches := pattern.FindStringSubmatch(claim)
+		if matches == nil {
+			return false, ""
+		}
+		if len(matches) > 1 {
+			return true, strings.TrimSpace(matches[1])
+		}
+		return true, ""
 	default:
 		return claim == mapping.MatchValue, ""
 	}
@@ -329,8 +343,8 @@ func renderOIDCNameTemplate(ruleID, matchType, template, claim, suffix, provider
 	if template == "" {
 		return "", fmt.Errorf("mapping %s is missing org_name_template", ruleID)
 	}
-	if matchType != "prefix" && strings.Contains(template, "{suffix}") {
-		return "", fmt.Errorf("mapping %s uses {suffix} with non-prefix matching", ruleID)
+	if matchType != "prefix" && matchType != "regex" && strings.Contains(template, "{suffix}") {
+		return "", fmt.Errorf("mapping %s uses {suffix} with unsupported matching", ruleID)
 	}
 	rendered := strings.ReplaceAll(template, "{claim}", claim)
 	rendered = strings.ReplaceAll(rendered, "{suffix}", suffix)

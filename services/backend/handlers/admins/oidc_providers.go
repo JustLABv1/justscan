@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ var allowedOIDCClaimTypes = map[string]struct{}{
 var allowedOIDCMatchTypes = map[string]struct{}{
 	"exact":  {},
 	"prefix": {},
+	"regex":  {},
 }
 
 var allowedOIDCProvisioningModes = map[string]struct{}{
@@ -549,8 +551,11 @@ func buildOIDCMapping(ctx context.Context, db *bun.DB, providerName string, body
 
 	recreateMissingOrg := body.RecreateMissingOrg || body.AutoCreateOrgLegacy
 	orgNameTemplate := strings.TrimSpace(body.OrgNameTemplate)
-	if matchType == "exact" && strings.Contains(orgNameTemplate, "{suffix}") {
-		return nil, fmt.Errorf("{suffix} can only be used with prefix mappings")
+	if matchType != "prefix" && matchType != "regex" && strings.Contains(orgNameTemplate, "{suffix}") {
+		return nil, fmt.Errorf("{suffix} can only be used with prefix or regex mappings")
+	}
+	if err := validateOIDCRegex(matchType, matchValue, orgNameTemplate); err != nil {
+		return nil, err
 	}
 
 	var orgID *uuid.UUID
@@ -661,8 +666,11 @@ func buildOIDCRoleOverride(ctx context.Context, db *bun.DB, providerName string,
 	}
 
 	orgNameTemplate := strings.TrimSpace(body.OrgNameTemplate)
-	if matchType != "prefix" && strings.Contains(orgNameTemplate, "{suffix}") {
-		return nil, fmt.Errorf("{suffix} can only be used with prefix mappings")
+	if matchType != "prefix" && matchType != "regex" && strings.Contains(orgNameTemplate, "{suffix}") {
+		return nil, fmt.Errorf("{suffix} can only be used with prefix or regex mappings")
+	}
+	if err := validateOIDCRegex(matchType, matchValue, orgNameTemplate); err != nil {
+		return nil, err
 	}
 
 	var orgID *uuid.UUID
@@ -704,6 +712,20 @@ func buildOIDCRoleOverride(ctx context.Context, db *bun.DB, providerName string,
 		OrgNameTemplate: orgNameTemplate,
 		Role:            role,
 	}, nil
+}
+
+func validateOIDCRegex(matchType, matchValue, orgNameTemplate string) error {
+	if matchType != "regex" {
+		return nil
+	}
+	pattern, err := regexp.Compile(matchValue)
+	if err != nil {
+		return fmt.Errorf("invalid regex match_value: %w", err)
+	}
+	if strings.Contains(orgNameTemplate, "{suffix}") && pattern.NumSubexp() == 0 {
+		return fmt.Errorf("regex mappings using {suffix} require a capture group")
+	}
+	return nil
 }
 
 func normalizeStringList(values []string) []string {

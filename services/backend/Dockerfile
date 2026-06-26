@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.24
+# syntax=docker/dockerfile:1.25
 FROM golang:1.26-alpine AS builder
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 

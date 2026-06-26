@@ -13,12 +13,12 @@ jobs:
 
       - uses: pnpm/action-setup@v6
         with:
-          version: 11.7.0
+          version: 11.9.0
           run_install: false
 
       - uses: actions/setup-node@v6
         with:
-          node-version: '24.16.0'
+          node-version: '24.18.0'
           cache: pnpm
           cache-dependency-path: services/frontend/pnpm-lock.yaml
 

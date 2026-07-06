@@ -999,10 +999,12 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                           setChannelForm((current) => ({ ...current, enabled }))
                         }
                       >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                        <Switch.Content>Enabled</Switch.Content>
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                          Enabled
+                        </Switch.Content>
                       </Switch>
                     </div>
                   </div>
@@ -1109,10 +1111,12 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                             setChannelForm((current) => ({ ...current, smtp_tls }))
                           }
                         >
-                          <Switch.Control>
-                            <Switch.Thumb />
-                          </Switch.Control>
-                          <Switch.Content>Use TLS</Switch.Content>
+                          <Switch.Content>
+                            <Switch.Control>
+                              <Switch.Thumb />
+                            </Switch.Control>
+                            Use TLS
+                          </Switch.Content>
                         </Switch>
                       </div>
                       <div className="md:col-span-2">
@@ -1207,10 +1211,12 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                         isSelected={ruleForm.enabled}
                         onChange={(enabled) => setRuleForm((current) => ({ ...current, enabled }))}
                       >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                        <Switch.Content>Enabled</Switch.Content>
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                          Enabled
+                        </Switch.Content>
                       </Switch>
                     </div>
                   </div>

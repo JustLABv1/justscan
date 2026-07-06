@@ -227,38 +227,40 @@ function ScanSelectionCheckbox({
       variant="secondary"
       onChange={onChange}
     >
-      <Checkbox.Control>
-        <Checkbox.Indicator>
-          {isIndeterminate ? (
-            <svg aria-hidden className="size-3 text-accent-foreground" fill="none" viewBox="0 0 24 24">
-              <line
-                x1="21"
-                x2="3"
-                y1="12"
-                y2="12"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeWidth="3"
-              />
-            </svg>
-          ) : isSelected ? (
-            <svg
-              aria-hidden
-              className="size-2.5 text-accent-foreground"
-              fill="none"
-              viewBox="0 0 17 18"
-            >
-              <polyline
-                points="1 9 7 14 15 4"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2.5"
-              />
-            </svg>
-          ) : null}
-        </Checkbox.Indicator>
-      </Checkbox.Control>
+      <Checkbox.Content>
+        <Checkbox.Control>
+          <Checkbox.Indicator>
+            {isIndeterminate ? (
+              <svg aria-hidden className="size-3 text-accent-foreground" fill="none" viewBox="0 0 24 24">
+                <line
+                  x1="21"
+                  x2="3"
+                  y1="12"
+                  y2="12"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="3"
+                />
+              </svg>
+            ) : isSelected ? (
+              <svg
+                aria-hidden
+                className="size-2.5 text-accent-foreground"
+                fill="none"
+                viewBox="0 0 17 18"
+              >
+                <polyline
+                  points="1 9 7 14 15 4"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2.5"
+                />
+              </svg>
+            ) : null}
+          </Checkbox.Indicator>
+        </Checkbox.Control>
+      </Checkbox.Content>
     </Checkbox>
   );
 }

@@ -97,7 +97,7 @@ import {
   Tooltip,
   useOverlayState,
 } from '@heroui/react';
-import type { DateValue } from '@internationalized/date';
+import type { DateValue } from '@heroui/react';
 import { parseDate } from '@internationalized/date';
 import {
   ArrowLeft01Icon,

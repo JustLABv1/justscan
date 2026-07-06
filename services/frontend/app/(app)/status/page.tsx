@@ -774,13 +774,13 @@ export default function StatusPagesPage() {
                     <Card className="px-4 py-3 bg-surface-secondary">
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <Switch isSelected={includeAllTags} onChange={setIncludeAllTags}>
-                          <Switch.Control>
-                            <Switch.Thumb />
-                          </Switch.Control>
                           <Switch.Content>
-                            <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                            <Switch.Control>
+                              <Switch.Thumb />
+                            </Switch.Control>
+                            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
                               Include all image tags
-                            </Label>
+                            </span>
                             <p className="text-xs text-zinc-500">
                               Ignore the manual selection list and publish every tracked image tag
                               on this page.

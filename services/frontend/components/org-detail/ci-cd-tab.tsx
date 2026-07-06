@@ -371,19 +371,19 @@ export function OrgCICDTab({ org, canManageTokens }: OrgCICDTabProps) {
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <Switch isSelected={failOnScanError} onChange={setFailOnScanError}>
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
                 <Switch.Content>
-                  <Label>Fail on scan errors</Label>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  Fail on scan errors
                 </Switch.Content>
               </Switch>
               <Switch isSelected={failOnXrayBlock} onChange={setFailOnXrayBlock}>
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
                 <Switch.Content>
-                  <Label>Fail on Xray policy blocks</Label>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  Fail on Xray policy blocks
                 </Switch.Content>
               </Switch>
             </div>

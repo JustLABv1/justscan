@@ -675,9 +675,11 @@ export default function PublicHelmScanPage() {
                           slot="selection"
                           variant="secondary"
                         >
-                          <Checkbox.Control>
-                            <Checkbox.Indicator />
-                          </Checkbox.Control>
+                          <Checkbox.Content>
+                            <Checkbox.Control>
+                              <Checkbox.Indicator />
+                            </Checkbox.Control>
+                          </Checkbox.Content>
                         </Checkbox>
                       </Table.Column>
                       <Table.Column className="w-[62%] min-w-[440px]">Image Reference</Table.Column>
@@ -694,9 +696,11 @@ export default function PublicHelmScanPage() {
                                 slot="selection"
                                 variant="secondary"
                               >
-                                <Checkbox.Control>
-                                  <Checkbox.Indicator />
-                                </Checkbox.Control>
+                                <Checkbox.Content>
+                                  <Checkbox.Control>
+                                    <Checkbox.Indicator />
+                                  </Checkbox.Control>
+                                </Checkbox.Content>
                               </Checkbox>
                             </Table.Cell>
                             <Table.Cell>

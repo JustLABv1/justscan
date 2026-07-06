@@ -1197,8 +1197,10 @@ export function IdentityTab() {
                             </div>
                             <div className="rounded-medium border border-divider/60 bg-content2/20 p-4">
                               <Switch isSelected={providerEnabled} onChange={setProviderEnabled}>
-                                <Switch.Control><Switch.Thumb /></Switch.Control>
-                                <Switch.Content>Provider enabled</Switch.Content>
+                                <Switch.Content>
+                                  <Switch.Control><Switch.Thumb /></Switch.Control>
+                                  Provider enabled
+                                </Switch.Content>
                               </Switch>
                               <p className="mt-2 text-sm text-zinc-500">Disabled providers stay configured but are hidden from the login screen.</p>
                             </div>
@@ -1306,8 +1308,10 @@ export function IdentityTab() {
                       <div className="grid gap-2">
                         {mappingProvisioningMode === 'existing_org' ? (
                           <Switch isSelected={mappingRecreateMissingOrg} onChange={setMappingRecreateMissingOrg}>
-                            <Switch.Control><Switch.Thumb /></Switch.Control>
-                            <Switch.Content>Recreate missing org</Switch.Content>
+                            <Switch.Content>
+                              <Switch.Control><Switch.Thumb /></Switch.Control>
+                              Recreate missing org
+                            </Switch.Content>
                           </Switch>
                         ) : (
                           <p className="text-sm text-zinc-500">
@@ -1315,8 +1319,10 @@ export function IdentityTab() {
                           </p>
                         )}
                         <Switch isSelected={mappingRemoveOnUnsync} onChange={setMappingRemoveOnUnsync}>
-                          <Switch.Control><Switch.Thumb /></Switch.Control>
-                          <Switch.Content>Remove on unsync</Switch.Content>
+                          <Switch.Content>
+                            <Switch.Control><Switch.Thumb /></Switch.Control>
+                            Remove on unsync
+                          </Switch.Content>
                         </Switch>
                       </div>
                     </>

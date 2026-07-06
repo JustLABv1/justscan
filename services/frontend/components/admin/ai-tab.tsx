@@ -386,8 +386,10 @@ export function AITab() {
               void handleUpdateSettings({ enabled: nextSelected }, 'enabled');
             }}
           >
-            <Switch.Control><Switch.Thumb /></Switch.Control>
-            <Switch.Content>AI Enabled</Switch.Content>
+            <Switch.Content>
+              <Switch.Control><Switch.Thumb /></Switch.Control>
+              AI Enabled
+            </Switch.Content>
           </Switch>
 
           <Switch
@@ -398,8 +400,10 @@ export function AITab() {
               void handleUpdateSettings({ allowAnonymous: nextSelected }, 'allowAnonymous');
             }}
           >
-            <Switch.Control><Switch.Thumb /></Switch.Control>
-            <Switch.Content>Anonymous Access</Switch.Content>
+            <Switch.Content>
+              <Switch.Control><Switch.Thumb /></Switch.Control>
+              Anonymous Access
+            </Switch.Content>
           </Switch>
 
           <Button variant="secondary" onPress={openCreateModal}>
@@ -629,12 +633,16 @@ export function AITab() {
 
                   {providerStep === 2 && <div className="grid gap-2 sm:grid-cols-2">
                     <Switch isSelected={form.enabled} onChange={(next) => setForm((current) => ({ ...current, enabled: next }))}>
-                      <Switch.Control><Switch.Thumb /></Switch.Control>
-                      <Switch.Content>Provider enabled</Switch.Content>
+                      <Switch.Content>
+                        <Switch.Control><Switch.Thumb /></Switch.Control>
+                        Provider enabled
+                      </Switch.Content>
                     </Switch>
                     <Switch isSelected={form.isDefault} onChange={(next) => setForm((current) => ({ ...current, isDefault: next }))}>
-                      <Switch.Control><Switch.Thumb /></Switch.Control>
-                      <Switch.Content>Set as default provider</Switch.Content>
+                      <Switch.Content>
+                        <Switch.Control><Switch.Thumb /></Switch.Control>
+                        Set as default provider
+                      </Switch.Content>
                     </Switch>
                   </div>}
                 </form>

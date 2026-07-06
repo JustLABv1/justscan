@@ -304,60 +304,72 @@ export function OrganizationsTab() {
                         onChange={(value) => void updateGovernance({ is_active: value })}
                         isDisabled={saving}
                       >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                        <Switch.Content>Organization active</Switch.Content>
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                          Organization active
+                        </Switch.Content>
                       </Switch>
                       <Switch
                         isSelected={activeOrg.allow_image_scans}
                         onChange={(value) => void updateGovernance({ allow_image_scans: value })}
                         isDisabled={saving}
                       >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                        <Switch.Content>Allow image scans</Switch.Content>
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                          Allow image scans
+                        </Switch.Content>
                       </Switch>
                       <Switch
                         isSelected={activeOrg.allow_helm_scans}
                         onChange={(value) => void updateGovernance({ allow_helm_scans: value })}
                         isDisabled={saving}
                       >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                        <Switch.Content>Allow Helm scans</Switch.Content>
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                          Allow Helm scans
+                        </Switch.Content>
                       </Switch>
                       <Switch
                         isSelected={activeOrg.allow_rescans}
                         onChange={(value) => void updateGovernance({ allow_rescans: value })}
                         isDisabled={saving}
                       >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                        <Switch.Content>Allow rescans</Switch.Content>
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                          Allow rescans
+                        </Switch.Content>
                       </Switch>
                       <Switch
                         isSelected={activeOrg.allow_member_invites}
                         onChange={(value) => void updateGovernance({ allow_member_invites: value })}
                         isDisabled={saving}
                       >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                        <Switch.Content>Allow member invites</Switch.Content>
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                          Allow member invites
+                        </Switch.Content>
                       </Switch>
                       <Switch
                         isSelected={activeOrg.allow_org_tokens}
                         onChange={(value) => void updateGovernance({ allow_org_tokens: value })}
                         isDisabled={saving}
                       >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                        <Switch.Content>Allow org tokens</Switch.Content>
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                          Allow org tokens
+                        </Switch.Content>
                       </Switch>
                     </div>
 

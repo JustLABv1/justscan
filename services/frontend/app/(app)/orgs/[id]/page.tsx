@@ -748,13 +748,13 @@ export default function OrgDetailPage() {
                       isSelected={policyIncludeSuppressed}
                       onChange={setPolicyIncludeSuppressed}
                     >
-                      <Switch.Control>
-                        <Switch.Thumb />
-                      </Switch.Control>
                       <Switch.Content>
-                        <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                        <Switch.Control>
+                          <Switch.Thumb />
+                        </Switch.Control>
+                        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
                           Count suppressed vulnerabilities in policy evaluation
-                        </Label>
+                        </span>
                         <p className="text-xs text-zinc-500">
                           Turn off to ignore effectively suppressed vulnerabilities for this policy.
                         </p>

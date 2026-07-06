@@ -640,11 +640,11 @@ export default function HelmPage() {
                 isSelected={makePublic}
                 onChange={setMakePublic}
               >
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
                 <Switch.Content>
-                  <Label className="text-xs">Share publicly</Label>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <span className="text-xs">Share publicly</span>
                 </Switch.Content>
               </Switch>
             </Card.Content>
@@ -664,9 +664,11 @@ export default function HelmPage() {
                       slot="selection"
                       onChange={toggleAll}
                     >
-                      <Checkbox.Control>
-                        <Checkbox.Indicator />
-                      </Checkbox.Control>
+                      <Checkbox.Content>
+                        <Checkbox.Control>
+                          <Checkbox.Indicator />
+                        </Checkbox.Control>
+                      </Checkbox.Content>
                     </Checkbox>
                   </Table.Column>
                   <Table.Column isRowHeader>Image</Table.Column>
@@ -691,9 +693,11 @@ export default function HelmPage() {
                             slot="selection"
                             onChange={() => toggleRow(img.id)}
                           >
-                            <Checkbox.Control>
-                              <Checkbox.Indicator />
-                            </Checkbox.Control>
+                            <Checkbox.Content>
+                              <Checkbox.Control>
+                                <Checkbox.Indicator />
+                              </Checkbox.Control>
+                            </Checkbox.Content>
                           </Checkbox>
                         </Table.Cell>
                         <Table.Cell className="min-w-[420px]">

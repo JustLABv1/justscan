@@ -410,11 +410,13 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
                 {({ isSelected }) => (
                   <>
                     <Switch.Content className="min-w-0 flex-1">
-                      <Label className="block text-xs leading-4 text-zinc-800">{label}</Label>
+                      <Switch.Control
+                        className={`shrink-0 ${isSelected ? 'bg-blue-600' : 'bg-zinc-200'}`}
+                      >
+                        <Switch.Thumb className="bg-white" />
+                      </Switch.Control>
+                      <span className="block text-xs leading-4 text-zinc-800">{label}</span>
                     </Switch.Content>
-                    <Switch.Control className={`shrink-0 ${isSelected ? 'bg-blue-600' : 'bg-zinc-200'}`}>
-                      <Switch.Thumb className="bg-white" />
-                    </Switch.Control>
                   </>
                 )}
               </Switch>

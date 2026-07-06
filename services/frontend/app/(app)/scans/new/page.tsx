@@ -91,15 +91,15 @@ function ScanSourceCard({
       isDisabled={disabled}
       value={source}
     >
-      <Radio.Control
-        className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-slate-300/50 bg-slate-400/10 group-data-[selected=true]:border-accent/40 group-data-[selected=true]:bg-accent/20"
-        aria-hidden
-      >
-        <Radio.Indicator className="text-[11px] font-semibold text-accent">
-          {({ isSelected }) => (isSelected ? '✓' : null)}
-        </Radio.Indicator>
-      </Radio.Control>
       <Radio.Content className="min-w-0 flex-1">
+        <Radio.Control
+          className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-slate-300/50 bg-slate-400/10 group-data-[selected=true]:border-accent/40 group-data-[selected=true]:bg-accent/20"
+          aria-hidden
+        >
+          <Radio.Indicator className="text-[11px] font-semibold text-accent">
+            {({ isSelected }) => (isSelected ? '✓' : null)}
+          </Radio.Indicator>
+        </Radio.Control>
         <p className="text-[10px] uppercase tracking-[0.2em] text-accent">{eyebrow}</p>
         <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-white">{title}</p>
         <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{description}</p>

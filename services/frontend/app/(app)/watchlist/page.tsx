@@ -1189,9 +1189,11 @@ export default function WatchlistPage() {
                                   )
                                 }
                               >
-                                <Checkbox.Control>
-                                  <Checkbox.Indicator />
-                                </Checkbox.Control>
+                                <Checkbox.Content>
+                                  <Checkbox.Control>
+                                    <Checkbox.Indicator />
+                                  </Checkbox.Control>
+                                </Checkbox.Content>
                               </Checkbox>
                               <span className="text-sm text-zinc-800 dark:text-zinc-200">
                                 {collection.name}
@@ -1203,11 +1205,11 @@ export default function WatchlistPage() {
                     )}
                   </div>
                   <Switch isSelected={enabled} onChange={setEnabled}>
-                    <Switch.Control>
-                      <Switch.Thumb />
-                    </Switch.Control>
                     <Switch.Content>
-                      <Label className="text-sm">Enabled</Label>
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                      <span className="text-sm">Enabled</span>
                     </Switch.Content>
                   </Switch>
                 </form>

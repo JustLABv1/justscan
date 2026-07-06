@@ -93,19 +93,23 @@ function ScannerSettingsPanel() {
           isSelected={settings.enable_trivy ?? true}
           onChange={(checked) => setSettings((p) => ({ ...p, enable_trivy: checked }))}
         >
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <Switch.Content>Enable Trivy</Switch.Content>
+          <Switch.Content>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            Enable Trivy
+          </Switch.Content>
         </Switch>
         <Switch
           isSelected={settings.enable_grype ?? true}
           onChange={(checked) => setSettings((p) => ({ ...p, enable_grype: checked }))}
         >
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <Switch.Content>Enable Grype</Switch.Content>
+          <Switch.Content>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            Enable Grype
+          </Switch.Content>
         </Switch>
         <Switch
           isSelected={settings.enable_osv_java_augmentation ?? false}
@@ -113,10 +117,12 @@ function ScannerSettingsPanel() {
             setSettings((p) => ({ ...p, enable_osv_java_augmentation: checked }))
           }
         >
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <Switch.Content>OSV Java Augmentation</Switch.Content>
+          <Switch.Content>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            OSV Java Augmentation
+          </Switch.Content>
         </Switch>
       </div>
 
@@ -202,10 +208,12 @@ function AuthSettingsPanel() {
         <p className="text-sm text-zinc-500">Control available login methods.</p>
       </div>
       <Switch isSelected={localAuthEnabled} onChange={setLocalAuthEnabled}>
-        <Switch.Control>
-          <Switch.Thumb />
-        </Switch.Control>
-        <Switch.Content>Enable local username/password authentication</Switch.Content>
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          Enable local username/password authentication
+        </Switch.Content>
       </Switch>
       <div className="flex justify-end">
         <Button variant="secondary" onPress={handleSave} isDisabled={saving}>
@@ -465,10 +473,12 @@ export function SettingsTab() {
                   isSelected={maintenanceEnabled}
                   onChange={handleToggleMaintenance}
                 >
-                  <Switch.Control>
-                    <Switch.Thumb />
-                  </Switch.Control>
-                  <Switch.Content>{maintenanceEnabled ? 'Enabled' : 'Disabled'}</Switch.Content>
+                  <Switch.Content>
+                    <Switch.Control>
+                      <Switch.Thumb />
+                    </Switch.Control>
+                    {maintenanceEnabled ? 'Enabled' : 'Disabled'}
+                  </Switch.Content>
                 </Switch>
               </div>
             </div>

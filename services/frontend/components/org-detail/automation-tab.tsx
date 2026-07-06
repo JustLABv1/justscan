@@ -259,13 +259,13 @@ export function OrgAutomationTab({
                 onChange={(value) => updateVulnerabilityViewSettings({ has_fix: value })}
                 isDisabled={!canManageOrgSettings}
               >
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
                 <Switch.Content>
-                  <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
                     Only show vulnerabilities with a fix
-                  </Label>
+                  </span>
                 </Switch.Content>
               </Switch>
 
@@ -274,13 +274,13 @@ export function OrgAutomationTab({
                 onChange={(value) => updateVulnerabilityViewSettings({ xray_policy_first: value })}
                 isDisabled={!canManageOrgSettings}
               >
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
                 <Switch.Content>
-                  <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
                     Prioritize vulnerabilities with Xray policy matches
-                  </Label>
+                  </span>
                 </Switch.Content>
               </Switch>
 
@@ -289,13 +289,13 @@ export function OrgAutomationTab({
                 onChange={(value) => updateVulnerabilityViewSettings({ policy_failed_only: value })}
                 isDisabled={!canManageOrgSettings}
               >
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
                 <Switch.Content>
-                  <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
                     Only show vulnerabilities that failed org policy
-                  </Label>
+                  </span>
                 </Switch.Content>
               </Switch>
             </div>

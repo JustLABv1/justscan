@@ -388,11 +388,11 @@ export default function VulnKBPage() {
                 onChange={setExploitOnly}
                 className="h-[38px] flex items-center"
               >
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
                 <Switch.Content>
-                  <Label className="text-sm text-zinc-600 dark:text-zinc-300">Exploit Only</Label>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <span className="text-sm text-zinc-600 dark:text-zinc-300">Exploit Only</span>
                 </Switch.Content>
               </Switch>
             </div>

@@ -18,8 +18,8 @@ importers:
         specifier: 3.2.1
         version: 3.2.1(tailwind-merge@3.6.0)(tailwindcss@4.3.2)
       '@internationalized/date':
-        specifier: 3.12.1
-        version: 3.12.1
+        specifier: 3.12.2
+        version: 3.12.2
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7)

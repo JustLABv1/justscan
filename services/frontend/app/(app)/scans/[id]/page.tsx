@@ -97,7 +97,7 @@ import {
   Tooltip,
   useOverlayState,
 } from '@heroui/react';
-import type { DateValue } from '@heroui/react';
+import type { CalendarDate } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
 import {
   ArrowLeft01Icon,
@@ -555,7 +555,7 @@ export default function ScanDetailPage() {
     workScope.kind === 'org' ? 'workspace' : 'personal'
   );
   const [suppressJustification, setSuppressJustification] = useState('');
-  const [suppressExpiry, setSuppressExpiry] = useState<DateValue | null>(null);
+  const [suppressExpiry, setSuppressExpiry] = useState<CalendarDate | null>(null);
   const [suppressSaving, setSuppressSaving] = useState(false);
   const [suppressError, setSuppressError] = useState('');
   const [scanOrgGrants, setScanOrgGrants] = useState<ResourceShare[]>([]);

@@ -8,9 +8,6 @@ import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
-import { SegmentedControl } from '@/components/ui/segmented-control';
-import { StatCard } from '@/components/ui/stat-card';
-import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
@@ -49,19 +46,21 @@ import {
   Card,
   Checkbox,
   Chip,
+  Disclosure,
+  Dropdown,
   Label,
   ListBox,
   Modal,
   SearchField,
   Select,
+  Spinner,
   Switch,
   Table,
+  Tabs,
   useOverlayState,
 } from '@heroui/react';
 import {
-  AlertCircleIcon,
   BiometricAccessIcon,
-  CheckmarkCircle02Icon,
   Clock01Icon,
   Delete01Icon,
   EyeIcon,
@@ -93,10 +92,6 @@ const postureChipColor: Record<
 };
 
 type WatchlistFocus = 'all' | 'attention' | 'stale' | 'healthy' | 'never_scanned';
-
-function buildWatchlistScansHref(imageName: string) {
-  return `/scans?image=${encodeURIComponent(imageName)}`;
-}
 
 function buildWatchlistTriageHref(imageName?: string) {
   const params = new URLSearchParams({ kind: 'watchlist' });
@@ -177,90 +172,6 @@ function getWatchlistOverviewSummary({
     tone: 'success',
   };
 }
-
-function WatchlistPostureSummary({
-  activeCount,
-  attentionCount,
-  healthyCount,
-  neverScannedCount,
-  staleCount,
-}: {
-  activeCount: number;
-  attentionCount: number;
-  healthyCount: number;
-  neverScannedCount: number;
-  staleCount: number;
-}) {
-  const cards = [
-    {
-      label: 'Active schedules',
-      value: activeCount,
-      detail: 'images monitored automatically',
-      hintClassName: 'text-muted',
-      icon: <PlayIcon size={16} />,
-      tone: 'accent' as const,
-    },
-    {
-      label: 'Need policy attention',
-      value: attentionCount,
-      detail: 'blocked, failed, or non-compliant',
-      hintClassName: attentionCount > 0 ? 'text-danger' : 'text-muted',
-      icon: <Shield01Icon size={16} />,
-      tone: 'danger' as const,
-    },
-    {
-      label: 'Healthy coverage',
-      value: healthyCount,
-      detail: 'current and not attention-bound',
-      hintClassName: healthyCount > 0 ? 'text-success' : 'text-muted',
-      icon: <CheckmarkCircle02Icon size={16} />,
-      tone: 'success' as const,
-    },
-    {
-      label: 'Never scanned',
-      value: neverScannedCount,
-      detail: 'no baseline result yet',
-      hintClassName: neverScannedCount > 0 ? 'text-warning' : 'text-muted',
-      icon: <AlertCircleIcon size={16} />,
-      tone: 'warning' as const,
-    },
-    {
-      label: 'Stale',
-      value: staleCount,
-      detail: 'last scan older than 7 days',
-      hintClassName: staleCount > 0 ? 'text-warning' : 'text-muted',
-      icon: <Clock01Icon size={16} />,
-      tone: 'warning' as const,
-    },
-  ];
-
-  return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-      {cards.map((card) => (
-        <StatCard
-          key={card.label}
-          label={card.label}
-          value={card.value.toLocaleString()}
-          hint={card.detail}
-          icon={card.icon}
-          tone={card.tone}
-          variant="stacked"
-          className="h-full border border-divider/70"
-          hintClassName={card.hintClassName}
-        />
-      ))}
-    </div>
-  );
-}
-
-type WatchlistQueueEntry = {
-  description: string;
-  href: string;
-  id: string;
-  image: string;
-  label: string;
-  tone: 'success' | 'warning' | 'danger' | 'accent' | 'neutral';
-};
 
 function LastScanState({
   item,
@@ -363,6 +274,7 @@ export default function WatchlistPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const [focusFilter, setFocusFilter] = useState<WatchlistFocus>('all');
+  const [showFilters, setShowFilters] = useState(false);
   const [postureNow] = useState(() => Date.now());
   const modal = useOverlayState();
   const shareModal = useOverlayState();
@@ -635,47 +547,6 @@ export default function WatchlistPage() {
     neverScannedCount,
     staleCount,
   });
-  const actionQueueItems: WatchlistQueueEntry[] = [
-    ...attentionItems.map((item) => {
-      const posture = getWatchlistPosture(item);
-      return {
-        id: `attention-${item.id}`,
-        image: `${item.image_name}:${item.image_tag}`,
-        label: posture.label,
-        description: posture.description,
-        href: item.last_scan_id
-          ? `/scans/${item.last_scan_id}`
-          : buildWatchlistTriageHref(item.image_name),
-        tone: posture.tone,
-      };
-    }),
-    ...staleItems
-      .filter((item) => !attentionItems.some((candidate) => candidate.id === item.id))
-      .map((item) => ({
-        id: `stale-${item.id}`,
-        image: `${item.image_name}:${item.image_tag}`,
-        label: 'Stale schedule',
-        description: item.last_scanned_at
-          ? `Last scan ${timeAgo(item.last_scanned_at, {
-              hourCycle,
-              timeZone: item.timezone,
-            })}`
-          : 'Scheduled item has no recent scan result.',
-        href: buildWatchlistScansHref(item.image_name),
-        tone: 'warning' as const,
-      })),
-    ...activeItems
-      .filter((item) => isNeverScannedItem(item))
-      .filter((item) => !attentionItems.some((candidate) => candidate.id === item.id))
-      .map((item) => ({
-        id: `never-${item.id}`,
-        image: `${item.image_name}:${item.image_tag}`,
-        label: 'Never scanned',
-        description: 'No baseline scan result exists for this scheduled image yet.',
-        href: buildWatchlistScansHref(item.image_name),
-        tone: 'warning' as const,
-      })),
-  ].slice(0, 5);
   const focusCounts: Record<WatchlistFocus, number> = {
     all: items.length,
     attention: attentionItems.length,
@@ -683,6 +554,8 @@ export default function WatchlistPage() {
     healthy: healthyItems.length,
     never_scanned: neverScannedCount,
   };
+  const hasFilters =
+    searchQuery.trim().length > 0 || statusFilter !== 'all' || focusFilter !== 'all';
 
   return (
     <div className="p-6 space-y-5">
@@ -690,40 +563,70 @@ export default function WatchlistPage() {
         title="Watchlist"
         description="Recurring image monitoring, freshness tracking, and policy follow-up for your active workspace."
         actions={
-          <div className="flex items-center gap-3 flex-wrap">
-            <SegmentedControl
-              ariaLabel="Hour format"
-              options={[
-                { id: 'locale', label: 'Locale' },
-                { id: '12', label: '12h' },
-                { id: '24', label: '24h' },
-              ]}
-              value={hourCycle}
-              onChange={(next) => setHourCycle(next as HourCyclePreference)}
-              size="sm"
-            />
-            <Link href={buildWatchlistTriageHref()}>
-              <Button variant="secondary">Open Triage</Button>
-            </Link>
-            <Button
-              onPress={openCreate}
-              className="btn-primary inline-flex items-center gap-2"
-              isDisabled={!canMutateActiveScope}
-              variant="primary"
-            >
-              <PlusSignIcon size={15} /> Add Image
-            </Button>
-          </div>
+          items.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {attentionItems.length > 0 ? (
+                <Link href={buildWatchlistTriageHref()}>
+                  <Button variant="secondary">Review triage</Button>
+                </Link>
+              ) : null}
+              <Dropdown>
+                <Dropdown.Trigger>
+                  <Button variant="secondary">View settings</Button>
+                </Dropdown.Trigger>
+                <Dropdown.Popover placement="bottom end">
+                  <Dropdown.Menu
+                    aria-label="Watchlist view settings"
+                    selectionMode="single"
+                    selectedKeys={new Set([hourCycle])}
+                    onAction={(key) => setHourCycle(String(key) as HourCyclePreference)}
+                  >
+                    <Dropdown.Section>
+                      <Label>Hour format</Label>
+                      <Dropdown.Item id="locale" textValue="Locale">
+                        <Label>Locale</Label>
+                        <Dropdown.ItemIndicator />
+                      </Dropdown.Item>
+                      <Dropdown.Item id="12" textValue="12-hour clock">
+                        <Label>12-hour clock</Label>
+                        <Dropdown.ItemIndicator />
+                      </Dropdown.Item>
+                      <Dropdown.Item id="24" textValue="24-hour clock">
+                        <Label>24-hour clock</Label>
+                        <Dropdown.ItemIndicator />
+                      </Dropdown.Item>
+                    </Dropdown.Section>
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
+              <Button
+                onPress={openCreate}
+                className="inline-flex items-center gap-2"
+                isDisabled={!canMutateActiveScope}
+                variant="primary"
+              >
+                <PlusSignIcon size={15} /> Add Image
+              </Button>
+            </div>
+          ) : undefined
         }
       />
 
-      <WatchlistPostureSummary
-        activeCount={activeItems.length}
-        attentionCount={attentionItems.length}
-        healthyCount={healthyItems.length}
-        neverScannedCount={neverScannedCount}
-        staleCount={staleCount}
-      />
+      {items.length > 0 ? (
+        <Card>
+          <Card.Content className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <Chip color={postureChipColor[overviewSummary.tone]} size="sm" variant="soft">
+                {overviewSummary.label}
+              </Chip>
+              <h2 className="mt-2 text-sm font-semibold text-foreground">
+                {overviewSummary.title}
+              </h2>
+              <p className="mt-1 text-sm text-muted">{overviewSummary.description}</p>
+            </div>
+          </Card.Content>
+        </Card>
+      ) : null}
 
       {error ? (
         <Alert status="danger" className="bg-danger-soft">
@@ -734,150 +637,153 @@ export default function WatchlistPage() {
         </Alert>
       ) : null}
 
-      <Card className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <SearchField name="watchlist-search" variant="secondary" className="w-full sm:max-w-sm">
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search image or tag..."
-              />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
-          <Select
-            value={statusFilter}
-            onChange={(value) =>
-              setStatusFilter(
-                value === 'disabled' ? 'disabled' : value === 'active' ? 'active' : 'all'
-              )
-            }
-            className="w-full sm:w-[160px]"
-            variant="secondary"
-          >
-            <Select.Trigger className={selectTriggerCls}>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="all">All statuses</ListBox.Item>
-                <ListBox.Item id="active">Active</ListBox.Item>
-                <ListBox.Item id="disabled">Disabled</ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {[
-            { id: 'all' as const, label: 'All' },
-            { id: 'attention' as const, label: 'Attention' },
-            { id: 'stale' as const, label: 'Stale' },
-            { id: 'never_scanned' as const, label: 'Never scanned' },
-            { id: 'healthy' as const, label: 'Healthy' },
-          ].map((option) => (
-            <Button
-              key={option.id}
-              variant={focusFilter === option.id ? 'secondary' : 'tertiary'}
-              size="sm"
-              onPress={() => setFocusFilter(option.id)}
+      {!loading && items.length === 0 ? (
+        <EmptyState
+          icon={<EyeIcon size={28} />}
+          title="No images being watched"
+          description="Add a Docker image to scan it on a recurring schedule and receive follow-up when its posture changes."
+          action={canMutateActiveScope ? { label: 'Add Image', onClick: openCreate } : undefined}
+        />
+      ) : (
+        <Card className="overflow-hidden">
+          <Card.Content className="gap-4 border-b border-divider py-4">
+            <Tabs
+              variant="secondary"
+              selectedKey={focusFilter}
+              onSelectionChange={(key) => setFocusFilter(String(key) as WatchlistFocus)}
             >
-              {option.label}
-              <Chip
-                size="sm"
-                variant="soft"
-                color={focusFilter === option.id ? 'accent' : 'default'}
-                className="ml-1 font-mono"
-              >
-                {focusCounts[option.id]}
-              </Chip>
-            </Button>
-          ))}
-        </div>
+              <Tabs.ListContainer className="overflow-x-auto">
+                <Tabs.List aria-label="Watchlist focus" className="min-w-max gap-1">
+                  {[
+                    { id: 'all' as const, label: 'All' },
+                    { id: 'attention' as const, label: 'Attention' },
+                    { id: 'stale' as const, label: 'Stale' },
+                    { id: 'never_scanned' as const, label: 'Never scanned' },
+                    { id: 'healthy' as const, label: 'Healthy' },
+                  ].map((option) => (
+                    <Tabs.Tab key={option.id} id={option.id}>
+                      {option.label}
+                      <Chip size="sm" variant="soft" className="ml-1 font-mono">
+                        {focusCounts[option.id]}
+                      </Chip>
+                      <Tabs.Indicator />
+                    </Tabs.Tab>
+                  ))}
+                </Tabs.List>
+              </Tabs.ListContainer>
+            </Tabs>
 
-        {loading ? (
-          <div className="surface-panel rounded-2xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    Image
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    Schedule
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    Timezone
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    Registry
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    Last Scan State
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    Policy Posture
-                  </th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <TableRowSkeleton key={i} cols={8} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : filteredItems.length === 0 ? (
-          <EmptyState
-            icon={<EyeIcon size={28} />}
-            title={
-              items.length > 0 ? 'No watchlist items match your filters' : 'No images being watched'
-            }
-            description={
-              items.length > 0
-                ? 'Try a different search or status filter.'
-                : focusFilter !== 'all'
-                  ? 'Try a different focus view or clear the filters.'
-                  : 'Add a Docker image to auto-scan it on a recurring schedule and get notified when new vulnerabilities appear.'
-            }
-            action={
-              items.length > 0
-                ? {
-                    label: 'Clear filters',
-                    onClick: () => {
-                      setSearchQuery('');
-                      setStatusFilter('all');
-                      setFocusFilter('all');
-                    },
-                  }
-                : canMutateActiveScope
-                  ? { label: '+ Add Image', onClick: openCreate }
-                  : undefined
-            }
-          />
-        ) : (
+            <Disclosure
+              isExpanded={showFilters}
+              onExpandedChange={setShowFilters}
+              className="contents"
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <SearchField
+                  name="watchlist-search"
+                  variant="secondary"
+                  className="w-full sm:max-w-sm"
+                >
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Search image or tag..."
+                    />
+                    <SearchField.ClearButton />
+                  </SearchField.Group>
+                </SearchField>
+                <div className="flex items-center gap-2">
+                  <Disclosure.Heading>
+                    <Disclosure.Trigger className="inline-flex h-10 items-center gap-2 rounded-xl border border-divider bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+                      Filters
+                      {statusFilter !== 'all' ? (
+                        <Chip size="sm" variant="soft" color="accent">
+                          1
+                        </Chip>
+                      ) : null}
+                      <Disclosure.Indicator />
+                    </Disclosure.Trigger>
+                  </Disclosure.Heading>
+                  {hasFilters ? (
+                    <Button
+                      variant="tertiary"
+                      onPress={() => {
+                        setSearchQuery('');
+                        setStatusFilter('all');
+                        setFocusFilter('all');
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+              <Disclosure.Content>
+                <Disclosure.Body className="mt-3 grid gap-3 rounded-xl border border-divider bg-surface-secondary p-3 sm:max-w-xs">
+                  <Select
+                    aria-label="Watchlist status"
+                    value={statusFilter}
+                    onChange={(value) =>
+                      setStatusFilter(
+                        value === 'disabled' ? 'disabled' : value === 'active' ? 'active' : 'all'
+                      )
+                    }
+                    variant="secondary"
+                  >
+                    <Select.Trigger className={selectTriggerCls}>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="all">All statuses</ListBox.Item>
+                        <ListBox.Item id="active">Active</ListBox.Item>
+                        <ListBox.Item id="disabled">Disabled</ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </Disclosure.Body>
+              </Disclosure.Content>
+            </Disclosure>
+          </Card.Content>
+
           <Table variant="secondary">
             <Table.ScrollContainer>
-              <Table.Content aria-label="Watchlist images" className="min-w-[1200px]">
+              <Table.Content aria-label="Watchlist images" className="min-w-[900px]">
                 <Table.Header>
                   <Table.Column isRowHeader>Image</Table.Column>
                   <Table.Column>Schedule</Table.Column>
-                  <Table.Column>Timezone</Table.Column>
-                  <Table.Column>Registry</Table.Column>
-                  <Table.Column>Status</Table.Column>
-                  <Table.Column>Last Scan State</Table.Column>
-                  <Table.Column>Policy Posture</Table.Column>
-                  <Table.Column className="justify-end flex">Actions</Table.Column>
+                  <Table.Column>Latest scan</Table.Column>
+                  <Table.Column>Coverage</Table.Column>
+                  <Table.Column className="flex justify-end">Actions</Table.Column>
                 </Table.Header>
-                <Table.Body>
-                  {filteredItems.map((item) => {
+                <Table.Body
+                  items={loading ? [] : filteredItems}
+                  renderEmptyState={() =>
+                    loading ? (
+                      <div className="flex min-h-48 items-center justify-center">
+                        <Spinner color="accent" size="sm" />
+                      </div>
+                    ) : (
+                      <EmptyState
+                        icon={<EyeIcon size={24} />}
+                        title="No watchlist items match your filters"
+                        description="Try a different search or clear the current filters."
+                        action={{
+                          label: 'Clear filters',
+                          onClick: () => {
+                            setSearchQuery('');
+                            setStatusFilter('all');
+                            setFocusFilter('all');
+                          },
+                        }}
+                      />
+                    )
+                  }
+                >
+                  {(item) => {
                     const reg = registries.find((r) => r.id === item.registry_id);
                     const posture = getWatchlistPosture(item);
                     const canMutate = canMutateItem(item);
@@ -890,7 +796,7 @@ export default function WatchlistPage() {
                               label: triggering === item.id ? 'Scanning…' : 'Scan now',
                               icon:
                                 triggering === item.id ? (
-                                  <div className="size-3.5 border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-400 rounded-full animate-spin" />
+                                  <Spinner color="accent" size="sm" />
                                 ) : (
                                   <PlayIcon size={15} />
                                 ),
@@ -934,9 +840,12 @@ export default function WatchlistPage() {
                     return (
                       <Table.Row key={item.id} id={item.id} className="hover:bg-[var(--row-hover)]">
                         <Table.Cell>
-                          <div className="space-y-1">
+                          <div className="space-y-1.5">
                             <p className="font-mono text-xs text-zinc-700 dark:text-zinc-200">
                               {item.image_name}:{item.image_tag}
+                            </p>
+                            <p className="text-xs text-muted">
+                              {reg?.name ?? 'Direct image source'}
                             </p>
                             <OwnershipBadge
                               ownerType={item.owner_type}
@@ -950,62 +859,31 @@ export default function WatchlistPage() {
                           </div>
                         </Table.Cell>
                         <Table.Cell>
-                          <div
-                            className="flex items-center gap-1.5 text-xs"
-                            style={{ color: 'color-mix(in srgb, var(--accent) 80%, transparent)' }}
-                            title={item.schedule}
-                          >
-                            <Clock01Icon
-                              size={12}
-                              color="rgba(113,113,122,0.7)"
-                              className="shrink-0"
-                            />
-                            {cronToHuman(item.schedule ?? '', {
-                              timezone: item.timezone,
-                              hourCycle,
-                            })}
+                          <div className="space-y-1.5" title={item.schedule}>
+                            <div className="flex items-center gap-1.5 text-xs text-accent">
+                              <Clock01Icon size={12} className="shrink-0" />
+                              {cronToHuman(item.schedule ?? '', {
+                                timezone: item.timezone,
+                                hourCycle,
+                              })}
+                            </div>
+                            <p className="font-mono text-xs text-muted">{item.timezone || 'UTC'}</p>
                           </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <span className="text-xs text-zinc-500 font-mono">
-                            {item.timezone || 'UTC'}
-                          </span>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <span className="text-xs text-zinc-500">
-                            {reg?.name ?? (
-                              <span className="text-zinc-400 dark:text-zinc-700">-</span>
-                            )}
-                          </span>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <span
-                            className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full"
-                            style={
-                              item.enabled
-                                ? {
-                                    color: '#34d399',
-                                    background: 'rgba(16,185,129,0.12)',
-                                    border: '1px solid rgba(16,185,129,0.22)',
-                                  }
-                                : {
-                                    color: '#71717a',
-                                    background: 'rgba(113,113,122,0.08)',
-                                    border: '1px solid rgba(113,113,122,0.15)',
-                                  }
-                            }
-                          >
-                            <span
-                              className={`size-1.5 rounded-full bg-current ${item.enabled ? 'animate-pulse' : ''}`}
-                            />
-                            {item.enabled ? 'Active' : 'Disabled'}
-                          </span>
                         </Table.Cell>
                         <Table.Cell>
                           <LastScanState item={item} hourCycle={hourCycle} />
                         </Table.Cell>
                         <Table.Cell>
-                          <PolicyPostureCell posture={posture} item={item} />
+                          <div className="space-y-2">
+                            <Chip
+                              color={item.enabled ? 'success' : 'default'}
+                              size="sm"
+                              variant="soft"
+                            >
+                              {item.enabled ? 'Scheduled' : 'Paused'}
+                            </Chip>
+                            <PolicyPostureCell posture={posture} item={item} />
+                          </div>
                         </Table.Cell>
                         <Table.Cell>
                           <div className="flex justify-end">
@@ -1021,13 +899,13 @@ export default function WatchlistPage() {
                         </Table.Cell>
                       </Table.Row>
                     );
-                  })}
+                  }}
                 </Table.Body>
               </Table.Content>
             </Table.ScrollContainer>
           </Table>
-        )}
-      </Card>
+        </Card>
+      )}
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>

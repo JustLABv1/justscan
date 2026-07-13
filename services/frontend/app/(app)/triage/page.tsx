@@ -3,15 +3,16 @@
 import { StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
-import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { getTriage, type TriageItem, type TriageItemKind, type TriagePriority } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { getScanFailurePresentation } from '@/lib/scan-failure';
 import {
   Alert,
   Button,
   Card,
   Chip,
+  Disclosure,
   Label,
   ListBox,
   Pagination,
@@ -19,12 +20,10 @@ import {
   Select,
   Spinner,
   Table,
+  Tabs,
 } from '@heroui/react';
 import {
-  AlertCircleIcon,
   ArrowRight01Icon,
-  CheckmarkCircle02Icon,
-  Clock01Icon,
   FilterIcon,
   PackageIcon,
   Shield01Icon,
@@ -32,15 +31,10 @@ import {
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type TriageQueueView =
-  | 'all'
-  | 'critical_now'
-  | 'fixable_first'
-  | 'policy_blocked'
-  | 'watchlist_stale'
-  | 'custom';
+  'all' | 'critical_now' | 'fixable_first' | 'policy_blocked' | 'watchlist_stale' | 'custom';
 type ChipTone = 'danger' | 'warning' | 'accent' | 'default';
 
 const KIND_LABELS: Record<TriageItemKind | 'all', string> = {
@@ -138,35 +132,20 @@ function itemTarget(item: TriageItem) {
   return 'JustScan item';
 }
 
-function signalColor(signal: string) {
-  return SIGNAL_COLORS[signal.toLowerCase()] ?? 'default';
+function itemDescription(item: TriageItem) {
+  if (item.kind === 'scan' && item.scan?.status === 'failed') {
+    return getScanFailurePresentation(item.description, itemTarget(item)).description;
+  }
+  return item.description;
 }
 
-function SummaryCard({
-  label,
-  value,
-  detail,
-  icon,
-  tone = 'default',
-}: {
-  label: string;
-  value: number;
-  detail: string;
-  icon?: ReactNode;
-  tone?: ChipTone;
-}) {
-  return (
-    <StatCard
-      label={label}
-      value={value.toLocaleString()}
-      hint={detail}
-      icon={icon}
-      tone={tone}
-      variant="stacked"
-      className="h-full border border-divider/70"
-      hintClassName="text-[11px] leading-4 text-muted"
-    />
-  );
+function itemActionLabel(item: TriageItem) {
+  if (item.kind === 'fix') return 'Review fixes';
+  return item.primary_action;
+}
+
+function signalColor(signal: string) {
+  return SIGNAL_COLORS[signal.toLowerCase()] ?? 'default';
 }
 
 function buildPaginationModel(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
@@ -413,49 +392,7 @@ export default function TriagePage() {
       <PageHeader
         title="Triage"
         description="Canonical operator queue for scan failures, policy blockers, fixable findings, and watchlist follow-up."
-        actions={
-          <Button onPress={() => load(true)} variant="secondary" isDisabled={manualRefreshing}>
-            {manualRefreshing ? 'Refreshing...' : 'Refresh'}
-          </Button>
-        }
       />
-
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard
-          label="Open items"
-          value={summary.total}
-          detail="visible now"
-          icon={<ShieldKeyIcon size={16} />}
-        />
-        <SummaryCard
-          label="Critical now"
-          value={summary.critical}
-          detail="highest-priority items"
-          tone="danger"
-          icon={<AlertCircleIcon size={16} />}
-        />
-        <SummaryCard
-          label="Fixable first"
-          value={summary.fixable}
-          detail="remediation available"
-          tone="accent"
-          icon={<CheckmarkCircle02Icon size={16} />}
-        />
-        <SummaryCard
-          label="Policy blocked"
-          value={summary.policy_failures}
-          detail="policy or Xray blocked"
-          tone="warning"
-          icon={<Shield01Icon size={16} />}
-        />
-        <SummaryCard
-          label="Watchlist attention"
-          value={summary.watchlist}
-          detail="stale or failed coverage"
-          tone="warning"
-          icon={<Clock01Icon size={16} />}
-        />
-      </div>
 
       {error ? (
         <Alert status="danger" className="bg-danger-soft">
@@ -468,129 +405,155 @@ export default function TriagePage() {
       ) : null}
 
       <Card className="overflow-hidden">
-        <Card.Content className="gap-3 border-b border-divider py-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <SearchField name="triage-search" variant="secondary" className="w-full xl:max-w-sm">
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input
-                  placeholder="Search image, policy, status, signal..."
-                  value={query}
-                  onChange={(event) => {
-                    setPage(1);
-                    setQuery(event.target.value);
-                  }}
-                />
-                {query ? (
-                  <SearchField.ClearButton
-                    onPress={() => {
+        <Card.Content className="gap-4 border-b border-divider py-4">
+          <Tabs
+            variant="secondary"
+            selectedKey={queueView === 'custom' ? undefined : queueView}
+            onSelectionChange={(key) =>
+              applySavedView(String(key) as Exclude<TriageQueueView, 'custom'>)
+            }
+            className="min-w-0"
+          >
+            <Tabs.ListContainer className="overflow-x-auto">
+              <Tabs.List aria-label="Triage queue views" className="min-w-max gap-1">
+                {TRIAGE_VIEW_OPTIONS.map((option) => (
+                  <Tabs.Tab
+                    key={option.id}
+                    id={option.id}
+                    className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap px-3"
+                  >
+                    {option.label}
+                    <Chip size="sm" variant="soft" color={option.tone}>
+                      {countForQueueView(option.id, summary)}
+                    </Chip>
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
+                ))}
+              </Tabs.List>
+            </Tabs.ListContainer>
+          </Tabs>
+
+          <Disclosure
+            isExpanded={showAdvancedFilters}
+            onExpandedChange={setShowAdvancedFilters}
+            className="contents"
+          >
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <SearchField name="triage-search" variant="secondary" className="w-full xl:max-w-sm">
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    placeholder="Search image, policy, status, signal..."
+                    value={query}
+                    onChange={(event) => {
                       setPage(1);
-                      setQuery('');
+                      setQuery(event.target.value);
                     }}
                   />
-                ) : null}
-              </SearchField.Group>
-            </SearchField>
+                  {query ? (
+                    <SearchField.ClearButton
+                      onPress={() => {
+                        setPage(1);
+                        setQuery('');
+                      }}
+                    />
+                  ) : null}
+                </SearchField.Group>
+              </SearchField>
 
-            <div className="flex flex-wrap gap-2 xl:justify-end">
-              <Button
-                size="sm"
-                variant={showAdvancedFilters ? 'primary' : 'secondary'}
-                onPress={() => setShowAdvancedFilters((current) => !current)}
-              >
-                <FilterIcon size={14} />
-                Advanced filters
-              </Button>
-              {hasActiveFilters ? (
+              <div className="flex flex-wrap gap-2 xl:justify-end">
+                <Disclosure.Heading>
+                  <Disclosure.Trigger className="inline-flex h-9 items-center gap-2 rounded-xl border border-divider bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+                    <FilterIcon size={14} />
+                    Filters
+                    {kindFilter !== 'all' || priorityFilter !== 'all' ? (
+                      <Chip size="sm" variant="soft" color="default">
+                        {Number(kindFilter !== 'all') + Number(priorityFilter !== 'all')}
+                      </Chip>
+                    ) : null}
+                    <Disclosure.Indicator />
+                  </Disclosure.Trigger>
+                </Disclosure.Heading>
                 <Button
                   size="sm"
                   variant="tertiary"
-                  onPress={() => {
-                    setPage(1);
-                    setQuery('');
-                    setKindFilter('all');
-                    setPriorityFilter('all');
-                    setShowAdvancedFilters(false);
-                  }}
+                  onPress={() => load(true)}
+                  isDisabled={manualRefreshing}
                 >
-                  Clear filters
+                  {manualRefreshing ? 'Refreshing...' : 'Refresh'}
                 </Button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {TRIAGE_VIEW_OPTIONS.map((option) => {
-              const active = queueView !== 'custom' && queueView === option.id;
-              return (
-                <Button
-                  key={option.id}
-                  size="sm"
-                  variant={active ? 'secondary' : 'ghost'}
-                  onPress={() => applySavedView(option.id)}
-                >
-                  {option.label}
-                  <Chip size="sm" variant="soft" color={option.tone}>
-                    {countForQueueView(option.id, summary)}
-                  </Chip>
-                </Button>
-              );
-            })}
-          </div>
-
-          {showAdvancedFilters ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-muted">Type</Label>
-                <Select
-                  value={kindFilter}
-                  onChange={(value) => {
-                    setPage(1);
-                    setKindFilter(String(value) as TriageItemKind | 'all');
-                  }}
-                >
-                  <Select.Trigger className="bg-surface-secondary">
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      {Object.entries(KIND_LABELS).map(([id, label]) => (
-                        <ListBox.Item key={id} id={id}>
-                          {label}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-muted">Priority</Label>
-                <Select
-                  value={priorityFilter}
-                  onChange={(value) => {
-                    setPage(1);
-                    setPriorityFilter(String(value) as TriagePriority | 'all');
-                  }}
-                >
-                  <Select.Trigger className="bg-surface-secondary">
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      {Object.entries(PRIORITY_LABELS).map(([id, label]) => (
-                        <ListBox.Item key={id} id={id}>
-                          {label}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+                {hasActiveFilters ? (
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    onPress={() => {
+                      setPage(1);
+                      setQuery('');
+                      setKindFilter('all');
+                      setPriorityFilter('all');
+                      setShowAdvancedFilters(false);
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : null}
               </div>
             </div>
-          ) : null}
+
+            <Disclosure.Content>
+              <Disclosure.Body className="grid gap-3 rounded-xl border border-divider bg-surface-secondary/40 p-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-muted">Type</Label>
+                  <Select
+                    value={kindFilter}
+                    onChange={(value) => {
+                      setPage(1);
+                      setKindFilter(String(value) as TriageItemKind | 'all');
+                    }}
+                  >
+                    <Select.Trigger className="bg-surface-secondary">
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {Object.entries(KIND_LABELS).map(([id, label]) => (
+                          <ListBox.Item key={id} id={id}>
+                            {label}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-muted">Priority</Label>
+                  <Select
+                    value={priorityFilter}
+                    onChange={(value) => {
+                      setPage(1);
+                      setPriorityFilter(String(value) as TriagePriority | 'all');
+                    }}
+                  >
+                    <Select.Trigger className="bg-surface-secondary">
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {Object.entries(PRIORITY_LABELS).map(([id, label]) => (
+                          <ListBox.Item key={id} id={id}>
+                            {label}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </div>
+              </Disclosure.Body>
+            </Disclosure.Content>
+          </Disclosure>
 
           {hasManualFilters ? (
             <p className="text-xs text-muted">Advanced filters are overriding the saved view.</p>
@@ -599,12 +562,11 @@ export default function TriagePage() {
 
         <Table variant="secondary">
           <Table.ScrollContainer>
-            <Table.Content aria-label="Triage queue" className="min-w-[980px]">
+            <Table.Content aria-label="Triage queue" className="min-w-[860px]">
               <Table.Header>
                 <Table.Column isRowHeader>Work item</Table.Column>
-                <Table.Column>Priority</Table.Column>
                 <Table.Column>Signals</Table.Column>
-                <Table.Column>Risk</Table.Column>
+                <Table.Column>Exposure</Table.Column>
                 <Table.Column>Updated</Table.Column>
                 <Table.Column className="text-right">Action</Table.Column>
               </Table.Header>
@@ -640,6 +602,9 @@ export default function TriagePage() {
                           <Chip size="sm" variant="soft" color="default">
                             {KIND_LABELS[item.kind]}
                           </Chip>
+                          <Chip size="sm" variant="soft" color={PRIORITY_COLORS[item.priority]}>
+                            {PRIORITY_LABELS[item.priority]}
+                          </Chip>
                         </div>
                         <p
                           className="max-w-xl truncate text-xs text-muted"
@@ -649,16 +614,11 @@ export default function TriagePage() {
                         </p>
                         <p
                           className="max-w-xl truncate text-xs text-muted"
-                          title={item.description}
+                          title={itemDescription(item)}
                         >
-                          {item.description}
+                          {itemDescription(item)}
                         </p>
                       </div>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Chip size="sm" variant="soft" color={PRIORITY_COLORS[item.priority]}>
-                        {PRIORITY_LABELS[item.priority]}
-                      </Chip>
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex max-w-xs flex-wrap gap-1.5">
@@ -676,16 +636,16 @@ export default function TriagePage() {
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <div className="space-y-1 text-xs text-muted">
-                        <p>
-                          C/H:{' '}
+                      <div className="flex max-w-[220px] flex-wrap gap-x-2 gap-y-1 text-xs text-muted">
+                        <span>
                           <span className="font-semibold text-foreground">
                             {severityTotal(item)}
-                          </span>
-                        </p>
-                        {item.fix_count > 0 ? <p>{item.fix_count} fixable total</p> : null}
+                          </span>{' '}
+                          C/H
+                        </span>
+                        {item.fix_count > 0 ? <span>{item.fix_count} fixable</span> : null}
                         {item.policy_names?.length ? (
-                          <p>{item.policy_names.length} failed policy</p>
+                          <span>{item.policy_names.length} policy failed</span>
                         ) : null}
                       </div>
                     </Table.Cell>
@@ -694,8 +654,8 @@ export default function TriagePage() {
                     </Table.Cell>
                     <Table.Cell className="text-right">
                       <Link href={item.href}>
-                        <Button size="sm" variant="secondary">
-                          {item.primary_action}
+                        <Button size="sm" variant="tertiary">
+                          {itemActionLabel(item)}
                           <ArrowRight01Icon size={14} />
                         </Button>
                       </Link>

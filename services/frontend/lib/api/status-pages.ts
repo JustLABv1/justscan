@@ -3,13 +3,21 @@ import { listScans } from './scans';
 import { appendScope } from './scope';
 import type { ResourceShare } from './types/orgs';
 import type { Vulnerability, VulnerabilityContextAnalysis } from './types/scans';
-import type { StatusPage, StatusPagePayload, StatusPageResponse, StatusPageScanSummary, StatusPageTargetOption } from './types/status-pages';
+import type {
+  StatusPage,
+  StatusPagePayload,
+  StatusPageResponse,
+  StatusPageScanSummary,
+  StatusPageTargetOption,
+} from './types/status-pages';
 
 export const listStatusPages = () => {
   const params = new URLSearchParams();
   appendScope(params);
   const qs = params.toString();
-  return req<{ data: StatusPage[] }>('GET', `/api/v1/status-pages/${qs ? `?${qs}` : ''}`).then((result) => result.data ?? []);
+  return req<{ data: StatusPage[] }>('GET', `/api/v1/status-pages/${qs ? `?${qs}` : ''}`).then(
+    (result) => result.data ?? []
+  );
 };
 
 export const createStatusPage = (data: StatusPagePayload) =>
@@ -25,7 +33,9 @@ export const deleteStatusPage = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/status-pages/${id}`);
 
 export const listStatusPageShares = (id: string) =>
-  req<{ data: ResourceShare[] }>('GET', `/api/v1/status-pages/${id}/shares`).then((result) => result.data ?? []);
+  req<{ data: ResourceShare[] }>('GET', `/api/v1/status-pages/${id}/shares`).then(
+    (result) => result.data ?? []
+  );
 
 export const shareStatusPage = (id: string, orgId: string) =>
   req<{ result: string }>('POST', `/api/v1/status-pages/${id}/shares`, { org_id: orgId });
@@ -33,14 +43,25 @@ export const shareStatusPage = (id: string, orgId: string) =>
 export const unshareStatusPage = (id: string, orgId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/status-pages/${id}/shares/${orgId}`);
 
+export const transferStatusPageOwnership = (id: string, orgId: string) =>
+  req<{ result: string }>('POST', `/api/v1/status-pages/${id}/transfer-ownership`, {
+    org_id: orgId,
+  });
+
 export const getStatusPageBySlug = (slug: string) =>
   sharedReq<StatusPageResponse>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}`);
 
 export const getStatusPageTrackedScan = (slug: string, scanId: string) =>
-  sharedReq<StatusPageScanSummary>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/scans/${encodeURIComponent(scanId)}`);
+  sharedReq<StatusPageScanSummary>(
+    'GET',
+    `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/scans/${encodeURIComponent(scanId)}`
+  );
 
 export const listStatusPageScanHistory = (slug: string, scanId: string) =>
-  sharedReq<{ data: StatusPageScanSummary[] }>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/scans/${encodeURIComponent(scanId)}/history`).then((result) => result.data ?? []);
+  sharedReq<{ data: StatusPageScanSummary[] }>(
+    'GET',
+    `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/scans/${encodeURIComponent(scanId)}/history`
+  ).then((result) => result.data ?? []);
 
 export const listStatusPageItemVulnerabilities = (
   slug: string,
@@ -52,7 +73,7 @@ export const listStatusPageItemVulnerabilities = (
   hasFix?: boolean,
   minCvss?: number,
   sortBy?: string,
-  sortDir?: 'asc' | 'desc',
+  sortDir?: 'asc' | 'desc'
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (severity) params.set('severity', severity);
@@ -61,11 +82,21 @@ export const listStatusPageItemVulnerabilities = (
   if (minCvss) params.set('min_cvss', String(minCvss));
   if (sortBy) params.set('sort_by', sortBy);
   if (sortDir) params.set('sort_dir', sortDir);
-  return sharedReq<{ data: Vulnerability[]; total: number }>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/items/${encodeURIComponent(scanId)}/vulnerabilities?${params}`);
+  return sharedReq<{ data: Vulnerability[]; total: number }>(
+    'GET',
+    `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/items/${encodeURIComponent(scanId)}/vulnerabilities?${params}`
+  );
 };
 
-export const getStatusPageItemVulnerabilityContextAnalysis = (slug: string, scanId: string, vulnerabilityId: string) =>
-  sharedReq<VulnerabilityContextAnalysis>('GET', `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/items/${encodeURIComponent(scanId)}/vulnerabilities/${encodeURIComponent(vulnerabilityId)}/analysis`);
+export const getStatusPageItemVulnerabilityContextAnalysis = (
+  slug: string,
+  scanId: string,
+  vulnerabilityId: string
+) =>
+  sharedReq<VulnerabilityContextAnalysis>(
+    'GET',
+    `/api/v1/status-pages/slug/${encodeURIComponent(slug)}/items/${encodeURIComponent(scanId)}/vulnerabilities/${encodeURIComponent(vulnerabilityId)}/analysis`
+  );
 
 export const listStatusPageTargetOptions = async () => {
   const limit = 100;

@@ -19,6 +19,7 @@ func Registries(router *gin.RouterGroup, db *bun.DB) {
 		r.GET("/:id/shares", registries.ListRegistryShares(db))
 		r.POST("/:id/shares", registries.ShareRegistry(db))
 		r.DELETE("/:id/shares/:orgId", registries.UnshareRegistry(db))
+		r.POST("/:id/transfer-ownership", registries.TransferRegistryOwnership(db))
 		r.POST("/:id/test", registries.TestRegistry(db))
 		r.GET("/:id/artifactory-repositories", registries.ListArtifactoryRepositories(db))
 	}

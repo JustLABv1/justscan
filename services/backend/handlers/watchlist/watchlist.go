@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"justscan-backend/functions/authz"
+	"justscan-backend/functions/resourceownership"
 	collectionhandlers "justscan-backend/handlers/collections"
 	scanhandlers "justscan-backend/handlers/scans"
 	"justscan-backend/pkg/models"
@@ -640,6 +641,35 @@ func UnshareWatchlistItem(db *bun.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"result": "unshared"})
+	}
+}
+
+func TransferWatchlistItemOwnership(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		itemID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid watchlist item ID"})
+			return
+		}
+		item := &models.WatchlistItem{}
+		if err := db.NewSelect().Model(item).Where("id = ?", itemID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "watchlist item not found"})
+			return
+		}
+		result, ok := resourceownership.TransferOrgOwnedResource(c, db, resourceownership.TransferParams{
+			ResourceID: item.ID, OwnerType: item.OwnerType, OwnerOrgID: item.OwnerOrgID,
+			ResourceTable: "watchlist_items", LinkTable: "org_watchlist_items", LinkResourceColumn: "watchlist_item_id",
+			ResourceName: "watchlist", HasUpdatedAt: true, ClearCollections: true,
+		})
+		if !ok {
+			return
+		}
+		item.OwnerType = models.OwnerTypeOrg
+		item.OwnerUserID = nil
+		item.OwnerOrgID = &result.TargetOrgID
+		item.CollectionIDs = []uuid.UUID{}
+		scheduler.SyncWatchlistItem(db, *item)
+		c.JSON(http.StatusOK, gin.H{"result": "ownership transferred"})
 	}
 }
 

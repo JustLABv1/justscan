@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"justscan-backend/functions/authz"
+	"justscan-backend/functions/resourceownership"
 	scanhandlers "justscan-backend/handlers/scans"
 	"justscan-backend/pkg/models"
 
@@ -283,6 +284,29 @@ func UnshareTag(db *bun.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"result": "unshared"})
+	}
+}
+
+func TransferTagOwnership(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tagID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tag ID"})
+			return
+		}
+		tag := &models.Tag{}
+		if err := db.NewSelect().Model(tag).Where("id = ?", tagID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "tag not found"})
+			return
+		}
+		if _, ok := resourceownership.TransferOrgOwnedResource(c, db, resourceownership.TransferParams{
+			ResourceID: tag.ID, OwnerType: tag.OwnerType, OwnerOrgID: tag.OwnerOrgID,
+			ResourceTable: "tags", LinkTable: "org_tags", LinkResourceColumn: "tag_id",
+			ResourceName: "tag",
+		}); !ok {
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"result": "ownership transferred"})
 	}
 }
 

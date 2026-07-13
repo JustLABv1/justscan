@@ -7,6 +7,7 @@ import (
 
 	"justscan-backend/config"
 	"justscan-backend/functions/authz"
+	"justscan-backend/functions/resourceownership"
 	"justscan-backend/pkg/crypto"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
@@ -340,6 +341,29 @@ func UnshareRegistry(db *bun.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"result": "unshared"})
+	}
+}
+
+func TransferRegistryOwnership(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		registryID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry ID"})
+			return
+		}
+		registry := &models.Registry{}
+		if err := db.NewSelect().Model(registry).Where("id = ?", registryID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "registry not found"})
+			return
+		}
+		if _, ok := resourceownership.TransferOrgOwnedResource(c, db, resourceownership.TransferParams{
+			ResourceID: registry.ID, OwnerType: registry.OwnerType, OwnerOrgID: registry.OwnerOrgID,
+			ResourceTable: "registries", LinkTable: "org_registries", LinkResourceColumn: "registry_id",
+			ResourceName: "registry", HasUpdatedAt: true,
+		}); !ok {
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"result": "ownership transferred"})
 	}
 }
 

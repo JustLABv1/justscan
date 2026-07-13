@@ -1,5 +1,6 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -22,6 +23,7 @@ import {
   ResourceShare,
   shareTag,
   Tag,
+  transferTagOwnership,
   unshareTag,
   updateTag,
 } from '@/lib/api';
@@ -83,6 +85,7 @@ export default function TagsPage() {
   const [sharesLoading, setSharesLoading] = useState(false);
   const [shareError, setShareError] = useState('');
   const [shareOrgId, setShareOrgId] = useState('');
+  const [transferOrgId, setTransferOrgId] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
   const [page, setPage] = useState(1);
@@ -180,6 +183,7 @@ export default function TagsPage() {
     setShareTarget(tag);
     setShares([]);
     setShareOrgId('');
+    setTransferOrgId('');
     setShareError('');
     shareModal.open();
     void loadShares(tag.id);
@@ -216,6 +220,38 @@ export default function TagsPage() {
     }
   }
 
+  async function handleTransferOwnership() {
+    if (
+      !shareTarget ||
+      !transferOrgId ||
+      shareTarget.owner_type !== 'org' ||
+      !canManageTag(shareTarget)
+    )
+      return;
+    const destination =
+      orgs.find((org) => org.id === transferOrgId)?.name ?? 'the selected organization';
+    const ok = await confirm({
+      title: `Transfer tag ownership to ${destination}?`,
+      message:
+        'The current owner will retain shared access and existing organization grants will remain.',
+      confirmLabel: 'Transfer',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await transferTagOwnership(shareTarget.id, transferOrgId);
+      toast.success('Tag ownership transferred');
+      shareModal.close();
+      await load();
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to transfer ownership');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
   const availableShareTargets = shareTarget
     ? orgs.filter(
         (org) =>
@@ -224,6 +260,13 @@ export default function TagsPage() {
           !shares.some((share) => share.org_id === org.id)
       )
     : [];
+  const transferTargets =
+    shareTarget?.owner_type === 'org'
+      ? orgs.filter(
+          (org) =>
+            (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id
+        )
+      : [];
   const visibleTags = useMemo(() => {
     const query = filterQuery.trim().toLowerCase();
     const filtered = query
@@ -773,6 +816,14 @@ export default function TagsPage() {
                     </div>
                   )}
                 </div>
+                <OwnershipTransfer
+                  ownerOrgId={shareTarget?.owner_type === 'org' ? shareTarget.owner_org_id : null}
+                  organizations={transferTargets}
+                  selectedOrgId={transferOrgId}
+                  onSelectedOrgIdChange={setTransferOrgId}
+                  onTransfer={() => void handleTransferOwnership()}
+                  isSaving={shareSaving}
+                />
               </Modal.Body>
               <Modal.Footer>
                 <Button onPress={shareModal.close} variant="secondary">

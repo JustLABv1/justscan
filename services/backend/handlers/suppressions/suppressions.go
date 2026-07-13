@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"justscan-backend/functions/authz"
+	"justscan-backend/functions/resourceownership"
 	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/pkg/models"
 
@@ -465,6 +466,29 @@ func UnshareSuppression(db *bun.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"result": "unshared"})
+	}
+}
+
+func TransferSuppressionOwnership(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		suppressionID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid suppression ID"})
+			return
+		}
+		suppression := &models.Suppression{}
+		if err := db.NewSelect().Model(suppression).Where("id = ?", suppressionID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "suppression not found"})
+			return
+		}
+		if _, ok := resourceownership.TransferOrgOwnedResource(c, db, resourceownership.TransferParams{
+			ResourceID: suppression.ID, OwnerType: suppression.OwnerType, OwnerOrgID: suppression.OwnerOrgID,
+			ResourceTable: "suppressions", LinkTable: "org_suppressions", LinkResourceColumn: "suppression_id",
+			ResourceName: "suppression", HasUpdatedAt: true,
+		}); !ok {
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"result": "ownership transferred"})
 	}
 }
 

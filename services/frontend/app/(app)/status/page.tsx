@@ -1,6 +1,7 @@
 'use client';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FilterToolbar } from '@/components/ui/filter-toolbar';
@@ -31,6 +32,7 @@ import {
   StatusPagePayload,
   StatusPageTarget,
   StatusPageTargetOption,
+  transferStatusPageOwnership,
   unshareStatusPage,
   updateStatusPage,
 } from '@/lib/api';
@@ -110,9 +112,7 @@ function describeScope(page: StatusPage) {
   return 'Curated tags';
 }
 
-function visibilityTone(
-  visibility: StatusPage['visibility']
-): 'default' | 'accent' | 'success' {
+function visibilityTone(visibility: StatusPage['visibility']): 'default' | 'accent' | 'success' {
   if (visibility === 'public') return 'success';
   if (visibility === 'authenticated') return 'accent';
   return 'default';
@@ -147,6 +147,7 @@ export default function StatusPagesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [visibilityFilter, setVisibilityFilter] = useState<'all' | StatusPage['visibility']>('all');
   const [shareOrgId, setShareOrgId] = useState('');
+  const [transferOrgId, setTransferOrgId] = useState('');
   const [shareError, setShareError] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
   const [sharesLoading, setSharesLoading] = useState(false);
@@ -161,13 +162,9 @@ export default function StatusPagesPage() {
     [orgs]
   );
   const canMutateActiveScope =
-    isPlatformAdmin ||
-    workScope.kind !== 'org' ||
-    canMutateOrg(orgRoleById.get(workScope.orgId));
+    isPlatformAdmin || workScope.kind !== 'org' || canMutateOrg(orgRoleById.get(workScope.orgId));
   const manageableOrgIds = new Set(
-    orgs
-      .filter((org) => canManageOrg(org.current_user_role))
-      .map((org) => org.id)
+    orgs.filter((org) => canManageOrg(org.current_user_role)).map((org) => org.id)
   );
   const filteredPages = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -323,6 +320,7 @@ export default function StatusPagesPage() {
     if (!canManageStatusPage(page)) return;
     setShareTarget(page);
     setShareOrgId('');
+    setTransferOrgId('');
     setShareError('');
     setShares([]);
     shareModal.open();
@@ -360,6 +358,38 @@ export default function StatusPagesPage() {
     }
   }
 
+  async function handleTransferOwnership() {
+    if (
+      !shareTarget ||
+      !transferOrgId ||
+      shareTarget.owner_type !== 'org' ||
+      !canManageStatusPage(shareTarget)
+    )
+      return;
+    const destination =
+      orgs.find((org) => org.id === transferOrgId)?.name ?? 'the selected organization';
+    const ok = await confirm({
+      title: `Transfer status page ownership to ${destination}?`,
+      message:
+        'The current owner will retain shared access. The status page will begin showing the destination organization’s scans and policy results.',
+      confirmLabel: 'Transfer',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await transferStatusPageOwnership(shareTarget.id, transferOrgId);
+      toast.success('Status page ownership transferred');
+      shareModal.close();
+      await load();
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to transfer ownership');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
   const availableShareTargets = shareTarget
     ? orgs.filter(
         (org) =>
@@ -368,6 +398,13 @@ export default function StatusPagesPage() {
           !shares.some((share) => share.org_id === org.id)
       )
     : [];
+  const transferTargets =
+    shareTarget?.owner_type === 'org'
+      ? orgs.filter(
+          (org) =>
+            (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id
+        )
+      : [];
 
   function resetForm() {
     setEditing(null);
@@ -559,127 +596,135 @@ export default function StatusPagesPage() {
           }
         />
 
-      {loading ? (
-        <div className="surface-card flex justify-center rounded-3xl border border-divider/70 py-16">
-          <Spinner size="lg" />
-        </div>
-      ) : filteredPages.length === 0 ? (
-        <EmptyState
-          action={
-            pages.length > 0 || !canMutateActiveScope
-              ? undefined
-              : { label: 'Create status page', onClick: openCreate }
-          }
-          description={
-            pages.length > 0
-              ? 'No status pages match the current filters. Adjust visibility or search terms to widen the results.'
-              : 'No status pages exist yet. Create one to publish current image-tag health for a curated or global set of workloads.'
-          }
-          eyebrow="Status pages"
-          icon={<EyeIcon size={28} />}
-          title={pages.length > 0 ? 'No matching pages' : 'No status pages yet'}
-        />
-      ) : (
-        <Card className="surface-card overflow-hidden rounded-3xl border border-divider/70">
-          <Card.Content className="p-0">
-            <Table variant="secondary">
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Status pages" className="min-w-[920px]">
-              <Table.Header>
-                <Table.Column isRowHeader>Name</Table.Column>
-                <Table.Column>Visibility</Table.Column>
-                <Table.Column>Scope</Table.Column>
-                <Table.Column>Slug</Table.Column>
-                <Table.Column>Access</Table.Column>
-                <Table.Column>Updated</Table.Column>
-                <Table.Column className="text-right">Actions</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {filteredPages.map((page) => (
-                  <Table.Row key={page.id} id={page.id} className="hover:bg-[var(--row-hover)]">
-                    <Table.Cell>
-                      <div>
-                        <p className="font-medium text-zinc-800 dark:text-zinc-100">{page.name}</p>
-                        <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">
-                          {page.description || 'No description'}
-                        </p>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Chip
-                        className="capitalize"
-                        color={visibilityTone(page.visibility)}
-                        size="sm"
-                        variant="soft"
-                      >
-                        {page.visibility}
-                      </Chip>
-                    </Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">{describeScope(page)}</Table.Cell>
-                    <Table.Cell className="font-mono text-xs text-zinc-600 dark:text-zinc-300">
-                      /status/{page.slug}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="mt-1.5">
-                        <OwnershipBadge
-                          ownerType={page.owner_type}
-                          ownerOrgId={page.owner_org_id}
-                          orgNamesById={orgNamesById}
-                        />
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">
-                      {timeAgo(page.updated_at)}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex justify-end">
-                        <RowActionsMenu
-                          label={`Open actions menu for ${page.name}`}
-                          items={[
-                            {
-                              id: 'open',
-                              label: 'Open page',
-                              icon: <EyeIcon size={15} />,
-                              onAction: () => window.open(`/status/${page.slug}`, '_blank'),
-                            },
-                            ...(canManageStatusPage(page)
-                              ? [
+        {loading ? (
+          <div className="surface-card flex justify-center rounded-3xl border border-divider/70 py-16">
+            <Spinner size="lg" />
+          </div>
+        ) : filteredPages.length === 0 ? (
+          <EmptyState
+            action={
+              pages.length > 0 || !canMutateActiveScope
+                ? undefined
+                : { label: 'Create status page', onClick: openCreate }
+            }
+            description={
+              pages.length > 0
+                ? 'No status pages match the current filters. Adjust visibility or search terms to widen the results.'
+                : 'No status pages exist yet. Create one to publish current image-tag health for a curated or global set of workloads.'
+            }
+            eyebrow="Status pages"
+            icon={<EyeIcon size={28} />}
+            title={pages.length > 0 ? 'No matching pages' : 'No status pages yet'}
+          />
+        ) : (
+          <Card className="surface-card overflow-hidden rounded-3xl border border-divider/70">
+            <Card.Content className="p-0">
+              <Table variant="secondary">
+                <Table.ScrollContainer>
+                  <Table.Content aria-label="Status pages" className="min-w-[920px]">
+                    <Table.Header>
+                      <Table.Column isRowHeader>Name</Table.Column>
+                      <Table.Column>Visibility</Table.Column>
+                      <Table.Column>Scope</Table.Column>
+                      <Table.Column>Slug</Table.Column>
+                      <Table.Column>Access</Table.Column>
+                      <Table.Column>Updated</Table.Column>
+                      <Table.Column className="text-right">Actions</Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {filteredPages.map((page) => (
+                        <Table.Row
+                          key={page.id}
+                          id={page.id}
+                          className="hover:bg-[var(--row-hover)]"
+                        >
+                          <Table.Cell>
+                            <div>
+                              <p className="font-medium text-zinc-800 dark:text-zinc-100">
+                                {page.name}
+                              </p>
+                              <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">
+                                {page.description || 'No description'}
+                              </p>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Chip
+                              className="capitalize"
+                              color={visibilityTone(page.visibility)}
+                              size="sm"
+                              variant="soft"
+                            >
+                              {page.visibility}
+                            </Chip>
+                          </Table.Cell>
+                          <Table.Cell className="text-xs text-zinc-500">
+                            {describeScope(page)}
+                          </Table.Cell>
+                          <Table.Cell className="font-mono text-xs text-zinc-600 dark:text-zinc-300">
+                            /status/{page.slug}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="mt-1.5">
+                              <OwnershipBadge
+                                ownerType={page.owner_type}
+                                ownerOrgId={page.owner_org_id}
+                                orgNamesById={orgNamesById}
+                              />
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell className="text-xs text-zinc-500">
+                            {timeAgo(page.updated_at)}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="flex justify-end">
+                              <RowActionsMenu
+                                label={`Open actions menu for ${page.name}`}
+                                items={[
                                   {
-                                    id: 'share',
-                                    label: 'Manage access',
-                                    icon: <Shield01Icon size={15} />,
-                                    onAction: () => openShareModal(page),
+                                    id: 'open',
+                                    label: 'Open page',
+                                    icon: <EyeIcon size={15} />,
+                                    onAction: () => window.open(`/status/${page.slug}`, '_blank'),
                                   },
-                                  {
-                                    id: 'edit',
-                                    label: 'Edit status page',
-                                    icon: <PencilEdit01Icon size={15} />,
-                                    onAction: () => openEdit(page),
-                                  },
-                                  {
-                                    id: 'delete',
-                                    label: 'Delete status page',
-                                    icon: <Delete01Icon size={15} />,
-                                    variant: 'danger' as const,
-                                    onAction: () => {
-                                      void handleDelete(page.id);
-                                    },
-                                  },
-                                ]
-                              : []),
-                          ]}
-                        />
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-            </Table>
-          </Card.Content>
-        </Card>
-      )}
+                                  ...(canManageStatusPage(page)
+                                    ? [
+                                        {
+                                          id: 'share',
+                                          label: 'Manage access',
+                                          icon: <Shield01Icon size={15} />,
+                                          onAction: () => openShareModal(page),
+                                        },
+                                        {
+                                          id: 'edit',
+                                          label: 'Edit status page',
+                                          icon: <PencilEdit01Icon size={15} />,
+                                          onAction: () => openEdit(page),
+                                        },
+                                        {
+                                          id: 'delete',
+                                          label: 'Delete status page',
+                                          icon: <Delete01Icon size={15} />,
+                                          variant: 'danger' as const,
+                                          onAction: () => {
+                                            void handleDelete(page.id);
+                                          },
+                                        },
+                                      ]
+                                    : []),
+                                ]}
+                              />
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </Card.Content>
+          </Card>
+        )}
       </div>
 
       <Modal state={modal}>
@@ -838,14 +883,22 @@ export default function StatusPagesPage() {
                                   key={option.id}
                                   className="flex items-start gap-3 p-3 cursor-pointer transition-colors"
                                   style={
-                                    isSelected ? { background: 'color-mix(in srgb, var(--accent) 9%, transparent)' } : undefined
+                                    isSelected
+                                      ? {
+                                          background:
+                                            'color-mix(in srgb, var(--accent) 9%, transparent)',
+                                        }
+                                      : undefined
                                   }
                                 >
                                   <span
                                     className="relative mt-1 flex size-4 shrink-0 items-center justify-center rounded border transition-colors"
                                     style={
                                       isSelected
-                                        ? { borderColor: 'var(--accent)', background: 'var(--accent)' }
+                                        ? {
+                                            borderColor: 'var(--accent)',
+                                            background: 'var(--accent)',
+                                          }
                                         : { borderColor: 'rgba(113,113,122,0.4)' }
                                     }
                                   >
@@ -1317,6 +1370,15 @@ export default function StatusPagesPage() {
                     </div>
                   )}
                 </div>
+                <OwnershipTransfer
+                  ownerOrgId={shareTarget?.owner_type === 'org' ? shareTarget.owner_org_id : null}
+                  organizations={transferTargets}
+                  selectedOrgId={transferOrgId}
+                  onSelectedOrgIdChange={setTransferOrgId}
+                  onTransfer={() => void handleTransferOwnership()}
+                  isSaving={shareSaving}
+                  warning="Displayed scans and policy results will use the destination organization."
+                />
               </Modal.Body>
               <Modal.Footer
                 className="px-6 py-4 flex justify-end"

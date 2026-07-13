@@ -1153,7 +1153,6 @@ export default function ScansPage() {
               selectedKey={scanView}
               onSelectionChange={(key) => handleViewChange(String(key) as ScansView)}
               variant="secondary"
-              className="[&_.tabs__list-container__scroll-next]:!hidden [&_.tabs__list-container__scroll-prev]:!hidden"
             >
               <Tabs.ListContainer>
                 <Tabs.List aria-label="Scan views">

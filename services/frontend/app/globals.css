@@ -4,6 +4,11 @@
 @import 'shadcn/tailwind.css';
 
 @layer components {
+  .tabs__list-container__scroll-prev,
+  .tabs__list-container__scroll-next {
+    display: none !important;
+  }
+
   .scan-source-card {
     transition-duration: 140ms;
     transition-property: transform, opacity, border-color, background-color;

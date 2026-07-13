@@ -704,7 +704,7 @@ export default function WatchlistPage() {
                     { id: 'never_scanned' as const, label: 'Never scanned' },
                     { id: 'healthy' as const, label: 'Healthy' },
                   ].map((option) => (
-                    <Tabs.Tab key={option.id} id={option.id}>
+                    <Tabs.Tab key={option.id} className="whitespace-nowrap" id={option.id}>
                       {option.label}
                       <Chip size="sm" variant="soft" className="ml-1 font-mono">
                         {focusCounts[option.id]}

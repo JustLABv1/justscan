@@ -263,6 +263,26 @@ export interface ImageSummary {
   collections?: Collection[];
 }
 
+/** The latest visible scan for one concrete image name and tag pair. */
+export interface ArtifactSummary {
+  image_name: string;
+  image_tag: string;
+  scan_count: number;
+  latest_scan_id: string;
+  latest_status: string;
+  latest_external_status?: string;
+  latest_scan_at: string;
+  owner_type?: OwnerType;
+  owner_user_id?: string | null;
+  owner_org_id?: string | null;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  compliance_summary?: ScanComplianceSummary | null;
+  collections?: Collection[];
+}
+
 export interface SBOMComponent {
   id: string;
   scan_id: string;

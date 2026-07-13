@@ -51,6 +51,18 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 				q = q.Where("image_name ILIKE ?", "%"+image+"%")
 			}
 		}
+		if imageTag := c.Query("image_tag"); imageTag != "" {
+			q = q.Where("image_tag = ?", imageTag)
+		}
+		if query := strings.TrimSpace(c.Query("q")); query != "" {
+			pattern := "%" + query + "%"
+			q = q.Where(
+				"(image_name ILIKE ? OR image_tag ILIKE ? OR (image_name || ':' || image_tag) ILIKE ?)",
+				pattern,
+				pattern,
+				pattern,
+			)
+		}
 		if tags := c.Query("tags"); tags != "" {
 			tagIDs := strings.Split(tags, ",")
 			q = q.Where("id IN (SELECT scan_id FROM scan_tags WHERE tag_id = ANY(?))", bun.In(tagIDs))

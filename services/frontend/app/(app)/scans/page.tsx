@@ -1,7 +1,7 @@
 'use client';
 import { CollectionBadgeList } from '@/components/scans/collection-badge-list';
 import { useConfirmDialog } from '@/components/confirm-dialog';
-import { ImageScansTable } from '@/components/scans/image-scans-table';
+import { ArtifactScansTable } from '@/components/scans/artifact-scans-table';
 import {
   getRecentActivityBounds,
   RECENT_ACTIVITY_RANGE_OPTIONS,
@@ -19,7 +19,6 @@ import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
-import { useOrgNameMap } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   Collection,
@@ -28,13 +27,11 @@ import {
   deleteCollection,
   deleteScan,
   getTokenType,
-  getUserDetails,
-  ImageSummary,
+  ArtifactSummary,
   listCollections,
-  listOrgMembers,
   listOrgs,
   Org,
-  listScanImages,
+  listScanArtifacts,
   listScans,
   listTags,
   Scan,
@@ -221,7 +218,7 @@ function buildScansRoute({
 }) {
   const params = new URLSearchParams();
 
-  if (image) params.set('image', image);
+  if (image) params.set('q', image);
   if (status) params.set('status', status);
   if (range) params.set('range', range);
   if (tag) params.set('tag', tag);
@@ -237,13 +234,13 @@ function readScansViewFromSearchParams(searchParams: {
   get(name: string): string | null;
 }): ScansViewState {
   return {
-    image: searchParams.get('image') ?? '',
+    image: searchParams.get('q') ?? searchParams.get('image') ?? '',
     status: searchParams.get('status') ?? '',
     range: normalizeScansTimeRange(searchParams.get('range'), searchParams.get('view')),
-    tag: searchParams.get('tag') ?? '',
+    tag: '',
     critical: normalizeCriticalFilter(searchParams.get('critical')),
     collection: searchParams.get('collection') ?? '',
-    group: normalizeGroupingMode(searchParams.get('group')),
+    group: '',
   };
 }
 
@@ -264,7 +261,6 @@ export default function ScansPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const toast = useToast();
-  const orgNamesById = useOrgNameMap();
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const savedViewStorageKey = `${SCANS_VIEW_STORAGE_KEY_PREFIX}:${scopeKey}`;
@@ -275,7 +271,7 @@ export default function ScansPage() {
   const searchParamsString = searchParams.toString();
   const didAttemptInitialRestoreRef = useRef(false);
 
-  const [images, setImages] = useState<ImageSummary[]>([]);
+  const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([]);
   const [activityScans, setActivityScans] = useState<Scan[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -306,7 +302,6 @@ export default function ScansPage() {
   // Available tags for bulk tagging
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [availableCollections, setAvailableCollections] = useState<Collection[]>([]);
-  const [scanUsersById, setScanUsersById] = useState<Record<string, { displayName: string }>>({});
   const [scopedOrgPolicy, setScopedOrgPolicy] = useState<Org | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const collectionModal = useOverlayState();
@@ -332,14 +327,15 @@ export default function ScansPage() {
         setError('');
       }
       try {
-        const res = await listScanImages(
+        const res = await listScanArtifacts(
           p,
           LIMIT,
           img || undefined,
           status || undefined,
+          criticalFilter,
           collection || undefined
         );
-        setImages(res.data ?? []);
+        setArtifacts(res.data ?? []);
         setTotal(res.total);
         if (silent) {
           setError('');
@@ -354,7 +350,7 @@ export default function ScansPage() {
         }
       }
     },
-    []
+    [criticalFilter]
   );
 
   const loadActivity = useCallback(
@@ -376,14 +372,16 @@ export default function ScansPage() {
         const res = await listScans(
           p,
           LIMIT,
-          img || undefined,
+          undefined,
           undefined,
           undefined,
           undefined,
           undefined,
           collection || undefined,
           from,
-          to
+          to,
+          undefined,
+          img || undefined
         );
         setActivityScans(res.data ?? []);
         setTotal(res.total);
@@ -524,43 +522,6 @@ export default function ScansPage() {
 
   useEffect(() => {
     let cancelled = false;
-
-    const loadScanUsers = async () => {
-      const [currentUserResult, orgMembers] = await Promise.all([
-        getUserDetails().catch(() => null),
-        workScope.kind === 'org'
-          ? listOrgMembers(workScope.orgId).catch(() => [])
-          : Promise.resolve([]),
-      ]);
-
-      if (cancelled) return;
-
-      const next: Record<string, { displayName: string }> = {};
-      if (currentUserResult?.user?.id) {
-        next[currentUserResult.user.id] = {
-          displayName: currentUserResult.user.username || currentUserResult.user.email,
-        };
-      }
-
-      orgMembers.forEach((member) => {
-        if (!member.user_id) return;
-        next[member.user_id] = {
-          displayName: member.username || member.email || member.user_id,
-        };
-      });
-
-      setScanUsersById(next);
-    };
-
-    void loadScanUsers();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [scopeKey, workScope]);
-
-  useEffect(() => {
-    let cancelled = false;
     const loadScopedOrgPolicy = async () => {
       if (workScope.kind !== 'org') {
         await Promise.resolve();
@@ -634,8 +595,8 @@ export default function ScansPage() {
     },
     hasRecentWindow
       ? activityScans.some((scan) => scan.status === 'running' || scan.status === 'pending')
-      : images.some(
-          (image) => image.latest_status === 'running' || image.latest_status === 'pending'
+      : artifacts.some(
+          (artifact) => artifact.latest_status === 'running' || artifact.latest_status === 'pending'
         ),
     5000
   );
@@ -747,23 +708,11 @@ export default function ScansPage() {
     syncRoute({ status: value });
   }
 
-  function handleTagFilterChange(value: string) {
-    clearPendingImageCommit();
-    setTagFilter(value);
-    setPage(1);
-    syncRoute({ tag: value });
-  }
-
   function handleCollectionFilterChange(value: string) {
     clearPendingImageCommit();
     setCollectionFilter(value);
     setPage(1);
     syncRoute({ collection: value });
-  }
-
-  function handleGroupingModeChange(value: ScansGroupingMode) {
-    setGroupingMode(value);
-    syncRoute({ group: value });
   }
 
   function handleCriticalFilterChange(value: '' | 'yes' | 'no') {
@@ -942,63 +891,6 @@ export default function ScansPage() {
     window.open(`/reports/print?scans=${scanIds}`, '_blank');
   }
 
-  async function handleParentScanSelection(
-    imageName: string,
-    selected: boolean,
-    latestScanId: string,
-    visibleScanIds: string[]
-  ) {
-    let targetIds = visibleScanIds;
-
-    // If child rows have not reported visible IDs yet, fetch only the first child page
-    // so selection still maps to visible rows instead of selecting a hidden latest scan ID.
-    if (targetIds.length === 0) {
-      try {
-        const res = await listScans(
-          1,
-          10,
-          imageName,
-          undefined,
-          true,
-          undefined,
-          undefined,
-          collectionFilter || undefined
-        );
-        targetIds = (res.data ?? []).map((scan) => scan.id);
-      } catch {
-        targetIds = [];
-      }
-    }
-
-    if (targetIds.length === 0) {
-      targetIds = [latestScanId];
-    }
-
-    setSelectedScans((previous) => {
-      const next = new Set(previous);
-      if (selected) {
-        targetIds.forEach((id) => next.add(id));
-      } else {
-        targetIds.forEach((id) => next.delete(id));
-      }
-      return next;
-    });
-  }
-
-  const tagFilterOptions = useMemo(() => {
-    const values = new Set<string>();
-
-    images.forEach((image) => {
-      if (image.latest_tag) values.add(image.latest_tag);
-    });
-
-    activityScans.forEach((scan) => {
-      if (scan.image_tag) values.add(scan.image_tag);
-    });
-
-    return Array.from(values).sort((a, b) => a.localeCompare(b));
-  }, [activityScans, images]);
-
   const filteredActivityScans = useMemo(
     () =>
       activityScans.filter((scan) => {
@@ -1023,66 +915,22 @@ export default function ScansPage() {
     [activityScans, criticalFilter, statusFilter, tagFilter]
   );
 
-  const filteredImages = useMemo(
+  const filteredArtifacts = useMemo(
     () =>
-      images.filter((image) => {
-        if (tagFilter && image.latest_tag !== tagFilter) {
+      artifacts.filter((artifact) => {
+        if (tagFilter && artifact.image_tag !== tagFilter) {
           return false;
         }
-
-        if (criticalFilter === 'yes' && image.critical_count <= 0) {
-          return false;
-        }
-
-        if (criticalFilter === 'no' && image.critical_count > 0) {
-          return false;
-        }
-
         return true;
       }),
-    [criticalFilter, images, tagFilter]
+    [artifacts, tagFilter]
   );
   const selectedCollection = useMemo(
     () => availableCollections.find((collection) => collection.id === collectionFilter) ?? null,
     [availableCollections, collectionFilter]
   );
-  const groupedImages = useMemo(() => {
-    if (groupingMode !== 'collections') return [];
-
-    const buckets = new Map<string, { key: string; label: string; images: ImageSummary[] }>();
-    filteredImages.forEach((image) => {
-      if (image.has_unassigned_scans || !image.collections || image.collections.length === 0) {
-        const existing = buckets.get('__unassigned__') ?? {
-          key: '__unassigned__',
-          label: 'Unassigned',
-          images: [],
-        };
-        existing.images.push(image);
-        buckets.set(existing.key, existing);
-      }
-
-      image.collections?.forEach((collection) => {
-        const existing = buckets.get(collection.id) ?? {
-          key: collection.id,
-          label: collection.name,
-          images: [],
-        };
-        existing.images.push(image);
-        buckets.set(existing.key, existing);
-      });
-    });
-
-    return Array.from(buckets.values()).sort((left, right) =>
-      left.label.localeCompare(right.label)
-    );
-  }, [filteredImages, groupingMode]);
-
-  const visibleRows = hasRecentWindow ? filteredActivityScans.length : filteredImages.length;
-  const hasClientSideFilters =
-    Boolean(tagFilter) ||
-    Boolean(collectionFilter) ||
-    Boolean(criticalFilter) ||
-    (hasRecentWindow && Boolean(statusFilter));
+  const visibleRows = hasRecentWindow ? filteredActivityScans.length : filteredArtifacts.length;
+  const hasClientSideFilters = Boolean(tagFilter) || (hasRecentWindow && Boolean(statusFilter));
   const totalForDisplay = hasClientSideFilters ? visibleRows : total;
   const totalPages = hasClientSideFilters ? 1 : Math.max(1, Math.ceil(total / LIMIT));
   const activityRangeLabel =
@@ -1115,8 +963,8 @@ export default function ScansPage() {
       ? `${totalForDisplay} scan event${totalForDisplay !== 1 ? 's' : ''} in ${activityRangeLabel.toLowerCase()}`
       : 'Chronological scan activity for the selected time window.'
     : totalForDisplay > 0
-      ? `${totalForDisplay} image${totalForDisplay !== 1 ? 's' : ''}`
-      : 'Search images, compare runs, and start new scans.';
+      ? `${totalForDisplay} image tag${totalForDisplay !== 1 ? 's' : ''}`
+      : 'Search image tags, compare runs, and start new scans.';
   const visibleActivityImageCount = new Set(filteredActivityScans.map((scan) => scan.image_name))
     .size;
   return (
@@ -1159,7 +1007,7 @@ export default function ScansPage() {
               <Tabs.ListContainer className="overflow-x-auto">
                 <Tabs.List aria-label="Scan views" className="min-w-max">
                   <Tabs.Tab className="whitespace-nowrap" id="images">
-                    Images
+                    Images &amp; tags
                     <Tabs.Indicator />
                   </Tabs.Tab>
                   <Tabs.Tab className="whitespace-nowrap" id="active">
@@ -1182,7 +1030,7 @@ export default function ScansPage() {
               {totalForDisplay}{' '}
               {hasRecentWindow
                 ? `scan event${totalForDisplay !== 1 ? 's' : ''}`
-                : `image${totalForDisplay !== 1 ? 's' : ''}`}
+                : `image tag${totalForDisplay !== 1 ? 's' : ''}`}
             </p>
           </div>
 
@@ -1193,20 +1041,20 @@ export default function ScansPage() {
           >
             <div className="flex flex-wrap items-end gap-3">
               <SearchField
-                aria-label="Search images"
+                aria-label="Search images or tags"
                 className="min-w-[220px] flex-1"
                 value={imageFilter}
                 onChange={handleImageFilterChange}
                 variant="secondary"
               >
-                <Label className="sr-only">Search images</Label>
+                <Label className="sr-only">Search images or tags</Label>
                 <SearchField.Group>
                   <SearchField.SearchIcon />
                   <SearchField.Input
                     placeholder={
                       hasRecentWindow
-                        ? 'Filter recent activity by image name…'
-                        : 'Filter by image name…'
+                        ? 'Filter recent activity by image or tag…'
+                        : 'Search image or tag…'
                     }
                   />
                   <SearchField.ClearButton />
@@ -1278,31 +1126,6 @@ export default function ScansPage() {
                   ) : null}
 
                   <Select
-                    className="min-w-[180px] flex-1"
-                    value={tagFilter || '__all__'}
-                    onChange={(value) =>
-                      handleTagFilterChange(String(value === '__all__' ? '' : (value ?? '')))
-                    }
-                    variant="secondary"
-                  >
-                    <Label>Tag</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        <ListBox.Item id="__all__">All tags</ListBox.Item>
-                        {tagFilterOptions.map((tagValue) => (
-                          <ListBox.Item key={tagValue} id={tagValue}>
-                            {tagValue}
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-
-                  <Select
                     className="min-w-[200px] flex-1"
                     value={collectionFilter || '__all__'}
                     onChange={(value) =>
@@ -1352,31 +1175,6 @@ export default function ScansPage() {
                       </ListBox>
                     </Select.Popover>
                   </Select>
-
-                  {scanView !== 'recent' ? (
-                    <Select
-                      className="min-w-[180px] flex-1"
-                      value={groupingMode || '__none__'}
-                      onChange={(value) =>
-                        handleGroupingModeChange(
-                          (value === '__none__' ? '' : (value ?? '')) as ScansGroupingMode
-                        )
-                      }
-                      variant="secondary"
-                    >
-                      <Label>Group by</Label>
-                      <Select.Trigger>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          <ListBox.Item id="__none__">No grouping</ListBox.Item>
-                          <ListBox.Item id="collections">Collections</ListBox.Item>
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                  ) : null}
 
                   <div className="flex flex-wrap items-center gap-2">
                     <Button onPress={() => openCollectionModal()} variant="secondary">
@@ -1570,146 +1368,27 @@ export default function ScansPage() {
           )}
         </Card>
       ) : (
-        <>
-          {groupingMode === 'collections' ? (
-            groupedImages.length === 0 && !loading ? (
-              <ImageScansTable
-                childRefreshKey={childRefreshKey}
-                collectionFilter={collectionFilter}
-                emptyState={
-                  scanView === 'active'
-                    ? {
-                        title: 'No active scans',
-                        description: 'Queued and running scans will appear here automatically.',
-                      }
-                    : undefined
+        <ArtifactScansTable
+          allowMutationActions={canMutateCurrentScope}
+          artifacts={filteredArtifacts}
+          childRefreshKey={childRefreshKey}
+          emptyState={
+            scanView === 'active'
+              ? {
+                  title: 'No active scans',
+                  description: 'Queued and running scans will appear here automatically.',
                 }
-                expanded={expanded}
-                hasActiveFilters={hasFilterBeyondView}
-                images={filteredImages}
-                loading={loading}
-                onCancel={(scanId, imageName) => handleCancel(scanId, imageName)}
-                onDelete={(scanId, imageName) => handleDelete(scanId, imageName)}
-                onExpandedChange={setExpanded}
-                allowMutationActions={canMutateCurrentScope}
-                onSelectedScansChange={setSelectedScans}
-                onSelectImageScans={(imageName, selected, latestScanId, visibleScanIds) =>
-                  handleParentScanSelection(imageName, selected, latestScanId, visibleScanIds)
-                }
-                onSelectScan={(scanId, selected) => {
-                  if (selected) {
-                    setSelectedScans((previous) => new Set(previous).add(scanId));
-                  } else {
-                    setSelectedScans((previous) => {
-                      const next = new Set(previous);
-                      next.delete(scanId);
-                      return next;
-                    });
-                  }
-                }}
-                scanUsersById={scanUsersById}
-                selectedScans={selectedScans}
-              />
-            ) : (
-              <div className="space-y-5">
-                {groupedImages.map((group) => (
-                  <Card key={group.key} className="surface-panel rounded-2xl p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-900 dark:text-white">
-                          {group.label}
-                        </p>
-                        <p className="mt-1 text-xs text-zinc-500">
-                          {group.images.length} image{group.images.length !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-                    </div>
-                    <ImageScansTable
-                      childRefreshKey={childRefreshKey}
-                      collectionFilter={
-                        collectionFilter ||
-                        (group.key === '__unassigned__' ? '__none__' : group.key)
-                      }
-                      emptyState={
-                        scanView === 'active'
-                          ? {
-                              title: 'No active scans',
-                              description:
-                                'Queued and running scans will appear here automatically.',
-                            }
-                          : undefined
-                      }
-                      expanded={expanded}
-                      expansionScope={group.key}
-                      hasActiveFilters={hasFilterBeyondView}
-                      images={group.images}
-                      loading={loading}
-                      onCancel={(scanId, imageName) => handleCancel(scanId, imageName)}
-                      onDelete={(scanId, imageName) => handleDelete(scanId, imageName)}
-                      onExpandedChange={setExpanded}
-                      allowMutationActions={canMutateCurrentScope}
-                      onSelectedScansChange={setSelectedScans}
-                      onSelectImageScans={(imageName, selected, latestScanId, visibleScanIds) =>
-                        handleParentScanSelection(imageName, selected, latestScanId, visibleScanIds)
-                      }
-                      onSelectScan={(scanId, selected) => {
-                        if (selected) {
-                          setSelectedScans((previous) => new Set(previous).add(scanId));
-                        } else {
-                          setSelectedScans((previous) => {
-                            const next = new Set(previous);
-                            next.delete(scanId);
-                            return next;
-                          });
-                        }
-                      }}
-                      scanUsersById={scanUsersById}
-                      selectedScans={selectedScans}
-                    />
-                  </Card>
-                ))}
-              </div>
-            )
-          ) : (
-            <ImageScansTable
-              childRefreshKey={childRefreshKey}
-              collectionFilter={collectionFilter}
-              emptyState={
-                scanView === 'active'
-                  ? {
-                      title: 'No active scans',
-                      description: 'Queued and running scans will appear here automatically.',
-                    }
-                  : undefined
-              }
-              expanded={expanded}
-              hasActiveFilters={hasFilterBeyondView}
-              images={filteredImages}
-              loading={loading}
-              onCancel={(scanId, imageName) => handleCancel(scanId, imageName)}
-              onDelete={(scanId, imageName) => handleDelete(scanId, imageName)}
-              onExpandedChange={setExpanded}
-              allowMutationActions={canMutateCurrentScope}
-              onSelectedScansChange={setSelectedScans}
-              onSelectImageScans={(imageName, selected, latestScanId, visibleScanIds) =>
-                handleParentScanSelection(imageName, selected, latestScanId, visibleScanIds)
-              }
-              onSelectScan={(scanId, selected) => {
-                if (selected) {
-                  setSelectedScans((previous) => new Set(previous).add(scanId));
-                } else {
-                  setSelectedScans((previous) => {
-                    const next = new Set(previous);
-                    next.delete(scanId);
-                    return next;
-                  });
-                }
-              }}
-              scanUsersById={scanUsersById}
-              selectedScans={selectedScans}
-            />
-          )}
-        </>
+              : undefined
+          }
+          expanded={expanded}
+          hasActiveFilters={hasFilterBeyondView}
+          loading={loading}
+          onCancel={handleCancel}
+          onDelete={handleDelete}
+          onExpandedChange={setExpanded}
+          onSelectedScansChange={setSelectedScans}
+          selectedScans={selectedScans}
+        />
       )}
 
       {/* Pagination */}

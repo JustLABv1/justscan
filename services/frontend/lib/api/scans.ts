@@ -7,6 +7,7 @@ import type {
 } from './types/orgs';
 import type {
   BulkDeleteScansResponse,
+  ArtifactSummary,
   ImageSummary,
   SBOMComponent,
   Scan,
@@ -30,7 +31,9 @@ export const listScans = (
   helmChart?: string,
   collection?: string,
   from?: string,
-  to?: string
+  to?: string,
+  imageTag?: string,
+  query?: string
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
@@ -41,8 +44,30 @@ export const listScans = (
   if (collection) params.set('collection', collection);
   if (from) params.set('from', from);
   if (to) params.set('to', to);
+  if (imageTag) params.set('image_tag', imageTag);
+  if (query) params.set('q', query);
   appendScope(params);
   return req<{ data: Scan[]; total: number }>('GET', `/api/v1/scans/?${params}`);
+};
+
+export const listScanArtifacts = (
+  page = 1,
+  limit = 30,
+  query?: string,
+  status?: string,
+  critical?: '' | 'yes' | 'no',
+  collection?: string
+) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (query) params.set('q', query);
+  if (status) params.set('status', status);
+  if (critical) params.set('critical', critical);
+  if (collection) params.set('collection', collection);
+  appendScope(params);
+  return req<{ data: ArtifactSummary[]; total: number }>(
+    'GET',
+    `/api/v1/scans/artifacts?${params}`
+  );
 };
 
 export const listScanImages = (

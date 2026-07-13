@@ -1038,28 +1038,29 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     </Drawer.Content>
                   </Drawer.Backdrop>
                 </Drawer>
-                <div id="tour-workspace-section" className="hidden min-w-0 md:flex md:flex-1 md:items-center">
+                <div
+                  id="tour-workspace-section"
+                  className="hidden min-w-0 md:flex md:flex-1 md:items-center"
+                >
                   <Dropdown>
-                    <Dropdown.Trigger id="tour-workspace-switcher">
-                      <Button
-                        aria-label={workspaceTitle}
-                        className="h-9 max-w-[180px] justify-between gap-1.5 rounded-full px-2 text-zinc-700 dark:text-zinc-200"
-                        variant="tertiary"
-                      >
-                        <div className="flex min-w-0 items-center gap-1.5">
-                          <Avatar
-                            className="size-5 shrink-0 rounded-full"
-                            color={activeWorkspaceColor}
-                            variant="soft"
-                          >
-                            <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
-                          </Avatar>
-                          <span className="min-w-0 truncate text-sm font-medium text-current">
-                            {workspaceTriggerLabel}
-                          </span>
-                        </div>
-                        <ArrowDown01Icon size={12} className="shrink-0 text-zinc-500" />
-                      </Button>
+                    <Dropdown.Trigger
+                      id="tour-workspace-switcher"
+                      aria-label={workspaceTitle}
+                      className="flex h-9 max-w-[180px] items-center justify-between gap-1.5 rounded-full px-2 text-zinc-700 outline-none transition-colors hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-accent/40 dark:text-zinc-200 dark:hover:bg-white/10"
+                    >
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <Avatar
+                          className="size-5 shrink-0 rounded-full"
+                          color={activeWorkspaceColor}
+                          variant="soft"
+                        >
+                          <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
+                        </Avatar>
+                        <span className="min-w-0 truncate text-sm font-medium text-current">
+                          {workspaceTriggerLabel}
+                        </span>
+                      </div>
+                      <ArrowDown01Icon size={12} className="shrink-0 text-zinc-500" />
                     </Dropdown.Trigger>
                     <Dropdown.Popover className="min-w-[240px]" placement="bottom start">
                       {renderWorkspaceMenu()}
@@ -1175,11 +1176,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       <div className="min-w-0 flex-1">
                         <h1 className="flex flex-wrap items-center gap-1.5 text-lg font-semibold tracking-tight md:text-xl">
                           {topbarHeader.icon ? (
-                            <SurfaceIcon
-                              icon={topbarHeader.icon}
-                              size="sm"
-                              className="mr-0.5"
-                            />
+                            <SurfaceIcon icon={topbarHeader.icon} size="sm" className="mr-0.5" />
                           ) : null}
                           <span>{topbarHeader.title}</span>
                           {topbarHeader.titleCom}

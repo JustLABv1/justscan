@@ -45,14 +45,13 @@ interface SharedChildProps {
 interface ImageScansTableProps extends SharedChildProps {
   allowMutationActions?: boolean;
   collectionFilter?: string;
+  emptyState?: { description: string; title: string };
   expanded: Set<string>;
   expansionScope?: string;
   hasActiveFilters: boolean;
   images: ImageSummary[];
   loading: boolean;
-  onClearFilters: () => void;
   onExpandedChange: (next: Set<string>) => void;
-  onOpenCreateModal: () => void;
   onSelectedScansChange: Dispatch<SetStateAction<Set<string>>>;
   onSelectImageScans?: (
     imageName: string,
@@ -101,11 +100,7 @@ function failedPolicyDetails(summary?: ComplianceSummary | null) {
   return failedPolicyNames(summary).map((name) => ({ name, ruleSummaries: [] as string[] }));
 }
 
-function PolicyFailureIndicator({
-  summary,
-}: {
-  summary?: ComplianceSummary | null;
-}) {
+function PolicyFailureIndicator({ summary }: { summary?: ComplianceSummary | null }) {
   const failedPolicies = failedPolicyDetails(summary);
   if (failedPolicies.length === 0) {
     return null;
@@ -231,7 +226,12 @@ function ScanSelectionCheckbox({
         <Checkbox.Control>
           <Checkbox.Indicator>
             {isIndeterminate ? (
-              <svg aria-hidden className="size-3 text-accent-foreground" fill="none" viewBox="0 0 24 24">
+              <svg
+                aria-hidden
+                className="size-3 text-accent-foreground"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
                 <line
                   x1="21"
                   x2="3"
@@ -662,11 +662,10 @@ export function ImageScansTable({
   images,
   loading,
   collectionFilter,
+  emptyState,
   onCancel,
-  onClearFilters,
   onDelete,
   onExpandedChange,
-  onOpenCreateModal,
   onSelectedScansChange,
   onSelectImageScans,
   onSelectScan,
@@ -831,18 +830,15 @@ export function ImageScansTable({
                   <div className="py-4">
                     <EmptyState
                       icon={<Shield01Icon size={28} />}
-                      title={hasActiveFilters ? 'No images match your filters' : 'No scans yet'}
-                      description={
-                        hasActiveFilters
-                          ? 'Try a different filter combination or clear filters.'
-                          : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.'
+                      title={
+                        emptyState?.title ??
+                        (hasActiveFilters ? 'No images match your filters' : 'No scans yet')
                       }
-                      action={
-                        hasActiveFilters
-                          ? { label: 'Clear Filters', onClick: onClearFilters }
-                          : allowMutationActions
-                            ? { label: '+ New Scan', onClick: onOpenCreateModal }
-                            : undefined
+                      description={
+                        emptyState?.description ??
+                        (hasActiveFilters
+                          ? 'Adjust or clear filters above to widen the results.'
+                          : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.')
                       }
                     />
                   </div>
@@ -971,7 +967,10 @@ export function ImageScansTable({
                           </div>
                         </div>
                         <div className="mt-2">
-                          <CollectionBadgeList collections={img.collections} emptyLabel="No collections" />
+                          <CollectionBadgeList
+                            collections={img.collections}
+                            emptyLabel="No collections"
+                          />
                         </div>
                       </Table.Cell>
                       <Table.Cell

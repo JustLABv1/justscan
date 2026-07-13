@@ -32,6 +32,7 @@ import {
   Autocomplete,
   Button,
   Card,
+  Disclosure,
   Label,
   ListBox,
   Radio,
@@ -170,6 +171,7 @@ export default function NewScanPage() {
   const [additionalImageEntries, setAdditionalImageEntries] = useState<string[]>([]);
   const [scanSource, setScanSource] = useState<ScanSourceKind | null>(null);
   const [isSourceExpanded, setIsSourceExpanded] = useState(true);
+  const [optionalSettingsExpanded, setOptionalSettingsExpanded] = useState(false);
   const [platform, setPlatform] = useState('');
   const [uploadedArchiveFile, setUploadedArchiveFile] = useState<File | null>(null);
   const [registryId, setRegistryId] = useState('');
@@ -640,6 +642,21 @@ export default function NewScanPage() {
                         No scan source is currently available in this deployment.
                       </p>
                     ) : null}
+                    {privateRegistries.length === 0 || xrayRegistries.length === 0 ? (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-border bg-surface-secondary px-3 py-3">
+                        <p className="text-sm text-muted">
+                          Private and Artifactory scan routes become available after their registry
+                          is configured.
+                        </p>
+                        <Button
+                          onPress={() => router.push('/registries')}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          Manage registries
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 </Accordion.Body>
               </Accordion.Panel>
@@ -845,110 +862,139 @@ export default function NewScanPage() {
         ) : null}
 
         {scanSource ? (
-          <ScanSection
-            title="Optional settings"
-            description="Add more image targets or pin a platform only when you need to."
+          <Disclosure
+            isExpanded={optionalSettingsExpanded}
+            onExpandedChange={setOptionalSettingsExpanded}
+            className="surface-panel overflow-hidden rounded-2xl"
           >
-            {scanSource !== 'local_archive' ? (
-              <ScanWizardField
-                description="Paste one or many full image references, separated by commas or new lines. Anything still in this box is included when you start the scan."
-                label="Queue more images"
-                optional
-              >
-                <TextArea
-                  className={joinClassNames(inputCls, 'min-h-24 bg-surface resize-y')}
-                  placeholder={'ghcr.io/example/api:1.2.3\nregistry.example.com/team/worker:latest'}
-                  value={additionalImageDraft}
-                  onChange={(e) => setAdditionalImageDraft(e.target.value)}
-                />
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="shrink-0"
-                    onPress={addAdditionalImagesFromDraft}
-                  >
-                    Add{' '}
-                    {pendingAdditionalImages.length > 1
-                      ? `${pendingAdditionalImages.length} refs`
-                      : 'to list'}
-                  </Button>
+            <Disclosure.Heading>
+              <Disclosure.Trigger className="flex w-full items-start justify-between gap-4 px-5 py-5 text-left transition-colors hover:bg-surface-secondary/60">
+                <div className="min-w-0 space-y-1.5">
+                  <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                    Optional settings
+                  </h2>
+                  <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                    Add more image targets or pin a platform only when you need to.
+                  </p>
                 </div>
-                {additionalImageEntries.length > 0 ? (
-                  <div
-                    className="rounded-2xl p-3"
-                    style={{
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid var(--surface-border)',
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-medium text-zinc-500">Queued image targets</p>
-                      <span
-                        className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-500"
-                        style={{
-                          background: 'rgba(255,255,255,0.05)',
-                          border: '1px solid var(--surface-border)',
-                        }}
-                      >
-                        {additionalImageEntries.length}
-                      </span>
-                    </div>
-                    <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
-                      {additionalImageEntries.map((image) => (
+                <Disclosure.Indicator className="mt-1 shrink-0 text-zinc-400">
+                  <ArrowDown01Icon size={16} />
+                </Disclosure.Indicator>
+              </Disclosure.Trigger>
+            </Disclosure.Heading>
+            <Disclosure.Content>
+              <Disclosure.Body className="border-t border-surface-border px-5 py-5">
+                <div className="space-y-4">
+                  {scanSource !== 'local_archive' ? (
+                    <ScanWizardField
+                      description="Paste one or many full image references, separated by commas or new lines. Anything still in this box is included when you start the scan."
+                      label="Queue more images"
+                      optional
+                    >
+                      <TextArea
+                        className={joinClassNames(inputCls, 'min-h-24 bg-surface resize-y')}
+                        placeholder={
+                          'ghcr.io/example/api:1.2.3\nregistry.example.com/team/worker:latest'
+                        }
+                        value={additionalImageDraft}
+                        onChange={(e) => setAdditionalImageDraft(e.target.value)}
+                      />
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="shrink-0"
+                          onPress={addAdditionalImagesFromDraft}
+                        >
+                          Add{' '}
+                          {pendingAdditionalImages.length > 1
+                            ? `${pendingAdditionalImages.length} refs`
+                            : 'to list'}
+                        </Button>
+                      </div>
+                      {additionalImageEntries.length > 0 ? (
                         <div
-                          key={image}
-                          className="flex items-start justify-between gap-3 rounded-xl px-3 py-2"
+                          className="rounded-2xl p-3"
                           style={{
                             background: 'rgba(255,255,255,0.03)',
                             border: '1px solid var(--surface-border)',
                           }}
                         >
-                          <span className="min-w-0 break-all font-mono text-xs text-zinc-600 dark:text-zinc-300">
-                            {image}
-                          </span>
-                          <button
-                            aria-label={`Remove ${image}`}
-                            className="btn-icon-subtle size-8 shrink-0 rounded-lg"
-                            onClick={() => removeAdditionalImageEntry(image)}
-                            type="button"
-                          >
-                            <Cancel01Icon aria-hidden size={14} />
-                          </button>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs font-medium text-zinc-500">
+                              Queued image targets
+                            </p>
+                            <span
+                              className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-500"
+                              style={{
+                                background: 'rgba(255,255,255,0.05)',
+                                border: '1px solid var(--surface-border)',
+                              }}
+                            >
+                              {additionalImageEntries.length}
+                            </span>
+                          </div>
+                          <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
+                            {additionalImageEntries.map((image) => (
+                              <div
+                                key={image}
+                                className="flex items-start justify-between gap-3 rounded-xl px-3 py-2"
+                                style={{
+                                  background: 'rgba(255,255,255,0.03)',
+                                  border: '1px solid var(--surface-border)',
+                                }}
+                              >
+                                <span className="min-w-0 break-all font-mono text-xs text-zinc-600 dark:text-zinc-300">
+                                  {image}
+                                </span>
+                                <button
+                                  aria-label={`Remove ${image}`}
+                                  className="btn-icon-subtle size-8 shrink-0 rounded-lg"
+                                  onClick={() => removeAdditionalImageEntry(image)}
+                                  type="button"
+                                >
+                                  <Cancel01Icon aria-hidden size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </ScanWizardField>
-            ) : null}
+                      ) : null}
+                    </ScanWizardField>
+                  ) : null}
 
-            <ScanWizardField label="Platform" optional>
-              <Select
-                value={platform || '__auto__'}
-                onChange={(value) => setPlatform(String(value === '__auto__' ? '' : (value ?? '')))}
-                variant="secondary"
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="__auto__">Auto-detect</ListBox.Item>
-                    <ListBox.Item id="linux/amd64">linux/amd64</ListBox.Item>
-                    <ListBox.Item id="linux/arm64">linux/arm64</ListBox.Item>
-                    <ListBox.Item id="linux/arm/v7">linux/arm/v7</ListBox.Item>
-                    <ListBox.Item id="linux/arm/v6">linux/arm/v6</ListBox.Item>
-                    <ListBox.Item id="linux/386">linux/386</ListBox.Item>
-                    <ListBox.Item id="linux/s390x">linux/s390x</ListBox.Item>
-                    <ListBox.Item id="linux/ppc64le">linux/ppc64le</ListBox.Item>
-                    <ListBox.Item id="windows/amd64">windows/amd64</ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-            </ScanWizardField>
-          </ScanSection>
+                  <ScanWizardField label="Platform" optional>
+                    <Select
+                      value={platform || '__auto__'}
+                      onChange={(value) =>
+                        setPlatform(String(value === '__auto__' ? '' : (value ?? '')))
+                      }
+                      variant="secondary"
+                    >
+                      <Label className="sr-only">Platform</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__auto__">Auto-detect</ListBox.Item>
+                          <ListBox.Item id="linux/amd64">linux/amd64</ListBox.Item>
+                          <ListBox.Item id="linux/arm64">linux/arm64</ListBox.Item>
+                          <ListBox.Item id="linux/arm/v7">linux/arm/v7</ListBox.Item>
+                          <ListBox.Item id="linux/arm/v6">linux/arm/v6</ListBox.Item>
+                          <ListBox.Item id="linux/386">linux/386</ListBox.Item>
+                          <ListBox.Item id="linux/s390x">linux/s390x</ListBox.Item>
+                          <ListBox.Item id="linux/ppc64le">linux/ppc64le</ListBox.Item>
+                          <ListBox.Item id="windows/amd64">windows/amd64</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </ScanWizardField>
+                </div>
+              </Disclosure.Body>
+            </Disclosure.Content>
+          </Disclosure>
         ) : null}
 
         {scanSource ? (
@@ -976,10 +1022,7 @@ export default function NewScanPage() {
           </Card>
         ) : null}
 
-        <div className="flex items-center justify-end gap-3">
-          <Button onPress={() => router.push('/scans')} variant="outline">
-            Cancel
-          </Button>
+        <div className="flex items-center justify-end">
           <Button
             type="submit"
             isDisabled={

@@ -16,6 +16,7 @@ import {
   getRecentActivityBounds,
   RECENT_ACTIVITY_RANGE_OPTIONS,
   RecentActivityRange,
+  RecentActivityRow,
 } from '@/components/scans/recent-activity';
 import { StatusBadge } from '@/components/ui/badges';
 import {
@@ -27,6 +28,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
 import { SurfaceIcon } from '@/components/ui/surface-icon';
 import { DashboardLoadingSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
+import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   DashboardStats,
@@ -47,7 +49,7 @@ import {
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 import { getWatchlistPolicyAttentionItems } from '@/lib/watchlist-posture';
-import { Button, Card, Chip, useOverlayState } from '@heroui/react';
+import { Alert, Button, Card, Chip, useOverlayState } from '@heroui/react';
 import {
   AlertCircleIcon,
   ArrowRight01Icon,
@@ -56,6 +58,7 @@ import {
   Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 
 // ── severity config ──────────────────────────────────────────────────
@@ -468,7 +471,8 @@ function getDashboardFocus({
       summary: {
         label: 'Needs action',
         title: 'Blocked or failed scans need review',
-        description: 'Delivery-impacting scan outcomes should be reviewed before broader hygiene work.',
+        description:
+          'Delivery-impacting scan outcomes should be reviewed before broader hygiene work.',
         tone: 'danger',
       },
       title: 'Start with policy issues or failed scans',
@@ -490,7 +494,8 @@ function getDashboardFocus({
       summary: {
         label: 'Coverage gaps',
         title: 'Coverage confidence needs follow-up',
-        description: 'Freshness gaps or scanner health issues reduce trust in the dashboard signal.',
+        description:
+          'Freshness gaps or scanner health issues reduce trust in the dashboard signal.',
         tone: 'warning',
       },
       title: 'Coverage needs a quick review',
@@ -660,7 +665,10 @@ function DashboardFocusCard({
             <p className="text-sm leading-6 text-muted">{description}</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">{primaryAction}{secondaryAction}</div>
+        <div className="flex flex-wrap gap-2">
+          {primaryAction}
+          {secondaryAction}
+        </div>
       </div>
     </Card>
   );
@@ -694,6 +702,71 @@ function DashboardSectionHeader({
       </div>
       {action}
     </div>
+  );
+}
+
+function ScanActivityCard({
+  activeScans,
+  recentResults,
+}: {
+  activeScans: Scan[];
+  recentResults: Scan[];
+}) {
+  return (
+    <Card className="p-4">
+      <DashboardSectionHeader
+        title="Scan activity"
+        icon={<Shield01Icon size={16} />}
+        description="Running work and the latest finalized results"
+        action={
+          <Link
+            href="/scans"
+            className="text-xs font-medium text-accent hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
+          >
+            View all scans →
+          </Link>
+        }
+      />
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <div className="min-w-0">
+          <div className="flex items-center justify-between gap-2 px-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Active</p>
+            <Chip color={activeScans.length > 0 ? 'accent' : 'default'} size="sm" variant="soft">
+              {activeScans.length}
+            </Chip>
+          </div>
+          {activeScans.length > 0 ? (
+            <div className="mt-2 space-y-1">
+              {activeScans.slice(0, 3).map((scan) => (
+                <RecentActivityRow key={scan.id} scan={scan} />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 rounded-xl border border-surface-border bg-surface-secondary px-3 py-4 text-sm text-muted">
+              No scans are currently running.
+            </p>
+          )}
+        </div>
+
+        <div className="min-w-0">
+          <p className="px-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+            Recent results
+          </p>
+          {recentResults.length > 0 ? (
+            <div className="mt-2 space-y-1">
+              {recentResults.slice(0, 3).map((scan) => (
+                <RecentActivityRow key={scan.id} scan={scan} />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 rounded-xl border border-surface-border bg-surface-secondary px-3 py-4 text-sm text-muted">
+              No finalized scans yet.
+            </p>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -761,7 +834,7 @@ function AttentionQueueCard({
     },
     {
       key: 'running',
-      label: 'In flight',
+      label: 'Active scans',
       value: activeQueueCount,
       detail: 'Queued or running scan work',
       tone: 'accent' as const,
@@ -801,9 +874,7 @@ function AttentionQueueCard({
               className="group min-w-0 rounded-xl border border-surface-border bg-surface-secondary px-3 py-2.5 text-left transition-colors hover:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
             >
               <span className="flex items-center justify-between gap-3">
-                <span className="truncate text-sm font-semibold text-foreground">
-                  {item.label}
-                </span>
+                <span className="truncate text-sm font-semibold text-foreground">{item.label}</span>
                 <Chip color={item.tone} size="sm" variant="soft">
                   {item.value.toLocaleString()}
                 </Chip>
@@ -1157,6 +1228,7 @@ function VulnTrendChart({
 
 // ── page ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const router = useRouter();
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const drilldownModal = useOverlayState();
@@ -1174,9 +1246,6 @@ export default function DashboardPage() {
   const [modalScansLoading, setModalScansLoading] = useState(false);
   const [modalScansError, setModalScansError] = useState('');
   const [watchlistOverviewItems, setWatchlistOverviewItems] = useState<WatchlistItem[]>([]);
-  const [recentProblemScans, setRecentProblemScans] = useState<Scan[]>([]);
-  const [recentProblemScansLoading, setRecentProblemScansLoading] = useState(true);
-  const [recentProblemScansError, setRecentProblemScansError] = useState('');
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
   const [watchlistError, setWatchlistError] = useState('');
@@ -1194,6 +1263,19 @@ export default function DashboardPage() {
   const failedScansTrend = useMemo(
     () => buildTrendSeries(trends, 7, (point) => point.failed),
     [trends]
+  );
+  const hasActiveScans = (stats?.attention_scans ?? []).some(
+    (scan) => scan.status === 'pending' || scan.status === 'running'
+  );
+
+  useConditionalInterval(
+    () => {
+      getStats()
+        .then(setStats)
+        .catch(() => {});
+    },
+    hasActiveScans,
+    5000
   );
 
   useEffect(() => {
@@ -1227,31 +1309,7 @@ export default function DashboardPage() {
         .catch((watchlistLoadError: Error) => {
           setWatchlistOverviewItems([]);
           console.warn('Failed to load watchlist overview', watchlistLoadError);
-        })
-    });
-  }, [scopeKey]);
-
-  useEffect(() => {
-    return deferEffect(() => {
-      const { from, to } = getRecentActivityBounds('7d');
-      setRecentProblemScansLoading(true);
-      setRecentProblemScansError('');
-
-      listScans(1, 20, undefined, undefined, undefined, undefined, undefined, undefined, from, to)
-        .then((result) => {
-          const items = (result.data ?? [])
-            .filter(isProblemScan)
-            .sort((left, right) => {
-              return Date.parse(problemScanTime(right)) - Date.parse(problemScanTime(left));
-            })
-            .slice(0, 5);
-          setRecentProblemScans(items);
-        })
-        .catch((recentProblemError: Error) => {
-          setRecentProblemScans([]);
-          setRecentProblemScansError(recentProblemError.message);
-        })
-        .finally(() => setRecentProblemScansLoading(false));
+        });
     });
   }, [scopeKey]);
 
@@ -1324,19 +1382,14 @@ export default function DashboardPage() {
   const criticalHighCount =
     (stats.severity_totals.critical ?? 0) + (stats.severity_totals.high ?? 0);
   const failedStatusCount = stats.status_counts['failed'] ?? 0;
-  const activeQueueCount =
-    (stats.status_counts['running'] ?? 0) + (stats.status_counts['pending'] ?? 0);
   const policyIssueCount =
     stats.operations?.blocked_policy_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
-  const xrayBlockedCount = stats.operations?.xray_blocked_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
-  const orgPolicyFailCount = stats.operations?.org_policy_fail_count ?? 0;
+  const xrayBlockedCount =
+    stats.operations?.xray_blocked_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
   const genericFailedCount = Math.max(0, failedStatusCount - xrayBlockedCount);
-  const activeXrayCount = stats.operations?.active_xray_count ?? 0;
   const completedCount = stats.status_counts['completed'] ?? 0;
   const needsAttentionTotal = genericFailedCount + policyIssueCount;
   const watchlistCoverage = getWatchlistCoverage(watchlistOverviewItems, stats.watchlist_count);
-  const watchlistPolicyAttentionItems = getWatchlistPolicyAttentionItems(watchlistOverviewItems);
-  const watchlistPolicyAttentionCount = watchlistPolicyAttentionItems.length;
   const criticalHighTrend = getCriticalHighTrend(vulnTrends);
   const riskSummary = getRiskSummary({
     criticalHighCount,
@@ -1349,28 +1402,13 @@ export default function DashboardPage() {
     scannerHealth,
     scannerHealthError,
   });
-  const dashboardFocus = getDashboardFocus({
-    criticalHighCount,
-    totalVulns,
-    genericFailedCount,
-    policyIssueCount,
-    watchlistPolicyAttentionCount,
-    watchlistCoverage,
-    scannerReady,
-  });
   const triageDefaultHref = buildTriageHref();
-  const triageWatchlistPolicyHref = buildTriageHref({ kind: 'watchlist', priority: 'high', query: 'policy' });
-  const triageWatchlistStaleHref = buildTriageHref({ kind: 'watchlist', priority: 'medium', query: 'stale' });
-  const triagePolicyHref = buildTriageHref({ kind: 'policy', priority: 'critical' });
-  const triageFailedHref = buildTriageHref({ kind: 'scan', query: 'failed' });
-  const triageRunningHref = buildTriageHref({ kind: 'scan', priority: 'medium', query: 'in flight' });
   const triageCriticalHighHref = buildTriageHref({ kind: 'fix', priority: 'high' });
   const displayedModalScans = modalScans;
   const recentActivityRangeLabel =
     RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === recentActivityRange)?.label ??
     'Last 24 hours';
   const recentActivityHref = buildRecentActivityHref(recentActivityRange);
-  const recentProblemScansHref = buildRecentActivityHref('7d');
   const severeFindingsTrendChip = getTrendChip(severeFindingsTrend, {
     stableLabel: 'Severity stable',
     noDataLabel: 'No trend yet',
@@ -1387,6 +1425,11 @@ export default function DashboardPage() {
         : watchlistCoverage.staleItems.length > 0 || watchlistCoverage.neverScannedCount > 0
           ? { label: 'Needs review', tone: 'warning' }
           : { label: 'Monitoring', tone: 'accent' };
+  const activeScans = (stats.attention_scans ?? []).filter(
+    (scan) => scan.status === 'pending' || scan.status === 'running'
+  );
+  const activeScanIds = new Set(activeScans.map((scan) => scan.id));
+  const recentResults = (stats.recent_scans ?? []).filter((scan) => !activeScanIds.has(scan.id));
 
   function prepareDrilldown(card: DashboardDrilldownKey) {
     if (card === 'watchlist') {
@@ -1415,28 +1458,35 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <PageHeader hidden title="Dashboard" />
-
-      <DashboardFocusCard
-        summary={dashboardFocus.summary}
-        title={dashboardFocus.title}
-        description={dashboardFocus.description}
-        primaryAction={
-          <Link href={dashboardFocus.primaryActionHref}>
-            <Button>
-              {dashboardFocus.primaryActionLabel}
-              <ArrowRight01Icon />
-            </Button>
-          </Link>
-        }
-        secondaryAction={
-          dashboardFocus.secondaryActionHref && dashboardFocus.secondaryActionLabel ? (
-            <Link href={dashboardFocus.secondaryActionHref}>
-              <Button variant="secondary">{dashboardFocus.secondaryActionLabel}</Button>
-            </Link>
-          ) : undefined
+      <PageHeader
+        title="Dashboard"
+        description="Scan activity and security posture for the current workspace."
+        actions={
+          <Button
+            className="inline-flex items-center gap-2"
+            onPress={() => router.push('/scans/new')}
+          >
+            Start scan
+            <ArrowRight01Icon size={15} />
+          </Button>
         }
       />
+
+      {!scannerReady ? (
+        <Alert status="warning">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Scanner health needs attention</Alert.Title>
+            <Alert.Description>
+              {scannerHealthError ||
+                'One or more local scanner workers are stale or unavailable, so new results may be delayed.'}
+            </Alert.Description>
+          </Alert.Content>
+          <Button onPress={() => router.push('/admin/scanner')} size="sm" variant="secondary">
+            Review scanner
+          </Button>
+        </Alert>
+      ) : null}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <BriefingMetric
@@ -1470,46 +1520,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      {genericFailedCount > 0 ||
-      policyIssueCount > 0 ||
-      watchlistPolicyAttentionCount > 0 ||
-      activeQueueCount > 0 ||
-      watchlistCoverage.staleItems.length > 0 ||
-      recentProblemScansLoading ||
-      Boolean(recentProblemScansError) ||
-      recentProblemScans.length > 0 ? (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {genericFailedCount > 0 ||
-          policyIssueCount > 0 ||
-          watchlistPolicyAttentionCount > 0 ||
-          activeQueueCount > 0 ||
-          watchlistCoverage.staleItems.length > 0 ? (
-            <AttentionQueueCard
-              genericFailedCount={genericFailedCount}
-              policyIssueCount={policyIssueCount}
-              xrayBlockedCount={xrayBlockedCount}
-              orgPolicyFailCount={orgPolicyFailCount}
-              watchlistPolicyAttentionCount={watchlistPolicyAttentionCount}
-              activeQueueCount={activeQueueCount}
-              staleItems={watchlistCoverage.staleItems}
-              triageDefaultHref={triageDefaultHref}
-              triageWatchlistPolicyHref={triageWatchlistPolicyHref}
-              triageWatchlistStaleHref={triageWatchlistStaleHref}
-              triagePolicyHref={triagePolicyHref}
-              triageFailedHref={triageFailedHref}
-              triageRunningHref={triageRunningHref}
-            />
-          ) : null}
-          {recentProblemScansLoading || Boolean(recentProblemScansError) || recentProblemScans.length > 0 ? (
-            <RecentProblemScansCard
-              scans={recentProblemScans}
-              loading={recentProblemScansLoading}
-              error={recentProblemScansError}
-              href={recentProblemScansHref}
-            />
-          ) : null}
-        </div>
-      ) : null}
+      <ScanActivityCard activeScans={activeScans} recentResults={recentResults} />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.55fr)]">
         <VulnTrendChart
@@ -1553,11 +1564,6 @@ export default function DashboardPage() {
             >
               No trend data yet
             </div>
-          )}
-          {activeXrayCount > 0 && (
-            <p className="mt-3 text-xs" style={{ color: '#60a5fa' }}>
-              {activeXrayCount} Xray scan{activeXrayCount === 1 ? '' : 's'} in flight
-            </p>
           )}
         </Card>
       </div>

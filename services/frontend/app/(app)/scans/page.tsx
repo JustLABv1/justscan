@@ -1154,8 +1154,8 @@ export default function ScansPage() {
               onSelectionChange={(key) => handleViewChange(String(key) as ScansView)}
               variant="secondary"
             >
-              <Tabs.ListContainer>
-                <Tabs.List aria-label="Scan views">
+              <Tabs.ListContainer className="overflow-x-auto">
+                <Tabs.List aria-label="Scan views" className="min-w-max">
                   <Tabs.Tab className="whitespace-nowrap" id="images">
                     Images
                     <Tabs.Indicator />

@@ -1335,7 +1335,7 @@ export function ScanStepTimeline({
                             - Status {selectedXrayLog.status_code}
                           </p>
                           {selectedXrayLog.error && (
-                            <Alert status="danger" className="bg-danger-soft">
+                            <Alert status="danger">
                               <Alert.Indicator />
                               <Alert.Content>
                                 <Alert.Title>Unable to connect to server</Alert.Title>

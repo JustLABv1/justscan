@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusAlert } from '@/components/ui/form-alert';
 import { listAuditLogs } from '@/lib/api/admin';
 import type { AuditLog, AuditLogFilters } from '@/lib/api/types/admin';
 import { deferEffect } from '@/lib/defer-effect';
@@ -129,13 +130,7 @@ export function AuditTab() {
 
   return (
     <div className="space-y-4">
-      {error && (
-        <Card className="border border-danger/30 bg-danger/10">
-          <Card.Content>
-            <p className="text-sm text-danger">{error}</p>
-          </Card.Content>
-        </Card>
-      )}
+      {error ? <StatusAlert status="danger" title="Audit log failed to load" description={error} /> : null}
 
       <Card className="space-y-4">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">

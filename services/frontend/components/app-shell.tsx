@@ -78,7 +78,12 @@ import { FloatingAIChat } from '@/components/assistant/floating-ai-chat';
 import { Logo } from '@/components/logo';
 import { SearchModal } from '@/components/search';
 import { ToastProvider } from '@/components/toast';
-import { BreadcrumbItem, PageHeaderConfig, PageHeaderContext } from '@/components/ui/page-header';
+import {
+  BreadcrumbItem,
+  PAGE_HEADER_ACTIONS_ID,
+  PageHeaderConfig,
+  PageHeaderContext,
+} from '@/components/ui/page-header';
 import { SurfaceIcon } from '@/components/ui/surface-icon';
 
 type SidebarIcon = ComponentType<{
@@ -275,6 +280,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const mobileNav = useOverlayState();
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
   const [pageHeader, setPageHeader] = useState<PageHeaderConfig | null>(null);
+  const [pageHeaderActionsTarget, setPageHeaderActionsTarget] = useState<HTMLElement | null>(null);
   const [aiEnabled, setAIEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -563,7 +569,10 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     ? { ...fallbackHeader, ...pageHeader, icon: pageHeader.icon ?? fallbackHeader.icon }
     : fallbackHeader;
   const contentRailClass = 'px-4 md:px-6';
-  const pageHeaderContextValue = useMemo(() => ({ setHeader: setPageHeader }), []);
+  const pageHeaderContextValue = useMemo(
+    () => ({ setHeader: setPageHeader, actionsTarget: pageHeaderActionsTarget }),
+    [pageHeaderActionsTarget]
+  );
 
   function renderWorkspaceMenu(onSelected?: () => void) {
     return (
@@ -1209,11 +1218,11 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                         ) : null}
                       </div>
 
-                      {topbarHeader.actions ? (
-                        <div className="flex shrink-0 items-center gap-1.5 sm:justify-end">
-                          {topbarHeader.actions}
-                        </div>
-                      ) : null}
+                      <div
+                        id={PAGE_HEADER_ACTIONS_ID}
+                        ref={setPageHeaderActionsTarget}
+                        className="flex shrink-0 items-center gap-1.5 sm:justify-end empty:hidden"
+                      />
                     </div>
                   </div>
                 ) : null}

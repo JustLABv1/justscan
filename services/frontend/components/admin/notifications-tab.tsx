@@ -1,6 +1,7 @@
 'use client';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { StatusAlert } from '@/components/ui/form-alert';
 import {
   deleteNotificationChannel,
   listNotificationChannels,
@@ -157,21 +158,15 @@ export function NotificationsTab() {
 
   return (
     <div className="space-y-4">
-      {error && (
-        <Card className="border border-danger/30 bg-danger/10">
-          <Card.Content>
-            <p className="text-sm text-danger">{error}</p>
-          </Card.Content>
-        </Card>
-      )}
+      {error ? <StatusAlert status="danger" title="Notification channels failed to load" description={error} /> : null}
 
-      {feedback && (
-        <Card className={feedback.type === 'success' ? 'border border-success/30 bg-success/10' : 'border border-danger/30 bg-danger/10'}>
-          <Card.Content>
-            <p className={feedback.type === 'success' ? 'text-sm text-success' : 'text-sm text-danger'}>{feedback.text}</p>
-          </Card.Content>
-        </Card>
-      )}
+      {feedback ? (
+        <StatusAlert
+          status={feedback.type === 'success' ? 'success' : 'danger'}
+          title={feedback.type === 'success' ? 'Notification channel updated' : 'Notification action failed'}
+          description={feedback.text}
+        />
+      ) : null}
 
       <Card className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useToast } from '@/components/toast';
+import { StatusAlert } from '@/components/ui/form-alert';
 import {
   adminUpdateAuthSettings,
   adminUpdateMaintenanceSettings,
@@ -483,9 +484,7 @@ export function SettingsTab() {
               </div>
             </div>
             {maintenanceEnabled ? (
-              <div className="mt-3 rounded-lg border border-warning/30 bg-warning/10 p-2 text-xs text-warning">
-                Maintenance page is active.
-              </div>
+              <StatusAlert className="mt-3" status="warning" title="Maintenance page is active" />
             ) : null}
           </div>
 

@@ -10,6 +10,10 @@ import {
 } from '@/components/scans/recent-activity';
 import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
+import {
+  filterDisclosureBodyClassName,
+  FilterDisclosureTrigger,
+} from '@/components/ui/filter-toolbar';
 import { FormAlert } from '@/components/ui/form-alert';
 import { nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
@@ -57,7 +61,6 @@ import {
 } from '@heroui/react';
 import {
   Delete01Icon,
-  FilterIcon,
   GitCompareIcon,
   PencilEdit01Icon,
   PlusSignIcon,
@@ -1107,7 +1110,6 @@ export default function ScansPage() {
     criticalFilter,
     groupingMode,
   ].filter(Boolean).length;
-  const advancedFiltersActive = advancedFilterCount > 0;
   const headerDescription = hasRecentWindow
     ? totalForDisplay > 0
       ? `${totalForDisplay} scan event${totalForDisplay !== 1 ? 's' : ''} in ${activityRangeLabel.toLowerCase()}`
@@ -1184,75 +1186,67 @@ export default function ScansPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-end gap-3">
-            <SearchField
-              aria-label="Search images"
-              className="min-w-[220px] flex-1"
-              value={imageFilter}
-              onChange={handleImageFilterChange}
-              variant="secondary"
-            >
-              <Label className="sr-only">Search images</Label>
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input
-                  placeholder={
-                    hasRecentWindow
-                      ? 'Filter recent activity by image name…'
-                      : 'Filter by image name…'
-                  }
-                />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
-
-            {scanView === 'recent' ? (
-              <Select
-                value={activityRange || DEFAULT_ACTIVITY_RANGE}
-                onChange={(value) =>
-                  handleActivityRangeChange(String(value) as RecentActivityRange)
-                }
+          <Disclosure
+            isExpanded={advancedFiltersExpanded}
+            onExpandedChange={setAdvancedFiltersExpanded}
+            className="contents"
+          >
+            <div className="flex flex-wrap items-end gap-3">
+              <SearchField
+                aria-label="Search images"
+                className="min-w-[220px] flex-1"
+                value={imageFilter}
+                onChange={handleImageFilterChange}
                 variant="secondary"
               >
-                <Label>Time range</Label>
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {RECENT_ACTIVITY_RANGE_OPTIONS.map((option) => (
-                      <ListBox.Item key={option.id} id={option.id}>
-                        {option.label}
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-            ) : null}
-          </div>
+                <Label className="sr-only">Search images</Label>
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    placeholder={
+                      hasRecentWindow
+                        ? 'Filter recent activity by image name…'
+                        : 'Filter by image name…'
+                    }
+                  />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
 
-          <Disclosure
-            isExpanded={advancedFiltersExpanded || advancedFiltersActive}
-            onExpandedChange={setAdvancedFiltersExpanded}
-            className="rounded-xl border border-surface-border bg-surface-secondary"
-          >
-            <Disclosure.Heading>
-              <Disclosure.Trigger className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm font-medium text-foreground">
-                <span className="flex items-center gap-2">
-                  <FilterIcon size={15} />
-                  Filters
-                  {advancedFilterCount > 0 ? (
-                    <Chip color="accent" size="sm" variant="soft">
-                      {advancedFilterCount}
-                    </Chip>
-                  ) : null}
-                </span>
-                <Disclosure.Indicator />
-              </Disclosure.Trigger>
-            </Disclosure.Heading>
+              {scanView === 'recent' ? (
+                <Select
+                  value={activityRange || DEFAULT_ACTIVITY_RANGE}
+                  onChange={(value) =>
+                    handleActivityRangeChange(String(value) as RecentActivityRange)
+                  }
+                  variant="secondary"
+                >
+                  <Label>Time range</Label>
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {RECENT_ACTIVITY_RANGE_OPTIONS.map((option) => (
+                        <ListBox.Item key={option.id} id={option.id}>
+                          {option.label}
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              ) : null}
+
+              <FilterDisclosureTrigger activeCount={advancedFilterCount} />
+              {hasActiveFilters ? (
+                <Button onPress={handleClearFilters} variant="tertiary">
+                  Clear filters
+                </Button>
+              ) : null}
+            </div>
             <Disclosure.Content>
-              <Disclosure.Body className="border-t border-surface-border p-3">
+              <Disclosure.Body className={filterDisclosureBodyClassName}>
                 <div className="flex flex-wrap items-end gap-3">
                   {scanView !== 'active' ? (
                     <Select
@@ -1388,15 +1382,6 @@ export default function ScansPage() {
                     <Button onPress={() => openCollectionModal()} variant="secondary">
                       Manage collections
                     </Button>
-                    {hasActiveFilters ? (
-                      <Button
-                        className="inline-flex items-center gap-1.5"
-                        onPress={handleClearFilters}
-                        variant="secondary"
-                      >
-                        Clear filters
-                      </Button>
-                    ) : null}
                   </div>
                 </div>
               </Disclosure.Body>

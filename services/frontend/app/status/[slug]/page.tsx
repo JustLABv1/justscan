@@ -8,6 +8,7 @@ import {
   StatusMetrics,
 } from './_components/public-status-chrome';
 import { StatusBadge, formatStatusLabel, resolveDisplayStatus } from '@/components/ui/badges';
+import { StatusAlert } from '@/components/ui/form-alert';
 import type { StatusPageItem, StatusPageResponse, StatusPageScanSummary } from '@/lib/api';
 import {
   ApiError,
@@ -948,9 +949,7 @@ function StatusItemHistoryModal({
 
               <div className="space-y-4">
                 {historyError ? (
-                  <Card className="border border-danger/20 bg-danger/5 p-3 text-sm text-danger">
-                    {historyError}
-                  </Card>
+                  <StatusAlert status="danger" title="Scan history failed to load" description={historyError} />
                 ) : null}
 
                 <ScanTimeline

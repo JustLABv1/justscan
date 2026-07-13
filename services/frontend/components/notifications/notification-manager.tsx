@@ -2,6 +2,7 @@
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { FormField } from '@/components/ui/form-field';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { heroSelectTriggerClassName, heroTextAreaClassName } from '@/components/ui/form-styles';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import type {
@@ -605,31 +606,17 @@ export function NotificationManager({ basePath, heading, description }: Notifica
       </Card>
 
       {error ? (
-        <Card className="border border-danger/30 bg-danger/10">
-          <Card.Content>
-            <p className="text-sm text-danger">{error}</p>
-          </Card.Content>
-        </Card>
+        <StatusAlert status="danger" title="Notifications failed to load" description={error} />
       ) : null}
 
       {feedback ? (
-        <Card
-          className={
-            feedback.type === 'success'
-              ? 'border border-success/30 bg-success/10'
-              : 'border border-danger/30 bg-danger/10'
+        <StatusAlert
+          status={feedback.type === 'success' ? 'success' : 'danger'}
+          title={
+            feedback.type === 'success' ? 'Notification updated' : 'Notification action failed'
           }
-        >
-          <Card.Content>
-            <p
-              className={
-                feedback.type === 'success' ? 'text-sm text-success' : 'text-sm text-danger'
-              }
-            >
-              {feedback.text}
-            </p>
-          </Card.Content>
-        </Card>
+          description={feedback.text}
+        />
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">

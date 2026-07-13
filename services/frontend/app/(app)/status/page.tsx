@@ -4,6 +4,7 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { FilterToolbar } from '@/components/ui/filter-toolbar';
 import { OwnershipBadge } from '@/components/ui/badges';
 import {
@@ -535,18 +536,9 @@ export default function StatusPagesPage() {
         }
       />
 
-      {error && (
-        <div
-          className="rounded-xl px-4 py-3 text-sm"
-          style={{
-            background: 'rgba(239,68,68,0.08)',
-            border: '1px solid rgba(239,68,68,0.18)',
-            color: '#f87171',
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {error ? (
+        <StatusAlert status="danger" title="Status pages failed to load" description={error} />
+      ) : null}
 
       <div className="space-y-4">
         <FilterToolbar

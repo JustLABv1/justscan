@@ -1,6 +1,9 @@
 'use client';
 
 import { createContext, type ReactNode, useContext, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+
+export const PAGE_HEADER_ACTIONS_ID = 'page-header-actions';
 
 export type BreadcrumbItem = {
   label: string;
@@ -19,6 +22,7 @@ export interface PageHeaderConfig {
 
 type PageHeaderContextValue = {
   setHeader: (header: PageHeaderConfig | null) => void;
+  actionsTarget: HTMLElement | null;
 };
 
 export const PageHeaderContext = createContext<PageHeaderContextValue | null>(null);
@@ -35,6 +39,7 @@ export function PageHeader({
   hidden,
 }: PageHeaderProps) {
   const context = useContext(PageHeaderContext);
+  const actionsTarget = context?.actionsTarget ?? null;
   const breadcrumbsKey = useMemo(
     () => (breadcrumbs ?? []).map((item) => `${item.label}:${item.href ?? ''}`).join('|'),
     [breadcrumbs]
@@ -48,16 +53,15 @@ export function PageHeader({
       titleCom,
       icon,
       description,
-      actions,
       breadcrumbs,
       hidden,
     });
 
     return () => context.setHeader(null);
-    // ReactNode props like actions/titleCom are often recreated every render.
-    // Depending on their identity causes recursive setState loops via AppShell.
+    // ReactNode metadata is intentionally excluded because it can be recreated every render.
+    // Header actions stay live through the portal below instead of being copied into shell state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [breadcrumbsKey, context, description, hidden, title]);
 
-  return null;
+  return actions && actionsTarget ? createPortal(actions, actionsTarget) : null;
 }

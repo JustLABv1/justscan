@@ -2,6 +2,7 @@
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { FormField } from '@/components/ui/form-field';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
   createAdminUser,
@@ -194,13 +195,7 @@ export function UsersTab() {
 
   return (
     <div className="space-y-4">
-      {error && (
-        <Card className="border border-danger/30 bg-danger/10">
-          <Card.Content>
-            <p className="text-sm text-danger">{error}</p>
-          </Card.Content>
-        </Card>
-      )}
+      {error ? <StatusAlert status="danger" title="Users failed to load" description={error} /> : null}
 
       <div className="flex justify-end">
         <Button onPress={openCreate} variant="secondary">
@@ -417,13 +412,7 @@ export function UsersTab() {
               </Modal.Header>
               <Modal.Body>
                 <form id="user-form" onSubmit={handleSubmit} className="space-y-4">
-                  {formError && (
-                    <Card className="border border-danger/30 bg-danger/10">
-                      <Card.Content>
-                        <p className="text-sm text-danger">{formError}</p>
-                      </Card.Content>
-                    </Card>
-                  )}
+                  {formError ? <StatusAlert status="danger" title="User could not be saved" description={formError} /> : null}
                   <Input value={formUsername} onChange={(e) => setFormUsername(e.target.value)} placeholder="username" required aria-label="Username" />
                   <Input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} placeholder="user@example.com" required aria-label="Email" />
                   <Select value={formRole} onChange={(value) => setFormRole(String(value))}>

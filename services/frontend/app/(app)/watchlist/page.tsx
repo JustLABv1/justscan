@@ -6,7 +6,12 @@ import { useToast } from '@/components/toast';
 import { OwnershipBadge, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import {
+  filterDisclosureBodyClassName,
+  FilterDisclosureTrigger,
+} from '@/components/ui/filter-toolbar';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -72,6 +77,7 @@ import {
   Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const selectTriggerCls = heroSelectTriggerClassName;
@@ -244,6 +250,7 @@ function PolicyPostureCell({ posture, item }: { posture: WatchlistPosture; item:
 }
 
 export default function WatchlistPage() {
+  const router = useRouter();
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const { orgs, orgNamesById } = useOrgDirectory();
@@ -606,78 +613,61 @@ export default function WatchlistPage() {
         title="Watchlist"
         description="Recurring image monitoring, freshness tracking, and policy follow-up for your active workspace."
         actions={
-          items.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {attentionItems.length > 0 ? (
-                <Link href={buildWatchlistTriageHref()}>
-                  <Button variant="secondary">Review triage</Button>
-                </Link>
-              ) : null}
-              <Dropdown>
-                <Dropdown.Trigger>
-                  <Button variant="secondary">View settings</Button>
-                </Dropdown.Trigger>
-                <Dropdown.Popover placement="bottom end">
-                  <Dropdown.Menu
-                    aria-label="Watchlist view settings"
-                    selectionMode="single"
-                    selectedKeys={new Set([hourCycle])}
-                    onAction={(key) => setHourCycle(String(key) as HourCyclePreference)}
-                  >
-                    <Dropdown.Section>
-                      <Label>Hour format</Label>
-                      <Dropdown.Item id="locale" textValue="Locale">
-                        <Label>Locale</Label>
-                        <Dropdown.ItemIndicator />
-                      </Dropdown.Item>
-                      <Dropdown.Item id="12" textValue="12-hour clock">
-                        <Label>12-hour clock</Label>
-                        <Dropdown.ItemIndicator />
-                      </Dropdown.Item>
-                      <Dropdown.Item id="24" textValue="24-hour clock">
-                        <Label>24-hour clock</Label>
-                        <Dropdown.ItemIndicator />
-                      </Dropdown.Item>
-                    </Dropdown.Section>
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
-              </Dropdown>
-              <Button
-                onPress={openCreate}
-                className="inline-flex items-center gap-2"
-                isDisabled={!canMutateActiveScope}
-                variant="primary"
-              >
-                <PlusSignIcon size={15} /> Add Image
+          <div className="flex flex-wrap items-center gap-2">
+            {attentionItems.length > 0 ? (
+              <Button variant="secondary" onPress={() => router.push(buildWatchlistTriageHref())}>
+                Review triage
               </Button>
-            </div>
-          ) : undefined
+            ) : null}
+            <Dropdown>
+              <Button variant="secondary">View settings</Button>
+              <Dropdown.Popover placement="bottom end">
+                <Dropdown.Menu
+                  aria-label="Watchlist view settings"
+                  selectionMode="single"
+                  selectedKeys={new Set([hourCycle])}
+                  onAction={(key) => setHourCycle(String(key) as HourCyclePreference)}
+                >
+                  <Dropdown.Section>
+                    <Label>Hour format</Label>
+                    <Dropdown.Item id="locale" textValue="Locale">
+                      <Label>Locale</Label>
+                      <Dropdown.ItemIndicator />
+                    </Dropdown.Item>
+                    <Dropdown.Item id="12" textValue="12-hour clock">
+                      <Label>12-hour clock</Label>
+                      <Dropdown.ItemIndicator />
+                    </Dropdown.Item>
+                    <Dropdown.Item id="24" textValue="24-hour clock">
+                      <Label>24-hour clock</Label>
+                      <Dropdown.ItemIndicator />
+                    </Dropdown.Item>
+                  </Dropdown.Section>
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
+            <Button
+              onPress={openCreate}
+              className="inline-flex items-center gap-2"
+              isDisabled={!canMutateActiveScope}
+              variant="primary"
+            >
+              <PlusSignIcon size={15} /> Add Image
+            </Button>
+          </div>
         }
       />
 
       {items.length > 0 ? (
-        <Card>
-          <Card.Content className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <Chip color={postureChipColor[overviewSummary.tone]} size="sm" variant="soft">
-                {overviewSummary.label}
-              </Chip>
-              <h2 className="mt-2 text-sm font-semibold text-foreground">
-                {overviewSummary.title}
-              </h2>
-              <p className="mt-1 text-sm text-muted">{overviewSummary.description}</p>
-            </div>
-          </Card.Content>
-        </Card>
+        <StatusAlert
+          status={overviewSummary.tone === 'neutral' ? 'default' : overviewSummary.tone}
+          title={overviewSummary.title}
+          description={overviewSummary.description}
+        />
       ) : null}
 
       {error ? (
-        <Alert status="danger" className="bg-danger-soft">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>{error}</Alert.Title>
-          </Alert.Content>
-        </Alert>
+        <StatusAlert status="danger" title="Watchlist failed to load" description={error} />
       ) : null}
 
       {!loading && items.length === 0 ? (
@@ -738,17 +728,7 @@ export default function WatchlistPage() {
                   </SearchField.Group>
                 </SearchField>
                 <div className="flex items-center gap-2">
-                  <Disclosure.Heading>
-                    <Disclosure.Trigger className="inline-flex h-10 items-center gap-2 rounded-xl border border-divider bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
-                      Filters
-                      {statusFilter !== 'all' ? (
-                        <Chip size="sm" variant="soft" color="accent">
-                          1
-                        </Chip>
-                      ) : null}
-                      <Disclosure.Indicator />
-                    </Disclosure.Trigger>
-                  </Disclosure.Heading>
+                  <FilterDisclosureTrigger activeCount={statusFilter === 'all' ? 0 : 1} />
                   {hasFilters ? (
                     <Button
                       variant="tertiary"
@@ -764,7 +744,7 @@ export default function WatchlistPage() {
                 </div>
               </div>
               <Disclosure.Content>
-                <Disclosure.Body className="mt-3 grid gap-3 rounded-xl border border-divider bg-surface-secondary p-3 sm:max-w-xs">
+                <Disclosure.Body className={`${filterDisclosureBodyClassName} sm:max-w-xs`}>
                   <Select
                     aria-label="Watchlist status"
                     value={statusFilter}
@@ -969,14 +949,13 @@ export default function WatchlistPage() {
               </Modal.Header>
               <Modal.Body className="py-5">
                 <form id="watchlist-form" onSubmit={handleSubmit} className="space-y-4">
-                  {formError && (
-                    <Alert status="danger" className="bg-danger-soft">
-                      <Alert.Indicator />
-                      <Alert.Content>
-                        <Alert.Title>{formError}</Alert.Title>
-                      </Alert.Content>
-                    </Alert>
-                  )}
+                  {formError ? (
+                    <StatusAlert
+                      status="danger"
+                      title="Watchlist item could not be saved"
+                      description={formError}
+                    />
+                  ) : null}
                   <div className="flex gap-3">
                     <FormField
                       label="Image Name"
@@ -1170,12 +1149,11 @@ export default function WatchlistPage() {
               </Modal.Header>
               <Modal.Body className="py-5 space-y-4">
                 {shareError ? (
-                  <Alert status="danger" className="bg-danger-soft">
-                    <Alert.Indicator />
-                    <Alert.Content>
-                      <Alert.Title>{shareError}</Alert.Title>
-                    </Alert.Content>
-                  </Alert>
+                  <StatusAlert
+                    status="danger"
+                    title="Access update failed"
+                    description={shareError}
+                  />
                 ) : null}
                 {shareTarget ? (
                   <div className="bg-surface-secondary rounded-xl px-4 py-3">

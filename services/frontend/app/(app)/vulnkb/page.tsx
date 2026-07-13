@@ -1,5 +1,9 @@
 'use client';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import {
+  filterDisclosureBodyClassName,
+  FilterDisclosureTrigger,
+} from '@/components/ui/filter-toolbar';
 import { PageHeader } from '@/components/ui/page-header';
 import { getKBEntry, listKBEntries, VulnKBEntry } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
@@ -319,17 +323,7 @@ export default function VulnKBPage() {
                     </ListBox>
                   </Select.Popover>
                 </Select>
-                <Disclosure.Heading>
-                  <Disclosure.Trigger className="inline-flex h-10 items-center gap-2 rounded-xl border border-divider bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
-                    Filters
-                    {activeFilters.length > 0 ? (
-                      <Chip color="accent" size="sm" variant="soft">
-                        {activeFilters.length}
-                      </Chip>
-                    ) : null}
-                    <Disclosure.Indicator />
-                  </Disclosure.Trigger>
-                </Disclosure.Heading>
+                <FilterDisclosureTrigger activeCount={activeFilters.length} />
                 {activeFilters.length > 0 ? (
                   <Button variant="tertiary" onPress={clearFilters}>
                     Clear filters
@@ -339,7 +333,7 @@ export default function VulnKBPage() {
             </div>
 
             <Disclosure.Content>
-              <Disclosure.Body className="grid gap-3 rounded-xl border border-divider bg-surface-secondary p-3 md:grid-cols-3">
+              <Disclosure.Body className={`${filterDisclosureBodyClassName} md:grid-cols-3`}>
                 <Select
                   value={minCvss}
                   onChange={(value) => setMinCvss(String(value ?? '0'))}

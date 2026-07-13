@@ -2,6 +2,10 @@
 
 import { StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
+import {
+  filterDisclosureBodyClassName,
+  FilterDisclosureTrigger,
+} from '@/components/ui/filter-toolbar';
 import { PageHeader } from '@/components/ui/page-header';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { getTriage, type TriageItem, type TriageItemKind, type TriagePriority } from '@/lib/api';
@@ -22,13 +26,7 @@ import {
   Table,
   Tabs,
 } from '@heroui/react';
-import {
-  ArrowRight01Icon,
-  FilterIcon,
-  PackageIcon,
-  Shield01Icon,
-  ShieldKeyIcon,
-} from 'hugeicons-react';
+import { ArrowRight01Icon, PackageIcon, Shield01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -462,29 +460,14 @@ export default function TriagePage() {
               </SearchField>
 
               <div className="flex flex-wrap gap-2 xl:justify-end">
-                <Disclosure.Heading>
-                  <Disclosure.Trigger className="inline-flex h-9 items-center gap-2 rounded-xl border border-divider bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
-                    <FilterIcon size={14} />
-                    Filters
-                    {kindFilter !== 'all' || priorityFilter !== 'all' ? (
-                      <Chip size="sm" variant="soft" color="default">
-                        {Number(kindFilter !== 'all') + Number(priorityFilter !== 'all')}
-                      </Chip>
-                    ) : null}
-                    <Disclosure.Indicator />
-                  </Disclosure.Trigger>
-                </Disclosure.Heading>
-                <Button
-                  size="sm"
-                  variant="tertiary"
-                  onPress={() => load(true)}
-                  isDisabled={manualRefreshing}
-                >
+                <FilterDisclosureTrigger
+                  activeCount={Number(kindFilter !== 'all') + Number(priorityFilter !== 'all')}
+                />
+                <Button variant="tertiary" onPress={() => load(true)} isDisabled={manualRefreshing}>
                   {manualRefreshing ? 'Refreshing...' : 'Refresh'}
                 </Button>
                 {hasActiveFilters ? (
                   <Button
-                    size="sm"
                     variant="tertiary"
                     onPress={() => {
                       setPage(1);
@@ -501,7 +484,7 @@ export default function TriagePage() {
             </div>
 
             <Disclosure.Content>
-              <Disclosure.Body className="grid gap-3 rounded-xl border border-divider bg-surface-secondary/40 p-3 md:grid-cols-2">
+              <Disclosure.Body className={`${filterDisclosureBodyClassName} md:grid-cols-2`}>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium text-muted">Type</Label>
                   <Select

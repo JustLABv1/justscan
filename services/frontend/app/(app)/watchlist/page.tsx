@@ -7,6 +7,10 @@ import { OwnershipBadge, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import {
+  filterDisclosureBodyClassName,
+  FilterDisclosureTrigger,
+} from '@/components/ui/filter-toolbar';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -72,6 +76,7 @@ import {
   Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const selectTriggerCls = heroSelectTriggerClassName;
@@ -244,6 +249,7 @@ function PolicyPostureCell({ posture, item }: { posture: WatchlistPosture; item:
 }
 
 export default function WatchlistPage() {
+  const router = useRouter();
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const { orgs, orgNamesById } = useOrgDirectory();
@@ -606,52 +612,48 @@ export default function WatchlistPage() {
         title="Watchlist"
         description="Recurring image monitoring, freshness tracking, and policy follow-up for your active workspace."
         actions={
-          items.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {attentionItems.length > 0 ? (
-                <Link href={buildWatchlistTriageHref()}>
-                  <Button variant="secondary">Review triage</Button>
-                </Link>
-              ) : null}
-              <Dropdown>
-                <Dropdown.Trigger>
-                  <Button variant="secondary">View settings</Button>
-                </Dropdown.Trigger>
-                <Dropdown.Popover placement="bottom end">
-                  <Dropdown.Menu
-                    aria-label="Watchlist view settings"
-                    selectionMode="single"
-                    selectedKeys={new Set([hourCycle])}
-                    onAction={(key) => setHourCycle(String(key) as HourCyclePreference)}
-                  >
-                    <Dropdown.Section>
-                      <Label>Hour format</Label>
-                      <Dropdown.Item id="locale" textValue="Locale">
-                        <Label>Locale</Label>
-                        <Dropdown.ItemIndicator />
-                      </Dropdown.Item>
-                      <Dropdown.Item id="12" textValue="12-hour clock">
-                        <Label>12-hour clock</Label>
-                        <Dropdown.ItemIndicator />
-                      </Dropdown.Item>
-                      <Dropdown.Item id="24" textValue="24-hour clock">
-                        <Label>24-hour clock</Label>
-                        <Dropdown.ItemIndicator />
-                      </Dropdown.Item>
-                    </Dropdown.Section>
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
-              </Dropdown>
-              <Button
-                onPress={openCreate}
-                className="inline-flex items-center gap-2"
-                isDisabled={!canMutateActiveScope}
-                variant="primary"
-              >
-                <PlusSignIcon size={15} /> Add Image
+          <div className="flex flex-wrap items-center gap-2">
+            {attentionItems.length > 0 ? (
+              <Button variant="secondary" onPress={() => router.push(buildWatchlistTriageHref())}>
+                Review triage
               </Button>
-            </div>
-          ) : undefined
+            ) : null}
+            <Dropdown>
+              <Button variant="secondary">View settings</Button>
+              <Dropdown.Popover placement="bottom end">
+                <Dropdown.Menu
+                  aria-label="Watchlist view settings"
+                  selectionMode="single"
+                  selectedKeys={new Set([hourCycle])}
+                  onAction={(key) => setHourCycle(String(key) as HourCyclePreference)}
+                >
+                  <Dropdown.Section>
+                    <Label>Hour format</Label>
+                    <Dropdown.Item id="locale" textValue="Locale">
+                      <Label>Locale</Label>
+                      <Dropdown.ItemIndicator />
+                    </Dropdown.Item>
+                    <Dropdown.Item id="12" textValue="12-hour clock">
+                      <Label>12-hour clock</Label>
+                      <Dropdown.ItemIndicator />
+                    </Dropdown.Item>
+                    <Dropdown.Item id="24" textValue="24-hour clock">
+                      <Label>24-hour clock</Label>
+                      <Dropdown.ItemIndicator />
+                    </Dropdown.Item>
+                  </Dropdown.Section>
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
+            <Button
+              onPress={openCreate}
+              className="inline-flex items-center gap-2"
+              isDisabled={!canMutateActiveScope}
+              variant="primary"
+            >
+              <PlusSignIcon size={15} /> Add Image
+            </Button>
+          </div>
         }
       />
 
@@ -738,17 +740,7 @@ export default function WatchlistPage() {
                   </SearchField.Group>
                 </SearchField>
                 <div className="flex items-center gap-2">
-                  <Disclosure.Heading>
-                    <Disclosure.Trigger className="inline-flex h-10 items-center gap-2 rounded-xl border border-divider bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
-                      Filters
-                      {statusFilter !== 'all' ? (
-                        <Chip size="sm" variant="soft" color="accent">
-                          1
-                        </Chip>
-                      ) : null}
-                      <Disclosure.Indicator />
-                    </Disclosure.Trigger>
-                  </Disclosure.Heading>
+                  <FilterDisclosureTrigger activeCount={statusFilter === 'all' ? 0 : 1} />
                   {hasFilters ? (
                     <Button
                       variant="tertiary"
@@ -764,7 +756,7 @@ export default function WatchlistPage() {
                 </div>
               </div>
               <Disclosure.Content>
-                <Disclosure.Body className="mt-3 grid gap-3 rounded-xl border border-divider bg-surface-secondary p-3 sm:max-w-xs">
+                <Disclosure.Body className={`${filterDisclosureBodyClassName} sm:max-w-xs`}>
                   <Select
                     aria-label="Watchlist status"
                     value={statusFilter}

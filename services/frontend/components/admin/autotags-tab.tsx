@@ -1,6 +1,7 @@
 'use client';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
   createAutoTagRule,
@@ -141,13 +142,7 @@ export function AutoTagsTab() {
 
   return (
     <div className="space-y-4">
-      {error && (
-        <Card className="border border-danger/30 bg-danger/10">
-          <Card.Content>
-            <p className="text-sm text-danger">{error}</p>
-          </Card.Content>
-        </Card>
-      )}
+      {error ? <StatusAlert status="danger" title="Auto-tag rules failed to load" description={error} /> : null}
 
       <div className="flex justify-end">
         <Button onPress={openCreate} variant="secondary">

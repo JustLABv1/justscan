@@ -4355,7 +4355,7 @@ export default function ScanDetailPage() {
                           </Table>
                         </Card>
                       ) : (
-                        <Alert status="warning" className="border border-warning">
+                        <Alert status="warning">
                           <Alert.Indicator />
                           <Alert.Content>
                             <Alert.Title>No watch-policy matches were persisted</Alert.Title>

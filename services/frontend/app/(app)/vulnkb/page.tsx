@@ -1,5 +1,6 @@
 'use client';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { StatusAlert } from '@/components/ui/form-alert';
 import {
   filterDisclosureBodyClassName,
   FilterDisclosureTrigger,
@@ -8,7 +9,6 @@ import { PageHeader } from '@/components/ui/page-header';
 import { getKBEntry, listKBEntries, VulnKBEntry } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import {
-  Alert,
   Button,
   Card,
   Chip,
@@ -397,14 +397,13 @@ export default function VulnKBPage() {
           </div>
         </Disclosure>
 
-        {error && (
-          <Alert status="danger">
-            <Alert.Indicator />
-            <Alert.Content>
-              <Alert.Title>{error}</Alert.Title>
-            </Alert.Content>
-          </Alert>
-        )}
+        {error ? (
+          <StatusAlert
+            status="danger"
+            title="Vulnerability knowledge base failed to load"
+            description={error}
+          />
+        ) : null}
 
         <div className="overflow-hidden">
           <Table variant="secondary">

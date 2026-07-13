@@ -2,6 +2,7 @@
 
 import { StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
+import { StatusAlert } from '@/components/ui/form-alert';
 import {
   filterDisclosureBodyClassName,
   FilterDisclosureTrigger,
@@ -12,7 +13,6 @@ import { getTriage, type TriageItem, type TriageItemKind, type TriagePriority } 
 import { deferEffect } from '@/lib/defer-effect';
 import { getScanFailurePresentation } from '@/lib/scan-failure';
 import {
-  Alert,
   Button,
   Card,
   Chip,
@@ -393,13 +393,7 @@ export default function TriagePage() {
       />
 
       {error ? (
-        <Alert status="danger" className="bg-danger-soft">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>Triage failed to load</Alert.Title>
-            <Alert.Description>{error}</Alert.Description>
-          </Alert.Content>
-        </Alert>
+        <StatusAlert status="danger" title="Triage failed to load" description={error} />
       ) : null}
 
       <Card className="overflow-hidden">

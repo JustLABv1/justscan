@@ -1,6 +1,7 @@
 'use client';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { listAdminOrgs, updateAdminOrgGovernance } from '@/lib/api/admin';
 import {
   createOrgInvite,
@@ -193,13 +194,7 @@ export function OrganizationsTab() {
 
   return (
     <div className="space-y-6">
-      {error && (
-        <Card className="border border-danger/30 bg-danger/10">
-          <Card.Content>
-            <p className="text-sm text-danger">{error}</p>
-          </Card.Content>
-        </Card>
-      )}
+      {error ? <StatusAlert status="danger" title="Organizations failed to load" description={error} /> : null}
 
       <Card className="space-y-4">
         <div className="flex items-center justify-between gap-3">

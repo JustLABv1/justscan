@@ -6,6 +6,7 @@ import { useToast } from '@/components/toast';
 import { OwnershipBadge, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import {
   filterDisclosureBodyClassName,
@@ -658,28 +659,15 @@ export default function WatchlistPage() {
       />
 
       {items.length > 0 ? (
-        <Card>
-          <Card.Content className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <Chip color={postureChipColor[overviewSummary.tone]} size="sm" variant="soft">
-                {overviewSummary.label}
-              </Chip>
-              <h2 className="mt-2 text-sm font-semibold text-foreground">
-                {overviewSummary.title}
-              </h2>
-              <p className="mt-1 text-sm text-muted">{overviewSummary.description}</p>
-            </div>
-          </Card.Content>
-        </Card>
+        <StatusAlert
+          status={overviewSummary.tone === 'neutral' ? 'default' : overviewSummary.tone}
+          title={overviewSummary.title}
+          description={overviewSummary.description}
+        />
       ) : null}
 
       {error ? (
-        <Alert status="danger" className="bg-danger-soft">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>{error}</Alert.Title>
-          </Alert.Content>
-        </Alert>
+        <StatusAlert status="danger" title="Watchlist failed to load" description={error} />
       ) : null}
 
       {!loading && items.length === 0 ? (
@@ -961,14 +949,13 @@ export default function WatchlistPage() {
               </Modal.Header>
               <Modal.Body className="py-5">
                 <form id="watchlist-form" onSubmit={handleSubmit} className="space-y-4">
-                  {formError && (
-                    <Alert status="danger" className="bg-danger-soft">
-                      <Alert.Indicator />
-                      <Alert.Content>
-                        <Alert.Title>{formError}</Alert.Title>
-                      </Alert.Content>
-                    </Alert>
-                  )}
+                  {formError ? (
+                    <StatusAlert
+                      status="danger"
+                      title="Watchlist item could not be saved"
+                      description={formError}
+                    />
+                  ) : null}
                   <div className="flex gap-3">
                     <FormField
                       label="Image Name"
@@ -1162,12 +1149,11 @@ export default function WatchlistPage() {
               </Modal.Header>
               <Modal.Body className="py-5 space-y-4">
                 {shareError ? (
-                  <Alert status="danger" className="bg-danger-soft">
-                    <Alert.Indicator />
-                    <Alert.Content>
-                      <Alert.Title>{shareError}</Alert.Title>
-                    </Alert.Content>
-                  </Alert>
+                  <StatusAlert
+                    status="danger"
+                    title="Access update failed"
+                    description={shareError}
+                  />
                 ) : null}
                 {shareTarget ? (
                   <div className="bg-surface-secondary rounded-xl px-4 py-3">

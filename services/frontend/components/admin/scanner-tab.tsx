@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusAlert } from '@/components/ui/form-alert';
 import { getScannerHealth } from '@/lib/api/dashboard';
 import type { ScannerHealth } from '@/lib/api/types/dashboard';
 import { deferEffect } from '@/lib/defer-effect';
@@ -41,13 +42,7 @@ export function ScannerTab() {
 
   return (
     <div className="space-y-4">
-      {error && (
-        <Card className="border border-danger/30 bg-danger/10">
-          <Card.Content>
-            <p className="text-sm text-danger">{error}</p>
-          </Card.Content>
-        </Card>
-      )}
+      {error ? <StatusAlert status="danger" title="Scanner health failed to load" description={error} /> : null}
 
       <Card className="space-y-4">
         <div className="flex items-start justify-between gap-3">
@@ -63,14 +58,11 @@ export function ScannerTab() {
         {health && (
           <>
             {!health.local_scanner_enabled ? (
-              <Card className="border border-warning/30 bg-warning/10">
-                <Card.Content className="space-y-1">
-                  <p className="text-sm font-medium">Local scanner is disabled.</p>
-                  <p className="text-sm text-zinc-500">
-                    {health.message || 'This backend instance is running without the built-in local scanner.'}
-                  </p>
-                </Card.Content>
-              </Card>
+              <StatusAlert
+                status="warning"
+                title="Local scanner is disabled"
+                description={health.message || 'This backend instance is running without the built-in local scanner.'}
+              />
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

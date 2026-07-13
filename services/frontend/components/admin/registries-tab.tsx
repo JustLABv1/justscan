@@ -1,6 +1,7 @@
 'use client';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
   adminCreateGlobalRegistry,
@@ -18,11 +19,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 function Banner({ type, text }: { type: 'success' | 'error'; text: string }) {
   return (
-    <Card className={type === 'success' ? 'border border-success/30 bg-success/10' : 'border border-danger/30 bg-danger/10'}>
-      <Card.Content>
-        <p className={type === 'success' ? 'text-sm text-success' : 'text-sm text-danger'}>{text}</p>
-      </Card.Content>
-    </Card>
+    <StatusAlert
+      status={type === 'success' ? 'success' : 'danger'}
+      title={type === 'success' ? 'Registry updated' : 'Registry action failed'}
+      description={text}
+    />
   );
 }
 

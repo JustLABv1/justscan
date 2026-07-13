@@ -23,6 +23,7 @@ import {
   singleSeriesConfig,
   typedChartConfigFromSeries,
 } from '@/components/ui/chart-adapter';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { ChartSkeleton } from '@/components/ui/skeleton';
 import { getAdminDashboard } from '@/lib/api/admin';
 import type { AdminDashboard, AdminDashboardVulnerabilityTrendPoint } from '@/lib/api/types/admin';
@@ -205,16 +206,16 @@ export function OverviewTab() {
 
   if (error) {
     return (
-      <Card className="border border-danger/30 bg-danger/10">
-        <Card.Content>
-          <p className="text-sm text-danger">{error}</p>
-          <div>
-            <Button size="sm" variant="danger" onPress={load}>
-              Retry
-            </Button>
-          </div>
-        </Card.Content>
-      </Card>
+      <StatusAlert
+        status="danger"
+        title="Admin overview failed to load"
+        description={error}
+        action={
+          <Button size="sm" variant="danger" onPress={load}>
+            Retry
+          </Button>
+        }
+      />
     );
   }
 

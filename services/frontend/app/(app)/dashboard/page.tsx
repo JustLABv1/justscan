@@ -19,6 +19,7 @@ import {
   RecentActivityRow,
 } from '@/components/scans/recent-activity';
 import { StatusBadge } from '@/components/ui/badges';
+import { StatusAlert } from '@/components/ui/form-alert';
 import {
   formatChartDate as formatChartDateShared,
   singleSeriesConfig,
@@ -932,16 +933,18 @@ function RecentProblemScansCard({
           ))}
         </div>
       ) : error ? (
-        <div className="mt-4 rounded-2xl border border-danger/20 bg-danger/8 px-4 py-3 text-sm text-danger">
-          {error}
-        </div>
+        <StatusAlert
+          className="mt-4"
+          status="danger"
+          title="Scan activity failed to load"
+          description={error}
+        />
       ) : scans.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-surface-border bg-surface-secondary px-4 py-4">
-          <p className="text-sm font-medium text-foreground">No recent failed or blocked scans.</p>
-          <p className="mt-1 text-xs text-muted">
-            When scans fail or Xray blocks a result, it will appear here first.
-          </p>
-        </div>
+        <StatusAlert
+          className="mt-4"
+          title="No recent failed or blocked scans"
+          description="When scans fail or Xray blocks a result, it will appear here first."
+        />
       ) : (
         <div className="mt-3 grid gap-2">
           {scans.map((scan) => (
@@ -1473,19 +1476,19 @@ export default function DashboardPage() {
       />
 
       {!scannerReady ? (
-        <Alert status="warning">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>Scanner health needs attention</Alert.Title>
-            <Alert.Description>
-              {scannerHealthError ||
-                'One or more local scanner workers are stale or unavailable, so new results may be delayed.'}
-            </Alert.Description>
-          </Alert.Content>
-          <Button onPress={() => router.push('/admin/scanner')} size="sm" variant="secondary">
-            Review scanner
-          </Button>
-        </Alert>
+        <StatusAlert
+          status="warning"
+          title="Scanner health needs attention"
+          description={
+            scannerHealthError ||
+            'One or more local scanner workers are stale or unavailable, so new results may be delayed.'
+          }
+          action={
+            <Button onPress={() => router.push('/admin/scanner')} size="sm" variant="secondary">
+              Review scanner
+            </Button>
+          }
+        />
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

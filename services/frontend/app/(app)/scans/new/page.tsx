@@ -28,10 +28,11 @@ import {
 import { deferEffect } from '@/lib/defer-effect';
 import { canMutateOrg } from '@/lib/org-permissions';
 import {
-  Accordion,
   Autocomplete,
   Button,
   Card,
+  Chip,
+  Description,
   Disclosure,
   Label,
   ListBox,
@@ -42,7 +43,16 @@ import {
   TextArea,
   useFilter,
 } from '@heroui/react';
-import { ArrowDown01Icon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon } from 'hugeicons-react';
+import {
+  ArrowDown01Icon,
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  Cancel01Icon,
+  CloudUploadIcon,
+  DatabaseSyncIcon,
+  Globe02Icon,
+  LockIcon,
+} from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import type { Key } from 'react';
 import { useEffect, useState } from 'react';
@@ -76,34 +86,47 @@ function mergeUniqueStringLists(...groups: string[][]) {
 function ScanSourceCard({
   description,
   disabled = false,
-  eyebrow,
+  disabledReason,
+  icon,
+  metadata,
   source,
   title,
 }: {
   description: string;
   disabled?: boolean;
-  eyebrow: string;
+  disabledReason?: string;
+  icon: React.ReactNode;
+  metadata: string;
   source: ScanSourceKind;
   title: string;
 }) {
   return (
     <Radio
-      className="group w-full cursor-pointer rounded-2xl border border-surface-border bg-surface-secondary px-4 py-3 text-left transition-all duration-150 data-[selected=true]:border-accent/35 data-[selected=true]:bg-accent/10 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-60"
+      className="scan-source-card group relative min-h-40 w-full cursor-pointer flex-col items-start gap-0 rounded-2xl border border-surface-border bg-surface px-5 py-5 text-left data-[focus-visible=true]:border-accent data-[selected=true]:border-accent/50 data-[selected=true]:bg-accent/10 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-60"
       isDisabled={disabled}
       value={source}
     >
-      <Radio.Content className="min-w-0 flex-1">
-        <Radio.Control
-          className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-slate-300/50 bg-slate-400/10 group-data-[selected=true]:border-accent/40 group-data-[selected=true]:bg-accent/20"
-          aria-hidden
-        >
-          <Radio.Indicator className="text-[11px] font-semibold text-accent">
-            {({ isSelected }) => (isSelected ? '✓' : null)}
-          </Radio.Indicator>
-        </Radio.Control>
-        <p className="text-[10px] uppercase tracking-[0.2em] text-accent">{eyebrow}</p>
-        <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-white">{title}</p>
-        <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{description}</p>
+      <Radio.Control className="absolute right-4 top-4 size-5">
+        <Radio.Indicator className="scan-source-indicator" />
+      </Radio.Control>
+      <Radio.Content className="flex min-w-0 flex-1 flex-col items-start gap-3 pr-8">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted group-data-[selected=true]:text-accent">
+            {icon}
+          </span>
+          <Chip size="sm" variant="soft" color={disabled ? 'warning' : 'default'}>
+            {disabled ? 'Setup required' : metadata}
+          </Chip>
+        </div>
+        <div className="w-full space-y-1.5">
+          <Label className="block w-full text-sm font-semibold text-foreground">{title}</Label>
+          <Description className="block w-full text-sm leading-6 text-muted">
+            {description}
+          </Description>
+          {disabledReason ? (
+            <p className="text-xs font-medium text-warning">{disabledReason}</p>
+          ) : null}
+        </div>
       </Radio.Content>
     </Radio>
   );
@@ -170,7 +193,6 @@ export default function NewScanPage() {
   const [additionalImageDraft, setAdditionalImageDraft] = useState('');
   const [additionalImageEntries, setAdditionalImageEntries] = useState<string[]>([]);
   const [scanSource, setScanSource] = useState<ScanSourceKind | null>(null);
-  const [isSourceExpanded, setIsSourceExpanded] = useState(true);
   const [optionalSettingsExpanded, setOptionalSettingsExpanded] = useState(false);
   const [platform, setPlatform] = useState('');
   const [uploadedArchiveFile, setUploadedArchiveFile] = useState<File | null>(null);
@@ -291,40 +313,51 @@ export default function NewScanPage() {
   const scanSourceOptions = [
     {
       source: 'public' as const,
-      eyebrow: 'Fastest path',
-      title: 'Public registry image',
+      metadata: 'No auth',
+      title: 'Public registry',
       description: 'Scan an image from Docker Hub or any unauthenticated registry endpoint.',
       disabled: !capabilities.enable_trivy,
+      disabledReason: !capabilities.enable_trivy ? 'Local image scanning is disabled.' : '',
+      icon: <Globe02Icon aria-hidden size={18} />,
     },
     {
       source: 'private_registry' as const,
-      eyebrow: 'Auth required',
-      title: 'Private registry image',
+      metadata: 'Credentials',
+      title: 'Private registry',
       description: 'Use one of your configured registries so JustScan can authenticate and pull.',
       disabled: !capabilities.enable_trivy || privateRegistries.length === 0,
+      disabledReason: !capabilities.enable_trivy
+        ? 'Local image scanning is disabled.'
+        : privateRegistries.length === 0
+          ? 'No private registry is configured.'
+          : '',
+      icon: <LockIcon aria-hidden size={18} />,
     },
     {
       source: 'artifactory_xray' as const,
-      eyebrow: 'Xray pipeline',
-      title: 'Artifactory Xray image',
+      metadata: 'Xray',
+      title: 'Artifactory Xray',
       description:
         'Route the image through a configured Artifactory/Xray registry and optional repo override.',
       disabled: xrayRegistries.length === 0,
+      disabledReason: xrayRegistries.length === 0 ? 'No Xray registry is configured.' : '',
+      icon: <DatabaseSyncIcon aria-hidden size={18} />,
     },
     {
       source: 'local_archive' as const,
-      eyebrow: 'Offline input',
-      title: 'Local OCI/Docker archive',
+      metadata: 'Upload',
+      title: 'Local archive',
       description:
         'Upload a tarball created from docker save or an OCI archive for one-off inspection.',
       disabled: !capabilities.enable_trivy,
+      disabledReason: !capabilities.enable_trivy ? 'Local image scanning is disabled.' : '',
+      icon: <CloudUploadIcon aria-hidden size={18} />,
     },
   ];
   const availableScanSourceOptions = scanSourceOptions.filter((option) => !option.disabled);
 
   function selectScanSource(source: ScanSourceKind) {
     setScanSource(source);
-    setIsSourceExpanded(false);
     setCreateError('');
 
     if (source === 'public') {
@@ -467,29 +500,29 @@ export default function NewScanPage() {
   }
 
   async function handleCreate(e: React.FormEvent) {
-    if (!canMutateCurrentScope) return;
     e.preventDefault();
     setCreateError('');
+
+    if (!canMutateCurrentScope) return;
+    if (xrayOnlyWithoutRegistries) {
+      setCreateError(
+        'No Artifactory Xray registry is configured yet. Add one before starting scans.'
+      );
+      return;
+    }
+    if (orgFeatureBlockMessage) {
+      setCreateError(orgFeatureBlockMessage);
+      return;
+    }
+
+    const validationError = validateCreateForm();
+    if (validationError) {
+      setCreateError(validationError);
+      return;
+    }
+
     setCreating(true);
-
     try {
-      if (xrayOnlyWithoutRegistries) {
-        setCreateError(
-          'No Artifactory Xray registry is configured yet. Add one before starting scans.'
-        );
-        return;
-      }
-      if (orgFeatureBlockMessage) {
-        setCreateError(orgFeatureBlockMessage);
-        return;
-      }
-
-      const validationError = validateCreateForm();
-      if (validationError) {
-        setCreateError(validationError);
-        return;
-      }
-
       const currentScope = getWorkScope();
       let createdScans: Scan[] = [];
 
@@ -555,10 +588,14 @@ export default function NewScanPage() {
     scanSource === 'public' || scanSource === 'local_archive'
       ? 'Direct'
       : selectedRegistry?.name || 'Not selected';
-  const sourceAccordionExpandedKeys = isSourceExpanded ? ['scan-source-section'] : [];
-
+  const canStartScan =
+    !creating &&
+    canMutateCurrentScope &&
+    !xrayOnlyWithoutRegistries &&
+    !orgFeatureBlockMessage &&
+    validateCreateForm() === '';
   return (
-    <div className="space-y-5 p-6">
+    <div className="mx-auto max-w-6xl space-y-5 p-6">
       <PageHeader
         title="New Scan"
         description="Choose a source, define the target, and start a scan without leaving your current workspace scope."
@@ -584,464 +621,436 @@ export default function NewScanPage() {
           />
         ) : null}
 
-        <Card className="surface-panel overflow-hidden rounded-2xl">
-          <Accordion
-            hideSeparator
-            className="bg-transparent"
-            expandedKeys={sourceAccordionExpandedKeys}
-            onExpandedChange={(keys) => setIsSourceExpanded(keys.has('scan-source-section'))}
-            variant="surface"
-          >
-            <Accordion.Item className="bg-transparent" id="scan-source-section">
-              <Accordion.Heading>
-                <Accordion.Trigger className="flex items-start gap-4 px-5 py-5 text-left transition-colors hover:bg-surface-secondary/60">
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <div className="flex items-center gap-3">
-                      <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-                        Source
-                      </h2>
-                      {scanSource && !isSourceExpanded ? (
-                        <span className="rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-accent">
-                          {scanSourceLabel}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                      {scanSource && !isSourceExpanded
-                        ? 'Selected source is locked in for now. Reopen this section to change it.'
-                        : 'Choose where the image lives. JustScan will only show the routing controls that matter for that source.'}
-                    </p>
-                  </div>
-                  <Accordion.Indicator className="mt-1 shrink-0 text-zinc-400">
-                    <ArrowDown01Icon size={16} />
-                  </Accordion.Indicator>
-                </Accordion.Trigger>
-              </Accordion.Heading>
-              <Accordion.Panel>
-                <Accordion.Body className="px-5 pb-5 pt-0">
-                  <div className="space-y-4">
-                    <RadioGroup
-                      className="grid gap-3"
-                      name="scan-source"
-                      onChange={(value) => selectScanSource(String(value) as ScanSourceKind)}
-                      value={scanSource}
-                    >
-                      {scanSourceOptions.map((option) => (
-                        <ScanSourceCard
-                          key={option.source}
-                          description={option.description}
-                          disabled={option.disabled}
-                          eyebrow={option.eyebrow}
-                          source={option.source}
-                          title={option.title}
-                        />
-                      ))}
-                    </RadioGroup>
-                    {availableScanSourceOptions.length === 0 ? (
-                      <p className="text-sm text-zinc-500">
-                        No scan source is currently available in this deployment.
-                      </p>
-                    ) : null}
-                    {privateRegistries.length === 0 || xrayRegistries.length === 0 ? (
-                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-border bg-surface-secondary px-3 py-3">
-                        <p className="text-sm text-muted">
-                          Private and Artifactory scan routes become available after their registry
-                          is configured.
-                        </p>
-                        <Button
-                          onPress={() => router.push('/registries')}
-                          size="sm"
-                          variant="secondary"
-                        >
-                          Manage registries
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                </Accordion.Body>
-              </Accordion.Panel>
-            </Accordion.Item>
-          </Accordion>
+        <Card className="surface-panel rounded-2xl">
+          <Card.Header>
+            <Card.Title>Source</Card.Title>
+            <Card.Description>
+              Choose where the image lives. Only relevant routing fields appear after selection.
+            </Card.Description>
+          </Card.Header>
+          <Card.Content className="gap-4">
+            <RadioGroup
+              className="grid gap-3 md:grid-cols-2"
+              name="scan-source"
+              onChange={(value) => selectScanSource(String(value) as ScanSourceKind)}
+              value={scanSource}
+              variant="secondary"
+            >
+              {scanSourceOptions.map((option) => (
+                <ScanSourceCard
+                  key={option.source}
+                  description={option.description}
+                  disabled={option.disabled}
+                  disabledReason={option.disabledReason}
+                  icon={option.icon}
+                  metadata={option.metadata}
+                  source={option.source}
+                  title={option.title}
+                />
+              ))}
+            </RadioGroup>
+            {availableScanSourceOptions.length === 0 ? (
+              <p className="text-sm text-muted">
+                No scan source is currently available in this deployment.
+              </p>
+            ) : null}
+            {privateRegistries.length === 0 || xrayRegistries.length === 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-border pt-4">
+                <p className="text-sm text-muted">
+                  Configure registries to enable private and Artifactory scan routes.
+                </p>
+                <Button onPress={() => router.push('/registries')} size="sm" variant="secondary">
+                  Manage registries
+                </Button>
+              </div>
+            ) : null}
+          </Card.Content>
         </Card>
 
         {scanSource ? (
-          <ScanSection
-            title="Target"
-            description={
-              scanSource === 'local_archive'
-                ? 'Upload the archive and optionally set a friendlier display name.'
-                : 'Use a single image or queue several references in one run.'
-            }
+          <div
+            className={`scan-form-reveal grid gap-4 ${
+              hasRoutingSection
+                ? 'xl:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)] xl:items-start'
+                : ''
+            }`}
           >
-            {scanSource === 'local_archive' ? (
-              <ScanWizardField label="OCI/Docker archive">
-                <div className="rounded-2xl border border-dashed border-surface-border bg-surface-secondary px-4 py-4">
-                  <input
-                    accept=".tar,.tgz,.tar.gz,.oci"
-                    className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-xl file:border-0 file:bg-accent file:px-3 file:py-2 file:font-medium file:text-white hover:file:opacity-90 dark:text-zinc-300"
-                    onChange={(e) => setUploadedArchiveFile(e.target.files?.[0] ?? null)}
-                    type="file"
-                  />
-                  {uploadedArchiveFile ? (
-                    <p className="mt-3 text-xs text-zinc-500">
-                      Selected: {uploadedArchiveFile.name}
-                    </p>
-                  ) : null}
-                </div>
-              </ScanWizardField>
-            ) : null}
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <FormField
-                className="font-mono"
-                label={scanSource === 'local_archive' ? 'Display name' : 'Image name'}
-                onChange={(e) => setImageName(e.target.value)}
-                placeholder={
-                  scanSource === 'artifactory_xray' ? 'n8nio/n8n' : 'ghcr.io/example/api'
-                }
-                required={scanSource !== 'local_archive'}
-                value={imageName}
-              />
-              <FormField
-                className="font-mono"
-                label="Tag"
-                onChange={(e) => setImageTag(e.target.value)}
-                placeholder="latest"
-                required={scanSource !== 'local_archive'}
-                value={imageTag}
-              />
-            </div>
-          </ScanSection>
-        ) : null}
-
-        {scanSource && hasRoutingSection ? (
-          <ScanSection
-            title="Routing"
-            description={
-              scanSource === 'private_registry'
-                ? 'Choose the configured registry that should authenticate and pull this image.'
-                : 'Choose the Xray-backed registry first, then optionally add a repo override for mirrors or remotes.'
-            }
-          >
-            {scanSource === 'private_registry' ? (
-              <ScanWizardField label="Private registry">
-                <Select
-                  value={registryId || '__none__'}
-                  onChange={(value) =>
-                    setRegistryId(String(value === '__none__' ? '' : (value ?? '')))
-                  }
-                >
-                  <Select.Trigger className={selectTriggerCls}>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      {privateRegistries.map((registry) => (
-                        <ListBox.Item key={registry.id} id={registry.id}>
-                          {registry.name}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-              </ScanWizardField>
-            ) : null}
-
-            {scanSource === 'artifactory_xray' ? (
-              <div className="space-y-4">
-                <ScanWizardField label="Artifactory registry">
-                  <Select
-                    value={registryId || '__none__'}
-                    onChange={(value) =>
-                      setRegistryId(String(value === '__none__' ? '' : (value ?? '')))
-                    }
-                  >
-                    <Select.Trigger className={selectTriggerCls}>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {xrayRegistries.map((registry) => (
-                          <ListBox.Item key={registry.id} id={registry.id}>
-                            {registry.name}
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                </ScanWizardField>
-
-                <ScanWizardField
-                  label="Repo override"
-                  optional
-                  description={
-                    <>
-                      Pick a repo like <span className="font-mono">docker-remote</span> so you can
-                      scan <span className="font-mono">n8nio/n8n</span> instead of typing{' '}
-                      <span className="font-mono">docker-remote/n8nio/n8n</span>.
-                    </>
-                  }
-                >
-                  <Autocomplete
-                    value={xrayRepositoryAutocompleteValue}
-                    onChange={(key: Key | null) => {
-                      const value = String(key ?? '__none__');
-                      if (value === '__manual__') {
-                        setUseManualXrayRepository(true);
-                        return;
-                      }
-                      setUseManualXrayRepository(false);
-                      setXrayRepository(value === '__none__' ? '' : value);
-                    }}
-                  >
-                    <Autocomplete.Trigger className="bg-surface-secondary">
-                      <Autocomplete.Value />
-                      <Autocomplete.ClearButton />
-                      <Autocomplete.Indicator />
-                    </Autocomplete.Trigger>
-                    <Autocomplete.Popover>
-                      <Autocomplete.Filter filter={contains}>
-                        <SearchField name="artifactory-repo-search" variant="secondary">
-                          <SearchField.Group>
-                            <SearchField.SearchIcon />
-                            <SearchField.Input placeholder="Search Artifactory repos..." />
-                            <SearchField.ClearButton />
-                          </SearchField.Group>
-                        </SearchField>
-                        <ListBox
-                          renderEmptyState={() => (
-                            <div className="px-3 py-2 text-sm text-zinc-500">
-                              No matching repositories
-                            </div>
-                          )}
-                        >
-                          <ListBox.Item id="__none__" textValue="No repo override">
-                            No repo override
-                          </ListBox.Item>
-                          {selectedRegistryRepositories.map((repository) => (
-                            <ListBox.Item
-                              key={repository.key}
-                              id={repository.key}
-                              textValue={`${repository.key} ${repository.class ?? ''}`.trim()}
-                            >
-                              {repository.key}
-                              {repository.class ? ` · ${repository.class}` : ''}
-                            </ListBox.Item>
-                          ))}
-                          <ListBox.Item id="__manual__" textValue="Enter manually">
-                            Enter manually
-                          </ListBox.Item>
-                        </ListBox>
-                      </Autocomplete.Filter>
-                    </Autocomplete.Popover>
-                  </Autocomplete>
-                  {selectedRegistry && artifactoryRepositoriesLoading === selectedRegistry.id ? (
-                    <p className="text-xs text-zinc-500">Loading available Artifactory repos…</p>
-                  ) : null}
-                  {selectedRegistryRepositoriesError ? (
-                    <p className="text-xs" style={{ color: '#f59e0b' }}>
-                      {selectedRegistryRepositoriesError}. You can still enter the repo manually.
-                    </p>
-                  ) : null}
-                  {useManualXrayRepository || !!selectedRegistryRepositoriesError ? (
-                    <FormField
-                      className="font-mono"
-                      description="Manual fallback when the repo list is unavailable or you need a repo key that is not listed."
-                      label="Manual repo override"
-                      onChange={(event) => setXrayRepository(event.target.value)}
-                      placeholder="docker-remote"
-                      value={xrayRepository}
+            <ScanSection
+              title="Target"
+              description={
+                scanSource === 'local_archive'
+                  ? 'Upload the archive and optionally set a friendlier display name.'
+                  : 'Use a single image or queue several references in one run.'
+              }
+            >
+              {scanSource === 'local_archive' ? (
+                <ScanWizardField label="OCI/Docker archive">
+                  <div className="rounded-2xl border border-dashed border-surface-border bg-surface-secondary px-4 py-4">
+                    <input
+                      accept=".tar,.tgz,.tar.gz,.oci"
+                      className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-xl file:border-0 file:bg-accent file:px-3 file:py-2 file:font-medium file:text-white hover:file:opacity-90 dark:text-zinc-300"
+                      onChange={(e) => setUploadedArchiveFile(e.target.files?.[0] ?? null)}
+                      type="file"
                     />
-                  ) : null}
+                    {uploadedArchiveFile ? (
+                      <p className="mt-3 text-xs text-zinc-500">
+                        Selected: {uploadedArchiveFile.name}
+                      </p>
+                    ) : null}
+                  </div>
                 </ScanWizardField>
+              ) : null}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  className="font-mono"
+                  label={scanSource === 'local_archive' ? 'Display name' : 'Image name'}
+                  onChange={(e) => setImageName(e.target.value)}
+                  placeholder={
+                    scanSource === 'artifactory_xray' ? 'n8nio/n8n' : 'ghcr.io/example/api'
+                  }
+                  required={scanSource !== 'local_archive'}
+                  value={imageName}
+                />
+                <FormField
+                  className="font-mono"
+                  label="Tag"
+                  onChange={(e) => setImageTag(e.target.value)}
+                  placeholder="latest"
+                  required={scanSource !== 'local_archive'}
+                  value={imageTag}
+                />
               </div>
-            ) : null}
-          </ScanSection>
-        ) : null}
+            </ScanSection>
 
-        {scanSource ? (
-          <Disclosure
-            isExpanded={optionalSettingsExpanded}
-            onExpandedChange={setOptionalSettingsExpanded}
-            className="surface-panel overflow-hidden rounded-2xl"
-          >
-            <Disclosure.Heading>
-              <Disclosure.Trigger className="flex w-full items-start justify-between gap-4 px-5 py-5 text-left transition-colors hover:bg-surface-secondary/60">
-                <div className="min-w-0 space-y-1.5">
-                  <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-                    Optional settings
-                  </h2>
-                  <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                    Add more image targets or pin a platform only when you need to.
-                  </p>
-                </div>
-                <Disclosure.Indicator className="mt-1 shrink-0 text-zinc-400">
-                  <ArrowDown01Icon size={16} />
-                </Disclosure.Indicator>
-              </Disclosure.Trigger>
-            </Disclosure.Heading>
-            <Disclosure.Content>
-              <Disclosure.Body className="border-t border-surface-border px-5 py-5">
-                <div className="space-y-4">
-                  {scanSource !== 'local_archive' ? (
-                    <ScanWizardField
-                      description="Paste one or many full image references, separated by commas or new lines. Anything still in this box is included when you start the scan."
-                      label="Queue more images"
-                      optional
-                    >
-                      <TextArea
-                        className={joinClassNames(inputCls, 'min-h-24 bg-surface resize-y')}
-                        placeholder={
-                          'ghcr.io/example/api:1.2.3\nregistry.example.com/team/worker:latest'
-                        }
-                        value={additionalImageDraft}
-                        onChange={(e) => setAdditionalImageDraft(e.target.value)}
-                      />
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="shrink-0"
-                          onPress={addAdditionalImagesFromDraft}
-                        >
-                          Add{' '}
-                          {pendingAdditionalImages.length > 1
-                            ? `${pendingAdditionalImages.length} refs`
-                            : 'to list'}
-                        </Button>
-                      </div>
-                      {additionalImageEntries.length > 0 ? (
-                        <div
-                          className="rounded-2xl p-3"
-                          style={{
-                            background: 'rgba(255,255,255,0.03)',
-                            border: '1px solid var(--surface-border)',
-                          }}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs font-medium text-zinc-500">
-                              Queued image targets
-                            </p>
-                            <span
-                              className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-500"
-                              style={{
-                                background: 'rgba(255,255,255,0.05)',
-                                border: '1px solid var(--surface-border)',
-                              }}
-                            >
-                              {additionalImageEntries.length}
-                            </span>
-                          </div>
-                          <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
-                            {additionalImageEntries.map((image) => (
-                              <div
-                                key={image}
-                                className="flex items-start justify-between gap-3 rounded-xl px-3 py-2"
-                                style={{
-                                  background: 'rgba(255,255,255,0.03)',
-                                  border: '1px solid var(--surface-border)',
-                                }}
-                              >
-                                <span className="min-w-0 break-all font-mono text-xs text-zinc-600 dark:text-zinc-300">
-                                  {image}
-                                </span>
-                                <button
-                                  aria-label={`Remove ${image}`}
-                                  className="btn-icon-subtle size-8 shrink-0 rounded-lg"
-                                  onClick={() => removeAdditionalImageEntry(image)}
-                                  type="button"
-                                >
-                                  <Cancel01Icon aria-hidden size={14} />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                    </ScanWizardField>
-                  ) : null}
-
-                  <ScanWizardField label="Platform" optional>
+            {hasRoutingSection ? (
+              <ScanSection
+                title="Routing"
+                description={
+                  scanSource === 'private_registry'
+                    ? 'Choose the configured registry that should authenticate and pull this image.'
+                    : 'Choose the Xray-backed registry first, then optionally add a repo override for mirrors or remotes.'
+                }
+              >
+                {scanSource === 'private_registry' ? (
+                  <ScanWizardField label="Private registry">
                     <Select
-                      value={platform || '__auto__'}
+                      value={registryId || '__none__'}
                       onChange={(value) =>
-                        setPlatform(String(value === '__auto__' ? '' : (value ?? '')))
+                        setRegistryId(String(value === '__none__' ? '' : (value ?? '')))
                       }
-                      variant="secondary"
                     >
-                      <Label className="sr-only">Platform</Label>
-                      <Select.Trigger>
+                      <Select.Trigger className={selectTriggerCls}>
                         <Select.Value />
                         <Select.Indicator />
                       </Select.Trigger>
                       <Select.Popover>
                         <ListBox>
-                          <ListBox.Item id="__auto__">Auto-detect</ListBox.Item>
-                          <ListBox.Item id="linux/amd64">linux/amd64</ListBox.Item>
-                          <ListBox.Item id="linux/arm64">linux/arm64</ListBox.Item>
-                          <ListBox.Item id="linux/arm/v7">linux/arm/v7</ListBox.Item>
-                          <ListBox.Item id="linux/arm/v6">linux/arm/v6</ListBox.Item>
-                          <ListBox.Item id="linux/386">linux/386</ListBox.Item>
-                          <ListBox.Item id="linux/s390x">linux/s390x</ListBox.Item>
-                          <ListBox.Item id="linux/ppc64le">linux/ppc64le</ListBox.Item>
-                          <ListBox.Item id="windows/amd64">windows/amd64</ListBox.Item>
+                          {privateRegistries.map((registry) => (
+                            <ListBox.Item key={registry.id} id={registry.id}>
+                              {registry.name}
+                            </ListBox.Item>
+                          ))}
                         </ListBox>
                       </Select.Popover>
                     </Select>
                   </ScanWizardField>
-                </div>
-              </Disclosure.Body>
-            </Disclosure.Content>
-          </Disclosure>
+                ) : null}
+
+                {scanSource === 'artifactory_xray' ? (
+                  <div className="space-y-4">
+                    <ScanWizardField label="Artifactory registry">
+                      <Select
+                        value={registryId || '__none__'}
+                        onChange={(value) =>
+                          setRegistryId(String(value === '__none__' ? '' : (value ?? '')))
+                        }
+                      >
+                        <Select.Trigger className={selectTriggerCls}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            {xrayRegistries.map((registry) => (
+                              <ListBox.Item key={registry.id} id={registry.id}>
+                                {registry.name}
+                              </ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                    </ScanWizardField>
+
+                    <ScanWizardField
+                      label="Repo override"
+                      optional
+                      description={
+                        <>
+                          Pick a repo like <span className="font-mono">docker-remote</span> so you
+                          can scan <span className="font-mono">n8nio/n8n</span> instead of typing{' '}
+                          <span className="font-mono">docker-remote/n8nio/n8n</span>.
+                        </>
+                      }
+                    >
+                      <Autocomplete
+                        value={xrayRepositoryAutocompleteValue}
+                        onChange={(key: Key | null) => {
+                          const value = String(key ?? '__none__');
+                          if (value === '__manual__') {
+                            setUseManualXrayRepository(true);
+                            return;
+                          }
+                          setUseManualXrayRepository(false);
+                          setXrayRepository(value === '__none__' ? '' : value);
+                        }}
+                      >
+                        <Autocomplete.Trigger className="bg-surface-secondary">
+                          <Autocomplete.Value />
+                          <Autocomplete.ClearButton />
+                          <Autocomplete.Indicator />
+                        </Autocomplete.Trigger>
+                        <Autocomplete.Popover>
+                          <Autocomplete.Filter filter={contains}>
+                            <SearchField name="artifactory-repo-search" variant="secondary">
+                              <SearchField.Group>
+                                <SearchField.SearchIcon />
+                                <SearchField.Input placeholder="Search Artifactory repos..." />
+                                <SearchField.ClearButton />
+                              </SearchField.Group>
+                            </SearchField>
+                            <ListBox
+                              renderEmptyState={() => (
+                                <div className="px-3 py-2 text-sm text-zinc-500">
+                                  No matching repositories
+                                </div>
+                              )}
+                            >
+                              <ListBox.Item id="__none__" textValue="No repo override">
+                                No repo override
+                              </ListBox.Item>
+                              {selectedRegistryRepositories.map((repository) => (
+                                <ListBox.Item
+                                  key={repository.key}
+                                  id={repository.key}
+                                  textValue={`${repository.key} ${repository.class ?? ''}`.trim()}
+                                >
+                                  {repository.key}
+                                  {repository.class ? ` · ${repository.class}` : ''}
+                                </ListBox.Item>
+                              ))}
+                              <ListBox.Item id="__manual__" textValue="Enter manually">
+                                Enter manually
+                              </ListBox.Item>
+                            </ListBox>
+                          </Autocomplete.Filter>
+                        </Autocomplete.Popover>
+                      </Autocomplete>
+                      {selectedRegistry &&
+                      artifactoryRepositoriesLoading === selectedRegistry.id ? (
+                        <p className="text-xs text-zinc-500">
+                          Loading available Artifactory repos…
+                        </p>
+                      ) : null}
+                      {selectedRegistryRepositoriesError ? (
+                        <p className="text-xs" style={{ color: '#f59e0b' }}>
+                          {selectedRegistryRepositoriesError}. You can still enter the repo
+                          manually.
+                        </p>
+                      ) : null}
+                      {useManualXrayRepository || !!selectedRegistryRepositoriesError ? (
+                        <FormField
+                          className="font-mono"
+                          description="Manual fallback when the repo list is unavailable or you need a repo key that is not listed."
+                          label="Manual repo override"
+                          onChange={(event) => setXrayRepository(event.target.value)}
+                          placeholder="docker-remote"
+                          value={xrayRepository}
+                        />
+                      ) : null}
+                    </ScanWizardField>
+                  </div>
+                ) : null}
+              </ScanSection>
+            ) : null}
+          </div>
         ) : null}
 
         {scanSource ? (
-          <Card className="surface-panel rounded-2xl p-4">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Source</p>
-                <p className="text-sm font-semibold text-zinc-900 dark:text-white">
-                  {scanSourceLabel}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Target</p>
-                <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
-                  {targetSummary}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Routing</p>
-                <p className="text-sm font-semibold text-zinc-900 dark:text-white">
-                  {routingSummary}
-                </p>
-              </div>
-            </div>
+          <Card className="surface-panel overflow-hidden rounded-2xl p-0">
+            <Disclosure
+              className="w-full"
+              isExpanded={optionalSettingsExpanded}
+              onExpandedChange={setOptionalSettingsExpanded}
+            >
+              <Disclosure.Heading>
+                <Disclosure.Trigger className="flex w-full items-start justify-between gap-4 px-5 py-5 text-left transition-colors hover:bg-surface-secondary/60">
+                  <div className="min-w-0 space-y-1.5">
+                    <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                      Optional settings
+                    </h2>
+                    <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                      Add more image targets or pin a platform only when you need to.
+                    </p>
+                  </div>
+                  <Disclosure.Indicator className="mt-1 shrink-0 text-zinc-400">
+                    <ArrowDown01Icon size={16} />
+                  </Disclosure.Indicator>
+                </Disclosure.Trigger>
+              </Disclosure.Heading>
+              <Disclosure.Content>
+                <Disclosure.Body className="border-t border-surface-border px-5 py-5">
+                  <div className="space-y-4">
+                    {scanSource !== 'local_archive' ? (
+                      <ScanWizardField
+                        description="Paste one or many full image references, separated by commas or new lines. Anything still in this box is included when you start the scan."
+                        label="Queue more images"
+                        optional
+                      >
+                        <TextArea
+                          className={joinClassNames(inputCls, 'min-h-24 bg-surface resize-y')}
+                          placeholder={
+                            'ghcr.io/example/api:1.2.3\nregistry.example.com/team/worker:latest'
+                          }
+                          value={additionalImageDraft}
+                          onChange={(e) => setAdditionalImageDraft(e.target.value)}
+                        />
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="shrink-0"
+                            onPress={addAdditionalImagesFromDraft}
+                          >
+                            Add{' '}
+                            {pendingAdditionalImages.length > 1
+                              ? `${pendingAdditionalImages.length} refs`
+                              : 'to list'}
+                          </Button>
+                        </div>
+                        {additionalImageEntries.length > 0 ? (
+                          <div
+                            className="rounded-2xl p-3"
+                            style={{
+                              background: 'rgba(255,255,255,0.03)',
+                              border: '1px solid var(--surface-border)',
+                            }}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-xs font-medium text-zinc-500">
+                                Queued image targets
+                              </p>
+                              <span
+                                className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-500"
+                                style={{
+                                  background: 'rgba(255,255,255,0.05)',
+                                  border: '1px solid var(--surface-border)',
+                                }}
+                              >
+                                {additionalImageEntries.length}
+                              </span>
+                            </div>
+                            <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
+                              {additionalImageEntries.map((image) => (
+                                <div
+                                  key={image}
+                                  className="flex items-start justify-between gap-3 rounded-xl px-3 py-2"
+                                  style={{
+                                    background: 'rgba(255,255,255,0.03)',
+                                    border: '1px solid var(--surface-border)',
+                                  }}
+                                >
+                                  <span className="min-w-0 break-all font-mono text-xs text-zinc-600 dark:text-zinc-300">
+                                    {image}
+                                  </span>
+                                  <button
+                                    aria-label={`Remove ${image}`}
+                                    className="btn-icon-subtle size-8 shrink-0 rounded-lg"
+                                    onClick={() => removeAdditionalImageEntry(image)}
+                                    type="button"
+                                  >
+                                    <Cancel01Icon aria-hidden size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </ScanWizardField>
+                    ) : null}
+
+                    <ScanWizardField label="Platform" optional>
+                      <Select
+                        value={platform || '__auto__'}
+                        onChange={(value) =>
+                          setPlatform(String(value === '__auto__' ? '' : (value ?? '')))
+                        }
+                        variant="secondary"
+                      >
+                        <Label className="sr-only">Platform</Label>
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="__auto__">Auto-detect</ListBox.Item>
+                            <ListBox.Item id="linux/amd64">linux/amd64</ListBox.Item>
+                            <ListBox.Item id="linux/arm64">linux/arm64</ListBox.Item>
+                            <ListBox.Item id="linux/arm/v7">linux/arm/v7</ListBox.Item>
+                            <ListBox.Item id="linux/arm/v6">linux/arm/v6</ListBox.Item>
+                            <ListBox.Item id="linux/386">linux/386</ListBox.Item>
+                            <ListBox.Item id="linux/s390x">linux/s390x</ListBox.Item>
+                            <ListBox.Item id="linux/ppc64le">linux/ppc64le</ListBox.Item>
+                            <ListBox.Item id="windows/amd64">windows/amd64</ListBox.Item>
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                    </ScanWizardField>
+                  </div>
+                </Disclosure.Body>
+              </Disclosure.Content>
+            </Disclosure>
           </Card>
         ) : null}
 
-        <div className="flex items-center justify-end">
-          <Button
-            type="submit"
-            isDisabled={
-              creating ||
-              !canMutateCurrentScope ||
-              xrayOnlyWithoutRegistries ||
-              Boolean(orgFeatureBlockMessage)
-            }
-            variant="primary"
-            className="inline-flex items-center gap-2"
-          >
-            {creating ? (
-              <div className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+        <Card className="surface-panel rounded-2xl p-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            {scanSource ? (
+              <dl className="grid min-w-0 flex-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <dt className="text-[11px] uppercase tracking-[0.18em] text-muted">Source</dt>
+                  <dd className="text-sm font-semibold text-foreground">{scanSourceLabel}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-[0.18em] text-muted">Target</dt>
+                  <dd className="truncate text-sm font-semibold text-foreground">
+                    {targetSummary}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-[0.18em] text-muted">Routing</dt>
+                  <dd className="text-sm font-semibold text-foreground">{routingSummary}</dd>
+                </div>
+              </dl>
             ) : (
-              <ArrowRight01Icon size={16} />
+              <p className="text-sm text-muted">Choose a source to configure the scan.</p>
             )}
-            {creating ? 'Starting scan…' : 'Start Scan'}
-          </Button>
-        </div>
+            <Button
+              type="submit"
+              isDisabled={!canStartScan}
+              variant="primary"
+              className="inline-flex shrink-0 items-center gap-2"
+            >
+              {creating ? (
+                <div className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              ) : (
+                <ArrowRight01Icon size={16} />
+              )}
+              {creating ? 'Starting scan…' : 'Start Scan'}
+            </Button>
+          </div>
+        </Card>
       </form>
     </div>
   );

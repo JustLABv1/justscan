@@ -85,6 +85,7 @@ import {
   Chip,
   DateField,
   DatePicker,
+  Disclosure,
   Dropdown,
   Label,
   ListBox,
@@ -93,6 +94,7 @@ import {
   SearchField,
   Select,
   Table,
+  Tabs,
   TextArea,
   Tooltip,
   useOverlayState,
@@ -101,6 +103,7 @@ import type { CalendarDate } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
 import {
   ArrowLeft01Icon,
+  ArrowDown01Icon,
   Cancel01Icon,
   Comment01Icon,
   Delete01Icon,
@@ -115,11 +118,7 @@ import {
 } from 'hugeicons-react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ScannerDatabaseCard,
-  ScanningAnimation,
-  ScanStepTimeline,
-} from '../../../../components/scans/scan-runtime';
+import { ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
 
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
@@ -348,7 +347,10 @@ function parseRouteSeverityFilter(raw: string | null): ActiveVulnerabilitySeveri
   if (unique.length === 2 && unique[0] === 'HIGH' && unique[1] === 'CRITICAL') {
     return 'CRITICAL,HIGH';
   }
-  if (unique.length === 1 && isPersistableSeverityFilter(unique[0] as ActiveVulnerabilitySeverityFilter)) {
+  if (
+    unique.length === 1 &&
+    isPersistableSeverityFilter(unique[0] as ActiveVulnerabilitySeverityFilter)
+  ) {
     return unique[0] as VulnerabilityViewSettings['severity'];
   }
 
@@ -517,10 +519,12 @@ export default function ScanDetailPage() {
   const [filteredVulnSummaryOverride, setFilteredVulnSummaryOverride] =
     useState<VulnerabilitySummary | null>(null);
   const [isVulnerabilityRadarCollapsed, setIsVulnerabilityRadarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined') return true;
     const userId = getUser()?.id ?? 'anonymous';
-    return window.localStorage.getItem(`justscan:vuln-radar-collapsed:${userId}`) === '1';
+    const savedPreference = window.localStorage.getItem(`justscan:vuln-radar-collapsed:${userId}`);
+    return savedPreference === null ? true : savedPreference === '1';
   });
+  const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
   const [error, setError] = useState('');
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [tagLoading, setTagLoading] = useState('');
@@ -631,6 +635,19 @@ export default function ScanDetailPage() {
     hideSuppressed ||
     !isPersistableSeverityFilter(severityFilter) ||
     hasRouteVulnerabilityFocus;
+  const advancedVulnerabilityFilterCount = [
+    cveInput.trim().length > 0 || cveFilter.trim().length > 0,
+    minCvss > 0,
+    hasFix,
+    hideSuppressed,
+    xrayPolicyFirst,
+    policyFailedOnly,
+  ].filter(Boolean).length;
+  const hasActiveVulnerabilityFilters =
+    Boolean(severityFilter) ||
+    pkgInput.trim().length > 0 ||
+    pkgFilter.trim().length > 0 ||
+    advancedVulnerabilityFilterCount > 0;
   const vulnerabilityViewSourceLabel = viewPreference?.has_user_override
     ? 'My saved default'
     : viewPreference?.source === 'org'
@@ -1253,6 +1270,28 @@ export default function ScanDetailPage() {
     });
   }
 
+  function clearVulnerabilityFilters() {
+    setPkgInput('');
+    setPkgFilter('');
+    setCveInput('');
+    setCveFilter('');
+    setSeverityFilter('');
+    setMinCvss(0);
+    setHasFix(false);
+    setHideSuppressed(false);
+    setXrayPolicyFirst(false);
+    setPolicyFailedOnly(false);
+    setPage(1);
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('severity');
+    params.delete('has_fix');
+    params.delete('suppressed');
+    params.delete('triage_focus');
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
+
   async function toggleTag(tag: Tag) {
     if (!scan || !canMutateScan()) return;
     const has = (scan.tags ?? []).some((t) => t.id === tag.id);
@@ -1830,88 +1869,20 @@ export default function ScanDetailPage() {
     { subject: 'Fix Available', value: vulnSummary?.with_fix ?? 0 },
     { subject: 'Xray Policy', value: vulnSummary?.xray_policy ?? 0 },
   ];
-  const filteredVulnerabilityTotal = vulnTotal;
   const vulnerabilitiesWithFix = vulnSummary?.with_fix ?? 0;
-  const vulnerabilitiesWithoutFix = Math.max(
-    0,
-    filteredVulnerabilityTotal - vulnerabilitiesWithFix
-  );
   const xrayPolicyMatches = vulnSummary?.xray_policy ?? 0;
-  const criticalAndHigh = (vulnSummary?.critical ?? 0) + (vulnSummary?.high ?? 0);
-  const fixCoveragePercent =
-    filteredVulnerabilityTotal > 0
-      ? Math.round((vulnerabilitiesWithFix / filteredVulnerabilityTotal) * 100)
-      : 0;
-  const xrayPolicyPercent =
-    filteredVulnerabilityTotal > 0
-      ? Math.round((xrayPolicyMatches / filteredVulnerabilityTotal) * 100)
-      : 0;
-  const severityDistribution = [
-    { label: 'Critical', value: vulnSummary?.critical ?? 0 },
-    { label: 'High', value: vulnSummary?.high ?? 0 },
-    { label: 'Medium', value: vulnSummary?.medium ?? 0 },
-    { label: 'Low', value: vulnSummary?.low ?? 0 },
-  ];
-  const dominantSeverity = severityDistribution.reduce((best, current) =>
-    current.value > best.value ? current : best
-  );
-  const remediationItems = [
-    {
-      label: 'Critical/high exposure',
-      value: criticalAndHigh,
-      detail:
-        criticalAndHigh > 0
-          ? 'Start here before reviewing medium and low findings.'
-          : 'No critical or high findings in the current view.',
-      tone: criticalAndHigh > 0 ? 'danger' : 'success',
-      action: () => {
-        setActiveTab('vulns');
-        setSeverityFilter(
-          criticalAndHigh > 0 && (vulnSummary?.critical ?? 0) > 0 ? 'CRITICAL' : 'HIGH'
-        );
-      },
-      actionLabel: 'Review highest risk',
-    },
-    {
-      label: 'Fixes available',
-      value: vulnerabilitiesWithFix,
-      detail:
-        vulnerabilitiesWithFix > 0
-          ? `${fixCoveragePercent}% of visible findings have a fixed version.`
-          : 'No fixed versions are currently reported.',
-      tone: vulnerabilitiesWithFix > 0 ? 'warning' : 'default',
-      action: () => {
-        setActiveTab('vulns');
-        setHasFix(true);
-      },
-      actionLabel: 'Show fixable',
-    },
-    {
-      label: 'Policy blockers',
-      value: complianceViolationRows.length + xrayPolicyMatches,
-      detail:
-        complianceViolationRows.length + xrayPolicyMatches > 0
-          ? 'Policy signals should be resolved or explicitly accepted.'
-          : 'No policy blockers are visible in this scan.',
-      tone: complianceViolationRows.length + xrayPolicyMatches > 0 ? 'danger' : 'success',
-      action: () => {
-        setActiveTab(complianceViolationRows.length > 0 ? 'compliance' : 'vulns');
-        setXrayPolicyFirst(xrayPolicyMatches > 0);
-        setPolicyFailedOnly(complianceViolationRows.length > 0);
-      },
-      actionLabel: 'Review policy',
-    },
-  ] as const;
-  const focusSeverityCounts = [
-    { label: 'Critical', value: scan.critical_count, className: 'text-red-400' },
-    { label: 'High', value: scan.high_count, className: 'text-orange-400' },
-    { label: 'Medium', value: scan.medium_count, className: 'text-yellow-400' },
-    { label: 'Low', value: scan.low_count, className: 'text-blue-400' },
-  ];
+  const scanVulnerabilityTotal =
+    (scan.critical_count ?? 0) +
+    (scan.high_count ?? 0) +
+    (scan.medium_count ?? 0) +
+    (scan.low_count ?? 0) +
+    (scan.unknown_count ?? 0);
+  const scanCriticalAndHigh = (scan.critical_count ?? 0) + (scan.high_count ?? 0);
+  const policyBlockerCount = complianceViolationRows.length + xrayPolicyMatches;
   const focusLead =
     scan.external_status === 'blocked_by_xray_policy'
       ? 'Xray blocked this artifact before the normal scan completion path.'
-      : criticalAndHigh > 0
+      : scanCriticalAndHigh > 0
         ? 'Start with critical and high findings before moving into broader cleanup.'
         : vulnerabilitiesWithFix > 0
           ? 'No critical/high exposure in this view. Apply available fixes next.'
@@ -1936,21 +1907,6 @@ export default function ScanDetailPage() {
             <Cancel01Icon size={15} />
           )}
           Cancel
-        </Button>
-      )}
-      {canRefreshXrayPolicy && (
-        <Button
-          className="btn-secondary"
-          isDisabled={xrayPolicyRefreshing || !canMutateCurrentScan}
-          onPress={handleRefreshXrayPolicy}
-          variant="secondary"
-        >
-          {xrayPolicyRefreshing ? (
-            <span className="size-3.5 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin" />
-          ) : (
-            <Refresh01Icon size={15} />
-          )}
-          Refresh Xray policy
         </Button>
       )}
       <Button
@@ -1997,6 +1953,9 @@ export default function ScanDetailPage() {
                 if (key === 'compare') {
                   void handleComparePrev();
                 }
+                if (key === 'refresh_xray_policy') {
+                  void handleRefreshXrayPolicy();
+                }
                 if (key === 'manage_access') {
                   if (!canManageScanAccess()) return;
                   openScanAccessModal();
@@ -2025,6 +1984,20 @@ export default function ScanDetailPage() {
                   <Label>{comparingPrev ? 'Compare…' : 'Compare'}</Label>
                 </div>
               </Dropdown.Item>
+              {canRefreshXrayPolicy ? (
+                <Dropdown.Item
+                  id="refresh_xray_policy"
+                  isDisabled={xrayPolicyRefreshing || !canMutateCurrentScan}
+                  textValue="Refresh Xray policy"
+                >
+                  <div className="flex items-center gap-2">
+                    <Refresh01Icon size={15} />
+                    <Label>
+                      {xrayPolicyRefreshing ? 'Refreshing Xray policy…' : 'Refresh Xray policy'}
+                    </Label>
+                  </div>
+                </Dropdown.Item>
+              ) : null}
               {canManageScanAccess() ? (
                 <Dropdown.Item id="manage_access" textValue="Manage scan access">
                   <div className="flex items-center gap-2">
@@ -2062,9 +2035,10 @@ export default function ScanDetailPage() {
   );
 
   return (
-    <div className="space-y-5 p-6">
+    <div className="mx-auto max-w-[1440px] space-y-4 p-6">
       <PageHeader
         title={`${scan.image_name}:${scan.image_tag}`}
+        titleCom={<StatusBadge status={scan.status} externalStatus={scan.external_status} />}
         description={
           scan.image_digest ||
           'Inspect vulnerability results, runtime signals, and sharing controls for this scan.'
@@ -2217,87 +2191,32 @@ export default function ScanDetailPage() {
       </Modal>
 
       {scan.status !== 'pending' && scan.status !== 'running' && (
-        <Card className="overflow-hidden">
-          <Card.Content className="gap-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0 space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusBadge status={scan.status} externalStatus={scan.external_status} />
-                  <Chip color={dominantSeverity.value > 0 ? 'warning' : 'success'} variant="soft">
-                    Dominant: {dominantSeverity.label}
-                  </Chip>
-                  {xrayPolicyMatches > 0 ? (
-                    <Chip color="warning" variant="soft">
-                      {xrayPolicyMatches} Xray signal{xrayPolicyMatches === 1 ? '' : 's'}
-                    </Chip>
-                  ) : null}
-                </div>
-                <div>
-                  <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-                    Remediation focus
-                  </h2>
-                  <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">{focusLead}</p>
-                  {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
-                    <p className="mt-2 max-w-3xl text-xs leading-relaxed text-warning">
-                      {blockedPolicyDetails.summary}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 gap-2 xl:min-w-[28rem]">
-                {focusSeverityCounts.map((item) => (
-                  <div
-                    key={item.label}
-                    className="rounded-2xl px-3 py-2"
-                    style={{ background: 'var(--surface-secondary)' }}
-                  >
-                    <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-muted">
-                      {item.label}
-                    </p>
-                    <p className={`mt-1 text-lg font-semibold tabular-nums ${item.className}`}>
-                      {item.value ?? 0}
-                    </p>
-                  </div>
-                ))}
-              </div>
+        <Card>
+          <Card.Content className="gap-4">
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold text-foreground">Scan overview</h2>
+              <p className="max-w-3xl text-sm leading-6 text-muted">{focusLead}</p>
+              {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
+                <p className="text-xs leading-5 text-warning">{blockedPolicyDetails.summary}</p>
+              ) : null}
             </div>
-
-            <div className="grid gap-2 lg:grid-cols-3">
-              {remediationItems.map((item) => (
-                <button
-                  key={item.label}
-                  className="group rounded-2xl px-3.5 py-3 text-left transition-colors hover:bg-[var(--row-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-55"
-                  disabled={item.value === 0}
-                  onClick={item.action}
-                  style={{ background: 'var(--surface-secondary)' }}
-                  type="button"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-muted">
-                        {item.label}
-                      </p>
-                      <p className="mt-1 truncate text-xs text-muted">{item.detail}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-lg font-semibold tabular-nums text-foreground">
-                        {item.value}
-                      </span>
-                      {item.value > 0 ? (
-                        <span className="text-xs font-medium text-accent transition-transform group-hover:translate-x-0.5">
-                          Open →
-                        </span>
-                      ) : (
-                        <Chip color="success" size="sm" variant="soft">
-                          Clear
-                        </Chip>
-                      )}
-                    </div>
-                  </div>
-                </button>
+            <dl className="grid grid-cols-2 gap-y-4 lg:grid-cols-4 lg:divide-x lg:divide-surface-border">
+              {[
+                { label: 'Vulnerabilities', value: scanVulnerabilityTotal },
+                { label: 'Critical + high', value: scanCriticalAndHigh },
+                { label: 'Fixable', value: vulnerabilitiesWithFix },
+                { label: 'Policy blockers', value: policyBlockerCount },
+              ].map((metric) => (
+                <div key={metric.label} className="min-w-0 lg:px-5 lg:first:pl-0">
+                  <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                    {metric.label}
+                  </dt>
+                  <dd className="mt-1 text-xl font-semibold tabular-nums text-foreground">
+                    {metric.value}
+                  </dd>
+                </div>
               ))}
-            </div>
+            </dl>
           </Card.Content>
         </Card>
       )}
@@ -2330,34 +2249,41 @@ export default function ScanDetailPage() {
 
       {/* Tab bar */}
       {scan.status !== 'pending' && scan.status !== 'running' && (
-        <div className="w-full overflow-x-auto pb-1">
-          <SegmentedControl
-            ariaLabel="Scan detail tabs"
-            className="min-w-max"
-            options={
-              [
-                {
-                  id: 'vulns',
-                  label: vulnTotal ? `Vulnerabilities (${vulnTotal})` : 'Vulnerabilities',
-                },
+        <Tabs
+          className="w-full"
+          onSelectionChange={(key) => setActiveTab(String(key) as ScanTab)}
+          selectedKey={activeTab}
+          variant="secondary"
+        >
+          <Tabs.ListContainer className="overflow-x-auto">
+            <Tabs.List aria-label="Scan detail tabs" className="min-w-max">
+              {[
+                { id: 'vulns', label: 'Vulnerabilities', count: vulnTotal },
                 {
                   id: 'compliance',
-                  label: `Compliance (${complianceViolationRows.length})`,
+                  label: 'Compliance',
+                  count: complianceViolationRows.length,
                 },
-                { id: 'sbom', label: sbomTotal ? `SBOM (${sbomTotal})` : 'SBOM' },
-                {
-                  id: 'timeline',
-                  label: scan.step_logs?.length
-                    ? `Timeline (${scan.step_logs.length})`
-                    : 'Timeline',
-                },
-                { id: 'details', label: 'Details' },
-              ] as { id: ScanTab; label: string }[]
-            }
-            value={activeTab}
-            onChange={setActiveTab}
-          />
-        </div>
+                { id: 'sbom', label: 'SBOM', count: sbomTotal },
+                { id: 'timeline', label: 'Timeline', count: scan.step_logs?.length ?? 0 },
+                { id: 'details', label: 'Details', count: null },
+              ].map((tab) => (
+                <Tabs.Tab key={tab.id} className="whitespace-nowrap" id={tab.id}>
+                  {tab.label}
+                  {tab.count !== null ? (
+                    <span className="ml-1 text-xs tabular-nums text-muted">{tab.count}</span>
+                  ) : null}
+                  <Tabs.Indicator />
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs.ListContainer>
+          {(['vulns', 'compliance', 'sbom', 'timeline', 'details'] as ScanTab[]).map((tab) => (
+            <Tabs.Panel key={tab} className="hidden" id={tab}>
+              {tab}
+            </Tabs.Panel>
+          ))}
+        </Tabs>
       )}
 
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'timeline' && (
@@ -2491,47 +2417,59 @@ export default function ScanDetailPage() {
                 </p>
                 {triageFocusActive && (
                   <p className="mt-1 text-[11px] text-zinc-500">
-                    Triage focus is showing open critical and high vulnerabilities with fixes so
-                    you can acknowledge them quickly.
+                    Triage focus is showing open critical and high vulnerabilities with fixes so you
+                    can acknowledge them quickly.
                   </p>
                 )}
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button
-                  className="btn-secondary"
-                  isDisabled={
-                    !viewSettingsReady || viewPreferenceSaving || !vulnerabilityViewHasChanges
-                  }
-                  onPress={() => void saveVulnerabilityViewPreference()}
-                  variant="secondary"
-                >
-                  {viewPreferenceSaving && vulnerabilityViewHasChanges
-                    ? 'Saving...'
-                    : 'Save as my default'}
-                </Button>
-                <Button
-                  className="btn-secondary"
-                  isDisabled={
-                    !viewSettingsReady ||
-                    viewPreferenceSaving ||
-                    (!vulnerabilityViewHasChanges && !hasTransientVulnerabilityFilters)
-                  }
-                  onPress={() => resetToSavedVulnerabilityView()}
-                  variant="secondary"
-                >
-                  Reset to saved
-                </Button>
-                <Button
-                  className="btn-secondary"
-                  isDisabled={
-                    !viewSettingsReady || viewPreferenceSaving || !viewPreference?.has_user_override
-                  }
-                  onPress={() => void resetVulnerabilityViewPreference()}
-                  variant="secondary"
-                >
-                  Reset default
-                </Button>
-              </div>
+              <Dropdown>
+                <Button variant="secondary">View settings</Button>
+                <Dropdown.Popover className="min-w-56">
+                  <Dropdown.Menu
+                    onAction={(key) => {
+                      if (key === 'save') void saveVulnerabilityViewPreference();
+                      if (key === 'reset_saved') resetToSavedVulnerabilityView();
+                      if (key === 'reset_default') void resetVulnerabilityViewPreference();
+                    }}
+                  >
+                    <Dropdown.Item
+                      id="save"
+                      isDisabled={
+                        !viewSettingsReady || viewPreferenceSaving || !vulnerabilityViewHasChanges
+                      }
+                      textValue="Save as my default"
+                    >
+                      <Label>
+                        {viewPreferenceSaving && vulnerabilityViewHasChanges
+                          ? 'Saving…'
+                          : 'Save as my default'}
+                      </Label>
+                    </Dropdown.Item>
+                    <Dropdown.Item
+                      id="reset_saved"
+                      isDisabled={
+                        !viewSettingsReady ||
+                        viewPreferenceSaving ||
+                        (!vulnerabilityViewHasChanges && !hasTransientVulnerabilityFilters)
+                      }
+                      textValue="Reset to saved"
+                    >
+                      <Label>Reset to saved</Label>
+                    </Dropdown.Item>
+                    <Dropdown.Item
+                      id="reset_default"
+                      isDisabled={
+                        !viewSettingsReady ||
+                        viewPreferenceSaving ||
+                        !viewPreference?.has_user_override
+                      }
+                      textValue="Reset my default"
+                    >
+                      <Label>Reset my default</Label>
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
             </div>
 
             <Card variant="secondary" className="flex flex-col gap-3 p-3">
@@ -2629,207 +2567,200 @@ export default function ScanDetailPage() {
                   }}
                 />
               </div>
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_160px_150px_120px_minmax(360px,auto)]">
-                <SearchField name="scan-vuln-search" className="min-w-0 w-full">
-                  <SearchField.Group>
-                    <SearchField.SearchIcon />
-                    <SearchField.Input
-                      placeholder="Search package..."
-                      value={pkgInput}
-                      onChange={(event: any) => setPkgInput(event.target.value)}
-                    />
-                    <SearchField.ClearButton />
-                  </SearchField.Group>
-                </SearchField>
-                <SearchField name="scan-vuln-cve-search" className="min-w-0 w-full">
-                  <SearchField.Group>
-                    <SearchField.SearchIcon />
-                    <SearchField.Input
-                      placeholder="Search CVE (e.g. CVE-2026-31789)..."
-                      value={cveInput}
-                      onChange={(event: any) => setCveInput(event.target.value)}
-                    />
-                    <SearchField.ClearButton />
-                  </SearchField.Group>
-                </SearchField>
-                <Select
-                  aria-label="Sort vulnerabilities by"
-                  value={sortBy}
-                  className="w-full"
-                  onChange={(value: any) => {
-                    setSortBy(value as VulnerabilityViewSettings['sort_by']);
-                    setPage(1);
-                  }}
-                >
-                  <Select.Trigger className={`${selectTriggerCls} h-11`}>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item id="vuln_id">CVE ID</ListBox.Item>
-                      <ListBox.Item id="pkg_name">Package</ListBox.Item>
-                      <ListBox.Item id="severity">Severity</ListBox.Item>
-                      <ListBox.Item id="cvss_score">CVSS</ListBox.Item>
-                      <ListBox.Item id="installed_version">Installed</ListBox.Item>
-                      <ListBox.Item id="fixed_version">Fixed In</ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-                <Select
-                  aria-label="Sort direction"
-                  value={sortDir}
-                  className="w-full"
-                  onChange={(value: any) => {
-                    setSortDir(value as VulnerabilityViewSettings['sort_dir']);
-                    setPage(1);
-                  }}
-                >
-                  <Select.Trigger className={`${selectTriggerCls} h-11`}>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item id="asc">Ascending</ListBox.Item>
-                      <ListBox.Item id="desc">Descending</ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-                <FormField
-                  hideLabel
-                  label="Minimum CVSS"
-                  type="number"
-                  min={0}
-                  max={10}
-                  step={0.1}
-                  value={minCvss || ''}
-                  placeholder="Min CVSS"
-                  onChange={(e: any) => {
-                    const val = parseFloat(e.target.value);
-                    setMinCvss(!isNaN(val) ? val : 0);
-                    setPage(1);
-                  }}
-                  className="w-full h-11 bg-surface"
-                  containerClassName="w-full"
-                />
-                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:col-span-2 2xl:col-span-1 2xl:grid-cols-4">
-                  <Button
-                    onPress={() => {
-                      setHasFix(!hasFix);
-                      setPage(1);
-                    }}
-                    className="min-w-0 w-full"
-                    variant={hasFix ? 'primary' : 'secondary'}
-                  >
-                    Has Fix
-                  </Button>
-                  <Button
-                    onPress={() => {
-                      setHideSuppressed(!hideSuppressed);
-                      setPage(1);
-                    }}
-                    className="min-w-0 w-full"
-                    variant={hideSuppressed ? 'primary' : 'secondary'}
-                  >
-                    Hide Acknowledged
-                  </Button>
-                  <Button
-                    onPress={() => {
-                      setXrayPolicyFirst(!xrayPolicyFirst);
-                      setPage(1);
-                    }}
-                    className={`${xrayPolicyFirst ? 'btn-primary' : 'btn-secondary'} min-w-0 w-full`}
-                    variant={xrayPolicyFirst ? 'primary' : 'secondary'}
-                  >
-                    Xray Policy First
-                  </Button>
-                  <Button
-                    onPress={() => {
-                      setPolicyFailedOnly(!policyFailedOnly);
-                      setPage(1);
-                    }}
-                    isDisabled={workScope.kind !== 'org'}
-                    className={`${policyFailedOnly && workScope.kind === 'org' ? 'btn-primary' : 'btn-secondary'} min-w-0 w-full`}
-                    variant={policyFailedOnly && workScope.kind === 'org' ? 'primary' : 'secondary'}
-                  >
-                    Policy Failed
-                  </Button>
+              <Disclosure
+                isExpanded={advancedFiltersExpanded}
+                onExpandedChange={setAdvancedFiltersExpanded}
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <SearchField name="scan-vuln-search" className="min-w-0 flex-1">
+                    <SearchField.Group>
+                      <SearchField.SearchIcon />
+                      <SearchField.Input
+                        placeholder="Search package…"
+                        value={pkgInput}
+                        onChange={(event: any) => setPkgInput(event.target.value)}
+                      />
+                      <SearchField.ClearButton />
+                    </SearchField.Group>
+                  </SearchField>
+                  <Disclosure.Heading>
+                    <Disclosure.Trigger className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-surface-border bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+                      Filters
+                      {advancedVulnerabilityFilterCount > 0 ? (
+                        <Chip color="accent" size="sm" variant="soft">
+                          {advancedVulnerabilityFilterCount}
+                        </Chip>
+                      ) : null}
+                      <Disclosure.Indicator className="text-muted">
+                        <ArrowDown01Icon aria-hidden size={15} />
+                      </Disclosure.Indicator>
+                    </Disclosure.Trigger>
+                  </Disclosure.Heading>
+                  {hasActiveVulnerabilityFilters ? (
+                    <Button onPress={clearVulnerabilityFilters} variant="tertiary">
+                      Clear filters
+                    </Button>
+                  ) : null}
                 </div>
-              </div>
+                <Disclosure.Content>
+                  <Disclosure.Body className="pt-3">
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+                      <SearchField name="scan-vuln-cve-search" className="min-w-0 w-full">
+                        <SearchField.Group>
+                          <SearchField.SearchIcon />
+                          <SearchField.Input
+                            placeholder="Search CVE (e.g. CVE-2026-31789)..."
+                            value={cveInput}
+                            onChange={(event: any) => setCveInput(event.target.value)}
+                          />
+                          <SearchField.ClearButton />
+                        </SearchField.Group>
+                      </SearchField>
+                      <Select
+                        aria-label="Sort vulnerabilities by"
+                        value={sortBy}
+                        className="w-full"
+                        onChange={(value: any) => {
+                          setSortBy(value as VulnerabilityViewSettings['sort_by']);
+                          setPage(1);
+                        }}
+                      >
+                        <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="vuln_id">CVE ID</ListBox.Item>
+                            <ListBox.Item id="pkg_name">Package</ListBox.Item>
+                            <ListBox.Item id="severity">Severity</ListBox.Item>
+                            <ListBox.Item id="cvss_score">CVSS</ListBox.Item>
+                            <ListBox.Item id="installed_version">Installed</ListBox.Item>
+                            <ListBox.Item id="fixed_version">Fixed In</ListBox.Item>
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                      <Select
+                        aria-label="Sort direction"
+                        value={sortDir}
+                        className="w-full"
+                        onChange={(value: any) => {
+                          setSortDir(value as VulnerabilityViewSettings['sort_dir']);
+                          setPage(1);
+                        }}
+                      >
+                        <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="asc">Ascending</ListBox.Item>
+                            <ListBox.Item id="desc">Descending</ListBox.Item>
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                      <FormField
+                        hideLabel
+                        label="Minimum CVSS"
+                        type="number"
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        value={minCvss || ''}
+                        placeholder="Min CVSS"
+                        onChange={(e: any) => {
+                          const val = parseFloat(e.target.value);
+                          setMinCvss(!isNaN(val) ? val : 0);
+                          setPage(1);
+                        }}
+                        className="w-full h-11 bg-surface"
+                        containerClassName="w-full"
+                      />
+                      <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:col-span-4 xl:grid-cols-4">
+                        <Button
+                          onPress={() => {
+                            setHasFix(!hasFix);
+                            setPage(1);
+                          }}
+                          className="min-w-0 w-full"
+                          variant={hasFix ? 'primary' : 'secondary'}
+                        >
+                          Has Fix
+                        </Button>
+                        <Button
+                          onPress={() => {
+                            setHideSuppressed(!hideSuppressed);
+                            setPage(1);
+                          }}
+                          className="min-w-0 w-full"
+                          variant={hideSuppressed ? 'primary' : 'secondary'}
+                        >
+                          Hide Acknowledged
+                        </Button>
+                        <Button
+                          onPress={() => {
+                            setXrayPolicyFirst(!xrayPolicyFirst);
+                            setPage(1);
+                          }}
+                          className={`${xrayPolicyFirst ? 'btn-primary' : 'btn-secondary'} min-w-0 w-full`}
+                          variant={xrayPolicyFirst ? 'primary' : 'secondary'}
+                        >
+                          Xray Policy First
+                        </Button>
+                        <Button
+                          onPress={() => {
+                            setPolicyFailedOnly(!policyFailedOnly);
+                            setPage(1);
+                          }}
+                          isDisabled={workScope.kind !== 'org'}
+                          className={`${policyFailedOnly && workScope.kind === 'org' ? 'btn-primary' : 'btn-secondary'} min-w-0 w-full`}
+                          variant={
+                            policyFailedOnly && workScope.kind === 'org' ? 'primary' : 'secondary'
+                          }
+                        >
+                          Policy Failed
+                        </Button>
+                      </div>
+                    </div>
+                  </Disclosure.Body>
+                </Disclosure.Content>
+              </Disclosure>
             </Card>
 
-            <Card variant="secondary" className="p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                  Vulnerability Radar
-                </p>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-zinc-500">
-                    Filtered results ({vulnTotal} rows)
+            <Disclosure
+              className="overflow-hidden rounded-xl border border-surface-border bg-surface-secondary"
+              isExpanded={!isVulnerabilityRadarCollapsed}
+              onExpandedChange={(isExpanded) => {
+                const nextCollapsed = !isExpanded;
+                setIsVulnerabilityRadarCollapsed(nextCollapsed);
+                if (typeof window !== 'undefined') {
+                  window.localStorage.setItem(radarPreferenceKey, nextCollapsed ? '1' : '0');
+                }
+              }}
+            >
+              <Disclosure.Heading>
+                <Disclosure.Trigger className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-surface">
+                  <span>
+                    <span className="block text-sm font-medium text-foreground">Insights</span>
+                    <span className="block text-xs text-muted">
+                      Severity and policy distribution for {vulnTotal} filtered results
+                    </span>
                   </span>
-                  <Button
-                    className="btn-secondary h-7 px-2 text-[11px]"
-                    variant="secondary"
-                    onPress={() => {
-                      const next = !isVulnerabilityRadarCollapsed;
-                      setIsVulnerabilityRadarCollapsed(next);
-                      if (typeof window !== 'undefined') {
-                        window.localStorage.setItem(radarPreferenceKey, next ? '1' : '0');
-                      }
-                    }}
-                  >
-                    {isVulnerabilityRadarCollapsed ? 'Show' : 'Hide'}
-                  </Button>
-                </div>
-              </div>
-              {!isVulnerabilityRadarCollapsed && (
-                <div className="grid gap-3 lg:grid-cols-[minmax(320px,520px)_1fr] lg:items-center">
+                  <Disclosure.Indicator className="text-muted">
+                    <ArrowDown01Icon aria-hidden size={16} />
+                  </Disclosure.Indicator>
+                </Disclosure.Trigger>
+              </Disclosure.Heading>
+              <Disclosure.Content>
+                <Disclosure.Body className="border-t border-surface-border p-4">
                   <EvilRadarChart
                     data={vulnerabilityRadarData}
-                    className="mx-auto h-[240px] w-full max-w-[520px] min-h-[240px] flex-none"
+                    className="mx-auto h-[240px] min-h-[240px] w-full max-w-[560px] flex-none"
                   />
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
-                    <Card className="p-2.5">
-                      <p className="text-[11px] text-zinc-500">Dominant Severity</p>
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                        {dominantSeverity.label}
-                      </p>
-                    </Card>
-                    <Card className="p-2.5">
-                      <p className="text-[11px] text-zinc-500">Critical + High</p>
-                      <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">
-                        {criticalAndHigh}
-                      </p>
-                    </Card>
-                    <Card className="p-2.5">
-                      <p className="text-[11px] text-zinc-500">Fix Coverage</p>
-                      <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                        {fixCoveragePercent}%
-                      </p>
-                    </Card>
-                    <Card className="p-2.5">
-                      <p className="text-[11px] text-zinc-500">No Known Fix</p>
-                      <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-                        {vulnerabilitiesWithoutFix}
-                      </p>
-                    </Card>
-                    <Card className="p-2.5">
-                      <p className="text-[11px] text-zinc-500">Xray Policy Matches</p>
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                        {xrayPolicyMatches}
-                      </p>
-                    </Card>
-                    <Card className="p-2.5">
-                      <p className="text-[11px] text-zinc-500">Policy Match Rate</p>
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                        {xrayPolicyPercent}%
-                      </p>
-                    </Card>
-                  </div>
-                </div>
-              )}
-            </Card>
+                </Disclosure.Body>
+              </Disclosure.Content>
+            </Disclosure>
           </Card.Header>
 
           <Table variant="secondary">
@@ -2912,19 +2843,7 @@ export default function ScanDetailPage() {
 
                       return (
                         <Fragment key={v.id}>
-                          <Table.Row
-                            id={v.id}
-                            className="hover:bg-[var(--row-hover)]"
-                            style={
-                              hasPolicyFailure
-                                ? {
-                                    background: 'rgba(239,68,68,0.05)',
-                                    borderTop: '1px solid rgba(239,68,68,0.12)',
-                                    borderBottom: '1px solid rgba(239,68,68,0.12)',
-                                  }
-                                : undefined
-                            }
-                          >
+                          <Table.Row id={v.id} className="hover:bg-[var(--row-hover)]">
                             <Table.Cell>
                               {v.vuln_id ? (
                                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -3215,9 +3134,7 @@ export default function ScanDetailPage() {
                                                   onChange={(value: any) =>
                                                     setSuppressScope(
                                                       (value as
-                                                        | 'personal'
-                                                        | 'workspace'
-                                                        | 'global') ??
+                                                        'personal' | 'workspace' | 'global') ??
                                                         (workScope.kind === 'org'
                                                           ? 'workspace'
                                                           : 'personal')
@@ -3709,109 +3626,109 @@ export default function ScanDetailPage() {
       {/* Details tab */}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'details' && (
         <div className="space-y-4">
-          <div className="space-y-3">
-            <p
-              className="text-xs font-semibold uppercase tracking-wider"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              Scan context
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <Card className="p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                  Ownership
-                </p>
-                <div className="mt-2">
-                  <OwnershipBadge
-                    ownerType={scan.owner_type}
-                    ownerOrgId={scan.owner_org_id}
-                    orgNamesById={orgNamesById}
-                  />
+          <Card>
+            <Card.Header>
+              <Card.Title>Scan context</Card.Title>
+            </Card.Header>
+            <Card.Content>
+              <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <dt className="text-xs text-muted">Ownership</dt>
+                  <dd className="mt-1.5">
+                    <OwnershipBadge
+                      ownerType={scan.owner_type}
+                      ownerOrgId={scan.owner_org_id}
+                      orgNamesById={orgNamesById}
+                    />
+                  </dd>
                 </div>
-              </Card>
-              <Card className="p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                  Platform
-                </p>
-                <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">
-                  {scan.architecture
-                    ? `${scan.architecture} · ${scan.os_family} ${scan.os_name}`
-                    : '-'}
-                </p>
-              </Card>
-              <Card className="p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                  Workspace
-                </p>
-                <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">
-                  {scan.owner_type === 'org' && scan.owner_org_id
-                    ? (orgNamesById[scan.owner_org_id] ?? 'Org workspace')
-                    : 'Personal'}
-                </p>
-              </Card>
-              <Card className="p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                  Source
-                </p>
-                {scan.helm_chart ? (
-                  <p
-                    className="mt-1 break-words text-sm text-zinc-900 dark:text-zinc-100"
+                <div>
+                  <dt className="text-xs text-muted">Platform</dt>
+                  <dd className="mt-1 text-sm text-foreground">
+                    {scan.architecture
+                      ? `${scan.architecture} · ${scan.os_family} ${scan.os_name}`
+                      : '-'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Workspace</dt>
+                  <dd className="mt-1 text-sm text-foreground">
+                    {scan.owner_type === 'org' && scan.owner_org_id
+                      ? (orgNamesById[scan.owner_org_id] ?? 'Org workspace')
+                      : 'Personal'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Source</dt>
+                  <dd
+                    className="mt-1 break-words text-sm text-foreground"
                     style={{ overflowWrap: 'anywhere' }}
                     title={scan.helm_source_path}
                   >
-                    Helm {scan.helm_chart}
-                    {scan.helm_source_path ? ` · ${scan.helm_source_path}` : ''}
-                  </p>
-                ) : (
-                  <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">Direct image scan</p>
-                )}
-              </Card>
-            </div>
-          </div>
+                    {scan.helm_chart
+                      ? `Helm ${scan.helm_chart}${scan.helm_source_path ? ` · ${scan.helm_source_path}` : ''}`
+                      : 'Direct image scan'}
+                  </dd>
+                </div>
+              </dl>
+            </Card.Content>
+          </Card>
 
           {/* Scanner info */}
           {(scan.trivy_version ||
             scan.grype_version ||
             scan.trivy_vuln_db_updated_at ||
             scan.trivy_java_db_updated_at) && (
-            <div className="space-y-3">
-              <p
-                className="text-xs font-semibold uppercase tracking-wider mb-2"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                Scanner
-              </p>
-              <div className="grid gap-3 lg:grid-cols-3">
-                <Card className="p-4">
-                  <Card.Content className="p-0">
-                    <p className="mb-1 text-xs text-zinc-500">Scanner</p>
-                    <p className="text-sm font-medium text-zinc-900 dark:text-white">
+            <Card>
+              <Card.Header>
+                <Card.Title>Scanner</Card.Title>
+              </Card.Header>
+              <Card.Content>
+                <dl className="grid gap-x-8 gap-y-5 lg:grid-cols-3">
+                  <div>
+                    <dt className="text-xs text-muted">Engine</dt>
+                    <dd className="mt-1 text-sm font-medium text-foreground">
                       Trivy {scan.trivy_version || 'unknown'}
-                    </p>
-                    {scan.grype_version && (
-                      <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
-                        Grype {scan.grype_version}
-                      </p>
-                    )}
-                    <p className="mt-1 text-xs text-zinc-500">
+                      {scan.grype_version ? ` · Grype ${scan.grype_version}` : ''}
+                    </dd>
+                    <dd className="mt-1 text-xs text-muted">
                       {scan.completed_at
-                        ? `DB snapshot captured ${timeAgo(scan.completed_at)}`
-                        : 'DB snapshot captured when this scan completed'}
-                    </p>
-                  </Card.Content>
-                </Card>
-                <ScannerDatabaseCard
-                  label="Vulnerability DB"
-                  updatedAt={scan.trivy_vuln_db_updated_at}
-                  downloadedAt={scan.trivy_vuln_db_downloaded_at}
-                />
-                <ScannerDatabaseCard
-                  label="Java DB"
-                  updatedAt={scan.trivy_java_db_updated_at}
-                  downloadedAt={scan.trivy_java_db_downloaded_at}
-                />
-              </div>
-            </div>
+                        ? `Snapshot captured ${timeAgo(scan.completed_at)}`
+                        : 'Snapshot captured when the scan completed'}
+                    </dd>
+                  </div>
+                  {[
+                    {
+                      label: 'Vulnerability database',
+                      updatedAt: scan.trivy_vuln_db_updated_at,
+                      downloadedAt: scan.trivy_vuln_db_downloaded_at,
+                    },
+                    {
+                      label: 'Java database',
+                      updatedAt: scan.trivy_java_db_updated_at,
+                      downloadedAt: scan.trivy_java_db_downloaded_at,
+                    },
+                  ].map((database) => (
+                    <div key={database.label}>
+                      <dt className="text-xs text-muted">{database.label}</dt>
+                      <dd
+                        className="mt-1 text-sm font-medium text-foreground"
+                        title={database.updatedAt ? fullDate(database.updatedAt) : ''}
+                      >
+                        {database.updatedAt ? timeAgo(database.updatedAt) : 'Unknown'}
+                      </dd>
+                      <dd
+                        className="mt-1 text-xs text-muted"
+                        title={database.downloadedAt ? fullDate(database.downloadedAt) : ''}
+                      >
+                        Downloaded{' '}
+                        {database.downloadedAt ? timeAgo(database.downloadedAt) : 'unknown'}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </Card.Content>
+            </Card>
           )}
 
           {fullImageConfig && (
@@ -3823,160 +3740,52 @@ export default function ScanDetailPage() {
                 Image metadata
               </p>
 
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <Card className="p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                    Created
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
-                    {imageCreated || '-'}
-                  </p>
-                </Card>
-                <Card className="p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                    Runtime user
-                  </p>
-                  <p className="mt-1  text-sm text-zinc-900 dark:text-zinc-100">
-                    {imageUser || '-'}
-                  </p>
-                </Card>
-                <Card className="p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                    Working directory
-                  </p>
-                  <p className="mt-1  text-sm text-zinc-900 dark:text-zinc-100">
-                    {imageWorkingDir || '-'}
-                  </p>
-                </Card>
-                <Card className="p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                    Entrypoint
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
-                    {imageEntrypoint.length > 0 ? 'Configured' : 'Not declared'}
-                  </p>
-                </Card>
-                <Card className="p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                    Environment variables
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
-                    {imageEnv.length > 0 ? `${imageEnv.length} captured` : '0 captured'}
-                  </p>
-                </Card>
-                <Card className="p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                    Labels
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
-                    {imageLabelEntries.length > 0
-                      ? `${imageLabelEntries.length} captured`
-                      : '0 captured'}
-                  </p>
-                </Card>
-                <Card className="p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                    Exposed ports
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
-                    {imageExposedPorts.length > 0
-                      ? `${imageExposedPorts.length} declared`
-                      : 'None declared'}
-                  </p>
-                </Card>
-                <Card className="p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                    Volumes
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
-                    {imageVolumes.length > 0 ? `${imageVolumes.length} declared` : 'None declared'}
-                  </p>
-                </Card>
-              </div>
-
-              <Card className="overflow-hidden">
-                <Table variant="secondary">
-                  <Table.Content aria-label="Image metadata details">
-                    <Table.Header>
-                      <Table.Column isRowHeader>Field</Table.Column>
-                      <Table.Column>Value</Table.Column>
-                    </Table.Header>
-                    <Table.Body>
-                      <Table.Row id="meta-created">
-                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Created
-                        </Table.Cell>
-                        <Table.Cell>{imageCreated || '-'}</Table.Cell>
-                      </Table.Row>
-                      <Table.Row id="meta-author">
-                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Author
-                        </Table.Cell>
-                        <Table.Cell>{imageAuthor || '-'}</Table.Cell>
-                      </Table.Row>
-                      <Table.Row id="meta-docker-version">
-                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Docker version
-                        </Table.Cell>
-                        <Table.Cell>{imageDockerVersion || '-'}</Table.Cell>
-                      </Table.Row>
-                      <Table.Row id="meta-user">
-                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          User
-                        </Table.Cell>
-                        <Table.Cell className=" text-xs">{imageUser || '-'}</Table.Cell>
-                      </Table.Row>
-                      <Table.Row id="meta-working-dir">
-                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Working directory
-                        </Table.Cell>
-                        <Table.Cell className=" text-xs">{imageWorkingDir || '-'}</Table.Cell>
-                      </Table.Row>
-                      <Table.Row id="meta-entrypoint">
-                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Entrypoint
-                        </Table.Cell>
-                        <Table.Cell className=" text-xs">
-                          {imageEntrypoint.length > 0 ? imageEntrypoint.join(' ') : '-'}
-                        </Table.Cell>
-                      </Table.Row>
-                      <Table.Row id="meta-command">
-                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Command
-                        </Table.Cell>
-                        <Table.Cell className=" text-xs">
-                          {imageCommand.length > 0 ? imageCommand.join(' ') : '-'}
-                        </Table.Cell>
-                      </Table.Row>
-                      <Table.Row id="meta-exposed-ports">
-                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Exposed ports
-                        </Table.Cell>
-                        <Table.Cell className={imageExposedPorts.length > 0 ? ' text-xs' : ''}>
-                          {imageExposedPorts.length > 0
+              <Card>
+                <Card.Content>
+                  <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
+                    {[
+                      { label: 'Created', value: imageCreated || '-' },
+                      { label: 'Author', value: imageAuthor || '-' },
+                      { label: 'Docker version', value: imageDockerVersion || '-' },
+                      { label: 'Runtime user', value: imageUser || '-' },
+                      { label: 'Working directory', value: imageWorkingDir || '-' },
+                      {
+                        label: 'Entrypoint',
+                        value: imageEntrypoint.length > 0 ? imageEntrypoint.join(' ') : '-',
+                      },
+                      {
+                        label: 'Command',
+                        value: imageCommand.length > 0 ? imageCommand.join(' ') : '-',
+                      },
+                      {
+                        label: 'Exposed ports',
+                        value:
+                          imageExposedPorts.length > 0
                             ? imageExposedPorts.join(', ')
-                            : 'None declared'}
-                        </Table.Cell>
-                      </Table.Row>
-                      <Table.Row id="meta-declared-volumes">
-                        <Table.Cell className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Declared volumes
-                        </Table.Cell>
-                        <Table.Cell className={imageVolumes.length > 0 ? ' text-xs' : ''}>
-                          {imageVolumes.length > 0 ? imageVolumes.join(', ') : '-'}
-                        </Table.Cell>
-                      </Table.Row>
-                    </Table.Body>
-                  </Table.Content>
-                </Table>
+                            : 'None declared',
+                      },
+                      {
+                        label: 'Volumes',
+                        value: imageVolumes.length > 0 ? imageVolumes.join(', ') : 'None declared',
+                      },
+                      {
+                        label: 'Environment',
+                        value: `${imageEnv.length} captured`,
+                      },
+                      { label: 'Labels', value: `${imageLabelEntries.length} captured` },
+                    ].map((item) => (
+                      <div key={item.label} className="min-w-0">
+                        <dt className="text-xs text-muted">{item.label}</dt>
+                        <dd className="mt-1 break-words text-sm text-foreground">{item.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </Card.Content>
               </Card>
 
               <Card className="p-2">
                 <Accordion allowsMultipleExpanded hideSeparator className="space-y-2">
-                  <Accordion.Item
-                    isExpanded={imageEnv.length > 0}
-                    className="overflow-hidden rounded-lg"
-                  >
+                  <Accordion.Item className="overflow-hidden rounded-lg">
                     <Accordion.Heading>
                       <Accordion.Trigger className="rounded-lg px-3 py-2 text-left">
                         <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
@@ -4016,10 +3825,7 @@ export default function ScanDetailPage() {
                     </Accordion.Panel>
                   </Accordion.Item>
 
-                  <Accordion.Item
-                    isExpanded={imageLabelEntries.length > 0}
-                    className="overflow-hidden rounded-lg"
-                  >
+                  <Accordion.Item className="overflow-hidden rounded-lg">
                     <Accordion.Heading>
                       <Accordion.Trigger className="rounded-lg px-3 py-2 text-left">
                         <div className="flex min-w-0 flex-1 items-center justify-between gap-3">

@@ -27,41 +27,20 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   Button,
   Card,
+  Chip,
   ListBox,
   Modal,
   Pagination,
   SearchField,
   Select,
   Separator,
+  Spinner,
   Table,
   useOverlayState,
 } from '@heroui/react';
 import { Delete01Icon, SecurityLockIcon, Shield01Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-
-const STATUS_STYLE: Record<string, React.CSSProperties> = {
-  accepted: {
-    color: '#60a5fa',
-    background: 'rgba(59,130,246,0.1)',
-    border: '1px solid rgba(59,130,246,0.22)',
-  },
-  wont_fix: {
-    color: 'color-mix(in srgb, var(--accent) 78%, white)',
-    background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
-    border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
-  },
-  false_positive: {
-    color: '#34d399',
-    background: 'rgba(16,185,129,0.1)',
-    border: '1px solid rgba(16,185,129,0.22)',
-  },
-  xray_ignore: {
-    color: '#f59e0b',
-    background: 'rgba(245,158,11,0.1)',
-    border: '1px solid rgba(245,158,11,0.22)',
-  },
-};
 
 const STATUS_LABEL: Record<string, string> = {
   accepted: 'Accepted Risk',
@@ -71,11 +50,18 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_STYLE[status] ?? {};
+  const color =
+    status === 'false_positive'
+      ? 'success'
+      : status === 'xray_ignore'
+        ? 'warning'
+        : status === 'accepted'
+          ? 'accent'
+          : 'default';
   return (
-    <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={s}>
+    <Chip color={color} size="sm" variant="soft">
       {STATUS_LABEL[status] ?? status}
-    </span>
+    </Chip>
   );
 }
 
@@ -343,33 +329,26 @@ export default function SuppressionsPage() {
 
         <Table variant="secondary">
           <Table.ScrollContainer>
-            <Table.Content aria-label="Suppressions" className="min-w-[1100px]">
+            <Table.Content aria-label="Suppressions" className="min-w-[840px]">
               <Table.Header>
-                <Table.Column isRowHeader>CVE ID</Table.Column>
-                <Table.Column>Image Digest</Table.Column>
-                <Table.Column>Applies to Images</Table.Column>
+                <Table.Column isRowHeader>Vulnerability</Table.Column>
                 <Table.Column>Status</Table.Column>
-                <Table.Column>Source</Table.Column>
-                <Table.Column>Justification</Table.Column>
-                <Table.Column>By</Table.Column>
-                <Table.Column>Expires</Table.Column>
-                <Table.Column>Created</Table.Column>
-                <Table.Column>Actions</Table.Column>
+                <Table.Column>Reason</Table.Column>
+                <Table.Column>Ownership</Table.Column>
+                <Table.Column className="flex justify-end">Actions</Table.Column>
               </Table.Header>
               <Table.Body>
                 {loading ? (
                   <Table.Row key="loading-row" id="loading">
-                    <Table.Cell colSpan={10}>
-                      <div className="py-16 text-center">
-                        <div className="flex justify-center">
-                          <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
-                        </div>
+                    <Table.Cell colSpan={5}>
+                      <div className="flex justify-center py-16">
+                        <Spinner color="accent" size="sm" />
                       </div>
                     </Table.Cell>
                   </Table.Row>
                 ) : suppressions.length === 0 ? (
                   <Table.Row key="empty-row" id="empty">
-                    <Table.Cell colSpan={10}>
+                    <Table.Cell colSpan={5}>
                       <div className="flex flex-col items-center gap-3 py-16 text-center">
                         <SecurityLockIcon size={32} className="text-zinc-400 dark:text-zinc-600" />
                         <p className="text-sm text-zinc-500">
@@ -389,38 +368,36 @@ export default function SuppressionsPage() {
                   suppressions.map((s) => (
                     <Table.Row id={s.id} key={s.id} className="hover:bg-[var(--row-hover)]">
                       <Table.Cell>
-                        <a
-                          href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-mono text-xs text-accent dark:text-accent hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {s.vuln_id}
-                        </a>
+                        <div className="space-y-1.5">
+                          <a
+                            href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-mono text-xs text-accent hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {s.vuln_id}
+                          </a>
+                          <p className="font-mono text-xs text-muted" title={s.image_digest}>
+                            {s.image_digest.length > 28
+                              ? `${s.image_digest.slice(0, 28)}…`
+                              : s.image_digest}
+                          </p>
+                          <Button
+                            variant="tertiary"
+                            onPress={() => openAppliesImagesModal(s)}
+                            size="sm"
+                          >
+                            {(s.applies_image_count ?? 0).toLocaleString()} matching image
+                            {(s.applies_image_count ?? 0) === 1 ? '' : 's'}
+                          </Button>
+                        </div>
                       </Table.Cell>
                       <Table.Cell>
-                        <span className="font-mono text-xs text-zinc-500" title={s.image_digest}>
-                          {s.image_digest.length > 28
-                            ? s.image_digest.slice(0, 28) + '…'
-                            : s.image_digest}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Button
-                          variant="secondary"
-                          onPress={() => openAppliesImagesModal(s)}
-                          size="sm"
-                        >
-                          {(s.applies_image_count ?? 0).toLocaleString()} image
-                          {(s.applies_image_count ?? 0) === 1 ? '' : 's'}
-                        </Button>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <StatusBadge status={s.status} />
-                      </Table.Cell>
-                      <Table.Cell>
-                        <SuppressionSourceBadge source={s.source} />
+                        <div className="space-y-1.5">
+                          <StatusBadge status={s.status} />
+                          <SuppressionSourceBadge source={s.source} />
+                        </div>
                       </Table.Cell>
                       <Table.Cell>
                         <div className="text-xs text-zinc-500 max-w-xs">
@@ -440,10 +417,9 @@ export default function SuppressionsPage() {
                             ownerOrgId={s.owner_org_id}
                             orgNamesById={orgNamesById}
                           />
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="text-xs">
+                          <p className="text-xs text-muted" title={fullDate(s.created_at)}>
+                            Created {timeAgo(s.created_at)}
+                          </p>
                           {s.expires_at ? (
                             <span
                               className={
@@ -456,13 +432,8 @@ export default function SuppressionsPage() {
                               {new Date(s.expires_at).toLocaleDateString()}
                             </span>
                           ) : (
-                            <span className="text-zinc-400">Never</span>
+                            <span className="text-xs text-muted">Never expires</span>
                           )}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="text-xs text-zinc-500" title={fullDate(s.created_at)}>
-                          {timeAgo(s.created_at)}
                         </div>
                       </Table.Cell>
                       <Table.Cell>

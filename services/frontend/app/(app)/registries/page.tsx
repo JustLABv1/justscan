@@ -8,7 +8,6 @@ import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
-import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
@@ -30,7 +29,17 @@ import {
 import { deferEffect } from '@/lib/defer-effect';
 import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
 import { timeAgo } from '@/lib/time';
-import { Button, Card, ListBox, Modal, SearchField, Select, Table, useOverlayState } from '@heroui/react';
+import {
+  Button,
+  Card,
+  ListBox,
+  Modal,
+  SearchField,
+  Select,
+  Spinner,
+  Table,
+  useOverlayState,
+} from '@heroui/react';
 import {
   Delete01Icon,
   PencilEdit01Icon,
@@ -171,14 +180,11 @@ export default function RegistriesPage() {
     [orgs]
   );
   const canMutateActiveScope =
-    isPlatformAdmin ||
-    workScope.kind !== 'org' ||
-    canMutateOrg(orgRoleById.get(workScope.orgId));
-  const manageableOrgIds = new Set(
-    orgs
-      .filter((org) => canManageOrg(org.current_user_role))
-      .map((org) => org.id)
-  );
+    isPlatformAdmin || workScope.kind !== 'org' || canMutateOrg(orgRoleById.get(workScope.orgId));
+  const manageableOrgIds = new Set<string>();
+  for (const org of orgs) {
+    if (canManageOrg(org.current_user_role)) manageableOrgIds.add(org.id);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -372,7 +378,8 @@ export default function RegistriesPage() {
   const filteredRegistries = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return registries.filter((registry) => {
-      const providerMatches = providerFilter === 'all' || (registry.scan_provider ?? 'trivy') === providerFilter;
+      const providerMatches =
+        providerFilter === 'all' || (registry.scan_provider ?? 'trivy') === providerFilter;
       if (!providerMatches) return false;
       if (!query) return true;
       return [registry.name, registry.url, registry.username]
@@ -387,234 +394,213 @@ export default function RegistriesPage() {
         title="Registries"
         description="Configure private Docker registries and choose the scan provider per registry."
         actions={
-          <Button
-            onPress={openCreate}
-            className="btn-primary inline-flex items-center gap-2"
-            type="button"
-            isDisabled={!canMutateActiveScope}
-            variant="primary"
-          >
-            <PlusSignIcon size={15} /> Add Registry
-          </Button>
+          registries.length > 0 ? (
+            <Button
+              onPress={openCreate}
+              className="inline-flex items-center gap-2"
+              type="button"
+              isDisabled={!canMutateActiveScope}
+              variant="primary"
+            >
+              <PlusSignIcon size={15} /> Add Registry
+            </Button>
+          ) : undefined
         }
       />
 
       {error ? <FormAlert description={error} title="Registry loading failed" /> : null}
 
-      <Card className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <SearchField name="registries-search" variant="secondary" className="w-full sm:max-w-sm">
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search registry, URL, or username..."
-              />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
-          <Select
-            value={providerFilter}
-            onChange={(value) =>
-              setProviderFilter(
-                value === 'artifactory_xray' ? 'artifactory_xray' : value === 'trivy' ? 'trivy' : 'all'
-              )
-            }
-            className="w-full sm:w-[180px]"
-            variant="secondary"
-          >
-            <Select.Trigger className={selectTriggerCls}>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="all">All providers</ListBox.Item>
-                <ListBox.Item id="trivy">Trivy</ListBox.Item>
-                <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
-        </div>
-      {loading ? (
-        <div className="surface-panel rounded-2xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--row-divider)' }}>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  URL
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Provider
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Auth
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Username
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Health
-                </th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: 3 }).map((_, i) => (
-                <TableRowSkeleton key={i} cols={7} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : filteredRegistries.length === 0 ? (
+      {!loading && registries.length === 0 ? (
         <EmptyState
           icon={<ServerStack01Icon size={28} />}
-          title={registries.length > 0 ? 'No registries match your filters' : 'No registries configured'}
-          description={
-            registries.length > 0
-              ? 'Try a different search or provider filter.'
-              : 'Add a private Docker registry and choose whether JustScan should use its local Trivy scanner or the Artifactory Xray provider for that registry.'
-          }
-          action={
-            registries.length > 0
-              ? { label: 'Clear filters', onClick: () => { setSearchQuery(''); setProviderFilter('all'); } }
-              : canMutateActiveScope
-                ? { label: '+ Add Registry', onClick: openCreate }
-                : undefined
-          }
+          title="No registries configured"
+          description="Add a private Docker registry and choose the scanner that will evaluate images from it."
+          action={canMutateActiveScope ? { label: 'Add Registry', onClick: openCreate } : undefined}
         />
       ) : (
-        <Table variant="secondary">
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Configured registries" className="min-w-[980px]">
-              <Table.Header>
-                <Table.Column isRowHeader>Name</Table.Column>
-                <Table.Column>URL</Table.Column>
-                <Table.Column>Provider</Table.Column>
-                <Table.Column>Auth</Table.Column>
-                <Table.Column>Username</Table.Column>
-                <Table.Column>Health</Table.Column>
-                <Table.Column>Actions</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {filteredRegistries.map((r) => (
-                  <Table.Row key={r.id} id={r.id}>
-                    <Table.Cell>
-                      <div className="space-y-1">
-                        <p className="font-medium text-zinc-700 dark:text-zinc-200">{r.name}</p>
-                        <OwnershipBadge
-                          ownerType={r.owner_type}
-                          ownerOrgId={r.owner_org_id}
-                          orgNamesById={orgNamesById}
-                        />
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span className="font-mono text-xs text-zinc-500">{r.url}</span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span
-                        className="text-xs font-medium px-2 py-0.5 rounded-md"
-                        style={PROVIDER_STYLE[r.scan_provider ?? 'trivy']}
-                      >
-                        {PROVIDER_LABEL[r.scan_provider ?? 'trivy']}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span
-                        className="text-xs font-medium px-2 py-0.5 rounded-md"
-                        style={AUTH_TYPE_STYLE[r.auth_type ?? 'none']}
-                      >
-                        {AUTH_TYPE_LABEL[r.auth_type ?? 'none']}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                        {r.username || <span className="text-zinc-400 dark:text-zinc-700">-</span>}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex flex-col gap-1">
-                        <HealthBadge
-                          status={r.health_status ?? 'unknown'}
-                          message={r.health_message ?? ''}
-                        />
-                        {r.last_health_check_at && (
-                          <span className="text-[10px] text-zinc-500">
-                            {timeAgo(r.last_health_check_at)}
-                          </span>
-                        )}
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex items-center justify-end">
-                        {canManageAccess(r) || canMutateRegistry(r) ? (
-                          <RowActionsMenu
-                            label={`Open actions menu for ${r.name}`}
-                            items={[
-                              ...(canMutateRegistry(r)
-                                ? [
-                                    {
-                                      id: 'test',
-                                      label: testing === r.id ? 'Testing…' : 'Test connection',
-                                      icon: <TestTube01Icon size={15} />,
-                                      disabled: testing === r.id,
-                                      onAction: () => {
-                                        void handleTest(r.id);
-                                      },
-                                    },
-                                  ]
-                                : []),
-                              ...(canManageAccess(r)
-                                ? [
-                                    {
-                                      id: 'share',
-                                      label: 'Manage access',
-                                      icon: <Shield01Icon size={15} />,
-                                      onAction: () => openShareModal(r),
-                                    },
-                                  ]
-                                : []),
-                              ...(canMutateRegistry(r)
-                                ? [
-                                    {
-                                      id: 'edit',
-                                      label: 'Edit registry',
-                                      icon: <PencilEdit01Icon size={15} />,
-                                      onAction: () => openEdit(r),
-                                    },
-                                    {
-                                      id: 'delete',
-                                      label: 'Delete registry',
-                                      icon: <Delete01Icon size={15} />,
-                                      variant: 'danger' as const,
-                                      onAction: () => {
-                                        void handleDelete(r.id);
-                                      },
-                                    },
-                                  ]
-                                : []),
-                            ]}
-                          />
-                        ) : (
-                          <span className="text-xs text-zinc-400">Read only</span>
-                        )}
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+        <Card className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <SearchField
+              name="registries-search"
+              variant="secondary"
+              className="w-full sm:max-w-sm"
+            >
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search registry, URL, or username..."
+                />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
+            <Select
+              value={providerFilter}
+              onChange={(value) =>
+                setProviderFilter(
+                  value === 'artifactory_xray'
+                    ? 'artifactory_xray'
+                    : value === 'trivy'
+                      ? 'trivy'
+                      : 'all'
+                )
+              }
+              className="w-full sm:w-[180px]"
+              variant="secondary"
+            >
+              <Select.Trigger className={selectTriggerCls}>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="all">All providers</ListBox.Item>
+                  <ListBox.Item id="trivy">Trivy</ListBox.Item>
+                  <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+          {loading ? (
+            <div className="flex min-h-48 items-center justify-center">
+              <Spinner color="accent" size="sm" />
+            </div>
+          ) : filteredRegistries.length === 0 ? (
+            <EmptyState
+              icon={<ServerStack01Icon size={28} />}
+              title="No registries match your filters"
+              description="Try a different search or provider filter."
+              action={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearchQuery('');
+                  setProviderFilter('all');
+                },
+              }}
+            />
+          ) : (
+            <Table variant="secondary">
+              <Table.ScrollContainer>
+                <Table.Content aria-label="Configured registries" className="min-w-[800px]">
+                  <Table.Header>
+                    <Table.Column isRowHeader>Name</Table.Column>
+                    <Table.Column>Connection</Table.Column>
+                    <Table.Column>Health</Table.Column>
+                    <Table.Column className="flex justify-end">Actions</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {filteredRegistries.map((r) => (
+                      <Table.Row key={r.id} id={r.id}>
+                        <Table.Cell>
+                          <div className="space-y-1">
+                            <p className="font-medium text-zinc-700 dark:text-zinc-200">{r.name}</p>
+                            <OwnershipBadge
+                              ownerType={r.owner_type}
+                              ownerOrgId={r.owner_org_id}
+                              orgNamesById={orgNamesById}
+                            />
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="space-y-1.5">
+                            <p className="font-mono text-xs text-muted">{r.url}</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              <span
+                                className="text-xs font-medium px-2 py-0.5 rounded-md"
+                                style={PROVIDER_STYLE[r.scan_provider ?? 'trivy']}
+                              >
+                                {PROVIDER_LABEL[r.scan_provider ?? 'trivy']}
+                              </span>
+                              <span
+                                className="text-xs font-medium px-2 py-0.5 rounded-md"
+                                style={AUTH_TYPE_STYLE[r.auth_type ?? 'none']}
+                              >
+                                {AUTH_TYPE_LABEL[r.auth_type ?? 'none']}
+                              </span>
+                              {r.username ? (
+                                <span className="text-xs text-muted">{r.username}</span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="flex flex-col gap-1">
+                            <HealthBadge
+                              status={r.health_status ?? 'unknown'}
+                              message={r.health_message ?? ''}
+                            />
+                            {r.last_health_check_at && (
+                              <span className="text-[10px] text-zinc-500">
+                                {timeAgo(r.last_health_check_at)}
+                              </span>
+                            )}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="flex items-center justify-end">
+                            {canManageAccess(r) || canMutateRegistry(r) ? (
+                              <RowActionsMenu
+                                label={`Open actions menu for ${r.name}`}
+                                items={[
+                                  ...(canMutateRegistry(r)
+                                    ? [
+                                        {
+                                          id: 'test',
+                                          label: testing === r.id ? 'Testing…' : 'Test connection',
+                                          icon: <TestTube01Icon size={15} />,
+                                          disabled: testing === r.id,
+                                          onAction: () => {
+                                            void handleTest(r.id);
+                                          },
+                                        },
+                                      ]
+                                    : []),
+                                  ...(canManageAccess(r)
+                                    ? [
+                                        {
+                                          id: 'share',
+                                          label: 'Manage access',
+                                          icon: <Shield01Icon size={15} />,
+                                          onAction: () => openShareModal(r),
+                                        },
+                                      ]
+                                    : []),
+                                  ...(canMutateRegistry(r)
+                                    ? [
+                                        {
+                                          id: 'edit',
+                                          label: 'Edit registry',
+                                          icon: <PencilEdit01Icon size={15} />,
+                                          onAction: () => openEdit(r),
+                                        },
+                                        {
+                                          id: 'delete',
+                                          label: 'Delete registry',
+                                          icon: <Delete01Icon size={15} />,
+                                          variant: 'danger' as const,
+                                          onAction: () => {
+                                            void handleDelete(r.id);
+                                          },
+                                        },
+                                      ]
+                                    : []),
+                                ]}
+                              />
+                            ) : (
+                              <span className="text-xs text-zinc-400">Read only</span>
+                            )}
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          )}
+        </Card>
       )}
-      </Card>
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>

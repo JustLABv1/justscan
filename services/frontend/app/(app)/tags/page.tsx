@@ -109,14 +109,11 @@ export default function TagsPage() {
     [orgs]
   );
   const canMutateActiveScope =
-    isPlatformAdmin ||
-    workScope.kind !== 'org' ||
-    canMutateOrg(orgRoleById.get(workScope.orgId));
-  const manageableOrgIds = new Set(
-    orgs
-      .filter((org) => canManageOrg(org.current_user_role))
-      .map((org) => org.id)
-  );
+    isPlatformAdmin || workScope.kind !== 'org' || canMutateOrg(orgRoleById.get(workScope.orgId));
+  const manageableOrgIds = new Set<string>();
+  for (const org of orgs) {
+    if (canManageOrg(org.current_user_role)) manageableOrgIds.add(org.id);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -338,14 +335,16 @@ export default function TagsPage() {
             : 'Organize your scans with color-coded labels.'
         }
         actions={
-          <Button
-            onPress={openCreate}
-            className="btn-primary inline-flex items-center gap-2"
-            isDisabled={!canMutateActiveScope}
-            variant="primary"
-          >
-            <PlusSignIcon size={15} /> New Tag
-          </Button>
+          tags.length > 0 ? (
+            <Button
+              onPress={openCreate}
+              className="inline-flex items-center gap-2"
+              isDisabled={!canMutateActiveScope}
+              variant="primary"
+            >
+              <PlusSignIcon size={15} /> New Tag
+            </Button>
+          ) : undefined
         }
       />
 
@@ -390,7 +389,7 @@ export default function TagsPage() {
           icon={<Tag01Icon size={28} />}
           title="No tags yet"
           description="Create color-coded tags to group and filter your scans. Tags can be assigned to any scan."
-          action={canMutateActiveScope ? { label: '+ New Tag', onClick: openCreate } : undefined}
+          action={canMutateActiveScope ? { label: 'New Tag', onClick: openCreate } : undefined}
         />
       ) : (
         <Card className="space-y-4">
@@ -424,9 +423,6 @@ export default function TagsPage() {
                   <Table.Column id="owner" allowsSorting>
                     Owner
                   </Table.Column>
-                  <Table.Column id="color" allowsSorting>
-                    Color
-                  </Table.Column>
                   <Table.Column className="text-right">Actions</Table.Column>
                 </Table.Header>
                 <Table.Body
@@ -440,17 +436,15 @@ export default function TagsPage() {
                   {(tag) => (
                     <Table.Row key={tag.id} id={tag.id}>
                       <Table.Cell>
-                        <span
-                          className="inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-xs font-medium"
-                          style={{
-                            background: tag.color + '22',
-                            color: tag.color,
-                            borderColor: tag.color + '44',
-                          }}
-                          title={tag.name}
-                        >
-                          <span className="truncate">{tag.name}</span>
-                        </span>
+                        <div className="flex min-w-0 items-center gap-2" title={tag.name}>
+                          <span
+                            className="size-3 shrink-0 rounded-full border"
+                            style={{ backgroundColor: tag.color, borderColor: `${tag.color}88` }}
+                            aria-hidden="true"
+                          />
+                          <span className="truncate text-sm font-medium">{tag.name}</span>
+                          <span className="font-mono text-xs text-muted">{tag.color}</span>
+                        </div>
                       </Table.Cell>
                       <Table.Cell>
                         <OwnershipBadge
@@ -458,9 +452,6 @@ export default function TagsPage() {
                           ownerOrgId={tag.owner_org_id}
                           orgNamesById={orgNamesById}
                         />
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span className="font-mono text-xs text-zinc-500">{tag.color}</span>
                       </Table.Cell>
                       <Table.Cell>
                         <div className="flex items-center justify-end">

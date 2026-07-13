@@ -1,161 +1,137 @@
 'use client';
-import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { getKBEntry, listKBEntries, VulnKBEntry } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import {
+  Alert,
+  Button,
   Card,
+  Chip,
+  Disclosure,
+  Drawer,
   Label,
   ListBox,
   Pagination,
   SearchField,
   Select,
+  Spinner,
   Switch,
   Table,
+  useOverlayState,
 } from '@heroui/react';
 import { InformationCircleIcon, Shield01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
 
-const SEV_STYLE: Record<string, React.CSSProperties> = {
-  CRITICAL: {
-    color: '#f87171',
-    background: 'rgba(239,68,68,0.10)',
-    border: '1px solid rgba(239,68,68,0.22)',
-  },
-  HIGH: {
-    color: '#fb923c',
-    background: 'rgba(249,115,22,0.10)',
-    border: '1px solid rgba(249,115,22,0.22)',
-  },
-  MEDIUM: {
-    color: '#facc15',
-    background: 'rgba(234,179,8,0.10)',
-    border: '1px solid rgba(234,179,8,0.22)',
-  },
-  LOW: {
-    color: '#60a5fa',
-    background: 'rgba(59,130,246,0.10)',
-    border: '1px solid rgba(59,130,246,0.22)',
-  },
-  UNKNOWN: {
-    color: '#a1a1aa',
-    background: 'rgba(161,161,170,0.08)',
-    border: '1px solid rgba(161,161,170,0.18)',
-  },
-};
+function severityColor(severity: string): 'danger' | 'warning' | 'accent' | 'default' {
+  switch (severity.toUpperCase()) {
+    case 'CRITICAL':
+      return 'danger';
+    case 'HIGH':
+      return 'warning';
+    case 'MEDIUM':
+      return 'accent';
+    default:
+      return 'default';
+  }
+}
 
 function SevBadge({ severity }: { severity: string }) {
-  const s = SEV_STYLE[severity?.toUpperCase()] ?? SEV_STYLE.UNKNOWN;
   return (
-    <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize" style={s}>
+    <Chip color={severityColor(severity)} size="sm" variant="soft" className="capitalize">
       {severity || 'Unknown'}
-    </span>
+    </Chip>
   );
 }
 
 function ScorePill({ score }: { score: number }) {
-  const color =
-    score >= 9 ? '#f87171' : score >= 7 ? '#fb923c' : score >= 4 ? '#facc15' : '#60a5fa';
+  return <span className="font-mono text-sm font-semibold">{score ? score.toFixed(1) : '-'}</span>;
+}
+
+function detailSummary(value?: string) {
   return (
-    <span className="font-mono text-sm font-semibold" style={{ color }}>
-      {score ? score.toFixed(1) : '-'}
-    </span>
+    value
+      ?.replace(/```[\s\S]*?```/g, 'Code example available in details.')
+      .replace(/#{1,6}\s*/g, '')
+      .replace(/[>*_`\[\]]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim() || '-'
   );
 }
 
-function DetailPanel({ entry, onClose }: { entry: VulnKBEntry; onClose: () => void }) {
+function DetailDrawer({
+  entry,
+  state,
+}: {
+  entry: VulnKBEntry;
+  state: ReturnType<typeof useOverlayState>;
+}) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4"
-      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        className="w-full max-w-2xl max-h-[80vh] overflow-y-auto rounded-2xl p-6 space-y-5"
-        style={{
-          background: 'var(--modal-bg)',
-          border: '1px solid var(--border-subtle)',
-          boxShadow: '0 25px 60px rgba(0,0,0,0.4)',
-        }}
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-lg font-bold font-mono text-zinc-900 dark:text-white">
-                {entry.vuln_id}
-              </h2>
-              <SevBadge severity={entry.severity} />
-              <ScorePill score={entry.cvss_score} />
-              {entry.exploit_available && (
-                <span
-                  className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                  style={{
-                    color: '#f87171',
-                    background: 'rgba(239,68,68,0.15)',
-                    border: '1px solid rgba(239,68,68,0.3)',
-                  }}
-                >
-                  Exploit Available
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-zinc-500 mt-1">
-              {entry.published_date
-                ? `Published ${new Date(entry.published_date).toLocaleDateString()}`
-                : 'Unknown publish date'}
-              {entry.cvss_vector && <span className="ml-3 font-mono">{entry.cvss_vector}</span>}
-            </p>
-          </div>
-          <button
-            aria-label="Close vulnerability details"
-            className="btn-icon-subtle shrink-0"
-            onClick={onClose}
-            type="button"
-          >
-            ×
-          </button>
-        </div>
-
-        {entry.description && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
-              Description
-            </p>
-            <p className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
-              {entry.description}
-            </p>
-          </div>
-        )}
-
-        {entry.references && entry.references.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
-              References
-            </p>
-            <ul className="space-y-1">
-              {entry.references.map((r, i) => (
-                <li key={i}>
-                  <a
-                    href={r.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-accent dark:text-accent hover:underline break-all"
-                  >
-                    {r.url}
-                  </a>
-                  {r.source && <span className="text-xs text-zinc-500 ml-2">({r.source})</span>}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-    </div>
+    <Drawer state={state}>
+      <Drawer.Backdrop isDismissable variant="blur">
+        <Drawer.Content placement="right">
+          <Drawer.Dialog className="flex h-full w-[min(100vw,42rem)] flex-col">
+            <Drawer.Header>
+              <div className="min-w-0 space-y-2">
+                <Drawer.Heading className="font-mono text-lg">{entry.vuln_id}</Drawer.Heading>
+                <div className="flex flex-wrap items-center gap-2">
+                  <SevBadge severity={entry.severity} />
+                  <ScorePill score={entry.cvss_score} />
+                  {entry.exploit_available ? (
+                    <Chip color="danger" size="sm" variant="soft">
+                      Exploit available
+                    </Chip>
+                  ) : null}
+                </div>
+              </div>
+              <Drawer.CloseTrigger />
+            </Drawer.Header>
+            <Drawer.Body className="space-y-6">
+              <div className="text-sm text-muted">
+                {entry.published_date
+                  ? `Published ${new Date(entry.published_date).toLocaleDateString()}`
+                  : 'Unknown publish date'}
+                {entry.cvss_vector ? (
+                  <span className="ml-3 font-mono">{entry.cvss_vector}</span>
+                ) : null}
+              </div>
+              {entry.description ? (
+                <section>
+                  <h3 className="text-sm font-semibold">Description</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted">
+                    {entry.description}
+                  </p>
+                </section>
+              ) : null}
+              {entry.references?.length ? (
+                <section>
+                  <h3 className="text-sm font-semibold">References</h3>
+                  <ul className="mt-2 space-y-2">
+                    {entry.references.map((reference) => (
+                      <li key={`${reference.url}-${reference.source ?? ''}`} className="text-sm">
+                        <a
+                          href={reference.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="break-all text-accent hover:underline"
+                        >
+                          {reference.url}
+                        </a>
+                        {reference.source ? (
+                          <span className="ml-2 text-muted">({reference.source})</span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+            </Drawer.Body>
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
+    </Drawer>
   );
 }
 
@@ -214,6 +190,8 @@ export default function VulnKBPage() {
   const [exploitOnly, setExploitOnly] = useState(false);
   const [publishedRange, setPublishedRange] = useState('');
   const [detail, setDetail] = useState<VulnKBEntry | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const detailDrawer = useOverlayState();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
   const paginationItems = useMemo(() => {
@@ -277,6 +255,7 @@ export default function VulnKBPage() {
     } catch {
       setDetail(entry);
     }
+    detailDrawer.open();
   }
 
   const activeFilters = [
@@ -285,6 +264,13 @@ export default function VulnKBPage() {
     exploitOnly ? 'Exploit Only' : '',
     publishedRange ? PUBLISHED_OPTIONS.find((o) => o.id === publishedRange)?.label : '',
   ].filter(Boolean);
+  const clearFilters = () => {
+    setSeverity('');
+    setMinCvss('0');
+    setExploitOnly(false);
+    setPublishedRange('');
+    setPage(1);
+  };
 
   return (
     <div className="p-6 space-y-5">
@@ -294,141 +280,135 @@ export default function VulnKBPage() {
       />
 
       <Card className="space-y-4">
-        <div className="space-y-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            {/* Search */}
-            <SearchField name="cve-search" variant="secondary" className="w-full xl:max-w-md">
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input
-                  placeholder="CVE ID or description..."
-                  value={queryInput}
-                  onChange={(event) => setQueryInput(event.target.value)}
-                />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
+        <Disclosure isExpanded={showFilters} onExpandedChange={setShowFilters} className="contents">
+          <div className="space-y-3">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <SearchField name="cve-search" variant="secondary" className="w-full xl:max-w-md">
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    placeholder="CVE ID or description..."
+                    value={queryInput}
+                    onChange={(event) => setQueryInput(event.target.value)}
+                  />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              {/* Severity Select */}
-              <Select
-                value={severity}
-                onChange={(value) => setSeverity(String(value ?? ''))}
-                className="w-full sm:w-[180px]"
-                placeholder="All Severities"
-                variant="secondary"
-              >
-                <Select.Trigger className={selectTriggerCls}>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {SEV_OPTIONS.map((o) => (
-                      <ListBox.Item key={o.id} id={o.id} textValue={o.label}>
-                        {o.label}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={severity}
+                  onChange={(value) => setSeverity(String(value ?? ''))}
+                  className="w-full sm:w-[180px]"
+                  placeholder="All Severities"
+                  variant="secondary"
+                >
+                  <Select.Trigger className={selectTriggerCls}>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {SEV_OPTIONS.map((o) => (
+                        <ListBox.Item key={o.id} id={o.id} textValue={o.label}>
+                          {o.label}
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                <Disclosure.Heading>
+                  <Disclosure.Trigger className="inline-flex h-10 items-center gap-2 rounded-xl border border-divider bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+                    Filters
+                    {activeFilters.length > 0 ? (
+                      <Chip color="accent" size="sm" variant="soft">
+                        {activeFilters.length}
+                      </Chip>
+                    ) : null}
+                    <Disclosure.Indicator />
+                  </Disclosure.Trigger>
+                </Disclosure.Heading>
+                {activeFilters.length > 0 ? (
+                  <Button variant="tertiary" onPress={clearFilters}>
+                    Clear filters
+                  </Button>
+                ) : null}
+              </div>
+            </div>
 
-              {/* CVSS Select */}
-              <Select
-                value={minCvss}
-                onChange={(value) => setMinCvss(String(value ?? '0'))}
-                className="w-full sm:w-[180px]"
-                placeholder="Any CVSS"
-                variant="secondary"
-              >
-                <Select.Trigger className={selectTriggerCls}>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {CVSS_OPTIONS.map((o) => (
-                      <ListBox.Item key={o.id} id={o.id} textValue={o.label}>
-                        {o.label}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-
-              {/* Published Range Select */}
-              <Select
-                value={publishedRange}
-                onChange={(value) => setPublishedRange(String(value ?? ''))}
-                className="w-full sm:w-[180px]"
-                placeholder="Any Time"
-                variant="secondary"
-              >
-                <Select.Trigger className={selectTriggerCls}>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {PUBLISHED_OPTIONS.map((o) => (
-                      <ListBox.Item key={o.id} id={o.id} textValue={o.label}>
-                        {o.label}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-
-              {/* Exploit Only Toggle */}
-              <Switch
-                isSelected={exploitOnly}
-                onChange={setExploitOnly}
-                className="h-[38px] flex items-center"
-              >
-                <Switch.Content>
+            <Disclosure.Content>
+              <Disclosure.Body className="grid gap-3 rounded-xl border border-divider bg-surface-secondary p-3 md:grid-cols-3">
+                <Select
+                  value={minCvss}
+                  onChange={(value) => setMinCvss(String(value ?? '0'))}
+                  placeholder="Any CVSS"
+                  variant="secondary"
+                >
+                  <Select.Trigger className={selectTriggerCls}>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {CVSS_OPTIONS.map((o) => (
+                        <ListBox.Item key={o.id} id={o.id} textValue={o.label}>
+                          {o.label}
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                <Select
+                  value={publishedRange}
+                  onChange={(value) => setPublishedRange(String(value ?? ''))}
+                  placeholder="Any time"
+                  variant="secondary"
+                >
+                  <Select.Trigger className={selectTriggerCls}>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {PUBLISHED_OPTIONS.map((o) => (
+                        <ListBox.Item key={o.id} id={o.id} textValue={o.label}>
+                          {o.label}
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                <Switch isSelected={exploitOnly} onChange={setExploitOnly}>
                   <Switch.Control>
                     <Switch.Thumb />
                   </Switch.Control>
-                  <span className="text-sm text-zinc-600 dark:text-zinc-300">Exploit Only</span>
-                </Switch.Content>
-              </Switch>
-            </div>
-          </div>
+                  <Switch.Content>Exploit available only</Switch.Content>
+                </Switch>
+              </Disclosure.Body>
+            </Disclosure.Content>
 
-          {/* Active filter chips */}
-          {activeFilters.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {activeFilters.map((f, i) => (
-                <span
-                  key={i}
-                  className="text-xs px-2 py-0.5 rounded-full font-medium"
-                  style={{
-                    background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-                    color: 'color-mix(in srgb, var(--accent) 78%, white)',
-                    border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
-                  }}
-                >
-                  {f}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+            {activeFilters.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {activeFilters.map((f) => (
+                  <Chip key={f} color="accent" size="sm" variant="soft">
+                    {f}
+                  </Chip>
+                ))}
+              </div>
+            )}
+          </div>
+        </Disclosure>
 
         {error && (
-          <div
-            className="rounded-xl px-4 py-3 text-sm"
-            style={{
-              background: 'rgba(239,68,68,0.08)',
-              border: '1px solid rgba(239,68,68,0.18)',
-              color: '#f87171',
-            }}
-          >
-            {error}
-          </div>
+          <Alert status="danger">
+            <Alert.Indicator />
+            <Alert.Content>
+              <Alert.Title>{error}</Alert.Title>
+            </Alert.Content>
+          </Alert>
         )}
 
         <div className="overflow-hidden">
@@ -447,10 +427,8 @@ export default function VulnKBPage() {
                   {loading ? (
                     <Table.Row key="loading" id="loading">
                       <Table.Cell colSpan={6}>
-                        <div className="py-16 text-center">
-                          <div className="flex justify-center">
-                            <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
-                          </div>
+                        <div className="flex justify-center py-16">
+                          <Spinner color="accent" size="sm" />
                         </div>
                       </Table.Cell>
                     </Table.Row>
@@ -492,20 +470,13 @@ export default function VulnKBPage() {
                           {e.published_date ? new Date(e.published_date).toLocaleDateString() : '-'}
                         </Table.Cell>
                         <Table.Cell className="text-xs text-zinc-600 dark:text-zinc-400 max-w-xs">
-                          <span className="line-clamp-2">{e.description || '-'}</span>
+                          <span className="line-clamp-2">{detailSummary(e.description)}</span>
                         </Table.Cell>
                         <Table.Cell className="text-center">
                           {e.exploit_available ? (
-                            <span
-                              className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                              style={{
-                                color: '#f87171',
-                                background: 'rgba(239,68,68,0.12)',
-                                border: '1px solid rgba(239,68,68,0.2)',
-                              }}
-                            >
+                            <Chip color="danger" size="sm" variant="soft">
                               Yes
-                            </span>
+                            </Chip>
                           ) : (
                             <span className="text-xs text-zinc-400">-</span>
                           )}
@@ -570,7 +541,7 @@ export default function VulnKBPage() {
         Debian, and more.
       </p>
 
-      {detail && <DetailPanel entry={detail} onClose={() => setDetail(null)} />}
+      {detail ? <DetailDrawer entry={detail} state={detailDrawer} /> : null}
     </div>
   );
 }

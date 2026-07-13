@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useWorkScope } from '@/hooks/use-work-scope';
+import { useToast } from '@/components/toast';
 import { ArtifactSummary, listScans, Scan } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -32,6 +33,7 @@ import {
 } from 'react';
 
 const HISTORY_LIMIT = 10;
+const ARTIFACT_SELECTION_PAGE_SIZE = 100;
 
 type ArtifactScansTableProps = {
   allowMutationActions?: boolean;
@@ -107,16 +109,19 @@ function PolicyFailureChip({
 
 function ScanSelectionCheckbox({
   ariaLabel,
+  isDisabled = false,
   isSelected,
   onChange,
 }: {
   ariaLabel: string;
+  isDisabled?: boolean;
   isSelected: boolean;
   onChange: (selected: boolean) => void;
 }) {
   return (
     <Checkbox
       aria-label={ariaLabel}
+      isDisabled={isDisabled}
       isSelected={isSelected}
       slot={null}
       variant="secondary"
@@ -405,6 +410,8 @@ export function ArtifactScansTable({
   selectedScans,
 }: ArtifactScansTableProps) {
   const router = useRouter();
+  const toast = useToast();
+  const [selectingArtifactKeys, setSelectingArtifactKeys] = useState<Set<string>>(new Set());
   const artifactKeys = useMemo(
     () =>
       new Set(artifacts.map((artifact) => artifactKey(artifact.image_name, artifact.image_tag))),
@@ -431,6 +438,57 @@ export function ArtifactScansTable({
       });
     },
     [onSelectedScansChange]
+  );
+
+  const setArtifactSelection = useCallback(
+    async (artifact: ArtifactSummary, selected: boolean) => {
+      const key = artifactKey(artifact.image_name, artifact.image_tag);
+      setSelectingArtifactKeys((current) => new Set(current).add(key));
+      try {
+        const scanIDs = new Set<string>();
+        let nextPage = 1;
+        let total = 0;
+
+        do {
+          const response = await listScans(
+            nextPage,
+            ARTIFACT_SELECTION_PAGE_SIZE,
+            artifact.image_name,
+            undefined,
+            true,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            artifact.image_tag
+          );
+          total = response.total;
+          const scans = response.data ?? [];
+          scans.forEach((scan) => scanIDs.add(scan.id));
+          if (scans.length === 0) break;
+          nextPage += 1;
+        } while (scanIDs.size < total);
+
+        onSelectedScansChange((current) => {
+          const next = new Set(current);
+          scanIDs.forEach((scanID) => {
+            if (selected) next.add(scanID);
+            else next.delete(scanID);
+          });
+          return next;
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to update scan selection');
+      } finally {
+        setSelectingArtifactKeys((current) => {
+          const next = new Set(current);
+          next.delete(key);
+          return next;
+        });
+      }
+    },
+    [onSelectedScansChange, toast]
   );
 
   const setExpandedKeys = useCallback(
@@ -516,11 +574,10 @@ export function ArtifactScansTable({
                     >
                       <Table.Cell onClick={(event) => event.stopPropagation()}>
                         <ScanSelectionCheckbox
-                          ariaLabel={`Select latest scan for ${artifact.image_name}:${artifact.image_tag}`}
+                          ariaLabel={`Select all scans for ${artifact.image_name}:${artifact.image_tag}`}
+                          isDisabled={selectingArtifactKeys.has(key)}
                           isSelected={selectedScans.has(artifact.latest_scan_id)}
-                          onChange={(selected) =>
-                            setScanSelection(artifact.latest_scan_id, selected)
-                          }
+                          onChange={(selected) => void setArtifactSelection(artifact, selected)}
                         />
                       </Table.Cell>
                       <Table.Cell onClick={(event) => event.stopPropagation()}>

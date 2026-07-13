@@ -15,6 +15,7 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 	s := router.Group("/scans").Use(middlewares.Auth(db))
 	{
 		s.GET("/", scans.ListScans(db))
+		s.GET("/artifacts", scans.ListScanArtifacts(db))
 		s.GET("/images", scans.ListScanImages(db))
 		s.POST("/", scans.CreateScan(db))
 		s.POST("/batch", scans.CreateScans(db))

@@ -1,7 +1,9 @@
 package scans
 
 import (
+	"context"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +39,15 @@ type ArtifactSummary struct {
 	Collections          []models.ScanCollection       `json:"collections,omitempty"`
 }
 
+// ArtifactFilterOptions describes only filters that can match at least one
+// visible image tag in the current scope and search result.
+type ArtifactFilterOptions struct {
+	Statuses      []string `json:"statuses"`
+	CollectionIDs []string `json:"collection_ids"`
+	HasCritical   bool     `json:"has_critical"`
+	HasPolicyFail bool     `json:"has_policy_fail"`
+}
+
 func artifactCollectionWhere(raw string) (string, []interface{}) {
 	collectionID := strings.TrimSpace(raw)
 	if collectionID == "" {
@@ -46,6 +57,91 @@ func artifactCollectionWhere(raw string) (string, []interface{}) {
 		return "NOT EXISTS (SELECT 1 FROM scan_collection_memberships scm WHERE scm.scan_id::text = l.latest_scan_id)", nil
 	}
 	return "EXISTS (SELECT 1 FROM scan_collection_memberships scm WHERE scm.scan_id::text = l.latest_scan_id AND scm.collection_id = ?)", []interface{}{collectionID}
+}
+
+func artifactPolicyWhere(raw string, orgID uuid.UUID, scoped bool) (string, []interface{}) {
+	if strings.TrimSpace(raw) != "fail" || !scoped {
+		return "1=1", nil
+	}
+
+	return "EXISTS (SELECT 1 FROM compliance_results cr WHERE cr.scan_id::text = l.latest_scan_id AND cr.org_id = ? AND cr.status = 'fail')", []interface{}{orgID}
+}
+
+func loadArtifactFilterOptions(
+	ctx context.Context,
+	db *bun.DB,
+	baseQuery string,
+	baseArgs []interface{},
+	orgID uuid.UUID,
+	orgScoped bool,
+) (ArtifactFilterOptions, error) {
+	options := ArtifactFilterOptions{Statuses: []string{}, CollectionIDs: []string{}}
+
+	rows, err := db.QueryContext(ctx, baseQuery+`
+SELECT l.latest_status, l.latest_external_status, l.critical_count
+FROM latest l`, baseArgs...)
+	if err != nil {
+		return options, err
+	}
+	defer rows.Close()
+
+	statuses := make(map[string]struct{})
+	for rows.Next() {
+		var status, externalStatus string
+		var criticalCount int
+		if err := rows.Scan(&status, &externalStatus, &criticalCount); err != nil {
+			return options, err
+		}
+		if status != "" {
+			statuses[status] = struct{}{}
+		}
+		if externalStatus != "" {
+			statuses[externalStatus] = struct{}{}
+		}
+		options.HasCritical = options.HasCritical || criticalCount > 0
+	}
+	if err := rows.Err(); err != nil {
+		return options, err
+	}
+	for status := range statuses {
+		options.Statuses = append(options.Statuses, status)
+	}
+	sort.Strings(options.Statuses)
+
+	collectionRows, err := db.QueryContext(ctx, baseQuery+`
+SELECT DISTINCT scm.collection_id::text
+FROM latest l
+JOIN scan_collection_memberships scm ON scm.scan_id::text = l.latest_scan_id`, baseArgs...)
+	if err != nil {
+		return options, err
+	}
+	defer collectionRows.Close()
+	for collectionRows.Next() {
+		var collectionID string
+		if err := collectionRows.Scan(&collectionID); err != nil {
+			return options, err
+		}
+		options.CollectionIDs = append(options.CollectionIDs, collectionID)
+	}
+	if err := collectionRows.Err(); err != nil {
+		return options, err
+	}
+	sort.Strings(options.CollectionIDs)
+
+	if !orgScoped {
+		return options, nil
+	}
+	if err := db.QueryRowContext(ctx, baseQuery+`
+SELECT EXISTS (
+    SELECT 1
+    FROM latest l
+    JOIN compliance_results cr ON cr.scan_id::text = l.latest_scan_id
+    WHERE cr.org_id = ? AND cr.status = 'fail'
+)`, append(append([]interface{}{}, baseArgs...), orgID)...).Scan(&options.HasPolicyFail); err != nil {
+		return options, err
+	}
+
+	return options, nil
 }
 
 // ListScanArtifacts returns one current row per image name and tag pair.
@@ -89,6 +185,8 @@ func ListScanArtifacts(db *bun.DB) gin.HandlerFunc {
 			criticalWhere = "l.critical_count = 0"
 		}
 		collectionWhere, collectionArgs := artifactCollectionWhere(c.Query("collection"))
+		scopedOrgID, orgScoped := scopedOrgIDFromRequest(c)
+		policyWhere, policyArgs := artifactPolicyWhere(c.Query("policy"), scopedOrgID, orgScoped)
 
 		baseQuery := `
 WITH ranked AS (
@@ -118,13 +216,22 @@ WITH ranked AS (
 )
 `
 
+		filterOptions, err := loadArtifactFilterOptions(
+			c.Request.Context(), db, baseQuery, baseArgs, scopedOrgID, orgScoped,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load artifact filter options"})
+			return
+		}
+
 		countQuery := baseQuery + `
 SELECT COUNT(*)
 FROM latest l
-WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + collectionWhere
+WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + collectionWhere + ` AND ` + policyWhere
 		countArgs := append([]interface{}{}, baseArgs...)
 		countArgs = append(countArgs, latestStatusArgs...)
 		countArgs = append(countArgs, collectionArgs...)
+		countArgs = append(countArgs, policyArgs...)
 
 		var total int
 		if err := db.QueryRowContext(c.Request.Context(), countQuery, countArgs...).Scan(&total); err != nil {
@@ -149,12 +256,13 @@ SELECT
     l.medium_count,
     l.low_count
 FROM latest l
-WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + collectionWhere + `
+WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + collectionWhere + ` AND ` + policyWhere + `
 ORDER BY l.latest_scan_at DESC, l.latest_scan_id DESC
 LIMIT ? OFFSET ?`
 		dataArgs := append([]interface{}{}, baseArgs...)
 		dataArgs = append(dataArgs, latestStatusArgs...)
 		dataArgs = append(dataArgs, collectionArgs...)
+		dataArgs = append(dataArgs, policyArgs...)
 		dataArgs = append(dataArgs, limit, offset)
 
 		rows, err := db.QueryContext(c.Request.Context(), dataQuery, dataArgs...)
@@ -234,7 +342,7 @@ LIMIT ? OFFSET ?`
 				collectionhandlers.SortCollectionsForDisplay(artifacts[index].Collections)
 			}
 
-			if scopedOrgID, scoped := scopedOrgIDFromRequest(c); scoped {
+			if orgScoped {
 				summaries, summaryErr := buildScanComplianceSummaries(c.Request.Context(), db, scanIDs, scopedOrgID)
 				if summaryErr != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load artifact compliance summaries"})
@@ -248,7 +356,7 @@ LIMIT ? OFFSET ?`
 			}
 		}
 
-		c.JSON(http.StatusOK, gin.H{"data": artifacts, "total": total, "page": page, "limit": limit})
+		c.JSON(http.StatusOK, gin.H{"data": artifacts, "total": total, "page": page, "limit": limit, "filters": filterOptions})
 	}
 }
 

@@ -27,6 +27,7 @@ import {
   deleteCollection,
   deleteScan,
   getTokenType,
+  ArtifactFilterOptions,
   ArtifactSummary,
   listCollections,
   listOrgs,
@@ -142,12 +143,14 @@ function MobileSevStat({ label, count, tone }: { label: string; count: number; t
 type ScansTimeRange = '' | RecentActivityRange;
 type ScansGroupingMode = '' | 'collections';
 type ScansView = 'images' | 'active' | 'recent';
+type OrgPolicyFilter = '' | 'fail';
 type ScansViewState = {
   image: string;
   status: string;
   range: ScansTimeRange;
   tag: string;
   critical: '' | 'yes' | 'no';
+  policy: OrgPolicyFilter;
   collection: string;
   group: ScansGroupingMode;
 };
@@ -172,6 +175,10 @@ function normalizeCriticalFilter(value?: string | null): '' | 'yes' | 'no' {
   }
 
   return '';
+}
+
+function normalizeOrgPolicyFilter(value?: string | null): OrgPolicyFilter {
+  return value === 'fail' ? 'fail' : '';
 }
 
 function normalizeGroupingMode(value?: string | null): ScansGroupingMode {
@@ -205,6 +212,7 @@ function buildScansRoute({
   range,
   tag,
   critical,
+  policy,
   collection,
   group,
 }: {
@@ -213,6 +221,7 @@ function buildScansRoute({
   range?: ScansTimeRange;
   tag?: string;
   critical?: '' | 'yes' | 'no';
+  policy?: OrgPolicyFilter;
   collection?: string;
   group?: ScansGroupingMode;
 }) {
@@ -223,6 +232,7 @@ function buildScansRoute({
   if (range) params.set('range', range);
   if (tag) params.set('tag', tag);
   if (critical) params.set('critical', critical);
+  if (policy) params.set('policy', policy);
   if (collection) params.set('collection', collection);
   if (group) params.set('group', group);
 
@@ -239,6 +249,7 @@ function readScansViewFromSearchParams(searchParams: {
     range: normalizeScansTimeRange(searchParams.get('range'), searchParams.get('view')),
     tag: '',
     critical: normalizeCriticalFilter(searchParams.get('critical')),
+    policy: normalizeOrgPolicyFilter(searchParams.get('policy')),
     collection: searchParams.get('collection') ?? '',
     group: '',
   };
@@ -251,6 +262,7 @@ function areScansViewStatesEqual(left: ScansViewState, right: ScansViewState) {
     left.range === right.range &&
     left.tag === right.tag &&
     left.critical === right.critical &&
+    left.policy === right.policy &&
     left.collection === right.collection &&
     left.group === right.group
   );
@@ -288,6 +300,15 @@ export default function ScansPage() {
   const [criticalFilter, setCriticalFilter] = useState<'' | 'yes' | 'no'>(
     initialViewState.critical
   );
+  const [orgPolicyFilter, setOrgPolicyFilter] = useState<OrgPolicyFilter>(
+    initialViewState.policy
+  );
+  const [artifactFilterOptions, setArtifactFilterOptions] = useState<ArtifactFilterOptions>({
+    statuses: [],
+    collection_ids: [],
+    has_critical: false,
+    has_policy_fail: false,
+  });
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -333,10 +354,12 @@ export default function ScansPage() {
           img || undefined,
           status || undefined,
           criticalFilter,
-          collection || undefined
+          collection || undefined,
+          orgPolicyFilter
         );
         setArtifacts(res.data ?? []);
         setTotal(res.total);
+        setArtifactFilterOptions(res.filters);
         if (silent) {
           setError('');
         }
@@ -350,7 +373,7 @@ export default function ScansPage() {
         }
       }
     },
-    [criticalFilter]
+    [criticalFilter, orgPolicyFilter]
   );
 
   const loadActivity = useCallback(
@@ -438,6 +461,7 @@ export default function ScansPage() {
         range: activityRange,
         tag: tagFilter,
         critical: criticalFilter,
+        policy: orgPolicyFilter,
         collection: collectionFilter,
         group: groupingMode,
       };
@@ -458,6 +482,7 @@ export default function ScansPage() {
       setCollectionFilter(nextViewState.collection);
       setGroupingMode(nextViewState.group);
       setCriticalFilter(nextViewState.critical);
+      setOrgPolicyFilter(nextViewState.policy);
       setPage(1);
     });
   }, [
@@ -465,6 +490,7 @@ export default function ScansPage() {
     appliedImageFilter,
     collectionFilter,
     criticalFilter,
+    orgPolicyFilter,
     groupingMode,
     imageFilter,
     searchParams,
@@ -496,6 +522,7 @@ export default function ScansPage() {
         range: activityRange,
         tag: tagFilter,
         critical: criticalFilter,
+        policy: orgPolicyFilter,
         collection: collectionFilter,
         group: groupingMode,
       })
@@ -505,6 +532,7 @@ export default function ScansPage() {
     appliedImageFilter,
     collectionFilter,
     criticalFilter,
+    orgPolicyFilter,
     groupingMode,
     savedViewStorageKey,
     statusFilter,
@@ -608,6 +636,7 @@ export default function ScansPage() {
       range: ScansTimeRange;
       tag: string;
       critical: '' | 'yes' | 'no';
+      policy: OrgPolicyFilter;
       collection: string;
       group: ScansGroupingMode;
     }>
@@ -619,6 +648,7 @@ export default function ScansPage() {
         range: next.range ?? activityRange,
         tag: next.tag ?? tagFilter,
         critical: next.critical ?? criticalFilter,
+        policy: next.policy ?? orgPolicyFilter,
         collection: next.collection ?? collectionFilter,
         group: next.group ?? groupingMode,
       })
@@ -663,9 +693,10 @@ export default function ScansPage() {
     const nextStatus = statusFilter === ACTIVE_SCAN_STATUS_FILTER ? '' : statusFilter;
     setActivityRange(nextRange);
     setStatusFilter(nextStatus);
+    setOrgPolicyFilter('');
     setGroupingMode('');
     setPage(1);
-    syncRoute({ range: nextRange, status: nextStatus, group: '' });
+    syncRoute({ range: nextRange, status: nextStatus, policy: '', group: '' });
   }
 
   function handleClearFilters() {
@@ -678,6 +709,7 @@ export default function ScansPage() {
     setCollectionFilter('');
     setGroupingMode('');
     setCriticalFilter('');
+    setOrgPolicyFilter('');
     setPage(1);
     syncRoute({
       image: '',
@@ -685,6 +717,7 @@ export default function ScansPage() {
       range: '',
       tag: '',
       critical: '',
+      policy: '',
       collection: '',
       group: '',
     });
@@ -720,6 +753,13 @@ export default function ScansPage() {
     setCriticalFilter(value);
     setPage(1);
     syncRoute({ critical: value });
+  }
+
+  function handleOrgPolicyFilterChange(value: OrgPolicyFilter) {
+    clearPendingImageCommit();
+    setOrgPolicyFilter(value);
+    setPage(1);
+    syncRoute({ policy: value });
   }
 
   async function handleDelete(scanId: string, imageName: string) {
@@ -942,20 +982,47 @@ export default function ScansPage() {
     hasRecentWindow ||
     Boolean(tagFilter) ||
     Boolean(collectionFilter) ||
-    Boolean(criticalFilter);
+    Boolean(criticalFilter) ||
+    Boolean(orgPolicyFilter);
   const hasFilterBeyondView =
     Boolean(imageFilter) ||
     (Boolean(statusFilter) && statusFilter !== ACTIVE_SCAN_STATUS_FILTER) ||
     Boolean(tagFilter) ||
     Boolean(collectionFilter) ||
     Boolean(criticalFilter) ||
+    Boolean(orgPolicyFilter) ||
     Boolean(groupingMode);
   const scanView = getScansView(statusFilter, activityRange);
+  const availableStatusOptions = STATUS_FILTER_OPTIONS.filter(
+    (option) =>
+      option.id !== '' &&
+      (scanView === 'recent' ||
+        artifactFilterOptions.statuses.includes(option.id) ||
+        option.id === statusFilter)
+  );
+  const availableFilterCollections = availableCollections.filter(
+    (collection) =>
+      scanView === 'recent' ||
+      artifactFilterOptions.collection_ids.includes(collection.id) ||
+      collection.id === collectionFilter
+  );
+  const showStatusFilter =
+    scanView !== 'active' &&
+    (scanView === 'recent' || availableStatusOptions.length > 1 || Boolean(statusFilter));
+  const showCollectionFilter =
+    scanView === 'recent' || availableFilterCollections.length > 0 || Boolean(collectionFilter);
+  const showCriticalFilter =
+    scanView === 'recent' || artifactFilterOptions.has_critical || Boolean(criticalFilter);
+  const showOrgPolicyFilter =
+    workScope.kind === 'org' &&
+    !hasRecentWindow &&
+    (artifactFilterOptions.has_policy_fail || Boolean(orgPolicyFilter));
   const advancedFilterCount = [
     statusFilter && statusFilter !== ACTIVE_SCAN_STATUS_FILTER,
     tagFilter,
     collectionFilter,
     criticalFilter,
+    orgPolicyFilter,
     groupingMode,
   ].filter(Boolean).length;
   const headerDescription = hasRecentWindow
@@ -1096,7 +1163,7 @@ export default function ScansPage() {
             <Disclosure.Content>
               <Disclosure.Body className={filterDisclosureBodyClassName}>
                 <div className="flex flex-wrap items-end gap-3">
-                  {scanView !== 'active' ? (
+                  {showStatusFilter ? (
                     <Select
                       className="min-w-[200px] flex-1"
                       value={statusFilter || '__all__'}
@@ -1113,19 +1180,18 @@ export default function ScansPage() {
                       <Select.Popover>
                         <ListBox>
                           <ListBox.Item id="__all__">All states</ListBox.Item>
-                          {STATUS_FILTER_OPTIONS.filter((option) => option.id !== '').map(
-                            (option) => (
-                              <ListBox.Item key={option.id} id={option.id}>
-                                {option.label}
-                              </ListBox.Item>
-                            )
-                          )}
+                          {availableStatusOptions.map((option) => (
+                            <ListBox.Item key={option.id} id={option.id}>
+                              {option.label}
+                            </ListBox.Item>
+                          ))}
                         </ListBox>
                       </Select.Popover>
                     </Select>
                   ) : null}
 
-                  <Select
+                  {showCollectionFilter ? (
+                    <Select
                     className="min-w-[200px] flex-1"
                     value={collectionFilter || '__all__'}
                     onChange={(value) =>
@@ -1141,16 +1207,18 @@ export default function ScansPage() {
                     <Select.Popover>
                       <ListBox>
                         <ListBox.Item id="__all__">All collections</ListBox.Item>
-                        {availableCollections.map((collection) => (
+                        {availableFilterCollections.map((collection) => (
                           <ListBox.Item key={collection.id} id={collection.id}>
                             {collection.name}
                           </ListBox.Item>
                         ))}
                       </ListBox>
                     </Select.Popover>
-                  </Select>
+                    </Select>
+                  ) : null}
 
-                  <Select
+                  {showCriticalFilter ? (
+                    <Select
                     className="min-w-[180px] flex-1"
                     value={criticalFilter || '__all__'}
                     onChange={(value) =>
@@ -1174,7 +1242,33 @@ export default function ScansPage() {
                         ))}
                       </ListBox>
                     </Select.Popover>
-                  </Select>
+                    </Select>
+                  ) : null}
+
+                  {showOrgPolicyFilter ? (
+                    <Select
+                      className="min-w-[190px] flex-1"
+                      value={orgPolicyFilter || '__all__'}
+                      onChange={(value) =>
+                        handleOrgPolicyFilterChange(
+                          (value === '__all__' ? '' : (value ?? '')) as OrgPolicyFilter
+                        )
+                      }
+                      variant="secondary"
+                    >
+                      <Label>Org policy</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__all__">Any policy result</ListBox.Item>
+                          <ListBox.Item id="fail">Policy failed</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  ) : null}
 
                   <div className="flex flex-wrap items-center gap-2">
                     <Button onPress={() => openCollectionModal()} variant="secondary">

@@ -52,13 +52,6 @@ function artifactKey(imageName: string, imageTag: string) {
   return JSON.stringify([imageName, imageTag]);
 }
 
-function toggleExpanded(current: Set<string>, key: string) {
-  const next = new Set(current);
-  if (next.has(key)) next.delete(key);
-  else next.add(key);
-  return next;
-}
-
 function splitImageReference(imageName: string) {
   const segments = imageName.split('/');
   const firstSegment = segments[0] ?? '';
@@ -530,12 +523,7 @@ export function ArtifactScansTable({
                           }
                         />
                       </Table.Cell>
-                      <Table.Cell
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onExpandedChange(toggleExpanded(expanded, key));
-                        }}
-                      >
+                      <Table.Cell onClick={(event) => event.stopPropagation()}>
                         {({ hasChildItems, isDisabled, isExpanded, isTreeColumn }) =>
                           hasChildItems && isTreeColumn ? (
                             <Button
@@ -560,40 +548,60 @@ export function ArtifactScansTable({
                         }
                       </Table.Cell>
                       <Table.Cell>
-                        <ArtifactReference {...artifact} />
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <StatusBadge
-                            status={artifact.latest_status}
-                            externalStatus={artifact.latest_external_status}
-                          />
-                          <PolicyFailureChip summary={artifact.compliance_summary} />
-                        </div>
                         <Link
-                          className="mt-1 block font-mono text-xs text-zinc-500 hover:text-accent"
+                          aria-label={`Open latest scan for ${artifact.image_name}:${artifact.image_tag}`}
+                          className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                           href={`/scans/${artifact.latest_scan_id}`}
-                          onClick={(event) => event.stopPropagation()}
                         >
-                          {artifact.latest_scan_id.slice(0, 8)}…{' '}
-                          <span className="font-sans" title={fullDate(artifact.latest_scan_at)}>
-                            · {timeAgo(artifact.latest_scan_at)}
-                          </span>
+                          <ArtifactReference {...artifact} />
                         </Link>
                       </Table.Cell>
                       <Table.Cell>
-                        <div className="flex items-center gap-1.5">
-                          <SevCount count={artifact.critical_count} level="critical" />
-                          <SevCount count={artifact.high_count} level="high" />
-                          <SevCount count={artifact.medium_count} level="medium" />
-                          <SevCount count={artifact.low_count} level="low" />
-                        </div>
+                        <Link
+                          aria-label={`Open latest scan ${artifact.latest_scan_id}`}
+                          className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                          href={`/scans/${artifact.latest_scan_id}`}
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusBadge
+                              status={artifact.latest_status}
+                              externalStatus={artifact.latest_external_status}
+                            />
+                            <PolicyFailureChip summary={artifact.compliance_summary} />
+                          </div>
+                          <p className="mt-1 font-mono text-xs text-zinc-500">
+                            {artifact.latest_scan_id.slice(0, 8)}…{' '}
+                            <span className="font-sans" title={fullDate(artifact.latest_scan_at)}>
+                              · {timeAgo(artifact.latest_scan_at)}
+                            </span>
+                          </p>
+                        </Link>
                       </Table.Cell>
                       <Table.Cell>
-                        <CollectionBadgeList
-                          collections={artifact.collections}
-                          emptyLabel="No collections"
-                        />
+                        <Link
+                          aria-label={`Open findings for ${artifact.image_name}:${artifact.image_tag}`}
+                          className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                          href={`/scans/${artifact.latest_scan_id}`}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <SevCount count={artifact.critical_count} level="critical" />
+                            <SevCount count={artifact.high_count} level="high" />
+                            <SevCount count={artifact.medium_count} level="medium" />
+                            <SevCount count={artifact.low_count} level="low" />
+                          </div>
+                        </Link>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Link
+                          aria-label={`Open latest scan for ${artifact.image_name}:${artifact.image_tag}`}
+                          className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                          href={`/scans/${artifact.latest_scan_id}`}
+                        >
+                          <CollectionBadgeList
+                            collections={artifact.collections}
+                            emptyLabel="No collections"
+                          />
+                        </Link>
                       </Table.Cell>
                       <Table.Cell onClick={(event) => event.stopPropagation()}>
                         <div className="flex justify-end">

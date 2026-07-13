@@ -283,6 +283,13 @@ export interface ArtifactSummary {
   collections?: Collection[];
 }
 
+export interface ArtifactFilterOptions {
+  statuses: string[];
+  collection_ids: string[];
+  has_critical: boolean;
+  has_policy_fail: boolean;
+}
+
 export interface SBOMComponent {
   id: string;
   scan_id: string;

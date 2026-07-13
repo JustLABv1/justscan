@@ -7,6 +7,7 @@ import type {
 } from './types/orgs';
 import type {
   BulkDeleteScansResponse,
+  ArtifactFilterOptions,
   ArtifactSummary,
   ImageSummary,
   SBOMComponent,
@@ -56,15 +57,17 @@ export const listScanArtifacts = (
   query?: string,
   status?: string,
   critical?: '' | 'yes' | 'no',
-  collection?: string
+  collection?: string,
+  policy?: '' | 'fail'
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (query) params.set('q', query);
   if (status) params.set('status', status);
   if (critical) params.set('critical', critical);
   if (collection) params.set('collection', collection);
+  if (policy) params.set('policy', policy);
   appendScope(params);
-  return req<{ data: ArtifactSummary[]; total: number }>(
+  return req<{ data: ArtifactSummary[]; total: number; filters: ArtifactFilterOptions }>(
     'GET',
     `/api/v1/scans/artifacts?${params}`
   );

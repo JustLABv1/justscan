@@ -2,3 +2,73 @@
 @import '@heroui/styles';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
+
+@layer components {
+  .scan-source-card {
+    transition-duration: 140ms;
+    transition-property: transform, opacity, border-color, background-color;
+    transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .scan-source-card[data-pressed='true'] {
+    transform: scale(0.985);
+  }
+
+  .scan-source-indicator {
+    opacity: 0.72;
+    transform: scale(0.9);
+    transition-duration: 140ms;
+    transition-property: transform, opacity;
+    transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .scan-source-card[data-selected='true'] .scan-source-indicator {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .scan-form-reveal {
+    opacity: 1;
+    transform: translateY(0);
+    transition-duration: 180ms;
+    transition-property: transform, opacity;
+    transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  @starting-style {
+    .scan-form-reveal {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .scan-source-card {
+      transition-duration: 100ms;
+      transition-property: opacity, border-color, background-color;
+    }
+
+    .scan-source-card[data-pressed='true'] {
+      transform: none;
+    }
+
+    .scan-source-indicator {
+      transform: none;
+      transition-duration: 100ms;
+      transition-property: opacity;
+    }
+
+    .scan-form-reveal {
+      transform: none;
+      transition-duration: 100ms;
+      transition-property: opacity;
+    }
+
+    @starting-style {
+      .scan-form-reveal {
+        opacity: 0;
+        transform: none;
+      }
+    }
+  }
+}

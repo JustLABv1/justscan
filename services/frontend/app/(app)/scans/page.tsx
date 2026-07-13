@@ -42,13 +42,17 @@ import { canMutateOrg } from '@/lib/org-permissions';
 import {
   Button,
   Card,
+  Chip,
+  Disclosure,
   Input,
   Label,
   ListBox,
   Modal,
   Pagination,
   Popover,
+  SearchField,
   Select,
+  Tabs,
   useOverlayState,
 } from '@heroui/react';
 import {
@@ -64,14 +68,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const inputCls = nativeFieldClassName;
 
+const ACTIVE_SCAN_STATUS_FILTER =
+  'pending,running,waiting_for_xray,warming_artifactory_cache,indexing,queued,importing';
+
 const STATUS_FILTER_OPTIONS = [
   { id: '', label: 'All latest states' },
   { id: 'failed', label: 'Failed' },
   { id: 'blocked_by_xray_policy', label: 'Blocked by Xray Policy' },
-  {
-    id: 'pending,running,waiting_for_xray,warming_artifactory_cache,indexing,queued,importing',
-    label: 'In Flight',
-  },
   { id: 'pending', label: 'Pending' },
   { id: 'running', label: 'Running' },
   { id: 'waiting_for_xray', label: 'Waiting for Xray' },
@@ -138,6 +141,7 @@ function MobileSevStat({ label, count, tone }: { label: string; count: number; t
 
 type ScansTimeRange = '' | RecentActivityRange;
 type ScansGroupingMode = '' | 'collections';
+type ScansView = 'images' | 'active' | 'recent';
 type ScansViewState = {
   image: string;
   status: string;
@@ -172,6 +176,11 @@ function normalizeCriticalFilter(value?: string | null): '' | 'yes' | 'no' {
 
 function normalizeGroupingMode(value?: string | null): ScansGroupingMode {
   return value === 'collections' ? 'collections' : '';
+}
+
+function getScansView(status: string, range: ScansTimeRange): ScansView {
+  if (range) return 'recent';
+  return status === ACTIVE_SCAN_STATUS_FILTER ? 'active' : 'images';
 }
 
 function matchesStatusFilter(
@@ -221,7 +230,9 @@ function buildScansRoute({
   return query ? `/scans?${query}` : '/scans';
 }
 
-function readScansViewFromSearchParams(searchParams: { get(name: string): string | null }): ScansViewState {
+function readScansViewFromSearchParams(searchParams: {
+  get(name: string): string | null;
+}): ScansViewState {
   return {
     image: searchParams.get('image') ?? '',
     status: searchParams.get('status') ?? '',
@@ -254,7 +265,10 @@ export default function ScansPage() {
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const savedViewStorageKey = `${SCANS_VIEW_STORAGE_KEY_PREFIX}:${scopeKey}`;
-  const initialViewState = useMemo(() => readScansViewFromSearchParams(searchParams), [searchParams]);
+  const initialViewState = useMemo(
+    () => readScansViewFromSearchParams(searchParams),
+    [searchParams]
+  );
   const searchParamsString = searchParams.toString();
   const didAttemptInitialRestoreRef = useRef(false);
 
@@ -272,7 +286,10 @@ export default function ScansPage() {
   const [tagFilter, setTagFilter] = useState(initialViewState.tag);
   const [collectionFilter, setCollectionFilter] = useState(initialViewState.collection);
   const [groupingMode, setGroupingMode] = useState<ScansGroupingMode>(initialViewState.group);
-  const [criticalFilter, setCriticalFilter] = useState<'' | 'yes' | 'no'>(initialViewState.critical);
+  const [criticalFilter, setCriticalFilter] = useState<'' | 'yes' | 'no'>(
+    initialViewState.critical
+  );
+  const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Which image rows are expanded; collection-grouped rows include their collection scope.
@@ -401,7 +418,7 @@ export default function ScansPage() {
     page,
     resolvedActivityRange,
     scopeKey,
-      statusFilter,
+    statusFilter,
   ]);
 
   useEffect(
@@ -508,7 +525,9 @@ export default function ScansPage() {
     const loadScanUsers = async () => {
       const [currentUserResult, orgMembers] = await Promise.all([
         getUserDetails().catch(() => null),
-        workScope.kind === 'org' ? listOrgMembers(workScope.orgId).catch(() => []) : Promise.resolve([]),
+        workScope.kind === 'org'
+          ? listOrgMembers(workScope.orgId).catch(() => [])
+          : Promise.resolve([]),
       ]);
 
       if (cancelled) return;
@@ -583,7 +602,13 @@ export default function ScansPage() {
   const refreshCurrentView = useCallback(
     (options?: { silent?: boolean }) => {
       if (hasRecentWindow) {
-        return loadActivity(page, appliedImageFilter, resolvedActivityRange, collectionFilter, options);
+        return loadActivity(
+          page,
+          appliedImageFilter,
+          resolvedActivityRange,
+          collectionFilter,
+          options
+        );
       }
 
       return loadImages(page, appliedImageFilter, statusFilter, collectionFilter, options);
@@ -650,11 +675,33 @@ export default function ScansPage() {
     syncRoute({ range: nextRange });
   }
 
-  function handleActivityRangeClear() {
+  function handleViewChange(nextView: ScansView) {
     clearPendingImageCommit();
-    setActivityRange('');
+
+    if (nextView === 'images') {
+      const nextStatus = statusFilter === ACTIVE_SCAN_STATUS_FILTER ? '' : statusFilter;
+      setActivityRange('');
+      setStatusFilter(nextStatus);
+      setPage(1);
+      syncRoute({ range: '', status: nextStatus });
+      return;
+    }
+
+    if (nextView === 'active') {
+      setActivityRange('');
+      setStatusFilter(ACTIVE_SCAN_STATUS_FILTER);
+      setPage(1);
+      syncRoute({ range: '', status: ACTIVE_SCAN_STATUS_FILTER });
+      return;
+    }
+
+    const nextRange = activityRange || DEFAULT_ACTIVITY_RANGE;
+    const nextStatus = statusFilter === ACTIVE_SCAN_STATUS_FILTER ? '' : statusFilter;
+    setActivityRange(nextRange);
+    setStatusFilter(nextStatus);
+    setGroupingMode('');
     setPage(1);
-    syncRoute({ range: '' });
+    syncRoute({ range: nextRange, status: nextStatus, group: '' });
   }
 
   function handleClearFilters() {
@@ -668,7 +715,15 @@ export default function ScansPage() {
     setGroupingMode('');
     setCriticalFilter('');
     setPage(1);
-    syncRoute({ image: '', status: '', range: '', tag: '', critical: '', collection: '', group: '' });
+    syncRoute({
+      image: '',
+      status: '',
+      range: '',
+      tag: '',
+      critical: '',
+      collection: '',
+      group: '',
+    });
   }
 
   function handleImageFilterChange(value: string) {
@@ -856,7 +911,8 @@ export default function ScansPage() {
   async function handleDeleteCollection(collection: Collection) {
     const ok = await confirm({
       title: `Delete ${collection.name}?`,
-      message: 'This removes the collection from scans and watchlist assignments in this workspace.',
+      message:
+        'This removes the collection from scans and watchlist assignments in this workspace.',
       confirmLabel: 'Delete',
       variant: 'danger',
     });
@@ -892,23 +948,23 @@ export default function ScansPage() {
     let targetIds = visibleScanIds;
 
     // If child rows have not reported visible IDs yet, fetch only the first child page
-      // so selection still maps to visible rows instead of selecting a hidden latest scan ID.
-      if (targetIds.length === 0) {
-        try {
-          const res = await listScans(
-            1,
-            10,
-            imageName,
-            undefined,
-            true,
-            undefined,
-            undefined,
-            collectionFilter || undefined
-          );
-          targetIds = (res.data ?? []).map((scan) => scan.id);
-        } catch {
-          targetIds = [];
-        }
+    // so selection still maps to visible rows instead of selecting a hidden latest scan ID.
+    if (targetIds.length === 0) {
+      try {
+        const res = await listScans(
+          1,
+          10,
+          imageName,
+          undefined,
+          true,
+          undefined,
+          undefined,
+          collectionFilter || undefined
+        );
+        targetIds = (res.data ?? []).map((scan) => scan.id);
+      } catch {
+        targetIds = [];
+      }
     }
 
     if (targetIds.length === 0) {
@@ -1013,7 +1069,9 @@ export default function ScansPage() {
       });
     });
 
-    return Array.from(buckets.values()).sort((left, right) => left.label.localeCompare(right.label));
+    return Array.from(buckets.values()).sort((left, right) =>
+      left.label.localeCompare(right.label)
+    );
   }, [filteredImages, groupingMode]);
 
   const visibleRows = hasRecentWindow ? filteredActivityScans.length : filteredImages.length;
@@ -1034,6 +1092,22 @@ export default function ScansPage() {
     Boolean(tagFilter) ||
     Boolean(collectionFilter) ||
     Boolean(criticalFilter);
+  const hasFilterBeyondView =
+    Boolean(imageFilter) ||
+    (Boolean(statusFilter) && statusFilter !== ACTIVE_SCAN_STATUS_FILTER) ||
+    Boolean(tagFilter) ||
+    Boolean(collectionFilter) ||
+    Boolean(criticalFilter) ||
+    Boolean(groupingMode);
+  const scanView = getScansView(statusFilter, activityRange);
+  const advancedFilterCount = [
+    statusFilter && statusFilter !== ACTIVE_SCAN_STATUS_FILTER,
+    tagFilter,
+    collectionFilter,
+    criticalFilter,
+    groupingMode,
+  ].filter(Boolean).length;
+  const advancedFiltersActive = advancedFilterCount > 0;
   const headerDescription = hasRecentWindow
     ? totalForDisplay > 0
       ? `${totalForDisplay} scan event${totalForDisplay !== 1 ? 's' : ''} in ${activityRangeLabel.toLowerCase()}`
@@ -1073,215 +1147,261 @@ export default function ScansPage() {
       />
 
       <Card className="surface-panel rounded-2xl p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1 space-y-1.5">
-            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Image</Label>
-            <Input
-              className={inputCls}
-              placeholder={
-                hasRecentWindow ? 'Filter recent activity by image name…' : 'Filter by image name…'
-              }
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Tabs
+              selectedKey={scanView}
+              onSelectionChange={(key) => handleViewChange(String(key) as ScansView)}
+              variant="secondary"
+            >
+              <Tabs.ListContainer className="overflow-x-auto">
+                <Tabs.List aria-label="Scan views" className="min-w-max">
+                  <Tabs.Tab className="whitespace-nowrap" id="images">
+                    Images
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
+                  <Tabs.Tab className="whitespace-nowrap" id="active">
+                    Active scans
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
+                  <Tabs.Tab className="whitespace-nowrap" id="recent">
+                    Recent
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
+                </Tabs.List>
+              </Tabs.ListContainer>
+              {(['images', 'active', 'recent'] as const).map((view) => (
+                <Tabs.Panel key={view} className="hidden" id={view}>
+                  <span className="sr-only">{view}</span>
+                </Tabs.Panel>
+              ))}
+            </Tabs>
+            <p className="text-sm text-muted">
+              {totalForDisplay}{' '}
+              {hasRecentWindow
+                ? `scan event${totalForDisplay !== 1 ? 's' : ''}`
+                : `image${totalForDisplay !== 1 ? 's' : ''}`}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <SearchField
+              aria-label="Search images"
+              className="min-w-[220px] flex-1"
               value={imageFilter}
-              onChange={(e) => handleImageFilterChange(e.target.value)}
-            />
-          </div>
-
-          <div className="min-w-[180px] space-y-1.5">
-            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-              Time Window
-            </Label>
-            <Select
-              value={activityRange || '__any__'}
-              onChange={(value) => {
-                const next = String(value === '__any__' ? '' : (value ?? ''));
-                if (!next) {
-                  handleActivityRangeClear();
-                  return;
-                }
-                handleActivityRangeChange(next as RecentActivityRange);
-              }}
-              className="min-w-0"
+              onChange={handleImageFilterChange}
+              variant="secondary"
             >
-              <Select.Trigger className="bg-surface-secondary">
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="__any__">Any time</ListBox.Item>
-                  {RECENT_ACTIVITY_RANGE_OPTIONS.map((option) => (
-                    <ListBox.Item key={option.id} id={option.id}>
-                      {option.label}
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
+              <Label className="sr-only">Search images</Label>
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input
+                  placeholder={
+                    hasRecentWindow
+                      ? 'Filter recent activity by image name…'
+                      : 'Filter by image name…'
+                  }
+                />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
 
-          <div className="min-w-[220px] space-y-1.5">
-            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-              Latest State
-            </Label>
-            <Select
-              value={statusFilter || '__all__'}
-              onChange={(value) =>
-                handleStatusFilterChange(String(value === '__all__' ? '' : (value ?? '')))
-              }
-              className="min-w-0"
-            >
-              <Select.Trigger className="bg-surface-secondary">
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="__all__">All latest states</ListBox.Item>
-                  {STATUS_FILTER_OPTIONS.filter((option) => option.id !== '').map((option) => (
-                    <ListBox.Item key={option.id} id={option.id}>
-                      {option.label}
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
-
-          <div className="min-w-[180px] space-y-1.5">
-            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Tag</Label>
-            <Select
-              value={tagFilter || '__all__'}
-              onChange={(value) =>
-                handleTagFilterChange(String(value === '__all__' ? '' : (value ?? '')))
-              }
-              className="min-w-0"
-            >
-              <Select.Trigger className="bg-surface-secondary">
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="__all__">All tags</ListBox.Item>
-                  {tagFilterOptions.map((tagValue) => (
-                    <ListBox.Item key={tagValue} id={tagValue}>
-                      {tagValue}
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
-
-          <div className="min-w-[220px] space-y-1.5">
-            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-              Collection
-            </Label>
-            <Select
-              value={collectionFilter || '__all__'}
-              onChange={(value) =>
-                handleCollectionFilterChange(String(value === '__all__' ? '' : (value ?? '')))
-              }
-              className="min-w-0"
-            >
-              <Select.Trigger className="bg-surface-secondary">
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="__all__">All collections</ListBox.Item>
-                  {availableCollections.map((collection) => (
-                    <ListBox.Item key={collection.id} id={collection.id}>
-                      {collection.name}
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
-
-          <div className="min-w-[180px] space-y-1.5">
-            <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-              Has Critical
-            </Label>
-            <Select
-              value={criticalFilter || '__all__'}
-              onChange={(value) =>
-                handleCriticalFilterChange(
-                  (value === '__all__' ? '' : (value ?? '')) as '' | 'yes' | 'no'
-                )
-              }
-              className="min-w-0"
-            >
-              <Select.Trigger className="bg-surface-secondary">
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  {CRITICAL_FILTER_OPTIONS.map((option) => (
-                    <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>
-                      {option.label}
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
-
-          {!hasRecentWindow ? (
-            <div className="min-w-[180px] space-y-1.5">
-              <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                Group By
-              </Label>
+            {scanView === 'recent' ? (
               <Select
-                value={groupingMode || '__none__'}
+                value={activityRange || DEFAULT_ACTIVITY_RANGE}
                 onChange={(value) =>
-                  handleGroupingModeChange(
-                    (value === '__none__' ? '' : (value ?? '')) as ScansGroupingMode
-                  )
+                  handleActivityRangeChange(String(value) as RecentActivityRange)
                 }
-                className="min-w-0"
+                variant="secondary"
               >
-                <Select.Trigger className="bg-surface-secondary">
+                <Label>Time range</Label>
+                <Select.Trigger>
                   <Select.Value />
                   <Select.Indicator />
                 </Select.Trigger>
                 <Select.Popover>
                   <ListBox>
-                    <ListBox.Item id="__none__">No grouping</ListBox.Item>
-                    <ListBox.Item id="collections">Collections</ListBox.Item>
+                    {RECENT_ACTIVITY_RANGE_OPTIONS.map((option) => (
+                      <ListBox.Item key={option.id} id={option.id}>
+                        {option.label}
+                      </ListBox.Item>
+                    ))}
                   </ListBox>
                 </Select.Popover>
               </Select>
-            </div>
-          ) : null}
-
-          <div className="ml-auto flex min-w-[140px] items-end justify-end">
-            <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto">
-              <Button variant="secondary" onPress={() => openCollectionModal()}>
-                Manage Collections
-              </Button>
-              {hasActiveFilters ? (
-                <Button
-                  onClick={handleClearFilters}
-                  className="flex items-center justify-center gap-1.5"
-                  variant="secondary"
-                >
-                  <FilterIcon size={12} />
-                  Clear Filters
-                </Button>
-              ) : (
-                <p className="text-sm text-zinc-500 md:text-right">
-                  {totalForDisplay}{' '}
-                  {hasRecentWindow
-                    ? `scan event${totalForDisplay !== 1 ? 's' : ''}`
-                    : `image${totalForDisplay !== 1 ? 's' : ''}`}
-                </p>
-              )}
-            </div>
+            ) : null}
           </div>
+
+          <Disclosure
+            isExpanded={advancedFiltersExpanded || advancedFiltersActive}
+            onExpandedChange={setAdvancedFiltersExpanded}
+            className="rounded-xl border border-surface-border bg-surface-secondary"
+          >
+            <Disclosure.Heading>
+              <Disclosure.Trigger className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm font-medium text-foreground">
+                <span className="flex items-center gap-2">
+                  <FilterIcon size={15} />
+                  Filters
+                  {advancedFilterCount > 0 ? (
+                    <Chip color="accent" size="sm" variant="soft">
+                      {advancedFilterCount}
+                    </Chip>
+                  ) : null}
+                </span>
+                <Disclosure.Indicator />
+              </Disclosure.Trigger>
+            </Disclosure.Heading>
+            <Disclosure.Content>
+              <Disclosure.Body className="border-t border-surface-border p-3">
+                <div className="flex flex-wrap items-end gap-3">
+                  {scanView !== 'active' ? (
+                    <Select
+                      className="min-w-[200px] flex-1"
+                      value={statusFilter || '__all__'}
+                      onChange={(value) =>
+                        handleStatusFilterChange(String(value === '__all__' ? '' : (value ?? '')))
+                      }
+                      variant="secondary"
+                    >
+                      <Label>{scanView === 'recent' ? 'Status' : 'Latest state'}</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__all__">All states</ListBox.Item>
+                          {STATUS_FILTER_OPTIONS.filter((option) => option.id !== '').map(
+                            (option) => (
+                              <ListBox.Item key={option.id} id={option.id}>
+                                {option.label}
+                              </ListBox.Item>
+                            )
+                          )}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  ) : null}
+
+                  <Select
+                    className="min-w-[180px] flex-1"
+                    value={tagFilter || '__all__'}
+                    onChange={(value) =>
+                      handleTagFilterChange(String(value === '__all__' ? '' : (value ?? '')))
+                    }
+                    variant="secondary"
+                  >
+                    <Label>Tag</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="__all__">All tags</ListBox.Item>
+                        {tagFilterOptions.map((tagValue) => (
+                          <ListBox.Item key={tagValue} id={tagValue}>
+                            {tagValue}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+
+                  <Select
+                    className="min-w-[200px] flex-1"
+                    value={collectionFilter || '__all__'}
+                    onChange={(value) =>
+                      handleCollectionFilterChange(String(value === '__all__' ? '' : (value ?? '')))
+                    }
+                    variant="secondary"
+                  >
+                    <Label>Collection</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="__all__">All collections</ListBox.Item>
+                        {availableCollections.map((collection) => (
+                          <ListBox.Item key={collection.id} id={collection.id}>
+                            {collection.name}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+
+                  <Select
+                    className="min-w-[180px] flex-1"
+                    value={criticalFilter || '__all__'}
+                    onChange={(value) =>
+                      handleCriticalFilterChange(
+                        (value === '__all__' ? '' : (value ?? '')) as '' | 'yes' | 'no'
+                      )
+                    }
+                    variant="secondary"
+                  >
+                    <Label>Critical findings</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {CRITICAL_FILTER_OPTIONS.map((option) => (
+                          <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>
+                            {option.label}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+
+                  {scanView !== 'recent' ? (
+                    <Select
+                      className="min-w-[180px] flex-1"
+                      value={groupingMode || '__none__'}
+                      onChange={(value) =>
+                        handleGroupingModeChange(
+                          (value === '__none__' ? '' : (value ?? '')) as ScansGroupingMode
+                        )
+                      }
+                      variant="secondary"
+                    >
+                      <Label>Group by</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__none__">No grouping</ListBox.Item>
+                          <ListBox.Item id="collections">Collections</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  ) : null}
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button onPress={() => openCollectionModal()} variant="secondary">
+                      Manage collections
+                    </Button>
+                    {hasActiveFilters ? (
+                      <Button
+                        className="inline-flex items-center gap-1.5"
+                        onPress={handleClearFilters}
+                        variant="secondary"
+                      >
+                        Clear filters
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </Disclosure.Body>
+            </Disclosure.Content>
+          </Disclosure>
         </div>
       </Card>
 
@@ -1313,16 +1433,14 @@ export default function ScansPage() {
           </span>
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              onClick={handleGenerateReport}
+              onPress={handleGenerateReport}
               className="flex flex-1 min-w-[110px] items-center justify-center gap-1.5 sm:flex-none"
               variant="secondary"
             >
               Generate Report
             </Button>
             <Popover>
-              <Popover.Trigger>
-                <Button variant="secondary">Add Tag</Button>
-              </Popover.Trigger>
+              <Button variant="secondary">Add Tag</Button>
               <Popover.Content className="rounded-xl min-w-[160px]" placement="bottom end">
                 <Popover.Dialog className="p-1">
                   {availableTags.length === 0 ? (
@@ -1352,13 +1470,13 @@ export default function ScansPage() {
               </Popover.Content>
             </Popover>
             <Popover>
-              <Popover.Trigger>
-                <Button variant="secondary">Add Collection</Button>
-              </Popover.Trigger>
+              <Button variant="secondary">Add Collection</Button>
               <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
                 <Popover.Dialog className="p-1">
                   {availableCollections.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-zinc-500">No collections created yet</div>
+                    <div className="px-3 py-2 text-xs text-zinc-500">
+                      No collections created yet
+                    </div>
                   ) : (
                     <ListBox onAction={(key) => void handleBulkAddCollection(String(key))}>
                       {availableCollections.map((collection) => (
@@ -1376,13 +1494,13 @@ export default function ScansPage() {
               </Popover.Content>
             </Popover>
             <Popover>
-              <Popover.Trigger>
-                <Button variant="secondary">Remove Collection</Button>
-              </Popover.Trigger>
+              <Button variant="secondary">Remove Collection</Button>
               <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
                 <Popover.Dialog className="p-1">
                   {availableCollections.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-zinc-500">No collections created yet</div>
+                    <div className="px-3 py-2 text-xs text-zinc-500">
+                      No collections created yet
+                    </div>
                   ) : (
                     <ListBox onAction={(key) => void handleBulkRemoveCollection(String(key))}>
                       {availableCollections.map((collection) => (
@@ -1400,14 +1518,14 @@ export default function ScansPage() {
               </Popover.Content>
             </Popover>
             <Button
-              onClick={() => setSelectedScans(new Set())}
+              onPress={() => setSelectedScans(new Set())}
               className="flex-1 min-w-[90px] sm:flex-none"
               variant="secondary"
             >
               Clear
             </Button>
             <Button
-              onClick={handleBulkDelete}
+              onPress={handleBulkDelete}
               className="flex-1 min-w-[90px] sm:flex-none"
               variant="danger-soft"
             >
@@ -1447,16 +1565,15 @@ export default function ScansPage() {
               <EmptyState
                 icon={<Shield01Icon size={28} />}
                 title={
-                  hasActiveFilters
+                  hasFilterBeyondView
                     ? 'No recent scans match your filters'
                     : 'No recent scans in this window'
                 }
                 description={
-                  hasActiveFilters
-                    ? 'Try a different filter combination or clear filters.'
-                    : 'Choose a wider time window or show all scans.'
+                  hasFilterBeyondView
+                    ? 'Adjust or clear filters above to widen the results.'
+                    : 'Choose a wider time window from the Recent view.'
                 }
-                action={{ label: 'Show all scans', onClick: handleClearFilters }}
               />
             </div>
           ) : (
@@ -1474,15 +1591,21 @@ export default function ScansPage() {
               <ImageScansTable
                 childRefreshKey={childRefreshKey}
                 collectionFilter={collectionFilter}
+                emptyState={
+                  scanView === 'active'
+                    ? {
+                        title: 'No active scans',
+                        description: 'Queued and running scans will appear here automatically.',
+                      }
+                    : undefined
+                }
                 expanded={expanded}
-                hasActiveFilters={hasActiveFilters}
+                hasActiveFilters={hasFilterBeyondView}
                 images={filteredImages}
                 loading={loading}
                 onCancel={(scanId, imageName) => handleCancel(scanId, imageName)}
-                onClearFilters={handleClearFilters}
                 onDelete={(scanId, imageName) => handleDelete(scanId, imageName)}
                 onExpandedChange={setExpanded}
-                onOpenCreateModal={openCreatePage}
                 allowMutationActions={canMutateCurrentScope}
                 onSelectedScansChange={setSelectedScans}
                 onSelectImageScans={(imageName, selected, latestScanId, visibleScanIds) =>
@@ -1518,17 +1641,27 @@ export default function ScansPage() {
                     </div>
                     <ImageScansTable
                       childRefreshKey={childRefreshKey}
-                      collectionFilter={collectionFilter || (group.key === '__unassigned__' ? '__none__' : group.key)}
+                      collectionFilter={
+                        collectionFilter ||
+                        (group.key === '__unassigned__' ? '__none__' : group.key)
+                      }
+                      emptyState={
+                        scanView === 'active'
+                          ? {
+                              title: 'No active scans',
+                              description:
+                                'Queued and running scans will appear here automatically.',
+                            }
+                          : undefined
+                      }
                       expanded={expanded}
                       expansionScope={group.key}
-                      hasActiveFilters={hasActiveFilters}
+                      hasActiveFilters={hasFilterBeyondView}
                       images={group.images}
                       loading={loading}
                       onCancel={(scanId, imageName) => handleCancel(scanId, imageName)}
-                      onClearFilters={handleClearFilters}
                       onDelete={(scanId, imageName) => handleDelete(scanId, imageName)}
                       onExpandedChange={setExpanded}
-                      onOpenCreateModal={openCreatePage}
                       allowMutationActions={canMutateCurrentScope}
                       onSelectedScansChange={setSelectedScans}
                       onSelectImageScans={(imageName, selected, latestScanId, visibleScanIds) =>
@@ -1556,15 +1689,21 @@ export default function ScansPage() {
             <ImageScansTable
               childRefreshKey={childRefreshKey}
               collectionFilter={collectionFilter}
+              emptyState={
+                scanView === 'active'
+                  ? {
+                      title: 'No active scans',
+                      description: 'Queued and running scans will appear here automatically.',
+                    }
+                  : undefined
+              }
               expanded={expanded}
-              hasActiveFilters={hasActiveFilters}
+              hasActiveFilters={hasFilterBeyondView}
               images={filteredImages}
               loading={loading}
               onCancel={(scanId, imageName) => handleCancel(scanId, imageName)}
-              onClearFilters={handleClearFilters}
               onDelete={(scanId, imageName) => handleDelete(scanId, imageName)}
               onExpandedChange={setExpanded}
-              onOpenCreateModal={openCreatePage}
               allowMutationActions={canMutateCurrentScope}
               onSelectedScansChange={setSelectedScans}
               onSelectImageScans={(imageName, selected, latestScanId, visibleScanIds) =>
@@ -1646,7 +1785,8 @@ export default function ScansPage() {
                     </Button>
                   </div>
                   <p className="text-xs text-zinc-500">
-                    Collections are scoped to the current workspace and can be assigned to multiple scans.
+                    Collections are scoped to the current workspace and can be assigned to multiple
+                    scans.
                   </p>
                 </div>
 
@@ -1672,14 +1812,19 @@ export default function ScansPage() {
                   ) : (
                     <div className="space-y-2">
                       {availableCollections.map((collection) => (
-                        <Card key={collection.id} className="rounded-xl border border-divider/70 px-3 py-3">
+                        <Card
+                          key={collection.id}
+                          className="rounded-xl border border-divider/70 px-3 py-3"
+                        >
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-zinc-900 dark:text-white">
                                 {collection.name}
                               </p>
                               <p className="mt-1 text-xs text-zinc-500">
-                                {collection.owner_type === 'org' ? 'Organization collection' : 'Personal collection'}
+                                {collection.owner_type === 'org'
+                                  ? 'Organization collection'
+                                  : 'Personal collection'}
                               </p>
                             </div>
                             <div className="flex items-center gap-2">

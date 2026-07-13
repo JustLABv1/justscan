@@ -113,10 +113,8 @@ export function OrgScansTab({
           images={imageSummaries}
           loading={false}
           onCancel={async () => {}}
-          onClearFilters={() => {}}
           onDelete={handleDelete}
           onExpandedChange={setExpanded}
-          onOpenCreateModal={onOpenAssignModal}
           onSelectedScansChange={setSelectedScans}
           onSelectScan={() => {}}
           allowMutationActions={canManageScans}

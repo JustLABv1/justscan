@@ -69,69 +69,72 @@ function DetailDrawer({
   state: ReturnType<typeof useOverlayState>;
 }) {
   return (
-    <Drawer state={state}>
-      <Drawer.Backdrop isDismissable variant="blur">
-        <Drawer.Content placement="right">
-          <Drawer.Dialog className="flex h-full w-[min(100vw,42rem)] flex-col">
-            <Drawer.Header>
-              <div className="min-w-0 space-y-2">
-                <Drawer.Heading className="font-mono text-lg">{entry.vuln_id}</Drawer.Heading>
-                <div className="flex flex-wrap items-center gap-2">
-                  <SevBadge severity={entry.severity} />
-                  <ScorePill score={entry.cvss_score} />
-                  {entry.exploit_available ? (
-                    <Chip color="danger" size="sm" variant="soft">
-                      Exploit available
-                    </Chip>
-                  ) : null}
-                </div>
-              </div>
-              <Drawer.CloseTrigger />
-            </Drawer.Header>
-            <Drawer.Body className="space-y-6">
-              <div className="text-sm text-muted">
-                {entry.published_date
-                  ? `Published ${new Date(entry.published_date).toLocaleDateString()}`
-                  : 'Unknown publish date'}
-                {entry.cvss_vector ? (
-                  <span className="ml-3 font-mono">{entry.cvss_vector}</span>
+    <Drawer.Backdrop
+      isDismissable
+      isOpen={state.isOpen}
+      onOpenChange={state.setOpen}
+      variant="blur"
+    >
+      <Drawer.Content placement="right">
+        <Drawer.Dialog className="flex h-full w-[min(100vw,42rem)] flex-col">
+          <Drawer.Header>
+            <div className="min-w-0 space-y-2">
+              <Drawer.Heading className="font-mono text-lg">{entry.vuln_id}</Drawer.Heading>
+              <div className="flex flex-wrap items-center gap-2">
+                <SevBadge severity={entry.severity} />
+                <ScorePill score={entry.cvss_score} />
+                {entry.exploit_available ? (
+                  <Chip color="danger" size="sm" variant="soft">
+                    Exploit available
+                  </Chip>
                 ) : null}
               </div>
-              {entry.description ? (
-                <section>
-                  <h3 className="text-sm font-semibold">Description</h3>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted">
-                    {entry.description}
-                  </p>
-                </section>
+            </div>
+            <Drawer.CloseTrigger />
+          </Drawer.Header>
+          <Drawer.Body className="space-y-6">
+            <div className="text-sm text-muted">
+              {entry.published_date
+                ? `Published ${new Date(entry.published_date).toLocaleDateString()}`
+                : 'Unknown publish date'}
+              {entry.cvss_vector ? (
+                <span className="ml-3 font-mono">{entry.cvss_vector}</span>
               ) : null}
-              {entry.references?.length ? (
-                <section>
-                  <h3 className="text-sm font-semibold">References</h3>
-                  <ul className="mt-2 space-y-2">
-                    {entry.references.map((reference) => (
-                      <li key={`${reference.url}-${reference.source ?? ''}`} className="text-sm">
-                        <a
-                          href={reference.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="break-all text-accent hover:underline"
-                        >
-                          {reference.url}
-                        </a>
-                        {reference.source ? (
-                          <span className="ml-2 text-muted">({reference.source})</span>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-            </Drawer.Body>
-          </Drawer.Dialog>
-        </Drawer.Content>
-      </Drawer.Backdrop>
-    </Drawer>
+            </div>
+            {entry.description ? (
+              <section>
+                <h3 className="text-sm font-semibold">Description</h3>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted">
+                  {entry.description}
+                </p>
+              </section>
+            ) : null}
+            {entry.references?.length ? (
+              <section>
+                <h3 className="text-sm font-semibold">References</h3>
+                <ul className="mt-2 space-y-2">
+                  {entry.references.map((reference) => (
+                    <li key={`${reference.url}-${reference.source ?? ''}`} className="text-sm">
+                      <a
+                        href={reference.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="break-all text-accent hover:underline"
+                      >
+                        {reference.url}
+                      </a>
+                      {reference.source ? (
+                        <span className="ml-2 text-muted">({reference.source})</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </Drawer.Body>
+        </Drawer.Dialog>
+      </Drawer.Content>
+    </Drawer.Backdrop>
   );
 }
 
@@ -248,14 +251,12 @@ export default function VulnKBPage() {
     });
   }, [severity, minCvss, exploitOnly, publishedRange]);
 
-  async function handleRowClick(entry: VulnKBEntry) {
-    try {
-      const full = await getKBEntry(entry.vuln_id);
-      setDetail(full);
-    } catch {
-      setDetail(entry);
-    }
+  function handleRowClick(entry: VulnKBEntry) {
+    setDetail(entry);
     detailDrawer.open();
+    void getKBEntry(entry.vuln_id)
+      .then(setDetail)
+      .catch(() => {});
   }
 
   const activeFilters = [
@@ -453,7 +454,7 @@ export default function VulnKBPage() {
                         key={e.vuln_id}
                         id={e.vuln_id}
                         className="cursor-pointer hover:bg-[var(--row-hover)]"
-                        onClick={() => handleRowClick(e)}
+                        onAction={() => handleRowClick(e)}
                       >
                         <Table.Cell>
                           <span className="font-mono text-xs text-accent dark:text-accent">

@@ -19,6 +19,7 @@ import {
   shareSuppression,
   Suppression,
   SuppressionAppliedImage,
+  transferSuppressionOwnership,
   unshareSuppression,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
@@ -85,6 +86,7 @@ export default function SuppressionsPage() {
   const [sharesLoading, setSharesLoading] = useState(false);
   const [shareError, setShareError] = useState('');
   const [shareOrgId, setShareOrgId] = useState('');
+  const [transferOrgId, setTransferOrgId] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
   const [imagesTarget, setImagesTarget] = useState<Suppression | null>(null);
   const [appliedImages, setAppliedImages] = useState<SuppressionAppliedImage[]>([]);
@@ -166,6 +168,7 @@ export default function SuppressionsPage() {
     setShareTarget(suppression);
     setShares([]);
     setShareOrgId('');
+    setTransferOrgId('');
     setShareError('');
     shareModal.open();
     void loadShares(suppression.id);
@@ -197,6 +200,38 @@ export default function SuppressionsPage() {
       await loadShares(shareTarget.id);
     } catch (err: unknown) {
       setShareError(err instanceof Error ? err.message : 'Failed to revoke access');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
+  async function handleTransferOwnership() {
+    if (
+      !shareTarget ||
+      !transferOrgId ||
+      shareTarget.owner_type !== 'org' ||
+      !canManageAccess(shareTarget)
+    )
+      return;
+    const destination =
+      orgs.find((org) => org.id === transferOrgId)?.name ?? 'the selected organization';
+    const ok = await confirm({
+      title: `Transfer suppression ownership to ${destination}?`,
+      message:
+        'The current owner will retain shared access and existing organization grants will remain.',
+      confirmLabel: 'Transfer',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await transferSuppressionOwnership(shareTarget.id, transferOrgId);
+      toast.success('Suppression ownership transferred');
+      shareModal.close();
+      await load(page, statusFilter, searchQuery);
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to transfer ownership');
     } finally {
       setShareSaving(false);
     }
@@ -261,6 +296,13 @@ export default function SuppressionsPage() {
           !shares.some((share) => share.org_id === org.id)
       )
     : [];
+  const transferTargets =
+    shareTarget?.owner_type === 'org'
+      ? orgs.filter(
+          (org) =>
+            (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id
+        )
+      : [];
 
   return (
     <div className="p-6 space-y-5">
@@ -541,6 +583,10 @@ export default function SuppressionsPage() {
           void handleRevokeShare(orgId);
         }}
         availableOrgTargets={availableShareTargets.map((org) => ({ id: org.id, name: org.name }))}
+        transferTargets={transferTargets.map((org) => ({ id: org.id, name: org.name }))}
+        transferOrgId={transferOrgId}
+        onTransferOrgIdChange={setTransferOrgId}
+        onTransfer={() => void handleTransferOwnership()}
         orgNamesById={orgNamesById}
       />
 

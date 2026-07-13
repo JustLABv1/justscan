@@ -17,6 +17,7 @@ func Suppressions(router *gin.RouterGroup, db *bun.DB) {
 	global.GET("/:id/shares", suppressions.ListSuppressionShares(db))
 	global.POST("/:id/shares", suppressions.ShareSuppression(db))
 	global.DELETE("/:id/shares/:orgId", suppressions.UnshareSuppression(db))
+	global.POST("/:id/transfer-ownership", suppressions.TransferSuppressionOwnership(db))
 
 	// Per-image CRUD
 	s := router.Group("/images/:digest/suppressions").Use(middlewares.Auth(db))

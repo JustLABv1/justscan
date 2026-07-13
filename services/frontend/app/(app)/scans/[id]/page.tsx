@@ -1,5 +1,6 @@
 'use client';
 import { useAIContextBridge } from '@/components/assistant/ai-context-bridge';
+import { useConfirmDialog } from '@/components/confirm-dialog';
 import { EvilRadarChart } from '@/components/evilcharts/charts/radar-chart';
 import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
 import { ManageSuppressionAccessModal } from '@/components/suppressions/manage-suppression-access-modal';
@@ -69,6 +70,7 @@ import {
   revokeScanOrgAccess,
   saveScanVulnerabilityViewPreference,
   shareSuppression,
+  transferSuppressionOwnership,
   unshareSuppression,
   upsertSuppression,
 } from '@/lib/api';
@@ -483,6 +485,7 @@ export default function ScanDetailPage() {
   const searchParams = useSearchParams();
   const workScope = useWorkScope();
   const toast = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [scan, setScan] = useState<Scan | null>(null);
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [vulnTotal, setVulnTotal] = useState(0);
@@ -572,6 +575,7 @@ export default function ScanDetailPage() {
   const [suppressionAccessLoading, setSuppressionAccessLoading] = useState(false);
   const [suppressionAccessError, setSuppressionAccessError] = useState('');
   const [suppressionAccessOrgId, setSuppressionAccessOrgId] = useState('');
+  const [suppressionTransferOrgId, setSuppressionTransferOrgId] = useState('');
   const [suppressionAccessSaving, setSuppressionAccessSaving] = useState(false);
   const vulnerabilityDetailsModal = useOverlayState();
   const xrayPolicyDetailsModal = useOverlayState();
@@ -1627,6 +1631,7 @@ export default function ScanDetailPage() {
     setSuppressionAccessTarget(suppression);
     setSuppressionAccessShares([]);
     setSuppressionAccessOrgId('');
+    setSuppressionTransferOrgId('');
     setSuppressionAccessError('');
     suppressionAccessModal.open();
     void loadSuppressionAccessShares(suppression.id);
@@ -1663,6 +1668,38 @@ export default function ScanDetailPage() {
       await loadSuppressionAccessShares(suppressionAccessTarget.id);
     } catch (err: unknown) {
       setSuppressionAccessError(err instanceof Error ? err.message : 'Failed to revoke access');
+    } finally {
+      setSuppressionAccessSaving(false);
+    }
+  }
+
+  async function handleTransferSuppressionOwnership() {
+    if (
+      !suppressionAccessTarget ||
+      !suppressionTransferOrgId ||
+      suppressionAccessTarget.owner_type !== 'org' ||
+      !canManageSuppressionAccess(suppressionAccessTarget)
+    )
+      return;
+    const destination =
+      allOrgs.find((org) => org.id === suppressionTransferOrgId)?.name ??
+      'the selected organization';
+    const ok = await confirm({
+      title: `Transfer suppression ownership to ${destination}?`,
+      message: 'The current owner will retain shared access and existing organization grants will remain.',
+      confirmLabel: 'Transfer',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setSuppressionAccessSaving(true);
+    setSuppressionAccessError('');
+    try {
+      await transferSuppressionOwnership(suppressionAccessTarget.id, suppressionTransferOrgId);
+      toast.success('Suppression ownership transferred');
+      suppressionAccessModal.close();
+      await loadScan();
+    } catch (err: unknown) {
+      setSuppressionAccessError(err instanceof Error ? err.message : 'Failed to transfer ownership');
     } finally {
       setSuppressionAccessSaving(false);
     }
@@ -1753,6 +1790,14 @@ export default function ScanDetailPage() {
           !suppressionAccessShares.some((share) => share.org_id === org.id)
       )
     : [];
+  const availableSuppressionTransferTargets =
+    suppressionAccessTarget?.owner_type === 'org'
+      ? allOrgs.filter(
+          (org) =>
+            (isPlatformAdmin || manageableOrgIds.has(org.id)) &&
+            org.id !== suppressionAccessTarget.owner_org_id
+        )
+      : [];
 
   const complianceByOrg = Object.values(
     compliance.reduce(
@@ -4157,6 +4202,15 @@ export default function ScanDetailPage() {
           id: org.id,
           name: org.name,
         }))}
+        transferTargets={availableSuppressionTransferTargets.map((org) => ({
+          id: org.id,
+          name: org.name,
+        }))}
+        transferOrgId={suppressionTransferOrgId}
+        onTransferOrgIdChange={setSuppressionTransferOrgId}
+        onTransfer={() => {
+          void handleTransferSuppressionOwnership();
+        }}
         orgNamesById={orgNamesById}
         selectTriggerClassName={selectTriggerCls}
       />
@@ -4169,6 +4223,7 @@ export default function ScanDetailPage() {
           getVulnerabilityContextAnalysis(id, vulnerability.id)
         }
       />
+      {confirmDialog}
 
       <Modal state={xrayPolicyDetailsModal}>
         <Modal.Backdrop isDismissable>

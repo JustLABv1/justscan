@@ -1153,9 +1153,10 @@ export default function ScansPage() {
               selectedKey={scanView}
               onSelectionChange={(key) => handleViewChange(String(key) as ScansView)}
               variant="secondary"
+              className="[&_.tabs__list-container__scroll-next]:!hidden [&_.tabs__list-container__scroll-prev]:!hidden"
             >
-              <Tabs.ListContainer className="overflow-x-auto">
-                <Tabs.List aria-label="Scan views" className="min-w-max">
+              <Tabs.ListContainer>
+                <Tabs.List aria-label="Scan views">
                   <Tabs.Tab className="whitespace-nowrap" id="images">
                     Images
                     <Tabs.Indicator />

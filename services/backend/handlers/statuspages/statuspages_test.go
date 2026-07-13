@@ -110,6 +110,26 @@ func TestBuildStatusPageScanSummaryIncludesOrgComplianceStatus(t *testing.T) {
 	}
 }
 
+func TestStatusPageScanScopeUsesCurrentOwnerOrganization(t *testing.T) {
+	previousOrgID := uuid.New()
+	destinationOrgID := uuid.New()
+	page := &models.StatusPage{
+		OwnerType:  models.OwnerTypeOrg,
+		OwnerOrgID: &destinationOrgID,
+	}
+
+	where, args := statusPageScanScopeWhere(page, "scan")
+	if !strings.Contains(where, "scan.owner_org_id") {
+		t.Fatalf("expected organization-owned scan scope, got %q", where)
+	}
+	if len(args) != 2 || args[0] != destinationOrgID || args[1] != destinationOrgID {
+		t.Fatalf("expected destination organization %s to scope both clauses, got %#v", destinationOrgID, args)
+	}
+	if args[0] == previousOrgID {
+		t.Fatal("status page scan scope must not retain the former owner")
+	}
+}
+
 func TestRebindStatusPageRelationsUsesExistingPageID(t *testing.T) {
 	userID := uuid.New()
 	existingPageID := uuid.New()

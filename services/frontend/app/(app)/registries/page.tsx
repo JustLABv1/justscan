@@ -1,5 +1,6 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -23,6 +24,7 @@ import {
   ScannerCapabilities,
   shareRegistry,
   testRegistry,
+  transferRegistryOwnership,
   unshareRegistry,
   updateRegistry,
 } from '@/lib/api';
@@ -167,6 +169,7 @@ export default function RegistriesPage() {
   const [sharesLoading, setSharesLoading] = useState(false);
   const [shareError, setShareError] = useState('');
   const [shareOrgId, setShareOrgId] = useState('');
+  const [transferOrgId, setTransferOrgId] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [providerFilter, setProviderFilter] = useState<'all' | 'trivy' | 'artifactory_xray'>('all');
@@ -331,6 +334,7 @@ export default function RegistriesPage() {
     setShareTarget(registry);
     setShares([]);
     setShareOrgId('');
+    setTransferOrgId('');
     setShareError('');
     shareModal.open();
     void loadShares(registry.id);
@@ -367,6 +371,38 @@ export default function RegistriesPage() {
     }
   }
 
+  async function handleTransferOwnership() {
+    if (
+      !shareTarget ||
+      !transferOrgId ||
+      shareTarget.owner_type !== 'org' ||
+      !canManageAccess(shareTarget)
+    )
+      return;
+    const destination =
+      orgs.find((org) => org.id === transferOrgId)?.name ?? 'the selected organization';
+    const ok = await confirm({
+      title: `Transfer registry ownership to ${destination}?`,
+      message:
+        'The current owner will retain shared access and existing organization grants will remain.',
+      confirmLabel: 'Transfer',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await transferRegistryOwnership(shareTarget.id, transferOrgId);
+      toast.success('Registry ownership transferred');
+      shareModal.close();
+      await load();
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to transfer ownership');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
   const availableShareTargets = shareTarget
     ? orgs.filter(
         (org) =>
@@ -375,6 +411,13 @@ export default function RegistriesPage() {
           !shares.some((share) => share.org_id === org.id)
       )
     : [];
+  const transferTargets =
+    shareTarget?.owner_type === 'org'
+      ? orgs.filter(
+          (org) =>
+            (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id
+        )
+      : [];
   const filteredRegistries = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return registries.filter((registry) => {
@@ -930,6 +973,14 @@ export default function RegistriesPage() {
                     </div>
                   )}
                 </div>
+                <OwnershipTransfer
+                  ownerOrgId={shareTarget?.owner_type === 'org' ? shareTarget.owner_org_id : null}
+                  organizations={transferTargets}
+                  selectedOrgId={transferOrgId}
+                  onSelectedOrgIdChange={setTransferOrgId}
+                  onTransfer={() => void handleTransferOwnership()}
+                  isSaving={shareSaving}
+                />
               </Modal.Body>
               <Modal.Footer
                 className="px-6 py-4 flex justify-end"

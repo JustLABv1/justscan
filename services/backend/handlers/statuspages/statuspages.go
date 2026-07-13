@@ -14,6 +14,7 @@ import (
 	"justscan-backend/functions/auth"
 	"justscan-backend/functions/authz"
 	"justscan-backend/functions/blockedpolicy"
+	"justscan-backend/functions/resourceownership"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -409,6 +410,29 @@ func UnshareStatusPage(db *bun.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"result": "unshared"})
+	}
+}
+
+func TransferStatusPageOwnership(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		pageID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status page ID"})
+			return
+		}
+		page := &models.StatusPage{}
+		if err := db.NewSelect().Model(page).Where("id = ?", pageID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "status page not found"})
+			return
+		}
+		if _, ok := resourceownership.TransferOrgOwnedResource(c, db, resourceownership.TransferParams{
+			ResourceID: page.ID, OwnerType: page.OwnerType, OwnerOrgID: page.OwnerOrgID,
+			ResourceTable: "status_pages", LinkTable: "org_status_pages", LinkResourceColumn: "status_page_id",
+			ResourceName: "status_page", HasUpdatedAt: true,
+		}); !ok {
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"result": "ownership transferred"})
 	}
 }
 

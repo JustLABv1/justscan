@@ -1,6 +1,7 @@
 'use client';
 
 import { OwnershipBadge } from '@/components/ui/badges';
+import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { FormAlert } from '@/components/ui/form-alert';
 import type { ResourceShare, Suppression } from '@/lib/api';
 import { Button, Card, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
@@ -23,6 +24,10 @@ type ManageSuppressionAccessModalProps = {
   onGrant: () => void;
   onRevoke: (orgId: string) => void;
   availableOrgTargets: OrgOption[];
+  transferTargets: OrgOption[];
+  transferOrgId: string;
+  onTransferOrgIdChange: (value: string) => void;
+  onTransfer: () => void;
   orgNamesById: Record<string, string>;
   selectTriggerClassName?: string;
 };
@@ -39,6 +44,10 @@ export function ManageSuppressionAccessModal({
   onGrant,
   onRevoke,
   availableOrgTargets,
+  transferTargets,
+  transferOrgId,
+  onTransferOrgIdChange,
+  onTransfer,
   orgNamesById,
   selectTriggerClassName,
 }: ManageSuppressionAccessModalProps) {
@@ -172,9 +181,22 @@ export function ManageSuppressionAccessModal({
                   </div>
                 )}
               </div>
+              <OwnershipTransfer
+                ownerOrgId={target?.owner_type === 'org' ? target.owner_org_id : null}
+                organizations={transferTargets}
+                selectedOrgId={transferOrgId}
+                onSelectedOrgIdChange={onTransferOrgIdChange}
+                onTransfer={onTransfer}
+                isSaving={saving}
+              />
             </Modal.Body>
             <Modal.Footer>
-              <Button onPress={state.close} className="btn-secondary" type="button" variant="secondary">
+              <Button
+                onPress={state.close}
+                className="btn-secondary"
+                type="button"
+                variant="secondary"
+              >
                 Close
               </Button>
             </Modal.Footer>

@@ -1,5 +1,6 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { CollectionBadgeList } from '@/components/scans/collection-badge-list';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, StatusBadge } from '@/components/ui/badges';
@@ -25,6 +26,7 @@ import {
   ResourceShare,
   ScannerCapabilities,
   shareWatchlistItem,
+  transferWatchlistItemOwnership,
   triggerWatchlistScan,
   unshareWatchlistItem,
   updateWatchlistItem,
@@ -270,6 +272,7 @@ export default function WatchlistPage() {
   const [sharesLoading, setSharesLoading] = useState(false);
   const [shareError, setShareError] = useState('');
   const [shareOrgId, setShareOrgId] = useState('');
+  const [transferOrgId, setTransferOrgId] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
@@ -455,6 +458,7 @@ export default function WatchlistPage() {
     setShareTarget(item);
     setShares([]);
     setShareOrgId('');
+    setTransferOrgId('');
     setShareError('');
     shareModal.open();
     void loadShares(item.id);
@@ -491,6 +495,38 @@ export default function WatchlistPage() {
     }
   }
 
+  async function handleTransferOwnership() {
+    if (
+      !shareTarget ||
+      !transferOrgId ||
+      shareTarget.owner_type !== 'org' ||
+      !canManageAccess(shareTarget)
+    )
+      return;
+    const destination =
+      orgs.find((org) => org.id === transferOrgId)?.name ?? 'the selected organization';
+    const ok = await confirm({
+      title: `Transfer watchlist ownership to ${destination}?`,
+      message:
+        'The current owner will retain shared access. Collection assignments will be removed because collections are organization-scoped.',
+      confirmLabel: 'Transfer',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setShareSaving(true);
+    setShareError('');
+    try {
+      await transferWatchlistItemOwnership(shareTarget.id, transferOrgId);
+      toast.success('Watchlist ownership transferred');
+      shareModal.close();
+      await load();
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Failed to transfer ownership');
+    } finally {
+      setShareSaving(false);
+    }
+  }
+
   const availableShareTargets = shareTarget
     ? orgs.filter(
         (org) =>
@@ -499,6 +535,13 @@ export default function WatchlistPage() {
           !shares.some((share) => share.org_id === org.id)
       )
     : [];
+  const transferTargets =
+    shareTarget?.owner_type === 'org'
+      ? orgs.filter(
+          (org) =>
+            (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id
+        )
+      : [];
 
   const schedulePreview = cronToHuman(schedule, { timezone, hourCycle });
   const filteredItems = useMemo(() => {
@@ -1242,6 +1285,15 @@ export default function WatchlistPage() {
                     </div>
                   )}
                 </div>
+                <OwnershipTransfer
+                  ownerOrgId={shareTarget?.owner_type === 'org' ? shareTarget.owner_org_id : null}
+                  organizations={transferTargets}
+                  selectedOrgId={transferOrgId}
+                  onSelectedOrgIdChange={setTransferOrgId}
+                  onTransfer={() => void handleTransferOwnership()}
+                  isSaving={shareSaving}
+                  warning="Collection assignments will be removed during transfer."
+                />
               </Modal.Body>
               <Modal.Footer
                 className="px-6 py-4 flex justify-end"

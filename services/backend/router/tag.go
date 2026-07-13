@@ -18,5 +18,6 @@ func Tags(router *gin.RouterGroup, db *bun.DB) {
 		t.GET("/:id/shares", tags.ListTagShares(db))
 		t.POST("/:id/shares", tags.ShareTag(db))
 		t.DELETE("/:id/shares/:orgId", tags.UnshareTag(db))
+		t.POST("/:id/transfer-ownership", tags.TransferTagOwnership(db))
 	}
 }

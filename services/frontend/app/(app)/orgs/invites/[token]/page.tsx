@@ -2,6 +2,7 @@
 
 import { FormAlert } from '@/components/ui/form-alert';
 import { acceptOrgInviteByToken } from '@/lib/api';
+import { Button, buttonVariants } from '@heroui/react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -42,10 +43,10 @@ export default function AcceptOrgInvitePage() {
               You joined {accepted.orgName || 'the organization'} as {accepted.role}.
             </p>
             <div className="flex gap-3">
-              <button className="btn-primary" onClick={() => router.push(`/orgs/${accepted.orgId}`)} type="button">
+              <Button onPress={() => router.push(`/orgs/${accepted.orgId}`)}>
                 Open organization
-              </button>
-              <Link href="/orgs" className="btn-secondary">Back to organizations</Link>
+              </Button>
+              <Link href="/orgs" className={buttonVariants({ variant: 'secondary' })}>Back to organizations</Link>
             </div>
           </>
         ) : (
@@ -54,11 +55,10 @@ export default function AcceptOrgInvitePage() {
               This action will attach the invite to the currently signed-in user. You can also review pending invites from the Organizations page.
             </p>
             <div className="flex gap-3">
-              <button className="btn-primary inline-flex items-center gap-2" disabled={loading} onClick={() => { void handleAccept(); }} type="button">
-                {loading && <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              <Button isPending={loading} onPress={() => { void handleAccept(); }}>
                 Accept invite
-              </button>
-              <Link href="/orgs" className="btn-secondary">Cancel</Link>
+              </Button>
+              <Link href="/orgs" className={buttonVariants({ variant: 'secondary' })}>Cancel</Link>
             </div>
           </>
         )}

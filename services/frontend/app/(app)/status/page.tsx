@@ -1337,18 +1337,25 @@ export default function StatusPagesPage() {
                     </p>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2">
-                      <select
-                        className={`${heroFieldClassName} flex-1 bg-surface-secondary`}
+                      <Select
+                        placeholder="Select an organization"
                         value={shareOrgId}
-                        onChange={(event) => setShareOrgId(event.target.value)}
+                        onChange={(value) => setShareOrgId(String(value))}
                       >
-                        <option value="">Select an organization</option>
-                        {availableShareTargets.map((org) => (
-                          <option key={org.id} value={org.id}>
-                            {org.name}
-                          </option>
-                        ))}
-                      </select>
+                        <Select.Trigger className={`${heroFieldClassName} flex-1 bg-surface-secondary`}>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            {availableShareTargets.map((org) => (
+                              <ListBox.Item key={org.id} id={org.id} textValue={org.name}>
+                                {org.name}
+                              </ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
                       <Button
                         type="button"
                         onPress={() => {

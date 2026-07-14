@@ -757,10 +757,14 @@ export function IdentityTab() {
                       </Button>
                     </Table.Cell>
                     <Table.Cell>
-                      <button className="text-left" onClick={() => setSelectedProvider(provider)} type="button">
+                      <Button
+                        className="h-auto min-h-0 justify-start p-0 text-left"
+                        onPress={() => setSelectedProvider(provider)}
+                        variant="tertiary"
+                      >
                         <p className="font-medium underline-offset-4 hover:underline">{provider.display_name}</p>
                         <p className="text-xs text-zinc-500 font-mono">{provider.name}</p>
-                      </button>
+                      </Button>
                     </Table.Cell>
                     <Table.Cell className="text-xs text-zinc-500 font-mono">{provider.issuer_url}</Table.Cell>
                     <Table.Cell>

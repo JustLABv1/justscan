@@ -1,6 +1,6 @@
 import { OrgInvite, OrgMember, OrgRole } from '@/lib/api';
 import { timeAgo, timeUntil } from '@/lib/time';
-import { Avatar, Button, Card, SearchField, Table, type SortDescriptor } from '@heroui/react';
+import { Avatar, Button, Card, ListBox, SearchField, Select, Table, type SortDescriptor } from '@heroui/react';
 import { Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useMemo, useState } from 'react';
 
@@ -198,23 +198,30 @@ export function OrgTeamTab({
                             </Table.Cell>
                             <Table.Cell>
                               {canEditRoles && member.role !== 'owner' ? (
-                                <select
-                                  className={`${inputClassName} py-2 px-3 max-w-[140px] text-sm`}
+                                <Select
                                   value={member.role}
-                                  onChange={(event) =>
+                                  onChange={(value) =>
                                     void onMemberRoleChange(
                                       member,
-                                      event.target.value as Extract<
+                                      String(value) as Extract<
                                         OrgRole,
                                         'admin' | 'editor' | 'viewer'
                                       >
                                     )
                                   }
                                 >
-                                  <option value="viewer">viewer</option>
-                                  <option value="editor">editor</option>
-                                  <option value="admin">admin</option>
-                                </select>
+                                  <Select.Trigger className={`${inputClassName} max-w-[140px] py-2 text-sm`}>
+                                    <Select.Value />
+                                    <Select.Indicator />
+                                  </Select.Trigger>
+                                  <Select.Popover>
+                                    <ListBox>
+                                      <ListBox.Item id="viewer">viewer</ListBox.Item>
+                                      <ListBox.Item id="editor">editor</ListBox.Item>
+                                      <ListBox.Item id="admin">admin</ListBox.Item>
+                                    </ListBox>
+                                  </Select.Popover>
+                                </Select>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-accent-500/10 text-accent border-accent-500/20">
                                   {member.role}

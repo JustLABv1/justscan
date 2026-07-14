@@ -20,18 +20,17 @@ import {
   Badge,
   Breadcrumbs,
   Button,
-  Card,
+  buttonVariants,
   Chip,
   Drawer,
   Dropdown,
   Header,
   Kbd,
   Label,
-  Popover,
   Separator,
+  Surface,
   Tooltip,
   Typography,
-  useOverlayState,
 } from '@heroui/react';
 import {
   AiContentGenerator01Icon,
@@ -69,11 +68,11 @@ import {
   useState,
 } from 'react';
 
-import { AdminSidebarTree } from '@/components/admin-sidebar-tree';
 import {
   AIContextBridgeProvider,
   useAIContextBridge,
 } from '@/components/assistant/ai-context-bridge';
+import { ADMIN_AREAS } from '@/app/(app)/admin/_components/admin-tabs';
 import { FloatingAIChat } from '@/components/assistant/floating-ai-chat';
 import { Logo } from '@/components/logo';
 import { SearchModal } from '@/components/search';
@@ -93,6 +92,17 @@ type SidebarIcon = ComponentType<{
   'aria-hidden'?: boolean;
 }>;
 
+type WorkspaceAvatarColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
+
+const workspaceColors: WorkspaceAvatarColor[] = ['accent', 'success', 'warning', 'danger'];
+
+function workspaceColorFor(kind: 'personal' | 'org', name: string): WorkspaceAvatarColor {
+  if (kind === 'personal') return 'default';
+
+  const nameHash = Array.from(name).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return workspaceColors[nameHash % workspaceColors.length];
+}
+
 const navGroups = [
   {
     label: 'Overview',
@@ -102,26 +112,23 @@ const navGroups = [
     ],
   },
   {
-    label: 'Operations',
+    label: 'Scan & investigate',
     items: [
-      { href: '/triage', label: 'Triage', Icon: ShieldKeyIcon },
       { href: '/scans', label: 'Scans', Icon: Shield01Icon },
       { href: '/helm', label: 'Helm Scan', Icon: PackageIcon },
-    ],
-  },
-  {
-    label: 'Knowledge',
-    items: [
+      { href: '/triage', label: 'Triage', Icon: ShieldKeyIcon },
       { href: '/vulnkb', label: 'Vuln KB', Icon: BookOpen01Icon },
-      { href: '/suppressions', label: 'Suppressions', Icon: GridTableIcon },
     ],
   },
   {
-    label: 'Publishing',
-    items: [{ href: '/status', label: 'Status Pages', Icon: EyeIcon }],
+    label: 'Govern & share',
+    items: [
+      { href: '/suppressions', label: 'Suppressions', Icon: GridTableIcon },
+      { href: '/status', label: 'Status Pages', Icon: EyeIcon },
+    ],
   },
   {
-    label: 'Configuration',
+    label: 'Workspace setup',
     items: [
       { href: '/registries', label: 'Registries', Icon: ServerStack01Icon },
       { href: '/tags', label: 'Tags', Icon: Tag01Icon },
@@ -161,14 +168,6 @@ function resolveFallbackHeader(
   };
 }
 
-const activeNavStyle = {
-  color: 'var(--accent-soft-foreground)',
-  background:
-    'linear-gradient(135deg, color-mix(in oklab, var(--accent) 22%, transparent) 0%, color-mix(in oklab, var(--accent) 12%, transparent) 100%)',
-  boxShadow:
-    'inset 0 0 0 1px color-mix(in oklab, var(--accent) 34%, transparent), 0 0 0 1px color-mix(in oklab, var(--accent) 12%, transparent)',
-} as const;
-
 function InviteCountChip({ count, className = '' }: { count: number; className?: string }) {
   if (count <= 0) return null;
 
@@ -204,50 +203,92 @@ function SidebarNavLink({
   const iconOnly = mode === 'collapsed';
   const isMobile = mode === 'mobile';
   const showCollapsedInviteBadge = href === '/orgs' && iconOnly && inviteCount > 0;
+  const variant = active ? 'secondary' : 'ghost';
 
   return (
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
       aria-label={iconOnly ? itemLabel : undefined}
-      className={
-        iconOnly
-          ? `group relative flex h-10 w-full items-center justify-center rounded-2xl text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`
-          : `group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${isMobile ? 'p-3' : 'overflow-hidden px-3 py-2.5 whitespace-nowrap'} ${active ? '' : 'text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100'}`
-      }
+      className={buttonVariants({
+        variant,
+        size: 'md',
+        className: iconOnly
+          ? 'group relative h-10 w-full justify-center rounded-xl px-0'
+          : `group relative w-full justify-start gap-3 rounded-xl ${
+              isMobile ? 'h-11 px-3' : 'h-10 overflow-hidden px-3 whitespace-nowrap'
+            }`,
+      })}
       onClick={onNavigate}
-      style={active ? activeNavStyle : isMobile ? { background: 'var(--row-hover)' } : undefined}
     >
-      {!active && !isMobile ? (
-        <span
-          className="absolute inset-0 rounded-xl opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-          style={{ background: 'var(--row-hover)' }}
-        />
-      ) : null}
-      {active && !iconOnly && !isMobile ? (
-        <span
-          className="absolute left-0 inset-y-2 w-1 rounded-r-full"
-          style={{
-            background:
-              'linear-gradient(180deg, color-mix(in oklab, var(--accent) 52%, white), var(--accent))',
-          }}
-        />
-      ) : null}
       <Icon
         size={18}
-        className="relative z-10 shrink-0"
-        style={{ color: active ? 'var(--accent-soft-foreground)' : 'var(--text-faint)' }}
+        className="shrink-0"
       />
       {showCollapsedInviteBadge ? (
         <Badge className="pointer-events-none right-1" color="warning" size="sm" />
       ) : null}
       {!iconOnly ? (
-        <span className={`relative z-10 flex-1 ${isMobile ? '' : 'truncate'}`}>{itemLabel}</span>
+        <span className={`flex-1 ${isMobile ? '' : 'truncate'}`}>{itemLabel}</span>
       ) : null}
       {href === '/orgs' && !iconOnly ? (
         <InviteCountChip count={inviteCount} className="ml-auto" />
       ) : null}
     </Link>
+  );
+}
+
+function AdminNavigationMenu({
+  active,
+  mode,
+  onNavigate,
+}: {
+  active: boolean;
+  mode: 'desktop' | 'collapsed' | 'mobile';
+  onNavigate: (href: string) => void;
+}) {
+  const collapsed = mode === 'collapsed';
+
+  return (
+    <Dropdown>
+      <Dropdown.Trigger className="block w-full">
+        <Button
+          aria-label="Open admin navigation"
+          className={
+            collapsed
+              ? 'h-10 w-full justify-center rounded-xl px-0'
+              : `h-10 w-full justify-start gap-3 rounded-xl px-3 ${mode === 'mobile' ? 'h-11' : ''}`
+          }
+          fullWidth
+          isIconOnly={collapsed}
+          variant={active ? 'secondary' : 'ghost'}
+        >
+          <Settings01Icon aria-hidden size={18} className="shrink-0" />
+          {!collapsed ? <span className="min-w-0 flex-1 truncate text-left">Admin</span> : null}
+          {!collapsed ? <ArrowDown01Icon aria-hidden size={14} className="shrink-0 text-muted" /> : null}
+        </Button>
+      </Dropdown.Trigger>
+      <Dropdown.Popover
+        className="max-h-[min(34rem,80vh)] min-w-[260px] overflow-y-auto"
+        placement={mode === 'mobile' ? 'bottom end' : 'right bottom'}
+      >
+        <Dropdown.Menu onAction={(key) => onNavigate(String(key))}>
+          {ADMIN_AREAS.map((area) => (
+            <Dropdown.Section key={area.value}>
+              <Header>{area.label}</Header>
+              {area.tabs.map((tab) => (
+                <Dropdown.Item key={tab.value} id={tab.href} textValue={tab.label}>
+                  <div className="min-w-0">
+                    <Label>{tab.label}</Label>
+                    <p className="truncate text-xs text-muted">{tab.blurb}</p>
+                  </div>
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Section>
+          ))}
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
   );
 }
 
@@ -267,6 +308,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const [user, setUser] = useState(initialUser);
   const [collapsed, setCollapsed] = useState(false);
+  const collapsedRef = useRef(false);
   const [mounted, setMounted] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [orgs, setOrgs] = useState<Org[]>([]);
@@ -277,7 +319,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const [workspaceTourStartSignal, setWorkspaceTourStartSignal] = useState(0);
   const workspaceTourStateSavedRef = useRef(false);
   const sidebarExpandedForTourRef = useRef(false);
-  const mobileNav = useOverlayState();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
   const [pageHeader, setPageHeader] = useState<PageHeaderConfig | null>(null);
   const [pageHeaderActionsTarget, setPageHeaderActionsTarget] = useState<HTMLElement | null>(null);
@@ -309,11 +351,13 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   }, [initialUser, pathname]);
 
   useEffect(() => {
-    mobileNav.close();
-  }, [mobileNav, pathname]);
+    const closeAfterNavigation = window.setTimeout(() => setMobileNavOpen(false), 0);
+    return () => window.clearTimeout(closeAfterNavigation);
+  }, [pathname]);
 
   useEffect(() => {
     if (localStorage.getItem('sidebar_collapsed') === 'true') {
+      collapsedRef.current = true;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollapsed(true);
     }
@@ -339,13 +383,11 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
         }
         setWorkspaceTourCompleted(state.completed);
         if (!state.completed) {
-          setCollapsed((current) => {
-            if (current) {
-              sidebarExpandedForTourRef.current = true;
-              return false;
-            }
-            return current;
-          });
+          if (collapsedRef.current) {
+            sidebarExpandedForTourRef.current = true;
+            collapsedRef.current = false;
+            setCollapsed(false);
+          }
           setWorkspaceTourPendingStart(true);
         }
       })
@@ -467,11 +509,10 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   }, [orgRefreshVersion, pathname]);
 
   function toggleCollapsed() {
-    setCollapsed((previous) => {
-      const next = !previous;
-      localStorage.setItem('sidebar_collapsed', String(next));
-      return next;
-    });
+    const next = !collapsed;
+    collapsedRef.current = next;
+    setCollapsed(next);
+    localStorage.setItem('sidebar_collapsed', String(next));
   }
 
   function handleLogout() {
@@ -485,6 +526,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
       const nextScope: WorkScope = { kind: 'personal' };
       setWorkScopeState(nextScope);
       setWorkScope(nextScope);
+      setMobileNavOpen(false);
       return;
     }
 
@@ -494,6 +536,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     const nextScope: WorkScope = { kind: 'org', orgId: matchedOrg.id, orgName: matchedOrg.name };
     setWorkScopeState(nextScope);
     setWorkScope(nextScope);
+    setMobileNavOpen(false);
   }
 
   function handleWorkspaceTourFinished() {
@@ -503,6 +546,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
 
     if (sidebarExpandedForTourRef.current) {
       sidebarExpandedForTourRef.current = false;
+      collapsedRef.current = true;
       setCollapsed(true);
     }
 
@@ -515,13 +559,11 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
 
   function handleRetakeWorkspaceTour() {
     workspaceTourStateSavedRef.current = false;
-    setCollapsed((current) => {
-      if (current) {
-        sidebarExpandedForTourRef.current = true;
-        return false;
-      }
-      return current;
-    });
+    if (collapsedRef.current) {
+      sidebarExpandedForTourRef.current = true;
+      collapsedRef.current = false;
+      setCollapsed(false);
+    }
     setWorkspaceTourCompleted(false);
     setWorkspaceTourPendingStart(true);
     void updateWorkspaceTourState(false).catch(() => {
@@ -538,18 +580,8 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
       : 'Switch to dark mode';
   const scopeLabel =
     workScope.kind === 'org' ? (workScope.orgName ?? 'Organization') : 'Personal workspace';
-  const workspaceTriggerLabel =
-    workScope.kind === 'org' ? (workScope.orgName ?? 'Organization') : 'Personal';
   const workspaceTitle = `Workspace: ${scopeLabel}`;
   const workspaceInitial = scopeLabel.trim().charAt(0).toUpperCase() || 'W';
-  type WorkspaceAvatarColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
-  const workspaceColors: WorkspaceAvatarColor[] = ['accent', 'success', 'warning', 'danger'];
-  const hashWorkspaceName = (name: string) =>
-    Array.from(name).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  const workspaceColorFor = (kind: 'personal' | 'org', name: string): WorkspaceAvatarColor =>
-    kind === 'personal'
-      ? 'default'
-      : workspaceColors[hashWorkspaceName(name) % workspaceColors.length];
   const activeWorkspaceColor = workspaceColorFor(
     workScope.kind,
     workScope.kind === 'org' ? (workScope.orgName ?? workScope.orgId) : 'personal'
@@ -574,12 +606,11 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     [pageHeaderActionsTarget]
   );
 
-  function renderWorkspaceMenu(onSelected?: () => void) {
+  function renderWorkspaceMenu() {
     return (
       <Dropdown.Menu
         onAction={(key) => {
           handleScopeChange(key as string);
-          onSelected?.();
         }}
         selectionMode="single"
         selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
@@ -627,33 +658,96 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
         <PageHeaderContext.Provider value={pageHeaderContextValue}>
           {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
           <div id="tour-main-shell" className="flex h-dvh app-bg overflow-hidden">
-            <Card
-              className={`relative hidden rounded-none rounded-br-3xl bg-surface md:flex flex-col shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
-                desktopCollapsed ? 'w-[76px]' : 'w-72'
+            <Surface
+              className={`relative hidden border-r border-border md:flex shrink-0 flex-col overflow-hidden transition-[width] duration-200 ease-out ${
+                desktopCollapsed ? 'w-20' : 'w-72'
               }`}
-              style={{
-                border: 'none',
-                boxShadow: 'none',
-              }}
+              variant="default"
             >
-              <div className="absolute -top-10 -left-10 size-40 rounded-full pointer-events-none" />
-              <div className="absolute inset-x-0 top-0 h-px pointer-events-none" />
+              <div className={`flex shrink-0 items-center gap-3 px-3 py-3 ${desktopCollapsed ? 'justify-center' : ''}`}>
+                <Link href="/dashboard" aria-label="JustScan dashboard" className="flex min-w-0 flex-1 items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                  <Logo size={36} className="shrink-0" />
+                  {!desktopCollapsed ? <span className="truncate text-base font-semibold tracking-tight">JustScan</span> : null}
+                </Link>
+              </div>
+
+              <div id="tour-workspace-section" className={`shrink-0 ${desktopCollapsed ? 'px-2' : 'px-3 pb-2'}`}>
+                <Dropdown>
+                  <Dropdown.Trigger
+                    id="tour-workspace-switcher"
+                    aria-label={workspaceTitle}
+                    className={`flex w-full items-center rounded-xl bg-surface-secondary p-2 outline-none transition-colors hover:bg-surface-tertiary focus-visible:ring-2 focus-visible:ring-accent ${
+                      desktopCollapsed ? 'justify-center' : 'gap-2.5'
+                    }`}
+                  >
+                    <Avatar className="size-7 shrink-0 rounded-lg" color={activeWorkspaceColor} variant="soft">
+                      <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
+                    </Avatar>
+                    {!desktopCollapsed ? (
+                      <div className="min-w-0 flex-1 text-left">
+                        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">Workspace</p>
+                        <p className="truncate text-sm font-medium">{scopeLabel}</p>
+                      </div>
+                    ) : null}
+                    {!desktopCollapsed ? <ArrowDown01Icon aria-hidden size={14} className="shrink-0 text-muted" /> : null}
+                  </Dropdown.Trigger>
+                  <Dropdown.Popover className="min-w-[240px]" placement="right top">
+                    {renderWorkspaceMenu()}
+                  </Dropdown.Popover>
+                </Dropdown>
+              </div>
+
+              <div className={`shrink-0 ${desktopCollapsed ? 'px-2 pb-2' : 'px-3 pb-3'}`}>
+                <Tooltip isDisabled={!desktopCollapsed}>
+                  <Tooltip.Trigger className="block w-full">
+                    <Link
+                      href="/scans/new"
+                      aria-label="New scan"
+                      className={buttonVariants({
+                        variant: 'primary',
+                        size: 'md',
+                        className: desktopCollapsed ? 'size-10 w-full rounded-xl px-0' : 'w-full justify-center rounded-xl',
+                      })}
+                    >
+                      <Shield01Icon aria-hidden size={17} />
+                      {!desktopCollapsed ? <span>New scan</span> : null}
+                    </Link>
+                  </Tooltip.Trigger>
+                  <Tooltip.Content placement="right">New scan</Tooltip.Content>
+                </Tooltip>
+                {aiEnabled ? (
+                  <div className="mt-1.5">
+                    <Tooltip isDisabled={!desktopCollapsed}>
+                      <Tooltip.Trigger className="block w-full">
+                        <SidebarNavLink
+                          href="/assistant"
+                          itemLabel="Assistant"
+                          Icon={AiContentGenerator01Icon}
+                          mode={desktopCollapsed ? 'collapsed' : 'desktop'}
+                          active={isActiveRoute(pathname, '/assistant')}
+                          inviteCount={pendingInviteCount}
+                        />
+                      </Tooltip.Trigger>
+                      <Tooltip.Content placement="right">Assistant</Tooltip.Content>
+                    </Tooltip>
+                  </div>
+                ) : null}
+              </div>
 
               <nav
                 id="tour-primary-navigation"
-                className={`flex-1 overflow-y-auto overflow-x-hidden pb-2 pt-3 ${desktopCollapsed ? 'px-1' : 'px-2'}`}
+                className={`flex-1 overflow-y-auto overflow-x-hidden pb-3 pt-2 ${desktopCollapsed ? 'px-2' : 'px-3'}`}
               >
                 {navigationGroups.map(({ label, items }) => (
                   <div
                     key={label}
-                    className="mb-1 border-b border-white/5 pb-2 last:border-b-0 last:pb-0"
+                    className="mb-2 pb-1 last:mb-0"
                   >
                     <div
-                      className="nav-section-label px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-[0.1em] leading-none transition-all duration-300 overflow-hidden"
+                      className="nav-section-label px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-[0.1em] leading-none transition-all duration-200 overflow-hidden text-muted"
                       style={{
                         maxHeight: desktopCollapsed ? 0 : 22,
                         opacity: desktopCollapsed ? 0 : 1,
-                        color: 'var(--text-faint)',
                         paddingTop: desktopCollapsed ? 0 : undefined,
                         paddingBottom: desktopCollapsed ? 0 : undefined,
                       }}
@@ -662,65 +756,16 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     </div>
                     <div className="space-y-0.5">
                       {items.map(({ href, label: itemLabel, Icon }) => {
-                        const showAdminTree = href === '/admin';
                         const active = isActiveRoute(pathname, href);
 
-                        if (showAdminTree && !desktopCollapsed) {
-                          return <AdminSidebarTree key="admin-tree-desktop" showLabel={false} />;
-                        }
-
-                        if (desktopCollapsed && showAdminTree) {
+                        if (href === '/admin') {
                           return (
-                            <div key={href}>
-                              <Popover>
-                                <Popover.Trigger aria-label={itemLabel} className="block w-full">
-                                  <Button
-                                    aria-current={active ? 'page' : undefined}
-                                    aria-label={itemLabel}
-                                    className={`group relative h-10 w-full rounded-2xl ${active ? '' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                                    isIconOnly
-                                    style={active ? activeNavStyle : undefined}
-                                    variant="ghost"
-                                  >
-                                    {!active && (
-                                      <span
-                                        className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                                        style={{ background: 'var(--row-hover)' }}
-                                      />
-                                    )}
-                                    <Icon
-                                      size={18}
-                                      className="shrink-0 relative z-10"
-                                      style={{
-                                        color: active
-                                          ? 'var(--accent-soft-foreground)'
-                                          : 'var(--text-faint)',
-                                      }}
-                                    />
-                                  </Button>
-                                </Popover.Trigger>
-                                <Popover.Content
-                                  placement="right top"
-                                  className="bg-surface-secondary"
-                                >
-                                  <Popover.Dialog>
-                                    <div className="w-[260px] p-2">
-                                      <p
-                                        className="px-2 pb-1.5 text-[11px] uppercase tracking-[0.18em]"
-                                        style={{ color: 'var(--text-faint)' }}
-                                      >
-                                        Admin
-                                      </p>
-                                      <AdminSidebarTree
-                                        condensed
-                                        showLabel={false}
-                                        showRoot={false}
-                                      />
-                                    </div>
-                                  </Popover.Dialog>
-                                </Popover.Content>
-                              </Popover>
-                            </div>
+                            <AdminNavigationMenu
+                              key={href}
+                              active={active}
+                              mode={desktopCollapsed ? 'collapsed' : 'desktop'}
+                              onNavigate={(adminHref) => router.push(adminHref)}
+                            />
                           );
                         }
 
@@ -761,51 +806,75 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                 ))}
               </nav>
 
-              <div
-                className={`flex min-h-12 items-center gap-2.5 py-2 shrink-0 ${desktopCollapsed ? 'justify-center px-0' : 'px-3'}`}
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <Logo size={40} className="shrink-0" />
-                <span
-                  className={`font-semibold text-[15px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300 ${desktopCollapsed ? 'ml-0' : 'ml-3'}`}
-                  style={{
-                    maxWidth: desktopCollapsed ? 0 : 120,
-                    opacity: desktopCollapsed ? 0 : 1,
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  JustScan
-                </span>
+              <div className={`flex shrink-0 items-center gap-2 border-t border-border p-3 ${desktopCollapsed ? 'flex-col' : ''}`}>
+                <Dropdown>
+                  <Dropdown.Trigger
+                    aria-label="Open user menu"
+                    className={`flex min-w-0 flex-1 items-center rounded-xl p-2 outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-accent ${desktopCollapsed ? 'justify-center' : 'gap-2.5'}`}
+                  >
+                    <Avatar variant="soft" color="accent" className="size-7 shrink-0">
+                      <Avatar.Fallback>{initials}</Avatar.Fallback>
+                    </Avatar>
+                    {!desktopCollapsed ? (
+                      <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">
+                        {user?.username ?? user?.email ?? 'User'}
+                      </span>
+                    ) : null}
+                  </Dropdown.Trigger>
+                  <Dropdown.Popover className="min-w-[220px]" placement="right bottom">
+                    <Dropdown.Menu
+                      onAction={(key) => {
+                        if (key === 'settings') router.push('/profile');
+                        if (key === 'api-docs') window.open('/swagger/index.html', '_blank');
+                        if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
+                        if (key === 'retake-tour') handleRetakeWorkspaceTour();
+                        if (key === 'signout') handleLogout();
+                      }}
+                    >
+                      <Dropdown.Item id="settings" textValue="Profile"><Label>Profile</Label></Dropdown.Item>
+                      <Dropdown.Item id="theme" textValue={themeToggleTitle}><Label>{themeToggleTitle}</Label></Dropdown.Item>
+                      <Dropdown.Item id="api-docs" textValue="API Docs"><Label>API Docs</Label></Dropdown.Item>
+                      <Dropdown.Item id="retake-tour" textValue="Retake tour"><Label>Retake tour</Label></Dropdown.Item>
+                      <Dropdown.Item id="signout" textValue="Sign out" variant="danger"><Label>Sign out</Label></Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
+                <Tooltip isDisabled={!desktopCollapsed}>
+                  <Tooltip.Trigger>
+                    <Button
+                      isIconOnly
+                      onPress={toggleCollapsed}
+                      variant="tertiary"
+                      aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                    >
+                      {desktopCollapsed ? <SidebarRight01Icon size={18} /> : <SidebarLeft01Icon size={18} />}
+                    </Button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Content placement="right">Expand sidebar</Tooltip.Content>
+                </Tooltip>
               </div>
-            </Card>
+            </Surface>
 
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <div
                 className={`bg-surface rounded-br-3xl flex min-h-11 items-center gap-2.5 py-1.5 ${contentRailClass}`}
               >
-                <Button
-                  isIconOnly
-                  onPress={toggleCollapsed}
-                  variant="ghost"
-                  aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                >
-                  {desktopCollapsed ? (
-                    <SidebarRight01Icon size={24} />
-                  ) : (
-                    <SidebarLeft01Icon size={24} />
-                  )}
-                </Button>
-
-                <Drawer state={mobileNav}>
+                <>
                   <Button
                     aria-label="Open navigation menu"
                     className="rounded-lg md:hidden"
                     isIconOnly
+                    onPress={() => setMobileNavOpen(true)}
                     variant="secondary"
                   >
                     <Menu01Icon size={16} />
                   </Button>
-                  <Drawer.Backdrop className="md:hidden" variant="blur">
+                  <Drawer.Backdrop
+                    className="md:hidden"
+                    isOpen={mobileNavOpen}
+                    onOpenChange={setMobileNavOpen}
+                    variant="blur"
+                  >
                     <Drawer.Content className="md:hidden" placement="left">
                       <Drawer.Dialog className="flex h-full w-[min(88vw,320px)] flex-col surface-sidebar">
                         <Drawer.Header
@@ -863,15 +932,40 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                 />
                               </Dropdown.Trigger>
                               <Dropdown.Popover className="w-[min(80vw,300px)]">
-                                {renderWorkspaceMenu(() => mobileNav.close())}
+                                {renderWorkspaceMenu()}
                               </Dropdown.Popover>
                             </Dropdown>
+
+                            <Link
+                              href="/scans/new"
+                              className={buttonVariants({
+                                variant: 'primary',
+                                size: 'md',
+                                className: 'w-full justify-center rounded-xl',
+                              })}
+                              onClick={() => setMobileNavOpen(false)}
+                            >
+                              <Shield01Icon aria-hidden size={17} />
+                              New scan
+                            </Link>
+
+                            {aiEnabled ? (
+                              <SidebarNavLink
+                                href="/assistant"
+                                itemLabel="Assistant"
+                                Icon={AiContentGenerator01Icon}
+                                mode="mobile"
+                                active={isActiveRoute(pathname, '/assistant')}
+                                inviteCount={pendingInviteCount}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            ) : null}
 
                             {pendingInviteCount > 0 && (
                               <Link
                                 href="/orgs"
                                 className="flex items-center justify-between rounded-xl p-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
-                                onClick={() => mobileNav.close()}
+                                onClick={() => setMobileNavOpen(false)}
                                 style={{
                                   background:
                                     'color-mix(in oklab, var(--warning) 10%, transparent)',
@@ -891,23 +985,21 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
 
                             {navigationGroups.map(({ label, items }) => (
                               <div key={label} className="space-y-1.5">
-                                <p
-                                  className="px-2 text-[11px] uppercase tracking-[0.18em]"
-                                  style={{ color: 'var(--text-faint)' }}
-                                >
+                                <p className="px-2 text-[11px] uppercase tracking-[0.18em] text-muted">
                                   {label}
                                 </p>
                                 <div className="space-y-1">
                                   {items.map(({ href, label: itemLabel, Icon }) => {
-                                    const showAdminTree = href === '/admin';
-
-                                    if (showAdminTree) {
+                                    if (href === '/admin') {
                                       return (
-                                        <AdminSidebarTree
-                                          key="admin-tree-mobile"
-                                          condensed
-                                          onNavigate={() => mobileNav.close()}
-                                          showLabel={false}
+                                        <AdminNavigationMenu
+                                          key={href}
+                                          active={isActiveRoute(pathname, href)}
+                                          mode="mobile"
+                                          onNavigate={(adminHref) => {
+                                            setMobileNavOpen(false);
+                                            router.push(adminHref);
+                                          }}
                                         />
                                       );
                                     }
@@ -921,7 +1013,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                         mode="mobile"
                                         active={isActiveRoute(pathname, href)}
                                         inviteCount={pendingInviteCount}
-                                        onNavigate={() => mobileNav.close()}
+                                        onNavigate={() => setMobileNavOpen(false)}
                                       />
                                     );
                                   })}
@@ -968,22 +1060,22 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                 onAction={(key) => {
                                   if (key === 'settings') {
                                     router.push('/profile');
-                                    mobileNav.close();
+                                    setMobileNavOpen(false);
                                   }
                                   if (key === 'api-docs') {
                                     window.open('/swagger/index.html', '_blank');
-                                    mobileNav.close();
+                                    setMobileNavOpen(false);
                                   }
                                   if (key === 'theme') {
                                     setTheme(isDark ? 'light' : 'dark');
                                   }
                                   if (key === 'retake-tour') {
                                     handleRetakeWorkspaceTour();
-                                    mobileNav.close();
+                                    setMobileNavOpen(false);
                                   }
                                   if (key === 'signout') {
                                     handleLogout();
-                                    mobileNav.close();
+                                    setMobileNavOpen(false);
                                   }
                                 }}
                               >
@@ -1046,36 +1138,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       </Drawer.Dialog>
                     </Drawer.Content>
                   </Drawer.Backdrop>
-                </Drawer>
-                <div
-                  id="tour-workspace-section"
-                  className="hidden min-w-0 md:flex md:flex-1 md:items-center"
-                >
-                  <Dropdown>
-                    <Dropdown.Trigger
-                      id="tour-workspace-switcher"
-                      aria-label={workspaceTitle}
-                      className="flex h-9 max-w-[180px] items-center justify-between gap-1.5 rounded-full px-2 text-zinc-700 outline-none transition-colors hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-accent/40 dark:text-zinc-200 dark:hover:bg-white/10"
-                    >
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <Avatar
-                          className="size-5 shrink-0 rounded-full"
-                          color={activeWorkspaceColor}
-                          variant="soft"
-                        >
-                          <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
-                        </Avatar>
-                        <span className="min-w-0 truncate text-sm font-medium text-current">
-                          {workspaceTriggerLabel}
-                        </span>
-                      </div>
-                      <ArrowDown01Icon size={12} className="shrink-0 text-zinc-500" />
-                    </Dropdown.Trigger>
-                    <Dropdown.Popover className="min-w-[240px]" placement="bottom start">
-                      {renderWorkspaceMenu()}
-                    </Dropdown.Popover>
-                  </Dropdown>
-                </div>
+                </>
                 <div
                   id="tour-topbar-actions"
                   className="ml-auto flex shrink-0 items-center gap-1.5"
@@ -1105,6 +1168,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     </Kbd>
                   </Button>
 
+                  <div className="md:hidden">
                   <Dropdown>
                     <Dropdown.Trigger id="tour-user-menu">
                       <Avatar variant="soft" color="accent" className="size-9">
@@ -1168,6 +1232,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       </Dropdown.Menu>
                     </Dropdown.Popover>
                   </Dropdown>
+                  </div>
                 </div>
               </div>
 

@@ -8,6 +8,7 @@ import { OrgScansTab } from '@/components/org-detail/scans-tab';
 import { OrgScanItem, StatusBadge } from '@/components/org-detail/shared';
 import { OrgTeamTab } from '@/components/org-detail/team-tab';
 import { OrgTokensTab } from '@/components/org-detail/tokens-tab';
+import { OrgVulnerabilityDefaults } from '@/components/org-detail/vulnerability-defaults';
 import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
@@ -101,7 +102,7 @@ const ORG_TABS = [
   {
     id: 'scans',
     label: 'Scans',
-    description: 'Manage assigned images, automatic routing, and vulnerability view defaults.',
+    description: 'Review the scans in this organization’s scope and their current ownership.',
   },
   {
     id: 'policies',
@@ -109,24 +110,14 @@ const ORG_TABS = [
     description: 'Define the compliance rules evaluated against organization scans.',
   },
   {
-    id: 'members',
-    label: 'Members',
-    description: 'Manage member roles, ownership, and pending invitations.',
-  },
-  {
-    id: 'notifications',
-    label: 'Notifications',
-    description: 'Configure organization channels, rules, retries, and delivery history.',
-  },
-  {
-    id: 'ci-cd',
-    label: 'CI/CD',
-    description: 'Connect pipelines, generate least-privilege credentials, and verify automated scans.',
-  },
-  {
     id: 'access',
-    label: 'Access',
-    description: 'Manage API tokens used by pipelines and automated tools.',
+    label: 'People & Access',
+    description: 'Manage people, organization roles, and least-privilege tokens.',
+  },
+  {
+    id: 'integrations',
+    label: 'Integrations',
+    description: 'Configure notifications and connect automated CI/CD scanning.',
   },
 ] as const;
 
@@ -134,8 +125,11 @@ type OrgTabId = (typeof ORG_TABS)[number]['id'];
 
 const LEGACY_ORG_TABS: Record<string, OrgTabId> = {
   automation: 'policies',
-  team: 'members',
+  team: 'access',
+  members: 'access',
   tokens: 'access',
+  notifications: 'integrations',
+  'ci-cd': 'integrations',
 };
 
 export default function OrgDetailPage() {
@@ -151,8 +145,6 @@ export default function OrgDetailPage() {
 
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [riskScore, setRiskScore] = useState<OrgRiskScore | null>(null);
-  const [activeTab, setActiveTab] = useState<OrgTabId>('overview');
-  const [newPattern, setNewPattern] = useState('');
   const [vulnerabilityViewSettings, setVulnerabilityViewSettings] =
     useState<VulnerabilityViewSettings>(DEFAULT_VULNERABILITY_VIEW_SETTINGS);
   const [vulnerabilityViewSaving, setVulnerabilityViewSaving] = useState(false);
@@ -251,20 +243,16 @@ export default function OrgDetailPage() {
     });
   }, [orgVulnerabilityViewSettings]);
 
-  useEffect(() => {
-    return deferEffect(() => {
-      const requestedTab = searchParams.get('tab');
-      const normalizedTab = requestedTab ? LEGACY_ORG_TABS[requestedTab] || requestedTab : null;
-      const match = ORG_TABS.find((tab) => tab.id === normalizedTab);
-      if (match && match.id !== activeTab) {
-        setActiveTab(match.id);
-        return;
-      }
-      if (!requestedTab && activeTab !== 'overview') {
-        setActiveTab('overview');
-      }
-    });
-  }, [activeTab, searchParams]);
+  const requestedTab = searchParams.get('tab');
+  const normalizedTab = requestedTab ? LEGACY_ORG_TABS[requestedTab] || requestedTab : 'overview';
+  const activeTab = (ORG_TABS.find((tab) => tab.id === normalizedTab)?.id ?? 'overview') as OrgTabId;
+  const requestedSection = searchParams.get('section');
+  const activeSection =
+    activeTab === 'access'
+      ? requestedSection === 'tokens' ? 'tokens' : 'members'
+      : activeTab === 'integrations'
+        ? requestedSection === 'notifications' ? 'notifications' : 'ci-cd'
+        : null;
 
   function openInviteModal() {
     if (!canManageMembers) return;
@@ -477,25 +465,6 @@ export default function OrgDetailPage() {
     loadOrgScans();
   }
 
-  async function addPattern() {
-    if (!canManageOrgSettings) return;
-    if (!newPattern.trim() || !org) return;
-    const patterns = [...(org.image_patterns ?? []), newPattern.trim()];
-    const updated = await updateOrg(id, { image_patterns: patterns }).catch(() => null);
-    if (updated) {
-      setOrg(updated);
-      setNewPattern('');
-    }
-  }
-
-  async function removePattern(p: string) {
-    if (!canManageOrgSettings) return;
-    if (!org) return;
-    const patterns = (org.image_patterns ?? []).filter((x) => x !== p);
-    const updated = await updateOrg(id, { image_patterns: patterns }).catch(() => null);
-    if (updated) setOrg(updated);
-  }
-
   async function saveVulnerabilityViewSettings() {
     if (!org || !canManageOrgSettings) return;
     setVulnerabilityViewSaving(true);
@@ -541,12 +510,15 @@ export default function OrgDetailPage() {
   if (!org) return null;
 
   function handleTabChange(nextTab: OrgTabId) {
-    setActiveTab(nextTab);
     const params = new URLSearchParams(searchParams.toString());
     if (nextTab === 'overview') {
       params.delete('tab');
+      params.delete('section');
     } else {
       params.set('tab', nextTab);
+      if (nextTab === 'access') params.set('section', 'members');
+      else if (nextTab === 'integrations') params.set('section', 'ci-cd');
+      else params.delete('section');
     }
     const query = params.toString();
     router.replace(query ? `/orgs/${id}?${query}` : `/orgs/${id}`, { scroll: false });
@@ -609,24 +581,14 @@ export default function OrgDetailPage() {
         )}
         {activeTab === 'policies' && (
           <OrgAutomationTab
-            section="policies"
             org={org}
-            inputClassName={inputCls}
             canManageOrgSettings={canManageOrgSettings}
-            newPattern={newPattern}
-            vulnerabilityViewSettings={vulnerabilityViewSettings}
-            vulnerabilityViewSaving={vulnerabilityViewSaving}
-            onPatternChange={setNewPattern}
-            onAddPattern={() => void addPattern()}
-            onRemovePattern={(pattern) => void removePattern(pattern)}
-            onVulnerabilityViewSettingsChange={setVulnerabilityViewSettings}
-            onSaveVulnerabilityViewSettings={() => void saveVulnerabilityViewSettings()}
             onCreatePolicy={openCreatePolicy}
             onEditPolicy={openEditPolicy}
             onDeletePolicy={(policyId) => void handleDeletePolicy(policyId)}
           />
         )}
-        {activeTab === 'members' && (
+        {activeTab === 'access' && activeSection === 'members' && (
           <OrgTeamTab
             canEditRoles={canEditRoles}
             canManageMembers={canManageMembers}
@@ -652,11 +614,12 @@ export default function OrgDetailPage() {
             }
           />
         )}
-        {activeTab === 'notifications' && (
+        {activeTab === 'integrations' && activeSection === 'notifications' && (
           <NotificationManager
             basePath={`/api/v1/orgs/${id}/notifications`}
             heading="Organization Notifications"
-            description="Manage org-owned notification channels, rule conditions, queue retries, and delivery history."
+            description="Send the security events that matter to this organization, then review their delivery status."
+            canManage={canManageOrgSettings}
           />
         )}
         {activeTab === 'scans' && (
@@ -667,26 +630,17 @@ export default function OrgDetailPage() {
               onRemoveScan={(scanId) => void handleRemoveScan(scanId)}
               orgScans={orgScans}
             />
-            <OrgAutomationTab
-              section="scan-settings"
-              org={org}
+            <OrgVulnerabilityDefaults
               inputClassName={inputCls}
               canManageOrgSettings={canManageOrgSettings}
-              newPattern={newPattern}
-              vulnerabilityViewSettings={vulnerabilityViewSettings}
-              vulnerabilityViewSaving={vulnerabilityViewSaving}
-              onPatternChange={setNewPattern}
-              onAddPattern={() => void addPattern()}
-              onRemovePattern={(pattern) => void removePattern(pattern)}
-              onVulnerabilityViewSettingsChange={setVulnerabilityViewSettings}
-              onSaveVulnerabilityViewSettings={() => void saveVulnerabilityViewSettings()}
-              onCreatePolicy={openCreatePolicy}
-              onEditPolicy={openEditPolicy}
-              onDeletePolicy={(policyId) => void handleDeletePolicy(policyId)}
+              settings={vulnerabilityViewSettings}
+              saving={vulnerabilityViewSaving}
+              onChange={setVulnerabilityViewSettings}
+              onSave={() => void saveVulnerabilityViewSettings()}
             />
           </div>
         )}
-        {activeTab === 'access' && (
+        {activeTab === 'access' && activeSection === 'tokens' && (
           <OrgTokensTab
             orgId={id}
             canManage={isSystemAdmin || canManageOrg(currentOrgRole)}
@@ -699,7 +653,7 @@ export default function OrgDetailPage() {
             }
           />
         )}
-        {activeTab === 'ci-cd' && (
+        {activeTab === 'integrations' && activeSection === 'ci-cd' && (
           <OrgCICDTab
             org={org}
             canManageTokens={isSystemAdmin || canManageOrg(currentOrgRole)}

@@ -3,7 +3,6 @@ package compliance
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -258,57 +257,4 @@ func RunForScan(db *bun.DB, scanID uuid.UUID) {
 			}
 		}
 	}
-}
-
-// AutoAssignOrgs checks all orgs with image_patterns and auto-assigns the scan if it matches,
-// then runs compliance evaluation for all orgs the scan belongs to.
-func AutoAssignOrgs(db *bun.DB, imageName, imageTag string, scanID uuid.UUID) {
-	ctx := context.Background()
-
-	var orgs []models.Org
-	if err := db.NewSelect().Model(&orgs).
-		Where("jsonb_array_length(image_patterns) > 0").
-		Scan(ctx); err != nil {
-		RunForScan(db, scanID)
-		return
-	}
-
-	imageRef := imageName + ":" + imageTag
-	for _, org := range orgs {
-		for _, pattern := range org.ImagePatterns {
-			if matchPattern(pattern, imageRef) || matchPattern(pattern, imageName) {
-				orgScan := &models.OrgScan{OrgID: org.ID, ScanID: scanID}
-				db.NewInsert().Model(orgScan).On("CONFLICT DO NOTHING").Exec(ctx) //nolint:errcheck
-				log.Infof("compliance: auto-assigned scan %s to org %s via pattern %q", scanID, org.Name, pattern)
-				break
-			}
-		}
-	}
-	// Now run compliance for all orgs this scan is in
-	RunForScan(db, scanID)
-}
-
-func matchPattern(pattern, target string) bool {
-	// Convert glob pattern to regex: escape dots, * → .*, ? → .
-	var sb strings.Builder
-	sb.WriteString("(?i)^")
-	for _, ch := range pattern {
-		switch ch {
-		case '*':
-			sb.WriteString(".*")
-		case '?':
-			sb.WriteString(".")
-		case '.', '+', '(', ')', '[', ']', '{', '}', '^', '$', '|', '\\':
-			sb.WriteString(`\`)
-			sb.WriteRune(ch)
-		default:
-			sb.WriteRune(ch)
-		}
-	}
-	sb.WriteString("$")
-	re, err := regexp.Compile(sb.String())
-	if err != nil {
-		return pattern == target
-	}
-	return re.MatchString(target)
 }

@@ -1,6 +1,6 @@
 import { req } from './core';
 import { notifyOrgMembershipChanged } from './scope';
-import type { AuditEntry, ComplianceResult, Org, OrgInvite, OrgMember, OrgPolicy, OrgRiskScore, OrgRole, PolicyRule, TrendPoint, VulnerabilityViewSettings } from './types/orgs';
+import type { AuditEntry, ComplianceResult, Org, OrgInvite, OrgMember, OrgPolicy, OrgRiskScore, OrgRole, PipelineScanHistoryItem, PolicyRule, TrendPoint, VulnerabilityViewSettings } from './types/orgs';
 import type { Scan } from './types/scans';
 
 export const listOrgs = () =>
@@ -117,8 +117,14 @@ export const getScanCompliance = (scanId: string) =>
 export const reEvaluateCompliance = (scanId: string) =>
   req<{ data: ComplianceResult[] }>('POST', `/api/v1/scans/${scanId}/compliance/evaluate`).then((result) => result.data ?? []);
 
-export const getComplianceTrend = (orgId: string) =>
-  req<{ data: TrendPoint[] }>('GET', `/api/v1/orgs/${orgId}/compliance/trend`).then((result) => result.data ?? []);
+export const getComplianceTrend = (orgId: string, days = 30) =>
+  req<{ data: TrendPoint[] }>('GET', `/api/v1/orgs/${orgId}/compliance/trend?days=${days}`).then((result) => result.data ?? []);
+
+export const listPipelineScans = (orgId: string, page = 1, limit = 20) =>
+  req<{ data: PipelineScanHistoryItem[]; total: number; page: number; limit: number }>(
+    'GET',
+    `/api/v1/orgs/${orgId}/pipeline-scans?page=${page}&limit=${limit}`
+  );
 
 export const getOrgRiskScore = (orgId: string) =>
   req<OrgRiskScore>('GET', `/api/v1/orgs/${orgId}/risk`);

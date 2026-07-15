@@ -56,7 +56,11 @@ export interface Org {
   id: string;
   name: string;
   description: string;
-  image_patterns?: string[];
+  member_count?: number;
+  policy_count?: number;
+  scan_count?: number;
+  unique_image_count?: number;
+  last_scan_at?: string | null;
   is_active: boolean;
   allow_image_scans: boolean;
   allow_helm_scans: boolean;
@@ -185,4 +189,27 @@ export interface OrgRiskScore {
   compliance_pass_rate: number;
   compliance_pass: number;
   compliance_fail: number;
+}
+
+export interface PipelineScanHistoryItem {
+  id: string;
+  scan_id: string;
+  source: string;
+  external_ref?: string;
+  delivery_status: string;
+  delivery_attempt_count: number;
+  last_delivery_error?: string;
+  last_attempt_at?: string | null;
+  delivered_at?: string | null;
+  created_at: string;
+  scan: {
+    id: string;
+    image_name: string;
+    image_tag: string;
+    status: string;
+    current_step: string;
+    critical_count: number;
+    high_count: number;
+    completed_at?: string | null;
+  };
 }

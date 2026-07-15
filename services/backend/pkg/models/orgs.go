@@ -39,7 +39,6 @@ type Org struct {
 	ID                        uuid.UUID                  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
 	Name                      string                     `bun:"name,type:text,notnull,unique" json:"name"`
 	Description               string                     `bun:"description,type:text,default:''" json:"description"`
-	ImagePatterns             StringList                 `bun:"image_patterns,type:jsonb,default:'[]'" json:"image_patterns"`
 	IsActive                  bool                       `bun:"is_active,type:bool,notnull,default:true" json:"is_active"`
 	AllowImageScans           bool                       `bun:"allow_image_scans,type:bool,notnull,default:true" json:"allow_image_scans"`
 	AllowHelmScans            bool                       `bun:"allow_helm_scans,type:bool,notnull,default:true" json:"allow_helm_scans"`

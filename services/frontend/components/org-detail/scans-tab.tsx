@@ -88,22 +88,22 @@ export function OrgScansTab({
     <Card>
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold">Assigned Images</h2>
+          <h2 className="text-base font-semibold">Scans in scope</h2>
           <p className="mt-0.5 text-xs text-zinc-500">
-            Images and scan history currently owned by this organization.
+            Explicitly scoped scans. Shared scans remain owned by their source organization.
           </p>
         </div>
         {canManageScans && (
           <Button onClick={() => void onOpenAssignModal()}>
             <PlusSignIcon size={14} />
-            Assign Scan
+            Add scan to scope
           </Button>
         )}
       </div>
 
       {orgScans.length === 0 ? (
         <Card className="surface-card rounded-2xl p-6 text-center text-sm text-zinc-500">
-          No scans assigned. Assign a scan to evaluate it against this organization&apos;s policies.
+          No scans are in scope. Add one to evaluate it against this organization&apos;s policies.
         </Card>
       ) : (
         <ImageScansTable

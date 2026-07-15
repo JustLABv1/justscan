@@ -211,7 +211,7 @@ export default function NewScanPage() {
   const [createError, setCreateError] = useState('');
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
   const [scopedOrgPolicy, setScopedOrgPolicy] = useState<Org | null>(null);
-  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(() =>
     getDefaultScannerCapabilities()
   );
 
@@ -668,13 +668,7 @@ export default function NewScanPage() {
         </Card>
 
         {scanSource ? (
-          <div
-            className={`scan-form-reveal grid gap-4 ${
-              hasRoutingSection
-                ? 'xl:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)] xl:items-start'
-                : ''
-            }`}
-          >
+          <div className="scan-form-reveal">
             <ScanSection
               title="Target"
               description={
@@ -721,46 +715,22 @@ export default function NewScanPage() {
                   value={imageTag}
                 />
               </div>
-            </ScanSection>
-
-            {hasRoutingSection ? (
-              <ScanSection
-                title="Routing"
-                description={
-                  scanSource === 'private_registry'
-                    ? 'Choose the configured registry that should authenticate and pull this image.'
-                    : 'Choose the Xray-backed registry first, then optionally add a repo override for mirrors or remotes.'
-                }
-              >
-                {scanSource === 'private_registry' ? (
-                  <ScanWizardField label="Private registry">
-                    <Select
-                      value={registryId || '__none__'}
-                      onChange={(value) =>
-                        setRegistryId(String(value === '__none__' ? '' : (value ?? '')))
-                      }
-                    >
-                      <Select.Trigger className={selectTriggerCls}>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          {privateRegistries.map((registry) => (
-                            <ListBox.Item key={registry.id} id={registry.id}>
-                              {registry.name}
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                  </ScanWizardField>
-                ) : null}
-
-                {scanSource === 'artifactory_xray' ? (
-                  <div className="space-y-4">
-                    <ScanWizardField label="Artifactory registry">
+              {hasRoutingSection ? (
+                <div className="space-y-4 border-t border-surface-border pt-5">
+                  <div className="space-y-1.5">
+                    <h3 className="text-base font-semibold text-zinc-900 dark:text-white">
+                      Routing
+                    </h3>
+                    <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                      {scanSource === 'private_registry'
+                        ? 'Choose the configured registry that should authenticate and pull this image.'
+                        : 'Choose the Xray-backed registry first, then optionally add a repo override for mirrors or remotes.'}
+                    </p>
+                  </div>
+                  {scanSource === 'private_registry' ? (
+                    <ScanWizardField label="Private registry">
                       <Select
+                        variant="secondary"
                         value={registryId || '__none__'}
                         onChange={(value) =>
                           setRegistryId(String(value === '__none__' ? '' : (value ?? '')))
@@ -772,7 +742,7 @@ export default function NewScanPage() {
                         </Select.Trigger>
                         <Select.Popover>
                           <ListBox>
-                            {xrayRegistries.map((registry) => (
+                            {privateRegistries.map((registry) => (
                               <ListBox.Item key={registry.id} id={registry.id}>
                                 {registry.name}
                               </ListBox.Item>
@@ -781,98 +751,126 @@ export default function NewScanPage() {
                         </Select.Popover>
                       </Select>
                     </ScanWizardField>
+                  ) : null}
 
-                    <ScanWizardField
-                      label="Repo override"
-                      optional
-                      description={
-                        <>
-                          Pick a repo like <span className="font-mono">docker-remote</span> so you
-                          can scan <span className="font-mono">n8nio/n8n</span> instead of typing{' '}
-                          <span className="font-mono">docker-remote/n8nio/n8n</span>.
-                        </>
-                      }
-                    >
-                      <Autocomplete
-                        value={xrayRepositoryAutocompleteValue}
-                        onChange={(key: Key | null) => {
-                          const value = String(key ?? '__none__');
-                          if (value === '__manual__') {
-                            setUseManualXrayRepository(true);
-                            return;
+                  {scanSource === 'artifactory_xray' ? (
+                    <div className="space-y-4">
+                      <ScanWizardField label="Artifactory registry">
+                        <Select
+                          variant="secondary"
+                          value={registryId || '__none__'}
+                          onChange={(value) =>
+                            setRegistryId(String(value === '__none__' ? '' : (value ?? '')))
                           }
-                          setUseManualXrayRepository(false);
-                          setXrayRepository(value === '__none__' ? '' : value);
-                        }}
-                      >
-                        <Autocomplete.Trigger className="bg-surface-secondary">
-                          <Autocomplete.Value />
-                          <Autocomplete.ClearButton />
-                          <Autocomplete.Indicator />
-                        </Autocomplete.Trigger>
-                        <Autocomplete.Popover>
-                          <Autocomplete.Filter filter={contains}>
-                            <SearchField name="artifactory-repo-search" variant="secondary">
-                              <SearchField.Group>
-                                <SearchField.SearchIcon />
-                                <SearchField.Input placeholder="Search Artifactory repos..." />
-                                <SearchField.ClearButton />
-                              </SearchField.Group>
-                            </SearchField>
-                            <ListBox
-                              renderEmptyState={() => (
-                                <div className="px-3 py-2 text-sm text-zinc-500">
-                                  No matching repositories
-                                </div>
-                              )}
-                            >
-                              <ListBox.Item id="__none__" textValue="No repo override">
-                                No repo override
-                              </ListBox.Item>
-                              {selectedRegistryRepositories.map((repository) => (
-                                <ListBox.Item
-                                  key={repository.key}
-                                  id={repository.key}
-                                  textValue={`${repository.key} ${repository.class ?? ''}`.trim()}
-                                >
-                                  {repository.key}
-                                  {repository.class ? ` · ${repository.class}` : ''}
+                        >
+                          <Select.Trigger className={selectTriggerCls}>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {xrayRegistries.map((registry) => (
+                                <ListBox.Item key={registry.id} id={registry.id}>
+                                  {registry.name}
                                 </ListBox.Item>
                               ))}
-                              <ListBox.Item id="__manual__" textValue="Enter manually">
-                                Enter manually
-                              </ListBox.Item>
                             </ListBox>
-                          </Autocomplete.Filter>
-                        </Autocomplete.Popover>
-                      </Autocomplete>
-                      {selectedRegistry &&
-                      artifactoryRepositoriesLoading === selectedRegistry.id ? (
-                        <p className="text-xs text-zinc-500">
-                          Loading available Artifactory repos…
-                        </p>
-                      ) : null}
-                      {selectedRegistryRepositoriesError ? (
-                        <p className="text-xs" style={{ color: '#f59e0b' }}>
-                          {selectedRegistryRepositoriesError}. You can still enter the repo
-                          manually.
-                        </p>
-                      ) : null}
-                      {useManualXrayRepository || !!selectedRegistryRepositoriesError ? (
-                        <FormField
-                          className="font-mono"
-                          description="Manual fallback when the repo list is unavailable or you need a repo key that is not listed."
-                          label="Manual repo override"
-                          onChange={(event) => setXrayRepository(event.target.value)}
-                          placeholder="docker-remote"
-                          value={xrayRepository}
-                        />
-                      ) : null}
-                    </ScanWizardField>
-                  </div>
-                ) : null}
-              </ScanSection>
-            ) : null}
+                          </Select.Popover>
+                        </Select>
+                      </ScanWizardField>
+
+                      <ScanWizardField
+                        label="Repo override"
+                        optional
+                        description={
+                          <>
+                            Pick a repo like <span className="font-mono">docker-remote</span> so you
+                            can scan <span className="font-mono">n8nio/n8n</span> instead of typing{' '}
+                            <span className="font-mono">docker-remote/n8nio/n8n</span>.
+                          </>
+                        }
+                      >
+                        <Autocomplete
+                          value={xrayRepositoryAutocompleteValue}
+                          onChange={(key: Key | null) => {
+                            const value = String(key ?? '__none__');
+                            if (value === '__manual__') {
+                              setUseManualXrayRepository(true);
+                              return;
+                            }
+                            setUseManualXrayRepository(false);
+                            setXrayRepository(value === '__none__' ? '' : value);
+                          }}
+                        >
+                          <Autocomplete.Trigger className="bg-surface-secondary">
+                            <Autocomplete.Value />
+                            <Autocomplete.ClearButton />
+                            <Autocomplete.Indicator />
+                          </Autocomplete.Trigger>
+                          <Autocomplete.Popover>
+                            <Autocomplete.Filter filter={contains}>
+                              <SearchField name="artifactory-repo-search" variant="secondary">
+                                <SearchField.Group>
+                                  <SearchField.SearchIcon />
+                                  <SearchField.Input placeholder="Search Artifactory repos..." />
+                                  <SearchField.ClearButton />
+                                </SearchField.Group>
+                              </SearchField>
+                              <ListBox
+                                renderEmptyState={() => (
+                                  <div className="px-3 py-2 text-sm text-zinc-500">
+                                    No matching repositories
+                                  </div>
+                                )}
+                              >
+                                <ListBox.Item id="__none__" textValue="No repo override">
+                                  No repo override
+                                </ListBox.Item>
+                                {selectedRegistryRepositories.map((repository) => (
+                                  <ListBox.Item
+                                    key={repository.key}
+                                    id={repository.key}
+                                    textValue={`${repository.key} ${repository.class ?? ''}`.trim()}
+                                  >
+                                    {repository.key}
+                                    {repository.class ? ` · ${repository.class}` : ''}
+                                  </ListBox.Item>
+                                ))}
+                                <ListBox.Item id="__manual__" textValue="Enter manually">
+                                  Enter manually
+                                </ListBox.Item>
+                              </ListBox>
+                            </Autocomplete.Filter>
+                          </Autocomplete.Popover>
+                        </Autocomplete>
+                        {selectedRegistry &&
+                        artifactoryRepositoriesLoading === selectedRegistry.id ? (
+                          <p className="text-xs text-zinc-500">
+                            Loading available Artifactory repos…
+                          </p>
+                        ) : null}
+                        {selectedRegistryRepositoriesError ? (
+                          <p className="text-xs" style={{ color: '#f59e0b' }}>
+                            {selectedRegistryRepositoriesError}. You can still enter the repo
+                            manually.
+                          </p>
+                        ) : null}
+                        {useManualXrayRepository || !!selectedRegistryRepositoriesError ? (
+                          <FormField
+                            className="font-mono"
+                            description="Manual fallback when the repo list is unavailable or you need a repo key that is not listed."
+                            label="Manual repo override"
+                            onChange={(event) => setXrayRepository(event.target.value)}
+                            placeholder="docker-remote"
+                            value={xrayRepository}
+                          />
+                        ) : null}
+                      </ScanWizardField>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </ScanSection>
           </div>
         ) : null}
 

@@ -1,5 +1,7 @@
 'use client';
 import { listHelmScanRuns } from '@/lib/api';
+import { PageHeader } from '@/components/ui/page-header';
+import { Card, Spinner, buttonVariants } from '@heroui/react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
@@ -32,30 +34,45 @@ function HelmChartRedirectContent() {
 
   if (requestError) {
     return (
-      <div className="p-6 text-center text-zinc-400 text-sm space-y-3">
-        <p>{requestError}</p>
-        <Link href="/helm" className="text-accent hover:underline">
-          Back to Helm runs
-        </Link>
+      <div className="space-y-5 px-4 py-6 md:px-6 xl:py-7">
+        <PageHeader title="Resolve Helm run" description="Find the latest run for the requested chart." />
+        <Card>
+          <Card.Content className="space-y-3 p-6 text-center text-sm text-muted">
+            <p>{requestError}</p>
+            <Link className={buttonVariants({ variant: 'secondary' })} href="/helm">
+              Back to Helm runs
+            </Link>
+          </Card.Content>
+        </Card>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-6 text-center text-zinc-400 text-sm space-y-3">
-        <p>{error}</p>
-        <Link href="/helm" className="text-accent hover:underline">
-          Back to Helm runs
-        </Link>
+      <div className="space-y-5 px-4 py-6 md:px-6 xl:py-7">
+        <PageHeader title="Resolve Helm run" description="Find the latest run for the requested chart." />
+        <Card>
+          <Card.Content className="space-y-3 p-6 text-center text-sm text-muted">
+            <p>{error}</p>
+            <Link className={buttonVariants({ variant: 'secondary' })} href="/helm">
+              Back to Helm runs
+            </Link>
+          </Card.Content>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="p-6 flex items-center justify-center gap-3 text-zinc-400 text-sm">
-      <span className="size-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
-      Resolving latest Helm run…
+    <div className="space-y-5 px-4 py-6 md:px-6 xl:py-7">
+      <PageHeader title="Resolve Helm run" description="Find the latest run for the requested chart." />
+      <Card>
+        <Card.Content className="flex items-center justify-center gap-3 p-6 text-sm text-muted">
+          <Spinner size="sm" />
+          Resolving latest Helm run…
+        </Card.Content>
+      </Card>
     </div>
   );
 }
@@ -64,9 +81,14 @@ export default function HelmChartRedirectPage() {
   return (
     <Suspense
       fallback={
-        <div className="p-6 flex items-center justify-center gap-3 text-zinc-400 text-sm">
-          <span className="size-4 rounded-full border-2 border-zinc-400/30 border-t-zinc-400 animate-spin" />
-          Resolving latest Helm run…
+        <div className="space-y-5 px-4 py-6 md:px-6 xl:py-7">
+          <PageHeader title="Resolve Helm run" description="Find the latest run for the requested chart." />
+          <Card>
+            <Card.Content className="flex items-center justify-center gap-3 p-6 text-sm text-muted">
+              <Spinner size="sm" />
+              Resolving latest Helm run…
+            </Card.Content>
+          </Card>
         </div>
       }
     >

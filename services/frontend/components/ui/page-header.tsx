@@ -1,67 +1,73 @@
-'use client';
+import { Breadcrumbs, Typography } from '@heroui/react';
+import type { ReactNode } from 'react';
 
-import { createContext, type ReactNode, useContext, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-
-export const PAGE_HEADER_ACTIONS_ID = 'page-header-actions';
+import { SurfaceIcon } from '@/components/ui/surface-icon';
 
 export type BreadcrumbItem = {
   label: string;
   href?: string;
 };
 
-export interface PageHeaderConfig {
+export interface PageTitleProps {
   title: string;
-  titleCom?: ReactNode;
+  /** A compact status element, for example a HeroUI Chip. */
+  status?: ReactNode;
   icon?: ReactNode;
   description?: string;
   actions?: ReactNode;
   breadcrumbs?: BreadcrumbItem[];
-  hidden?: boolean;
 }
 
-type PageHeaderContextValue = {
-  setHeader: (header: PageHeaderConfig | null) => void;
-  actionsTarget: HTMLElement | null;
-};
-
-export const PageHeaderContext = createContext<PageHeaderContextValue | null>(null);
-
-interface PageHeaderProps extends PageHeaderConfig {}
-
-export function PageHeader({
+export function PageTitle({
   title,
-  titleCom,
+  status,
   icon,
   description,
   actions,
   breadcrumbs,
-  hidden,
-}: PageHeaderProps) {
-  const context = useContext(PageHeaderContext);
-  const actionsTarget = context?.actionsTarget ?? null;
-  const breadcrumbsKey = useMemo(
-    () => (breadcrumbs ?? []).map((item) => `${item.label}:${item.href ?? ''}`).join('|'),
-    [breadcrumbs]
+}: PageTitleProps) {
+  return (
+    <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 flex-1">
+        {breadcrumbs && breadcrumbs.length > 1 ? (
+          <Breadcrumbs className="mb-2 text-sm">
+            {breadcrumbs.map((item, index) => {
+              const isCurrent = index === breadcrumbs.length - 1;
+              return (
+                <Breadcrumbs.Item key={`${item.href ?? 'current'}:${item.label}`} href={isCurrent ? undefined : item.href}>
+                  {item.label}
+                </Breadcrumbs.Item>
+              );
+            })}
+          </Breadcrumbs>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {icon ? <SurfaceIcon icon={icon} size="sm" /> : null}
+          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
+          {status}
+        </div>
+        {description ? (
+          <Typography.Paragraph className="mt-1 max-w-3xl text-sm leading-6" color="muted">
+            {description}
+          </Typography.Paragraph>
+        ) : null}
+      </div>
+      {actions ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">{actions}</div>
+      ) : null}
+    </header>
   );
+}
 
-  useEffect(() => {
-    if (!context) return;
+export function PageContainer({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`w-full space-y-5 px-4 py-6 md:px-6 xl:py-7 ${className}`}>{children}</div>;
+}
 
-    context.setHeader({
-      title,
-      titleCom,
-      icon,
-      description,
-      breadcrumbs,
-      hidden,
-    });
+/** @deprecated Use PageTitle. Kept temporarily so route migrations stay source-compatible. */
+export type PageHeaderConfig = PageTitleProps & { titleCom?: ReactNode; hidden?: boolean };
 
-    return () => context.setHeader(null);
-    // ReactNode metadata is intentionally excluded because it can be recreated every render.
-    // Header actions stay live through the portal below instead of being copied into shell state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [breadcrumbsKey, context, description, hidden, title]);
-
-  return actions && actionsTarget ? createPortal(actions, actionsTarget) : null;
+/** @deprecated Use PageTitle. */
+export function PageHeader({ titleCom, hidden, ...props }: PageHeaderConfig) {
+  if (hidden) return null;
+  return <PageTitle {...props} status={props.status ?? titleCom} />;
 }

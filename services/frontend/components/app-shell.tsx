@@ -18,7 +18,6 @@ import {
 import {
   Avatar,
   Badge,
-  Breadcrumbs,
   Button,
   buttonVariants,
   Chip,
@@ -30,7 +29,6 @@ import {
   Separator,
   Surface,
   Tooltip,
-  Typography,
 } from '@heroui/react';
 import {
   AiContentGenerator01Icon,
@@ -77,13 +75,6 @@ import { FloatingAIChat } from '@/components/assistant/floating-ai-chat';
 import { Logo } from '@/components/logo';
 import { SearchModal } from '@/components/search';
 import { ToastProvider } from '@/components/toast';
-import {
-  BreadcrumbItem,
-  PAGE_HEADER_ACTIONS_ID,
-  PageHeaderConfig,
-  PageHeaderContext,
-} from '@/components/ui/page-header';
-import { SurfaceIcon } from '@/components/ui/surface-icon';
 
 type SidebarIcon = ComponentType<{
   size?: number;
@@ -115,7 +106,7 @@ const navGroups = [
     label: 'Scan & investigate',
     items: [
       { href: '/scans', label: 'Scans', Icon: Shield01Icon },
-      { href: '/helm', label: 'Helm Scan', Icon: PackageIcon },
+      { href: '/helm', label: 'Helm', Icon: PackageIcon },
       { href: '/triage', label: 'Triage', Icon: ShieldKeyIcon },
       { href: '/vulnkb', label: 'Vuln KB', Icon: BookOpen01Icon },
     ],
@@ -144,28 +135,6 @@ interface AppShellProps {
 
 function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + '/');
-}
-
-function titleFromPath(pathname: string) {
-  const segment = pathname.split('/').filter(Boolean).pop();
-  if (!segment) return 'Dashboard';
-
-  return segment.replace(/[-_]/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function resolveFallbackHeader(
-  pathname: string,
-  items: Array<{ href: string; label: string; Icon: SidebarIcon }>
-): PageHeaderConfig {
-  const current = items.find((item) => isActiveRoute(pathname, item.href));
-  const breadcrumbs: BreadcrumbItem[] = current ? [{ label: current.label }] : [];
-  const HeaderIcon = current?.Icon;
-
-  return {
-    title: current?.label ?? titleFromPath(pathname),
-    breadcrumbs,
-    icon: HeaderIcon ? <HeaderIcon size={16} aria-hidden /> : undefined,
-  };
 }
 
 function InviteCountChip({ count, className = '' }: { count: number; className?: string }) {
@@ -321,8 +290,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const sidebarExpandedForTourRef = useRef(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
-  const [pageHeader, setPageHeader] = useState<PageHeaderConfig | null>(null);
-  const [pageHeaderActionsTarget, setPageHeaderActionsTarget] = useState<HTMLElement | null>(null);
   const [aiEnabled, setAIEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -593,18 +560,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
       ? [{ label: 'Admin', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
       : []),
   ];
-  const navItems = navigationGroups.flatMap((group) =>
-    group.items.map(({ href, label, Icon }) => ({ href, label, Icon }))
-  );
-  const fallbackHeader = resolveFallbackHeader(pathname, navItems);
-  const topbarHeader = pageHeader
-    ? { ...fallbackHeader, ...pageHeader, icon: pageHeader.icon ?? fallbackHeader.icon }
-    : fallbackHeader;
   const contentRailClass = 'px-4 md:px-6';
-  const pageHeaderContextValue = useMemo(
-    () => ({ setHeader: setPageHeader, actionsTarget: pageHeaderActionsTarget }),
-    [pageHeaderActionsTarget]
-  );
 
   function renderWorkspaceMenu() {
     return (
@@ -655,8 +611,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
       onFinish={handleWorkspaceTourFinished}
     >
       <ToastProvider>
-        <PageHeaderContext.Provider value={pageHeaderContextValue}>
-          {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
+        {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
           <div id="tour-main-shell" className="flex h-dvh app-bg overflow-hidden">
             <Surface
               className={`relative hidden border-r border-border md:flex shrink-0 flex-col overflow-hidden transition-[width] duration-200 ease-out ${
@@ -1241,56 +1196,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                   isAssistantRoute ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
                 }`}
               >
-                {!isAssistantRoute && !topbarHeader.hidden ? (
-                  <div className={`border-b border-white/5 py-1.5 md:py-2 ${contentRailClass}`}>
-                    <div
-                      id="tour-page-header"
-                      className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <h1 className="flex flex-wrap items-center gap-1.5 text-lg font-semibold tracking-tight md:text-xl">
-                          {topbarHeader.icon ? (
-                            <SurfaceIcon icon={topbarHeader.icon} size="sm" className="mr-0.5" />
-                          ) : null}
-                          <span>{topbarHeader.title}</span>
-                          {topbarHeader.titleCom}
-                        </h1>
-                        {topbarHeader.description ? (
-                          <Typography.Paragraph className="mt-0.5" color="muted" size="xs">
-                            {topbarHeader.description}
-                          </Typography.Paragraph>
-                        ) : null}
-                        {topbarHeader.breadcrumbs && topbarHeader.breadcrumbs.length > 1 ? (
-                          <Breadcrumbs className="mt-1 gap-1 text-[11px] font-medium">
-                            {topbarHeader.breadcrumbs.map((item, index) => {
-                              const isCurrent = index === topbarHeader.breadcrumbs!.length - 1;
-
-                              return (
-                                <Breadcrumbs.Item
-                                  key={`${item.label}-${index}`}
-                                  className={
-                                    isCurrent
-                                      ? 'text-default-600'
-                                      : 'text-default-500 hover:text-foreground'
-                                  }
-                                  href={!isCurrent ? item.href : undefined}
-                                >
-                                  {item.label}
-                                </Breadcrumbs.Item>
-                              );
-                            })}
-                          </Breadcrumbs>
-                        ) : null}
-                      </div>
-
-                      <div
-                        id={PAGE_HEADER_ACTIONS_ID}
-                        ref={setPageHeaderActionsTarget}
-                        className="flex shrink-0 items-center gap-1.5 sm:justify-end empty:hidden"
-                      />
-                    </div>
-                  </div>
-                ) : null}
                 <div className={isAssistantRoute ? 'min-h-0 flex-1 overflow-hidden' : ''}>
                   {children}
                 </div>
@@ -1298,7 +1203,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
             </div>
           </div>
           {!isAssistantRoute ? <FloatingAIChat /> : null}
-        </PageHeaderContext.Provider>
       </ToastProvider>
     </WorkspaceTourProvider>
   );

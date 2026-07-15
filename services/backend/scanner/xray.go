@@ -555,9 +555,9 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		return err
 	}
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray scan completed with %d total findings.", scan.CriticalCount+scan.HighCount+scan.MediumCount+scan.LowCount+scan.UnknownCount))
-	recordScanStepOutput(ctx, db, scan.ID, "Queued org auto-assignment, compliance evaluation, auto-tagging, and completion notifications.")
+	recordScanStepOutput(ctx, db, scan.ID, "Queued compliance evaluation, auto-tagging, and completion notifications.")
 
-	go compliance.AutoAssignOrgs(db, scan.ImageName, scan.ImageTag, scan.ID)
+	go compliance.RunForScan(db, scan.ID)
 	go applyAutoTags(db, scan)
 	notifications.Dispatch(db, models.NotificationEventScanComplete, notifications.Payload{
 		ScanID:    scan.ID.String(),

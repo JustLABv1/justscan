@@ -1,5 +1,5 @@
 import { OrgRiskScore, TrendPoint } from '@/lib/api';
-import { Card } from '@heroui/react';
+import { Card, Chip, Link } from '@heroui/react';
 
 import { OrgScanItem, RiskOverviewCard, TrendChart } from './shared';
 
@@ -7,6 +7,20 @@ interface OrgOverviewTabProps {
   riskScore: OrgRiskScore | null;
   trend: TrendPoint[];
   orgScans: OrgScanItem[];
+}
+
+function SummaryMetric({ label, value, detail, color = 'default' }: { label: string; value: string | number; detail: string; color?: 'default' | 'danger' | 'warning' | 'success' }) {
+  return (
+    <Card variant="secondary">
+      <Card.Content className="gap-1">
+        <p className="text-xs font-medium text-muted">{label}</p>
+        <div className="flex items-baseline gap-2">
+          <p className="text-2xl font-semibold tracking-tight">{value}</p>
+          <Chip color={color} size="sm" variant="soft">{detail}</Chip>
+        </div>
+      </Card.Content>
+    </Card>
+  );
 }
 
 export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabProps) {
@@ -27,62 +41,61 @@ export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabPro
           policyName: result.policy_name,
         }))
     );
-
-  const uniqueFailingItems = Array.from(
-    new Map(failingItems.map((item) => [item.key, item])).values()
-  ).slice(0, 6);
+  const uniqueFailingItems = Array.from(new Map(failingItems.map((item) => [item.key, item])).values()).slice(0, 5);
+  const critical = riskScore?.totals.critical ?? orgScans.reduce((total, scan) => total + scan.critical_count, 0);
+  const high = riskScore?.totals.high ?? orgScans.reduce((total, scan) => total + scan.high_count, 0);
+  const passRate = riskScore?.compliance_pass_rate ?? 0;
 
   return (
     <div className="space-y-6">
       <RiskOverviewCard riskScore={riskScore} />
 
-      <Card className="surface-card relative rounded-2xl p-5 space-y-3">
-        <div
-          className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-          style={{ background: 'linear-gradient(90deg,transparent,color-mix(in srgb, var(--accent) 20%, transparent),transparent)' }}
-        />
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Compliance Trend</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Pass/fail evaluations over 30 days</p>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-zinc-500">
-            <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-emerald-500/70 inline-block" />Pass</span>
-            <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-red-500/70 inline-block" />Fail</span>
-          </div>
+      <section aria-labelledby="attention-heading" className="space-y-3">
+        <div>
+          <h2 id="attention-heading" className="text-base font-semibold">Needs attention</h2>
+          <p className="text-sm text-muted">The signals that should guide the next remediation decision.</p>
         </div>
-        <TrendChart points={trend} />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <SummaryMetric label="Critical findings" value={critical} detail={critical === 1 ? '1 finding' : `${critical} findings`} color={critical > 0 ? 'danger' : 'success'} />
+          <SummaryMetric label="High findings" value={high} detail={high === 1 ? '1 finding' : `${high} findings`} color={high > 0 ? 'warning' : 'success'} />
+          <SummaryMetric label="Policy pass rate" value={`${Math.round(passRate)}%`} detail={uniqueFailingItems.length > 0 ? `${uniqueFailingItems.length} recent failures` : 'No recent failures'} color={uniqueFailingItems.length > 0 ? 'warning' : 'success'} />
+        </div>
+      </section>
 
-        <div className="pt-1">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            What Failed Recently
-          </h3>
-          {uniqueFailingItems.length === 0 ? (
-            <p className="mt-2 text-xs text-zinc-500">No recent failed policy evaluations.</p>
-          ) : (
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {uniqueFailingItems.map((item) => (
-                <a
-                  key={item.key}
-                  href={`/scans/${item.scanId}`}
-                  className="group rounded-lg px-3 py-2 transition-colors hover:border-accent/40"
-                  style={{
-                    background: 'var(--surface-secondary)',
-                    border: '1px solid var(--surface-border)',
-                  }}
-                >
-                  <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200 group-hover:text-accent">
-                    {item.policyName || 'Unnamed policy'}
-                  </p>
-                  <p className="mt-0.5 truncate font-mono text-[11px] text-zinc-600 dark:text-zinc-500">
-                    {item.imageRef}
-                  </p>
-                </a>
-              ))}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.85fr)]">
+        <Card>
+          <Card.Header>
+            <div>
+              <Card.Title>Compliance trend</Card.Title>
+              <Card.Description>Pass and fail evaluations across the last 30 days.</Card.Description>
             </div>
-          )}
-        </div>
-      </Card>
+            <div className="flex items-center gap-3 text-xs text-muted">
+              <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-success" />Pass</span>
+              <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-danger" />Fail</span>
+            </div>
+          </Card.Header>
+          <Card.Content><TrendChart points={trend} /></Card.Content>
+        </Card>
+
+        <Card>
+          <Card.Header>
+            <div>
+              <Card.Title>Recent policy failures</Card.Title>
+              <Card.Description>Start with the most recently evaluated images.</Card.Description>
+            </div>
+          </Card.Header>
+          <Card.Content className="gap-2">
+            {uniqueFailingItems.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-divider p-5 text-sm text-muted">No recent failed policy evaluations.</div>
+            ) : uniqueFailingItems.map((item) => (
+              <Link key={item.key} href={`/scans/${item.scanId}`} className="block rounded-xl border border-divider bg-surface-secondary p-3 no-underline hover:bg-surface-tertiary">
+                <p className="truncate text-sm font-medium text-foreground">{item.policyName || 'Unnamed policy'}</p>
+                <p className="mt-1 truncate font-mono text-xs text-muted">{item.imageRef}</p>
+              </Link>
+            ))}
+          </Card.Content>
+        </Card>
+      </div>
     </div>
   );
 }

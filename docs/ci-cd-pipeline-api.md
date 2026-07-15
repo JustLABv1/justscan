@@ -100,6 +100,16 @@ Result shape:
 - `fail`: terminal scan failed the configured severity or Xray policy gate
 - `error`: terminal scan failed due to scan execution or delivery problems
 
+## Organization pipeline history
+
+Signed-in organization viewers can inspect recent pipeline-triggered scans without an API token:
+
+```text
+GET /api/v1/orgs/:orgId/pipeline-scans?page=1&limit=20
+```
+
+The response is paginated and includes the image, scan state, CI source, external reference, and callback delivery state. Callback URLs and secrets are never returned.
+
 ## Callback behavior
 
 If `callback.url` is set, JustScan sends a `POST` request to that URL after the scan reaches a terminal state.

@@ -200,6 +200,7 @@ type NotificationManagerProps = {
   basePath: string;
   heading: string;
   description: string;
+  canManage?: boolean;
 };
 
 type ChannelFormState = {
@@ -337,7 +338,7 @@ function summarizeRule(rule: NotificationRule, channels: NotificationChannel[]) 
   return `${rule.event_types.join(', ')} • ${channelNames || 'No channels'} • ${conditions}`;
 }
 
-export function NotificationManager({ basePath, heading, description }: NotificationManagerProps) {
+export function NotificationManager({ basePath, heading, description, canManage = true }: NotificationManagerProps) {
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [rules, setRules] = useState<NotificationRule[]>([]);
   const [deliveries, setDeliveries] = useState<NotificationDelivery[]>([]);
@@ -395,11 +396,13 @@ export function NotificationManager({ basePath, heading, description }: Notifica
   );
 
   function openCreateChannel() {
+    if (!canManage) return;
     setChannelForm(emptyChannelForm());
     channelModal.open();
   }
 
   function openEditChannel(channel: NotificationChannel) {
+    if (!canManage) return;
     setChannelForm({
       id: channel.id,
       name: channel.name,
@@ -423,11 +426,13 @@ export function NotificationManager({ basePath, heading, description }: Notifica
   }
 
   function openCreateRule() {
+    if (!canManage) return;
     setRuleForm(emptyRuleForm());
     ruleModal.open();
   }
 
   function openEditRule(rule: NotificationRule) {
+    if (!canManage) return;
     setRuleForm({
       id: rule.id,
       name: rule.name,
@@ -444,6 +449,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
 
   async function handleSaveChannel(event: React.FormEvent) {
     event.preventDefault();
+    if (!canManage) return;
     setFeedback(null);
 
     const payload: Partial<NotificationChannel> = {
@@ -489,6 +495,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
 
   async function handleSaveRule(event: React.FormEvent) {
     event.preventDefault();
+    if (!canManage) return;
     setFeedback(null);
 
     const payload: Partial<NotificationRule> = {
@@ -530,6 +537,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
   }
 
   async function handleDeleteChannel(channel: NotificationChannel) {
+    if (!canManage) return;
     const ok = await confirm({
       title: `Delete "${channel.name}"?`,
       message:
@@ -551,6 +559,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
   }
 
   async function handleDeleteRule(rule: NotificationRule) {
+    if (!canManage) return;
     const ok = await confirm({
       title: `Delete "${rule.name}"?`,
       message: 'Future matching events will stop creating deliveries for this rule.',
@@ -571,6 +580,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
   }
 
   async function handleTestChannel(channel: NotificationChannel) {
+    if (!canManage) return;
     try {
       await testScopedNotificationChannel(basePath, channel.id, 'scan_complete');
       setFeedback({ type: 'success', text: `Sent test notification via ${channel.name}.` });
@@ -584,6 +594,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
   }
 
   async function handleRetryJob(job: NotificationQueueJob) {
+    if (!canManage) return;
     try {
       await retryScopedNotificationQueueJob(basePath, job.id);
       setFeedback({ type: 'success', text: `Re-queued ${job.rule_name ?? 'notification job'}.` });
@@ -626,7 +637,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
               <h2 className="text-base font-semibold">Channels</h2>
               <p className="text-sm text-zinc-500">Delivery credentials and destination toggles.</p>
             </div>
-            <Button onPress={openCreateChannel}>
+            <Button onPress={openCreateChannel} isDisabled={!canManage}>
               <Add01Icon size={15} />
               Add channel
             </Button>
@@ -672,7 +683,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                       </Table.Cell>
                       <Table.Cell>
                         <div className="flex justify-end">
-                          <RowActionsMenu
+                          {canManage ? <RowActionsMenu
                             label={`Open actions for ${channel.name}`}
                             items={[
                               {
@@ -699,7 +710,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                                 },
                               },
                             ]}
-                          />
+                          /> : <span className="text-xs text-muted">Read only</span>}
                         </div>
                       </Table.Cell>
                     </Table.Row>
@@ -718,7 +729,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                 Match scan events and route them through selected channels.
               </p>
             </div>
-            <Button onPress={openCreateRule} isDisabled={channels.length === 0}>
+            <Button onPress={openCreateRule} isDisabled={!canManage || channels.length === 0}>
               <Add01Icon size={15} />
               Add rule
             </Button>
@@ -755,7 +766,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                         </p>
                       </div>
                       <div className="flex">
-                        <RowActionsMenu
+                        {canManage ? <RowActionsMenu
                           label={`Open actions for ${rule.name}`}
                           items={[
                             {
@@ -774,7 +785,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                               },
                             },
                           ]}
-                        />
+                        /> : null}
                       </div>
                     </div>
                   </Card.Content>
@@ -839,7 +850,7 @@ export function NotificationManager({ basePath, heading, description }: Notifica
                       </Table.Cell>
                       <Table.Cell>
                         <div className="flex justify-end">
-                          {job.status === 'dead_letter' || job.status === 'failed' ? (
+                          {canManage && (job.status === 'dead_letter' || job.status === 'failed') ? (
                             <RowActionsMenu
                               label={`Open actions for ${job.rule_name ?? 'notification job'}`}
                               items={[

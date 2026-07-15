@@ -3,6 +3,8 @@ package orgs
 import (
 	"context"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"justscan-backend/compliance"
@@ -25,13 +27,25 @@ func ListOrgs(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		type OrgWithCount struct {
+		type OrgWithSummary struct {
 			models.Org
-			PolicyCount int `json:"policy_count"`
+			MemberCount      int        `bun:"member_count" json:"member_count"`
+			PolicyCount      int        `bun:"policy_count" json:"policy_count"`
+			ScanCount        int        `bun:"scan_count" json:"scan_count"`
+			UniqueImageCount int        `bun:"unique_image_count" json:"unique_image_count"`
+			LastScanAt       *time.Time `bun:"last_scan_at" json:"last_scan_at,omitempty"`
 		}
 
-		var orgs []models.Org
-		query := db.NewSelect().Model(&orgs).OrderExpr("created_at DESC")
+		var orgs []OrgWithSummary
+		query := db.NewSelect().
+			TableExpr("orgs AS org").
+			ColumnExpr("org.*").
+			ColumnExpr("(SELECT COUNT(*) FROM org_members om WHERE om.org_id = org.id) AS member_count").
+			ColumnExpr("(SELECT COUNT(*) FROM org_policies op WHERE op.org_id = org.id) AS policy_count").
+			ColumnExpr("(SELECT COUNT(*) FROM org_scans os WHERE os.org_id = org.id) AS scan_count").
+			ColumnExpr("(SELECT COUNT(DISTINCT s.image_name) FROM scans s JOIN org_scans os ON os.scan_id = s.id WHERE os.org_id = org.id) AS unique_image_count").
+			ColumnExpr("(SELECT MAX(s.created_at) FROM scans s JOIN org_scans os ON os.scan_id = s.id WHERE os.org_id = org.id) AS last_scan_at").
+			OrderExpr("org.created_at DESC")
 		if !isAdmin {
 			accessibleOrgIDs, err := authz.ListAccessibleOrgIDs(c.Request.Context(), db, userID, false)
 			if err != nil {
@@ -39,12 +53,13 @@ func ListOrgs(db *bun.DB) gin.HandlerFunc {
 				return
 			}
 			if len(accessibleOrgIDs) == 0 {
-				c.JSON(http.StatusOK, gin.H{"data": []OrgWithCount{}})
+				c.JSON(http.StatusOK, gin.H{"data": []OrgWithSummary{}})
 				return
 			}
-			query = query.Where("id IN (?)", bun.In(accessibleOrgIDs))
+			query = query.Where("org.id IN (?)", bun.In(accessibleOrgIDs))
 		}
-		if err := query.Scan(c.Request.Context()); err != nil {
+		if err := query.Scan(c.Request.Context(), &orgs); err != nil {
+			log.WithError(err).Warn("orgs: failed to list organization summaries")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list organizations"})
 			return
 		}
@@ -59,8 +74,8 @@ func ListOrgs(db *bun.DB) gin.HandlerFunc {
 			}
 		}
 
-		result := make([]OrgWithCount, 0, len(orgs))
-		for _, o := range orgs {
+		for index := range orgs {
+			o := &orgs[index].Org
 			if !isAdmin {
 				if o.CreatedByID == userID {
 					o.CurrentUserRole = models.OrgRoleOwner
@@ -68,11 +83,9 @@ func ListOrgs(db *bun.DB) gin.HandlerFunc {
 					o.CurrentUserRole = roleMap[o.ID]
 				}
 			}
-			count, _ := db.NewSelect().Model((*models.OrgPolicy)(nil)).Where("org_id = ?", o.ID).Count(c.Request.Context())
-			result = append(result, OrgWithCount{Org: o, PolicyCount: count})
 		}
 
-		c.JSON(http.StatusOK, gin.H{"data": result})
+		c.JSON(http.StatusOK, gin.H{"data": orgs})
 	}
 }
 
@@ -155,7 +168,7 @@ func GetOrg(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
-// UpdateOrg updates an org's name, description, and/or image_patterns.
+// UpdateOrg updates an org's name and description.
 func UpdateOrg(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		orgID, err := uuid.Parse(c.Param("id"))
@@ -165,9 +178,8 @@ func UpdateOrg(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var body struct {
-			Name          string            `json:"name"`
-			Description   string            `json:"description"`
-			ImagePatterns models.StringList `json:"image_patterns"`
+			Name        *string `json:"name"`
+			Description *string `json:"description"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -179,18 +191,20 @@ func UpdateOrg(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if body.Name != "" {
-			org.Name = body.Name
+		if body.Name != nil {
+			name := strings.TrimSpace(*body.Name)
+			if name == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "organization name is required"})
+				return
+			}
+			org.Name = name
 		}
-		if body.Description != "" {
-			org.Description = body.Description
-		}
-		if body.ImagePatterns != nil {
-			org.ImagePatterns = body.ImagePatterns
+		if body.Description != nil {
+			org.Description = *body.Description
 		}
 		org.UpdatedAt = time.Now()
 
-		if _, err := db.NewUpdate().Model(org).Column("name", "description", "image_patterns", "updated_at").Where("id = ?", orgID).Exec(c.Request.Context()); err != nil {
+		if _, err := db.NewUpdate().Model(org).Column("name", "description", "updated_at").Where("id = ?", orgID).Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update organization"})
 			return
 		}
@@ -210,8 +224,18 @@ func GetComplianceTrend(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
 			return
 		}
-		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin); !ok {
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleViewer); !ok {
 			return
+		}
+
+		days := 30
+		if rawDays := strings.TrimSpace(c.Query("days")); rawDays != "" {
+			parsedDays, parseErr := strconv.Atoi(rawDays)
+			if parseErr != nil || (parsedDays != 30 && parsedDays != 60 && parsedDays != 90) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "days must be one of 30, 60, or 90"})
+				return
+			}
+			days = parsedDays
 		}
 
 		type DayResult struct {
@@ -222,15 +246,22 @@ func GetComplianceTrend(db *bun.DB) gin.HandlerFunc {
 
 		var rows []DayResult
 		err = db.NewRaw(`
+            WITH latest_daily AS (
+                SELECT DISTINCT ON (scan_id, policy_id, (evaluated_at AT TIME ZONE 'UTC')::date)
+                       evaluated_at,
+                       status
+                FROM compliance_history
+                WHERE org_id = ?
+                  AND evaluated_at >= NOW() - (? * INTERVAL '1 day')
+                ORDER BY scan_id, policy_id, (evaluated_at AT TIME ZONE 'UTC')::date, evaluated_at DESC
+            )
             SELECT to_char(evaluated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') as day,
                    status,
                    count(*) as count
-            FROM compliance_history
-            WHERE org_id = ?
-              AND evaluated_at >= NOW() - INTERVAL '30 days'
+            FROM latest_daily
             GROUP BY day, status
             ORDER BY day ASC
-        `, orgID).Scan(c.Request.Context(), &rows)
+        `, orgID, days).Scan(c.Request.Context(), &rows)
 		if err != nil {
 			log.WithError(err).Warn("org compliance trend: failed to query compliance_history; falling back to compliance_results")
 			if err := db.NewRaw(`
@@ -239,10 +270,10 @@ func GetComplianceTrend(db *bun.DB) gin.HandlerFunc {
 				       count(*) as count
 				FROM compliance_results
 				WHERE org_id = ?
-				  AND evaluated_at >= NOW() - INTERVAL '30 days'
+				  AND evaluated_at >= NOW() - (? * INTERVAL '1 day')
 				GROUP BY day, status
 				ORDER BY day ASC
-			`, orgID).Scan(c.Request.Context(), &rows); err != nil {
+			`, orgID, days).Scan(c.Request.Context(), &rows); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load compliance trend"})
 				return
 			}
@@ -468,7 +499,7 @@ func DeletePolicy(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
-// AssignScan assigns a scan to an org and immediately runs compliance checks.
+// AssignScan grants an organization access to an existing scan and runs compliance checks.
 func AssignScan(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		orgID, err := uuid.Parse(c.Param("id"))
@@ -499,7 +530,7 @@ func AssignScan(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
-// RemoveScan removes a scan from an org and deletes its compliance results.
+// RemoveScan revokes an organization access grant and deletes its compliance results.
 func RemoveScan(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		orgID, err := uuid.Parse(c.Param("id"))
@@ -515,7 +546,12 @@ func RemoveScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
 			return
 		}
-		if _, _, _, ok := scanhandlers.LoadAuthorizedScanForWrite(c, db, scanID); !ok {
+		scan, _, _, ok := scanhandlers.LoadAuthorizedScanForWrite(c, db, scanID)
+		if !ok {
+			return
+		}
+		if scan.OwnerOrgID != nil && *scan.OwnerOrgID == orgID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot remove an organization-owned scan from its owner scope"})
 			return
 		}
 
@@ -555,6 +591,20 @@ func ListOrgScans(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
+		scanIDs := make([]uuid.UUID, 0, len(scans))
+		for _, scan := range scans {
+			scanIDs = append(scanIDs, scan.ID)
+		}
+		pipelineRequestsByScanID := make(map[uuid.UUID]models.PipelineScanRequest, len(scanIDs))
+		if len(scanIDs) > 0 {
+			var pipelineRequests []models.PipelineScanRequest
+			if err := db.NewSelect().Model(&pipelineRequests).Where("scan_id IN (?)", bun.In(scanIDs)).Scan(c.Request.Context()); err == nil {
+				for _, request := range pipelineRequests {
+					pipelineRequestsByScanID[request.ScanID] = request
+				}
+			}
+		}
+
 		// Load policies for this org to resolve names
 		var policies []models.OrgPolicy
 		db.NewSelect().Model(&policies).Where("org_id = ?", orgID).Scan(c.Request.Context()) //nolint:errcheck
@@ -572,25 +622,46 @@ func ListOrgScans(db *bun.DB) gin.HandlerFunc {
 			for _, cr := range crs {
 				pName := policyNames[cr.PolicyID]
 				compItems = append(compItems, gin.H{
-					"policy_id":   cr.PolicyID,
-					"policy_name": pName,
-					"status":      cr.Status,
-					"violations":  cr.Violations,
+					"policy_id":    cr.PolicyID,
+					"policy_name":  pName,
+					"status":       cr.Status,
+					"violations":   cr.Violations,
+					"evaluated_at": cr.EvaluatedAt,
 				})
 			}
+			accessType := "shared"
+			if s.OwnerOrgID != nil && *s.OwnerOrgID == orgID {
+				accessType = "owned"
+			}
+			triggerSource := s.ScanSource
+			externalRef := ""
+			if pipelineRequest, ok := pipelineRequestsByScanID[s.ID]; ok {
+				triggerSource = pipelineRequest.Source
+				externalRef = pipelineRequest.ExternalRef
+			}
 			result = append(result, gin.H{
-				"id":             s.ID,
-				"image_name":     s.ImageName,
-				"image_tag":      s.ImageTag,
-				"image_digest":   s.ImageDigest,
-				"status":         s.Status,
-				"critical_count": s.CriticalCount,
-				"high_count":     s.HighCount,
-				"medium_count":   s.MediumCount,
-				"low_count":      s.LowCount,
-				"unknown_count":  s.UnknownCount,
-				"created_at":     s.CreatedAt,
-				"compliance":     compItems,
+				"id":              s.ID,
+				"image_name":      s.ImageName,
+				"image_tag":       s.ImageTag,
+				"image_digest":    s.ImageDigest,
+				"scan_provider":   s.ScanProvider,
+				"scan_source":     s.ScanSource,
+				"trigger_source":  triggerSource,
+				"external_ref":    externalRef,
+				"status":          s.Status,
+				"current_step":    s.CurrentStep,
+				"external_status": s.ExternalStatus,
+				"critical_count":  s.CriticalCount,
+				"high_count":      s.HighCount,
+				"medium_count":    s.MediumCount,
+				"low_count":       s.LowCount,
+				"unknown_count":   s.UnknownCount,
+				"owner_type":      s.OwnerType,
+				"owner_org_id":    s.OwnerOrgID,
+				"access_type":     accessType,
+				"created_at":      s.CreatedAt,
+				"completed_at":    s.CompletedAt,
+				"compliance":      compItems,
 			})
 		}
 

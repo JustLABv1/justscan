@@ -12,11 +12,9 @@ import {
   deleteOrg,
   getUser,
   listMyOrgInvites,
-  listOrgMembers,
   listOrgs,
   Org,
   OrgInvite,
-  OrgMember,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import {
@@ -36,10 +34,7 @@ import { Delete01Icon, PlusSignIcon, UserAdd01Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-interface OrgWithCount extends Org {
-  members: OrgMember[];
-  policy_count: number;
-}
+type OrgWithCount = Org;
 
 type OrgSortKey = 'name' | 'policies' | 'members' | 'updated';
 type WorkspaceAvatarColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
@@ -51,21 +46,6 @@ const workspaceColorFor = (kind: 'personal' | 'org', name: string): WorkspaceAva
   kind === 'personal'
     ? 'default'
     : workspaceColors[hashWorkspaceName(name) % workspaceColors.length];
-
-function initialsForMember(member: OrgMember) {
-  const value = member.username || member.email || member.user_id;
-  const parts = value
-    .replace(/@.*/, '')
-    .split(/[\s._-]+/)
-    .filter(Boolean)
-    .slice(0, 2);
-
-  if (parts.length === 0) {
-    return 'U';
-  }
-
-  return parts.map((part) => part[0]?.toUpperCase() ?? '').join('');
-}
 
 export default function OrgsPage() {
   const currentUser = getUser() as { role?: string } | null;
@@ -94,13 +74,7 @@ export default function OrgsPage() {
     setLoading(true);
     try {
       const [nextOrgs, nextInvites] = await Promise.all([listOrgs(), listMyOrgInvites()]);
-      const orgsWithMembers = await Promise.all(
-        nextOrgs.map(async (org) => {
-          const members = await listOrgMembers(org.id).catch(() => []);
-          return { ...(org as OrgWithCount), members };
-        })
-      );
-      setOrgs(orgsWithMembers);
+      setOrgs(nextOrgs);
       setPendingInvites(nextInvites);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load organizations');
@@ -118,16 +92,9 @@ export default function OrgsPage() {
     }
 
     return orgs.filter((org) => {
-      const memberMatches = org.members.some((member) =>
-        [member.username, member.email, member.role]
-          .filter((value): value is string => Boolean(value))
-          .some((value) => value.toLowerCase().includes(query))
-      );
-
       return (
         org.name.toLowerCase().includes(query) ||
-        (org.description || '').toLowerCase().includes(query) ||
-        memberMatches
+        (org.description || '').toLowerCase().includes(query)
       );
     });
   }, [orgs, searchQuery]);
@@ -142,7 +109,7 @@ export default function OrgsPage() {
       }
 
       if (column === 'members') {
-        return (first.members.length - second.members.length) * direction;
+        return ((first.member_count ?? 0) - (second.member_count ?? 0)) * direction;
       }
 
       if (column === 'updated') {
@@ -501,26 +468,9 @@ export default function OrgsPage() {
                           </div>
                         </Table.Cell>
                         <Table.Cell onClick={() => router.push(`/orgs/${org.id}`)}>
-                          {org.members.length === 0 ? (
-                            <span className="text-xs text-zinc-500">No members</span>
-                          ) : (
-                            <div className="flex items-center -space-x-2">
-                              {org.members.slice(0, 4).map((member) => (
-                                <Avatar
-                                  key={member.user_id}
-                                  color={workspaceColorFor('org', org.name)}
-                                  size="sm"
-                                >
-                                  <Avatar.Fallback>{initialsForMember(member)}</Avatar.Fallback>
-                                </Avatar>
-                              ))}
-                              {org.members.length > 4 ? (
-                                <Avatar color={workspaceColorFor('org', org.name)} size="sm">
-                                  <Avatar.Fallback>+{org.members.length - 4}</Avatar.Fallback>
-                                </Avatar>
-                              ) : null}
-                            </div>
-                          )}
+                          <Chip variant="soft">
+                            {org.member_count ?? 0} {(org.member_count ?? 0) === 1 ? 'member' : 'members'}
+                          </Chip>
                         </Table.Cell>
                         <Table.Cell onClick={() => router.push(`/orgs/${org.id}`)}>
                           <Chip variant="soft">

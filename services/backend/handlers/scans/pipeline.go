@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -200,6 +201,85 @@ func GetPipelineScan(db *bun.DB) gin.HandlerFunc {
 		statusURL := buildPipelineStatusURL(c, orgID, scanID)
 		c.JSON(http.StatusOK, pipelines.BuildScanResult(req, scan, statusURL))
 	}
+}
+
+// ListPipelineScans returns recent pipeline-triggered scans for the organization.
+// It is intentionally session-authenticated (rather than token-authenticated) so
+// people can inspect CI/CD activity without exposing callback secrets.
+func ListPipelineScans(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		orgID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
+			return
+		}
+		if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleViewer); !ok {
+			return
+		}
+
+		page, limit := parsePipelinePagination(c)
+		total, err := db.NewSelect().Model((*models.PipelineScanRequest)(nil)).
+			Where("org_id = ?", orgID).
+			Count(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list pipeline scans"})
+			return
+		}
+
+		type pipelineScanRow struct {
+			models.PipelineScanRequest
+			Scan models.Scan `bun:"rel:belongs-to,join:scan_id=id" json:"scan"`
+		}
+		var rows []pipelineScanRow
+		if err := db.NewSelect().Model(&rows).
+			Relation("Scan").
+			Where("pipeline_scan_request.org_id = ?", orgID).
+			OrderExpr("pipeline_scan_request.created_at DESC").
+			Limit(limit).
+			Offset((page - 1) * limit).
+			Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list pipeline scans"})
+			return
+		}
+
+		data := make([]gin.H, 0, len(rows))
+		for _, row := range rows {
+			data = append(data, gin.H{
+				"id":                     row.ID,
+				"scan_id":                row.ScanID,
+				"source":                 row.Source,
+				"external_ref":           row.ExternalRef,
+				"delivery_status":        row.DeliveryStatus,
+				"delivery_attempt_count": row.DeliveryAttemptCount,
+				"last_delivery_error":    row.LastDeliveryError,
+				"last_attempt_at":        row.LastAttemptAt,
+				"delivered_at":           row.DeliveredAt,
+				"created_at":             row.CreatedAt,
+				"scan": gin.H{
+					"id":             row.Scan.ID,
+					"image_name":     row.Scan.ImageName,
+					"image_tag":      row.Scan.ImageTag,
+					"status":         row.Scan.Status,
+					"current_step":   row.Scan.CurrentStep,
+					"critical_count": row.Scan.CriticalCount,
+					"high_count":     row.Scan.HighCount,
+					"completed_at":   row.Scan.CompletedAt,
+				},
+			})
+		}
+		c.JSON(http.StatusOK, gin.H{"data": data, "total": total, "page": page, "limit": limit})
+	}
+}
+
+func parsePipelinePagination(c *gin.Context) (int, int) {
+	page, limit := 1, 20
+	if value, err := strconv.Atoi(c.DefaultQuery("page", "1")); err == nil && value > 0 {
+		page = value
+	}
+	if value, err := strconv.Atoi(c.DefaultQuery("limit", "20")); err == nil && value > 0 && value <= 100 {
+		limit = value
+	}
+	return page, limit
 }
 
 func requirePipelineOrgToken(c *gin.Context, db *bun.DB) (uuid.UUID, *models.Org, bool) {

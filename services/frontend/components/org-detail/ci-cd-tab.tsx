@@ -6,7 +6,9 @@ import {
   createOrgToken,
   createPipelineScanWithToken,
   getPipelineScanWithToken,
+  listPipelineScans,
   type Org,
+  type PipelineScanHistoryItem,
   type PipelineScanResult,
   type PipelineVerdictConfig,
 } from '@/lib/api';
@@ -121,6 +123,8 @@ export function OrgCICDTab({ org, canManageTokens }: OrgCICDTabProps) {
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState('');
   const [result, setResult] = useState<PipelineScanResult | null>(null);
+  const [history, setHistory] = useState<PipelineScanHistoryItem[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
   const cancelledRef = useRef(false);
 
   useEffect(() => {
@@ -130,6 +134,17 @@ export function OrgCICDTab({ org, canManageTokens }: OrgCICDTabProps) {
       cancelledRef.current = true;
     };
   }, []);
+
+  useEffect(() => {
+    void listPipelineScans(org.id)
+      .then((response) => {
+        setHistory(response.data);
+        setHistoryTotal(response.total);
+      })
+      .catch(() => {
+        setHistory([]);
+      });
+  }, [org.id, result]);
 
   const verdict = useMemo<PipelineVerdictConfig>(
     () => ({
@@ -599,6 +614,37 @@ export function OrgCICDTab({ org, canManageTokens }: OrgCICDTabProps) {
           </Card.Content>
         </Card>
       )}
+
+      <Card>
+        <Card.Header>
+          <Card.Title>Recent pipeline runs</Card.Title>
+          <Card.Description>
+            {historyTotal === 0
+              ? 'No pipeline-triggered scans have been recorded yet.'
+              : `${historyTotal} pipeline-triggered scan${historyTotal === 1 ? '' : 's'} in this organization.`}
+          </Card.Description>
+        </Card.Header>
+        <Card.Content>
+          {history.length === 0 ? (
+            <p className="text-sm text-muted">Run a verification scan or install a template to create history.</p>
+          ) : (
+            <div className="divide-y divide-divider rounded-2xl border border-divider">
+              {history.map((entry) => (
+                <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{entry.scan.image_name}:{entry.scan.image_tag}</p>
+                    <p className="text-xs text-muted">{entry.source.replaceAll('_', ' ')}{entry.external_ref ? ` · ${entry.external_ref}` : ''}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Chip size="sm" variant="soft">{entry.scan.status}</Chip>
+                    <Chip size="sm" color={entry.delivery_status === 'failed' ? 'danger' : entry.delivery_status === 'delivered' ? 'success' : 'default'} variant="soft">{entry.delivery_status}</Chip>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card.Content>
+      </Card>
 
       <div className="flex justify-between">
         <Button

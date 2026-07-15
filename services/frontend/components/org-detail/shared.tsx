@@ -11,7 +11,10 @@ import { OrgPolicy, OrgRiskScore, Scan, TrendPoint } from '@/lib/api';
 import { Card } from '@heroui/react';
 
 export type OrgScanItem = Scan & {
-  compliance: { policy_id: string; policy_name: string; status: string }[];
+  compliance: { policy_id: string; policy_name: string; status: string; evaluated_at?: string }[];
+  access_type?: 'owned' | 'shared';
+  trigger_source?: string;
+  external_ref?: string;
 };
 
 export function RulePill({ rule }: { rule: OrgPolicy['rules'][number] }) {

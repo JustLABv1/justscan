@@ -454,14 +454,14 @@ func processScan(job ScanJob, cacheDir string) {
 		return
 	}
 	recordScanStepOutput(context.Background(), db, scanID, fmt.Sprintf("Scan completed with %d total findings.", len(vulns)+len(osvVulns)))
-	recordScanStepOutput(context.Background(), db, scanID, "Queued org auto-assignment, compliance evaluation, auto-tagging, and completion notifications.")
+	recordScanStepOutput(context.Background(), db, scanID, "Queued compliance evaluation, auto-tagging, and completion notifications.")
 
 	log.Infof("Worker: scan %s completed — CRIT:%d HIGH:%d MED:%d LOW:%d UNK:%d",
 		scanID,
 		scan.CriticalCount, scan.HighCount, scan.MediumCount, scan.LowCount, scan.UnknownCount)
 
-	// Auto-assign to orgs by image pattern, then run compliance checks
-	go compliance.AutoAssignOrgs(db, scan.ImageName, scan.ImageTag, scanID)
+	// Evaluate compliance for explicit organization grants only.
+	go compliance.RunForScan(db, scanID)
 
 	// Apply auto-tag rules based on image name/tag patterns
 	go applyAutoTags(db, scan)

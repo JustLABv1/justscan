@@ -1,7 +1,6 @@
 @import 'tailwindcss';
 @import '@heroui/styles';
 @import 'tw-animate-css';
-@import 'shadcn/tailwind.css';
 
 @layer components {
   .tabs__list-container__scroll-prev,

@@ -1,8 +1,9 @@
 'use client';
 
 import { FormAlert } from '@/components/ui/form-alert';
+import { PageHeader } from '@/components/ui/page-header';
 import { acceptOrgInviteByToken } from '@/lib/api';
-import { Button, buttonVariants } from '@heroui/react';
+import { Button, Card, buttonVariants } from '@heroui/react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -28,15 +29,17 @@ export default function AcceptOrgInvitePage() {
   }
 
   return (
-    <div className="p-6 space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Organization Invite</h1>
-        <p className="text-sm text-zinc-500 mt-1">Accept this invite to join the organization in your signed-in account.</p>
-      </div>
+    <div className="space-y-5 px-4 py-6 md:px-6 xl:py-7">
+      <PageHeader
+        title="Organization invite"
+        description="Accept this invite to join the organization in your signed-in account."
+        breadcrumbs={[{ label: 'Organizations', href: '/orgs' }, { label: 'Invite' }]}
+      />
 
       {error ? <FormAlert title="Invite acceptance failed" description={error} /> : null}
 
-      <div className="surface-panel rounded-2xl p-6 space-y-4">
+      <Card>
+        <Card.Content className="space-y-4 p-6">
         {accepted ? (
           <>
             <p className="text-sm text-zinc-600 dark:text-zinc-300">
@@ -62,7 +65,8 @@ export default function AcceptOrgInvitePage() {
             </div>
           </>
         )}
-      </div>
+        </Card.Content>
+      </Card>
     </div>
   );
 }

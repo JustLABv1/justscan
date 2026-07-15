@@ -36,6 +36,7 @@ import { timeAgo } from '@/lib/time';
 import {
   Alert,
   Button,
+  buttonVariants,
   Card,
   Checkbox,
   Chip,
@@ -65,7 +66,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-type Step = 'input' | 'preview';
+type Step = 'input' | 'images' | 'configure';
+
+const HELM_CREATION_STEPS: { key: Step; label: string }[] = [
+  { key: 'input', label: 'Chart' },
+  { key: 'images', label: 'Review images' },
+  { key: 'configure', label: 'Configure & queue' },
+];
 
 const PLATFORMS = [
   { id: '__auto__', label: 'Auto-detect' },
@@ -98,7 +105,7 @@ type HelmRunHistorySortKey =
 
 const HELM_RUN_HISTORY_PAGE_SIZE = 10;
 
-export default function HelmPage() {
+export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }) {
   const router = useRouter();
   const toast = useToast();
   const workScope = useWorkScope();
@@ -119,7 +126,7 @@ export default function HelmPage() {
   const [registryId, setRegistryId] = useState('');
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
-  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(
+  const [capabilities, setCapabilities] = useState<ScannerCapabilities>(() =>
     getDefaultScannerCapabilities()
   );
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
@@ -229,7 +236,7 @@ export default function HelmPage() {
       setExtracted({ ...result, images });
       setEditableImages(nextImages);
       setSelected(new Set(nextImages.map((img) => img.id)));
-      setStep('preview');
+      setStep('images');
     } catch (err: unknown) {
       setExtractError(err instanceof Error ? err.message : 'Extraction failed');
     } finally {
@@ -374,24 +381,38 @@ export default function HelmPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-5 px-4 py-6 md:px-6 xl:py-7">
       <PageHeader
-        title="Helm Scan Runs"
-        description="Queue a chart run once, keep it as a first-class record, and drill into the child scans by run ID."
-        breadcrumbs={[{ label: 'Helm' }]}
+        title={mode === 'new' ? 'New Helm scan' : 'Helm runs'}
+        description={
+          mode === 'new'
+            ? 'Extract images from a chart, review them, then configure and queue the run.'
+            : 'Review chart scan runs, investigate results, and return to the exact set of images that was queued.'
+        }
+        breadcrumbs={mode === 'new' ? [{ label: 'Helm', href: '/helm' }, { label: 'New scan' }] : undefined}
         actions={
-          <Button
-            type="button"
-            variant="secondary"
-            onPress={loadHistory}
-            isDisabled={historyLoading}
-          >
-            <Refresh01Icon size={14} className={historyLoading ? 'animate-spin' : ''} />
-            Refresh history
-          </Button>
+          mode === 'new' ? (
+            <Link className={buttonVariants({ variant: 'secondary' })} href="/helm">
+              <ArrowLeft01Icon size={14} />
+              Back to runs
+            </Link>
+          ) : (
+            <>
+              <Link className={buttonVariants({ variant: 'primary' })} href="/helm/new">
+                <PackageIcon size={15} />
+                New Helm scan
+              </Link>
+              <Button type="button" variant="secondary" onPress={loadHistory} isDisabled={historyLoading}>
+                <Refresh01Icon size={14} className={historyLoading ? 'animate-spin' : ''} />
+                Refresh
+              </Button>
+            </>
+          )
         }
       />
 
+      {mode === 'new' ? (
+        <>
       <StepBar current={step} />
 
       {step === 'input' && (
@@ -484,20 +505,10 @@ export default function HelmPage() {
         </Card>
       )}
 
-      {step === 'input' && (
-        <HelmRunHistory
-          runs={helmRuns}
-          isAdmin={isAdmin}
-          loading={historyLoading}
-          actionRunId={historyActionRunId}
-          onDeleteRun={deleteHelmRun}
-          onShareRun={(run) => shareHelmRun(run)}
-          onCopyShareLink={(run) => shareHelmRun(run, true)}
-        />
-      )}
-
-      {step === 'preview' && extracted && (
+      {(step === 'images' || step === 'configure') && extracted && (
         <div className="space-y-4">
+          {step === 'configure' ? (
+          <>
           <Card>
             <Card.Content className="grid w-full gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
               <div className="min-w-0">
@@ -649,7 +660,11 @@ export default function HelmPage() {
               </Switch>
             </Card.Content>
           </Card>
+          </>
+          ) : null}
 
+          {step === 'images' ? (
+          <>
           <Table>
             <Table.ScrollContainer>
               <Table.Content aria-label="Extracted Helm images" className="min-w-[840px]">
@@ -733,7 +748,9 @@ export default function HelmPage() {
             Override any extracted image reference before queueing. The selected rows will use the
             edited values.
           </p>
-          {orgFeatureBlockMessage ? (
+          </>
+          ) : null}
+          {step === 'configure' && orgFeatureBlockMessage ? (
             <Alert status="warning">
               <Alert.Indicator />
               <Alert.Content>
@@ -744,27 +761,54 @@ export default function HelmPage() {
           ) : null}
 
           <div className="flex items-center justify-between gap-4 pt-1">
-            <Button type="button" variant="secondary" onPress={() => setStep('input')}>
+            <Button type="button" variant="secondary" onPress={() => setStep(step === 'images' ? 'input' : 'images')}>
               <ArrowLeft01Icon size={14} />
               Back
             </Button>
-            <Button
-              type="button"
-              variant="primary"
-              onPress={handleScan}
-              isDisabled={
-                scanning || selected.size === 0 || hasInvalidSelection || xrayOnlyWithoutRegistries || Boolean(orgFeatureBlockMessage)
-              }
-              isPending={scanning}
-            >
-              Queue {selected.size} selected image{selected.size !== 1 ? 's' : ''}
-            </Button>
+            {step === 'images' ? (
+              <Button
+                type="button"
+                variant="primary"
+                onPress={() => setStep('configure')}
+                isDisabled={selected.size === 0 || hasInvalidSelection}
+              >
+                Continue to configuration
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                onPress={handleScan}
+                isDisabled={
+                  scanning || selected.size === 0 || hasInvalidSelection || xrayOnlyWithoutRegistries || Boolean(orgFeatureBlockMessage)
+                }
+                isPending={scanning}
+              >
+                Queue {selected.size} selected image{selected.size !== 1 ? 's' : ''}
+              </Button>
+            )}
           </div>
         </div>
+      )}
+        </>
+      ) : (
+        <HelmRunHistory
+          runs={helmRuns}
+          isAdmin={isAdmin}
+          loading={historyLoading}
+          actionRunId={historyActionRunId}
+          onDeleteRun={deleteHelmRun}
+          onShareRun={(run) => shareHelmRun(run)}
+          onCopyShareLink={(run) => shareHelmRun(run, true)}
+        />
       )}
       {confirmDialog}
     </div>
   );
+}
+
+export default function HelmPage() {
+  return <HelmWorkspace />;
 }
 
 function statusColor(status: string): 'default' | 'success' | 'warning' | 'danger' | 'accent' {
@@ -1191,15 +1235,11 @@ function HelmRunHistory({
 }
 
 function StepBar({ current }: { current: Step }) {
-  const steps: { key: Step; label: string }[] = [
-    { key: 'input', label: 'Chart' },
-    { key: 'preview', label: 'Review Images' },
-  ];
-  const idx = steps.findIndex((step) => step.key === current);
+  const idx = HELM_CREATION_STEPS.findIndex((step) => step.key === current);
 
   return (
     <div className="flex items-center gap-2">
-      {steps.map((step, index) => (
+      {HELM_CREATION_STEPS.map((step, index) => (
         <div key={step.key} className="flex items-center gap-2">
           <Chip
             color={index <= idx ? 'accent' : 'default'}
@@ -1207,7 +1247,7 @@ function StepBar({ current }: { current: Step }) {
           >
             {index + 1}. {step.label}
           </Chip>
-          {index < steps.length - 1 && <div className="h-px w-8 bg-border" />}
+          {index < HELM_CREATION_STEPS.length - 1 && <div className="h-px w-8 bg-border" />}
         </div>
       ))}
     </div>

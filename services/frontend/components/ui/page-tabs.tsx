@@ -31,13 +31,13 @@ export function PageTabs({ items, currentPath }: PageTabsProps) {
   }, undefined);
 
   return (
-    <Tabs className="w-full" selectedKey={activeHref ?? items[0].href} variant="primary">
-      <Tabs.ListContainer className="overflow-x-auto">
+    <Tabs className="w-full" selectedKey={activeHref ?? items[0].href} variant="secondary">
+      <Tabs.ListContainer className="border-b border-divider overflow-x-auto">
         <Tabs.List
           aria-label="Section navigation"
           className={cn(
-            'w-full min-w-max gap-1 rounded-2xl border border-divider/70 bg-content1/70 p-1',
-            '*:min-h-0 *:rounded-xl *:px-4 *:py-2.5 *:text-left *:text-sm *:font-medium *:transition-colors'
+            'w-full min-w-max gap-1',
+            '*:min-h-0 *:px-3 *:py-2.5 *:text-left *:text-sm *:font-medium'
           )}
         >
           {items.map((item) => (

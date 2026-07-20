@@ -71,7 +71,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 const LOCAL_PROGRESS_STEPS: StepDefinition[] = [
   {
     key: 'queued',
-    title: 'Queued',
+    title: 'Queued in JustScan',
     description: 'Waiting for a scanner worker and free execution capacity.',
     detailMessages: [
       'The scan request is queued and waiting for the next available worker.',
@@ -119,11 +119,11 @@ const LOCAL_PROGRESS_STEPS: StepDefinition[] = [
 const XRAY_PROGRESS_STEPS: StepDefinition[] = [
   {
     key: 'queued',
-    title: 'Queued',
-    description: 'Scan request accepted and waiting for the external pipeline to start.',
+    title: 'Queued in JustScan',
+    description: 'Waiting for a JustScan worker before the scan can be submitted to Artifactory Xray.',
     detailMessages: [
-      'The external scan request has been accepted and is waiting for the provider pipeline.',
-      'JustScan has queued the scan and is waiting for the external provider to begin work.',
+      'JustScan has accepted the scan and is waiting for a local worker to start the Xray handoff.',
+      'Xray has not received the artifact scan request yet.',
     ],
   },
   {
@@ -369,9 +369,9 @@ function buildRuntimeWarning(
     return {
       title: 'Still waiting for execution capacity',
       detail:
-        scanProvider === 'artifactory_xray'
-          ? 'The request is accepted, but the provider has not started the next execution phase yet.'
-          : 'The request is accepted, but a local scanner worker has not started the next execution phase yet.',
+        activeKey === 'queued_in_xray'
+          ? 'The artifact scan was submitted to Xray, which has not started the next execution phase yet.'
+          : 'The request is accepted, but a JustScan worker has not started the handoff yet.',
     };
   }
 
@@ -531,7 +531,7 @@ type PipelineStepRuntime = StepView & {
 };
 
 function scanStatusLabel(status: string): string {
-  if (status === 'pending') return 'Queued';
+  if (status === 'pending') return 'Queued in JustScan';
   if (status === 'running') return 'Running';
   return titleCaseStep(status);
 }
@@ -739,9 +739,11 @@ function activeRuntimeStep(
 function resolveTimelinePipelineSteps({
   orderedLogs,
   completedAt,
+  now,
 }: {
   orderedLogs: ScanStepLog[];
   completedAt?: string | null;
+  now: number;
 }): PipelineStepRuntime[] {
   return orderedLogs.map((stepLog, index) => {
     const definition = describeStep(stepLog.step);
@@ -749,12 +751,21 @@ function resolveTimelinePipelineSteps({
     const durationMs = resolvedEnd
       ? Math.max(0, new Date(resolvedEnd).getTime() - new Date(stepLog.started_at).getTime())
       : null;
+    const activeDurationSeconds =
+      durationMs === null
+        ? Math.max(0, Math.floor((now - new Date(stepLog.started_at).getTime()) / 1000))
+        : null;
 
     return {
       ...definition,
       runtimeId: stepLog.id,
       state: resolvedEnd ? 'complete' : 'active',
-      durationLabel: durationMs !== null ? formatDuration(durationMs) : 'Running',
+      durationLabel:
+        durationMs !== null
+          ? formatDuration(durationMs)
+          : activeDurationSeconds !== null
+            ? formatElapsed(activeDurationSeconds)
+            : 'Starting',
       output: stepLog.output,
       startedAt: stepLog.started_at,
       completedAt: resolvedEnd,
@@ -1117,11 +1128,18 @@ export function ScanStepTimeline({
   scanId?: string | null;
 }) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const [now, setNow] = useState(0);
   const xrayDebugModal = useOverlayState();
   const [xrayLogs, setXrayLogs] = useState<XRayRequestLog[]>([]);
   const [xrayLogsLoading, setXrayLogsLoading] = useState(false);
   const [xrayLogsError, setXrayLogsError] = useState<string | null>(null);
   const [selectedXrayLogID, setSelectedXrayLogID] = useState<string | null>(null);
+
+  useEffect(() => {
+    const clock = window.setInterval(() => setNow(new Date().getTime()), 1000);
+    return () => window.clearInterval(clock);
+  }, []);
+
   const orderedLogs = orderStepLogs(stepLogs);
 
   if (orderedLogs.length === 0) {
@@ -1140,7 +1158,7 @@ export function ScanStepTimeline({
   const blockedByPolicy = isBlockedXrayPolicy(externalStatus, scanProvider);
   const recoveredBlockedSummary = blockedByPolicy && hasRecoveredBlockedSummary(orderedLogs);
   const effectiveStatus = effectiveTimelineStatus(status, externalStatus);
-  const timelineSteps = resolveTimelinePipelineSteps({ orderedLogs, completedAt });
+  const timelineSteps = resolveTimelinePipelineSteps({ orderedLogs, completedAt, now });
   const canShowXrayDebug = scanProvider === 'artifactory_xray' && Boolean(scanId);
   const resolvedSelectedStepId =
     selectedStepId && orderedLogs.some((stepLog) => stepLog.id === selectedStepId)

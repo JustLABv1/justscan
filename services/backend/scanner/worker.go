@@ -33,6 +33,18 @@ type ScanJob struct {
 
 var jobQueue chan ScanJob
 
+// WorkerConcurrency returns the instance-wide number of shared scan workers.
+func WorkerConcurrency() int {
+	if config.Config == nil {
+		return 2
+	}
+	concurrency := config.Config.Scanner.Concurrency
+	if concurrency <= 0 {
+		return 2
+	}
+	return concurrency
+}
+
 // cancelMap stores cancel functions for in-progress scans so they can be interrupted.
 var (
 	cancelMap = make(map[uuid.UUID]context.CancelFunc)
@@ -54,10 +66,7 @@ func CancelScan(scanID uuid.UUID) bool {
 
 // InitWorker initializes the scan worker pool and starts it
 func InitWorker(db *bun.DB) {
-	concurrency := config.Config.Scanner.Concurrency
-	if concurrency <= 0 {
-		concurrency = 2
-	}
+	concurrency := WorkerConcurrency()
 
 	jobQueue = make(chan ScanJob, 64)
 

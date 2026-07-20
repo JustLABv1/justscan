@@ -38,19 +38,7 @@ func DispatchScan(_ context.Context, db *bun.DB, scan *models.Scan, envVars []st
 		}
 		return EnqueueScan(scan.ID, db, envVars, platform, archivePath)
 	case models.ScanProviderArtifactoryXray:
-		scan.ExternalStatus = "queued"
 		scan.CurrentStep = models.ScanStepQueued
-		if scan.ID != uuid.Nil {
-			now := time.Now()
-			if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
-				Set("external_status = ?", scan.ExternalStatus).
-				Set("current_step = ?", scan.CurrentStep).
-				Set("last_progress_at = ?", now).
-				Where("id = ?", scan.ID).
-				Exec(context.Background()); err != nil {
-				return fmt.Errorf("failed to persist external status for scan %s: %w", scan.ID, err)
-			}
-		}
 		return EnqueueScan(scan.ID, db, envVars, platform, "")
 	default:
 		return fmt.Errorf("unsupported scan provider %q", provider)

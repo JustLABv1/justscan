@@ -22,9 +22,9 @@ type WorkerHealth struct {
 }
 
 type HealthReport struct {
-	LocalScannerEnabled bool           `json:"local_scanner_enabled"`
-	GrypeEnabled        bool           `json:"grype_enabled"`
-	Message             string         `json:"message,omitempty"`
+	LocalScannerEnabled  bool           `json:"local_scanner_enabled"`
+	GrypeEnabled         bool           `json:"grype_enabled"`
+	Message              string         `json:"message,omitempty"`
 	GeneratedAt          time.Time      `json:"generated_at"`
 	CacheRoot            string         `json:"cache_root"`
 	MaxAllowedAgeHours   int            `json:"max_allowed_age_hours"`
@@ -38,19 +38,16 @@ type HealthReport struct {
 }
 
 func GetHealthReport(ctx context.Context) HealthReport {
-	concurrency := config.Config.Scanner.Concurrency
-	if concurrency <= 0 {
-		concurrency = 2
-	}
+	concurrency := WorkerConcurrency()
 
 	report := HealthReport{
 		LocalScannerEnabled: TrivyEnabled(),
 		GrypeEnabled:        GrypeEnabled(),
-		GeneratedAt:        time.Now().UTC(),
-		CacheRoot:          trivyCacheRoot(),
-		MaxAllowedAgeHours: config.Config.Scanner.DBMaxAgeHours,
-		TotalWorkers:       concurrency,
-		Workers:            make([]WorkerHealth, 0, concurrency),
+		GeneratedAt:         time.Now().UTC(),
+		CacheRoot:           trivyCacheRoot(),
+		MaxAllowedAgeHours:  config.Config.Scanner.DBMaxAgeHours,
+		TotalWorkers:        concurrency,
+		Workers:             make([]WorkerHealth, 0, concurrency),
 	}
 	if report.MaxAllowedAgeHours <= 0 {
 		report.MaxAllowedAgeHours = 24

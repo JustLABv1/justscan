@@ -466,19 +466,19 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIndexError(repoPath, err))
 	}
 
-	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "queued", models.ScanStepQueuedInXray); err != nil {
-		return err
-	}
-	scan.ExternalStatus = "queued"
-	scan.CurrentStep = models.ScanStepQueuedInXray
-	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Submitted the artifact scan request for component %s.", componentID))
-
 	if err := client.scanArtifact(ctx, componentID); err != nil {
 		if !isNonFatalXrayScanArtifactError(err) {
 			return fmt.Errorf("failed to trigger a fresh xray scanArtifact run for %s: %w", componentID, err)
 		}
 		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayScanArtifactError(componentID, err))
 	}
+
+	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "queued", models.ScanStepQueuedInXray); err != nil {
+		return err
+	}
+	scan.ExternalStatus = "queued"
+	scan.CurrentStep = models.ScanStepQueuedInXray
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Submitted the artifact scan request for component %s.", componentID))
 
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Waiting %s before polling Xray summary so we import from the active scan run.", xrayFreshScanSettleDelay))
 	select {

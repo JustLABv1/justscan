@@ -337,7 +337,11 @@ function ArtifactHistoryRows({
             </Table.Cell>
             <Table.Cell>
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+                <StatusBadge
+                  currentStep={scan.current_step}
+                  status={scan.status}
+                  externalStatus={scan.external_status}
+                />
                 <PolicyFailureChip summary={scan.compliance_summary} />
               </div>
               <p className="mt-1 text-xs text-zinc-500" title={fullDate(scan.created_at)}>
@@ -661,6 +665,7 @@ export function ArtifactScansTable({
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <StatusBadge
+                              currentStep={artifact.latest_current_step}
                               status={artifact.latest_status}
                               externalStatus={artifact.latest_external_status}
                             />
@@ -759,8 +764,7 @@ export function ArtifactScansTable({
                                       id: 'share-workspace',
                                       label: 'Share with workspace',
                                       icon: <Shield01Icon size={14} aria-hidden />,
-                                      onAction: () =>
-                                        onShareToWorkspace([artifact.latest_scan_id]),
+                                      onAction: () => onShareToWorkspace([artifact.latest_scan_id]),
                                     },
                                     {
                                       id: 'transfer-workspace',

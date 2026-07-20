@@ -38,10 +38,7 @@ function SemanticBadge({
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
         <span
           aria-hidden
-          className={cn(
-            'size-1.5 rounded-full bg-current',
-            animated ? 'animate-pulse' : undefined
-          )}
+          className={cn('size-1.5 rounded-full bg-current', animated ? 'animate-pulse' : undefined)}
         />
         {label}
       </span>
@@ -62,10 +59,11 @@ const STATUS_CONFIG: Record<string, BadgeConfig> = {
   completed: { tone: 'success' },
   failed: { tone: 'danger' },
   running: { tone: 'accent', animated: true },
-  pending: { tone: 'default', label: 'queued' },
+  pending: { tone: 'default', label: 'queued in JustScan', animated: true },
   cancelled: { tone: 'warning' },
   warming_cache: { tone: 'accent', label: 'warming cache', animated: true },
   indexing_artifact: { tone: 'warning', label: 'indexing artifact', animated: true },
+  queued_in_justscan: { tone: 'default', label: 'queued in JustScan', animated: true },
   queued_in_xray: { tone: 'accent', label: 'queued in xray', animated: true },
   blocked_by_xray_policy: { tone: 'warning', label: 'blocked by xray policy' },
   waiting_for_xray: { tone: 'warning', label: 'waiting for xray', animated: true },
@@ -79,7 +77,18 @@ export function normalizeStatus(status?: string) {
   return STATUS_ALIASES[status] ?? status;
 }
 
-export function resolveDisplayStatus(status: string, externalStatus?: string) {
+export function resolveDisplayStatus(
+  status: string,
+  externalStatus?: string,
+  currentStep?: string
+) {
+  if (status === 'pending' && currentStep === 'queued') {
+    return 'queued_in_justscan';
+  }
+  if (currentStep === 'queued_in_xray') {
+    return 'queued_in_xray';
+  }
+
   const normalizedStatus = normalizeStatus(status);
   const normalizedExternalStatus = normalizeStatus(externalStatus);
 
@@ -105,6 +114,7 @@ export function formatStatusLabel(status: string) {
     waiting_for_xray: 'waiting for xray',
     warming_cache: 'warming cache',
     indexing_artifact: 'indexing artifact',
+    queued_in_justscan: 'queued in JustScan',
     queued_in_xray: 'queued in xray',
   };
 
@@ -114,11 +124,13 @@ export function formatStatusLabel(status: string) {
 export function StatusBadge({
   status,
   externalStatus,
+  currentStep,
 }: {
   status: string;
   externalStatus?: string;
+  currentStep?: string;
 }) {
-  const effectiveStatus = resolveDisplayStatus(status, externalStatus);
+  const effectiveStatus = resolveDisplayStatus(status, externalStatus, currentStep);
   const config = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.pending;
 
   return (

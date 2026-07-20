@@ -27,6 +27,7 @@ import {
   deleteCollection,
   deleteScan,
   getTokenType,
+  getScanQueueSummary,
   ArtifactFilterOptions,
   ArtifactSummary,
   bulkGrantScansToOrg,
@@ -39,6 +40,7 @@ import {
   listTags,
   reScan,
   Scan,
+  ScanQueueSummary,
   Tag,
   updateCollection,
 } from '@/lib/api';
@@ -87,7 +89,7 @@ const STATUS_FILTER_OPTIONS = [
   { id: '', label: 'All latest states' },
   { id: 'failed', label: 'Failed' },
   { id: 'blocked_by_xray_policy', label: 'Blocked by Xray Policy' },
-  { id: 'pending', label: 'Pending' },
+  { id: 'pending', label: 'Queued in JustScan' },
   { id: 'running', label: 'Running' },
   { id: 'waiting_for_xray', label: 'Waiting for Xray' },
   { id: 'warming_artifactory_cache', label: 'Warming Artifactory Cache' },
@@ -286,9 +288,7 @@ const ScansSearchField = memo(function ScansSearchField({
         <SearchField.SearchIcon />
         <SearchField.Input
           placeholder={
-            hasRecentWindow
-              ? 'Filter recent activity by image or tag…'
-              : 'Search image or tag…'
+            hasRecentWindow ? 'Filter recent activity by image or tag…' : 'Search image or tag…'
           }
         />
         <SearchField.ClearButton />
@@ -401,9 +401,15 @@ export default function ScansPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSizesByWorkspace, setPageSizesByWorkspace] = useState<Record<string, number>>({});
-  const pageSize = pageSizesByWorkspace[savedPageSizeStorageKey] ?? readSavedPageSize(savedPageSizeStorageKey);
+  const pageSize =
+    pageSizesByWorkspace[savedPageSizeStorageKey] ?? readSavedPageSize(savedPageSizeStorageKey);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [queueSummary, setQueueSummary] = useState<ScanQueueSummary>({
+    queued_in_justscan: 0,
+    active: 0,
+    worker_capacity: 0,
+  });
 
   const [appliedImageFilter, setAppliedImageFilter] = useState(initialViewState.image);
   const [statusFilter, setStatusFilter] = useState(initialViewState.status);
@@ -414,9 +420,7 @@ export default function ScansPage() {
   const [criticalFilter, setCriticalFilter] = useState<'' | 'yes' | 'no'>(
     initialViewState.critical
   );
-  const [orgPolicyFilter, setOrgPolicyFilter] = useState<OrgPolicyFilter>(
-    initialViewState.policy
-  );
+  const [orgPolicyFilter, setOrgPolicyFilter] = useState<OrgPolicyFilter>(initialViewState.policy);
   const [artifactFilterOptions, setArtifactFilterOptions] = useState<ArtifactFilterOptions>({
     statuses: [],
     collection_ids: [],
@@ -454,6 +458,13 @@ export default function ScansPage() {
   const isPlatformAdmin = getTokenType() === 'admin';
   const hasRecentWindow = activityRange !== '';
   const resolvedActivityRange = activityRange || DEFAULT_ACTIVITY_RANGE;
+  const loadQueueSummary = useCallback(async () => {
+    try {
+      setQueueSummary(await getScanQueueSummary());
+    } catch {
+      // Queue capacity is supplementary; keep the scan list usable when unavailable.
+    }
+  }, []);
 
   const loadImages = useCallback(
     async (
@@ -584,6 +595,12 @@ export default function ScansPage() {
 
   useEffect(() => {
     return deferEffect(() => {
+      void loadQueueSummary();
+    });
+  }, [loadQueueSummary, scopeKey]);
+
+  useEffect(() => {
+    return deferEffect(() => {
       const nextViewState = readScansViewFromSearchParams(searchParams);
       const currentViewState: ScansViewState = {
         image: appliedImageFilter,
@@ -674,7 +691,9 @@ export default function ScansPage() {
   }, [scopeKey]);
 
   useEffect(() => {
-    listOrgs().then(setWorkspaceOrgs).catch(() => setWorkspaceOrgs([]));
+    listOrgs()
+      .then(setWorkspaceOrgs)
+      .catch(() => setWorkspaceOrgs([]));
   }, [scopeKey]);
 
   useEffect(() => {
@@ -730,17 +749,11 @@ export default function ScansPage() {
 
   const refreshCurrentView = useCallback(
     (options?: { silent?: boolean }) => {
-      if (hasRecentWindow) {
-        return loadActivity(
-          page,
-          appliedImageFilter,
-          resolvedActivityRange,
-          collectionFilter,
-          options
-        );
-      }
+      const loadView = hasRecentWindow
+        ? loadActivity(page, appliedImageFilter, resolvedActivityRange, collectionFilter, options)
+        : loadImages(page, appliedImageFilter, statusFilter, collectionFilter, options);
 
-      return loadImages(page, appliedImageFilter, statusFilter, collectionFilter, options);
+      return Promise.all([loadView, loadQueueSummary()]);
     },
     [
       collectionFilter,
@@ -748,6 +761,7 @@ export default function ScansPage() {
       hasRecentWindow,
       loadActivity,
       loadImages,
+      loadQueueSummary,
       page,
       resolvedActivityRange,
       statusFilter,
@@ -758,11 +772,14 @@ export default function ScansPage() {
     () => {
       void refreshCurrentView({ silent: true });
     },
-    hasRecentWindow
-      ? activityScans.some((scan) => scan.status === 'running' || scan.status === 'pending')
-      : artifacts.some(
-          (artifact) => artifact.latest_status === 'running' || artifact.latest_status === 'pending'
-        ),
+    queueSummary.queued_in_justscan > 0 ||
+      queueSummary.active > 0 ||
+      (hasRecentWindow
+        ? activityScans.some((scan) => scan.status === 'running' || scan.status === 'pending')
+        : artifacts.some(
+            (artifact) =>
+              artifact.latest_status === 'running' || artifact.latest_status === 'pending'
+          )),
     5000
   );
 
@@ -925,13 +942,17 @@ export default function ScansPage() {
     try {
       if (workspaceAction === 'share') {
         await bulkGrantScansToOrg(workspaceTarget, workspaceScanIds);
-        toast.success(`Shared ${workspaceScanIds.length} scan${workspaceScanIds.length === 1 ? '' : 's'} with workspace`);
+        toast.success(
+          `Shared ${workspaceScanIds.length} scan${workspaceScanIds.length === 1 ? '' : 's'} with workspace`
+        );
       } else {
         await bulkTransferScansOwnership(
           workspaceScanIds,
           workspaceTarget === 'user' ? { type: 'user' } : { type: 'org', orgId: workspaceTarget }
         );
-        toast.success(`Transferred ${workspaceScanIds.length} scan${workspaceScanIds.length === 1 ? '' : 's'} to workspace`);
+        toast.success(
+          `Transferred ${workspaceScanIds.length} scan${workspaceScanIds.length === 1 ? '' : 's'} to workspace`
+        );
       }
       setSelectedScans(new Set());
       workspaceModal.close();
@@ -1334,6 +1355,17 @@ export default function ScansPage() {
               ))}
             </Tabs>
             <div className="flex flex-wrap items-center justify-end gap-3">
+              <Chip
+                className="whitespace-nowrap text-xs"
+                color="default"
+                size="sm"
+                title="Queue and active scan counts are limited to this workspace. Worker capacity is shared across JustScan."
+                variant="soft"
+              >
+                JustScan: {queueSummary.queued_in_justscan} queued · {queueSummary.active} active ·{' '}
+                {queueSummary.worker_capacity} shared worker
+                {queueSummary.worker_capacity === 1 ? '' : 's'}
+              </Chip>
               <Select
                 aria-label="Rows per page"
                 className="w-[132px]"
@@ -1443,56 +1475,58 @@ export default function ScansPage() {
 
                   {showCollectionFilter ? (
                     <Select
-                    className="min-w-[200px] flex-1"
-                    value={collectionFilter || '__all__'}
-                    onChange={(value) =>
-                      handleCollectionFilterChange(String(value === '__all__' ? '' : (value ?? '')))
-                    }
-                    variant="secondary"
-                  >
-                    <Label>Collection</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        <ListBox.Item id="__all__">All collections</ListBox.Item>
-                        {availableFilterCollections.map((collection) => (
-                          <ListBox.Item key={collection.id} id={collection.id}>
-                            {collection.name}
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
+                      className="min-w-[200px] flex-1"
+                      value={collectionFilter || '__all__'}
+                      onChange={(value) =>
+                        handleCollectionFilterChange(
+                          String(value === '__all__' ? '' : (value ?? ''))
+                        )
+                      }
+                      variant="secondary"
+                    >
+                      <Label>Collection</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__all__">All collections</ListBox.Item>
+                          {availableFilterCollections.map((collection) => (
+                            <ListBox.Item key={collection.id} id={collection.id}>
+                              {collection.name}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
                     </Select>
                   ) : null}
 
                   {showCriticalFilter ? (
                     <Select
-                    className="min-w-[180px] flex-1"
-                    value={criticalFilter || '__all__'}
-                    onChange={(value) =>
-                      handleCriticalFilterChange(
-                        (value === '__all__' ? '' : (value ?? '')) as '' | 'yes' | 'no'
-                      )
-                    }
-                    variant="secondary"
-                  >
-                    <Label>Critical findings</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {CRITICAL_FILTER_OPTIONS.map((option) => (
-                          <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>
-                            {option.label}
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
+                      className="min-w-[180px] flex-1"
+                      value={criticalFilter || '__all__'}
+                      onChange={(value) =>
+                        handleCriticalFilterChange(
+                          (value === '__all__' ? '' : (value ?? '')) as '' | 'yes' | 'no'
+                        )
+                      }
+                      variant="secondary"
+                    >
+                      <Label>Critical findings</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {CRITICAL_FILTER_OPTIONS.map((option) => (
+                            <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>
+                              {option.label}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
                     </Select>
                   ) : null}
 
@@ -1565,11 +1599,7 @@ export default function ScansPage() {
                 <FileExportIcon size={14} aria-hidden />
                 Generate report
               </Button>
-              <Button
-                isDisabled={bulkRetrying}
-                isPending={bulkRetrying}
-                onPress={handleBulkRetry}
-              >
+              <Button isDisabled={bulkRetrying} isPending={bulkRetrying} onPress={handleBulkRetry}>
                 <ButtonGroup.Separator />
                 <Refresh01Icon size={14} aria-hidden />
                 Retry selected
@@ -1586,87 +1616,87 @@ export default function ScansPage() {
                   <Tag01Icon size={14} aria-hidden />
                   Add tag
                 </Button>
-              <Popover.Content className="rounded-xl min-w-[160px]" placement="bottom end">
-                <Popover.Dialog className="p-1">
-                  {availableTags.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-zinc-500">No tags created yet</div>
-                  ) : (
-                    <ListBox
-                      onAction={(key) => {
-                        handleBulkAddTag(String(key));
-                      }}
-                    >
-                      {availableTags.map((tag) => (
-                        <ListBox.Item
-                          key={tag.id}
-                          id={tag.id}
-                          className="px-3 py-1.5 text-sm rounded-lg cursor-pointer flex items-center gap-2"
-                        >
-                          <span
-                            className="size-2.5 rounded-full shrink-0"
-                            style={{ background: tag.color }}
-                          />
-                          {tag.name}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  )}
-                </Popover.Dialog>
-              </Popover.Content>
+                <Popover.Content className="rounded-xl min-w-[160px]" placement="bottom end">
+                  <Popover.Dialog className="p-1">
+                    {availableTags.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-zinc-500">No tags created yet</div>
+                    ) : (
+                      <ListBox
+                        onAction={(key) => {
+                          handleBulkAddTag(String(key));
+                        }}
+                      >
+                        {availableTags.map((tag) => (
+                          <ListBox.Item
+                            key={tag.id}
+                            id={tag.id}
+                            className="px-3 py-1.5 text-sm rounded-lg cursor-pointer flex items-center gap-2"
+                          >
+                            <span
+                              className="size-2.5 rounded-full shrink-0"
+                              style={{ background: tag.color }}
+                            />
+                            {tag.name}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    )}
+                  </Popover.Dialog>
+                </Popover.Content>
               </Popover>
               <Popover>
                 <Button size="sm" variant="tertiary">
                   <FolderLibraryIcon size={14} aria-hidden />
                   Add collection
                 </Button>
-              <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
-                <Popover.Dialog className="p-1">
-                  {availableCollections.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-zinc-500">
-                      No collections created yet
-                    </div>
-                  ) : (
-                    <ListBox onAction={(key) => void handleBulkAddCollection(String(key))}>
-                      {availableCollections.map((collection) => (
-                        <ListBox.Item
-                          key={collection.id}
-                          id={collection.id}
-                          className="px-3 py-1.5 text-sm rounded-lg cursor-pointer"
-                        >
-                          {collection.name}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  )}
-                </Popover.Dialog>
-              </Popover.Content>
+                <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
+                  <Popover.Dialog className="p-1">
+                    {availableCollections.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-zinc-500">
+                        No collections created yet
+                      </div>
+                    ) : (
+                      <ListBox onAction={(key) => void handleBulkAddCollection(String(key))}>
+                        {availableCollections.map((collection) => (
+                          <ListBox.Item
+                            key={collection.id}
+                            id={collection.id}
+                            className="px-3 py-1.5 text-sm rounded-lg cursor-pointer"
+                          >
+                            {collection.name}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    )}
+                  </Popover.Dialog>
+                </Popover.Content>
               </Popover>
               <Popover>
                 <Button size="sm" variant="tertiary">
                   <FolderLibraryIcon size={14} aria-hidden />
                   Remove collection
                 </Button>
-              <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
-                <Popover.Dialog className="p-1">
-                  {availableCollections.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-zinc-500">
-                      No collections created yet
-                    </div>
-                  ) : (
-                    <ListBox onAction={(key) => void handleBulkRemoveCollection(String(key))}>
-                      {availableCollections.map((collection) => (
-                        <ListBox.Item
-                          key={collection.id}
-                          id={collection.id}
-                          className="px-3 py-1.5 text-sm rounded-lg cursor-pointer"
-                        >
-                          {collection.name}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  )}
-                </Popover.Dialog>
-              </Popover.Content>
+                <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
+                  <Popover.Dialog className="p-1">
+                    {availableCollections.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-zinc-500">
+                        No collections created yet
+                      </div>
+                    ) : (
+                      <ListBox onAction={(key) => void handleBulkRemoveCollection(String(key))}>
+                        {availableCollections.map((collection) => (
+                          <ListBox.Item
+                            key={collection.id}
+                            id={collection.id}
+                            className="px-3 py-1.5 text-sm rounded-lg cursor-pointer"
+                          >
+                            {collection.name}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    )}
+                  </Popover.Dialog>
+                </Popover.Content>
               </Popover>
             </div>
 
@@ -1792,38 +1822,41 @@ export default function ScansPage() {
             </p>
           </div>
           {totalPages > 1 ? (
-          <Pagination className="justify-center sm:justify-end" size="sm">
-            <Pagination.Content>
-              <Pagination.Item>
-                <Pagination.Previous isDisabled={page === 1} onPress={() => setPage((p) => p - 1)}>
-                  <Pagination.PreviousIcon />
-                  <span>Previous</span>
-                </Pagination.Previous>
-              </Pagination.Item>
-              {paginationItems.map((item) =>
-                typeof item === 'string' ? (
-                  <Pagination.Item key={item}>
-                    <Pagination.Ellipsis />
-                  </Pagination.Item>
-                ) : (
-                  <Pagination.Item key={item}>
-                    <Pagination.Link isActive={item === page} onPress={() => setPage(item)}>
-                      {item}
-                    </Pagination.Link>
-                  </Pagination.Item>
-                )
-              )}
-              <Pagination.Item>
-                <Pagination.Next
-                  isDisabled={page === totalPages}
-                  onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  <span>Next</span>
-                  <Pagination.NextIcon />
-                </Pagination.Next>
-              </Pagination.Item>
-            </Pagination.Content>
-          </Pagination>
+            <Pagination className="justify-center sm:justify-end" size="sm">
+              <Pagination.Content>
+                <Pagination.Item>
+                  <Pagination.Previous
+                    isDisabled={page === 1}
+                    onPress={() => setPage((p) => p - 1)}
+                  >
+                    <Pagination.PreviousIcon />
+                    <span>Previous</span>
+                  </Pagination.Previous>
+                </Pagination.Item>
+                {paginationItems.map((item) =>
+                  typeof item === 'string' ? (
+                    <Pagination.Item key={item}>
+                      <Pagination.Ellipsis />
+                    </Pagination.Item>
+                  ) : (
+                    <Pagination.Item key={item}>
+                      <Pagination.Link isActive={item === page} onPress={() => setPage(item)}>
+                        {item}
+                      </Pagination.Link>
+                    </Pagination.Item>
+                  )
+                )}
+                <Pagination.Item>
+                  <Pagination.Next
+                    isDisabled={page === totalPages}
+                    onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    <span>Next</span>
+                    <Pagination.NextIcon />
+                  </Pagination.Next>
+                </Pagination.Item>
+              </Pagination.Content>
+            </Pagination>
           ) : null}
         </div>
       ) : null}
@@ -1833,7 +1866,9 @@ export default function ScansPage() {
             <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading className="font-semibold">
-                  {workspaceAction === 'transfer' ? 'Transfer scan ownership' : 'Share scans with workspace'}
+                  {workspaceAction === 'transfer'
+                    ? 'Transfer scan ownership'
+                    : 'Share scans with workspace'}
                 </Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>

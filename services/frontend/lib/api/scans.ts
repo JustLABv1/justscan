@@ -13,6 +13,7 @@ import type {
   SBOMComponent,
   Scan,
   ScanComparison,
+  ScanQueueSummary,
   ScanShareResponse,
   ScanTrendPoint,
   SharedScanRescanResponse,
@@ -86,6 +87,13 @@ export const listScanImages = (
   if (collection) params.set('collection', collection);
   appendScope(params);
   return req<{ data: ImageSummary[]; total: number }>('GET', `/api/v1/scans/images?${params}`);
+};
+
+export const getScanQueueSummary = () => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const query = params.toString();
+  return req<ScanQueueSummary>('GET', `/api/v1/scans/queue-summary${query ? `?${query}` : ''}`);
 };
 
 export const getScan = (id: string) => req<Scan>('GET', `/api/v1/scans/${id}`);

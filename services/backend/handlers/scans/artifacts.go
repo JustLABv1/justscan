@@ -27,6 +27,7 @@ type ArtifactSummary struct {
 	LatestScanID         string                        `json:"latest_scan_id"`
 	LatestStatus         string                        `json:"latest_status"`
 	LatestExternalStatus string                        `json:"latest_external_status,omitempty"`
+	LatestCurrentStep    string                        `json:"latest_current_step,omitempty"`
 	LatestScanAt         time.Time                     `json:"latest_scan_at"`
 	OwnerType            string                        `json:"owner_type,omitempty"`
 	OwnerUserID          *uuid.UUID                    `json:"owner_user_id,omitempty"`
@@ -207,6 +208,7 @@ WITH ranked AS (
         s.id::text AS latest_scan_id,
         s.status AS latest_status,
         COALESCE(s.external_status, '') AS latest_external_status,
+        COALESCE(s.current_step, '') AS latest_current_step,
         s.created_at AS latest_scan_at,
         s.owner_type,
         s.owner_user_id,
@@ -258,6 +260,7 @@ SELECT
     l.latest_scan_id,
     l.latest_status,
     l.latest_external_status,
+    l.latest_current_step,
     l.latest_scan_at,
     l.owner_type,
     l.owner_user_id,
@@ -293,6 +296,7 @@ LIMIT ? OFFSET ?`
 				&artifact.LatestScanID,
 				&artifact.LatestStatus,
 				&artifact.LatestExternalStatus,
+				&artifact.LatestCurrentStep,
 				&artifact.LatestScanAt,
 				&artifact.OwnerType,
 				&artifact.OwnerUserID,

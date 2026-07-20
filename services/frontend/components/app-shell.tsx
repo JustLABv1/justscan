@@ -40,6 +40,8 @@ import {
   EyeIcon,
   FileExportIcon,
   GridTableIcon,
+  Key01Icon,
+  LinkSquare02Icon,
   Logout02Icon,
   Menu01Icon,
   Moon02Icon,
@@ -70,7 +72,7 @@ import {
   AIContextBridgeProvider,
   useAIContextBridge,
 } from '@/components/assistant/ai-context-bridge';
-import { ADMIN_AREAS } from '@/app/(app)/admin/_components/admin-tabs';
+import { ADMIN_AREAS, type AdminTab } from '@/app/(app)/admin/_components/admin-tabs';
 import { FloatingAIChat } from '@/components/assistant/floating-ai-chat';
 import { Logo } from '@/components/logo';
 import { SearchModal } from '@/components/search';
@@ -127,6 +129,32 @@ const navGroups = [
     ],
   },
 ];
+
+const adminItemIcons: Record<AdminTab, SidebarIcon> = {
+  overview: DashboardSquare01Icon,
+  scans: Shield01Icon,
+  scanner: ServerStack01Icon,
+  autotags: Tag01Icon,
+  users: Building04Icon,
+  organizations: Building04Icon,
+  tokens: ShieldKeyIcon,
+  identity: Key01Icon,
+  notifications: LinkSquare02Icon,
+  registries: ServerStack01Icon,
+  ai: AiContentGenerator01Icon,
+  audit: FileExportIcon,
+  insights: EyeIcon,
+  settings: Settings01Icon,
+};
+
+const adminNavigationGroups = ADMIN_AREAS.map((area) => ({
+  label: area.label,
+  items: area.tabs.map((tab) => ({
+    href: tab.href,
+    label: tab.label,
+    Icon: adminItemIcons[tab.value],
+  })),
+}));
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -207,60 +235,6 @@ function SidebarNavLink({
   );
 }
 
-function AdminNavigationMenu({
-  active,
-  mode,
-  onNavigate,
-}: {
-  active: boolean;
-  mode: 'desktop' | 'collapsed' | 'mobile';
-  onNavigate: (href: string) => void;
-}) {
-  const collapsed = mode === 'collapsed';
-
-  return (
-    <Dropdown>
-      <Dropdown.Trigger className="block w-full">
-        <Button
-          aria-label="Open admin navigation"
-          className={
-            collapsed
-              ? 'h-10 w-full justify-center rounded-xl px-0'
-              : `h-10 w-full justify-start gap-3 rounded-xl px-3 ${mode === 'mobile' ? 'h-11' : ''}`
-          }
-          fullWidth
-          isIconOnly={collapsed}
-          variant={active ? 'secondary' : 'ghost'}
-        >
-          <Settings01Icon aria-hidden size={18} className="shrink-0" />
-          {!collapsed ? <span className="min-w-0 flex-1 truncate text-left">Admin</span> : null}
-          {!collapsed ? <ArrowDown01Icon aria-hidden size={14} className="shrink-0 text-muted" /> : null}
-        </Button>
-      </Dropdown.Trigger>
-      <Dropdown.Popover
-        className="max-h-[min(34rem,80vh)] min-w-[260px] overflow-y-auto"
-        placement={mode === 'mobile' ? 'bottom end' : 'right bottom'}
-      >
-        <Dropdown.Menu onAction={(key) => onNavigate(String(key))}>
-          {ADMIN_AREAS.map((area) => (
-            <Dropdown.Section key={area.value}>
-              <Header>{area.label}</Header>
-              {area.tabs.map((tab) => (
-                <Dropdown.Item key={tab.value} id={tab.href} textValue={tab.label}>
-                  <div className="min-w-0">
-                    <Label>{tab.label}</Label>
-                    <p className="truncate text-xs text-muted">{tab.blurb}</p>
-                  </div>
-                </Dropdown.Item>
-              ))}
-            </Dropdown.Section>
-          ))}
-        </Dropdown.Menu>
-      </Dropdown.Popover>
-    </Dropdown>
-  );
-}
-
 export function AppShell({ children, initialUser }: AppShellProps) {
   return (
     <AIContextBridgeProvider>
@@ -273,6 +247,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { setRouteContext } = useAIContextBridge();
+  const isAdminRoute = pathname === '/admin' || pathname.startsWith('/admin/');
   const isAssistantRoute = pathname.startsWith('/assistant');
   const { resolvedTheme, setTheme } = useTheme();
   const [user, setUser] = useState(initialUser);
@@ -553,13 +528,15 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     workScope.kind,
     workScope.kind === 'org' ? (workScope.orgName ?? workScope.orgId) : 'personal'
   );
-  const desktopCollapsed = collapsed;
-  const navigationGroups = [
-    ...navGroups,
-    ...(user?.role === 'admin'
-      ? [{ label: 'Admin', items: [{ href: '/admin', label: 'Admin', Icon: Settings01Icon }] }]
-      : []),
-  ];
+  const desktopCollapsed = isAdminRoute ? false : collapsed;
+  const navigationGroups = isAdminRoute
+    ? adminNavigationGroups
+    : [
+        ...navGroups,
+        ...(user?.role === 'admin'
+          ? [{ label: 'Admin', items: [{ href: '/admin', label: 'Administration', Icon: Settings01Icon }] }]
+          : []),
+      ];
   const contentRailClass = 'px-4 md:px-6';
 
   function renderWorkspaceMenu() {
@@ -620,14 +597,30 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               variant="default"
             >
               <div className={`flex shrink-0 items-center gap-3 px-3 py-3 ${desktopCollapsed ? 'justify-center' : ''}`}>
-                <Link href="/dashboard" aria-label="JustScan dashboard" className="flex min-w-0 flex-1 items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                <Link
+                  href={isAdminRoute ? '/admin' : '/dashboard'}
+                  aria-label={isAdminRoute ? 'JustScan administration' : 'JustScan dashboard'}
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
                   <Logo size={36} className="shrink-0" />
-                  {!desktopCollapsed ? <span className="truncate text-base font-semibold tracking-tight">JustScan</span> : null}
+                  {!desktopCollapsed ? (
+                    <span className="truncate text-base font-semibold tracking-tight">
+                      {isAdminRoute ? 'Administration' : 'JustScan'}
+                    </span>
+                  ) : null}
                 </Link>
               </div>
 
-              <div id="tour-workspace-section" className={`shrink-0 ${desktopCollapsed ? 'px-2' : 'px-3 pb-2'}`}>
-                <Dropdown>
+              {isAdminRoute ? (
+                <div className="mx-3 mb-3 rounded-xl bg-surface-secondary px-3 py-2.5">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
+                    System scope
+                  </p>
+                  <p className="mt-0.5 text-sm font-medium">Platform control plane</p>
+                </div>
+              ) : (
+                <div id="tour-workspace-section" className={`shrink-0 ${desktopCollapsed ? 'px-2' : 'px-3 pb-2'}`}>
+                  <Dropdown>
                   <Dropdown.Trigger
                     id="tour-workspace-switcher"
                     aria-label={workspaceTitle}
@@ -649,10 +642,12 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                   <Dropdown.Popover className="min-w-[240px]" placement="right top">
                     {renderWorkspaceMenu()}
                   </Dropdown.Popover>
-                </Dropdown>
-              </div>
+                  </Dropdown>
+                </div>
+              )}
 
-              <div className={`shrink-0 ${desktopCollapsed ? 'px-2 pb-2' : 'px-3 pb-3'}`}>
+              {!isAdminRoute ? (
+                <div className={`shrink-0 ${desktopCollapsed ? 'px-2 pb-2' : 'px-3 pb-3'}`}>
                 <Tooltip isDisabled={!desktopCollapsed}>
                   <Tooltip.Trigger className="block w-full">
                     <Link
@@ -687,7 +682,8 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     </Tooltip>
                   </div>
                 ) : null}
-              </div>
+                </div>
+              ) : null}
 
               <nav
                 id="tour-primary-navigation"
@@ -712,17 +708,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     <div className="space-y-0.5">
                       {items.map(({ href, label: itemLabel, Icon }) => {
                         const active = isActiveRoute(pathname, href);
-
-                        if (href === '/admin') {
-                          return (
-                            <AdminNavigationMenu
-                              key={href}
-                              active={active}
-                              mode={desktopCollapsed ? 'collapsed' : 'desktop'}
-                              onNavigate={(adminHref) => router.push(adminHref)}
-                            />
-                          );
-                        }
 
                         if (desktopCollapsed) {
                           return (
@@ -761,6 +746,19 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                 ))}
               </nav>
 
+              {isAdminRoute ? (
+                <div className="shrink-0 px-3 pb-3">
+                  <SidebarNavLink
+                    href="/dashboard"
+                    itemLabel="Exit administration"
+                    Icon={DashboardSquare01Icon}
+                    mode="desktop"
+                    active={false}
+                    inviteCount={0}
+                  />
+                </div>
+              ) : null}
+
               <div className={`flex shrink-0 items-center gap-2 border-t border-border p-3 ${desktopCollapsed ? 'flex-col' : ''}`}>
                 <Dropdown>
                   <Dropdown.Trigger
@@ -794,7 +792,8 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     </Dropdown.Menu>
                   </Dropdown.Popover>
                 </Dropdown>
-                <Tooltip isDisabled={!desktopCollapsed}>
+                {!isAdminRoute ? (
+                  <Tooltip isDisabled={!desktopCollapsed}>
                   <Tooltip.Trigger>
                     <Button
                       isIconOnly
@@ -806,7 +805,8 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     </Button>
                   </Tooltip.Trigger>
                   <Tooltip.Content placement="right">Expand sidebar</Tooltip.Content>
-                </Tooltip>
+                  </Tooltip>
+                ) : null}
               </div>
             </Surface>
 
@@ -843,10 +843,10 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                 className="text-sm font-semibold"
                                 style={{ color: 'var(--text-primary)' }}
                               >
-                                JustScan
+                                {isAdminRoute ? 'Administration' : 'JustScan'}
                               </Drawer.Heading>
                               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                                Scan, watch, and manage
+                                {isAdminRoute ? 'Platform control plane' : 'Scan, watch, and manage'}
                               </p>
                             </div>
                           </div>
@@ -854,7 +854,8 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                         </Drawer.Header>
                         <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
                           <div className="space-y-4">
-                            <Dropdown>
+                            {!isAdminRoute ? (
+                              <Dropdown>
                               <Dropdown.Trigger
                                 className="w-full flex items-center justify-between rounded-xl p-3 text-sm transition-all duration-150 outline-none text-left"
                                 style={{
@@ -889,9 +890,18 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                               <Dropdown.Popover className="w-[min(80vw,300px)]">
                                 {renderWorkspaceMenu()}
                               </Dropdown.Popover>
-                            </Dropdown>
+                              </Dropdown>
+                            ) : (
+                              <div className="rounded-xl bg-surface-secondary px-3 py-2.5">
+                                <p className="text-[11px] uppercase tracking-[0.18em] text-muted">
+                                  System scope
+                                </p>
+                                <p className="mt-1 text-sm font-medium">Platform control plane</p>
+                              </div>
+                            )}
 
-                            <Link
+                            {!isAdminRoute ? (
+                              <Link
                               href="/scans/new"
                               className={buttonVariants({
                                 variant: 'primary',
@@ -902,9 +912,10 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                             >
                               <Shield01Icon aria-hidden size={17} />
                               New scan
-                            </Link>
+                              </Link>
+                            ) : null}
 
-                            {aiEnabled ? (
+                            {!isAdminRoute && aiEnabled ? (
                               <SidebarNavLink
                                 href="/assistant"
                                 itemLabel="Assistant"
@@ -916,7 +927,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                               />
                             ) : null}
 
-                            {pendingInviteCount > 0 && (
+                            {!isAdminRoute && pendingInviteCount > 0 && (
                               <Link
                                 href="/orgs"
                                 className="flex items-center justify-between rounded-xl p-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
@@ -945,20 +956,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                 </p>
                                 <div className="space-y-1">
                                   {items.map(({ href, label: itemLabel, Icon }) => {
-                                    if (href === '/admin') {
-                                      return (
-                                        <AdminNavigationMenu
-                                          key={href}
-                                          active={isActiveRoute(pathname, href)}
-                                          mode="mobile"
-                                          onNavigate={(adminHref) => {
-                                            setMobileNavOpen(false);
-                                            router.push(adminHref);
-                                          }}
-                                        />
-                                      );
-                                    }
-
                                     return (
                                       <SidebarNavLink
                                         key={href}
@@ -975,6 +972,18 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                 </div>
                               </div>
                             ))}
+
+                            {isAdminRoute ? (
+                              <SidebarNavLink
+                                href="/dashboard"
+                                itemLabel="Exit administration"
+                                Icon={DashboardSquare01Icon}
+                                mode="mobile"
+                                active={false}
+                                inviteCount={0}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            ) : null}
                           </div>
                         </Drawer.Body>
                         <Drawer.Footer
@@ -1202,7 +1211,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               </main>
             </div>
           </div>
-          {!isAssistantRoute ? <FloatingAIChat /> : null}
+          {!isAssistantRoute && !isAdminRoute ? <FloatingAIChat /> : null}
       </ToastProvider>
     </WorkspaceTourProvider>
   );

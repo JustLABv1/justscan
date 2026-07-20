@@ -147,6 +147,53 @@ function SummaryTile({
   );
 }
 
+function AttentionRow({
+  href,
+  label,
+  detail,
+  count,
+  tone,
+}: {
+  href: string;
+  label: string;
+  detail: string;
+  count: number;
+  tone: 'danger' | 'warning' | 'default';
+}) {
+  return (
+    <Card variant="secondary" className="p-0">
+      <Link href={href} className="flex items-center justify-between gap-4 px-4 py-3 no-underline">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">{label}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+        </div>
+        <Chip color={tone === 'default' ? 'default' : tone} size="sm" variant="soft">
+          {count}
+        </Chip>
+      </Link>
+    </Card>
+  );
+}
+
+function ConfigurationLink({
+  href,
+  label,
+  value,
+}: {
+  href: string;
+  label: string;
+  value: number;
+}) {
+  return (
+    <Card variant="secondary" className="p-0">
+      <Link href={href} className="flex items-center justify-between gap-3 px-4 py-3 no-underline">
+        <span className="text-sm font-medium text-foreground">{label}</span>
+        <Chip size="sm" variant="soft">{value}</Chip>
+      </Link>
+    </Card>
+  );
+}
+
 export function OverviewTab() {
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -235,9 +282,135 @@ export function OverviewTab() {
           (dashboard.insights.api_error_requests_24h / dashboard.insights.api_requests_24h) * 100
         )
       : 0;
+  const workerIssues =
+    dashboard.scanner_health.stale_workers + dashboard.scanner_health.error_workers;
+  const attentionItems = [
+    ...(failedScans > 0
+      ? [
+          {
+            href: '/admin/scans?status=failed',
+            label: 'Failed scans',
+            detail: 'Review failed work and retry or investigate the affected jobs.',
+            count: failedScans,
+            tone: 'danger' as const,
+          },
+        ]
+      : []),
+    ...(dashboard.queues.blocked_policies > 0
+      ? [
+          {
+            href: '/admin/scans',
+            label: 'Blocked policies',
+            detail: 'Review scans that require a policy decision or operational follow-up.',
+            count: dashboard.queues.blocked_policies,
+            tone: 'warning' as const,
+          },
+        ]
+      : []),
+    ...(workerIssues > 0
+      ? [
+          {
+            href: '/admin/scanner',
+            label: 'Scanner workers need review',
+            detail: 'One or more local workers are stale or reporting an error.',
+            count: workerIssues,
+            tone: 'warning' as const,
+          },
+        ]
+      : []),
+    ...(dashboard.insights.api_error_requests_24h > 0
+      ? [
+          {
+            href: '/admin/insights',
+            label: 'API errors in the last 24 hours',
+            detail: 'Inspect request telemetry and error patterns before they affect users.',
+            count: dashboard.insights.api_error_requests_24h,
+            tone: 'warning' as const,
+          },
+        ]
+      : []),
+  ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      <Card className="border border-divider/70">
+        <Card.Header className="flex items-start justify-between gap-3">
+          <div>
+            <Card.Title>Platform health</Card.Title>
+            <Card.Description>
+              A concise view of what needs attention across the system right now.
+            </Card.Description>
+          </div>
+          <Chip
+            color={attentionItems.length === 0 ? 'success' : 'warning'}
+            size="sm"
+            variant="soft"
+          >
+            {attentionItems.length === 0 ? 'No immediate attention' : 'Attention needed'}
+          </Chip>
+        </Card.Header>
+        <Card.Content className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div>
+            <p className="text-xs text-muted-foreground">Queue</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">
+              {dashboard.queues.running + dashboard.queues.pending} active
+            </p>
+            <p className="text-xs text-muted-foreground">{dashboard.queues.pending} pending</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Scanner workers</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">
+              {dashboard.scanner_health.healthy_workers} healthy
+            </p>
+            <p className="text-xs text-muted-foreground">{workerIssues} need review</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Public scanning</p>
+            <p className="mt-1 text-xl font-semibold">
+              {dashboard.public_scan_enabled ? 'Enabled' : 'Disabled'}
+            </p>
+            <p className="text-xs text-muted-foreground">System exposure setting</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">API error rate</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">{telemetryErrorRate}%</p>
+            <p className="text-xs text-muted-foreground">Last 24 hours</p>
+          </div>
+        </Card.Content>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <Card className="border border-divider/70">
+          <Card.Header>
+            <Card.Title>Needs attention</Card.Title>
+            <Card.Description>Follow the highest-signal issues without hunting through pages.</Card.Description>
+          </Card.Header>
+          <Card.Content className="space-y-2">
+            {attentionItems.length > 0 ? (
+              attentionItems.map((item) => <AttentionRow key={item.label} {...item} />)
+            ) : (
+              <div className="rounded-xl border border-divider/70 bg-surface-secondary px-3 py-5 text-sm text-muted-foreground">
+                The scan queue, local workers, and API telemetry do not report an immediate issue.
+              </div>
+            )}
+          </Card.Content>
+        </Card>
+
+        <Card className="border border-divider/70">
+          <Card.Header>
+            <Card.Title>Configuration coverage</Card.Title>
+            <Card.Description>Open the service you want to manage directly.</Card.Description>
+          </Card.Header>
+          <Card.Content className="space-y-2">
+            <ConfigurationLink href="/admin/users" label="Users" value={dashboard.admin_counts.users} />
+            <ConfigurationLink href="/admin/tokens" label="Service tokens" value={dashboard.admin_counts.tokens} />
+            <ConfigurationLink href="/admin/identity" label="Identity providers" value={dashboard.admin_counts.identity_providers} />
+            <ConfigurationLink href="/admin/notifications" label="Active channels" value={dashboard.admin_counts.active_channels} />
+            <ConfigurationLink href="/admin/registries" label="Global registries" value={dashboard.admin_counts.global_registries} />
+          </Card.Content>
+        </Card>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryTile
           label="Total Scans"

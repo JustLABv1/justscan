@@ -1,6 +1,7 @@
 'use client';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { LocalAuthPanel } from '@/components/admin/local-auth-panel';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
@@ -35,6 +36,7 @@ import {
   Button,
   Card,
   Chip,
+  Disclosure,
   Input,
   ListBox,
   Modal,
@@ -42,7 +44,6 @@ import {
   Select,
   Switch,
   Table,
-  Tabs,
   TextArea,
   useOverlayState,
 } from '@heroui/react';
@@ -703,6 +704,11 @@ export function IdentityTab() {
       {error && <Banner type="error" text={error} />}
       {success && <Banner type="success" text={success} />}
 
+      <LocalAuthPanel
+        hasEnabledOIDCProvider={providers.some((provider) => provider.enabled)}
+        providersLoading={loading}
+      />
+
       <Card className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <SearchField name="admin-identity-provider-search" variant="secondary" className="w-full sm:max-w-sm">
@@ -1002,24 +1008,38 @@ export function IdentityTab() {
                 <p className="text-sm text-warning">UserInfo could not be read: {debugReport.userinfo_error}</p>
               )}
 
-              <Tabs defaultSelectedKey="id-token" variant="secondary">
-                <Tabs.ListContainer>
-                  <Tabs.List aria-label="OIDC diagnostic claim sources">
-                    <Tabs.Tab id="id-token">ID token<Tabs.Indicator /></Tabs.Tab>
-                    <Tabs.Tab id="userinfo">UserInfo<Tabs.Indicator /></Tabs.Tab>
-                  </Tabs.List>
-                </Tabs.ListContainer>
-                <Tabs.Panel id="id-token">
-                  <pre className="max-h-[32rem] overflow-auto rounded-xl bg-content2 p-4 text-xs leading-5">
-                    {JSON.stringify(debugReport.id_token_claims, null, 2)}
-                  </pre>
-                </Tabs.Panel>
-                <Tabs.Panel id="userinfo">
-                  <pre className="max-h-[32rem] overflow-auto rounded-xl bg-content2 p-4 text-xs leading-5">
-                    {JSON.stringify(debugReport.userinfo_claims ?? {}, null, 2)}
-                  </pre>
-                </Tabs.Panel>
-              </Tabs>
+              <div className="space-y-2">
+                <Disclosure isExpanded>
+                  <Disclosure.Heading>
+                    <Disclosure.Trigger className="flex w-full items-center justify-between rounded-xl border border-divider/60 px-3 py-2 text-sm font-medium">
+                      ID token claims
+                      <Disclosure.Indicator />
+                    </Disclosure.Trigger>
+                  </Disclosure.Heading>
+                  <Disclosure.Content>
+                    <Disclosure.Body className="pt-2">
+                      <pre className="max-h-[32rem] overflow-auto rounded-xl bg-content2 p-4 text-xs leading-5">
+                        {JSON.stringify(debugReport.id_token_claims, null, 2)}
+                      </pre>
+                    </Disclosure.Body>
+                  </Disclosure.Content>
+                </Disclosure>
+                <Disclosure>
+                  <Disclosure.Heading>
+                    <Disclosure.Trigger className="flex w-full items-center justify-between rounded-xl border border-divider/60 px-3 py-2 text-sm font-medium">
+                      UserInfo claims
+                      <Disclosure.Indicator />
+                    </Disclosure.Trigger>
+                  </Disclosure.Heading>
+                  <Disclosure.Content>
+                    <Disclosure.Body className="pt-2">
+                      <pre className="max-h-[32rem] overflow-auto rounded-xl bg-content2 p-4 text-xs leading-5">
+                        {JSON.stringify(debugReport.userinfo_claims ?? {}, null, 2)}
+                      </pre>
+                    </Disclosure.Body>
+                  </Disclosure.Content>
+                </Disclosure>
+              </div>
               <p className="text-xs text-zinc-500">
                 OAuth tokens, authorization codes, and client credentials are never included. This result expires shortly.
               </p>
@@ -1061,8 +1081,11 @@ export function IdentityTab() {
                   <Table.Column>Behavior</Table.Column>
                 </Table.Header>
                 <Table.Body renderEmptyState={() => <div className="py-6 text-center text-sm text-zinc-500">No memberships.</div>}>
-                  {preview.final_memberships.map((membership, index) => (
-                    <Table.Row key={`${membership.mapping_id}-${membership.org_name}-${index}`} id={`${membership.mapping_id}-${index}`}>
+                  {preview.final_memberships.map((membership) => (
+                    <Table.Row
+                      key={`${membership.mapping_id}-${membership.org_name}-${membership.claim}-${membership.final_role}`}
+                      id={`${membership.mapping_id}-${membership.org_name}-${membership.claim}-${membership.final_role}`}
+                    >
                       <Table.Cell>{membership.org_name}</Table.Cell>
                       <Table.Cell className="font-mono text-xs text-zinc-500">{membership.claim}</Table.Cell>
                       <Table.Cell className="text-xs text-zinc-500">{membership.base_role} → {membership.final_role}</Table.Cell>

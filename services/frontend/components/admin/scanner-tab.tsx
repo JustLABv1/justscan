@@ -1,6 +1,7 @@
 'use client';
 
 import { StatusAlert } from '@/components/ui/form-alert';
+import { ScannerRuntimePanel } from '@/components/admin/scanner-runtime-panel';
 import { getScannerHealth } from '@/lib/api/dashboard';
 import type { ScannerHealth } from '@/lib/api/types/dashboard';
 import { deferEffect } from '@/lib/defer-effect';
@@ -120,6 +121,8 @@ export function ScannerTab() {
           </>
         )}
       </Card>
+
+      <ScannerRuntimePanel />
     </div>
   );
 }

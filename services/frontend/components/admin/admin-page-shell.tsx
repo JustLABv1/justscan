@@ -4,9 +4,7 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { PageHeader } from '@/components/ui/page-header';
-import { PageTabs } from '@/components/ui/page-tabs';
 import {
-  getAdminAreaForTab,
   getAdminTabMeta,
   resolveAdminTab,
 } from '@/app/(app)/admin/_components/admin-tabs';
@@ -20,28 +18,17 @@ export function AdminPageShell({ children, actions }: AdminPageShellProps) {
   const pathname = usePathname();
   const activeTab = resolveAdminTab(pathname);
   const activeMeta = getAdminTabMeta(activeTab);
-  const activeArea = getAdminAreaForTab(activeTab);
 
-  const title = activeTab === 'overview' ? 'System administration' : activeMeta.label;
+  const title = activeTab === 'overview' ? 'Control center' : activeMeta.label;
   const description =
     activeTab === 'overview'
-      ? 'Manage operations, access, integrations, and governance from a single admin workspace.'
+      ? 'Review platform health, resolve attention items, and manage system-wide controls.'
       : activeMeta.blurb;
-  const areaDescription = activeArea.label ? `Area: ${activeArea.label}.` : '';
-  const mergedDescription = areaDescription ? `${areaDescription} ${description}` : description;
 
   return (
     <div className="px-4 py-6 md:px-6 xl:py-7">
       <div className="space-y-5">
-        <PageHeader title={title} description={mergedDescription} actions={actions} />
-        <PageTabs
-          currentPath={pathname}
-          items={activeArea.tabs.map((tab) => ({
-            href: tab.href,
-            label: tab.label,
-            description: tab.blurb,
-          }))}
-        />
+        <PageHeader title={title} description={description} actions={actions} />
         {children}
       </div>
     </div>

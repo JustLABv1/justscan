@@ -31,11 +31,11 @@ interface AdminSidebarTreeProps {
 }
 
 const areaIcons = {
-  home: Home12Icon,
+  overview: Home12Icon,
   operations: Shield01Icon,
   access: Key01Icon,
-  integrations: LinkSquare02Icon,
-  governance: Setting07Icon,
+  connections: LinkSquare02Icon,
+  system: Setting07Icon,
 } as const;
 
 const activeTextClass = 'text-accent';

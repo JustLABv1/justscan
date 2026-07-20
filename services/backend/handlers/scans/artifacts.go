@@ -170,8 +170,18 @@ func ListScanArtifacts(db *bun.DB) gin.HandlerFunc {
 		var searchArgs []interface{}
 		if query := strings.TrimSpace(c.Query("q")); query != "" {
 			pattern := "%" + query + "%"
-			searchWhere = "(s.image_name ILIKE ? OR s.image_tag ILIKE ? OR (s.image_name || ':' || s.image_tag) ILIKE ?)"
-			searchArgs = []interface{}{pattern, pattern, pattern}
+			searchWhere = `(
+    s.image_name ILIKE ?
+    OR s.image_tag ILIKE ?
+    OR (s.image_name || ':' || s.image_tag) ILIKE ?
+    OR EXISTS (
+        SELECT 1
+        FROM scan_tags AS st
+        JOIN tags AS t ON t.id = st.tag_id
+        WHERE st.scan_id = s.id AND t.name ILIKE ?
+    )
+)`
+			searchArgs = []interface{}{pattern, pattern, pattern, pattern}
 		}
 
 		baseArgs := append([]interface{}{}, userArgs...)
@@ -343,25 +353,27 @@ LIMIT ? OFFSET ?`
 				collectionhandlers.SortCollectionsForDisplay(artifacts[index].Collections)
 			}
 
-			var tagRows []struct {
-				ScanID uuid.UUID  `bun:"scan_id"`
-				Tag    models.Tag `bun:"embed"`
-			}
+			var scanTags []models.ScanTag
 			if err := db.NewSelect().
-				TableExpr("scan_tags AS st").
-				ColumnExpr("st.scan_id").
-				ColumnExpr("t.*").
-				Join("JOIN tags AS t ON t.id = st.tag_id").
-				Where("st.scan_id IN (?)", bun.In(scanIDs)).
-				OrderExpr("t.name ASC").
-				Scan(c.Request.Context(), &tagRows); err != nil {
+				Model(&scanTags).
+				Relation("Tag").
+				Where("scan_tag.scan_id IN (?)", bun.In(scanIDs)).
+				Scan(c.Request.Context(), &scanTags); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load artifact tags"})
 				return
 			}
-			for _, row := range tagRows {
-				if index, ok := artifactIndexByScanID[row.ScanID]; ok {
-					artifacts[index].Tags = append(artifacts[index].Tags, row.Tag)
+			for _, scanTag := range scanTags {
+				if scanTag.Tag == nil {
+					continue
 				}
+				if index, ok := artifactIndexByScanID[scanTag.ScanID]; ok {
+					artifacts[index].Tags = append(artifacts[index].Tags, *scanTag.Tag)
+				}
+			}
+			for index := range artifacts {
+				sort.Slice(artifacts[index].Tags, func(left, right int) bool {
+					return artifacts[index].Tags[left].Name < artifacts[index].Tags[right].Name
+				})
 			}
 
 			if orgScoped {

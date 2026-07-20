@@ -57,7 +57,18 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 		if query := strings.TrimSpace(c.Query("q")); query != "" {
 			pattern := "%" + query + "%"
 			q = q.Where(
-				"(image_name ILIKE ? OR image_tag ILIKE ? OR (image_name || ':' || image_tag) ILIKE ?)",
+				`(
+                    image_name ILIKE ?
+                    OR image_tag ILIKE ?
+                    OR (image_name || ':' || image_tag) ILIKE ?
+                    OR EXISTS (
+                        SELECT 1
+                        FROM scan_tags AS st
+                        JOIN tags AS t ON t.id = st.tag_id
+                        WHERE st.scan_id = scan.id AND t.name ILIKE ?
+                    )
+                )`,
+				pattern,
 				pattern,
 				pattern,
 				pattern,

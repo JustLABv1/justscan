@@ -1,14 +1,11 @@
 import {
-  LandingDecisionSection,
-  LandingEnterpriseSection,
+  LandingCapabilitiesSection,
   LandingFinalCta,
   LandingFooter,
   LandingHeader,
   LandingHeroSection,
-  LandingMonitoringSection,
-  LandingPlatformSection,
+  LandingProductStorySection,
   LandingProofStrip,
-  LandingWorkflowSection,
 } from '@/components/landing/landing-sections';
 import type { Metadata } from 'next';
 
@@ -39,20 +36,12 @@ export default function Page() {
       >
         Skip to content
       </a>
-      <div
-        aria-hidden
-        className="landing-page-glow pointer-events-none absolute inset-x-0 top-0 h-[760px]"
-      />
-
       <LandingHeader />
       <main id="main-content" className="relative z-10">
         <LandingHeroSection />
         <LandingProofStrip />
-        <LandingPlatformSection />
-        <LandingDecisionSection />
-        <LandingMonitoringSection />
-        <LandingEnterpriseSection />
-        <LandingWorkflowSection />
+        <LandingProductStorySection />
+        <LandingCapabilitiesSection />
         <LandingFinalCta />
       </main>
       <LandingFooter />

@@ -29,6 +29,7 @@ import { deferEffect } from '@/lib/defer-effect';
 import { canMutateOrg } from '@/lib/org-permissions';
 import {
   Autocomplete,
+  Alert,
   Button,
   Card,
   Chip,
@@ -778,6 +779,24 @@ export default function NewScanPage() {
                           </Select.Popover>
                         </Select>
                       </ScanWizardField>
+
+                      {selectedRegistry ? (
+                        <Alert status={selectedRegistry.xray_mode === 'full' ? 'accent' : 'warning'}>
+                          <Alert.Indicator />
+                          <Alert.Content>
+                            <Alert.Title>
+                              {selectedRegistry.xray_mode === 'full'
+                                ? 'Full Xray mode'
+                                : 'Limited Xray mode'}
+                            </Alert.Title>
+                            <Alert.Description>
+                              {selectedRegistry.xray_mode === 'full'
+                                ? 'JustScan will request and confirm a fresh Xray scan after Artifactory resolves the artifact.'
+                                : 'JustScan pulls through Artifactory and imports provider results. A cached image is not force-rescanned, so result freshness cannot be verified.'}
+                            </Alert.Description>
+                          </Alert.Content>
+                        </Alert>
+                      ) : null}
 
                       <ScanWizardField
                         label="Repo override"

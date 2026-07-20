@@ -181,6 +181,18 @@ const XRAY_STEP_KEYS = new Set<string>([
   'importing_results',
 ]);
 
+function xrayProgressSteps(mode?: 'full' | 'limited' | null): StepDefinition[] {
+  if (mode === 'limited') {
+    return XRAY_PROGRESS_STEPS.filter(
+      (step) => step.key !== 'indexing_artifact' && step.key !== 'queued_in_xray'
+    );
+  }
+  if (mode === 'full') {
+    return XRAY_PROGRESS_STEPS.filter((step) => step.key !== 'indexing_artifact');
+  }
+  return XRAY_PROGRESS_STEPS;
+}
+
 const TERMINAL_PROGRESS_STEPS: StepDefinition[] = [
   {
     key: 'completed',
@@ -453,11 +465,12 @@ function resolveCurrentStep(
 function buildProgressModel(
   status: string,
   currentStep: string | null | undefined,
-  scanProvider?: string | null
+  scanProvider?: string | null,
+  xrayMode?: 'full' | 'limited' | null
 ): ProgressModel {
   const activeKey = resolveCurrentStep(status, currentStep, scanProvider);
   const xrayFlow = scanProvider === 'artifactory_xray' || XRAY_STEP_KEYS.has(activeKey);
-  const steps = xrayFlow ? XRAY_PROGRESS_STEPS : LOCAL_PROGRESS_STEPS;
+  const steps = xrayFlow ? xrayProgressSteps(xrayMode) : LOCAL_PROGRESS_STEPS;
   const knownActiveIndex = steps.findIndex((step) => step.key === activeKey);
   const activeIndex = knownActiveIndex === -1 ? steps.length : Math.max(0, knownActiveIndex);
   const resolvedStep =
@@ -1014,6 +1027,7 @@ export function ScanningAnimation({
   startedAt,
   image,
   scanProvider,
+  xrayMode,
   currentStep,
   stepLogs,
 }: {
@@ -1021,6 +1035,7 @@ export function ScanningAnimation({
   startedAt: string | null;
   image?: string;
   scanProvider?: string | null;
+  xrayMode?: 'full' | 'limited' | null;
   currentStep?: string | null;
   stepLogs?: ScanStepLog[] | null;
 }) {
@@ -1047,7 +1062,7 @@ export function ScanningAnimation({
 
   const baseStart = startedAtMs ?? fallbackStart ?? now;
   const elapsed = Math.max(0, Math.floor((now - baseStart) / 1000));
-  const progress = buildProgressModel(status, currentStep, scanProvider);
+  const progress = buildProgressModel(status, currentStep, scanProvider, xrayMode);
   const detailMessage =
     progress.detailMessages[detailTick % progress.detailMessages.length] ??
     progress.detailMessages[0];
@@ -1118,6 +1133,8 @@ export function ScanStepTimeline({
   status,
   externalStatus,
   scanProvider,
+  xrayMode,
+  xrayProviderScannedAt,
   scanId,
 }: {
   stepLogs?: ScanStepLog[] | null;
@@ -1125,6 +1142,8 @@ export function ScanStepTimeline({
   status?: string | null;
   externalStatus?: string | null;
   scanProvider?: string | null;
+  xrayMode?: 'full' | 'limited' | null;
+  xrayProviderScannedAt?: string | null;
   scanId?: string | null;
 }) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
@@ -1256,6 +1275,22 @@ export function ScanStepTimeline({
           finalTimestamp ? ` · Finished ${timeAgo(finalTimestamp)}` : ''
         }`}
       />
+
+      {scanProvider === 'artifactory_xray' && xrayMode === 'limited' ? (
+        <Alert status="warning">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Limited Xray result</Alert.Title>
+            <Alert.Description>
+              Xray returned a readable provider-managed result; JustScan could not verify that it
+              was freshly rescanned for this request.
+              {xrayProviderScannedAt
+                ? ` Provider completion: ${fullDate(xrayProviderScannedAt)}.`
+                : ''}
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
+      ) : null}
 
       <Modal state={xrayDebugModal}>
         <Modal.Backdrop isDismissable>

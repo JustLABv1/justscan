@@ -1,6 +1,7 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
+import { XrayModeSelector } from '@/components/registries/xray-mode-selector';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -32,6 +33,7 @@ import { deferEffect } from '@/lib/defer-effect';
 import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
 import { timeAgo } from '@/lib/time';
 import {
+  Alert,
   Button,
   Card,
   ListBox,
@@ -51,6 +53,7 @@ import {
   TestTube01Icon,
 } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { XrayMode } from '@/lib/api/types/registries';
 
 const selectTriggerCls = heroSelectTriggerClassName;
 
@@ -157,6 +160,7 @@ export default function RegistriesPage() {
   const [xrayUrl, setXrayUrl] = useState('');
   const [xrayArtifactoryId, setXrayArtifactoryId] = useState('default');
   const [xrayRepository, setXrayRepository] = useState('');
+  const [xrayMode, setXrayMode] = useState<XrayMode>('limited');
   const [authType, setAuthType] = useState<'none' | 'basic' | 'token' | 'aws_ecr'>('none');
   const [scanProvider, setScanProvider] = useState<'trivy' | 'artifactory_xray'>('trivy');
   const [username, setUsername] = useState('');
@@ -212,6 +216,7 @@ export default function RegistriesPage() {
     setXrayUrl('');
     setXrayArtifactoryId('default');
     setXrayRepository('');
+    setXrayMode('limited');
     setAuthType('none');
     setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray');
     setUsername('');
@@ -227,6 +232,7 @@ export default function RegistriesPage() {
     setXrayUrl(r.xray_url ?? '');
     setXrayArtifactoryId(r.xray_artifactory_id ?? 'default');
     setXrayRepository(r.xray_repository ?? '');
+    setXrayMode(r.xray_mode ?? 'limited');
     setAuthType(r.auth_type ?? 'none');
     setScanProvider(r.scan_provider ?? 'trivy');
     setUsername(r.username ?? '');
@@ -258,6 +264,7 @@ export default function RegistriesPage() {
           scanProvider === 'artifactory_xray' ? xrayArtifactoryId || 'default' : undefined,
         xray_repository:
           scanProvider === 'artifactory_xray' ? xrayRepository.trim() || undefined : undefined,
+        xray_mode: scanProvider === 'artifactory_xray' ? xrayMode : undefined,
         auth_type: authType,
         scan_provider: scanProvider,
         username,
@@ -647,166 +654,203 @@ export default function RegistriesPage() {
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
-          <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
+          <Modal.Container className="px-3 sm:px-6" size="lg" placement="center" scroll="inside">
+            <Modal.Dialog className="max-w-3xl">
+              <Modal.Header className="border-b border-surface-border px-6 py-5 sm:px-8">
+                <div className="min-w-0">
+                  <Modal.Heading>{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
+                  <p className="mt-1 text-sm text-muted">
+                    Configure connectivity, scan behavior, and credentials in one place.
+                  </p>
+                </div>
                 <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="py-5">
-                <form id="registry-form" onSubmit={handleSubmit} className="space-y-4">
+              <Modal.Body className="px-6 py-6 sm:px-8">
+                <form id="registry-form" onSubmit={handleSubmit} className="space-y-6">
                   {formError ? (
                     <FormAlert description={formError} title="Registry save failed" />
                   ) : null}
-                  <FormField
-                    label="Name"
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="My Registry"
-                    required
-                    value={name}
-                    className="bg-surface-secondary"
-                  />
-                  <FormField
-                    className="bg-surface-secondary"
-                    label="URL"
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://registry.example.com"
-                    required
-                    value={url}
-                  />
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Scan Provider</label>
-                    <Select
-                      value={scanProvider}
-                      onChange={(value) => setScanProvider(value as 'trivy' | 'artifactory_xray')}
-                    >
-                      <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="text-zinc-400 shrink-0">
-                            <ServerStack01Icon size={15} />
-                          </span>
-                          <Select.Value />
-                        </div>
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          <ListBox.Item id="trivy" isDisabled={!capabilities.enable_trivy}>
-                            Trivy (built-in JustScan scanner)
-                          </ListBox.Item>
-                          <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      This is stored in JustScan and does not require editing backend/config.yaml.
-                    </p>
-                    {!capabilities.enable_trivy && scanProvider === 'trivy' && editing && (
-                      <p className="text-xs" style={{ color: '#f59e0b' }}>
-                        This registry must be switched to Artifactory Xray before saving changes.
-                      </p>
-                    )}
-                  </div>
+                  <Card variant="secondary" className="gap-0 overflow-hidden">
+                    <Card.Header className="border-b border-surface-border px-5 py-4">
+                      <Card.Title>Registry connection</Card.Title>
+                      <Card.Description>
+                        The endpoint JustScan uses to resolve and pull images.
+                      </Card.Description>
+                    </Card.Header>
+                    <Card.Content className="grid gap-4 p-5 md:grid-cols-2">
+                      <FormField
+                        label="Name"
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="My Registry"
+                        required
+                        value={name}
+                        className="bg-surface-primary"
+                        variant="primary"
+                      />
+                      <FormField
+                        className="bg-surface-primary"
+                        label="URL"
+                        onChange={(e) => setUrl(e.target.value)}
+                        placeholder="https://registry.example.com"
+                        required
+                        value={url}
+                        variant="primary"
+                      />
+                      <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-sm font-medium">Scan Provider</label>
+                        <Select
+                          variant="primary"
+                          value={scanProvider}
+                          onChange={(value) =>
+                            setScanProvider(value as 'trivy' | 'artifactory_xray')
+                          }
+                        >
+                          <Select.Trigger className={selectTriggerCls + ' bg-surface-primary'}>
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                              <span className="shrink-0 text-zinc-400">
+                                <ServerStack01Icon size={15} />
+                              </span>
+                              <Select.Value />
+                            </div>
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item id="trivy" isDisabled={!capabilities.enable_trivy}>
+                                Trivy (built-in JustScan scanner)
+                              </ListBox.Item>
+                              <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                        <p className="text-xs text-muted">
+                          This is stored in JustScan and does not require editing backend/config.yaml.
+                        </p>
+                        {!capabilities.enable_trivy && scanProvider === 'trivy' && editing && (
+                          <p className="text-xs text-warning">
+                            This registry must be switched to Artifactory Xray before saving changes.
+                          </p>
+                        )}
+                      </div>
+                    </Card.Content>
+                  </Card>
                   {scanProvider === 'artifactory_xray' && (
-                    <>
-                      <FormField
-                        className="bg-surface-secondary"
-                        description="Leave empty to reuse the registry URL. Set this when your Docker registry host differs from the JFrog platform/Xray host."
-                        label="Xray Base URL"
-                        onChange={(e) => setXrayUrl(e.target.value)}
-                        placeholder="https://jfrog.example.com"
-                        value={xrayUrl}
-                      />
-                      <FormField
-                        className="bg-surface-secondary"
-                        description="This prefixes artifact summary paths in Xray. In most JFrog setups the correct value is default."
-                        label="Artifactory ID"
-                        onChange={(e) => setXrayArtifactoryId(e.target.value)}
-                        placeholder="default"
-                        value={xrayArtifactoryId}
-                      />
-                      <FormField
-                        className="bg-surface-secondary"
-                        description="Optional default Docker repo key for this registry, for example docker-remote. JustScan will prepend it for Xray scans when users enter Docker Hub-style image names."
-                        label="Default Artifactory Repo"
-                        onChange={(e) => setXrayRepository(e.target.value)}
-                        placeholder="docker-remote"
-                        value={xrayRepository}
-                      />
-                    </>
-                  )}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                      Auth Type
-                    </label>
-                    <Select
-                      value={authType}
-                      onChange={(value) =>
-                        setAuthType(value as 'none' | 'basic' | 'token' | 'aws_ecr')
-                      }
-                    >
-                      <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="text-zinc-400 shrink-0">
-                            <Shield01Icon size={15} />
-                          </span>
-                          <Select.Value />
+                    <Card variant="secondary" className="gap-0 overflow-hidden">
+                      <Card.Header className="border-b border-surface-border px-5 py-4">
+                        <Card.Title>Xray scan behavior</Card.Title>
+                        <Card.Description>
+                          Map images to Artifactory and choose whether this credential can request a
+                          fresh Xray scan.
+                        </Card.Description>
+                      </Card.Header>
+                      <Card.Content className="grid gap-4 p-5 md:grid-cols-2">
+                        <FormField
+                          className="bg-surface-primary md:col-span-2"
+                          description="Leave empty to reuse the registry URL. Set this only when the Docker host differs from the JFrog platform host."
+                          label="Xray Base URL"
+                          onChange={(e) => setXrayUrl(e.target.value)}
+                          placeholder="https://jfrog.example.com"
+                          value={xrayUrl}
+                          variant="primary"
+                        />
+                        <FormField
+                          className="bg-surface-primary"
+                          description="Usually default. Prefixes artifact paths sent to Xray."
+                          label="Artifactory ID"
+                          onChange={(e) => setXrayArtifactoryId(e.target.value)}
+                          placeholder="default"
+                          value={xrayArtifactoryId}
+                          variant="primary"
+                        />
+                        <FormField
+                          className="bg-surface-primary"
+                          description="Optional repo prefix, for example docker-remote."
+                          label="Default Artifactory Repo"
+                          onChange={(e) => setXrayRepository(e.target.value)}
+                          placeholder="docker-remote"
+                          value={xrayRepository}
+                          variant="primary"
+                        />
+                        <div className="md:col-span-2">
+                          <XrayModeSelector value={xrayMode} onChange={setXrayMode} />
                         </div>
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          <ListBox.Item id="none">None (public registry)</ListBox.Item>
-                          <ListBox.Item id="basic">Basic (username / password)</ListBox.Item>
-                          <ListBox.Item id="token">Token</ListBox.Item>
-                          <ListBox.Item id="aws_ecr">AWS ECR</ListBox.Item>
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                  </div>
-                  {scanProvider === 'artifactory_xray' && (
-                    <div
-                      className="rounded-xl px-3 py-2.5 text-xs"
-                      style={{
-                        background: 'rgba(245,158,11,0.08)',
-                        border: '1px solid rgba(245,158,11,0.18)',
-                        color: '#d97706',
-                      }}
-                    >
-                      Xray scans require image references that map cleanly to an Artifactory
-                      repository path, for example{' '}
-                      <span className="font-mono">test-images/debian:12-slim</span> or{' '}
-                      <span className="font-mono">
-                        registry.example.com/test-images/debian:12-slim
-                      </span>
-                      .
-                    </div>
+                        <Alert className="md:col-span-2" status="warning">
+                          <Alert.Indicator />
+                          <Alert.Content>
+                            <Alert.Description>
+                              Xray image names must map to an Artifactory repository path, for
+                              example <span className="font-mono">test-images/debian:12-slim</span>.
+                            </Alert.Description>
+                          </Alert.Content>
+                        </Alert>
+                      </Card.Content>
+                    </Card>
                   )}
-                  <FormField
-                    label="Username"
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Optional"
-                    value={username}
-                    className="bg-surface-secondary"
-                  />
-                  <FormField
-                    autoComplete="off"
-                    description={
-                      editing
-                        ? 'Leave blank to keep the stored password unchanged.'
-                        : 'Optional unless your registry provider requires credentials.'
-                    }
-                    label="Password"
-                    name="registry-password"
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={editing ? '••••••••' : 'Optional'}
-                    type="password"
-                    value={password}
-                    className="bg-surface-secondary"
-                  />
+                  <Card variant="secondary" className="gap-0 overflow-hidden">
+                    <Card.Header className="border-b border-surface-border px-5 py-4">
+                      <Card.Title>Credentials</Card.Title>
+                      <Card.Description>
+                        Stored encrypted and reused for image pulls and Xray requests.
+                      </Card.Description>
+                    </Card.Header>
+                    <Card.Content className="grid gap-4 p-5 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Auth Type</label>
+                        <Select
+                          variant="primary"
+                          value={authType}
+                          onChange={(value) =>
+                            setAuthType(value as 'none' | 'basic' | 'token' | 'aws_ecr')
+                          }
+                        >
+                          <Select.Trigger className={selectTriggerCls + ' bg-surface-primary'}>
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                              <span className="shrink-0 text-zinc-400">
+                                <Shield01Icon size={15} />
+                              </span>
+                              <Select.Value />
+                            </div>
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item id="none">None (public registry)</ListBox.Item>
+                              <ListBox.Item id="basic">Basic (username / password)</ListBox.Item>
+                              <ListBox.Item id="token">Token</ListBox.Item>
+                              <ListBox.Item id="aws_ecr">AWS ECR</ListBox.Item>
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </div>
+                      <FormField
+                        className="bg-surface-primary"
+                        label="Username"
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Optional"
+                        value={username}
+                        variant="primary"
+                      />
+                      <FormField
+                        autoComplete="off"
+                        className="bg-surface-primary md:col-span-2"
+                        description={
+                          editing
+                            ? 'Leave blank to keep the stored password unchanged.'
+                            : 'Optional unless your registry provider requires credentials.'
+                        }
+                        label="Password / token"
+                        name="registry-password"
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={editing ? '••••••••' : 'Optional'}
+                        type="password"
+                        value={password}
+                        variant="primary"
+                      />
+                    </Card.Content>
+                  </Card>
                 </form>
               </Modal.Body>
-              <Modal.Footer>
+              <Modal.Footer className="border-t border-surface-border px-6 py-4 sm:px-8">
                 <Button onPress={modal.close} type="button" variant="secondary">
                   Cancel
                 </Button>

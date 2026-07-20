@@ -23,6 +23,7 @@ type globalRegistryPayload struct {
 	XrayURL           *string `json:"xray_url"`
 	XrayArtifactoryID *string `json:"xray_artifactory_id"`
 	XrayRepository    *string `json:"xray_repository"`
+	XrayMode          *string `json:"xray_mode" binding:"omitempty,oneof=full limited"`
 	AuthType          *string `json:"auth_type" binding:"omitempty,oneof=basic token aws_ecr none"`
 	ScanProvider      *string `json:"scan_provider" binding:"omitempty,oneof=trivy artifactory_xray"`
 	Username          *string `json:"username"`
@@ -78,6 +79,10 @@ func CreateGlobalRegistry(c *gin.Context, db *bun.DB) {
 	xrayURL := strings.TrimSpace(stringValue(body.XrayURL))
 	xrayArtifactoryID := strings.TrimSpace(stringValue(body.XrayArtifactoryID))
 	xrayRepository := strings.Trim(strings.TrimSpace(stringValue(body.XrayRepository)), "/")
+	xrayMode := models.XrayModeLimited
+	if body.XrayMode != nil {
+		xrayMode = models.NormalizeXrayMode(strings.TrimSpace(*body.XrayMode))
+	}
 	if scanProvider == models.ScanProviderArtifactoryXray {
 		if xrayArtifactoryID == "" {
 			xrayArtifactoryID = "default"
@@ -86,6 +91,7 @@ func CreateGlobalRegistry(c *gin.Context, db *bun.DB) {
 		xrayURL = ""
 		xrayArtifactoryID = "default"
 		xrayRepository = ""
+		xrayMode = models.XrayModeLimited
 	}
 	username := strings.TrimSpace(stringValue(body.Username))
 	encryptedPassword := ""
@@ -104,6 +110,7 @@ func CreateGlobalRegistry(c *gin.Context, db *bun.DB) {
 		XrayURL:           xrayURL,
 		XrayArtifactoryID: xrayArtifactoryID,
 		XrayRepository:    xrayRepository,
+		XrayMode:          xrayMode,
 		AuthType:          authType,
 		ScanProvider:      scanProvider,
 		Username:          username,
@@ -189,6 +196,9 @@ func UpdateGlobalRegistry(c *gin.Context, db *bun.DB) {
 	if body.XrayRepository != nil {
 		registry.XrayRepository = strings.Trim(strings.TrimSpace(*body.XrayRepository), "/")
 	}
+	if body.XrayMode != nil {
+		registry.XrayMode = models.NormalizeXrayMode(strings.TrimSpace(*body.XrayMode))
+	}
 	if registry.ScanProvider == models.ScanProviderArtifactoryXray {
 		if registry.XrayArtifactoryID == "" {
 			registry.XrayArtifactoryID = "default"
@@ -197,7 +207,9 @@ func UpdateGlobalRegistry(c *gin.Context, db *bun.DB) {
 		registry.XrayURL = ""
 		registry.XrayArtifactoryID = "default"
 		registry.XrayRepository = ""
+		registry.XrayMode = models.XrayModeLimited
 	}
+	registry.XrayMode = models.NormalizeXrayMode(registry.XrayMode)
 	if body.Password != nil {
 		trimmed := strings.TrimSpace(*body.Password)
 		if trimmed == "" {
@@ -215,7 +227,7 @@ func UpdateGlobalRegistry(c *gin.Context, db *bun.DB) {
 
 	registry.UpdatedAt = time.Now()
 	if _, err := db.NewUpdate().Model(registry).
-		Column("name", "url", "xray_url", "xray_artifactory_id", "xray_repository", "auth_type", "scan_provider", "username", "password", "updated_at").
+		Column("name", "url", "xray_url", "xray_artifactory_id", "xray_repository", "xray_mode", "auth_type", "scan_provider", "username", "password", "updated_at").
 		Where("id = ? AND owner_type = ?", id, models.OwnerTypeSystem).
 		Exec(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update global registry"})

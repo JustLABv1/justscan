@@ -16,6 +16,8 @@ type Scan struct {
 	ImageDigest             string                 `bun:"image_digest,type:text,default:''" json:"image_digest"`
 	ImageConfig             JSONObject             `bun:"image_config,type:jsonb,notnull,default:'{}'" json:"image_config,omitempty"`
 	ScanProvider            string                 `bun:"scan_provider,type:text,notnull,default:'trivy'" json:"scan_provider"`
+	XrayMode                string                 `bun:"xray_mode,type:text,notnull,default:''" json:"xray_mode,omitempty"`
+	XrayProviderScannedAt   *time.Time             `bun:"xray_provider_scanned_at,type:timestamptz" json:"xray_provider_scanned_at,omitempty"`
 	ScanSource              string                 `bun:"scan_source,type:text,notnull,default:'registry'" json:"scan_source"`
 	ExternalScanID          string                 `bun:"external_scan_id,type:text,default:''" json:"external_scan_id,omitempty"`
 	ExternalStatus          string                 `bun:"external_status,type:text,default:''" json:"external_status,omitempty"`

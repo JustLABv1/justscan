@@ -281,6 +281,7 @@ export interface ArtifactSummary {
   low_count: number;
   compliance_summary?: ScanComplianceSummary | null;
   collections?: Collection[];
+  tags?: Tag[];
 }
 
 export interface ArtifactFilterOptions {

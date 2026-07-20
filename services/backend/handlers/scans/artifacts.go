@@ -37,6 +37,7 @@ type ArtifactSummary struct {
 	LowCount             int                           `json:"low_count"`
 	ComplianceSummary    *models.ScanComplianceSummary `json:"compliance_summary,omitempty"`
 	Collections          []models.ScanCollection       `json:"collections,omitempty"`
+	Tags                 []models.Tag                  `json:"tags,omitempty"`
 }
 
 // ArtifactFilterOptions describes only filters that can match at least one
@@ -340,6 +341,27 @@ LIMIT ? OFFSET ?`
 			}
 			for index := range artifacts {
 				collectionhandlers.SortCollectionsForDisplay(artifacts[index].Collections)
+			}
+
+			var tagRows []struct {
+				ScanID uuid.UUID  `bun:"scan_id"`
+				Tag    models.Tag `bun:"embed"`
+			}
+			if err := db.NewSelect().
+				TableExpr("scan_tags AS st").
+				ColumnExpr("st.scan_id").
+				ColumnExpr("t.*").
+				Join("JOIN tags AS t ON t.id = st.tag_id").
+				Where("st.scan_id IN (?)", bun.In(scanIDs)).
+				OrderExpr("t.name ASC").
+				Scan(c.Request.Context(), &tagRows); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load artifact tags"})
+				return
+			}
+			for _, row := range tagRows {
+				if index, ok := artifactIndexByScanID[row.ScanID]; ok {
+					artifacts[index].Tags = append(artifacts[index].Tags, row.Tag)
+				}
 			}
 
 			if orgScoped {

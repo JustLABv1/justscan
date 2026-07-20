@@ -1,6 +1,7 @@
 'use client';
 
 import { CollectionBadgeList } from '@/components/scans/collection-badge-list';
+import { ScanTagBadgeList } from '@/components/scans/scan-tag-badge-list';
 import { SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
@@ -47,6 +48,8 @@ type ArtifactScansTableProps = {
   onDelete: (scanId: string, artifactKey: string) => Promise<void> | void;
   onExpandedChange: (next: Set<string>) => void;
   onSelectedScansChange: Dispatch<SetStateAction<Set<string>>>;
+  onShareToWorkspace: (scanIds: string[]) => void;
+  onTransferToWorkspace: (scanIds: string[]) => void;
   selectedScans: Set<string>;
 };
 
@@ -204,6 +207,8 @@ function ArtifactHistoryRows({
   onCancel,
   onDelete,
   onSelectScan,
+  onShareToWorkspace,
+  onTransferToWorkspace,
   selectedScans,
 }: {
   allowMutationActions: boolean;
@@ -212,6 +217,8 @@ function ArtifactHistoryRows({
   onCancel: (scanId: string) => void;
   onDelete: (scanId: string) => void;
   onSelectScan: (scanId: string, selected: boolean) => void;
+  onShareToWorkspace: (scanIds: string[]) => void;
+  onTransferToWorkspace: (scanIds: string[]) => void;
   selectedScans: Set<string>;
 }) {
   const router = useRouter();
@@ -241,7 +248,7 @@ function ArtifactHistoryRows({
               id={`${artifact.latest_scan_id}-${row.id}`}
               textValue={`${row.kind} scan history`}
             >
-              <Table.Cell colSpan={7}>
+              <Table.Cell colSpan={8}>
                 <div className="px-4 py-3 text-xs text-zinc-500">
                   {row.kind === 'loading' ? 'Loading scan history…' : 'No scan history found.'}
                 </div>
@@ -255,7 +262,7 @@ function ArtifactHistoryRows({
               id={`${artifact.latest_scan_id}-history-pages`}
               textValue="Scan history pages"
             >
-              <Table.Cell colSpan={7}>
+              <Table.Cell colSpan={8}>
                 <div className="flex justify-center px-2 py-2">
                   <Pagination size="sm">
                     <Pagination.Content>
@@ -342,6 +349,9 @@ function ArtifactHistoryRows({
               </div>
             </Table.Cell>
             <Table.Cell>
+              <ScanTagBadgeList tags={scan.tags} />
+            </Table.Cell>
+            <Table.Cell>
               <CollectionBadgeList collections={scan.collections} emptyLabel="No collections" />
             </Table.Cell>
             <Table.Cell onClick={(event) => event.stopPropagation()}>
@@ -376,6 +386,18 @@ function ArtifactHistoryRows({
                     ...(allowMutationActions
                       ? [
                           {
+                            id: 'share-workspace',
+                            label: 'Share with workspace',
+                            icon: <Shield01Icon size={14} aria-hidden />,
+                            onAction: () => onShareToWorkspace([scan.id]),
+                          },
+                          {
+                            id: 'transfer-workspace',
+                            label: 'Transfer ownership',
+                            icon: <ArrowRight01Icon size={14} aria-hidden />,
+                            onAction: () => onTransferToWorkspace([scan.id]),
+                          },
+                          {
                             id: 'delete',
                             label: 'Delete scan',
                             icon: <Delete01Icon size={14} aria-hidden />,
@@ -407,6 +429,8 @@ export function ArtifactScansTable({
   onDelete,
   onExpandedChange,
   onSelectedScansChange,
+  onShareToWorkspace,
+  onTransferToWorkspace,
   selectedScans,
 }: ArtifactScansTableProps) {
   const router = useRouter();
@@ -503,7 +527,7 @@ export function ArtifactScansTable({
       <Table.ScrollContainer>
         <Table.Content
           aria-label="Latest scans by image and tag"
-          className="min-w-[860px]"
+          className="min-w-[980px]"
           expandedKeys={expandedKeys}
           treeColumn="expander"
           onExpandedChange={setExpandedKeys}
@@ -528,6 +552,7 @@ export function ArtifactScansTable({
             <Table.Column isRowHeader>Image &amp; tag</Table.Column>
             <Table.Column>Latest scan</Table.Column>
             <Table.Column>Findings</Table.Column>
+            <Table.Column>Labels</Table.Column>
             <Table.Column>Collections</Table.Column>
             <Table.Column>Actions</Table.Column>
           </Table.Header>
@@ -535,14 +560,14 @@ export function ArtifactScansTable({
             {loading ? (
               Array.from({ length: 5 }, (_, index) => (
                 <Table.Row id={`loading-${index}`} key={`loading-${index}`}>
-                  <Table.Cell colSpan={7}>
+                  <Table.Cell colSpan={8}>
                     <div className="h-16 animate-pulse rounded-md" />
                   </Table.Cell>
                 </Table.Row>
               ))
             ) : artifacts.length === 0 ? (
               <Table.Row id="empty">
-                <Table.Cell colSpan={7}>
+                <Table.Cell colSpan={8}>
                   <div className="py-5">
                     <EmptyState
                       icon={<Shield01Icon size={28} />}
@@ -650,6 +675,15 @@ export function ArtifactScansTable({
                       </Table.Cell>
                       <Table.Cell>
                         <Link
+                          aria-label={`Open latest scan labels for ${artifact.image_name}:${artifact.image_tag}`}
+                          className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                          href={`/scans/${artifact.latest_scan_id}`}
+                        >
+                          <ScanTagBadgeList tags={artifact.tags} />
+                        </Link>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Link
                           aria-label={`Open latest scan for ${artifact.image_name}:${artifact.image_tag}`}
                           className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                           href={`/scans/${artifact.latest_scan_id}`}
@@ -697,6 +731,20 @@ export function ArtifactScansTable({
                               ...(allowMutationActions
                                 ? [
                                     {
+                                      id: 'share-workspace',
+                                      label: 'Share with workspace',
+                                      icon: <Shield01Icon size={14} aria-hidden />,
+                                      onAction: () =>
+                                        onShareToWorkspace([artifact.latest_scan_id]),
+                                    },
+                                    {
+                                      id: 'transfer-workspace',
+                                      label: 'Transfer ownership',
+                                      icon: <ArrowRight01Icon size={14} aria-hidden />,
+                                      onAction: () =>
+                                        onTransferToWorkspace([artifact.latest_scan_id]),
+                                    },
+                                    {
                                       id: 'delete',
                                       label: 'Delete latest scan',
                                       icon: <Delete01Icon size={14} aria-hidden />,
@@ -716,6 +764,8 @@ export function ArtifactScansTable({
                         onCancel={(scanId) => onCancel(scanId, key)}
                         onDelete={(scanId) => onDelete(scanId, key)}
                         onSelectScan={setScanSelection}
+                        onShareToWorkspace={onShareToWorkspace}
+                        onTransferToWorkspace={onTransferToWorkspace}
                         selectedScans={selectedScans}
                       />
                     </Table.Row>
